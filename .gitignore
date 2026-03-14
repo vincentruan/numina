@@ -120,6 +120,11 @@ data/*.json
 *.pem
 *.key
 
-.omc/ 
+.omc/
 
 .claude/settings.local.json
+
+# ===========================
+# Reverse Engineering
+# ===========================
+.re/
