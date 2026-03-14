@@ -1,0 +1,116 @@
+<template>
+  <div class="login-page">
+    <div class="login-header">
+      <h1 class="app-title">Numina</h1>
+      <p class="app-subtitle">家庭资产可视化管理</p>
+    </div>
+
+    <van-form @submit="onSubmit" class="login-form">
+      <van-cell-group inset>
+        <van-field
+          v-model="form.username"
+          name="username"
+          label="用户名"
+          placeholder="请输入用户名"
+          :rules="[{ required: true, message: '请输入用户名' }]"
+        />
+        <van-field
+          v-model="form.password"
+          type="password"
+          name="password"
+          label="密码"
+          placeholder="请输入密码"
+          :rules="[{ required: true, message: '请输入密码' }]"
+        />
+      </van-cell-group>
+
+      <div class="form-actions">
+        <van-button round block type="primary" native-type="submit" :loading="loading">
+          登录
+        </van-button>
+      </div>
+    </van-form>
+
+    <div class="login-links">
+      <router-link to="/register">创建家庭</router-link>
+      <span class="divider">|</span>
+      <router-link to="/join-family">加入家庭</router-link>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { showToast } from 'vant'
+import { useAuthStore } from '@/stores/auth'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const loading = ref(false)
+
+const form = ref({
+  username: '',
+  password: ''
+})
+
+async function onSubmit() {
+  loading.value = true
+  try {
+    await authStore.login(form.value)
+    showToast('登录成功')
+    router.push('/')
+  } catch {
+    // Error handled by interceptor
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<style scoped>
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 15vh;
+}
+.login-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+.app-title {
+  font-size: 36px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0;
+  letter-spacing: 2px;
+}
+.app-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 8px;
+}
+.login-form {
+  width: 100%;
+  max-width: 400px;
+}
+.form-actions {
+  padding: 24px 16px 0;
+}
+.login-links {
+  margin-top: 20px;
+  text-align: center;
+}
+.login-links a {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: none;
+  font-size: 14px;
+}
+.divider {
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 12px;
+}
+</style>
