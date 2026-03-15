@@ -48,5 +48,13 @@ export const useLiabilityStore = defineStore('liability', () => {
     if (currentLiability.value?.id === id) currentLiability.value = null
   }
 
-  return { liabilities, currentLiability, loading, fetchLiabilities, fetchLiability, createLiability, updateLiability, deleteLiability }
+  async function recordPayment(id: string, amount: number) {
+    const res = await liabilityApi.recordPayment(id, amount)
+    const idx = liabilities.value.findIndex(l => l.id === id)
+    if (idx !== -1) liabilities.value[idx] = res.data
+    if (currentLiability.value?.id === id) currentLiability.value = res.data
+    return res.data
+  }
+
+  return { liabilities, currentLiability, loading, fetchLiabilities, fetchLiability, createLiability, updateLiability, deleteLiability, recordPayment }
 })

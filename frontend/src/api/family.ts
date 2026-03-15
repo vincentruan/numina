@@ -10,7 +10,7 @@ export function getMembers() {
 }
 
 export function regenerateInviteCode() {
-  return http.post<{ invite_code: string }>('/family/regenerate-invite-code')
+  return http.post<{ invite_code: string }>('/family/invite-code')
 }
 
 export function updateMemberRole(userId: string, role: 'owner' | 'member') {

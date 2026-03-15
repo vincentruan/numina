@@ -21,6 +21,7 @@ class AssetCreate(BaseModel):
     usage_frequency: str | None = None
     properties: str | None = None
     notes: str | None = None
+    target_daily_cost: float | None = None
     tag_ids: list[str] = []
 
 
@@ -42,11 +43,40 @@ class AssetUpdate(BaseModel):
     usage_frequency: str | None = None
     properties: str | None = None
     notes: str | None = None
+    target_daily_cost: float | None = None
     tag_ids: list[str] | None = None
+
+
+class AssetSellRequest(BaseModel):
+    sell_price: float
+    sell_fee: float = 0
+    sell_channel: str | None = None
+    notes: str | None = None
+
+
+class AssetSellResponse(BaseModel):
+    asset_id: str
+    name: str
+    net_recovery: float
+    total_profit_loss: float
+    actual_daily_cost: float
+    target_daily_cost: float | None
+    days_held: int
+    purchase_price: float | None
+    sell_price: float
 
 
 class AssetValueUpdate(BaseModel):
     current_value: float
+
+
+class ValuationResponse(BaseModel):
+    id: str
+    asset_id: str
+    value: float
+    valued_at: datetime
+    notes: str | None = None
+    model_config = {"from_attributes": True}
 
 
 class TagBrief(BaseModel):
@@ -89,6 +119,12 @@ class AssetResponse(BaseModel):
     properties: str | None = None
     notes: str | None = None
     is_archived: bool
+    sell_price: float | None = None
+    sell_date: date | None = None
+    sell_fee: float | None = None
+    sell_channel: str | None = None
+    retire_date: date | None = None
+    target_daily_cost: float | None = None
     tags: list[TagBrief] = []
     daily_cost: float | None = None
     return_rate: float | None = None

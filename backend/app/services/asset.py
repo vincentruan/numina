@@ -15,7 +15,8 @@ def list_assets(
     category_id: str | None = None,
     asset_type: str | None = None,
     asset_status: str | None = None,
-    tag: str | None = None,
+    tag_id: str | None = None,
+    search: str | None = None,
     sort: str | None = None,
 ) -> list[Asset]:
     query = (
@@ -29,8 +30,10 @@ def list_assets(
         query = query.filter(Asset.asset_type == asset_type)
     if asset_status:
         query = query.filter(Asset.status == asset_status)
-    if tag:
-        query = query.join(asset_tags).join(Tag).filter(Tag.id == tag)
+    if tag_id:
+        query = query.join(asset_tags).join(Tag).filter(Tag.id == tag_id)
+    if search:
+        query = query.filter(Asset.name.ilike(f"%{search}%"))
 
     if sort == "value":
         query = query.order_by(Asset.current_value.desc().nullslast())
@@ -130,8 +133,82 @@ def archive_asset(db: Session, user: User, asset_id: str) -> Asset:
 
 
 def update_asset_value(db: Session, user: User, asset_id: str, value: float) -> Asset:
+    from app.models.valuation import AssetValuation
     asset = get_asset(db, user, asset_id)
     asset.current_value = value
+    valuation = AssetValuation(asset_id=asset.id, value=value)
+    db.add(valuation)
     db.commit()
     db.refresh(asset)
     return asset
+
+
+def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
+    asset = get_asset(db, user, asset_id)
+    if asset.status == 'sold':
+        raise HTTPException(status_code=400, detail="资产已卖出")
+
+    asset.status = 'sold'
+    asset.sell_price = req.sell_price
+    asset.sell_fee = req.sell_fee
+    asset.sell_channel = req.sell_channel
+    asset.sell_date = date.today()
+    if req.notes:
+        asset.notes = req.notes
+
+    net_recovery = req.sell_price - (req.sell_fee or 0)
+    days_held = (date.today() - asset.purchase_date).days if asset.purchase_date else 0
+
+    years = days_held / 365.0 if days_held > 0 else 0
+    total_maintenance = (asset.annual_maintenance_cost or 0) * years
+    total_cost = (asset.purchase_price or 0) + total_maintenance
+    total_profit_loss = net_recovery - total_cost
+    actual_daily_cost = round(total_cost / days_held, 2) if days_held > 0 else 0
+
+    db.commit()
+    db.refresh(asset)
+
+    return {
+        "asset_id": asset.id,
+        "name": asset.name,
+        "net_recovery": round(net_recovery, 2),
+        "total_profit_loss": round(total_profit_loss, 2),
+        "actual_daily_cost": actual_daily_cost,
+        "target_daily_cost": asset.target_daily_cost,
+        "days_held": days_held,
+        "purchase_price": asset.purchase_price,
+        "sell_price": req.sell_price,
+    }
+
+
+def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
+    asset = get_asset(db, user, asset_id)
+    if asset.status == 'sold':
+        raise HTTPException(status_code=400, detail="已卖出的资产不能退役")
+    asset.status = 'retired'
+    asset.retire_date = date.today()
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
+    asset = get_asset(db, user, asset_id)
+    if asset.status not in ('retired', 'idle'):
+        raise HTTPException(status_code=400, detail="只有退役或闲置的资产可以恢复服役")
+    asset.status = 'in_use'
+    asset.retire_date = None
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def get_valuations(db: Session, user: User, asset_id: str) -> list:
+    from app.models.valuation import AssetValuation
+    get_asset(db, user, asset_id)  # Verify access
+    return (
+        db.query(AssetValuation)
+        .filter(AssetValuation.asset_id == asset_id)
+        .order_by(AssetValuation.valued_at.desc())
+        .all()
+    )

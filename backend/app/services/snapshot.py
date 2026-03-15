@@ -4,9 +4,28 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.models.asset import Asset
+from app.models.family import Family
 from app.models.liability import Liability
 from app.models.snapshot import AssetSnapshot
 from app.models.user import User
+
+
+def auto_generate_daily_snapshots(db: Session) -> None:
+    """Generate today's snapshots for all families that don't have one yet."""
+    today = date.today()
+    families = db.query(Family).all()
+    for family in families:
+        existing = (
+            db.query(AssetSnapshot)
+            .filter(
+                AssetSnapshot.family_id == family.id,
+                AssetSnapshot.user_id == None,
+                AssetSnapshot.snapshot_date == today,
+            )
+            .first()
+        )
+        if not existing:
+            generate_snapshots(db, family.id)
 
 
 def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:

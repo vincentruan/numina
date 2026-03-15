@@ -74,3 +74,11 @@ def get_investment_returns(
     user: User = Depends(get_current_user),
 ):
     return dashboard_service.get_investment_returns(db, user)
+
+
+@router.get("/states-summary")
+def get_states_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return dashboard_service.get_states_summary(db, user)

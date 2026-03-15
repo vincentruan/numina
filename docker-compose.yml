@@ -22,7 +22,7 @@ services:
     restart: unless-stopped
 
   nginx:
-    image: nginx:alpine
+    image: docker.xuanyuan.me/library/nginx:alpine 
     container_name: numina-nginx
     restart: unless-stopped
     ports:

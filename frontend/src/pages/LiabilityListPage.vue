@@ -19,7 +19,7 @@
           v-for="item in liabilityStore.liabilities"
           :key="item.id"
           :liability="item"
-          @click="$router.push(`/liabilities/${item.id}/edit`)"
+          @click="$router.push(`/liabilities/${item.id}`)"
         />
       </div>
       <EmptyState v-else description="暂无负债记录">

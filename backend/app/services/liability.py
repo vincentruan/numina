@@ -6,13 +6,11 @@ from app.models.user import User
 from app.schemas.liability import LiabilityCreate, LiabilityUpdate
 
 
-def list_liabilities(db: Session, user: User) -> list[Liability]:
-    return (
-        db.query(Liability)
-        .filter(Liability.family_id == user.family_id, Liability.is_active == True)
-        .order_by(Liability.created_at.desc())
-        .all()
-    )
+def list_liabilities(db: Session, user: User, is_active: bool | None = None) -> list[Liability]:
+    query = db.query(Liability).filter(Liability.family_id == user.family_id)
+    if is_active is not None:
+        query = query.filter(Liability.is_active == is_active)
+    return query.order_by(Liability.created_at.desc()).all()
 
 
 def get_liability(db: Session, user: User, liability_id: str) -> Liability:
@@ -65,10 +63,24 @@ def delete_liability(db: Session, user: User, liability_id: str) -> None:
 
 
 def record_payment(db: Session, user: User, liability_id: str, amount: float) -> Liability:
+    from app.models.payment_record import PaymentRecord
     liability = get_liability(db, user, liability_id)
     liability.remaining_amount = max(0, liability.remaining_amount - amount)
     if liability.remaining_amount == 0:
         liability.is_active = False
+    record = PaymentRecord(liability_id=liability_id, amount=amount)
+    db.add(record)
     db.commit()
     db.refresh(liability)
     return liability
+
+
+def get_payments(db: Session, user: User, liability_id: str) -> list:
+    from app.models.payment_record import PaymentRecord
+    get_liability(db, user, liability_id)  # Verify access
+    return (
+        db.query(PaymentRecord)
+        .filter(PaymentRecord.liability_id == liability_id)
+        .order_by(PaymentRecord.paid_at.desc())
+        .all()
+    )

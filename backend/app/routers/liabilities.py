@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
@@ -11,16 +11,18 @@ from app.schemas.liability import (
     PaymentRequest,
 )
 from app.services import liability as liability_service
+from app.services.activity import record_activity
 
 router = APIRouter(prefix="/liabilities", tags=["liabilities"])
 
 
 @router.get("/", response_model=list[LiabilityResponse])
 def list_liabilities(
+    is_active: bool | None = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return liability_service.list_liabilities(db, user)
+    return liability_service.list_liabilities(db, user, is_active)
 
 
 @router.post("/", response_model=LiabilityResponse, status_code=201)
@@ -29,7 +31,9 @@ def create_liability(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return liability_service.create_liability(db, user, req)
+    liability = liability_service.create_liability(db, user, req)
+    record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", liability.original_amount)
+    return liability
 
 
 @router.get("/{liability_id}", response_model=LiabilityResponse)
@@ -68,4 +72,15 @@ def record_payment(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    return liability_service.record_payment(db, user, liability_id, req.amount)
+    liability = liability_service.record_payment(db, user, liability_id, req.amount)
+    record_activity(db, user, "payment", "liability", liability_id, f"还款「{liability.name}」", req.amount)
+    return liability
+
+
+@router.get("/{liability_id}/payments")
+def get_payments(
+    liability_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    return liability_service.get_payments(db, user, liability_id)

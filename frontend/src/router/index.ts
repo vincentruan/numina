@@ -52,6 +52,11 @@ const router = createRouter({
           component: () => import('@/pages/AssetFormPage.vue')
         },
         {
+          path: 'assets/:id/sell',
+          name: 'AssetSell',
+          component: () => import('@/pages/AssetSellPage.vue')
+        },
+        {
           path: 'liabilities',
           name: 'LiabilityList',
           component: () => import('@/pages/LiabilityListPage.vue')
@@ -65,6 +70,26 @@ const router = createRouter({
           path: 'liabilities/:id/edit',
           name: 'LiabilityEdit',
           component: () => import('@/pages/LiabilityFormPage.vue')
+        },
+        {
+          path: 'liabilities/:id',
+          name: 'LiabilityDetail',
+          component: () => import('@/pages/LiabilityDetailPage.vue')
+        },
+        {
+          path: 'wishes',
+          name: 'WishList',
+          component: () => import('@/pages/WishListPage.vue')
+        },
+        {
+          path: 'wishes/new',
+          name: 'WishCreate',
+          component: () => import('@/pages/WishFormPage.vue')
+        },
+        {
+          path: 'wishes/:id/edit',
+          name: 'WishEdit',
+          component: () => import('@/pages/WishFormPage.vue')
         },
         {
           path: 'family',

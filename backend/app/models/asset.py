@@ -49,6 +49,12 @@ class Asset(Base):
     usage_frequency: Mapped[str | None] = mapped_column(String(20), nullable=True)  # daily/weekly/monthly/rarely/idle
     properties: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sell_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sell_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    sell_fee: Mapped[float | None] = mapped_column(Float, nullable=True, default=0)
+    sell_channel: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    retire_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    target_daily_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

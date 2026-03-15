@@ -50,11 +50,44 @@ export interface Asset {
   usage_frequency?: 'daily' | 'weekly' | 'monthly' | 'rarely' | 'idle'
   properties?: string
   notes?: string
+  sell_price?: number
+  sell_date?: string
+  sell_fee?: number
+  sell_channel?: string
+  retire_date?: string
+  target_daily_cost?: number
   tags?: Tag[]
   daily_cost?: number
   return_rate?: number
   created_at: string
   updated_at: string
+}
+
+export interface AssetSellRequest {
+  sell_price: number
+  sell_fee?: number
+  sell_channel?: string
+  notes?: string
+}
+
+export interface AssetSellResponse {
+  asset_id: string
+  name: string
+  net_recovery: number
+  total_profit_loss: number
+  actual_daily_cost: number
+  target_daily_cost: number | null
+  days_held: number
+  purchase_price: number | null
+  sell_price: number
+}
+
+export interface AssetValuation {
+  id: string
+  asset_id: string
+  value: number
+  valued_at: string
+  notes?: string
 }
 
 export interface Liability {
@@ -87,7 +120,7 @@ export interface DashboardOverview {
   total_liabilities: number
   net_worth: number
   asset_count: number
-  month_change_percent: number
+  month_over_month_change: number
 }
 
 export interface AllocationItem {
@@ -107,19 +140,51 @@ export interface TrendPoint {
 }
 
 export interface DailyCostItem {
-  asset_id: string
+  id: string
   name: string
   daily_cost: number
-  category_icon: string
+  icon: string
+  category_name: string
+  days_used: number
+  total_cost: number
 }
 
 export interface InvestmentReturnItem {
-  asset_id: string
+  id: string
   name: string
   purchase_price: number
   current_value: number
   return_rate: number
-  return_amount: number
+  profit: number
+  category_name: string
+  icon: string
+}
+
+export interface TopAssetItem {
+  id: string
+  name: string
+  category_name: string
+  icon: string
+  current_value: number
+}
+
+export interface AllocationResponse {
+  items: AllocationItem[]
+  total: number
+}
+
+export interface TrendResponse {
+  points: TrendPoint[]
+}
+
+export interface LowUsageItem {
+  id: string
+  name: string
+  category_name: string
+  icon: string
+  current_value: number
+  usage_frequency: string
+  purchase_date?: string
 }
 
 export interface LoginRequest {
@@ -143,8 +208,8 @@ export interface JoinFamilyRequest {
 
 export interface AuthResponse {
   access_token: string
+  refresh_token: string
   token_type: string
-  user: User
 }
 
 export interface AssetFilter {
@@ -162,4 +227,28 @@ export interface PaginatedResponse<T> {
   total: number
   page: number
   page_size: number
+}
+
+export interface Wish {
+  id: string
+  family_id: string
+  user_id: string
+  name: string
+  category_id?: string
+  expected_price?: number
+  target_date?: string
+  priority: number
+  notes?: string
+  is_fulfilled: boolean
+  fulfilled_asset_id?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PaymentRecord {
+  id: string
+  liability_id: string
+  amount: number
+  paid_at: string
+  notes?: string
 }

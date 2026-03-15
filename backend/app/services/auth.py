@@ -1,3 +1,4 @@
+import time
 from uuid import uuid4
 
 import bcrypt
@@ -14,6 +15,39 @@ from app.schemas.auth import (
     TokenResponse,
     UpdateProfileRequest,
 )
+
+# Login rate limiting: {username: (fail_count, first_fail_time)}
+_login_attempts: dict[str, tuple[int, float]] = {}
+_MAX_ATTEMPTS = 5
+_LOCKOUT_SECONDS = 15 * 60  # 15 minutes
+
+
+def _check_rate_limit(username: str) -> None:
+    if username not in _login_attempts:
+        return
+    count, first_time = _login_attempts[username]
+    if count >= _MAX_ATTEMPTS:
+        elapsed = time.time() - first_time
+        if elapsed < _LOCKOUT_SECONDS:
+            remaining = int((_LOCKOUT_SECONDS - elapsed) / 60) + 1
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"登录失败次数过多，请 {remaining} 分钟后重试",
+            )
+        # Lockout expired, reset
+        del _login_attempts[username]
+
+
+def _record_failed_login(username: str) -> None:
+    if username in _login_attempts:
+        count, first_time = _login_attempts[username]
+        _login_attempts[username] = (count + 1, first_time)
+    else:
+        _login_attempts[username] = (1, time.time())
+
+
+def _clear_failed_login(username: str) -> None:
+    _login_attempts.pop(username, None)
 
 
 def hash_password(password: str) -> str:
@@ -56,10 +90,14 @@ def register(db: Session, req: RegisterRequest) -> TokenResponse:
 
 
 def login(db: Session, req: LoginRequest) -> TokenResponse:
+    _check_rate_limit(req.username)
+
     user = db.query(User).filter(User.username == req.username, User.is_active == True).first()
     if not user or not verify_password(req.password, user.password_hash):
+        _record_failed_login(req.username)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
 
+    _clear_failed_login(req.username)
     return TokenResponse(
         access_token=create_access_token({"sub": user.id}),
         refresh_token=create_refresh_token({"sub": user.id}),

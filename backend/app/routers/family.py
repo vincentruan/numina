@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
@@ -15,6 +16,10 @@ from app.services.snapshot import generate_snapshots
 router = APIRouter(prefix="/family", tags=["family"])
 
 
+class UpdateRoleRequest(BaseModel):
+    role: str
+
+
 @router.get("/", response_model=FamilyResponse)
 def get_family(
     db: Session = Depends(get_db),
@@ -29,6 +34,15 @@ def get_family(
         created_by=family.created_by,
         members=[UserResponse.model_validate(m) for m in members],
     )
+
+
+@router.get("/members", response_model=list[UserResponse])
+def get_members(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    members = family_service.get_family_members(db, user)
+    return [UserResponse.model_validate(m) for m in members]
 
 
 @router.get("/aggregate")
@@ -99,11 +113,34 @@ def get_member_summary(
     )
 
 
+@router.patch("/members/{member_id}/role", response_model=UserResponse)
+def update_member_role(
+    member_id: str,
+    body: UpdateRoleRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    member = family_service.update_member_role(db, user, member_id, body.role)
+    return UserResponse.model_validate(member)
+
+
+@router.delete("/members/{member_id}")
+def remove_member(
+    member_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    family_service.remove_member(db, user, member_id)
+    return {"detail": "已移除"}
+
+
 @router.post("/invite-code")
 def regenerate_invite_code(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if user.role != 'owner':
+        raise HTTPException(status_code=403, detail="只有家庭创建者可以重新生成邀请码")
     family = family_service.regenerate_invite_code(db, user)
     return {"invite_code": family.invite_code}
 

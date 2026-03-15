@@ -1,16 +1,19 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, Asset } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
+import type { ActivityItem } from '@/api/dashboard'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const overview = ref<DashboardOverview | null>(null)
   const allocation = ref<AllocationItem[]>([])
+  const allocationTotal = ref(0)
   const trend = ref<TrendPoint[]>([])
-  const topAssets = ref<Asset[]>([])
+  const topAssets = ref<TopAssetItem[]>([])
   const dailyCostRanking = ref<DailyCostItem[]>([])
-  const lowUsageAssets = ref<Asset[]>([])
+  const lowUsageAssets = ref<LowUsageItem[]>([])
   const investmentReturns = ref<InvestmentReturnItem[]>([])
+  const recentActivities = ref<ActivityItem[]>([])
   const loading = ref(false)
 
   async function fetchOverview() {
@@ -20,12 +23,13 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   async function fetchAllocation() {
     const res = await dashboardApi.getAllocation()
-    allocation.value = res.data
+    allocation.value = res.data.items
+    allocationTotal.value = res.data.total
   }
 
   async function fetchTrend(period: 'month' | 'quarter' | 'year' = 'month') {
     const res = await dashboardApi.getTrend(period)
-    trend.value = res.data
+    trend.value = res.data.points
   }
 
   async function fetchTopAssets() {
@@ -48,6 +52,15 @@ export const useDashboardStore = defineStore('dashboard', () => {
     investmentReturns.value = res.data
   }
 
+  async function fetchRecentActivities() {
+    try {
+      const res = await dashboardApi.getRecentActivities()
+      recentActivities.value = res.data
+    } catch {
+      // non-critical
+    }
+  }
+
   async function fetchAll() {
     loading.value = true
     try {
@@ -58,7 +71,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchTopAssets(),
         fetchDailyCostRanking(),
         fetchLowUsageAssets(),
-        fetchInvestmentReturns()
+        fetchInvestmentReturns(),
+        fetchRecentActivities(),
       ])
     } finally {
       loading.value = false
@@ -66,9 +80,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   return {
-    overview, allocation, trend, topAssets, dailyCostRanking,
-    lowUsageAssets, investmentReturns, loading,
+    overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
+    lowUsageAssets, investmentReturns, recentActivities, loading,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
-    fetchDailyCostRanking, fetchLowUsageAssets, fetchInvestmentReturns, fetchAll
+    fetchDailyCostRanking, fetchLowUsageAssets, fetchInvestmentReturns,
+    fetchRecentActivities, fetchAll
   }
 })

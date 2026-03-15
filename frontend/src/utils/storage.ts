@@ -1,4 +1,5 @@
 const TOKEN_KEY = 'numina_token'
+const REFRESH_TOKEN_KEY = 'numina_refresh_token'
 const USER_KEY = 'numina_user'
 
 export function getToken(): string | null {
@@ -11,6 +12,18 @@ export function setToken(token: string): void {
 
 export function removeToken(): void {
   localStorage.removeItem(TOKEN_KEY)
+}
+
+export function getRefreshToken(): string | null {
+  return localStorage.getItem(REFRESH_TOKEN_KEY)
+}
+
+export function setRefreshToken(token: string): void {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token)
+}
+
+export function removeRefreshToken(): void {
+  localStorage.removeItem(REFRESH_TOKEN_KEY)
 }
 
 export function getUser<T>(): T | null {
@@ -33,5 +46,6 @@ export function removeUser(): void {
 
 export function clearAuth(): void {
   removeToken()
+  removeRefreshToken()
   removeUser()
 }

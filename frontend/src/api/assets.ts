@@ -1,5 +1,5 @@
 import http from './index'
-import type { Asset, AssetFilter } from '@/types'
+import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse, AssetValuation } from '@/types'
 
 export function getAssets(params?: AssetFilter) {
   return http.get<Asset[]>('/assets', { params })
@@ -22,5 +22,21 @@ export function deleteAsset(id: string) {
 }
 
 export function updateAssetValue(id: string, currentValue: number) {
-  return http.patch<Asset>(`/assets/${id}/value`, { current_value: currentValue })
+  return http.put<Asset>(`/assets/${id}/value`, { current_value: currentValue })
+}
+
+export function sellAsset(id: string, data: AssetSellRequest) {
+  return http.post<AssetSellResponse>(`/assets/${id}/sell`, data)
+}
+
+export function retireAsset(id: string) {
+  return http.post<Asset>(`/assets/${id}/retire`)
+}
+
+export function reactivateAsset(id: string) {
+  return http.post<Asset>(`/assets/${id}/reactivate`)
+}
+
+export function getValuations(id: string) {
+  return http.get<AssetValuation[]>(`/assets/${id}/valuations`)
 }

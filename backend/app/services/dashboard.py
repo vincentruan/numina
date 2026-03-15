@@ -252,3 +252,21 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
 
     items.sort(key=lambda x: x.return_rate, reverse=True)
     return items
+
+
+def get_states_summary(db: Session, user: User) -> dict:
+    family_id = user.family_id
+    results = (
+        db.query(
+            Asset.status,
+            func.count(Asset.id).label("count"),
+            func.coalesce(func.sum(Asset.current_value), 0).label("total_value"),
+        )
+        .filter(Asset.family_id == family_id, Asset.is_archived == False)
+        .group_by(Asset.status)
+        .all()
+    )
+    states = {}
+    for r in results:
+        states[r.status] = {"count": r.count, "total_value": r.total_value}
+    return {"states": states}

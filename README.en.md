@@ -1,0 +1,319 @@
+# Numina - Family Asset Visualization & Management
+
+<div align="center">
+
+**Privacy-first, self-hosted family financial management platform**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Vue 3](https://img.shields.io/badge/vue-3.x-green.svg)](https://vuejs.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+
+[简体中文](./README.md) | English
+
+</div>
+
+## Overview
+
+Numina is a fully self-hosted family asset visualization and management system. It helps family members collaboratively track, manage, and visualize assets and liabilities. The core design principle is **privacy** — all financial data stays entirely under your control, deployable on a home LAN or private cloud server.
+
+### Key Features
+
+- 🏠 **Full Asset Coverage** — Physical assets (real estate, vehicles, electronics) and financial assets (deposits, funds, stocks, bonds)
+- 💳 **Liability Management** — Track mortgages, car loans, credit cards with automatic net worth calculation
+- 👨‍👩‍👧‍👦 **Multi-User Family** — Each family member records their own assets, with family-level aggregate views
+- 📊 **Data Visualization** — Financial dashboard, net worth trend charts, asset allocation pie charts
+- 💰 **Smart Analytics** — Daily cost calculation, low-usage asset alerts, investment return rankings
+- 🔐 **Privacy & Security** — Fully self-hosted, JWT authentication, bcrypt password hashing
+- 📱 **Mobile-First** — Responsive design optimized for mobile browsers
+- 🐳 **One-Click Deploy** — Docker Compose for quick setup, supports LAN and cloud deployment
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
+| Backend | Python 3.11+ + FastAPI + SQLAlchemy + Alembic |
+| Database | SQLite |
+| Auth | JWT (access token + refresh token) |
+| Deploy | Docker + docker-compose + Nginx |
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose
+- (Optional) Python 3.11+ and Node.js 18+ for local development
+
+### Deploy with Docker (Recommended)
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/yourusername/numina.git
+cd numina
+
+# 2. Start all services
+docker-compose up -d
+
+# 3. Access the application
+# Open http://localhost:8080 in your browser
+```
+
+**Environment Variables** (optional):
+
+Create a `.env` file:
+
+```env
+PORT=8080                                    # Nginx port
+SECRET_KEY=your-secret-key-here              # JWT signing key (must set in production)
+DATABASE_URL=sqlite:////app/data/numina.db   # Database path
+```
+
+### Local Development
+
+#### Backend
+
+```bash
+cd backend
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run development server
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run tests
+pytest tests/ -v
+```
+
+#### Frontend
+
+```bash
+cd frontend
+
+# Install dependencies
+npm ci
+
+# Run development server (proxies /api to localhost:8000)
+npm run dev
+
+# Build for production
+npm run build
+```
+
+## Features
+
+### Asset Management
+
+- **Physical Assets**: Real estate, vehicles, electronics, appliances, furniture, jewelry, clothing, cosmetics, sports equipment, toys, pets, instruments, bags
+- **Financial Assets**: Deposits, funds, stocks, bonds, insurance, wealth management products, cryptocurrency
+- **Asset Properties**: Purchase price, current value, purchase date, usage frequency, expected lifespan, annual maintenance cost
+- **Smart Calculations**: Daily usage cost, investment return rate, low-usage detection
+
+### Liability Management
+
+- **Liability Types**: Mortgage, car loan, credit card, personal loan
+- **Properties**: Original amount, remaining principal, monthly payment, annual interest rate, start/end date, institution
+- **Payment Tracking**: Record each payment, auto-update remaining principal, auto-mark when fully paid
+- **Asset Linking**: Link liabilities to corresponding assets (e.g., mortgage → property)
+
+### Data Visualization
+
+- **Financial Dashboard**: Total assets, total liabilities, net worth, asset count, month-over-month change
+- **Net Worth Trend**: Monthly/quarterly/yearly net worth trend chart
+- **Asset Allocation**: Pie chart showing asset distribution by category
+- **Daily Cost Ranking**: Assets ranked by daily usage cost
+- **Low-Usage Alerts**: Flag idle or rarely-used assets
+- **Investment Returns**: Financial assets ranked by return rate
+
+### Multi-User & Family
+
+- **Registration**: Create a family and become the owner
+- **Invite System**: Invite family members via 6-digit invite code
+- **Role Management**: Owners can manage member roles
+- **Family Aggregate**: View combined asset summary across all family members
+- **Data Isolation**: Complete data isolation between different families
+
+## Project Structure
+
+```
+numina/
+├── backend/                    # FastAPI backend
+│   ├── app/
+│   │   ├── models/            # SQLAlchemy ORM models
+│   │   ├── schemas/           # Pydantic request/response schemas
+│   │   ├── routers/           # API route handlers
+│   │   ├── services/          # Business logic layer
+│   │   ├── auth/              # JWT authentication
+│   │   └── seed/              # Database seed data
+│   ├── tests/                 # pytest tests (36 tests, all passing)
+│   ├── alembic/               # Database migrations
+│   └── Dockerfile
+├── frontend/                   # Vue 3 frontend
+│   ├── src/
+│   │   ├── api/               # Axios API client
+│   │   ├── stores/            # Pinia state management
+│   │   ├── pages/             # Page components
+│   │   ├── components/        # Reusable components
+│   │   ├── router/            # Vue Router configuration
+│   │   └── types/             # TypeScript type definitions
+│   └── Dockerfile
+├── docker-compose.yml          # Docker Compose configuration
+├── nginx.conf                  # Nginx reverse proxy configuration
+└── docs/                       # Project documentation
+```
+
+## Security
+
+- **Password Encryption**: bcrypt hashing
+- **JWT Authentication**: Access token (15 min) + refresh token (7 days)
+- **Auto Refresh**: Frontend automatically refreshes expired tokens seamlessly
+- **Family Isolation**: Users can only access their own family's data
+- **HTTPS Support**: Recommended for production deployment
+
+## API Documentation
+
+After starting the backend, visit:
+
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+### Key API Endpoints
+
+```
+POST   /api/v1/auth/register              # Register (create family)
+POST   /api/v1/auth/login                 # Login
+POST   /api/v1/auth/refresh               # Refresh token
+POST   /api/v1/auth/family/join           # Join family
+
+GET    /api/v1/assets                     # List assets (with filters)
+POST   /api/v1/assets                     # Create asset
+PUT    /api/v1/assets/{id}/value          # Quick value update
+
+GET    /api/v1/liabilities                # List liabilities
+POST   /api/v1/liabilities                # Create liability
+PUT    /api/v1/liabilities/{id}/payment   # Record payment
+
+GET    /api/v1/dashboard/overview         # Dashboard overview
+GET    /api/v1/dashboard/allocation       # Asset allocation
+GET    /api/v1/dashboard/trend            # Net worth trend
+GET    /api/v1/dashboard/daily-cost-ranking       # Daily cost ranking
+GET    /api/v1/dashboard/low-usage-assets         # Low-usage assets
+GET    /api/v1/dashboard/investment-returns       # Investment returns
+
+GET    /api/v1/family                     # Family info
+GET    /api/v1/family/aggregate           # Family aggregate
+```
+
+## Testing
+
+The backend includes 36 automated tests covering authentication, assets, liabilities, and dashboard features.
+
+```bash
+cd backend
+pytest tests/ -v
+```
+
+**Test Results**: ✅ 36 passed, 0 failed
+
+## Deployment
+
+### LAN Deployment (Home NAS / Raspberry Pi)
+
+```bash
+git clone https://github.com/yourusername/numina.git
+cd numina
+docker-compose up -d
+# Access at http://<NAS-IP>:8080
+```
+
+### Cloud Deployment
+
+```bash
+git clone https://github.com/yourusername/numina.git
+cd numina
+
+# Configure environment
+cat > .env << EOF
+SECRET_KEY=$(openssl rand -base64 32)
+PORT=8080
+EOF
+
+docker-compose up -d
+# Configure HTTPS with Caddy or Nginx
+```
+
+### Data Backup
+
+The SQLite database is stored at `./data/numina.db`. Simply back up this file regularly.
+
+```bash
+cp ./data/numina.db ./backups/numina-$(date +%Y%m%d).db
+```
+
+## Roadmap
+
+### ✅ MVP (Current)
+
+- [x] User authentication & family management
+- [x] Asset & liability CRUD
+- [x] Data visualization dashboard
+- [x] Daily cost calculation & smart analytics
+- [x] Token auto-refresh
+- [x] Liability payment tracking
+- [x] 36 automated tests
+
+### 🔜 Phase 2: Smart Analysis
+
+- [ ] Spending leak detection (idle asset reports)
+- [ ] Buy vs. rent comparison calculator
+- [ ] Spending equivalence converter
+
+### 🔮 Phase 3: Asset Time Machine
+
+- [ ] What-if analysis for different spending choices
+- [ ] Future financial projection based on historical data
+- [ ] Inflation-adjusted purchasing power tracking
+
+### 🔔 Phase 4: Smart Reminders
+
+- [ ] Large purchase cooling-off reminders
+- [ ] Asset allocation imbalance alerts
+- [ ] Insurance/warranty expiration reminders
+
+### 📤 Phase 5: Data Import/Export
+
+- [ ] CSV/Excel batch import
+- [ ] Monthly/yearly financial report PDF generation
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Design inspired by the "YouShu" (有数) App
+- UI Components: [Vant](https://vant-ui.github.io/)
+- Charts: [Apache ECharts](https://echarts.apache.org/)
+- Backend: [FastAPI](https://fastapi.tiangolo.com/)
+- Frontend: [Vue.js](https://vuejs.org/)
+
+---
+
+<div align="center">
+
+**Track wisely, decide smartly 💰**
+
+Made with ❤️ by Numina Team
+
+</div>

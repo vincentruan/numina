@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { User, LoginRequest, RegisterRequest, JoinFamilyRequest } from '@/types'
 import * as authApi from '@/api/auth'
-import { getToken, setToken, removeToken, getUser, setUser, clearAuth } from '@/utils/storage'
+import { getToken, setToken, getUser, setUser, clearAuth, setRefreshToken } from '@/utils/storage'
 import router from '@/router'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -12,25 +12,25 @@ export const useAuthStore = defineStore('auth', () => {
   async function login(data: LoginRequest) {
     const res = await authApi.login(data)
     token.value = res.data.access_token
-    user.value = res.data.user
     setToken(res.data.access_token)
-    setUser(res.data.user)
+    setRefreshToken(res.data.refresh_token)
+    await fetchMe()
   }
 
   async function register(data: RegisterRequest) {
     const res = await authApi.register(data)
     token.value = res.data.access_token
-    user.value = res.data.user
     setToken(res.data.access_token)
-    setUser(res.data.user)
+    setRefreshToken(res.data.refresh_token)
+    await fetchMe()
   }
 
   async function joinFamily(data: JoinFamilyRequest) {
     const res = await authApi.joinFamily(data)
     token.value = res.data.access_token
-    user.value = res.data.user
     setToken(res.data.access_token)
-    setUser(res.data.user)
+    setRefreshToken(res.data.refresh_token)
+    await fetchMe()
   }
 
   async function fetchMe() {

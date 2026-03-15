@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { Asset, AssetFilter } from '@/types'
+import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse } from '@/types'
 import * as assetApi from '@/api/assets'
 
 export const useAssetStore = defineStore('asset', () => {
@@ -55,5 +55,33 @@ export const useAssetStore = defineStore('asset', () => {
     if (currentAsset.value?.id === id) currentAsset.value = res.data
   }
 
-  return { assets, currentAsset, loading, fetchAssets, fetchAsset, createAsset, updateAsset, deleteAsset, updateValue }
+  async function sellAsset(id: string, data: AssetSellRequest): Promise<AssetSellResponse> {
+    const res = await assetApi.sellAsset(id, data)
+    assets.value = assets.value.filter(a => a.id !== id)
+    if (currentAsset.value?.id === id) currentAsset.value = null
+    return res.data
+  }
+
+  async function retireAsset(id: string) {
+    const res = await assetApi.retireAsset(id)
+    const idx = assets.value.findIndex(a => a.id === id)
+    if (idx !== -1) assets.value[idx] = res.data
+    if (currentAsset.value?.id === id) currentAsset.value = res.data
+    return res.data
+  }
+
+  async function reactivateAsset(id: string) {
+    const res = await assetApi.reactivateAsset(id)
+    const idx = assets.value.findIndex(a => a.id === id)
+    if (idx !== -1) assets.value[idx] = res.data
+    if (currentAsset.value?.id === id) currentAsset.value = res.data
+    return res.data
+  }
+
+  return {
+    assets, currentAsset, loading,
+    fetchAssets, fetchAsset, createAsset, updateAsset, deleteAsset, updateValue,
+    sellAsset, retireAsset, reactivateAsset,
+  }
 })
+

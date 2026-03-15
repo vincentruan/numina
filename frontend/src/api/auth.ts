@@ -10,13 +10,13 @@ export function register(data: RegisterRequest) {
 }
 
 export function joinFamily(data: JoinFamilyRequest) {
-  return http.post<AuthResponse>('/auth/join-family', data)
+  return http.post<AuthResponse>('/auth/family/join', data)
 }
 
 export function getMe() {
   return http.get<User>('/auth/me')
 }
 
-export function refreshToken() {
-  return http.post<AuthResponse>('/auth/refresh')
+export function refreshToken(refreshToken: string) {
+  return http.post<AuthResponse>('/auth/refresh', { refresh_token: refreshToken })
 }

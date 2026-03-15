@@ -1,3 +1,5 @@
+import logging
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.seed.categories import seed_categories
+from app.services.snapshot import auto_generate_daily_snapshots
 
 # Import all models so Base.metadata knows about them
 from app.models.user import User  # noqa: F401
@@ -15,8 +18,18 @@ from app.models.asset import Asset  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.tag import Tag  # noqa: F401
+from app.models.wish import Wish  # noqa: F401
+from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.valuation import AssetValuation  # noqa: F401
+from app.models.activity import Activity  # noqa: F401
 
-from app.routers import auth, assets, liabilities, categories, tags, dashboard, family
+from app.routers import auth, assets, liabilities, categories, tags, dashboard, family, wishes
+from app.routers import export as export_router
+from app.routers import import_ as import_router
+from app.routers import activities as activities_router
+
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -25,8 +38,17 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_categories(db)
+        # Auto-generate daily snapshots for all families
+        try:
+            auto_generate_daily_snapshots(db)
+        except Exception as e:
+            logger.warning(f"自动快照生成失败: {e}")
     finally:
         db.close()
+
+    if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
+        logger.warning("生产环境 CORS_ORIGINS 设置为 ['*']，建议配置具体域名。")
+
     yield
 
 
@@ -47,6 +69,10 @@ app.include_router(categories.router, prefix="/api/v1")
 app.include_router(tags.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(family.router, prefix="/api/v1")
+app.include_router(export_router.router, prefix="/api/v1")
+app.include_router(import_router.router, prefix="/api/v1")
+app.include_router(wishes.router, prefix="/api/v1")
+app.include_router(activities_router.router, prefix="/api/v1")
 
 
 @app.get("/api/health")

@@ -1,105 +1,131 @@
 <template>
   <div class="dashboard-page">
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <!-- Net Worth Card -->
-      <div class="net-worth-card">
-        <div class="nw-label">净资产</div>
-        <div class="nw-amount">
-          <MoneyDisplay :amount="overview?.net_worth || 0" size="large" />
-        </div>
-        <div class="nw-change" :class="changeClass">
-          {{ changeText }} vs 上月
-        </div>
-        <van-grid :column-num="2" :border="false" class="nw-grid">
-          <van-grid-item>
-            <div class="grid-label">总资产</div>
-            <div class="grid-value positive">
-              <MoneyDisplay :amount="overview?.total_assets || 0" />
-            </div>
-          </van-grid-item>
-          <van-grid-item>
-            <div class="grid-label">总负债</div>
-            <div class="grid-value negative">
-              <MoneyDisplay :amount="overview?.total_liabilities || 0" />
-            </div>
-          </van-grid-item>
-        </van-grid>
+      <!-- Empty State for new users -->
+      <div v-if="!dashboardStore.loading && overview?.asset_count === 0" class="empty-dashboard">
+        <van-empty description="开始记录你的第一项资产">
+          <van-button type="primary" size="small" @click="$router.push('/assets/new')">
+            添加资产
+          </van-button>
+        </van-empty>
       </div>
 
-      <!-- Trend Chart -->
-      <TrendLineChart :data="dashboardStore.trend" @period-change="onPeriodChange" />
-
-      <!-- Allocation Chart -->
-      <AllocationPieChart :data="dashboardStore.allocation" />
-
-      <!-- Top 5 Assets -->
-      <van-cell-group v-if="dashboardStore.topAssets.length" inset title="Top 5 资产" class="section">
-        <van-cell
-          v-for="asset in dashboardStore.topAssets"
-          :key="asset.id"
-          :title="asset.name"
-          :label="asset.category?.name"
-          clickable
-          @click="$router.push(`/assets/${asset.id}`)"
-        >
-          <template #value>
-            <MoneyDisplay :amount="asset.current_value" />
-          </template>
-        </van-cell>
-      </van-cell-group>
-
-      <!-- Daily Cost Ranking -->
-      <van-cell-group v-if="dashboardStore.dailyCostRanking.length" inset title="日耗排行" class="section">
-        <van-cell
-          v-for="item in dashboardStore.dailyCostRanking"
-          :key="item.asset_id"
-          :title="`${item.category_icon} ${item.name}`"
-          clickable
-          @click="$router.push(`/assets/${item.asset_id}`)"
-        >
-          <template #value>
-            <span class="daily-cost-value">¥{{ item.daily_cost.toFixed(2) }}/天</span>
-          </template>
-        </van-cell>
-      </van-cell-group>
-
-      <!-- Low Usage Alert -->
-      <div v-if="dashboardStore.lowUsageAssets.length" class="section low-usage-section">
-        <van-notice-bar left-icon="info-o" :scrollable="false" wrapable>
-          <div>低使用率资产提醒</div>
-          <div v-for="asset in dashboardStore.lowUsageAssets" :key="asset.id" class="low-usage-item">
-            {{ asset.name }} - {{ usageText(asset.usage_frequency) }}
+      <template v-else>
+        <!-- Net Worth Card -->
+        <div class="net-worth-card">
+          <div class="nw-label">净资产</div>
+          <div class="nw-amount">
+            <MoneyDisplay :amount="overview?.net_worth || 0" size="large" />
           </div>
-        </van-notice-bar>
-      </div>
+          <div class="nw-change" :class="changeClass">
+            {{ changeText }} vs 上月
+          </div>
+          <van-grid :column-num="2" :border="false" class="nw-grid">
+            <van-grid-item>
+              <div class="grid-label">总资产</div>
+              <div class="grid-value positive">
+                <MoneyDisplay :amount="overview?.total_assets || 0" />
+              </div>
+            </van-grid-item>
+            <van-grid-item>
+              <div class="grid-label">总负债</div>
+              <div class="grid-value negative">
+                <MoneyDisplay :amount="overview?.total_liabilities || 0" />
+              </div>
+            </van-grid-item>
+          </van-grid>
+        </div>
 
-      <!-- Investment Returns -->
-      <van-cell-group v-if="dashboardStore.investmentReturns.length" inset title="投资收益排行" class="section">
-        <van-cell
-          v-for="item in dashboardStore.investmentReturns"
-          :key="item.asset_id"
-          :title="item.name"
-          :label="`本金 ¥${item.purchase_price.toLocaleString()}`"
-          clickable
-          @click="$router.push(`/assets/${item.asset_id}`)"
-        >
-          <template #value>
-            <div class="return-value">
-              <span :class="item.return_rate >= 0 ? 'positive' : 'negative'">
-                {{ item.return_rate >= 0 ? '+' : '' }}{{ item.return_rate.toFixed(2) }}%
-              </span>
-              <span class="return-amount">
-                {{ item.return_amount >= 0 ? '+' : '' }}¥{{ item.return_amount.toLocaleString() }}
-              </span>
+        <!-- Trend Chart -->
+        <TrendLineChart :data="dashboardStore.trend" @period-change="onPeriodChange" />
+
+        <!-- Allocation Chart -->
+        <AllocationPieChart :data="dashboardStore.allocation" />
+
+        <!-- Top 5 Assets -->
+        <van-cell-group v-if="dashboardStore.topAssets.length" inset title="Top 5 资产" class="section">
+          <van-cell
+            v-for="asset in dashboardStore.topAssets"
+            :key="asset.id"
+            :title="asset.name"
+            :label="asset.category_name"
+            clickable
+            @click="$router.push(`/assets/${asset.id}`)"
+          >
+            <template #value>
+              <MoneyDisplay :amount="asset.current_value" />
+            </template>
+          </van-cell>
+        </van-cell-group>
+
+        <!-- Daily Cost Ranking -->
+        <van-cell-group v-if="dashboardStore.dailyCostRanking.length" inset title="日耗排行" class="section">
+          <van-cell
+            v-for="item in dashboardStore.dailyCostRanking"
+            :key="item.id"
+            :title="`${item.icon} ${item.name}`"
+            clickable
+            @click="$router.push(`/assets/${item.id}`)"
+          >
+            <template #value>
+              <span class="daily-cost-value">¥{{ item.daily_cost.toFixed(2) }}/天</span>
+            </template>
+          </van-cell>
+        </van-cell-group>
+
+        <!-- Low Usage Alert -->
+        <div v-if="dashboardStore.lowUsageAssets.length" class="section low-usage-section">
+          <van-notice-bar left-icon="info-o" :scrollable="false" wrapable>
+            <div>低使用率资产提醒</div>
+            <div v-for="asset in dashboardStore.lowUsageAssets" :key="asset.id" class="low-usage-item">
+              {{ asset.name }} - {{ usageText(asset.usage_frequency) }}
             </div>
-          </template>
-        </van-cell>
-      </van-cell-group>
+          </van-notice-bar>
+        </div>
 
-      <!-- Settings Link -->
-      <van-cell-group inset class="section">
-        <van-cell title="设置" icon="setting-o" is-link to="/settings" />
-      </van-cell-group>
+        <!-- Investment Returns -->
+        <van-cell-group v-if="dashboardStore.investmentReturns.length" inset title="投资收益排行" class="section">
+          <van-cell
+            v-for="item in dashboardStore.investmentReturns"
+            :key="item.id"
+            :title="item.name"
+            :label="`本金 ¥${item.purchase_price.toLocaleString()}`"
+            clickable
+            @click="$router.push(`/assets/${item.id}`)"
+          >
+            <template #value>
+              <div class="return-value">
+                <span :class="item.return_rate >= 0 ? 'positive' : 'negative'">
+                  {{ item.return_rate >= 0 ? '+' : '' }}{{ item.return_rate.toFixed(2) }}%
+                </span>
+                <span class="return-amount">
+                  {{ item.profit >= 0 ? '+' : '' }}¥{{ item.profit.toLocaleString() }}
+                </span>
+              </div>
+            </template>
+          </van-cell>
+        </van-cell-group>
+
+        <!-- Recent Activities -->
+        <van-cell-group v-if="dashboardStore.recentActivities.length" inset title="最近动态" class="section">
+          <van-cell
+            v-for="activity in dashboardStore.recentActivities.slice(0, 8)"
+            :key="activity.id"
+            :title="activity.title"
+            :label="activity.created_at.slice(0, 10)"
+            :icon="activityIcon(activity.type)"
+          >
+            <template v-if="activity.amount" #value>
+              <span class="activity-amount">¥{{ activity.amount.toLocaleString() }}</span>
+            </template>
+          </van-cell>
+        </van-cell-group>
+
+        <!-- Settings Link -->
+        <van-cell-group inset class="section">
+          <van-cell title="设置" icon="setting-o" is-link to="/settings" />
+        </van-cell-group>
+      </template>
 
       <div class="bottom-spacer" />
     </van-pull-refresh>
@@ -119,12 +145,12 @@ const refreshing = ref(false)
 const overview = computed(() => dashboardStore.overview)
 
 const changeClass = computed(() => {
-  const pct = overview.value?.month_change_percent || 0
+  const pct = overview.value?.month_over_month_change || 0
   return pct >= 0 ? 'positive' : 'negative'
 })
 
 const changeText = computed(() => {
-  const pct = overview.value?.month_change_percent || 0
+  const pct = overview.value?.month_over_month_change || 0
   const arrow = pct >= 0 ? '↑' : '↓'
   return `${arrow} ${Math.abs(pct).toFixed(1)}%`
 })
@@ -134,6 +160,19 @@ function usageText(freq?: string) {
     daily: '每天', weekly: '每周', monthly: '每月', rarely: '很少使用', idle: '闲置'
   }
   return map[freq || ''] || freq || '未知'
+}
+
+function activityIcon(type: string) {
+  const map: Record<string, string> = {
+    create: 'plus',
+    update: 'edit',
+    delete: 'delete-o',
+    sell: 'gold-coin-o',
+    retire: 'close',
+    reactivate: 'replay',
+    payment: 'balance-pay',
+  }
+  return map[type] || 'notes-o'
 }
 
 function onPeriodChange(period: 'month' | 'quarter' | 'year') {
@@ -239,5 +278,9 @@ onMounted(() => {
 }
 .bottom-spacer {
   height: 20px;
+}
+.activity-amount {
+  color: #1989fa;
+  font-size: 13px;
 }
 </style>

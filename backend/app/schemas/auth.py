@@ -1,4 +1,18 @@
-from pydantic import BaseModel
+import re
+
+from pydantic import BaseModel, field_validator
+
+
+def validate_password_strength(password: str) -> str:
+    if len(password) < 8:
+        raise ValueError("密码长度至少8位")
+    if not re.search(r"[A-Z]", password):
+        raise ValueError("密码必须包含大写字母")
+    if not re.search(r"[a-z]", password):
+        raise ValueError("密码必须包含小写字母")
+    if not re.search(r"\d", password):
+        raise ValueError("密码必须包含数字")
+    return password
 
 
 class RegisterRequest(BaseModel):
@@ -6,6 +20,11 @@ class RegisterRequest(BaseModel):
     password: str
     display_name: str
     family_name: str
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class LoginRequest(BaseModel):
@@ -28,6 +47,11 @@ class JoinFamilyRequest(BaseModel):
     password: str
     display_name: str
     invite_code: str
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        return validate_password_strength(v)
 
 
 class UserResponse(BaseModel):
