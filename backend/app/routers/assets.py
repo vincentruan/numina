@@ -94,7 +94,7 @@ def sell_asset(
     user: User = Depends(get_current_user),
 ):
     result = asset_service.sell_asset(db, user, asset_id, req)
-    record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result.name}」", req.sell_price)
+    record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result['name']}」", req.sell_price)
     return result
 
 

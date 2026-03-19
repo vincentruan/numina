@@ -47,7 +47,7 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 ### 前置要求
 
 - Docker 和 Docker Compose
-- （可选）Python 3.11+ 和 Node.js 18+ 用于本地开发
+- （可选）Python 3.11+ 和 Node.js 18+ 以及 [uv](https://docs.astral.sh/uv/) 用于本地开发
 
 ### 使用 Docker 部署（推荐）
 
@@ -80,14 +80,14 @@ DATABASE_URL=sqlite:////app/data/numina.db   # 数据库路径
 ```bash
 cd backend
 
-# 安装依赖
-pip install -r requirements.txt
+# 安装依赖（需要 uv: https://docs.astral.sh/uv/）
+uv sync
 
 # 运行开发服务器
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 运行测试
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 #### 前端开发
@@ -220,10 +220,10 @@ POST   /api/v1/family/invite-code     # 生成邀请码
 
 ```bash
 cd backend
-pytest tests/ -v
+uv run pytest tests/ -v
 
 # 测试覆盖率
-pytest tests/ --cov=app --cov-report=html
+uv run pytest tests/ --cov=app --cov-report=html
 ```
 
 **测试结果**：✅ 36 passed, 0 failed

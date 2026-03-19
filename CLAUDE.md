@@ -18,23 +18,38 @@ Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visu
 ```bash
 cd backend
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (requires uv: https://docs.astral.sh/uv/)
+uv sync
 
 # Run development server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Run tests (36 tests covering auth, assets, liabilities, dashboard)
-pytest tests/ -v
+uv run pytest tests/ -v
+
+# Run a single test file
+uv run pytest tests/test_assets.py -v
+
+# Run a single test function
+uv run pytest tests/test_assets.py::test_create_physical_asset -v
+
+# Run tests matching keyword
+uv run pytest tests/ -v -k "daily_cost"
 
 # Run tests with coverage
-pytest tests/ --cov=app --cov-report=html
+uv run pytest tests/ --cov=app --cov-report=html
 
 # Create new Alembic migration
-alembic revision --autogenerate -m "description"
+uv run alembic revision --autogenerate -m "description"
 
 # Apply migrations
-alembic upgrade head
+uv run alembic upgrade head
+
+# Add a new dependency
+uv add <package>
+
+# Add a dev-only dependency
+uv add --group dev <package>
 ```
 
 ### Frontend Development
@@ -50,6 +65,9 @@ npm run dev
 
 # Build for production
 npm run build
+
+# Type-check only (no build output)
+npx vue-tsc -b --noEmit
 
 # Preview production build
 npm run preview
@@ -222,3 +240,37 @@ Key test patterns:
 - **TokenResponse** does not include `user` — frontend should call `/auth/me` after login to get user info
 - **SQLite file path**: In Docker, the database is at `/app/data/numina.db`; locally at `./data/numina.db`
 - **Vite proxy**: Frontend dev server proxies `/api` to `http://localhost:8000` (configured in `vite.config.ts`)
+
+## Code Style
+
+### Backend (Python)
+
+- Imports: stdlib → third-party → local (`app.*`), blank line between groups.
+- Use `from app.models.user import User` (explicit per-model), not `from app.models import *`.
+- Model imports in `main.py` use `# noqa: F401` for side-effect-only imports.
+- Files: `snake_case.py`. Classes: `PascalCase`. Functions: `snake_case`.
+- Route prefixes: `router = APIRouter(prefix="/assets", tags=["assets"])`.
+- Private helpers: `_to_response(asset)` (leading underscore).
+- Type annotations: `str | None`, `list[str]` (3.10+ syntax, not `Optional`/`List`).
+- SQLAlchemy: `Mapped[type]` + `mapped_column(...)`. Pydantic: `BaseModel` + `model_config = {"from_attributes": True}`.
+- Error messages in Chinese: `raise HTTPException(status_code=404, detail="资产不存在")`.
+
+### Frontend (TypeScript / Vue 3)
+
+- Imports: third-party first, then `@/` aliases. Use `import type { X }` for type-only.
+- Vant components are auto-imported — no manual imports needed.
+- Files: `PascalCase.vue` for pages/components, `camelCase.ts` for modules.
+- Pages: `*Page.vue`. Components: `components/{domain}/`. Composables: `use*.ts`. Stores: `use*Store`.
+- Strict mode enabled. Interfaces in `src/types/index.ts` with `snake_case` fields.
+- String literal unions for enums: `'physical' | 'financial'`. Optional fields: `?:` syntax.
+- `<script setup lang="ts">` only (Composition API, no Options API).
+
+## Conventions
+
+- UI text and error messages are in Chinese (简体中文). Currency defaults to CNY.
+- No linter/formatter configured — match existing code style by reading neighboring files.
+- No `as any`, `@ts-ignore`, or `@ts-expect-error` — fix types properly.
+- Minimal changes: fix what's asked, don't refactor unrelated code.
+- Always run `uv run pytest tests/ -v` (from `backend/`) after backend changes.
+- Always run `npm run build` (from `frontend/`) after frontend changes to verify types.
+- DO NOT run dev servers (`uvicorn`, `npm run dev`) from automated agents — they are long-running processes.

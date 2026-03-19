@@ -43,7 +43,7 @@ Numina is a fully self-hosted family asset visualization and management system. 
 ### Prerequisites
 
 - Docker and Docker Compose
-- (Optional) Python 3.11+ and Node.js 18+ for local development
+- (Optional) Python 3.11+, Node.js 18+, and [uv](https://docs.astral.sh/uv/) for local development
 
 ### Deploy with Docker (Recommended)
 
@@ -76,14 +76,14 @@ DATABASE_URL=sqlite:////app/data/numina.db   # Database path
 ```bash
 cd backend
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (requires uv: https://docs.astral.sh/uv/)
+uv sync
 
 # Run development server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Run tests
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 #### Frontend
@@ -211,7 +211,7 @@ The backend includes 36 automated tests covering authentication, assets, liabili
 
 ```bash
 cd backend
-pytest tests/ -v
+uv run pytest tests/ -v
 ```
 
 **Test Results**: ✅ 36 passed, 0 failed
