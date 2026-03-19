@@ -10,7 +10,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - CORS_ORIGINS=["*"]
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/api/v1/health')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -20,13 +20,15 @@ services:
     build: ./frontend
     container_name: numina-frontend
     restart: unless-stopped
+    ports:
+      - "28080:80"
 
   nginx:
-    image: docker.xuanyuan.me/library/nginx:alpine 
+    image: ${X_DOCKER_MIRROR:-docker.xuanyuan.me}/library/nginx:alpine
     container_name: numina-nginx
     restart: unless-stopped
     ports:
-      - "${PORT:-8080}:80"
+      - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
