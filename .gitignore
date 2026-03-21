@@ -128,3 +128,11 @@ data/*.json
 # Reverse Engineering
 # ===========================
 .re/
+# ===========================
+# AI prompts (temporary)
+# ===========================
+.prompt-*.md
+
+# Root package files (for screenshot tools only)
+/package.json
+/package-lock.json
