@@ -5,7 +5,7 @@ import { getToken, setToken, setRefreshToken, getRefreshToken, clearAuth } from 
 import router from '@/router'
 
 const http = axios.create({
-  baseURL: '/api/v1',
+  baseURL: '/numina/api/v1',
   timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
@@ -80,7 +80,7 @@ http.interceptors.response.use(
       originalRequest._retry = true
 
       try {
-        const res = await axios.post('/api/v1/auth/refresh', {
+        const res = await axios.post('/numina/api/v1/auth/refresh', {
           refresh_token: refreshTokenValue
         })
         const { access_token, refresh_token } = res.data

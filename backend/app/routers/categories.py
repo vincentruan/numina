@@ -10,7 +10,7 @@ from app.services import category as category_service
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
-@router.get("/", response_model=list[CategoryResponse])
+@router.get("", response_model=list[CategoryResponse])
 def list_categories(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -18,7 +18,7 @@ def list_categories(
     return category_service.list_categories(db, user)
 
 
-@router.post("/", response_model=CategoryResponse, status_code=201)
+@router.post("", response_model=CategoryResponse, status_code=201)
 def create_category(
     req: CategoryCreate,
     db: Session = Depends(get_db),
