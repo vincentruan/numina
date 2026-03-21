@@ -1,9 +1,11 @@
 import logging
-
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
@@ -27,6 +29,7 @@ from app.routers import auth, assets, liabilities, categories, tags, dashboard, 
 from app.routers import export as export_router
 from app.routers import import_ as import_router
 from app.routers import activities as activities_router
+from app.routers import upload
 
 
 logger = logging.getLogger(__name__)
@@ -73,6 +76,12 @@ app.include_router(export_router.router, prefix="/api/v1")
 app.include_router(import_router.router, prefix="/api/v1")
 app.include_router(wishes.router, prefix="/api/v1")
 app.include_router(activities_router.router, prefix="/api/v1")
+app.include_router(upload.router, prefix="/api/v1")
+
+# Serve uploaded files
+upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
+upload_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
 
 
 @app.get("/api/health")

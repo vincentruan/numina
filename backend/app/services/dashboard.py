@@ -267,6 +267,44 @@ def get_states_summary(db: Session, user: User) -> dict:
         .all()
     )
     states = {}
+    total_count = 0
+    total_value = 0
     for r in results:
         states[r.status] = {"count": r.count, "total_value": r.total_value}
-    return {"states": states}
+        total_count += r.count
+        total_value += r.total_value
+    return {"states": states, "total_count": total_count, "total_value": total_value}
+
+
+def get_home_assets(db: Session, user: User, limit: int = 5) -> dict:
+    """Get assets grouped by status for home page display."""
+    from app.services.asset import compute_daily_cost, compute_return_rate
+    from app.schemas.asset import AssetResponse
+
+    family_id = user.family_id
+    statuses = ["in_use", "idle", "sold", "retired"]
+
+    result = {}
+    for status in statuses:
+        assets = (
+            db.query(Asset)
+            .options(joinedload(Asset.category), joinedload(Asset.tags))
+            .filter(
+                Asset.family_id == family_id,
+                Asset.is_archived == False,
+                Asset.status == status,
+            )
+            .order_by(Asset.updated_at.desc())
+            .limit(limit)
+            .all()
+        )
+        items = []
+        for a in assets:
+            resp = AssetResponse.model_validate(a)
+            resp.daily_cost = compute_daily_cost(a)
+            resp.return_rate = compute_return_rate(a)
+            items.append(resp)
+        if items:  # Only include non-empty groups
+            result[status] = items
+
+    return result

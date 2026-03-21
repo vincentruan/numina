@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem } from '@/api/dashboard'
 
@@ -14,6 +14,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const lowUsageAssets = ref<LowUsageItem[]>([])
   const investmentReturns = ref<InvestmentReturnItem[]>([])
   const recentActivities = ref<ActivityItem[]>([])
+  const statesSummary = ref<StatesSummaryResponse | null>(null)
+  const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
 
   async function fetchOverview() {
@@ -61,6 +63,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
     }
   }
 
+  async function fetchStatesSummary() {
+    const res = await dashboardApi.getStatesSummary()
+    statesSummary.value = res.data
+  }
+
+  async function fetchHomeAssets(limit = 5) {
+    const res = await dashboardApi.getHomeAssets(limit)
+    homeAssets.value = res.data
+  }
+
   async function fetchAll() {
     loading.value = true
     try {
@@ -73,6 +85,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchLowUsageAssets(),
         fetchInvestmentReturns(),
         fetchRecentActivities(),
+        fetchStatesSummary(),
+        fetchHomeAssets(),
       ])
     } finally {
       loading.value = false
@@ -81,9 +95,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
-    lowUsageAssets, investmentReturns, recentActivities, loading,
+    lowUsageAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchInvestmentReturns,
-    fetchRecentActivities, fetchAll
+    fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll
   }
 })

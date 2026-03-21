@@ -56,6 +56,7 @@ class Asset(Base):
     retire_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     target_daily_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

@@ -22,6 +22,7 @@ class AssetCreate(BaseModel):
     properties: str | None = None
     notes: str | None = None
     target_daily_cost: float | None = None
+    image_url: str | None = None
     tag_ids: list[str] = []
 
 
@@ -44,6 +45,7 @@ class AssetUpdate(BaseModel):
     properties: str | None = None
     notes: str | None = None
     target_daily_cost: float | None = None
+    image_url: str | None = None
     tag_ids: list[str] | None = None
 
 
@@ -125,6 +127,7 @@ class AssetResponse(BaseModel):
     sell_channel: str | None = None
     retire_date: date | None = None
     target_daily_cost: float | None = None
+    image_url: str | None = None
     tags: list[TagBrief] = []
     daily_cost: float | None = None
     return_rate: float | None = None

@@ -56,6 +56,7 @@ export interface Asset {
   sell_channel?: string
   retire_date?: string
   target_daily_cost?: number
+  image_url?: string
   tags?: Tag[]
   daily_cost?: number
   return_rate?: number
@@ -185,6 +186,17 @@ export interface LowUsageItem {
   current_value: number
   usage_frequency: string
   purchase_date?: string
+}
+
+export interface StatusSummary {
+  count: number
+  total_value: number
+}
+
+export interface StatesSummaryResponse {
+  states: Record<string, StatusSummary>
+  total_count: number
+  total_value: number
 }
 
 export interface LoginRequest {

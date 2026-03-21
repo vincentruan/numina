@@ -1,5 +1,5 @@
 import http from './index'
-import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem } from '@/types'
+import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset } from '@/types'
 
 export function getOverview() {
   return http.get<DashboardOverview>('/dashboard/overview')
@@ -31,6 +31,14 @@ export function getInvestmentReturns(limit = 10) {
 
 export function getRecentActivities(limit = 20) {
   return http.get<ActivityItem[]>('/activities/recent', { params: { limit } })
+}
+
+export function getStatesSummary() {
+  return http.get<StatesSummaryResponse>('/dashboard/states-summary')
+}
+
+export function getHomeAssets(limit = 5) {
+  return http.get<Record<string, Asset[]>>('/dashboard/home-assets', { params: { limit } })
 }
 
 export interface ActivityItem {

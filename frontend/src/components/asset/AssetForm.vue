@@ -1,6 +1,26 @@
 <template>
   <van-form @submit="onSubmit">
     <van-cell-group inset>
+      <!-- Image Upload -->
+      <van-field label="图片">
+        <template #input>
+          <van-uploader
+            v-model="fileList"
+            :max-count="1"
+            :max-size="5 * 1024 * 1024"
+            :after-read="afterRead"
+            @delete="onDelete"
+          >
+            <template v-if="!fileList.length">
+              <div class="upload-placeholder">
+                <van-icon name="photograph" size="24" />
+                <span>上传图片</span>
+              </div>
+            </template>
+          </van-uploader>
+        </template>
+      </van-field>
+
       <van-field
         v-model="form.name"
         label="名称"
@@ -156,6 +176,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { Asset, Category } from '@/types'
+import { uploadImage } from '@/api/upload'
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
@@ -187,8 +208,12 @@ const form = ref<Record<string, any>>({
   expected_lifespan_days: '',
   annual_maintenance_cost: '',
   usage_frequency: '',
-  notes: ''
+  notes: '',
+  image_url: ''
 })
+
+// Image upload state
+const fileList = ref<{ url: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
 
 watch(() => props.initialData, (data) => {
   if (data) {
@@ -197,6 +222,11 @@ watch(() => props.initialData, (data) => {
         form.value[key] = String((data as any)[key] ?? '')
       }
     })
+    // Set image preview
+    if (data.image_url) {
+      const imageUrl = data.image_url.startsWith('/') ? `/api/v1${data.image_url}` : data.image_url
+      fileList.value = [{ url: imageUrl }]
+    }
   }
 }, { immediate: true })
 
@@ -289,6 +319,24 @@ function onUsageConfirm({ selectedOptions }: any) {
   showUsagePicker.value = false
 }
 
+// Image upload handlers
+async function afterRead(file: any) {
+  file.status = 'uploading'
+  try {
+    const res = await uploadImage(file.file)
+    file.status = 'done'
+    file.url = `/api/v1${res.data.url}`
+    form.value.image_url = res.data.url
+  } catch (e) {
+    file.status = 'failed'
+    file.message = '上传失败'
+  }
+}
+
+function onDelete() {
+  form.value.image_url = ''
+}
+
 function onSubmit() {
   const data: Partial<Asset> = {
     name: form.value.name,
@@ -298,7 +346,8 @@ function onSubmit() {
     current_value: Number(form.value.current_value),
     purchase_date: form.value.purchase_date || undefined,
     status: form.value.status,
-    notes: form.value.notes || undefined
+    notes: form.value.notes || undefined,
+    image_url: form.value.image_url || undefined
   }
 
   if (form.value.asset_type === 'physical') {
@@ -327,5 +376,22 @@ function onSubmit() {
 :deep(.van-cell-group__title) {
   font-size: 13px;
   color: #969799;
+}
+.upload-placeholder {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #f7f8fa;
+  border-radius: 8px;
+  color: #969799;
+  font-size: 12px;
+  gap: 4px;
+}
+:deep(.van-uploader__preview-image) {
+  width: 80px;
+  height: 80px;
 }
 </style>

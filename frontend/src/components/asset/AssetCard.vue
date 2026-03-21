@@ -1,7 +1,10 @@
 <template>
   <van-cell class="asset-card" clickable @click="$emit('click')">
     <template #icon>
-      <div class="card-icon" :style="{ background: asset.category?.color || '#1989fa' }">
+      <div v-if="asset.image_url && !imageError" class="card-image">
+        <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
+      </div>
+      <div v-else class="card-icon" :style="{ background: asset.category?.color || '#1989fa' }">
         {{ asset.category?.icon || '📦' }}
       </div>
     </template>
@@ -24,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import type { Asset } from '@/types'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 
@@ -35,6 +38,21 @@ const props = defineProps<{
 defineEmits<{
   click: []
 }>()
+
+const imageError = ref(false)
+
+const imageUrl = computed(() => {
+  if (!props.asset.image_url) return ''
+  // Handle relative URLs
+  if (props.asset.image_url.startsWith('/')) {
+    return `/api/v1${props.asset.image_url}`
+  }
+  return props.asset.image_url
+})
+
+function onImageError() {
+  imageError.value = true
+}
 
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
   in_use: { text: '使用中', type: 'success' },
@@ -53,14 +71,28 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   border-radius: 8px;
 }
 .card-icon {
-  width: 36px;
-  height: 36px;
+  width: 48px;
+  height: 48px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 22px;
   margin-right: 10px;
+  flex-shrink: 0;
+}
+.card-image {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+.card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 .card-title {
   display: flex;

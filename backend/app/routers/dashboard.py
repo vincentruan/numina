@@ -82,3 +82,13 @@ def get_states_summary(
     user: User = Depends(get_current_user),
 ):
     return dashboard_service.get_states_summary(db, user)
+
+
+@router.get("/home-assets")
+def get_home_assets(
+    limit: int = Query(5, ge=1, le=20),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Get assets grouped by status for home page display."""
+    return dashboard_service.get_home_assets(db, user, limit)
