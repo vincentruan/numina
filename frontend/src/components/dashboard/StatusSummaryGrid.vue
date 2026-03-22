@@ -1,20 +1,22 @@
 <template>
-  <van-grid :column-num="4" :border="false" class="status-grid">
-    <van-grid-item
-      v-for="status in statusList"
-      :key="status.key"
-      :class="{ active: activeStatus === status.key }"
-      @click="onSelect(status.key)"
-    >
-      <div class="status-count">{{ getCount(status.key) }}</div>
-      <div class="status-label">{{ status.label }}</div>
-      <div class="status-value">{{ formatValue(status.key) }}</div>
-    </van-grid-item>
-  </van-grid>
+  <div class="status-tabs-wrapper">
+    <div class="status-tabs">
+      <div
+        v-for="status in statusList"
+        :key="status.key ?? 'all'"
+        class="status-tab"
+        :class="{ active: activeStatus === status.key }"
+        @click="onSelect(status.key)"
+      >
+        <span class="tab-label">{{ status.label }}</span>
+        <span class="tab-count">{{ getCount(status.key) }}</span>
+      </div>
+    </div>
+    <div class="toolbar-slot"><slot name="toolbar"></slot></div>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import type { StatesSummaryResponse } from '@/types'
 
 const props = defineProps<{
@@ -26,71 +28,82 @@ const emit = defineEmits<{
   select: [status: string | null]
 }>()
 
-const statusList = [
-  { key: 'in_use', label: '使用中' },
+const statusList: { key: string | null; label: string }[] = [
+  { key: null, label: '全部' },
+  { key: 'in_use', label: '服役中' },
   { key: 'idle', label: '闲置' },
   { key: 'sold', label: '已出售' },
-  { key: 'retired', label: '已报废' }
+  { key: 'retired', label: '已退役' }
 ]
 
-function getCount(status: string): number {
+function getCount(status: string | null): number {
+  if (status === null) {
+    return props.summary?.total_count || 0
+  }
   return props.summary?.states[status]?.count || 0
 }
 
-function formatValue(status: string): string {
-  const value = props.summary?.states[status]?.total_value || 0
-  if (value >= 10000) {
-    return `¥${(value / 10000).toFixed(1)}万`
-  }
-  return `¥${value.toLocaleString()}`
-}
-
-function onSelect(status: string) {
+function onSelect(status: string | null) {
   if (props.activeStatus === status) {
-    emit('select', null)
-  } else {
-    emit('select', status)
+    if (status !== null) {
+      emit('select', null)
+    }
+    return
   }
+  emit('select', status)
 }
 </script>
 
 <style scoped>
-.status-grid {
+.status-tabs-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   background: #fff;
-  padding: 12px 0;
+  padding: 12px 16px;
+  gap: 12px;
 }
-.status-grid :deep(.van-grid-item__content) {
-  padding: 8px 4px;
+.status-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  flex: 1;
+  -webkit-overflow-scrolling: touch;
+}
+.status-tabs::-webkit-scrollbar {
+  display: none;
+}
+.status-tab {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: #f7f8fa;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.status-grid :deep(.van-grid-item__content):active {
-  background: #f5f5f5;
+.status-tab:active {
+  opacity: 0.7;
 }
-.status-grid .active :deep(.van-grid-item__content) {
-  background: #ecf5ff;
-  border: 2px solid #1989fa;
-  border-radius: 8px;
+.status-tab.active {
+  background: #1989fa;
+  color: #fff;
 }
-.status-count {
-  font-size: 20px;
+.tab-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+.tab-count {
+  font-size: 13px;
   font-weight: 600;
-  color: #323233;
 }
-.status-label {
-  font-size: 12px;
-  color: #969799;
-  margin-top: 2px;
-}
-.status-value {
-  font-size: 11px;
-  color: #1989fa;
-  margin-top: 2px;
-}
-.active .status-count {
-  color: #1989fa;
-}
-.active .status-label {
-  color: #1989fa;
+.toolbar-slot {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-shrink: 0;
 }
 </style>
