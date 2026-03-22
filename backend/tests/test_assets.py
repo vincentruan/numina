@@ -188,3 +188,186 @@ def test_cross_family_isolation(client, auth_headers, second_user_headers, sampl
     asset_id = sample_asset["id"]
     response = client.get(f"/api/v1/assets/{asset_id}", headers=second_user_headers)
     assert response.status_code == 404
+
+
+# Batch operation tests
+def test_batch_archive_assets(client, auth_headers, category_id):
+    """Test batch archiving assets"""
+    # Create multiple assets
+    asset_ids = []
+    for i in range(3):
+        response = client.post("/api/v1/assets", headers=auth_headers, json={
+            "name": f"测试资产{i}",
+            "category_id": category_id,
+            "asset_type": "physical",
+            "purchase_price": 10000 * (i + 1),
+        })
+        assert response.status_code == 201
+        asset_ids.append(response.json()["id"])
+
+    # Batch archive
+    response = client.post("/api/v1/assets/batch/archive", headers=auth_headers, json={
+        "asset_ids": asset_ids
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success_count"] == 3
+    assert data["failed_count"] == 0
+
+    # Verify they are archived
+    list_response = client.get("/api/v1/assets", headers=auth_headers)
+    active_ids = [a["id"] for a in list_response.json()]
+    for aid in asset_ids:
+        assert aid not in active_ids
+
+
+def test_batch_update_category(client, auth_headers, category_id, financial_category_id):
+    """Test batch updating asset category"""
+    # Create assets with physical category
+    asset_ids = []
+    for i in range(2):
+        response = client.post("/api/v1/assets", headers=auth_headers, json={
+            "name": f"测试资产{i}",
+            "category_id": category_id,
+            "asset_type": "physical",
+        })
+        assert response.status_code == 201
+        asset_ids.append(response.json()["id"])
+
+    # Batch update to financial category
+    response = client.put("/api/v1/assets/batch/category", headers=auth_headers, json={
+        "asset_ids": asset_ids,
+        "category_id": financial_category_id
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success_count"] == 2
+
+    # Verify categories changed
+    for aid in asset_ids:
+        asset_response = client.get(f"/api/v1/assets/{aid}", headers=auth_headers)
+        assert asset_response.json()["category_id"] == financial_category_id
+
+
+def test_batch_update_tags(client, auth_headers, category_id):
+    """Test batch updating asset tags"""
+    # Create tags
+    tag1 = client.post("/api/v1/tags", headers=auth_headers, json={
+        "name": "标签1",
+        "color": "#FF0000"
+    }).json()
+    tag2 = client.post("/api/v1/tags", headers=auth_headers, json={
+        "name": "标签2",
+        "color": "#00FF00"
+    }).json()
+
+    # Create assets
+    asset_ids = []
+    for i in range(2):
+        response = client.post("/api/v1/assets", headers=auth_headers, json={
+            "name": f"测试资产{i}",
+            "category_id": category_id,
+            "asset_type": "physical",
+        })
+        assert response.status_code == 201
+        asset_ids.append(response.json()["id"])
+
+    # Batch update tags
+    response = client.put("/api/v1/assets/batch/tags", headers=auth_headers, json={
+        "asset_ids": asset_ids,
+        "tag_ids": [tag1["id"], tag2["id"]]
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success_count"] == 2
+
+    # Verify tags applied
+    for aid in asset_ids:
+        asset_response = client.get(f"/api/v1/assets/{aid}", headers=auth_headers)
+        tags = asset_response.json()["tags"]
+        assert len(tags) == 2
+
+
+def test_batch_update_status(client, auth_headers, category_id):
+    """Test batch updating asset status"""
+    # Create assets
+    asset_ids = []
+    for i in range(2):
+        response = client.post("/api/v1/assets", headers=auth_headers, json={
+            "name": f"测试资产{i}",
+            "category_id": category_id,
+            "asset_type": "physical",
+        })
+        assert response.status_code == 201
+        asset_ids.append(response.json()["id"])
+
+    # Batch archive via status
+    response = client.put("/api/v1/assets/batch/status", headers=auth_headers, json={
+        "asset_ids": asset_ids,
+        "status": "archived"
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success_count"] == 2
+
+    # Batch reactivate via status
+    response = client.put("/api/v1/assets/batch/status", headers=auth_headers, json={
+        "asset_ids": asset_ids,
+        "status": "active"
+    })
+    assert response.status_code == 200
+    assert response.json()["success_count"] == 2
+
+
+def test_batch_export_assets(client, auth_headers, category_id):
+    """Test batch exporting assets"""
+    # Create assets
+    asset_ids = []
+    for i in range(3):
+        response = client.post("/api/v1/assets", headers=auth_headers, json={
+            "name": f"导出测试资产{i}",
+            "category_id": category_id,
+            "asset_type": "physical",
+            "purchase_price": 10000 * (i + 1),
+            "current_value": 12000 * (i + 1),
+        })
+        assert response.status_code == 201
+        asset_ids.append(response.json()["id"])
+
+    # Batch export
+    response = client.post("/api/v1/assets/batch/export", headers=auth_headers, json={
+        "asset_ids": asset_ids
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["format"] == "json"
+    assert data["count"] == 3
+    assert len(data["data"]) == 3
+
+    # Verify export data structure
+    exported = data["data"][0]
+    assert "name" in exported
+    assert "purchase_price" in exported
+    assert "current_value" in exported
+
+
+def test_batch_archive_cross_family_isolation(client, auth_headers, second_user_headers, category_id):
+    """Test batch archive respects family isolation"""
+    # Create asset with first user
+    response = client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "用户1资产",
+        "category_id": category_id,
+        "asset_type": "physical",
+    })
+    assert response.status_code == 201
+    asset_id = response.json()["id"]
+
+    # Second user tries to archive first user's asset
+    response = client.post("/api/v1/assets/batch/archive", headers=second_user_headers, json={
+        "asset_ids": [asset_id]
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success_count"] == 0
+    assert data["failed_count"] == 1
+    assert len(data["errors"]) == 1
