@@ -109,12 +109,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useAssetStore } from '@/stores/asset'
+import { useDashboardStore } from '@/stores/dashboard'
 import type { AssetSellResponse } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const route = useRoute()
 const router = useRouter()
 const assetStore = useAssetStore()
+const dashboardStore = useDashboardStore()
 const submitting = ref(false)
 const showResult = ref(false)
 const sellResult = ref<AssetSellResponse | null>(null)
@@ -156,6 +158,7 @@ async function onSubmit() {
     })
     sellResult.value = result
     showResult.value = true
+    dashboardStore.fetchAll()
   } catch {
     showToast('出售失败，请重试')
   } finally {

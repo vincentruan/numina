@@ -38,12 +38,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAssetStore } from '@/stores/asset'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 
 const assetStore = useAssetStore()
+const route = useRoute()
 const refreshing = ref(false)
 const activeTab = ref('all')
 const searchText = ref('')
@@ -77,7 +79,8 @@ async function onRefresh() {
 }
 
 onMounted(() => {
-  assetStore.fetchAssets()
+  const statusParam = route.query.status as string | undefined
+  assetStore.fetchAssets({ ...buildFilters(), status: statusParam })
 })
 </script>
 

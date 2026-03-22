@@ -20,3 +20,14 @@ export function getMe() {
 export function refreshToken(refreshToken: string) {
   return http.post<AuthResponse>('/auth/refresh', { refresh_token: refreshToken })
 }
+
+interface UpdateSettingsRequest {
+  theme?: string
+  language?: string
+  default_currency?: string
+  view_mode?: string
+}
+
+export function updateSettings(data: UpdateSettingsRequest) {
+  return http.put<User>('/auth/me/settings', data)
+}
