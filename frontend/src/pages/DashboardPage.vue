@@ -121,7 +121,6 @@
               :selectable="true"
               :selected="selectedIds.includes(asset.id)"
               @click="toggleSelection(asset.id)"
-              @update:selected="(val) => val ? selectedIds.push(asset.id) : selectedIds.splice(selectedIds.indexOf(asset.id), 1)"
             />
           </div>
           <div class="selection-actions">
