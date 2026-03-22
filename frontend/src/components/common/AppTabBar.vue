@@ -1,8 +1,8 @@
 <template>
-  <van-tabbar v-model="active" route>
-    <van-tabbar-item to="/" icon="chart-trending-o">总览</van-tabbar-item>
-    <van-tabbar-item to="/assets" icon="balance-o">资产</van-tabbar-item>
-    <van-tabbar-item to="/assets/new" icon="add-o">
+  <van-tabbar :model-value="activeTab" @change="onTabChange">
+    <van-tabbar-item name="dashboard" icon="chart-trending-o">总览</van-tabbar-item>
+    <van-tabbar-item name="wishes" icon="star-o">心愿</van-tabbar-item>
+    <van-tabbar-item name="add" icon="add-o">
       <template #icon="{ active: isActive }">
         <div class="add-btn" :class="{ active: isActive }">
           <van-icon name="plus" size="24" />
@@ -10,15 +10,50 @@
       </template>
       <span></span>
     </van-tabbar-item>
-    <van-tabbar-item to="/liabilities" icon="bill-o">负债</van-tabbar-item>
-    <van-tabbar-item to="/family" icon="friends-o">家庭</van-tabbar-item>
+    <van-tabbar-item name="liabilities" icon="bill-o">负债</van-tabbar-item>
+    <van-tabbar-item name="stats" icon="bar-chart-o">统计</van-tabbar-item>
+    <van-tabbar-item name="settings" icon="setting-o">设置</van-tabbar-item>
   </van-tabbar>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
-const active = ref(0)
+const router = useRouter()
+const route = useRoute()
+
+const routeToTab: Record<string, string> = {
+  '/': 'dashboard',
+  '/wishes': 'wishes',
+  '/liabilities': 'liabilities',
+  '/stats': 'stats',
+  '/settings': 'settings',
+}
+
+const activeTab = computed(() => {
+  const path = route.path
+  return routeToTab[path] ?? 'dashboard'
+})
+
+const tabToRoute: Record<string, string> = {
+  dashboard: '/',
+  wishes: '/wishes',
+  liabilities: '/liabilities',
+  stats: '/stats',
+  settings: '/settings',
+}
+
+function onTabChange(name: string | number) {
+  if (name === 'add') {
+    router.push('/assets/new')
+    return
+  }
+  const target = tabToRoute[name as string]
+  if (target && route.path !== target) {
+    router.push(target)
+  }
+}
 </script>
 
 <style scoped>

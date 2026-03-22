@@ -3,21 +3,57 @@
     <PageHeader title="资产详情" />
 
     <template v-if="asset">
-      <!-- Value Card -->
-      <div class="value-card" :class="asset.status === 'sold' ? 'sold' : ''">
-        <div class="value-label">{{ asset.status === 'sold' ? '出售价格' : '当前价值' }}</div>
-        <MoneyDisplay :amount="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)" size="large" />
-        <div v-if="asset.status !== 'sold'" class="value-change" :class="returnClass">
+      <!-- Hero Card -->
+      <div class="hero-card" :class="asset.status === 'sold' ? 'sold' : ''">
+        <van-tag v-if="asset.status !== 'in_use'" class="status-badge" :type="statusType" size="medium">
+          {{ statusText }}
+        </van-tag>
+        <div class="hero-top">
+          <div v-if="asset.image_url && !imageError" class="hero-image">
+            <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
+          </div>
+          <div v-else class="hero-icon" :style="{ background: 'rgba(255,255,255,0.15)' }">
+            {{ asset.category?.icon || '📦' }}
+          </div>
+          <div class="hero-info">
+            <div class="hero-name">{{ asset.name }}</div>
+            <div class="hero-category">{{ asset.category?.icon }} {{ asset.category?.name || '未分类' }}</div>
+            <div class="hero-usage">
+              <span v-if="daysUsed > 0" class="usage-badge">已使用 {{ daysUsed }} 天</span>
+              <span v-if="asset.expected_lifespan_days" class="usage-badge lifespan">预计 {{ asset.expected_lifespan_days }} 天</span>
+            </div>
+          </div>
+        </div>
+        <div class="hero-values">
+          <div class="hero-value-item">
+            <div class="hero-value-label">{{ asset.status === 'sold' ? '出售价格' : '当前价值' }}</div>
+            <MoneyDisplay :amount="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)" size="large" />
+          </div>
+          <div class="hero-value-item">
+            <div class="hero-value-label">购入价格</div>
+            <MoneyDisplay :amount="asset.purchase_price" />
+          </div>
+          <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
+            <div class="hero-value-label">日均成本</div>
+            <div class="hero-daily-cost">¥{{ asset.daily_cost.toFixed(2) }}</div>
+          </div>
+        </div>
+        <div v-if="asset.status !== 'sold'" class="hero-change" :class="returnClass">
           {{ returnText }}
         </div>
         <div v-if="asset.status === 'sold'" class="sell-summary">
           净回收 ¥{{ (asset.sell_price! - (asset.sell_fee || 0)).toLocaleString() }}
           <span v-if="asset.sell_date"> · {{ asset.sell_date }}</span>
         </div>
-        <van-tag v-if="asset.status !== 'in_use'" class="status-badge" :type="statusType" size="medium">
-          {{ statusText }}
-        </van-tag>
       </div>
+
+      <!-- Daily Cost Chart -->
+      <DailyCostChart
+        v-if="asset.purchase_price && asset.purchase_date"
+        :purchase-price="asset.purchase_price"
+        :purchase-date="asset.purchase_date"
+        :target-daily-cost="asset.target_daily_cost"
+      />
 
       <!-- Basic Info -->
       <van-cell-group inset title="基本信息">
@@ -158,6 +194,7 @@ import * as assetApi from '@/api/assets'
 import type { AssetValuation } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+import DailyCostChart from '@/components/charts/DailyCostChart.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -165,8 +202,29 @@ const assetStore = useAssetStore()
 const deleting = ref(false)
 const acting = ref(false)
 const valuations = ref<AssetValuation[]>([])
+const imageError = ref(false)
 
 const asset = computed(() => assetStore.currentAsset)
+
+const imageUrl = computed(() => {
+  if (!asset.value?.image_url) return ''
+  if (asset.value.image_url.startsWith('/')) {
+    return `/api/v1${asset.value.image_url}`
+  }
+  return asset.value.image_url
+})
+
+function onImageError() {
+  imageError.value = true
+}
+
+const daysUsed = computed(() => {
+  if (!asset.value?.purchase_date) return 0
+  const purchase = new Date(asset.value.purchase_date)
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
+  return diff > 0 ? diff : 0
+})
 
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
   in_use: { text: '使用中', type: 'success' },
@@ -250,29 +308,118 @@ onMounted(async () => {
   min-height: 100vh;
   padding-bottom: 20px;
 }
-.value-card {
-  background: linear-gradient(135deg, #1989fa 0%, #2b5cff 100%);
-  padding: 20px 16px;
+.hero-card {
+  background: linear-gradient(135deg, #1677ff 0%, #0052d9 50%, #2b3a8e 100%);
+  padding: 20px 16px 16px;
   color: #fff;
-  text-align: center;
   position: relative;
 }
-.value-card.sold {
+.hero-card.sold {
   background: linear-gradient(135deg, #646566 0%, #969799 100%);
 }
-.value-label {
+.status-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+.hero-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.hero-image {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.hero-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.hero-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  flex-shrink: 0;
+}
+.hero-info {
+  flex: 1;
+  min-width: 0;
+}
+.hero-name {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hero-category {
   font-size: 13px;
   opacity: 0.8;
+  margin-bottom: 6px;
 }
-.value-card :deep(.money-display) {
+.hero-usage {
+  display: flex;
+  gap: 6px;
+}
+.usage-badge {
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+}
+.usage-badge.lifespan {
+  background: rgba(255, 255, 255, 0.12);
+}
+.hero-values {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 0;
+  margin-bottom: 8px;
+}
+.hero-value-item {
+  flex: 1;
+  text-align: center;
+  border-right: 1px solid rgba(255, 255, 255, 0.15);
+}
+.hero-value-item:last-child {
+  border-right: none;
+}
+.hero-value-label {
+  font-size: 11px;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+.hero-value-item :deep(.money-display) {
   color: #fff;
+  font-size: 16px;
+  font-weight: 600;
 }
-.value-change {
-  font-size: 13px;
-  margin-top: 4px;
+.hero-daily-cost {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffd666;
 }
-.value-change.positive { color: #a8f0c6; }
-.value-change.negative { color: #ffb3b3; }
+.hero-change {
+  font-size: 12px;
+  text-align: center;
+  opacity: 0.9;
+}
+.hero-change.positive { color: #7dffa8; }
+.hero-change.negative { color: #ffb3b3; }
 .sell-summary {
   font-size: 13px;
   opacity: 0.85;
