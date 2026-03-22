@@ -20,9 +20,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/numina/api': {
-        target: 'http://localhost:8000/api',
+        target: 'http://localhost:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/numina\/api/, '/api')
+        rewrite: (path) => path.replace(/^\/numina/, '')
       }
     }
   }
