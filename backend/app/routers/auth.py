@@ -11,6 +11,7 @@ from app.schemas.auth import (
     RegisterRequest,
     TokenResponse,
     UpdateProfileRequest,
+    UpdateSettingsRequest,
     UserResponse,
 )
 from app.services import auth as auth_service
@@ -50,3 +51,23 @@ def update_me(
     user: User = Depends(get_current_user),
 ):
     return auth_service.update_profile(db, user, req)
+
+
+@router.put("/me/settings", response_model=UserResponse)
+def update_settings(
+    req: UpdateSettingsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """更新用户设置（主题、语言、币种、视图模式）"""
+    if req.theme is not None:
+        user.theme = req.theme
+    if req.language is not None:
+        user.language = req.language
+    if req.default_currency is not None:
+        user.default_currency = req.default_currency
+    if req.view_mode is not None:
+        user.view_mode = req.view_mode
+    db.commit()
+    db.refresh(user)
+    return user

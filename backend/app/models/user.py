@@ -18,9 +18,15 @@ class User(Base):
     avatar_color: Mapped[str] = mapped_column(String(20), default="#4F46E5")
     role: Mapped[str] = mapped_column(String(10), default="member")  # 'owner' or 'member'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # User settings
+    theme: Mapped[str] = mapped_column(String(20), default="light")  # 'light' or 'dark'
+    language: Mapped[str] = mapped_column(String(10), default="zh-CN")  # 'zh-CN' or 'en-US'
+    default_currency: Mapped[str] = mapped_column(String(10), default="CNY")
+    view_mode: Mapped[str] = mapped_column(String(20), default="card")  # 'card' or 'list'
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     family = relationship("Family", back_populates="members")
     assets = relationship("Asset", back_populates="user")
     liabilities = relationship("Liability", back_populates="user")
+    wishes = relationship("Wish", back_populates="user")

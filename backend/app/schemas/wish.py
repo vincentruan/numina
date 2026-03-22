@@ -1,23 +1,38 @@
 from datetime import date, datetime
+
 from pydantic import BaseModel
 
 
 class WishCreate(BaseModel):
     name: str
-    category_id: str | None = None
+    description: str | None = None
     expected_price: float | None = None
-    target_date: date | None = None
-    priority: int = 3
-    notes: str | None = None
+    priority: str = "medium"
+    category_id: str | None = None
 
 
 class WishUpdate(BaseModel):
     name: str | None = None
-    category_id: str | None = None
+    description: str | None = None
     expected_price: float | None = None
-    target_date: date | None = None
-    priority: int | None = None
-    notes: str | None = None
+    priority: str | None = None
+    status: str | None = None
+    category_id: str | None = None
+
+
+class WishRealizeRequest(BaseModel):
+    purchase_price: float
+    purchase_date: date
+    category_id: str | None = None
+
+
+class CategoryInfo(BaseModel):
+    id: str
+    name: str
+    icon: str
+    asset_type: str
+
+    model_config = {"from_attributes": True}
 
 
 class WishResponse(BaseModel):
@@ -25,17 +40,14 @@ class WishResponse(BaseModel):
     family_id: str
     user_id: str
     name: str
-    category_id: str | None = None
-    expected_price: float | None = None
-    target_date: date | None = None
-    priority: int
-    notes: str | None = None
-    is_fulfilled: bool
-    fulfilled_asset_id: str | None = None
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
+    description: str | None
+    expected_price: float | None
+    priority: str
+    status: str
+    category_id: str | None
+    category: CategoryInfo | None
+    realized_asset_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
     model_config = {"from_attributes": True}
-
-
-class FulfillRequest(BaseModel):
-    asset_id: str

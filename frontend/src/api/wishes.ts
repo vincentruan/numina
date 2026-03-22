@@ -1,8 +1,8 @@
 import http from './index'
-import type { Wish } from '@/types'
+import type { Wish, WishRealizeRequest } from '@/types'
 
-export function getWishes() {
-  return http.get<Wish[]>('/wishes')
+export function getWishes(status?: string) {
+  return http.get<Wish[]>('/wishes', { params: status ? { status } : undefined })
 }
 
 export function getWish(id: string) {
@@ -21,6 +21,6 @@ export function deleteWish(id: string) {
   return http.delete(`/wishes/${id}`)
 }
 
-export function fulfillWish(id: string, assetId: string) {
-  return http.post<Wish>(`/wishes/${id}/fulfill`, { asset_id: assetId })
+export function realizeWish(id: string, data: WishRealizeRequest) {
+  return http.post(`/wishes/${id}/realize`, data)
 }

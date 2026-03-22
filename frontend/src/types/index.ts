@@ -6,6 +6,10 @@ export interface User {
   avatar_color: string
   role: 'owner' | 'member'
   is_active: boolean
+  theme: string
+  language: string
+  default_currency: string
+  view_mode: string
   created_at: string
 }
 
@@ -121,7 +125,8 @@ export interface DashboardOverview {
   total_liabilities: number
   net_worth: number
   asset_count: number
-  month_over_month_change: number
+  month_over_month_change: number | null
+  total_daily_cost: number
 }
 
 export interface AllocationItem {
@@ -246,15 +251,28 @@ export interface Wish {
   family_id: string
   user_id: string
   name: string
-  category_id?: string
+  description?: string
   expected_price?: number
-  target_date?: string
-  priority: number
-  notes?: string
-  is_fulfilled: boolean
-  fulfilled_asset_id?: string
+  priority: string
+  status: string
+  category_id?: string
+  category?: CategoryInfo
+  realized_asset_id?: string
   created_at: string
   updated_at: string
+}
+
+export interface CategoryInfo {
+  id: string
+  name: string
+  icon: string
+  asset_type: string
+}
+
+export interface WishRealizeRequest {
+  purchase_price: number
+  purchase_date: string
+  category_id?: string
 }
 
 export interface PaymentRecord {

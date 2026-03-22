@@ -92,6 +92,11 @@ const router = createRouter({
           component: () => import('@/pages/WishFormPage.vue')
         },
         {
+          path: 'wishes/:id',
+          name: 'WishDetail',
+          component: () => import('@/pages/WishDetailPage.vue')
+        },
+        {
           path: 'family',
           name: 'Family',
           component: () => import('@/pages/FamilyPage.vue')
@@ -115,6 +120,11 @@ const router = createRouter({
           path: 'settings/tags',
           name: 'TagManage',
           component: () => import('@/pages/TagManagePage.vue')
+        },
+        {
+          path: 'stats',
+          name: 'DataStats',
+          component: () => import('@/pages/DataStatsPage.vue')
         }
       ]
     }

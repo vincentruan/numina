@@ -62,6 +62,10 @@ class UserResponse(BaseModel):
     avatar_color: str
     role: str
     is_active: bool
+    theme: str = "light"
+    language: str = "zh-CN"
+    default_currency: str = "CNY"
+    view_mode: str = "card"
 
     model_config = {"from_attributes": True}
 
@@ -69,3 +73,10 @@ class UserResponse(BaseModel):
 class UpdateProfileRequest(BaseModel):
     display_name: str | None = None
     avatar_color: str | None = None
+
+
+class UpdateSettingsRequest(BaseModel):
+    theme: str | None = None
+    language: str | None = None
+    default_currency: str | None = None
+    view_mode: str | None = None

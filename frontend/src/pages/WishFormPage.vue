@@ -18,39 +18,37 @@
           :rules="[{ required: true, message: '请填写名称' }]"
         />
         <van-field
+          v-model="form.description"
+          name="description"
+          label="描述"
+          type="textarea"
+          placeholder="可选"
+          rows="2"
+          autosize
+        />
+        <van-field
           v-model="priceStr"
           name="expected_price"
           label="预期价格"
           type="number"
           placeholder="可选"
         />
-        <van-field
-          v-model="form.target_date"
-          name="target_date"
-          label="目标日期"
-          placeholder="可选，点击选择"
-          readonly
-          @click="showCalendar = true"
-        />
         <van-field label="优先级" name="priority">
           <template #input>
-            <van-rate
-              v-model="form.priority"
-              :count="5"
-              color="#ffd21e"
-              void-icon="star"
-              void-color="#eee"
-            />
+            <van-radio-group v-model="form.priority" direction="horizontal">
+              <van-radio name="low">低</van-radio>
+              <van-radio name="medium">中</van-radio>
+              <van-radio name="high">高</van-radio>
+            </van-radio-group>
           </template>
         </van-field>
         <van-field
-          v-model="form.notes"
-          name="notes"
-          label="备注"
-          type="textarea"
-          placeholder="可选"
-          rows="3"
-          autosize
+          v-model="selectedCategoryName"
+          name="category"
+          label="分类"
+          placeholder="可选，点击选择"
+          readonly
+          @click="showCategoryPicker = true"
         />
       </van-cell-group>
 
@@ -61,7 +59,14 @@
       </div>
     </van-form>
 
-    <van-calendar v-model:show="showCalendar" @confirm="onDateConfirm" />
+    <!-- Category Picker -->
+    <van-popup v-model:show="showCategoryPicker" round position="bottom">
+      <van-picker
+        :columns="categoryColumns"
+        @confirm="onCategoryConfirm"
+        @cancel="showCategoryPicker = false"
+      />
+    </van-popup>
   </div>
 </template>
 
@@ -70,6 +75,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { getWish, createWish, updateWish, deleteWish } from '@/api/wishes'
+import { getCategories } from '@/api/categories'
+import type { Category } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -79,18 +86,29 @@ const isEdit = computed(() => !!wishId.value)
 
 const form = ref({
   name: '',
+  description: '',
   expected_price: undefined as number | undefined,
-  target_date: undefined as string | undefined,
-  priority: 3,
-  notes: '',
+  priority: 'medium',
+  category_id: undefined as string | undefined,
 })
 const priceStr = ref('')
-const showCalendar = ref(false)
 const submitting = ref(false)
+const showCategoryPicker = ref(false)
+const categories = ref<Category[]>([])
 
-function onDateConfirm(date: Date) {
-  form.value.target_date = date.toISOString().slice(0, 10)
-  showCalendar.value = false
+const categoryColumns = computed(() => {
+  return categories.value.map(c => ({ text: `${c.icon} ${c.name}`, value: c.id }))
+})
+
+const selectedCategoryName = computed(() => {
+  if (!form.value.category_id) return ''
+  const cat = categories.value.find(c => c.id === form.value.category_id)
+  return cat ? `${cat.icon} ${cat.name}` : ''
+})
+
+function onCategoryConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
+  form.value.category_id = selectedOptions[0].value
+  showCategoryPicker.value = false
 }
 
 async function onSubmit() {
@@ -122,15 +140,19 @@ async function onDelete() {
 }
 
 onMounted(async () => {
+  // Load categories
+  const catRes = await getCategories()
+  categories.value = catRes.data
+
   if (isEdit.value) {
     const res = await getWish(wishId.value!)
     const w = res.data
     form.value = {
       name: w.name,
+      description: w.description ?? '',
       expected_price: w.expected_price,
-      target_date: w.target_date,
       priority: w.priority,
-      notes: w.notes ?? '',
+      category_id: w.category_id,
     }
     priceStr.value = w.expected_price != null ? String(w.expected_price) : ''
   }
