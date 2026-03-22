@@ -689,6 +689,16 @@ onUnmounted(() => {
 .category-nav-sticky :deep(.van-tabs__wrap) {
   padding: 0 12px;
 }
+.category-nav-sticky :deep(.van-tabs__line) {
+  background: linear-gradient(90deg, transparent, #1989fa, transparent);
+  height: 3px;
+  border-radius: 3px;
+  box-shadow: 0 0 8px rgba(25, 137, 250, 0.6);
+}
+.category-nav-sticky :deep(.van-tab--active) {
+  color: #1989fa;
+  font-weight: 600;
+}
 
 /* Asset Section */
 .asset-section {
