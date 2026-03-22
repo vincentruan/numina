@@ -110,20 +110,19 @@
         <div v-else class="selection-mode">
           <div class="selection-header">
             <van-checkbox v-model="selectAll" @change="toggleSelectAll">全选</van-checkbox>
+            <span class="selection-count">已选 {{ selectedIds.length }} 项</span>
             <van-button type="primary" size="small" @click="exitSelectionMode">完成</van-button>
           </div>
-          <div class="selection-list">
-            <div
+          <div class="selection-list-cards">
+            <AssetCard
               v-for="asset in sortedAndFilteredAssets"
               :key="asset.id"
-              class="selection-item"
+              :asset="asset"
+              :selectable="true"
+              :selected="selectedIds.includes(asset.id)"
               @click="toggleSelection(asset.id)"
-            >
-              <van-checkbox v-model="selectedIds" :name="asset.id" />
-              <div class="selection-item-content">
-                <AssetListItem :asset="asset" />
-              </div>
-            </div>
+              @update:selected="(val) => val ? selectedIds.push(asset.id) : selectedIds.splice(selectedIds.indexOf(asset.id), 1)"
+            />
           </div>
           <div class="selection-actions">
             <van-button icon="share-o" size="small" @click="handleBatchShare">分享</van-button>
@@ -780,39 +779,25 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
+  padding: 12px 16px;
   background: #fff;
   border-radius: 8px;
-  padding: 12px 16px;
   margin-bottom: 12px;
 }
-.selection-list {
-  background: #fff;
-  border-radius: 12px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-.selection-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid #f7f8fa;
-  cursor: pointer;
-}
-.selection-item:last-child {
-  border-bottom: none;
-}
-.selection-item .van-checkbox {
-  margin-right: 12px;
-}
-.selection-item-content {
+.selection-count {
   flex: 1;
-  min-width: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1989fa;
+}
+.selection-list-cards {
+  padding: 0 12px;
 }
 .selection-actions {
   display: flex;
   justify-content: space-around;
-  padding: 12px 0;
+  padding: 12px 16px;
   background: #fff;
   border-radius: 8px;
   position: sticky;
