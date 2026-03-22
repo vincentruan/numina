@@ -1,26 +1,33 @@
 <template>
-  <div class="net-worth-card">
-    <div class="nw-label">净资产</div>
-    <div class="nw-amount">
-      <MoneyDisplay :amount="netWorth" size="large" />
+  <div class="overview-card">
+    <div class="ov-main">
+      <div class="ov-label">总资产</div>
+      <div class="ov-amount">
+        <MoneyDisplay :amount="totalAssets" size="large" />
+      </div>
+      <div class="ov-sub-row">
+        <span v-if="totalDailyCost > 0" class="ov-daily">日均 ¥{{ totalDailyCost.toFixed(2) }}</span>
+        <span class="ov-count">共 {{ assetCount }} 件</span>
+        <span v-if="monthOverMonthChange != null" class="ov-change" :class="changeClass">
+          {{ changeText }} vs 上月
+        </span>
+      </div>
     </div>
-    <div class="nw-change" :class="changeClass">
-      {{ changeText }} vs 上月
-    </div>
-    <van-grid :column-num="2" :border="false" class="nw-grid">
-      <van-grid-item>
-        <div class="grid-label">总资产</div>
-        <div class="grid-value positive">
-          <MoneyDisplay :amount="totalAssets" />
+    <div class="ov-detail">
+      <div class="ov-detail-item">
+        <div class="ov-detail-label">净资产</div>
+        <div class="ov-detail-value">
+          <MoneyDisplay :amount="netWorth" />
         </div>
-      </van-grid-item>
-      <van-grid-item>
-        <div class="grid-label">总负债</div>
-        <div class="grid-value negative">
+      </div>
+      <div class="ov-detail-divider" />
+      <div class="ov-detail-item">
+        <div class="ov-detail-label">总负债</div>
+        <div class="ov-detail-value">
           <MoneyDisplay :amount="totalLiabilities" />
         </div>
-      </van-grid-item>
-    </van-grid>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -32,6 +39,8 @@ const props = defineProps<{
   netWorth: number
   totalAssets: number
   totalLiabilities: number
+  totalDailyCost: number
+  assetCount: number
   monthOverMonthChange?: number | null
 }>()
 
@@ -48,50 +57,72 @@ const changeText = computed(() => {
 </script>
 
 <style scoped>
-.net-worth-card {
-  background: linear-gradient(135deg, #1989fa 0%, #2b5cff 100%);
-  padding: 24px 16px 16px;
+.overview-card {
+  background: linear-gradient(135deg, #1677ff 0%, #0052d9 50%, #2b3a8e 100%);
+  padding: 24px 20px 16px;
   color: #fff;
 }
-.nw-label {
-  font-size: 13px;
-  opacity: 0.8;
+.ov-label {
+  font-size: 14px;
+  opacity: 0.85;
+  letter-spacing: 0.5px;
 }
-.nw-amount {
-  margin: 4px 0;
+.ov-amount {
+  margin: 6px 0 8px;
 }
-.nw-amount :deep(.money-display) {
+.ov-amount :deep(.money-display) {
   color: #fff;
 }
-.nw-change {
-  font-size: 13px;
-  margin-bottom: 12px;
+.ov-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  opacity: 0.9;
+  margin-bottom: 14px;
 }
-.nw-change.positive {
-  color: #a8f0c6;
+.ov-daily {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  backdrop-filter: blur(4px);
 }
-.nw-change.negative {
+.ov-count {
+  font-size: 12px;
+}
+.ov-change.positive {
+  color: #7dffa8;
+}
+.ov-change.negative {
   color: #ffb3b3;
 }
-.nw-grid {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
+.ov-detail {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 12px 0;
 }
-.nw-grid :deep(.van-grid-item__content) {
-  background: transparent;
-  padding: 12px;
+.ov-detail-item {
+  flex: 1;
+  text-align: center;
 }
-.grid-label {
+.ov-detail-label {
   font-size: 12px;
-  opacity: 0.8;
-  color: #fff;
+  opacity: 0.75;
 }
-.grid-value {
+.ov-detail-value {
   margin-top: 4px;
 }
-.grid-value :deep(.money-display) {
+.ov-detail-value :deep(.money-display) {
   color: #fff;
   font-size: 16px;
-  font-weight: 500;
+  font-weight: 600;
+}
+.ov-detail-divider {
+  width: 1px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.25);
 }
 </style>

@@ -78,15 +78,10 @@ export const useDashboardStore = defineStore('dashboard', () => {
     try {
       await Promise.all([
         fetchOverview(),
-        fetchAllocation(),
-        fetchTrend(),
-        fetchTopAssets(),
-        fetchDailyCostRanking(),
-        fetchLowUsageAssets(),
-        fetchInvestmentReturns(),
-        fetchRecentActivities(),
         fetchStatesSummary(),
         fetchHomeAssets(),
+        fetchAllocation(),
+        fetchTrend(),
       ])
     } finally {
       loading.value = false

@@ -41,6 +41,24 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         .scalar()
     )
 
+    # Calculate total daily cost
+    daily_cost_assets = (
+        db.query(Asset)
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.purchase_date != None,
+            Asset.purchase_price != None,
+        )
+        .all()
+    )
+    total_daily_cost = 0.0
+    for a in daily_cost_assets:
+        dc = compute_daily_cost(a)
+        if dc is not None and dc > 0:
+            total_daily_cost += dc
+    total_daily_cost = round(total_daily_cost, 2)
+
     # Month over month change
     today = date.today()
     last_month = today.replace(day=1) - timedelta(days=1)
@@ -65,6 +83,7 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         net_worth=total_assets_val - total_liabilities_val,
         asset_count=asset_count,
         month_over_month_change=mom_change,
+        total_daily_cost=total_daily_cost,
     )
 
 
