@@ -1,10 +1,11 @@
 <template>
   <div class="wish-list-page">
-    <van-nav-bar title="心愿单" left-arrow @click-left="$router.back()" />
+    <van-nav-bar title="心愿单" />
 
     <van-tabs v-model:active="activeTab" sticky>
-      <van-tab title="未实现" name="pending" />
-      <van-tab title="已实现" name="fulfilled" />
+      <van-tab title="待实现" name="pending" />
+      <van-tab title="已实现" name="realized" />
+      <van-tab title="已取消" name="cancelled" />
     </van-tabs>
 
     <div class="list-content">
@@ -14,30 +15,24 @@
             v-for="wish in filteredWishes"
             :key="wish.id"
             class="wish-card"
-            @click="$router.push(`/wishes/${wish.id}/edit`)"
+            @click="$router.push(`/wishes/${wish.id}`)"
           >
             <div class="wish-header">
               <span class="wish-name">{{ wish.name }}</span>
-              <van-icon v-if="wish.is_fulfilled" name="success" color="#07c160" size="18" />
+              <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="18" />
             </div>
             <div class="wish-meta">
-              <van-rate
-                v-model="wish.priority"
-                :count="5"
-                size="14"
-                color="#ffd21e"
-                void-icon="star"
-                void-color="#eee"
-                readonly
-              />
+              <span class="priority-badge" :class="wish.priority">
+                {{ priorityText(wish.priority) }}
+              </span>
               <span v-if="wish.expected_price" class="wish-price">
                 ¥{{ wish.expected_price.toLocaleString() }}
               </span>
             </div>
-            <div v-if="wish.target_date" class="wish-date">
-              目标日期：{{ wish.target_date }}
+            <div v-if="wish.category" class="wish-category">
+              {{ wish.category.icon }} {{ wish.category.name }}
             </div>
-            <div v-if="wish.notes" class="wish-notes">{{ wish.notes }}</div>
+            <div v-if="wish.description" class="wish-notes">{{ wish.description }}</div>
           </div>
         </template>
         <van-empty v-else description="暂无心愿" />
@@ -57,14 +52,17 @@ import { getWishes } from '@/api/wishes'
 import type { Wish } from '@/types'
 
 const wishes = ref<Wish[]>([])
-const activeTab = ref<'pending' | 'fulfilled'>('pending')
+const activeTab = ref<'pending' | 'realized' | 'cancelled'>('pending')
 const refreshing = ref(false)
 
 const filteredWishes = computed(() =>
-  wishes.value.filter(w =>
-    activeTab.value === 'fulfilled' ? w.is_fulfilled : !w.is_fulfilled
-  )
+  wishes.value.filter(w => w.status === activeTab.value)
 )
+
+function priorityText(priority: string): string {
+  const map: Record<string, string> = { low: '低', medium: '中', high: '高' }
+  return map[priority] || '中'
+}
 
 async function loadWishes() {
   const res = await getWishes()
@@ -106,11 +104,28 @@ onMounted(loadWishes)
   gap: 12px;
   margin-bottom: 4px;
 }
+.priority-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.priority-badge.low {
+  background: #e8f5e9;
+  color: #4caf50;
+}
+.priority-badge.medium {
+  background: #fff3e0;
+  color: #ff9800;
+}
+.priority-badge.high {
+  background: #ffebee;
+  color: #f44336;
+}
 .wish-price {
   font-size: 13px;
   color: #ee0a24;
 }
-.wish-date,
+.wish-category,
 .wish-notes {
   font-size: 12px;
   color: #999;
