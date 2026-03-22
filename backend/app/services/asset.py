@@ -212,3 +212,172 @@ def get_valuations(db: Session, user: User, asset_id: str) -> list:
         .order_by(AssetValuation.valued_at.desc())
         .all()
     )
+
+
+def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
+    """Batch archive assets. Returns success/failed counts and errors."""
+    errors = []
+    success_count = 0
+
+    for asset_id in asset_ids:
+        try:
+            asset = get_asset(db, user, asset_id)
+            asset.is_archived = True
+            success_count += 1
+        except HTTPException as e:
+            errors.append(f"资产 {asset_id}: {e.detail}")
+        except Exception as e:
+            errors.append(f"资产 {asset_id}: 操作失败")
+
+    db.commit()
+    return {
+        "success_count": success_count,
+        "failed_count": len(asset_ids) - success_count,
+        "errors": errors,
+    }
+
+
+def batch_update_category(db: Session, user: User, asset_ids: list[str], category_id: str) -> dict:
+    """Batch update asset category. Returns success/failed counts and errors."""
+    from app.models.category import Category
+
+    # Verify category exists and belongs to user's family or is system category
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
+    if category.family_id is not None and category.family_id != user.family_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权使用该分类")
+
+    errors = []
+    success_count = 0
+
+    for asset_id in asset_ids:
+        try:
+            asset = get_asset(db, user, asset_id)
+            asset.category_id = category_id
+            success_count += 1
+        except HTTPException as e:
+            errors.append(f"资产 {asset_id}: {e.detail}")
+        except Exception as e:
+            errors.append(f"资产 {asset_id}: 操作失败")
+
+    db.commit()
+    return {
+        "success_count": success_count,
+        "failed_count": len(asset_ids) - success_count,
+        "errors": errors,
+    }
+
+
+def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: list[str]) -> dict:
+    """Batch update asset tags. Returns success/failed counts and errors."""
+    # Verify tags exist and belong to user's family
+    valid_tags = []
+    if tag_ids:
+        valid_tags = db.query(Tag).filter(
+            Tag.id.in_(tag_ids),
+            Tag.family_id == user.family_id
+        ).all()
+
+        if len(valid_tags) != len(tag_ids):
+            invalid_ids = set(tag_ids) - {t.id for t in valid_tags}
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"无效的标签ID: {', '.join(invalid_ids)}"
+            )
+
+    errors = []
+    success_count = 0
+
+    for asset_id in asset_ids:
+        try:
+            asset = get_asset(db, user, asset_id)
+            asset.tags = valid_tags
+            success_count += 1
+        except HTTPException as e:
+            errors.append(f"资产 {asset_id}: {e.detail}")
+        except Exception as e:
+            errors.append(f"资产 {asset_id}: 操作失败")
+
+    db.commit()
+    return {
+        "success_count": success_count,
+        "failed_count": len(asset_ids) - success_count,
+        "errors": errors,
+    }
+
+
+def batch_update_status(db: Session, user: User, asset_ids: list[str], status: str) -> dict:
+    """Batch update asset status. Returns success/failed counts and errors."""
+    valid_statuses = ['active', 'archived']
+    if status not in valid_statuses:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效的状态值，可选值: {', '.join(valid_statuses)}"
+        )
+
+    is_archived = (status == 'archived')
+    errors = []
+    success_count = 0
+
+    for asset_id in asset_ids:
+        try:
+            asset = get_asset(db, user, asset_id)
+            asset.is_archived = is_archived
+            success_count += 1
+        except HTTPException as e:
+            errors.append(f"资产 {asset_id}: {e.detail}")
+        except Exception as e:
+            errors.append(f"资产 {asset_id}: 操作失败")
+
+    db.commit()
+    return {
+        "success_count": success_count,
+        "failed_count": len(asset_ids) - success_count,
+        "errors": errors,
+    }
+
+
+def batch_export_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
+    """Export assets data. Returns list of asset data for export."""
+    assets_data = []
+    errors = []
+
+    for asset_id in asset_ids:
+        try:
+            asset = (
+                db.query(Asset)
+                .options(joinedload(Asset.category), joinedload(Asset.tags))
+                .filter(Asset.id == asset_id, Asset.family_id == user.family_id)
+                .first()
+            )
+            if not asset:
+                errors.append(f"资产 {asset_id}: 资产不存在")
+                continue
+
+            asset_dict = {
+                "id": asset.id,
+                "name": asset.name,
+                "asset_type": asset.asset_type,
+                "category": asset.category.name if asset.category else "",
+                "purchase_price": asset.purchase_price,
+                "current_value": asset.current_value,
+                "currency": asset.currency,
+                "purchase_date": str(asset.purchase_date) if asset.purchase_date else "",
+                "status": asset.status,
+                "location": asset.location or "",
+                "institution": asset.institution or "",
+                "daily_cost": compute_daily_cost(asset),
+                "return_rate": compute_return_rate(asset),
+                "tags": ", ".join([t.name for t in asset.tags]) if asset.tags else "",
+                "is_archived": asset.is_archived,
+            }
+            assets_data.append(asset_dict)
+        except Exception as e:
+            errors.append(f"资产 {asset_id}: 导出失败")
+
+    return {
+        "format": "json",
+        "data": assets_data,
+        "count": len(assets_data),
+    }

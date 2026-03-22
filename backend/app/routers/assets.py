@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.schemas.asset import AssetCreate, AssetResponse, AssetSellRequest, AssetSellResponse, AssetUpdate, AssetValueUpdate, ValuationResponse
+from app.schemas.asset import AssetCreate, AssetResponse, AssetSellRequest, AssetSellResponse, AssetUpdate, AssetValueUpdate, ValuationResponse, BatchAssetRequest, BatchUpdateCategoryRequest, BatchUpdateTagsRequest, BatchUpdateStatusRequest, BatchOperationResponse, BatchExportResponse
 from app.services import asset as asset_service
 from app.services.activity import record_activity
 
@@ -127,3 +127,54 @@ def get_valuations(
     user: User = Depends(get_current_user),
 ):
     return asset_service.get_valuations(db, user, asset_id)
+
+
+# Batch operations
+@router.post("/batch/archive", response_model=BatchOperationResponse)
+def batch_archive_assets(
+    req: BatchAssetRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """批量归档资产"""
+    return asset_service.batch_archive_assets(db, user, req.asset_ids)
+
+
+@router.put("/batch/category", response_model=BatchOperationResponse)
+def batch_update_category(
+    req: BatchUpdateCategoryRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """批量修改资产分类"""
+    return asset_service.batch_update_category(db, user, req.asset_ids, req.category_id)
+
+
+@router.put("/batch/tags", response_model=BatchOperationResponse)
+def batch_update_tags(
+    req: BatchUpdateTagsRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """批量修改资产标签"""
+    return asset_service.batch_update_tags(db, user, req.asset_ids, req.tag_ids)
+
+
+@router.put("/batch/status", response_model=BatchOperationResponse)
+def batch_update_status(
+    req: BatchUpdateStatusRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """批量修改资产状态"""
+    return asset_service.batch_update_status(db, user, req.asset_ids, req.status)
+
+
+@router.post("/batch/export", response_model=BatchExportResponse)
+def batch_export_assets(
+    req: BatchAssetRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """批量导出资产数据"""
+    return asset_service.batch_export_assets(db, user, req.asset_ids)

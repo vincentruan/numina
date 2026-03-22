@@ -135,3 +135,35 @@ class AssetResponse(BaseModel):
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+# Batch operation schemas
+class BatchAssetRequest(BaseModel):
+    asset_ids: list[str]
+
+
+class BatchUpdateCategoryRequest(BaseModel):
+    asset_ids: list[str]
+    category_id: str
+
+
+class BatchUpdateTagsRequest(BaseModel):
+    asset_ids: list[str]
+    tag_ids: list[str]
+
+
+class BatchUpdateStatusRequest(BaseModel):
+    asset_ids: list[str]
+    status: str  # 'active' or 'archived'
+
+
+class BatchOperationResponse(BaseModel):
+    success_count: int
+    failed_count: int
+    errors: list[str]
+
+
+class BatchExportResponse(BaseModel):
+    format: str
+    data: list[dict]
+    count: int

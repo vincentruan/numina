@@ -1,6 +1,37 @@
 import http from './index'
 import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse, AssetValuation } from '@/types'
 
+// Batch operation types
+interface BatchAssetRequest {
+  asset_ids: string[]
+}
+
+interface BatchUpdateCategoryRequest {
+  asset_ids: string[]
+  category_id: string
+}
+
+interface BatchUpdateTagsRequest {
+  asset_ids: string[]
+  tag_ids: string[]
+}
+
+interface BatchUpdateStatusRequest {
+  asset_ids: string[]
+  status: string
+}
+
+interface BatchOperationResponse {
+  success_count: number
+  failed_count: number
+  errors: string[]
+}
+
+interface BatchExportResponse {
+  data: Asset[]
+  count: number
+}
+
 export function getAssets(params?: AssetFilter) {
   return http.get<Asset[]>('/assets', { params })
 }
@@ -39,4 +70,25 @@ export function reactivateAsset(id: string) {
 
 export function getValuations(id: string) {
   return http.get<AssetValuation[]>(`/assets/${id}/valuations`)
+}
+
+// Batch operations
+export function batchArchiveAssets(assetIds: string[]) {
+  return http.post<BatchOperationResponse>('/assets/batch/archive', { asset_ids: assetIds })
+}
+
+export function batchUpdateCategory(assetIds: string[], categoryId: string) {
+  return http.put<BatchOperationResponse>('/assets/batch/category', { asset_ids: assetIds, category_id: categoryId })
+}
+
+export function batchUpdateTags(assetIds: string[], tagIds: string[]) {
+  return http.put<BatchOperationResponse>('/assets/batch/tags', { asset_ids: assetIds, tag_ids: tagIds })
+}
+
+export function batchUpdateStatus(assetIds: string[], status: string) {
+  return http.put<BatchOperationResponse>('/assets/batch/status', { asset_ids: assetIds, status })
+}
+
+export function batchExportAssets(assetIds: string[]) {
+  return http.post<BatchExportResponse>('/assets/batch/export', { asset_ids: assetIds })
 }
