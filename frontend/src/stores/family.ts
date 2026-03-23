@@ -43,5 +43,10 @@ export const useFamilyStore = defineStore('family', () => {
     members.value = members.value.filter(m => m.id !== userId)
   }
 
-  return { family, members, loading, fetchFamily, fetchMembers, regenerateInviteCode, updateMemberRole, removeMember }
+  async function updateFamilyTitle(custom_title: string | null) {
+    const res = await familyApi.updateFamilyTitle(custom_title)
+    family.value = res.data
+  }
+
+  return { family, members, loading, fetchFamily, fetchMembers, regenerateInviteCode, updateMemberRole, removeMember, updateFamilyTitle }
 })

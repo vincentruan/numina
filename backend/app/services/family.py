@@ -14,6 +14,16 @@ def get_family_members(db: Session, user: User) -> list[User]:
     return db.query(User).filter(User.family_id == user.family_id, User.is_active == True).all()
 
 
+def update_family_title(db: Session, owner: User, custom_title: str | None) -> Family:
+    if owner.role != 'owner':
+        raise HTTPException(status_code=403, detail="只有家庭创建者可以修改家庭标题")
+    family = db.query(Family).filter(Family.id == owner.family_id).first()
+    family.custom_title = custom_title
+    db.commit()
+    db.refresh(family)
+    return family
+
+
 def regenerate_invite_code(db: Session, user: User) -> Family:
     family = db.query(Family).filter(Family.id == user.family_id).first()
     family.invite_code = generate_invite_code()

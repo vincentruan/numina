@@ -10,7 +10,7 @@
       <template v-if="familyStore.family">
         <!-- Family Info -->
         <van-cell-group inset class="section">
-          <van-cell title="家庭名称" :value="familyStore.family.name" />
+          <van-cell title="家庭名称" :value="familyStore.family.custom_title || familyStore.family.name" />
           <van-cell title="邀请码" :value="familyStore.family.invite_code" is-link @click="copyInviteCode">
             <template #right-icon>
               <van-icon name="description" />

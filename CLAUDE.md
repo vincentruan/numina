@@ -211,10 +211,12 @@ Liability N──1 Asset (optional linked_asset_id)
 
 ## Testing
 
+### Backend Unit Tests
+
 Backend tests are in `backend/tests/` using pytest + FastAPI TestClient with in-memory SQLite.
 
 ```
-tests/
+backend/tests/
 ├── conftest.py          # Fixtures: db, client, auth_headers, second_user_headers
 ├── test_auth.py         # 10 tests: register, login, refresh, join-family, me, isolation
 ├── test_assets.py       # 11 tests: CRUD, daily cost, return rate, cross-family isolation
@@ -229,6 +231,57 @@ Key test patterns:
 - `auth_headers` fixture registers a user and returns JWT headers
 - `second_user_headers` fixture creates a user in a different family for isolation tests
 - System categories are seeded via `seed_categories()` in the db fixture
+
+### E2E and Integration Tests
+
+E2E and integration test scripts are in `tests/` (project root):
+
+```
+tests/
+├── seed-complete-data.sh        # 完整测试数据生成（19项实物资产 + 11项金融资产 + 负债 + 心愿）
+├── test-wishes-liabilities.sh   # 心愿和负债仿真测试（全字段验证 + 列表展示 + 功能测试）
+├── create-test-data.sh          # 旧版测试数据脚本（已被 seed-complete-data.sh 替代）
+├── e2e-acceptance.sh            # Basic acceptance tests (auth, CRUD operations)
+├── e2e-extended.sh              # Extended E2E tests (full user flows)
+├── screenshot.js                # Puppeteer screenshot capture (legacy)
+├── take-screenshots.js          # Optimized screenshot capture with per-page isolation
+└── TEST_DATA_SUMMARY.md         # 测试数据总结文档
+```
+
+**Running E2E tests:**
+
+```bash
+# Prerequisites: Docker services running (docker-compose up -d)
+
+# 生成完整测试数据（推荐）
+./tests/seed-complete-data.sh
+
+# 运行心愿和负债仿真测试
+./tests/test-wishes-liabilities.sh
+
+# Run acceptance tests
+./tests/e2e-acceptance.sh
+
+# Run extended E2E tests
+./tests/e2e-extended.sh
+
+# Capture UI screenshots (requires Node.js + puppeteer)
+cd tests && node take-screenshots.js
+```
+
+**Test Data Summary:**
+- 实物资产: 19 项（覆盖所有 13 个分类）
+- 金融资产: 11 项（覆盖所有 8 个分类）
+- 负债: 3 项基础数据
+- 心愿: 5 项基础数据
+- 总资产价值: ¥50,792,000
+- 总负债: ¥5,480,000
+- 净资产: ¥45,312,000
+
+**Test Organization Convention:**
+- All simulation, E2E, integration, and UI testing scripts go in `tests/` folder
+- Backend unit tests stay in `backend/tests/`
+- Frontend unit tests (if added) should go in `frontend/tests/`
 
 ## Common Pitfalls
 

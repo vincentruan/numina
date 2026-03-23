@@ -15,6 +15,12 @@
     </van-cell-group>
 
     <van-cell-group inset title="账户信息" class="section">
+      <van-cell 
+        title="家庭名称" 
+        :value="familyStore.family?.custom_title || familyStore.family?.name" 
+        :is-link="authStore.user?.role === 'owner'" 
+        @click="onEditFamilyTitle" 
+      />
       <van-cell title="当前用户" :value="authStore.user?.display_name" />
       <van-cell title="用户名" :value="authStore.user?.username" />
       <van-cell title="角色" :value="authStore.user?.role === 'owner' ? '管理员' : '成员'" />
@@ -61,22 +67,46 @@
         @cancel="showViewModePicker = false"
       />
     </van-popup>
+
+    <!-- Edit Family Title Dialog -->
+    <van-dialog 
+      v-model:show="showTitleDialog" 
+      title="修改家庭名称" 
+      show-cancel-button 
+      @confirm="onTitleConfirm"
+    >
+      <van-field
+        v-model="editTitleValue"
+        placeholder="请输入新的家庭名称"
+        clearable
+      />
+    </van-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
+import { useFamilyStore } from '@/stores/family'
 import { updateSettings } from '@/api/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const authStore = useAuthStore()
+const familyStore = useFamilyStore()
+
+onMounted(() => {
+  if (!familyStore.family) {
+    familyStore.fetchFamily()
+  }
+})
 
 const showThemePicker = ref(false)
 const showLanguagePicker = ref(false)
 const showCurrencyPicker = ref(false)
 const showViewModePicker = ref(false)
+const showTitleDialog = ref(false)
+const editTitleValue = ref('')
 
 const themeOptions = [
   { text: '浅色模式', value: 'light' },
@@ -140,6 +170,26 @@ function onViewModeConfirm({ selectedOptions }: { selectedOptions: Array<{ text:
   updateSetting('view_mode', selectedOptions[0].value)
   showViewModePicker.value = false
 }
+
+function onEditFamilyTitle() {
+  if (authStore.user?.role !== 'owner') {
+    showToast('只有家庭创建者可以修改名称')
+    return
+  }
+  editTitleValue.value = familyStore.family?.custom_title || familyStore.family?.name || ''
+  showTitleDialog.value = true
+}
+
+async function onTitleConfirm() {
+  try {
+    const newTitle = editTitleValue.value.trim()
+    await familyStore.updateFamilyTitle(newTitle || null)
+    showToast('家庭名称已修改')
+  } catch (err: any) {
+    showToast(err.response?.data?.detail || '修改失败')
+  }
+}
+
 
 async function onLogout() {
   try {

@@ -9,7 +9,7 @@ from app.models.asset import Asset
 from app.models.liability import Liability
 from app.models.user import User
 from app.schemas.auth import UserResponse
-from app.schemas.family import FamilyResponse, MemberSummary
+from app.schemas.family import FamilyResponse, MemberSummary, UpdateFamilyTitleRequest
 from app.services import family as family_service
 from app.services.snapshot import generate_snapshots
 
@@ -31,6 +31,24 @@ def get_family(
     return FamilyResponse(
         id=family.id,
         name=family.name,
+        custom_title=family.custom_title,
+        invite_code=family.invite_code,
+        created_by=family.created_by,
+        members=[UserResponse.model_validate(m) for m in members],
+    )
+
+@router.patch("/title", response_model=FamilyResponse)
+def update_family_title(
+    body: UpdateFamilyTitleRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    family = family_service.update_family_title(db, user, body.custom_title)
+    members = family_service.get_family_members(db, user)
+    return FamilyResponse(
+        id=family.id,
+        name=family.name,
+        custom_title=family.custom_title,
         invite_code=family.invite_code,
         created_by=family.created_by,
         members=[UserResponse.model_validate(m) for m in members],

@@ -16,6 +16,7 @@ export interface User {
 export interface Family {
   id: string
   name: string
+  custom_title?: string
   invite_code: string
   created_by: string
   members: User[]

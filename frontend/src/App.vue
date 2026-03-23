@@ -23,4 +23,13 @@ const resolvedTheme = computed(() => {
   if (settingsStore.theme === 'system') return systemDark.value ? 'dark' : 'light'
   return settingsStore.theme
 })
+
+import { useFamilyStore } from '@/stores/family'
+import { watch } from 'vue'
+
+const familyStore = useFamilyStore()
+
+watch(() => familyStore.family?.custom_title, (newTitle) => {
+  document.title = newTitle || 'Numina'
+}, { immediate: true })
 </script>

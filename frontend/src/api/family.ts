@@ -20,3 +20,7 @@ export function updateMemberRole(userId: string, role: 'owner' | 'member') {
 export function removeMember(userId: string) {
   return http.delete(`/family/members/${userId}`)
 }
+
+export function updateFamilyTitle(custom_title: string | null) {
+  return http.patch<Family>('/family/title', { custom_title })
+}
