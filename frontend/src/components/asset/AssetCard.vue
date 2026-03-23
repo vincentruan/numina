@@ -3,7 +3,6 @@
     <div v-if="selectable" class="selection-overlay">
       <van-checkbox
         :model-value="selected"
-        @click.stop="$emit('update:selected', !selected)"
       />
     </div>
     <div class="card-left">
