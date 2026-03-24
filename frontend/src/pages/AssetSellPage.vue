@@ -183,7 +183,7 @@ onMounted(() => {
 
 <style scoped>
 .asset-sell-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }
@@ -223,7 +223,7 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--separator);
   font-size: 14px;
 }
 .result-row:last-child {

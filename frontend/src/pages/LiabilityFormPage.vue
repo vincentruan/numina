@@ -54,7 +54,7 @@ onMounted(() => {
 
 <style scoped>
 .liability-form-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 </style>

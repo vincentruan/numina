@@ -100,7 +100,7 @@ onMounted(() => {
 
 <style scoped>
 .member-manage-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 .avatar {

@@ -82,12 +82,17 @@ onMounted(loadWishes)
   padding: 12px;
 }
 .wish-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   padding: 14px;
   margin-bottom: 10px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
+
+[data-theme='dark'] .wish-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
 .wish-header {
   display: flex;
   justify-content: space-between;
@@ -97,6 +102,7 @@ onMounted(loadWishes)
 .wish-name {
   font-size: 15px;
   font-weight: 600;
+  color: var(--text-primary);
 }
 .wish-meta {
   display: flex;
@@ -110,17 +116,35 @@ onMounted(loadWishes)
   border-radius: 4px;
 }
 .priority-badge.low {
-  background: #e8f5e9;
+  background: rgba(76, 175, 80, 0.15);
   color: #4caf50;
 }
+
+[data-theme='dark'] .priority-badge.low {
+  background: rgba(76, 175, 80, 0.2);
+  color: #81c784;
+}
+
 .priority-badge.medium {
-  background: #fff3e0;
+  background: rgba(255, 152, 0, 0.15);
   color: #ff9800;
 }
+
+[data-theme='dark'] .priority-badge.medium {
+  background: rgba(255, 152, 0, 0.2);
+  color: #ffb74d;
+}
+
 .priority-badge.high {
-  background: #ffebee;
+  background: rgba(244, 67, 54, 0.15);
   color: #f44336;
 }
+
+[data-theme='dark'] .priority-badge.high {
+  background: rgba(244, 67, 54, 0.2);
+  color: #e57373;
+}
+
 .wish-price {
   font-size: 13px;
   color: #ee0a24;
@@ -128,7 +152,7 @@ onMounted(loadWishes)
 .wish-category,
 .wish-notes {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
   margin-top: 4px;
 }
 </style>

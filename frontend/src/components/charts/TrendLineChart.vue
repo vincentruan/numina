@@ -117,7 +117,7 @@ const chartOption = computed(() => ({
 
 <style scoped>
 .trend-chart {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   padding: 12px;
   margin: 12px;
@@ -131,7 +131,7 @@ const chartOption = computed(() => ({
 .chart-title {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--text-primary);
 }
 .chart {
   height: 220px;
@@ -146,5 +146,9 @@ const chartOption = computed(() => ({
     padding: 0 8px;
     line-height: 26px;
   }
+}
+
+[data-theme='dark'] .chart {
+  color-scheme: dark;
 }
 </style>

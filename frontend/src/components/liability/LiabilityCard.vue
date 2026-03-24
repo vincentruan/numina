@@ -17,7 +17,7 @@
       <div class="card-label">
         <span>{{ categoryText }}</span>
         <span v-if="liability.institution">{{ liability.institution }}</span>
-        <span>月供 ¥{{ liability.monthly_payment.toLocaleString() }}</span>
+        <span>月供 {{ currency.format(liability.monthly_payment) }}</span>
       </div>
     </template>
     <template #value>
@@ -33,6 +33,7 @@
 import { computed } from 'vue'
 import type { Liability } from '@/types'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   liability: Liability
@@ -41,6 +42,8 @@ const props = defineProps<{
 defineEmits<{
   click: []
 }>()
+
+const currency = useCurrency()
 
 const categoryMap: Record<string, { text: string; icon: string; color: string }> = {
   mortgage: { text: '房贷', icon: '🏠', color: '#1989fa' },
@@ -78,13 +81,13 @@ const categoryColor = computed(() => categoryMap[props.liability.category]?.colo
 .name {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--text-primary);
 }
 .card-label {
   display: flex;
   gap: 8px;
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-top: 2px;
 }
 .card-value {
@@ -92,7 +95,7 @@ const categoryColor = computed(() => categoryMap[props.liability.category]?.colo
 }
 .rate {
   font-size: 11px;
-  color: #969799;
+  color: var(--text-tertiary);
   display: block;
   margin-top: 2px;
 }

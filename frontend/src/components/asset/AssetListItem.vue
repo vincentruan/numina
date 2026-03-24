@@ -10,11 +10,11 @@
           <van-tag :type="statusType" size="medium" class="item-status-tag">{{ statusText }}</van-tag>
         </div>
         <div class="item-meta">
-          <span class="item-price-days">¥{{ formatPrice(asset.purchase_price) }} | {{ daysUsed }}天</span>
+          <span class="item-price-days">{{ currency.format(asset.purchase_price || 0) }} | {{ daysUsed }}天</span>
         </div>
         <div class="item-cost">
           <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="item-daily">
-            ¥{{ asset.daily_cost.toFixed(2) }}/天
+            {{ currency.format(asset.daily_cost) }}/天
           </span>
         </div>
 
@@ -39,6 +39,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Asset } from '@/types'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   asset: Asset
@@ -47,6 +48,8 @@ const props = defineProps<{
 defineEmits<{
   click: []
 }>()
+
+const currency = useCurrency()
 
 const statusType = computed(() => {
   switch (props.asset.status) {
@@ -99,14 +102,14 @@ function formatPrice(price: number | null | undefined): string {
 <style scoped>
 .asset-list-item {
   display: flex;
-  background: #fff;
+  background: var(--card-bg);
   padding: 12px 14px;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--separator);
   cursor: pointer;
   transition: background 0.15s;
 }
 .asset-list-item:active {
-  background: #f7f8fa;
+  background: var(--bg-tertiary);
 }
 .asset-list-item:last-child {
   border-bottom: none;
@@ -147,7 +150,7 @@ function formatPrice(price: number | null | undefined): string {
 .item-name {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -166,7 +169,7 @@ function formatPrice(price: number | null | undefined): string {
 
 .item-price-days {
   font-size: 12px;
-  color: #646566;
+  color: var(--text-secondary);
 }
 
 .item-cost {
@@ -196,7 +199,7 @@ function formatPrice(price: number | null | undefined): string {
 .progress-bar {
   position: relative;
   height: 6px;
-  background: #f0f0f0;
+  background: var(--separator);
   border-radius: 3px;
   overflow: visible;
 }
@@ -210,6 +213,9 @@ function formatPrice(price: number | null | undefined): string {
   border-radius: 3px;
   transition: width 0.3s ease;
 }
+[data-theme='dark'] .progress-fill {
+  background: linear-gradient(90deg, #0a84ff 0%, #5ac8fa 100%);
+}
 
 .progress-marker {
   position: absolute;
@@ -218,10 +224,14 @@ function formatPrice(price: number | null | undefined): string {
   width: 12px;
   height: 12px;
   background: #1989fa;
-  border: 2px solid #fff;
+  border: 2px solid var(--card-bg);
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(25, 137, 250, 0.3);
   transition: left 0.3s ease;
+}
+[data-theme='dark'] .progress-marker {
+  background: #0a84ff;
+  box-shadow: 0 2px 4px rgba(10, 132, 255, 0.3);
 }
 
 .progress-info {
@@ -232,11 +242,14 @@ function formatPrice(price: number | null | undefined): string {
 }
 
 .progress-target {
-  color: #969799;
+  color: var(--text-tertiary);
 }
 
 .progress-remaining {
   color: #1989fa;
   font-weight: 500;
+}
+[data-theme='dark'] .progress-remaining {
+  color: #0a84ff;
 }
 </style>

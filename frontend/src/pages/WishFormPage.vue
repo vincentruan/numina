@@ -32,7 +32,11 @@
           label="预期价格"
           type="number"
           placeholder="可选"
-        />
+        >
+          <template #left-icon>
+            <CurrencyButton v-model="form.currency" />
+          </template>
+        </van-field>
         <van-field label="优先级" name="priority">
           <template #input>
             <van-radio-group v-model="form.priority" direction="horizontal">
@@ -77,9 +81,12 @@ import { showConfirmDialog, showToast } from 'vant'
 import { getWish, createWish, updateWish, deleteWish } from '@/api/wishes'
 import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const wishId = computed(() => route.params.id as string | undefined)
 const isEdit = computed(() => !!wishId.value)
@@ -88,6 +95,7 @@ const form = ref({
   name: '',
   description: '',
   expected_price: undefined as number | undefined,
+  currency: authStore.user?.default_currency || 'CNY',
   priority: 'medium',
   category_id: undefined as string | undefined,
 })
@@ -151,6 +159,7 @@ onMounted(async () => {
       name: w.name,
       description: w.description ?? '',
       expected_price: w.expected_price,
+      currency: w.currency || authStore.user?.default_currency || 'CNY',
       priority: w.priority,
       category_id: w.category_id,
     }

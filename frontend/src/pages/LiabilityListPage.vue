@@ -67,7 +67,7 @@ onMounted(() => {
 
 <style scoped>
 .liability-list-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 .summary-bar {
@@ -75,7 +75,7 @@ onMounted(() => {
   justify-content: space-between;
   padding: 8px 16px;
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
 }
 .liability-list {
   padding: 0 12px;
@@ -94,5 +94,8 @@ onMounted(() => {
   justify-content: center;
   box-shadow: 0 4px 12px rgba(25, 137, 250, 0.4);
   z-index: 10;
+}
+[data-theme='dark'] .fab {
+  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.6);
 }
 </style>

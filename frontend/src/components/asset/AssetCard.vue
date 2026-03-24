@@ -25,16 +25,16 @@
       <div class="card-row-prices">
         <div class="price-item">
           <span class="price-label">购入</span>
-          <span class="price-value">¥{{ formatPrice(asset.purchase_price) }}</span>
+          <span class="price-value">{{ formatPrice(asset.purchase_price) }}</span>
         </div>
         <div class="price-item">
           <span class="price-label">当前</span>
-          <span class="price-value current">¥{{ formatPrice(asset.current_value) }}</span>
+          <span class="price-value current">{{ formatPrice(asset.current_value) }}</span>
         </div>
       </div>
       <div class="card-row-bottom">
         <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
-          ⏱ 日均 ¥{{ asset.daily_cost.toFixed(2) }}
+          ⏱ 日均 {{ currency.format(asset.daily_cost) }}
         </span>
         <span v-else class="card-daily-cost-placeholder" />
       </div>
@@ -45,6 +45,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import type { Asset } from '@/types'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   asset: Asset
@@ -57,6 +58,7 @@ defineEmits<{
   'update:selected': [value: boolean]
 }>()
 
+const currency = useCurrency()
 const imageError = ref(false)
 
 const imageUrl = computed(() => {
@@ -81,10 +83,7 @@ const daysUsed = computed(() => {
 
 function formatPrice(price: number | null | undefined): string {
   if (price == null) return '-'
-  if (price >= 10000) {
-    return `${(price / 10000).toFixed(1)}万`
-  }
-  return price.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
+  return currency.format(price)
 }
 
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
@@ -102,13 +101,16 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 .asset-card {
   position: relative;
   display: flex;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 12px;
   margin-bottom: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: transform 0.15s;
+}
+[data-theme='dark'] .asset-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .asset-card:active {
   transform: scale(0.98);
@@ -118,7 +120,7 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   top: 8px;
   left: 8px;
   z-index: 10;
-  background: rgba(255, 255, 255, 0.9);
+  background: var(--card-bg);
   border-radius: 50%;
   padding: 2px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -166,7 +168,7 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 .card-name {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -179,15 +181,19 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 }
 .card-category-text {
   font-size: 12px;
-  color: #999;
+  color: var(--text-tertiary);
 }
 .card-days {
   font-size: 10px;
-  color: #1989fa;
-  background: #ecf5ff;
+  color: var(--van-primary-color);
+  background: rgba(25, 137, 250, 0.1);
   padding: 1px 6px;
   border-radius: 8px;
   line-height: 1.4;
+}
+[data-theme='dark'] .card-days {
+  color: #0a84ff;
+  background: rgba(10, 132, 255, 0.15);
 }
 .card-row-prices {
   display: flex;
@@ -200,15 +206,15 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 }
 .price-label {
   font-size: 11px;
-  color: #bbb;
+  color: var(--text-tertiary);
 }
 .price-value {
   font-size: 13px;
-  color: #666;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 .price-value.current {
-  color: #1a1a1a;
+  color: var(--text-primary);
   font-weight: 600;
 }
 .card-row-bottom {

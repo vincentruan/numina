@@ -153,7 +153,7 @@ const chartOption = computed(() => {
 
 <style scoped>
 .daily-cost-chart {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 14px;
   margin: 12px 16px;
@@ -167,7 +167,7 @@ const chartOption = computed(() => {
 .chart-title {
   font-size: 14px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .chart-current {
   font-size: 12px;
@@ -177,5 +177,9 @@ const chartOption = computed(() => {
 .chart {
   height: 200px;
   width: 100%;
+}
+
+[data-theme='dark'] .chart {
+  color-scheme: dark;
 }
 </style>

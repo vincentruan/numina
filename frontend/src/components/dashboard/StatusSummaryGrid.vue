@@ -59,7 +59,7 @@ function onSelect(status: string | null) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
+  background: var(--card-bg);
   padding: 12px 16px;
   gap: 12px;
 }
@@ -79,7 +79,7 @@ function onSelect(status: string | null) {
   gap: 4px;
   padding: 6px 12px;
   border-radius: 16px;
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;

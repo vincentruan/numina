@@ -1,34 +1,34 @@
 <template>
   <div class="settings-page">
-    <PageHeader title="设置" />
+    <PageHeader :title="t('settings.title')" />
 
-    <van-cell-group inset title="数据管理">
-      <van-cell title="分类管理" icon="apps-o" is-link to="/settings/categories" />
-      <van-cell title="标签管理" icon="label-o" is-link to="/settings/tags" />
+    <van-cell-group inset :title="t('settings.dataManagement')">
+      <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
+      <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
     </van-cell-group>
 
-    <van-cell-group inset title="用户设置" class="section">
-      <van-cell title="主题模式" :value="themeLabel" @click="showThemePicker = true" is-link />
-      <van-cell title="语言" :value="languageLabel" @click="showLanguagePicker = true" is-link />
-      <van-cell title="默认币种" :value="authStore.user?.default_currency || 'CNY'" @click="showCurrencyPicker = true" is-link />
-      <van-cell title="默认视图" :value="viewModeLabel" @click="showViewModePicker = true" is-link />
+    <van-cell-group inset :title="t('settings.userSettings')" class="section">
+      <van-cell :title="t('settings.theme')" :value="themeLabel" @click="showThemePicker = true" is-link />
+      <van-cell :title="t('settings.language')" :value="languageLabel" @click="showLanguagePicker = true" is-link />
+      <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" @click="showCurrencyPicker = true" is-link />
+      <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" @click="showViewModePicker = true" is-link />
     </van-cell-group>
 
-    <van-cell-group inset title="账户信息" class="section">
-      <van-cell 
-        title="家庭名称" 
-        :value="familyStore.family?.custom_title || familyStore.family?.name" 
-        :is-link="authStore.user?.role === 'owner'" 
-        @click="onEditFamilyTitle" 
+    <van-cell-group inset :title="t('settings.accountInfo')" class="section">
+      <van-cell
+        :title="t('family.familyName')"
+        :value="familyStore.family?.custom_title || familyStore.family?.name"
+        :is-link="authStore.user?.role === 'owner'"
+        @click="onEditFamilyTitle"
       />
-      <van-cell title="当前用户" :value="authStore.user?.display_name" />
-      <van-cell title="用户名" :value="authStore.user?.username" />
-      <van-cell title="角色" :value="authStore.user?.role === 'owner' ? '管理员' : '成员'" />
+      <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name" />
+      <van-cell :title="t('settings.username')" :value="authStore.user?.username" />
+      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" />
     </van-cell-group>
 
     <div class="actions">
       <van-button block type="danger" plain @click="onLogout">
-        退出登录
+        {{ t('settings.logout') }}
       </van-button>
     </div>
 
@@ -51,13 +51,10 @@
     </van-popup>
 
     <!-- Currency Picker -->
-    <van-popup v-model:show="showCurrencyPicker" round position="bottom">
-      <van-picker
-        :columns="currencyOptions"
-        @confirm="onCurrencyConfirm"
-        @cancel="showCurrencyPicker = false"
-      />
-    </van-popup>
+    <CurrencyPicker
+      v-model:show="showCurrencyPicker"
+      v-model="selectedCurrency"
+    />
 
     <!-- View Mode Picker -->
     <van-popup v-model:show="showViewModePicker" round position="bottom">
@@ -69,10 +66,10 @@
     </van-popup>
 
     <!-- Edit Family Title Dialog -->
-    <van-dialog 
-      v-model:show="showTitleDialog" 
-      title="修改家庭名称" 
-      show-cancel-button 
+    <van-dialog
+      v-model:show="showTitleDialog"
+      title="修改家庭名称"
+      show-cancel-button
       @confirm="onTitleConfirm"
     >
       <van-field
@@ -85,12 +82,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { updateSettings } from '@/api/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
+import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
+
+const { t } = useI18n()
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
@@ -107,47 +108,46 @@ const showCurrencyPicker = ref(false)
 const showViewModePicker = ref(false)
 const showTitleDialog = ref(false)
 const editTitleValue = ref('')
+const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 
 const themeOptions = [
-  { text: '浅色模式', value: 'light' },
-  { text: '深色模式', value: 'dark' },
+  { text: t('settings.themeLight'), value: 'light' },
+  { text: t('settings.themeDark'), value: 'dark' },
+  { text: t('settings.themeSystem'), value: 'system' },
 ]
 
 const languageOptions = [
-  { text: '简体中文', value: 'zh-CN' },
-  { text: 'English', value: 'en-US' },
-]
-
-const currencyOptions = [
-  { text: '人民币 (CNY)', value: 'CNY' },
-  { text: '美元 (USD)', value: 'USD' },
-  { text: '欧元 (EUR)', value: 'EUR' },
+  { text: t('settings.languageZhCN'), value: 'zh-CN' },
+  { text: t('settings.languageEnUS'), value: 'en-US' },
 ]
 
 const viewModeOptions = [
-  { text: '卡片视图', value: 'card' },
-  { text: '列表视图', value: 'list' },
+  { text: t('settings.viewCard'), value: 'card' },
+  { text: t('settings.viewList'), value: 'list' },
 ]
 
 const themeLabel = computed(() => {
-  return authStore.user?.theme === 'dark' ? '深色模式' : '浅色模式'
+  const theme = authStore.user?.theme
+  if (theme === 'dark') return t('settings.themeDark')
+  if (theme === 'system') return t('settings.themeSystem')
+  return t('settings.themeLight')
 })
 
 const languageLabel = computed(() => {
-  return authStore.user?.language === 'en-US' ? 'English' : '简体中文'
+  return authStore.user?.language === 'en-US' ? t('settings.languageEnUS') : t('settings.languageZhCN')
 })
 
 const viewModeLabel = computed(() => {
-  return authStore.user?.view_mode === 'list' ? '列表视图' : '卡片视图'
+  return authStore.user?.view_mode === 'list' ? t('settings.viewList') : t('settings.viewCard')
 })
 
 async function updateSetting(key: string, value: string) {
   try {
     await updateSettings({ [key]: value })
     await authStore.fetchMe()
-    showToast('设置已保存')
+    showToast(t('settings.settingsSaved'))
   } catch {
-    showToast('保存失败')
+    showToast(t('settings.saveFailed'))
   }
 }
 
@@ -161,10 +161,12 @@ function onLanguageConfirm({ selectedOptions }: { selectedOptions: Array<{ text:
   showLanguagePicker.value = false
 }
 
-function onCurrencyConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  updateSetting('default_currency', selectedOptions[0].value)
-  showCurrencyPicker.value = false
-}
+// Watch for currency selection changes
+watch(selectedCurrency, (newCurrency) => {
+  if (newCurrency && newCurrency !== authStore.user?.default_currency) {
+    updateSetting('default_currency', newCurrency)
+  }
+})
 
 function onViewModeConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
   updateSetting('view_mode', selectedOptions[0].value)
@@ -193,7 +195,7 @@ async function onTitleConfirm() {
 
 async function onLogout() {
   try {
-    await showConfirmDialog({ title: '确认', message: '确定要退出登录吗？' })
+    await showConfirmDialog({ title: '确认', message: t('settings.logoutConfirm') })
     authStore.logout()
   } catch {
     // cancelled
@@ -203,7 +205,7 @@ async function onLogout() {
 
 <style scoped>
 .settings-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }

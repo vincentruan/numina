@@ -187,7 +187,7 @@ onMounted(() => {
 
 <style scoped>
 .liability-detail-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }
@@ -228,7 +228,7 @@ onMounted(() => {
 }
 .payment-hint {
   font-size: 13px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-bottom: 12px;
   text-align: center;
 }

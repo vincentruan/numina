@@ -23,6 +23,6 @@ onMounted(() => {
 .main-layout {
   min-height: 100vh;
   padding-bottom: 50px;
-  background-color: #f7f8fa;
+  background-color: var(--bg-secondary);
 }
 </style>

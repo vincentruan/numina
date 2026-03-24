@@ -27,11 +27,20 @@
         <div class="hero-values">
           <div class="hero-value-item">
             <div class="hero-value-label">{{ asset.status === 'sold' ? '出售价格' : '当前价值' }}</div>
-            <MoneyDisplay :amount="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)" size="large" />
+            <MoneyDisplay
+            :amount="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)"
+            size="large"
+            :source-currency="asset.currency"
+            :original-value="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)"
+          />
           </div>
           <div class="hero-value-item">
             <div class="hero-value-label">购入价格</div>
-            <MoneyDisplay :amount="asset.purchase_price" />
+            <MoneyDisplay
+              :amount="asset.purchase_price"
+              :source-currency="asset.currency"
+              :original-value="asset.purchase_price"
+            />
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
             <div class="hero-value-label">日均成本</div>
@@ -58,14 +67,20 @@
       <!-- Basic Info -->
       <van-cell-group inset title="基本信息">
         <van-cell title="名称" :value="asset.name" />
-        <van-cell title="类型" :value="asset.asset_type === 'physical' ? '实物资产' : '金融资产'" />
+        <van-cell title="类型" :value="typeText" />
         <van-cell title="分类" :value="asset.category?.name || '未分类'">
           <template #icon>
             <span class="cat-icon">{{ asset.category?.icon }}</span>
           </template>
         </van-cell>
         <van-cell title="购入价格">
-          <template #value><MoneyDisplay :amount="asset.purchase_price" /></template>
+          <template #value>
+            <MoneyDisplay
+              :amount="asset.purchase_price"
+              :source-currency="asset.currency"
+              :original-value="asset.purchase_price"
+            />
+          </template>
         </van-cell>
         <van-cell title="购入日期" :value="asset.purchase_date" />
         <van-cell title="状态">
@@ -227,14 +242,17 @@ const daysUsed = computed(() => {
 })
 
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
-  in_use: { text: '使用中', type: 'success' },
+  in_use: { text: '服役中', type: 'success' },
   idle: { text: '闲置', type: 'warning' },
   sold: { text: '已出售', type: 'default' },
-  retired: { text: '已报废', type: 'danger' }
+  retired: { text: '已退役', type: 'danger' }
 }
 
 const statusText = computed(() => statusMap[asset.value?.status || '']?.text || '')
 const statusType = computed(() => statusMap[asset.value?.status || '']?.type || 'default')
+
+const typeMap: Record<string, string> = { physical: '实物资产', financial: '金融资产' }
+const typeText = computed(() => typeMap[asset.value?.asset_type || ''] || '')
 
 const usageMap: Record<string, string> = {
   daily: '每天', weekly: '每周', monthly: '每月', rarely: '很少', idle: '闲置'
@@ -304,7 +322,7 @@ onMounted(async () => {
 
 <style scoped>
 .asset-detail-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }

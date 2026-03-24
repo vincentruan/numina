@@ -6,7 +6,7 @@
         <MoneyDisplay :amount="totalAssets" size="large" />
       </div>
       <div class="ov-sub-row">
-        <span v-if="totalDailyCost > 0" class="ov-daily">日均 ¥{{ totalDailyCost.toFixed(2) }}</span>
+        <span v-if="totalDailyCost > 0" class="ov-daily">日均 {{ currency.format(totalDailyCost) }}</span>
         <span class="ov-count">共 {{ assetCount }} 件</span>
         <span v-if="monthOverMonthChange != null" class="ov-change" :class="changeClass">
           {{ changeText }} vs 上月
@@ -34,6 +34,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   netWorth: number
@@ -43,6 +44,8 @@ const props = defineProps<{
   assetCount: number
   monthOverMonthChange?: number | null
 }>()
+
+const currency = useCurrency()
 
 const changeClass = computed(() => {
   const pct = props.monthOverMonthChange || 0
@@ -61,6 +64,9 @@ const changeText = computed(() => {
   background: linear-gradient(135deg, #1677ff 0%, #0052d9 50%, #2b3a8e 100%);
   padding: 24px 20px 16px;
   color: #fff;
+}
+[data-theme='dark'] .overview-card {
+  background: linear-gradient(135deg, #0d4a99 0%, #003d8f 50%, #1a2456 100%);
 }
 .ov-label {
   font-size: 14px;
@@ -88,6 +94,9 @@ const changeText = computed(() => {
   font-size: 11px;
   backdrop-filter: blur(4px);
 }
+[data-theme='dark'] .ov-daily {
+  background: rgba(255, 255, 255, 0.15);
+}
 .ov-count {
   font-size: 12px;
 }
@@ -103,6 +112,9 @@ const changeText = computed(() => {
   background: rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   padding: 12px 0;
+}
+[data-theme='dark'] .ov-detail {
+  background: rgba(255, 255, 255, 0.08);
 }
 .ov-detail-item {
   flex: 1;
@@ -124,5 +136,8 @@ const changeText = computed(() => {
   width: 1px;
   height: 30px;
   background: rgba(255, 255, 255, 0.25);
+}
+[data-theme='dark'] .ov-detail-divider {
+  background: rgba(255, 255, 255, 0.15);
 }
 </style>

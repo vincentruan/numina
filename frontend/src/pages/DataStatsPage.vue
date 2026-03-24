@@ -70,7 +70,7 @@ onMounted(async () => {
 
 <style scoped>
 .data-stats-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }
@@ -83,7 +83,7 @@ onMounted(async () => {
 
 .summary-card {
   flex: 1;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   padding: 12px;
   text-align: center;
@@ -91,7 +91,7 @@ onMounted(async () => {
 
 .summary-label {
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-bottom: 4px;
 }
 
@@ -117,16 +117,20 @@ onMounted(async () => {
 }
 
 .chart-card {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
   margin-bottom: 12px;
+}
+
+[data-theme='dark'] .chart-card {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
 }
 
 .chart-title {
   font-size: 15px;
   font-weight: 600;
   margin-bottom: 12px;
-  color: #323233;
+  color: var(--text-primary);
 }
 </style>

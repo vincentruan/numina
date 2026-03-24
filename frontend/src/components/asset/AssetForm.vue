@@ -29,7 +29,7 @@
       />
 
       <van-field
-        v-model="form.asset_type"
+        v-model="typeDisplay"
         is-link
         readonly
         label="类型"
@@ -68,7 +68,9 @@
         placeholder="请输入购入价格"
         :rules="[{ required: true, message: '请输入购入价格' }]"
       >
-        <template #left-icon><span class="field-prefix">¥</span></template>
+        <template #left-icon>
+          <CurrencyButton v-model="form.currency" />
+        </template>
       </van-field>
 
       <van-field
@@ -78,7 +80,9 @@
         placeholder="请输入当前价值"
         :rules="[{ required: true, message: '请输入当前价值' }]"
       >
-        <template #left-icon><span class="field-prefix">¥</span></template>
+        <template #left-icon>
+          <span class="field-prefix">{{ currencySymbol }}</span>
+        </template>
       </van-field>
 
       <van-field
@@ -120,7 +124,7 @@
       <van-field v-model="form.location" label="存放位置" placeholder="请输入存放位置" />
       <van-field v-model="form.expected_lifespan_days" type="digit" label="预期寿命(天)" placeholder="请输入" />
       <van-field v-model="form.annual_maintenance_cost" type="number" label="年维护费" placeholder="请输入">
-        <template #left-icon><span class="field-prefix">¥</span></template>
+        <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
       <van-field
         v-model="usageDisplay"
@@ -177,6 +181,7 @@
 import { ref, computed, watch } from 'vue'
 import type { Asset, Category } from '@/types'
 import { uploadImage } from '@/api/upload'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
@@ -199,6 +204,7 @@ const form = ref<Record<string, any>>({
   category_id: '',
   purchase_price: '',
   current_value: '',
+  currency: 'CNY',
   purchase_date: '',
   status: 'in_use',
   location: '',
@@ -211,6 +217,18 @@ const form = ref<Record<string, any>>({
   notes: '',
   image_url: ''
 })
+
+// Currency symbol helper
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: '¥',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  HKD: 'HK$',
+}
+
+const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || form.value.currency)
 
 // Image upload state
 const fileList = ref<{ url: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
@@ -253,14 +271,14 @@ const typeColumns = [
 const typeDisplayMap: Record<string, string> = { physical: '实物资产', financial: '金融资产' }
 
 const statusColumns = [
-  { text: '使用中', value: 'in_use' },
+  { text: '服役中', value: 'in_use' },
   { text: '闲置', value: 'idle' },
   { text: '已出售', value: 'sold' },
-  { text: '已报废', value: 'retired' }
+  { text: '已退役', value: 'retired' }
 ]
 
 const statusDisplayMap: Record<string, string> = {
-  in_use: '使用中', idle: '闲置', sold: '已出售', retired: '已报废'
+  in_use: '服役中', idle: '闲置', sold: '已出售', retired: '已退役'
 }
 
 const usageColumns = [
@@ -286,6 +304,7 @@ const categoryDisplay = computed(() => {
   return cat ? `${cat.icon} ${cat.name}` : ''
 })
 
+const typeDisplay = computed(() => typeDisplayMap[form.value.asset_type] || '')
 const statusDisplay = computed(() => statusDisplayMap[form.value.status] || '')
 const usageDisplay = computed(() => usageDisplayMap[form.value.usage_frequency] || '')
 
@@ -344,6 +363,7 @@ function onSubmit() {
     category_id: form.value.category_id || undefined,
     purchase_price: Number(form.value.purchase_price),
     current_value: Number(form.value.current_value),
+    currency: form.value.currency,
     purchase_date: form.value.purchase_date || undefined,
     status: form.value.status,
     notes: form.value.notes || undefined,
@@ -367,7 +387,7 @@ function onSubmit() {
 
 <style scoped>
 .field-prefix {
-  color: #323233;
+  color: var(--text-primary);
   margin-right: 4px;
 }
 .form-actions {
@@ -375,7 +395,7 @@ function onSubmit() {
 }
 :deep(.van-cell-group__title) {
   font-size: 13px;
-  color: #969799;
+  color: var(--text-tertiary);
 }
 .upload-placeholder {
   width: 80px;
@@ -384,9 +404,9 @@ function onSubmit() {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   border-radius: 8px;
-  color: #969799;
+  color: var(--text-tertiary);
   font-size: 12px;
   gap: 4px;
 }

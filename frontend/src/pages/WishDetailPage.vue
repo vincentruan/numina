@@ -302,7 +302,7 @@ onMounted(async () => {
 
 <style scoped>
 .wish-detail-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }
@@ -333,12 +333,17 @@ onMounted(async () => {
   margin-top: 4px;
 }
 .main-card {
-  background: #fff;
+  background: var(--card-bg);
   margin: -16px 12px 12px;
   border-radius: 12px;
   padding: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
+
+[data-theme='dark'] .main-card {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
 .wish-header {
   display: flex;
   justify-content: space-between;
@@ -350,6 +355,7 @@ onMounted(async () => {
   font-weight: 600;
   flex: 1;
   margin-right: 8px;
+  color: var(--text-primary);
 }
 .wish-meta {
   display: flex;
@@ -361,20 +367,20 @@ onMounted(async () => {
   align-items: center;
   gap: 4px;
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
 }
 .meta-item .van-icon {
-  color: #999;
+  color: var(--text-tertiary);
 }
 .unset {
-  color: #999;
+  color: var(--text-tertiary);
 }
 .wish-description {
   font-size: 14px;
-  color: #666;
+  color: var(--text-secondary);
   line-height: 1.5;
   padding-top: 8px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--separator);
 }
 .actions {
   padding: 16px;
@@ -398,5 +404,6 @@ onMounted(async () => {
   font-weight: 600;
   text-align: center;
   margin-bottom: 16px;
+  color: var(--text-primary);
 }
 </style>

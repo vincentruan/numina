@@ -53,7 +53,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCurrencyStore } from '@/stores/currency'
 import type { Currency } from '@/types'
@@ -70,6 +70,11 @@ const emit = defineEmits<{
 
 const { t, locale } = useI18n()
 const currencyStore = useCurrencyStore()
+
+// Fetch currencies on mount
+onMounted(() => {
+  currencyStore.fetchCurrencies()
+})
 
 const searchQuery = ref('')
 

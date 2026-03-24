@@ -32,7 +32,9 @@
         placeholder="请输入原始金额"
         :rules="[{ required: true, message: '请输入原始金额' }]"
       >
-        <template #left-icon><span class="field-prefix">¥</span></template>
+        <template #left-icon>
+          <CurrencyButton v-model="form.currency" />
+        </template>
       </van-field>
 
       <van-field
@@ -42,7 +44,9 @@
         placeholder="请输入剩余金额"
         :rules="[{ required: true, message: '请输入剩余金额' }]"
       >
-        <template #left-icon><span class="field-prefix">¥</span></template>
+        <template #left-icon>
+          <span class="field-prefix">{{ currencySymbol }}</span>
+        </template>
       </van-field>
 
       <van-field
@@ -52,7 +56,7 @@
         placeholder="请输入月供金额"
         :rules="[{ required: true, message: '请输入月供' }]"
       >
-        <template #left-icon><span class="field-prefix">¥</span></template>
+        <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
 
       <van-field
@@ -113,6 +117,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { Liability } from '@/types'
+import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Liability>
@@ -132,6 +137,7 @@ const form = ref<Record<string, any>>({
   category: 'mortgage',
   original_amount: '',
   remaining_amount: '',
+  currency: 'CNY',
   monthly_payment: '',
   interest_rate: '',
   start_date: '',
@@ -139,6 +145,18 @@ const form = ref<Record<string, any>>({
   institution: '',
   notes: ''
 })
+
+// Currency symbol helper
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: '¥',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  HKD: 'HK$',
+}
+
+const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || form.value.currency)
 
 watch(() => props.initialData, (data) => {
   if (data) {
@@ -201,6 +219,7 @@ function onSubmit() {
     category: form.value.category,
     original_amount: Number(form.value.original_amount),
     remaining_amount: Number(form.value.remaining_amount),
+    currency: form.value.currency,
     monthly_payment: Number(form.value.monthly_payment),
     interest_rate: Number(form.value.interest_rate),
     start_date: form.value.start_date || undefined,

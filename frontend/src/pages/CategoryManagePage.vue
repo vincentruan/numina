@@ -123,7 +123,7 @@ onMounted(() => {
 
 <style scoped>
 .category-manage-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 .color-dot {
@@ -141,6 +141,6 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid #eee;
+  border: 1px solid var(--separator);
 }
 </style>

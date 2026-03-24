@@ -1,7 +1,7 @@
 <template>
   <van-tabbar :model-value="activeTab" @change="onTabChange">
-    <van-tabbar-item name="dashboard" icon="chart-trending-o">总览</van-tabbar-item>
-    <van-tabbar-item name="wishes" icon="star-o">心愿</van-tabbar-item>
+    <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
+    <van-tabbar-item name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
     <van-tabbar-item name="add" icon="add-o">
       <template #icon="{ active: isActive }">
         <div class="add-btn" :class="{ active: isActive }">
@@ -10,15 +10,18 @@
       </template>
       <span></span>
     </van-tabbar-item>
-    <van-tabbar-item name="liabilities" icon="bill-o">负债</van-tabbar-item>
-    <van-tabbar-item name="stats" icon="bar-chart-o">统计</van-tabbar-item>
-    <van-tabbar-item name="settings" icon="setting-o">设置</van-tabbar-item>
+    <van-tabbar-item name="liabilities" icon="bill-o">{{ t('nav.liabilities') }}</van-tabbar-item>
+    <van-tabbar-item name="stats" icon="bar-chart-o">{{ t('nav.stats') }}</van-tabbar-item>
+    <van-tabbar-item name="settings" icon="setting-o">{{ t('nav.settings') }}</van-tabbar-item>
   </van-tabbar>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const route = useRoute()

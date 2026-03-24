@@ -125,7 +125,7 @@ onMounted(() => {
 
 <style scoped>
 .tag-manage-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 .tag-preview {
@@ -141,7 +141,7 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  border: 1px solid #eee;
+  border: 1px solid var(--separator);
 }
 .color-presets {
   display: flex;
@@ -158,6 +158,6 @@ onMounted(() => {
   transition: border-color 0.2s;
 }
 .preset-dot.active {
-  border-color: #323233;
+  border-color: var(--text-primary);
 }
 </style>

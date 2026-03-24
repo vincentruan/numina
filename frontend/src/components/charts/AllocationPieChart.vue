@@ -61,7 +61,7 @@ const chartOption = computed(() => ({
 
 <style scoped>
 .allocation-chart {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   padding: 12px;
   margin: 0 12px 12px;
@@ -69,11 +69,15 @@ const chartOption = computed(() => ({
 .chart-title {
   font-size: 14px;
   font-weight: 500;
-  color: #323233;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 .chart {
   height: 200px;
   width: 100%;
+}
+
+[data-theme='dark'] .chart {
+  color-scheme: dark;
 }
 </style>

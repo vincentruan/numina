@@ -198,11 +198,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useCategoryStore } from '@/stores/category'
 import { useAssetStore } from '@/stores/asset'
+import { useAuthStore } from '@/stores/auth'
 import { batchArchiveAssets, batchUpdateCategory, batchUpdateTags, batchUpdateStatus, batchExportAssets } from '@/api/assets'
 import type { Asset } from '@/types'
 import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
@@ -211,9 +213,12 @@ import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 
+const { t } = useI18n()
+
 const dashboardStore = useDashboardStore()
 const categoryStore = useCategoryStore()
 const assetStore = useAssetStore()
+const authStore = useAuthStore()
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 const viewMode = ref<'card' | 'list'>('card')
@@ -649,9 +654,20 @@ async function onRefresh() {
 }
 
 onMounted(() => {
+  // Initialize viewMode from user settings
+  if (authStore.user?.view_mode === 'list') {
+    viewMode.value = 'list'
+  }
   dashboardStore.fetchAll()
   categoryStore.fetchCategories()
   window.addEventListener('scroll', handleScroll)
+})
+
+// Watch for user settings changes
+watch(() => authStore.user?.view_mode, (newMode) => {
+  if (newMode === 'list' || newMode === 'card') {
+    viewMode.value = newMode
+  }
 })
 
 onUnmounted(() => {
@@ -661,14 +677,14 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 
 /* Toolbar Icons */
 :deep(.toolbar-slot .van-icon) {
   font-size: 20px;
-  color: #646566;
+  color: var(--text-secondary);
   cursor: pointer;
   padding: 4px;
 }
@@ -681,8 +697,11 @@ onUnmounted(() => {
   position: sticky;
   top: 0;
   z-index: 99;
-  background: #fff;
+  background: var(--card-bg);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+[data-theme='dark'] .category-nav-sticky {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .category-nav-sticky :deep(.van-tabs__wrap) {
   padding: 0 12px;
@@ -712,7 +731,7 @@ onUnmounted(() => {
 .section-title {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .section-actions {
   display: flex;
@@ -726,7 +745,11 @@ onUnmounted(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  background: #f0f9ff;
+  background: rgba(25, 137, 250, 0.1);
+}
+[data-theme='dark'] .view-toggle,
+[data-theme='dark'] .category-toggle {
+  background: rgba(25, 137, 250, 0.15);
 }
 .view-toggle:active,
 .category-toggle:active {
@@ -736,10 +759,13 @@ onUnmounted(() => {
   /* cards have their own margin-bottom */
 }
 .asset-list-compact {
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+[data-theme='dark'] .asset-list-compact {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Category Group */
@@ -754,6 +780,9 @@ onUnmounted(() => {
   border-radius: 8px;
   margin-bottom: 8px;
 }
+[data-theme='dark'] .category-group-header {
+  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+}
 .category-icon {
   font-size: 20px;
   margin-right: 8px;
@@ -761,11 +790,11 @@ onUnmounted(() => {
 .category-name {
   font-size: 15px;
   font-weight: 600;
-  color: #323233;
+  color: var(--text-primary);
 }
 .category-count {
   font-size: 13px;
-  color: #969799;
+  color: var(--text-tertiary);
   margin-left: 4px;
 }
 
@@ -779,7 +808,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   margin-bottom: 12px;
 }
@@ -797,11 +826,14 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-around;
   padding: 12px 16px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
   position: sticky;
   bottom: 60px;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+}
+[data-theme='dark'] .selection-actions {
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Filter Popup */
@@ -849,7 +881,7 @@ onUnmounted(() => {
 }
 .sort-group-label {
   font-size: 13px;
-  color: #969799;
+  color: var(--text-tertiary);
 }
 .sort-options {
   display: flex;

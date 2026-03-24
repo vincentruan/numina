@@ -1,6 +1,6 @@
 <template>
   <div class="family-page">
-    <PageHeader title="家庭" :show-back="false">
+    <PageHeader :title="t('family.title')" :show-back="false">
       <template #right>
         <van-icon name="setting-o" size="20" @click="$router.push('/settings')" />
       </template>
@@ -10,8 +10,8 @@
       <template v-if="familyStore.family">
         <!-- Family Info -->
         <van-cell-group inset class="section">
-          <van-cell title="家庭名称" :value="familyStore.family.custom_title || familyStore.family.name" />
-          <van-cell title="邀请码" :value="familyStore.family.invite_code" is-link @click="copyInviteCode">
+          <van-cell :title="t('family.familyName')" :value="familyStore.family.custom_title || familyStore.family.name" />
+          <van-cell :title="t('family.inviteCode')" :value="familyStore.family.invite_code" is-link @click="copyInviteCode">
             <template #right-icon>
               <van-icon name="description" />
             </template>
@@ -19,16 +19,16 @@
         </van-cell-group>
 
         <!-- Members -->
-        <van-cell-group inset title="家庭成员" class="section">
+        <van-cell-group inset :title="t('family.members')" class="section">
           <template #extra>
-            <span class="member-count">{{ familyStore.members.length }} 人</span>
+            <span class="member-count">{{ familyStore.members.length }} {{ t('family.memberCount') }}</span>
           </template>
           <MemberCard
             v-for="member in familyStore.members"
             :key="member.id"
             :member="member"
           />
-          <van-cell v-if="isOwner" title="成员管理" is-link to="/family/members" />
+          <van-cell v-if="isOwner" :title="t('family.memberManagement')" is-link to="/family/members" />
         </van-cell-group>
       </template>
 
@@ -40,11 +40,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import MemberCard from '@/components/family/MemberCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 
+const { t } = useI18n()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const refreshing = ref(false)
@@ -55,9 +57,9 @@ function copyInviteCode() {
   const code = familyStore.family?.invite_code
   if (code) {
     navigator.clipboard.writeText(code).then(() => {
-      showToast('邀请码已复制')
+      showToast(t('family.inviteCodeCopied'))
     }).catch(() => {
-      showToast(`邀请码: ${code}`)
+      showToast(`${t('family.inviteCode')}: ${code}`)
     })
   }
 }
@@ -74,7 +76,7 @@ onMounted(() => {
 
 <style scoped>
 .family-page {
-  background: #f7f8fa;
+  background: var(--bg-secondary);
   min-height: 100vh;
 }
 .section {
@@ -82,7 +84,7 @@ onMounted(() => {
 }
 .member-count {
   font-size: 12px;
-  color: #969799;
+  color: var(--text-tertiary);
 }
 .page-loading {
   display: flex;
