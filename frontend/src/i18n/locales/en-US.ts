@@ -103,6 +103,7 @@ export default {
     theme: 'Theme',
     themeLight: 'Light',
     themeDark: 'Dark',
+    themeSystem: 'System',
     language: 'Language',
     languageZhCN: '简体中文',
     languageEnUS: 'English',
@@ -136,5 +137,7 @@ export default {
     rateInfo: '1 {from} = {rate} {to}',
     rateUpdatedAt: 'Rate updated: {time}',
     fetchFailed: 'Rate fetch failed, using cached data',
+    originalAmount: 'Original Amount',
+    exchangeRate: 'Exchange Rate',
   }
 }

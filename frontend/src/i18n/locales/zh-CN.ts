@@ -103,6 +103,7 @@ export default {
     theme: '主题模式',
     themeLight: '浅色模式',
     themeDark: '深色模式',
+    themeSystem: '跟随系统',
     language: '语言',
     languageZhCN: '简体中文',
     languageEnUS: 'English',
@@ -136,5 +137,7 @@ export default {
     rateInfo: '1 {from} = {rate} {to}',
     rateUpdatedAt: '汇率更新时间：{time}',
     fetchFailed: '汇率获取失败，使用缓存数据',
+    originalAmount: '原始金额',
+    exchangeRate: '汇率',
   }
 }
