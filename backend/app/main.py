@@ -9,8 +9,10 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
+from app.scheduler import fetch_rates_job, scheduler, setup_exchange_rate_schedule
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
+from app.services.exchange_rate import ExchangeRateService
 from app.services.snapshot import auto_generate_daily_snapshots
 
 # Import all models so Base.metadata knows about them
@@ -50,13 +52,29 @@ async def lifespan(app: FastAPI):
             auto_generate_daily_snapshots(db)
         except Exception as e:
             logger.warning(f"自动快照生成失败: {e}")
+        # Fetch exchange rates immediately if none exist
+        try:
+            from app.models.exchange_rate import ExchangeRate
+            has_rates = db.query(ExchangeRate).first() is not None
+            if not has_rates:
+                logger.info("首次启动，立即获取汇率数据...")
+                ExchangeRateService.fetch_and_store_rates(db)
+        except Exception as e:
+            logger.warning(f"初始汇率获取失败: {e}")
     finally:
         db.close()
 
     if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
         logger.warning("生产环境 CORS_ORIGINS 设置为 ['*']，建议配置具体域名。")
 
+    setup_exchange_rate_schedule()
+    scheduler.start()
+    logger.info("APScheduler 已启动")
+
     yield
+
+    scheduler.shutdown()
+    logger.info("APScheduler 已停止")
 
 
 app = FastAPI(title="Numina - 家庭资产可视化", version="1.0.0", lifespan=lifespan)
