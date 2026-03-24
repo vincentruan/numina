@@ -1,15 +1,41 @@
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: '¥',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+  JPY: '¥',
+  HKD: 'HK$',
+}
+
+const CURRENCY_LOCALES: Record<string, string> = {
+  CNY: 'zh-CN',
+  USD: 'en-US',
+  EUR: 'de-DE',
+  GBP: 'en-GB',
+  JPY: 'ja-JP',
+  HKD: 'zh-HK',
+}
+
 export function formatCurrency(amount: number, currency = 'CNY'): string {
   const absAmount = Math.abs(amount)
   const sign = amount < 0 ? '-' : ''
+  const symbol = CURRENCY_SYMBOLS[currency] || currency
+  const locale = CURRENCY_LOCALES[currency] || 'zh-CN'
 
-  if (absAmount >= 100000000) {
-    return `${sign}¥${(absAmount / 100000000).toFixed(2)}亿`
-  } else if (absAmount >= 10000) {
-    return `${sign}¥${(absAmount / 10000).toFixed(2)}万`
-  } else if (absAmount >= 1000) {
-    return `${sign}¥${absAmount.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+  // CNY使用万/亿单位
+  if (currency === 'CNY') {
+    if (absAmount >= 100000000) {
+      return `${sign}${symbol}${(absAmount / 100000000).toFixed(2)}亿`
+    } else if (absAmount >= 10000) {
+      return `${sign}${symbol}${(absAmount / 10000).toFixed(2)}万`
+    }
+  }
+
+  // 其他货币使用标准格式
+  if (absAmount >= 1000) {
+    return `${sign}${symbol}${absAmount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
   } else {
-    return `${sign}¥${absAmount.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    return `${sign}${symbol}${absAmount.toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 }
 
