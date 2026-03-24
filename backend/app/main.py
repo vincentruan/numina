@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import Base, SessionLocal, engine
 from app.seed.categories import seed_categories
+from app.seed.currencies import seed_currencies
 from app.services.snapshot import auto_generate_daily_snapshots
 
 # Import all models so Base.metadata knows about them
@@ -43,6 +44,7 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         seed_categories(db)
+        seed_currencies(db)
         # Auto-generate daily snapshots for all families
         try:
             auto_generate_daily_snapshots(db)
