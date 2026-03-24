@@ -283,3 +283,22 @@ export interface PaymentRecord {
   paid_at: string
   notes?: string
 }
+
+export interface Currency {
+  code: string
+  name_zh: string
+  name_en: string
+  symbol: string
+  flag_emoji: string
+  is_favorite: boolean
+  sort_order: number
+}
+
+export interface RateResponse {
+  rate: number
+  fetched_at: string
+}
+
+export interface RatesResponse {
+  [code: string]: RateResponse
+}
