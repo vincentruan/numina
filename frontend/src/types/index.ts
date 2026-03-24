@@ -104,6 +104,7 @@ export interface Liability {
   name: string
   original_amount: number
   remaining_amount: number
+  currency: string
   monthly_payment: number
   interest_rate: number
   start_date: string
@@ -254,6 +255,7 @@ export interface Wish {
   name: string
   description?: string
   expected_price?: number
+  currency: string
   priority: string
   status: string
   category_id?: string
