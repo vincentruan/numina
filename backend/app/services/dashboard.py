@@ -20,43 +20,53 @@ from app.schemas.dashboard import (
     TrendResponse,
 )
 from app.services.asset import compute_daily_cost, compute_return_rate
+from app.services.exchange_rate import ExchangeRateService
 
 
 def get_overview(db: Session, user: User) -> OverviewResponse:
     family_id = user.family_id
+    default_currency = user.default_currency or "CNY"
 
-    total_assets_val = (
-        db.query(func.coalesce(func.sum(Asset.current_value), 0))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
-        .scalar()
-    )
-    total_liabilities_val = (
-        db.query(func.coalesce(func.sum(Liability.remaining_amount), 0))
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
-        .scalar()
-    )
-    asset_count = (
-        db.query(func.count(Asset.id))
-        .filter(Asset.family_id == family_id, Asset.is_archived == False)
-        .scalar()
-    )
-
-    # Calculate total daily cost
-    daily_cost_assets = (
+    # Query assets and convert each to default currency
+    assets = (
         db.query(Asset)
-        .filter(
-            Asset.family_id == family_id,
-            Asset.is_archived == False,
-            Asset.purchase_date != None,
-            Asset.purchase_price != None,
-        )
+        .filter(Asset.family_id == family_id, Asset.is_archived == False)
         .all()
     )
+    total_assets_val = 0.0
+    for a in assets:
+        if a.current_value is not None:
+            asset_currency = a.currency or "CNY"
+            converted = ExchangeRateService.convert(a.current_value, asset_currency, default_currency, db)
+            total_assets_val += converted
+
+    # Query liabilities and convert each to default currency
+    liabilities = (
+        db.query(Liability)
+        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .all()
+    )
+    total_liabilities_val = 0.0
+    for l in liabilities:
+        if l.remaining_amount is not None:
+            liability_currency = getattr(l, "currency", "CNY") or "CNY"
+            converted = ExchangeRateService.convert(l.remaining_amount, liability_currency, default_currency, db)
+            total_liabilities_val += converted
+
+    asset_count = len(assets)
+
+    # Calculate total daily cost with currency conversion
+    daily_cost_assets = [
+        a for a in assets
+        if a.purchase_date is not None and a.purchase_price is not None
+    ]
     total_daily_cost = 0.0
     for a in daily_cost_assets:
         dc = compute_daily_cost(a)
         if dc is not None and dc > 0:
-            total_daily_cost += dc
+            asset_currency = a.currency or "CNY"
+            converted = ExchangeRateService.convert(dc, asset_currency, default_currency, db)
+            total_daily_cost += converted
     total_daily_cost = round(total_daily_cost, 2)
 
     # Month over month change
@@ -73,14 +83,16 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
         .first()
     )
     mom_change = None
+    current_net = total_assets_val - total_liabilities_val
     if last_snapshot and last_snapshot.net_worth != 0:
-        current_net = total_assets_val - total_liabilities_val
-        mom_change = round((current_net - last_snapshot.net_worth) / abs(last_snapshot.net_worth) * 100, 2)
+        # Snapshot net_worth is stored in CNY, convert to default_currency for comparison
+        snapshot_net = ExchangeRateService.convert(last_snapshot.net_worth, "CNY", default_currency, db)
+        mom_change = round((current_net - snapshot_net) / abs(snapshot_net) * 100, 2)
 
     return OverviewResponse(
-        total_assets=total_assets_val,
-        total_liabilities=total_liabilities_val,
-        net_worth=total_assets_val - total_liabilities_val,
+        total_assets=round(total_assets_val, 2),
+        total_liabilities=round(total_liabilities_val, 2),
+        net_worth=round(current_net, 2),
         asset_count=asset_count,
         month_over_month_change=mom_change,
         total_daily_cost=total_daily_cost,
@@ -89,33 +101,48 @@ def get_overview(db: Session, user: User) -> OverviewResponse:
 
 def get_allocation(db: Session, user: User) -> AllocationResponse:
     family_id = user.family_id
-    results = (
-        db.query(
-            Category.id,
-            Category.name,
-            Category.icon,
-            Category.color,
-            func.coalesce(func.sum(Asset.current_value), 0).label("amount"),
-        )
-        .join(Asset, Asset.category_id == Category.id)
+    default_currency = user.default_currency or "CNY"
+
+    # Query all assets with their categories
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
         .filter(Asset.family_id == family_id, Asset.is_archived == False)
-        .group_by(Category.id)
         .all()
     )
 
-    total = sum(r.amount for r in results) or 1
+    # Group by category with currency conversion
+    category_totals: dict[str, dict] = {}
+    for a in assets:
+        if a.current_value is None:
+            continue
+        cat_id = a.category_id
+        asset_currency = a.currency or "CNY"
+        converted = ExchangeRateService.convert(a.current_value, asset_currency, default_currency, db)
+
+        if cat_id not in category_totals:
+            category_totals[cat_id] = {
+                "id": a.category.id if a.category else cat_id,
+                "name": a.category.name if a.category else "",
+                "icon": a.category.icon if a.category else "",
+                "color": a.category.color if a.category else "",
+                "amount": 0.0,
+            }
+        category_totals[cat_id]["amount"] += converted
+
+    total = sum(c["amount"] for c in category_totals.values()) or 1
     items = [
         AllocationItem(
-            category_id=r.id,
-            category_name=r.name,
-            icon=r.icon,
-            color=r.color,
-            amount=r.amount,
-            percentage=round(r.amount / total * 100, 2),
+            category_id=c["id"],
+            category_name=c["name"],
+            icon=c["icon"],
+            color=c["color"],
+            amount=round(c["amount"], 2),
+            percentage=round(c["amount"] / total * 100, 2),
         )
-        for r in results
+        for c in category_totals.values()
     ]
-    return AllocationResponse(items=items, total=total)
+    return AllocationResponse(items=items, total=round(total, 2))
 
 
 def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:
@@ -153,6 +180,8 @@ def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:
 
 
 def get_top_assets(db: Session, user: User, limit: int = 10) -> list[TopAssetItem]:
+    default_currency = user.default_currency or "CNY"
+
     assets = (
         db.query(Asset)
         .options(joinedload(Asset.category))
@@ -161,23 +190,33 @@ def get_top_assets(db: Session, user: User, limit: int = 10) -> list[TopAssetIte
             Asset.is_archived == False,
             Asset.current_value != None,
         )
-        .order_by(Asset.current_value.desc())
-        .limit(limit)
         .all()
     )
-    return [
-        TopAssetItem(
-            id=a.id,
-            name=a.name,
-            category_name=a.category.name if a.category else "",
-            icon=a.category.icon if a.category else "",
-            current_value=a.current_value,
+
+    items = []
+    for a in assets:
+        asset_currency = a.currency or "CNY"
+        converted = ExchangeRateService.convert(a.current_value, asset_currency, default_currency, db)
+        items.append(
+            TopAssetItem(
+                id=a.id,
+                name=a.name,
+                category_name=a.category.name if a.category else "",
+                icon=a.category.icon if a.category else "",
+                current_value=round(converted, 2),
+                currency=default_currency,
+                original_value=a.current_value,
+            )
         )
-        for a in assets
-    ]
+
+    # Sort by converted value and limit
+    items.sort(key=lambda x: x.current_value, reverse=True)
+    return items[:limit]
 
 
 def get_daily_cost_ranking(db: Session, user: User) -> list[DailyCostItem]:
+    default_currency = user.default_currency or "CNY"
+
     assets = (
         db.query(Asset)
         .options(joinedload(Asset.category))
@@ -197,15 +236,23 @@ def get_daily_cost_ranking(db: Session, user: User) -> list[DailyCostItem]:
             days = (date.today() - a.purchase_date).days
             years = days / 365.0
             total_cost = a.purchase_price + (a.annual_maintenance_cost or 0) * years
+
+            # Convert to default currency
+            asset_currency = a.currency or "CNY"
+            dc_converted = ExchangeRateService.convert(dc, asset_currency, default_currency, db)
+            total_cost_converted = ExchangeRateService.convert(total_cost, asset_currency, default_currency, db)
+
             items.append(
                 DailyCostItem(
                     id=a.id,
                     name=a.name,
                     category_name=a.category.name if a.category else "",
                     icon=a.category.icon if a.category else "",
-                    daily_cost=dc,
+                    daily_cost=round(dc_converted, 2),
                     days_used=days,
-                    total_cost=round(total_cost, 2),
+                    total_cost=round(total_cost_converted, 2),
+                    currency=default_currency,
+                    original_value=round(total_cost, 2),
                 )
             )
 
@@ -214,6 +261,8 @@ def get_daily_cost_ranking(db: Session, user: User) -> list[DailyCostItem]:
 
 
 def get_low_usage_assets(db: Session, user: User) -> list[LowUsageItem]:
+    default_currency = user.default_currency or "CNY"
+
     assets = (
         db.query(Asset)
         .options(joinedload(Asset.category))
@@ -230,15 +279,24 @@ def get_low_usage_assets(db: Session, user: User) -> list[LowUsageItem]:
             name=a.name,
             category_name=a.category.name if a.category else "",
             icon=a.category.icon if a.category else "",
-            current_value=a.current_value or 0,
+            current_value=round(
+                ExchangeRateService.convert(
+                    a.current_value or 0, a.currency or "CNY", default_currency, db
+                ),
+                2,
+            ),
             usage_frequency=a.usage_frequency or "",
             purchase_date=a.purchase_date.isoformat() if a.purchase_date else None,
+            currency=default_currency,
+            original_value=a.current_value or 0,
         )
         for a in assets
     ]
 
 
 def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem]:
+    default_currency = user.default_currency or "CNY"
+
     assets = (
         db.query(Asset)
         .options(joinedload(Asset.category))
@@ -256,16 +314,28 @@ def get_investment_returns(db: Session, user: User) -> list[InvestmentReturnItem
     for a in assets:
         rr = compute_return_rate(a)
         if rr is not None:
+            asset_currency = a.currency or "CNY"
+            purchase_price_converted = ExchangeRateService.convert(
+                a.purchase_price, asset_currency, default_currency, db
+            )
+            current_value_converted = ExchangeRateService.convert(
+                a.current_value, asset_currency, default_currency, db
+            )
+            profit = current_value_converted - purchase_price_converted
+
             items.append(
                 InvestmentReturnItem(
                     id=a.id,
                     name=a.name,
                     category_name=a.category.name if a.category else "",
                     icon=a.category.icon if a.category else "",
-                    purchase_price=a.purchase_price,
-                    current_value=a.current_value,
+                    purchase_price=round(purchase_price_converted, 2),
+                    current_value=round(current_value_converted, 2),
                     return_rate=rr,
-                    profit=round(a.current_value - a.purchase_price, 2),
+                    profit=round(profit, 2),
+                    currency=default_currency,
+                    original_purchase_price=a.purchase_price,
+                    original_current_value=a.current_value,
                 )
             )
 
