@@ -41,6 +41,8 @@ class TopAssetItem(BaseModel):
     category_name: str
     icon: str
     current_value: float
+    currency: str = "CNY"
+    original_value: float = 0.0
 
 
 class DailyCostItem(BaseModel):
@@ -51,6 +53,8 @@ class DailyCostItem(BaseModel):
     daily_cost: float
     days_used: int
     total_cost: float
+    currency: str = "CNY"
+    original_value: float = 0.0
 
 
 class LowUsageItem(BaseModel):
@@ -61,6 +65,8 @@ class LowUsageItem(BaseModel):
     current_value: float
     usage_frequency: str
     purchase_date: str | None = None
+    currency: str = "CNY"
+    original_value: float = 0.0
 
 
 class InvestmentReturnItem(BaseModel):
@@ -72,3 +78,6 @@ class InvestmentReturnItem(BaseModel):
     current_value: float
     return_rate: float
     profit: float
+    currency: str = "CNY"
+    original_purchase_price: float = 0.0
+    original_current_value: float = 0.0
