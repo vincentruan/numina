@@ -24,6 +24,8 @@ from app.models.wish import Wish  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.activity import Activity  # noqa: F401
+from app.models.exchange_rate import ExchangeRate  # noqa: F401
+from app.models.currency import Currency  # noqa: F401
 
 from app.routers import auth, assets, liabilities, categories, tags, dashboard, family, wishes
 from app.routers import export as export_router

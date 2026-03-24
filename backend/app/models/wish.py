@@ -19,6 +19,7 @@ class Wish(Base):
     priority: Mapped[str] = mapped_column(String(20), default="medium")  # low/medium/high
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/realized/cancelled
     category_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("categories.id"), nullable=True)
+    currency: Mapped[str] = mapped_column(String(10), default="CNY")
     realized_asset_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("assets.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
