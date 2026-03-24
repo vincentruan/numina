@@ -147,6 +147,7 @@ def get_allocation(db: Session, user: User) -> AllocationResponse:
 
 def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:
     family_id = user.family_id
+    default_currency = user.default_currency or "CNY"
     today = date.today()
 
     if period == "year":
@@ -167,15 +168,20 @@ def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:
         .all()
     )
 
-    points = [
-        TrendPoint(
-            date=s.snapshot_date.isoformat(),
-            total_assets=s.total_assets,
-            total_liabilities=s.total_liabilities,
-            net_worth=s.net_worth,
+    points = []
+    for s in snapshots:
+        # Convert from CNY (stored in DB) to user's default_currency
+        converted_assets = ExchangeRateService.convert(s.total_assets, "CNY", default_currency, db)
+        converted_liabilities = ExchangeRateService.convert(s.total_liabilities, "CNY", default_currency, db)
+        converted_net = ExchangeRateService.convert(s.net_worth, "CNY", default_currency, db)
+        points.append(
+            TrendPoint(
+                date=s.snapshot_date.isoformat(),
+                total_assets=round(converted_assets, 2),
+                total_liabilities=round(converted_liabilities, 2),
+                net_worth=round(converted_net, 2),
+            )
         )
-        for s in snapshots
-    ]
     return TrendResponse(points=points)
 
 

@@ -8,6 +8,7 @@ from app.models.family import Family
 from app.models.liability import Liability
 from app.models.snapshot import AssetSnapshot
 from app.models.user import User
+from app.services.exchange_rate import ExchangeRateService
 
 
 def auto_generate_daily_snapshots(db: Session) -> None:
@@ -41,18 +42,24 @@ def generate_snapshots(db: Session, family_id: str) -> list[AssetSnapshot]:
         total_assets = (
             db.query(Asset)
             .filter(Asset.user_id == member.id, Asset.is_archived == False)
-            .with_entities(Asset.current_value)
+            .with_entities(Asset.current_value, Asset.currency)
             .all()
         )
-        member_assets = sum(a.current_value or 0 for a in total_assets)
+        member_assets = sum(
+            ExchangeRateService.convert(a.current_value or 0, a.currency or "CNY", "CNY", db)
+            for a in total_assets
+        )
 
         total_liabilities = (
             db.query(Liability)
             .filter(Liability.user_id == member.id, Liability.is_active == True)
-            .with_entities(Liability.remaining_amount)
+            .with_entities(Liability.remaining_amount, Liability.currency)
             .all()
         )
-        member_liabilities = sum(l.remaining_amount or 0 for l in total_liabilities)
+        member_liabilities = sum(
+            ExchangeRateService.convert(l.remaining_amount or 0, getattr(l, "currency", "CNY") or "CNY", "CNY", db)
+            for l in total_liabilities
+        )
 
         family_total_assets += member_assets
         family_total_liabilities += member_liabilities
