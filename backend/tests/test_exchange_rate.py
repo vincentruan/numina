@@ -63,3 +63,45 @@ def test_fallback_when_no_rates(db):
     rate, fetched_at = ExchangeRateService.get_rate("XYZ", db)
     assert rate == 1.0
     assert isinstance(fetched_at, datetime)
+
+
+def test_fetch_and_store_rates_success(db):
+    """Successful API fetch inserts rates and clears cache."""
+    # Pre-populate cache to verify it gets cleared
+    ExchangeRateService._cache["USD"] = (0.15, datetime(2026, 1, 1, 0, 0, 0))
+
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "rates": {"USD": 0.1374, "EUR": 0.128, "JPY": 20.5, "CNY": 1.0}
+    }
+    mock_response.raise_for_status = MagicMock()
+
+    with patch("httpx.get", return_value=mock_response):
+        result = ExchangeRateService.fetch_and_store_rates(db)
+
+    assert result is True
+    # Verify cache was cleared
+    assert ExchangeRateService._cache == {}
+    # Verify rates were inserted
+    rates = db.query(ExchangeRate).order_by(ExchangeRate.target_currency).all()
+    assert len(rates) == 3  # USD, EUR, JPY (CNY skipped)
+
+
+def test_fetch_and_store_rates_http_failure(db):
+    """HTTP failure returns False without modifying DB."""
+    # Pre-populate DB with existing rate
+    existing_rate = ExchangeRate(
+        target_currency="USD",
+        rate=0.14,
+        fetched_at=datetime(2026, 1, 1, 0, 0, 0),
+    )
+    db.add(existing_rate)
+    db.commit()
+    initial_count = db.query(ExchangeRate).count()
+
+    with patch("httpx.get", side_effect=Exception("Connection error")):
+        result = ExchangeRateService.fetch_and_store_rates(db)
+
+    assert result is False
+    # Verify DB is unchanged
+    assert db.query(ExchangeRate).count() == initial_count

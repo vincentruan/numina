@@ -38,8 +38,12 @@ class ExchangeRateService:
         return cls._cache[target_currency]
 
     @classmethod
-    def fetch_and_store_rates(cls, db: Session) -> None:
-        """Fetch latest rates from exchangerate-api.com and persist to DB."""
+    def fetch_and_store_rates(cls, db: Session) -> bool:
+        """Fetch latest rates from exchangerate-api.com and persist to DB.
+
+        Returns:
+            True on success, False on failure.
+        """
         try:
             resp = httpx.get(
                 "https://api.exchangerate-api.com/v4/latest/CNY",
@@ -48,8 +52,8 @@ class ExchangeRateService:
             resp.raise_for_status()
             data = resp.json()
         except Exception as e:
-            logger.error(f"汇率获取失败: {e}")
-            return
+            logger.exception(f"汇率获取失败: {e}")
+            return False
 
         fetched_at = datetime.now()
         rates: dict[str, float] = data.get("rates", {})
@@ -87,6 +91,7 @@ class ExchangeRateService:
         db.commit()
         cls._cache.clear()
         logger.info(f"汇率更新完成，共 {len(rates)} 种货币")
+        return True
 
     @classmethod
     def convert(
