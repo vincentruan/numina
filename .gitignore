@@ -136,3 +136,4 @@ data/*.json
 # Root package files (for screenshot tools only)
 /package.json
 /package-lock.json
+docs/prompt_tmp.md
