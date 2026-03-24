@@ -15,7 +15,9 @@ def fetch_rates_job() -> None:
     """APScheduler job: fetch and store latest exchange rates."""
     db = SessionLocal()
     try:
-        ExchangeRateService.fetch_and_store_rates(db)
+        success = ExchangeRateService.fetch_and_store_rates(db)
+        if success:
+            logger.info("定时汇率更新成功")
     except Exception as e:
         logger.exception(f"定时汇率更新失败: {e}")
     finally:

@@ -67,9 +67,12 @@ async def lifespan(app: FastAPI):
     if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
         logger.warning("生产环境 CORS_ORIGINS 设置为 ['*']，建议配置具体域名。")
 
-    setup_exchange_rate_schedule()
-    scheduler.start()
-    logger.info("APScheduler 已启动")
+    try:
+        setup_exchange_rate_schedule()
+        scheduler.start()
+        logger.info("APScheduler 已启动")
+    except Exception as e:
+        logger.error(f"APScheduler 启动失败：{e}")
 
     yield
 
