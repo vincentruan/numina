@@ -15,6 +15,7 @@ class LiabilityCreate(BaseModel):
     institution: str | None = None
     linked_asset_id: str | None = None
     notes: str | None = None
+    currency: str = "CNY"
 
 
 class LiabilityUpdate(BaseModel):
@@ -29,6 +30,7 @@ class LiabilityUpdate(BaseModel):
     institution: str | None = None
     linked_asset_id: str | None = None
     notes: str | None = None
+    currency: str | None = None
 
 
 class PaymentRequest(BaseModel):
@@ -51,6 +53,7 @@ class LiabilityResponse(BaseModel):
     linked_asset_id: str | None = None
     notes: str | None = None
     is_active: bool
+    currency: str = "CNY"
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

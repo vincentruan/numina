@@ -9,6 +9,7 @@ class WishCreate(BaseModel):
     expected_price: float | None = None
     priority: str = "medium"
     category_id: str | None = None
+    currency: str = "CNY"
 
 
 class WishUpdate(BaseModel):
@@ -18,6 +19,7 @@ class WishUpdate(BaseModel):
     priority: str | None = None
     status: str | None = None
     category_id: str | None = None
+    currency: str | None = None
 
 
 class WishRealizeRequest(BaseModel):
@@ -46,6 +48,7 @@ class WishResponse(BaseModel):
     status: str
     category_id: str | None
     category: CategoryInfo | None
+    currency: str = "CNY"
     realized_asset_id: str | None
     created_at: datetime
     updated_at: datetime
