@@ -8,7 +8,7 @@ BASE_URL="http://localhost/numina/api/v1"
 # Get fresh token
 echo "Getting auth token..."
 TOKEN=$(curl -sL "$BASE_URL/auth/login" -H "Content-Type: application/json" \
-  -d '{"username":"uxtest","password":"Test123456"}' | jq -r '.access_token')
+  -d '{"username":"testuser","password":"TestPass123"}' | jq -r '.access_token')
 
 if [ -z "$TOKEN" ] || [ "$TOKEN" == "null" ]; then
   echo "Failed to get token"
