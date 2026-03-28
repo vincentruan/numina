@@ -99,6 +99,55 @@ docker-compose down
 - `ACCESS_TOKEN_EXPIRE_MINUTES`: JWT access token lifetime (default: 15)
 - `REFRESH_TOKEN_EXPIRE_DAYS`: JWT refresh token lifetime (default: 7)
 
+### Database Configuration
+
+Numina supports multiple database backends: **SQLite (default)**, **MySQL**, and **PostgreSQL**.
+
+**DATABASE_URL formats:**
+
+```
+# SQLite (default)
+sqlite:///./data/numina.db            # Local development
+sqlite:////app/data/numina.db         # Docker
+
+# MySQL
+mysql+pymysql://user:password@host:3306/database
+
+# PostgreSQL
+postgresql+psycopg2://user:password@host:5432/database
+```
+
+**Docker with MySQL/PostgreSQL:**
+
+```bash
+# Default SQLite (no extra config)
+docker-compose up -d
+
+# Use MySQL (starts MySQL container)
+docker-compose --profile mysql up -d
+# Set DATABASE_URL=mysql+pymysql://numina:numinapass@mysql:3306/numina
+
+# Use PostgreSQL (starts PostgreSQL container)
+docker-compose --profile postgres up -d
+# Set DATABASE_URL=postgresql+psycopg2://numina:numinapass@postgres:5432/numina
+```
+
+**MySQL/PostgreSQL default credentials (Docker):**
+- Database: `numina`
+- User: `numina`
+- Password: `numinapass`
+
+**Database backend architecture:**
+- `backend/app/db/` — Abstract backend factory pattern
+- `factory.py` — URL parsing and backend selection
+- `sqlite.py`, `mysql.py`, `postgres.py` — Backend implementations with connection pool configs
+
+**Integration tests (require Docker):**
+```bash
+cd backend
+uv run pytest tests/integration/ -v -m integration
+```
+
 ## Architecture
 
 ### Backend Structure
