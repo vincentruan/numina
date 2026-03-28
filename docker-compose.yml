@@ -6,7 +6,7 @@ services:
     volumes:
       - ./data:/app/data
     environment:
-      - DATABASE_URL=sqlite:////app/data/numina.db
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - CORS_ORIGINS=["*"]
     healthcheck:
@@ -34,3 +34,46 @@ services:
     depends_on:
       - backend
       - frontend
+
+  # 可选 MySQL 服务（使用 --profile mysql 启动）
+  mysql:
+    image: ${X_DOCKER_MIRROR:-docker.xuanyuan.me}/library/mysql:8.0
+    container_name: numina-mysql
+    restart: unless-stopped
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpass}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-numina}
+      - MYSQL_USER=${MYSQL_USER:-numina}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-numinapass}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    profiles:
+      - mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 可选 PostgreSQL 服务（使用 --profile postgres 启动）
+  postgres:
+    image: ${X_DOCKER_MIRROR:-docker.xuanyuan.me}/library/postgres:15
+    container_name: numina-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-numina}
+      - POSTGRES_USER=${POSTGRES_USER:-numina}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-numinapass}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    profiles:
+      - postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-numina}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+  postgres_data:
