@@ -111,9 +111,9 @@ const editTitleValue = ref('')
 const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 
 const themeOptions = [
-  { text: t('settings.themeLight'), value: 'light' },
-  { text: t('settings.themeDark'), value: 'dark' },
-  { text: t('settings.themeSystem'), value: 'system' },
+  { text: `☀️ ${t('settings.themeLight')}`, value: 'light' },
+  { text: `🌙 ${t('settings.themeDark')}`, value: 'dark' },
+  { text: `⚙️ ${t('settings.themeSystem')}`, value: 'system' },
 ]
 
 const languageOptions = [
