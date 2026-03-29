@@ -1,26 +1,40 @@
 <template>
   <van-form @submit="onSubmit">
-    <van-cell-group inset>
-      <!-- Image Upload -->
-      <van-field label="图片">
-        <template #input>
-          <van-uploader
-            v-model="fileList"
-            :max-count="1"
-            :max-size="5 * 1024 * 1024"
-            :after-read="afterRead"
-            @delete="onDelete"
-          >
-            <template v-if="!fileList.length">
-              <div class="upload-placeholder">
-                <van-icon name="photograph" size="24" />
-                <span>上传图片</span>
-              </div>
-            </template>
-          </van-uploader>
-        </template>
-      </van-field>
 
+    <!-- P1: Image upload — top independent section -->
+    <div class="image-upload-section">
+      <van-uploader
+        v-model="fileList"
+        :max-count="1"
+        :max-size="5 * 1024 * 1024"
+        :after-read="afterRead"
+        @delete="onDelete"
+      >
+        <template #default>
+          <div v-if="!fileList.length" class="image-placeholder">
+            <van-icon name="photograph" size="28" color="var(--van-text-color-3)" />
+            <span class="image-hint">添加图片</span>
+          </div>
+        </template>
+      </van-uploader>
+    </div>
+
+    <!-- P1: Asset type — SegmentedControl -->
+    <div class="type-segmented">
+      <div
+        class="type-option"
+        :class="{ active: form.asset_type === 'physical' }"
+        @click="onTypeChange('physical')"
+      >实物资产</div>
+      <div
+        class="type-option"
+        :class="{ active: form.asset_type === 'financial' }"
+        @click="onTypeChange('financial')"
+      >金融资产</div>
+    </div>
+
+    <!-- Basic info -->
+    <van-cell-group inset title="基本信息">
       <van-field
         v-model="form.name"
         label="名称"
@@ -28,38 +42,13 @@
         :rules="[{ required: true, message: '请输入名称' }]"
       />
 
-      <van-field
-        v-model="typeDisplay"
-        is-link
-        readonly
-        label="类型"
-        placeholder="选择资产类型"
-        @click="showTypePicker = true"
-        :rules="[{ required: true, message: '请选择类型' }]"
+      <!-- P0: Category — inline icon grid -->
+      <van-cell title="分类" />
+      <CategoryGrid
+        v-model="form.category_id"
+        :categories="categories"
+        :asset-type="form.asset_type"
       />
-      <van-popup v-model:show="showTypePicker" position="bottom" round>
-        <van-picker
-          :columns="typeColumns"
-          @confirm="onTypeConfirm"
-          @cancel="showTypePicker = false"
-        />
-      </van-popup>
-
-      <van-field
-        v-model="categoryDisplay"
-        is-link
-        readonly
-        label="分类"
-        placeholder="选择分类"
-        @click="showCategoryPicker = true"
-      />
-      <van-popup v-model:show="showCategoryPicker" position="bottom" round>
-        <van-picker
-          :columns="categoryColumns"
-          @confirm="onCategoryConfirm"
-          @cancel="showCategoryPicker = false"
-        />
-      </van-popup>
 
       <van-field
         v-model="form.purchase_price"
@@ -73,6 +62,7 @@
         </template>
       </van-field>
 
+      <!-- P0: current_value — with "同购入价" button -->
       <van-field
         v-model="form.current_value"
         type="number"
@@ -82,6 +72,16 @@
       >
         <template #left-icon>
           <span class="field-prefix">{{ currencySymbol }}</span>
+        </template>
+        <template #right-icon>
+          <van-button
+            size="mini"
+            plain
+            type="primary"
+            :disabled="!form.purchase_price"
+            class="same-price-btn"
+            @click.stop="syncPurchasePrice"
+          >同购入价</van-button>
         </template>
       </van-field>
 
@@ -102,45 +102,58 @@
         />
       </van-popup>
 
-      <van-field
-        v-model="statusDisplay"
-        is-link
-        readonly
-        label="状态"
-        placeholder="选择状态"
-        @click="showStatusPicker = true"
-      />
-      <van-popup v-model:show="showStatusPicker" position="bottom" round>
-        <van-picker
-          :columns="statusColumns"
-          @confirm="onStatusConfirm"
-          @cancel="showStatusPicker = false"
+      <!-- P0: Status — only show in edit mode -->
+      <template v-if="isEdit">
+        <van-field
+          v-model="statusDisplay"
+          is-link
+          readonly
+          label="状态"
+          placeholder="选择状态"
+          @click="showStatusPicker = true"
         />
-      </van-popup>
+        <van-popup v-model:show="showStatusPicker" position="bottom" round>
+          <van-picker
+            :columns="statusColumns"
+            @confirm="onStatusConfirm"
+            @cancel="showStatusPicker = false"
+          />
+        </van-popup>
+      </template>
     </van-cell-group>
 
-    <!-- Physical asset fields -->
+    <!-- Physical asset fields — reordered: freq → lifespan → location → maintenance -->
     <van-cell-group v-if="form.asset_type === 'physical'" inset title="实物资产信息">
-      <van-field v-model="form.location" label="存放位置" placeholder="请输入存放位置" />
-      <van-field v-model="form.expected_lifespan_days" type="digit" label="预期寿命(天)" placeholder="请输入" />
-      <van-field v-model="form.annual_maintenance_cost" type="number" label="年维护费" placeholder="请输入">
+
+      <!-- P1: Usage frequency — icon button group -->
+      <van-cell title="使用频率" />
+      <UsageFreqSelector v-model="form.usage_frequency" />
+
+      <!-- P0: Expected lifespan — unit years + "不限" -->
+      <van-field
+        v-model="expectedLifeYears"
+        type="digit"
+        label="预期寿命"
+        placeholder="请输入年限"
+      >
+        <template #extra>
+          <span class="unit-label">年</span>
+        </template>
+        <template #right-icon>
+          <van-button
+            size="mini"
+            plain
+            class="same-price-btn"
+            @click.stop="expectedLifeYears = ''"
+          >不限</van-button>
+        </template>
+      </van-field>
+
+      <van-field v-model="form.location" label="存放位置" placeholder="可选" />
+
+      <van-field v-model="form.annual_maintenance_cost" type="number" label="年维护费" placeholder="可选">
         <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
-      <van-field
-        v-model="usageDisplay"
-        is-link
-        readonly
-        label="使用频率"
-        placeholder="选择使用频率"
-        @click="showUsagePicker = true"
-      />
-      <van-popup v-model:show="showUsagePicker" position="bottom" round>
-        <van-picker
-          :columns="usageColumns"
-          @confirm="onUsageConfirm"
-          @cancel="showUsagePicker = false"
-        />
-      </van-popup>
     </van-cell-group>
 
     <!-- Financial asset fields -->
@@ -165,8 +178,18 @@
       </van-popup>
     </van-cell-group>
 
-    <van-cell-group inset title="其他">
-      <van-field v-model="form.notes" type="textarea" label="备注" placeholder="请输入备注" rows="2" autosize />
+    <!-- P1: Tags + notes -->
+    <van-cell-group inset title="标签与备注">
+      <van-cell title="标签">
+        <template #value>
+          <TagSelector
+            v-model="selectedTagIds"
+            :tags="availableTags"
+            @tag-created="onTagCreated"
+          />
+        </template>
+      </van-cell>
+      <van-field v-model="form.notes" type="textarea" label="备注" placeholder="可选" rows="2" autosize />
     </van-cell-group>
 
     <div class="form-actions">
@@ -179,9 +202,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import type { Asset, Category } from '@/types'
+import type { Asset, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
+import { getTags, createTag as apiCreateTag } from '@/api/tags'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
+import CategoryGrid from './CategoryGrid.vue'
+import UsageFreqSelector from './UsageFreqSelector.vue'
+import TagSelector from './TagSelector.vue'
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
@@ -211,28 +238,73 @@ const form = ref<Record<string, any>>({
   institution: '',
   interest_rate: '',
   maturity_date: '',
-  expected_lifespan_days: '',
   annual_maintenance_cost: '',
-  usage_frequency: '',
+  usage_frequency: 'daily',
   notes: '',
   image_url: ''
 })
 
-// Currency symbol helper
-const CURRENCY_SYMBOLS: Record<string, string> = {
-  CNY: '¥',
-  USD: '$',
-  EUR: '€',
-  GBP: '£',
-  JPY: '¥',
-  HKD: 'HK$',
+// P0: Lifespan in years (display) — submitted as days
+// Use string for van-field v-model compatibility; empty string = "不限" (null days)
+const expectedLifeYears = ref<string>('')
+
+watch(expectedLifeYears, (val) => {
+  const num = val !== '' ? parseInt(val, 10) : null
+  form.value.expected_lifespan_days = num !== null && !isNaN(num) ? Math.round(num * 365) : null
+})
+
+// P0: Sync current_value = purchase_price
+function syncPurchasePrice() {
+  if (form.value.purchase_price) {
+    form.value.current_value = form.value.purchase_price
+  }
 }
 
+// P1: Type change — clear type-specific fields
+function onTypeChange(type: 'physical' | 'financial') {
+  if (form.value.asset_type === type) return
+  form.value.asset_type = type
+  if (type === 'financial') {
+    form.value.location = ''
+    form.value.expected_lifespan_days = null
+    form.value.annual_maintenance_cost = ''
+    form.value.usage_frequency = ''
+    expectedLifeYears.value = ''
+  } else {
+    form.value.institution = ''
+    form.value.interest_rate = ''
+    form.value.maturity_date = ''
+    form.value.usage_frequency = 'daily'
+  }
+}
+
+// Currency symbol helper
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  CNY: '¥', USD: '$', EUR: '€', GBP: '£', JPY: '¥', HKD: 'HK$',
+}
 const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || form.value.currency)
 
 // Image upload state
 const fileList = ref<{ url: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
 
+// Tags state
+const availableTags = ref<Tag[]>([])
+const selectedTagIds = ref<string[]>([])
+
+async function fetchTags() {
+  try {
+    const res = await getTags()
+    availableTags.value = res.data
+  } catch {
+    // non-critical
+  }
+}
+
+function onTagCreated(tag: Tag) {
+  availableTags.value.push(tag)
+}
+
+// Populate form from initialData (edit mode)
 watch(() => props.initialData, (data) => {
   if (data) {
     Object.keys(form.value).forEach(key => {
@@ -240,7 +312,13 @@ watch(() => props.initialData, (data) => {
         form.value[key] = String((data as any)[key] ?? '')
       }
     })
-    // Set image preview
+    // P0: reverse-convert lifespan days → years
+    expectedLifeYears.value = (data as any).expected_lifespan_days
+      ? String(Math.round(Number((data as any).expected_lifespan_days) / 365))
+      : ''
+    // Tags
+    selectedTagIds.value = (data as any).tags?.map((t: Tag) => t.id) ?? []
+    // Image preview
     if (data.image_url) {
       const imageUrl = data.image_url.startsWith('/') ? `/api/v1${data.image_url}` : data.image_url
       fileList.value = [{ url: imageUrl }]
@@ -248,11 +326,12 @@ watch(() => props.initialData, (data) => {
   }
 }, { immediate: true })
 
-const showTypePicker = ref(false)
-const showCategoryPicker = ref(false)
+// Fetch tags on mount
+fetchTags()
+
+// Pickers state
 const showDatePicker = ref(false)
 const showStatusPicker = ref(false)
-const showUsagePicker = ref(false)
 const showMaturityPicker = ref(false)
 
 const now = new Date()
@@ -263,60 +342,16 @@ const datePickerValue = ref([
 ])
 const maturityPickerValue = ref([...datePickerValue.value])
 
-const typeColumns = [
-  { text: '实物资产', value: 'physical' },
-  { text: '金融资产', value: 'financial' }
-]
-
-const typeDisplayMap: Record<string, string> = { physical: '实物资产', financial: '金融资产' }
-
 const statusColumns = [
   { text: '服役中', value: 'in_use' },
   { text: '闲置', value: 'idle' },
   { text: '已出售', value: 'sold' },
   { text: '已退役', value: 'retired' }
 ]
-
 const statusDisplayMap: Record<string, string> = {
   in_use: '服役中', idle: '闲置', sold: '已出售', retired: '已退役'
 }
-
-const usageColumns = [
-  { text: '每天', value: 'daily' },
-  { text: '每周', value: 'weekly' },
-  { text: '每月', value: 'monthly' },
-  { text: '很少', value: 'rarely' },
-  { text: '闲置', value: 'idle' }
-]
-
-const usageDisplayMap: Record<string, string> = {
-  daily: '每天', weekly: '每周', monthly: '每月', rarely: '很少', idle: '闲置'
-}
-
-const categoryColumns = computed(() =>
-  props.categories
-    .filter(c => !form.value.asset_type || c.asset_type === form.value.asset_type)
-    .map(c => ({ text: `${c.icon} ${c.name}`, value: c.id }))
-)
-
-const categoryDisplay = computed(() => {
-  const cat = props.categories.find(c => c.id === form.value.category_id)
-  return cat ? `${cat.icon} ${cat.name}` : ''
-})
-
-const typeDisplay = computed(() => typeDisplayMap[form.value.asset_type] || '')
 const statusDisplay = computed(() => statusDisplayMap[form.value.status] || '')
-const usageDisplay = computed(() => usageDisplayMap[form.value.usage_frequency] || '')
-
-function onTypeConfirm({ selectedOptions }: any) {
-  form.value.asset_type = selectedOptions[0].value
-  showTypePicker.value = false
-}
-
-function onCategoryConfirm({ selectedOptions }: any) {
-  form.value.category_id = selectedOptions[0].value
-  showCategoryPicker.value = false
-}
 
 function onDateConfirm({ selectedValues }: any) {
   form.value.purchase_date = selectedValues.join('-')
@@ -333,11 +368,6 @@ function onStatusConfirm({ selectedOptions }: any) {
   showStatusPicker.value = false
 }
 
-function onUsageConfirm({ selectedOptions }: any) {
-  form.value.usage_frequency = selectedOptions[0].value
-  showUsagePicker.value = false
-}
-
 // Image upload handlers
 async function afterRead(file: any) {
   file.status = 'uploading'
@@ -346,7 +376,7 @@ async function afterRead(file: any) {
     file.status = 'done'
     file.url = `/api/v1${res.data.url}`
     form.value.image_url = res.data.url
-  } catch (e) {
+  } catch {
     file.status = 'failed'
     file.message = '上传失败'
   }
@@ -367,18 +397,19 @@ function onSubmit() {
     purchase_date: form.value.purchase_date || undefined,
     status: form.value.status,
     notes: form.value.notes || undefined,
-    image_url: form.value.image_url || undefined
-  }
+    image_url: form.value.image_url || undefined,
+    tag_ids: selectedTagIds.value.length ? selectedTagIds.value : undefined,
+  } as any
 
   if (form.value.asset_type === 'physical') {
-    data.location = form.value.location || undefined
-    data.expected_lifespan_days = form.value.expected_lifespan_days ? Number(form.value.expected_lifespan_days) : undefined
-    data.annual_maintenance_cost = form.value.annual_maintenance_cost ? Number(form.value.annual_maintenance_cost) : undefined
-    data.usage_frequency = form.value.usage_frequency || undefined
+    ;(data as any).location = form.value.location || undefined
+    ;(data as any).expected_lifespan_days = form.value.expected_lifespan_days ?? undefined
+    ;(data as any).annual_maintenance_cost = form.value.annual_maintenance_cost ? Number(form.value.annual_maintenance_cost) : undefined
+    ;(data as any).usage_frequency = form.value.usage_frequency || undefined
   } else {
-    data.institution = form.value.institution || undefined
-    data.interest_rate = form.value.interest_rate ? Number(form.value.interest_rate) : undefined
-    data.maturity_date = form.value.maturity_date || undefined
+    ;(data as any).institution = form.value.institution || undefined
+    ;(data as any).interest_rate = form.value.interest_rate ? Number(form.value.interest_rate) : undefined
+    ;(data as any).maturity_date = form.value.maturity_date || undefined
   }
 
   emit('submit', data)
@@ -386,9 +417,72 @@ function onSubmit() {
 </script>
 
 <style scoped>
+/* P1: Image upload section */
+.image-upload-section {
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px 12px;
+  background: var(--van-background);
+}
+.image-placeholder {
+  width: 76px;
+  height: 76px;
+  border-radius: 14px;
+  border: 2px dashed var(--van-border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.image-hint {
+  font-size: 10px;
+  color: var(--van-text-color-3);
+}
+:deep(.van-uploader__preview-image) {
+  width: 76px;
+  height: 76px;
+  border-radius: 14px;
+}
+
+/* P1: Type segmented control */
+.type-segmented {
+  display: flex;
+  margin: 8px 16px 4px;
+  background: var(--van-background-2);
+  border-radius: 10px;
+  padding: 3px;
+}
+.type-option {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--van-text-color-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.type-option.active {
+  background: var(--van-primary-color);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Shared */
 .field-prefix {
   color: var(--text-primary);
   margin-right: 4px;
+}
+.unit-label {
+  font-size: 12px;
+  color: var(--van-text-color-2);
+  margin-left: 4px;
+}
+.same-price-btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 11px;
 }
 .form-actions {
   padding: 16px;
@@ -396,22 +490,5 @@ function onSubmit() {
 :deep(.van-cell-group__title) {
   font-size: 13px;
   color: var(--text-tertiary);
-}
-.upload-placeholder {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  gap: 4px;
-}
-:deep(.van-uploader__preview-image) {
-  width: 80px;
-  height: 80px;
 }
 </style>
