@@ -12,8 +12,8 @@
       >
         <template #default>
           <div v-if="!fileList.length" class="image-placeholder">
-            <van-icon name="photograph" size="28" color="var(--van-text-color-3)" />
-            <span class="image-hint">添加图片</span>
+            <van-icon name="photograph" size="32" color="var(--van-text-color-3)" />
+            <span class="image-hint">点击添加图片</span>
           </div>
         </template>
       </van-uploader>
@@ -421,28 +421,29 @@ function onSubmit() {
 .image-upload-section {
   display: flex;
   justify-content: center;
-  padding: 20px 16px 12px;
+  padding: 24px 16px 16px;
   background: var(--van-background);
 }
 .image-placeholder {
-  width: 76px;
-  height: 76px;
-  border-radius: 14px;
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
   border: 2px dashed var(--van-border-color);
+  background: var(--van-background-2);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 6px;
 }
 .image-hint {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--van-text-color-3);
 }
 :deep(.van-uploader__preview-image) {
-  width: 76px;
-  height: 76px;
-  border-radius: 14px;
+  width: 120px;
+  height: 120px;
+  border-radius: 16px;
 }
 
 /* P1: Type segmented control */
