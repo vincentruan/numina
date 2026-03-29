@@ -57,8 +57,8 @@ get_token() {
     local login_response=$(curl -sL -X POST "$BASE_URL/auth/login" \
         -H "Content-Type: application/json" \
         -d '{
-            "username": "testuser",
-            "password": "TestPass123"
+            "username": "demouser",
+            "password": "DemoPass123"
         }')
 
     TOKEN=$(echo "$login_response" | jq -r '.access_token')
@@ -70,10 +70,10 @@ get_token() {
         local register_response=$(curl -sL -X POST "$BASE_URL/auth/register" \
             -H "Content-Type: application/json" \
             -d '{
-                "username": "testuser",
-                "display_name": "Test User",
-                "password": "TestPass123",
-                "family_name": "Test Family"
+                "username": "demouser",
+                "display_name": "Demo User",
+                "password": "DemoPass123",
+                "family_name": "Demo Family"
             }')
 
         TOKEN=$(echo "$register_response" | jq -r '.access_token')

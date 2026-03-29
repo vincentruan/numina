@@ -50,7 +50,7 @@ test_case "注册返回token" "true" "$([ -n "$REG_TOKEN" ] && echo true || echo
 echo "1.2 登录..."
 LOGIN_RESP=$(curl -sL -X POST "$BASE_URL/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"username":"uxtest","password":"Test123456"}')
+    -d '{"username":"demouser","password":"DemoPass123"}')
 TOKEN=$(json_value "$LOGIN_RESP" '.access_token')
 test_case "登录返回token" "true" "$(echo $TOKEN | grep -q '^ey' && echo true || echo false)"
 
@@ -58,7 +58,7 @@ test_case "登录返回token" "true" "$(echo $TOKEN | grep -q '^ey' && echo true
 echo "1.3 错误密码登录..."
 ERR_RESP=$(curl -sL -w "%{http_code}" -X POST "$BASE_URL/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"username":"uxtest","password":"wrongpassword"}')
+    -d '{"username":"demouser","password":"wrongpassword"}')
 HTTP_CODE="${ERR_RESP: -3}"
 test_case "错误密码返回401" "401" "$HTTP_CODE"
 

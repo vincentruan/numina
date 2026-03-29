@@ -40,7 +40,7 @@ echo ""
 echo "=== 登录 ==="
 LOGIN_RESP=$(curl -sL -X POST "$BASE_URL/auth/login" \
     -H "Content-Type: application/json" \
-    -d '{"username":"uxtest","password":"Test123456"}')
+    -d '{"username":"demouser","password":"DemoPass123"}')
 TOKEN=$(json_value "$LOGIN_RESP" '.access_token')
 test_case "登录获取token" "true" "$(echo $TOKEN | grep -q '^ey' && echo true || echo false)"
 
