@@ -79,7 +79,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { LowUsageItem, ExpiringSoonItem } from '@/api/dashboard'
+import type { LowUsageItem } from '@/types'
+import type { ExpiringSoonItem } from '@/api/dashboard'
 
 const props = defineProps<{
   idleAssets: LowUsageItem[]
