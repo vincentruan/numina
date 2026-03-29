@@ -58,13 +58,28 @@ flowchart LR
 
 系统 SHALL 提供资产和负债的 CSV 格式导出，包含关联数据（分类名称、标签名称）。
 
+#### Scenario: 导出资产 CSV
+
+- **WHEN** 用户点击"导出资产 CSV"
+- **THEN** 系统生成并下载 CSV 文件
+
 ### Requirement: 系统必须支持 JSON 全量备份
 
 系统 SHALL 提供全量数据 JSON 导出，包含 export_version 字段用于版本管理。
 
+#### Scenario: 全量数据备份
+
+- **WHEN** 用户点击"导出全部数据"
+- **THEN** 系统生成包含所有数据的 JSON 文件
+
 ### Requirement: 导入必须提供错误反馈
 
 CSV 导入失败时，系统 SHALL 返回具体行号和错误信息。
+
+#### Scenario: 导入校验失败
+
+- **WHEN** CSV 文件包含无效数据
+- **THEN** 系统返回具体行号和错误描述
 
 ## Related Specs
 

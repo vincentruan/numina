@@ -64,13 +64,28 @@ stateDiagram-v2
 
 资产 SHALL 支持 in_use、idle、sold、retired 四种状态，状态变更通过业务操作触发。
 
+#### Scenario: 用户出售资产
+
+- **WHEN** 用户填写出售信息并提交
+- **THEN** 资产状态变为 sold
+
 ### Requirement: 出售资产必须记录盈亏
 
 资产出售时系统 SHALL 自动计算出售盈亏 = sell_price - purchase_price - sell_fee。
 
+#### Scenario: 计算出售盈亏
+
+- **WHEN** 用户填写出售价格和费用
+- **THEN** 系统显示出售盈亏
+
 ### Requirement: 资产价值变更必须记录历史
 
 用户更新资产当前价值时，系统 SHALL 自动创建 AssetValuation 记录。
+
+#### Scenario: 更新资产价值
+
+- **WHEN** 用户更新资产当前价值
+- **THEN** 系统创建 AssetValuation 历史记录
 
 ## Related Specs
 

@@ -60,9 +60,19 @@ flowchart LR
 
 系统 SHALL 支持 zh-CN 和 en-US 两种语言，用户可切换界面语言。
 
+#### Scenario: 用户切换语言
+
+- **WHEN** 用户在设置中选择语言
+- **THEN** 所有界面文本切换为对应语言
+
 ### Requirement: 翻译 Key 必须遵循命名约定
 
 翻译 Key SHALL 使用点分隔的层级命名格式：`模块.功能.具体文本`。
+
+#### Scenario: 添加新翻译
+
+- **WHEN** 开发者添加新翻译项
+- **THEN** 使用如 asset.status.in_use 的格式命名
 
 ## Related Specs
 

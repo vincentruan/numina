@@ -71,10 +71,25 @@ flowchart LR
 
 心愿 SHALL 支持 pending、realized、cancelled 三种状态，状态变更通过业务操作触发。
 
+#### Scenario: 用户实现心愿
+
+- **WHEN** 用户点击"实现心愿"并填写资产信息
+- **THEN** 心愿状态变为 realized，系统创建对应资产
+
 ### Requirement: 心愿实现时必须创建资产
 
 当心愿状态变为 realized 时，系统 SHALL 自动创建对应的资产记录，并关联 realized_asset_id。
 
+#### Scenario: 查看已实现心愿的关联资产
+
+- **WHEN** 用户查看已实现心愿详情
+- **THEN** 显示关联的资产链接
+
 ### Requirement: 心愿必须支持优先级
 
 心愿 SHALL 支持 high、medium、low 三级优先级，列表按优先级排序显示。
+
+#### Scenario: 心愿按优先级排序
+
+- **WHEN** 用户查看心愿列表
+- **THEN** 高优先级心愿排在前面

@@ -64,13 +64,28 @@ flowchart TB
 
 APScheduler SHALL 每 2 小时自动获取并存储最新汇率数据（08:00-22:00）。
 
+#### Scenario: 汇率定时更新
+
+- **WHEN** 定时任务触发
+- **THEN** 系统获取最新汇率并存储到 ExchangeRate 表
+
 ### Requirement: 统计数据必须换算为默认货币
 
 仪表盘汇总 SHALL 将所有资产按当前汇率换算为家庭默认货币后显示。
 
+#### Scenario: 查看净资产总览
+
+- **WHEN** 用户查看仪表盘
+- **THEN** 所有外币资产按当前汇率换算为默认货币后显示
+
 ### Requirement: 前端必须提供货币选择组件
 
 前端 SHALL 提供 CurrencyPicker、CurrencySelector、CurrencyButton 组件支持货币选择和切换。
+
+#### Scenario: 用户选择货币
+
+- **WHEN** 用户创建资产时选择货币
+- **THEN** 资产以选定货币记录
 
 ## Related Specs
 

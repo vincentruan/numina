@@ -61,9 +61,19 @@ flowchart LR
 
 资产和负债的创建、更新、删除、出售、退役、还款操作 SHALL 自动创建 Activity 记录。
 
+#### Scenario: 记录资产创建
+
+- **WHEN** 用户创建新资产
+- **THEN** 系统创建 type=create 的 Activity 记录
+
 ### Requirement: 快照必须记录净资产
 
 Snapshot SHALL 记录生成时刻的总资产、总负债、净资产。
+
+#### Scenario: 手动生成快照
+
+- **WHEN** 用户点击"生成快照"
+- **THEN** 系统记录当前净资产状态
 
 ## Related Specs
 
