@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>资产录入界面对比分析</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f7fa;
+      padding: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+      margin-bottom: 30px;
+      font-size: 28px;
+    }
+    .comparison-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 40px;
+    }
+    .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .panel-title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid;
+    }
+    .panel-title.reference { color: #1890ff; border-color: #1890ff; }
+    .panel-title.current { color: #52c41a; border-color: #52c41a; }
+    
+    /* Reference Design Mockup */
+    .mockup-phone {
+      width: 320px;
+      background: #f0f0f0;
+      border-radius: 24px;
+      padding: 12px;
+      margin: 0 auto;
+    }
+    .mockup-screen {
+      background: white;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .mockup-header {
+      background: linear-gradient(135deg, #1890ff, #40a9ff);
+      color: white;
+      padding: 12px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 16px;
+    }
+    .mockup-header .back { font-size: 20px; }
+    .mockup-header .save { font-size: 14px; opacity: 0.9; }
+    
+    /* Image Section */
+    .mockup-image-section {
+      padding: 20px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+    }
+    .mockup-image-placeholder {
+      width: 120px;
+      height: 120px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+    }
+    .mockup-image-placeholder .icon { font-size: 32px; margin-bottom: 8px; }
+    .mockup-image-placeholder .text { font-size: 12px; }
+    
+    /* Form Fields */
+    .mockup-form {
+      padding: 16px;
+    }
+    .mockup-field {
+      margin-bottom: 16px;
+    }
+    .mockup-field-label {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+    .mockup-field-input {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: 14px;
+      color: #333;
+    }
+    
+    /* Segmented Control */
+    .mockup-segment {
+      display: flex;
+      background: #f0f0f0;
+      border-radius: 8px;
+      padding: 4px;
+    }
+    .mockup-segment-item {
+      flex: 1;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .mockup-segment-item.active {
+      background: #1890ff;
+      color: white;
+    }
+    
+    /* Category Grid */
+    .mockup-category-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      padding: 12px;
+      background: #f8f8f8;
+      border-radius: 8px;
+    }
+    .mockup-category-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px;
+      border-radius: 8px;
+      background: white;
+      border: 1px solid #eee;
+    }
+    .mockup-category-item.active {
+      border: 2px solid #1890ff;
+      background: #e6f7ff;
+    }
+    .mockup-category-icon { font-size: 24px; margin-bottom: 4px; }
+    .mockup-category-name { font-size: 10px; color: #666; }
+    
+    /* Quick Button */
+    .mockup-quick-btn {
+      display: inline-block;
+      background: #1890ff;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 4px;
+      font-size: 12px;
+      margin-left: 8px;
+    }
+    
+    /* Frequency Buttons */
+    .mockup-frequency {
+      display: flex;
+      gap: 6px;
+    }
+    .mockup-frequency-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 8px 4px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+    .mockup-frequency-item.active {
+      background: #1890ff;
+      color: white;
+    }
+    .mockup-frequency-icon { font-size: 18px; margin-bottom: 2px; }
+    
+    /* Year Input */
+    .mockup-year-input {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .mockup-year-input input {
+      width: 60px;
+      text-align: center;
+    }
+    .mockup-year-input .unit { color: #666; }
+    .mockup-year-input .limit-btn {
+      background: #f0f0f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      color: #666;
+    }
+    
+    /* Tags */
+    .mockup-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .mockup-tag {
+      background: #f0f0f0;
+      padding: 6px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+    }
+    .mockup-tag.selected {
+      background: #1890ff;
+      color: white;
+    }
+    .mockup-tag-add {
+      background: #e6f7ff;
+      color: #1890ff;
+      border: 1px solid #1890ff;
+    }
+    
+    /* Bottom Button */
+    .mockup-bottom-btn {
+      background: linear-gradient(135deg, #1890ff, #40a9ff);
+      color: white;
+      text-align: center;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 500;
+      margin-top: 16px;
+      border-radius: 8px;
+    }
+    
+    /* Current Implementation Mockup */
+    .current-form {
+      font-size: 13px;
+    }
+    .current-field {
+      display: flex;
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+    }
+    .current-field-label {
+      width: 80px;
+      color: #333;
+    }
+    .current-field-value {
+      flex: 1;
+      color: #999;
+    }
+    .current-picker {
+      background: #f5f5f5;
+      padding: 8px 12px;
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .current-upload {
+      width: 80px;
+      height: 80px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #999;
+      border: 1px dashed #ccc;
+    }
+    
+    /* Differences Section */
+    .differences-section {
+      margin-top: 30px;
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .differences-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #ff4d4f;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #ff4d4f;
+    }
+    .diff-item {
+      display: flex;
+      margin-bottom: 16px;
+      padding: 12px;
+      background: #fff7e6;
+      border-radius: 8px;
+      border-left: 4px solid #faad14;
+    }
+    .diff-item .label {
+      width: 140px;
+      font-weight: 600;
+      color: #333;
+    }
+    .diff-item .reference {
+      width: 180px;
+      color: #1890ff;
+    }
+    .diff-item .current {
+      width: 180px;
+      color: #52c41a;
+    }
+    .diff-item .impact {
+      flex: 1;
+      color: #ff4d4f;
+      font-size: 13px;
+    }
+    
+    /* Recommendations */
+    .recommendations-section {
+      margin-top: 30px;
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+    .recommendations-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #722ed1;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid #722ed1;
+    }
+    .rec-item {
+      margin-bottom: 12px;
+      padding: 12px;
+      background: #f9f0ff;
+      border-radius: 8px;
+      border-left: 4px solid #722ed1;
+    }
+    .rec-item .priority {
+      display: inline-block;
+      background: #722ed1;
+      color: white;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      margin-right: 8px;
+    }
+    .rec-item .priority.high { background: #ff4d4f; }
+    .rec-item .priority.medium { background: #faad14; }
+    .rec-item .priority.low { background: #52c41a; }
+  </style>
+</head>
+<body>
+  <h1>资产录入界面深度对比分析</h1>
+  
+  <div class="comparison-container">
+    <!-- Reference Design Panel -->
+    <div class="panel">
+      <div class="panel-title reference">参考设计（有数 App）</div>
+      <div class="mockup-phone">
+        <div class="mockup-screen">
+          <div class="mockup-header">
+            <span class="back">←</span>
+            <span>添加资产</span>
+            <span class="save">保存</span>
+          </div>
+          
+          <!-- Image Section -->
+          <div class="mockup-image-section">
+            <div class="mockup-image-placeholder">
+              <span class="icon">📷</span>
+              <span class="text">点击添加图片</span>
+            </div>
+          </div>
+          
+          <!-- Form -->
+          <div class="mockup-form">
+            <div class="mockup-field">
+              <div class="mockup-field-label">资产名称</div>
+              <div class="mockup-field-input">请输入资产名称</div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">资产类型</div>
+              <div class="mockup-segment">
+                <div class="mockup-segment-item active">实物资产</div>
+                <div class="mockup-segment-item">金融资产</div>
+              </div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">分类</div>
+              <div class="mockup-category-grid">
+                <div class="mockup-category-item active">
+                  <span class="mockup-category-icon">📱</span>
+                  <span class="mockup-category-name">数码</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">🚗</span>
+                  <span class="mockup-category-name">汽车</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">🏠</span>
+                  <span class="mockup-category-name">房产</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">⌚</span>
+                  <span class="mockup-category-name">手表</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">🎮</span>
+                  <span class="mockup-category-name">游戏</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">📚</span>
+                  <span class="mockup-category-name">书籍</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">🎵</span>
+                  <span class="mockup-category-name">音乐</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">🖼️</span>
+                  <span class="mockup-category-name">收藏</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">👕</span>
+                  <span class="mockup-category-name">服饰</span>
+                </div>
+                <div class="mockup-category-item">
+                  <span class="mockup-category-icon">⚽</span>
+                  <span class="mockup-category-name">运动</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">购入价格</div>
+              <div class="mockup-field-input">¥ 5999.00</div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">当前价值</div>
+              <div style="display: flex; align-items: center;">
+                <div class="mockup-field-input" style="flex: 1;">¥ 5999.00</div>
+                <span class="mockup-quick-btn">同购入价</span>
+              </div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">购入日期</div>
+              <div class="mockup-field-input">2024年1月1日</div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">预期使用年限</div>
+              <div class="mockup-year-input">
+                <div class="mockup-field-input" style="width: 60px; text-align: center;">3</div>
+                <span class="unit">年</span>
+                <span class="limit-btn">不限</span>
+              </div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">使用频率</div>
+              <div class="mockup-frequency">
+                <div class="mockup-frequency-item">
+                  <span class="mockup-frequency-icon">📅</span>
+                  <span>每天</span>
+                </div>
+                <div class="mockup-frequency-item active">
+                  <span class="mockup-frequency-icon">📆</span>
+                  <span>每周</span>
+                </div>
+                <div class="mockup-frequency-item">
+                  <span class="mockup-frequency-icon">🗓️</span>
+                  <span>每月</span>
+                </div>
+                <div class="mockup-frequency-item">
+                  <span class="mockup-frequency-icon">⏰</span>
+                  <span>偶尔</span>
+                </div>
+                <div class="mockup-frequency-item">
+                  <span class="mockup-frequency-icon">💤</span>
+                  <span>闲置</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">存放位置</div>
+              <div class="mockup-field-input">卧室书桌</div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">年维护费</div>
+              <div class="mockup-field-input">¥ 0</div>
+            </div>
+            
+            <div class="mockup-field">
+              <div class="mockup-field-label">标签</div>
+              <div class="mockup-tags">
+                <span class="mockup-tag selected">数码产品</span>
+                <span class="mockup-tag">工作必备</span>
+                <span class="mockup-tag-add">+ 添加标签</span>
+              </div>
+            </div>
+            
+            <div class="mockup-bottom-btn">保存</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Current Implementation Panel -->
+    <div class="panel">
+      <div class="panel-title current">当前实现</div>
+      <div class="mockup-phone">
+        <div class="mockup-screen">
+          <div class="mockup-header" style="background: linear-gradient(135deg, #52c41a, #73d13d);">
+            <span class="back">←</span>
+            <span>添加资产</span>
+            <span class="save"></span>
+          </div>
+          
+          <div class="current-form">
+            <!-- Image Field -->
+            <div class="current-field">
+              <div class="current-field-label">图片</div>
+              <div class="current-upload">
+                <span>📷</span>
+              </div>
+            </div>
+            
+            <!-- Name Field -->
+            <div class="current-field">
+              <div class="current-field-label">名称</div>
+              <div class="current-field-value">请输入资产名称</div>
+            </div>
+            
+            <!-- Category Picker -->
+            <div class="current-field">
+              <div class="current-field-label">分类</div>
+              <div class="current-picker">请选择分类 ▼</div>
+            </div>
+            
+            <!-- Status Field -->
+            <div class="current-field" style="background: #fff1f0;">
+              <div class="current-field-label">状态</div>
+              <div class="current-picker">服役中 ▼</div>
+            </div>
+            
+            <!-- Price Field -->
+            <div class="current-field">
+              <div class="current-field-label">购入价格</div>
+              <div class="current-field-value">¥ 0.00</div>
+            </div>
+            
+            <!-- Current Value - No Quick Button -->
+            <div class="current-field" style="background: #fffbe6;">
+              <div class="current-field-label">当前价值</div>
+              <div class="current-field-value">¥ 0.00</div>
+              <span style="color: #faad14; font-size: 11px; margin-left: 8px;">⚠️ 无快捷按钮</span>
+            </div>
+            
+            <!-- Purchase Date -->
+            <div class="current-field">
+              <div class="current-field-label">购入日期</div>
+              <div class="current-picker">请选择日期 ▼</div>
+            </div>
+            
+            <!-- Expected Life - Days -->
+            <div class="current-field" style="background: #fff1f0;">
+              <div class="current-field-label">预期寿命</div>
+              <div style="display: flex; align-items: center;">
+                <div class="current-picker" style="width: 60px;">365</div>
+                <span style="color: #ff4d4f; font-size: 11px; margin-left: 8px;">⚠️ 单位：天（心智模型不匹配）</span>
+              </div>
+            </div>
+            
+            <!-- Frequency Picker -->
+            <div class="current-field" style="background: #fffbe6;">
+              <div class="current-field-label">使用频率</div>
+              <div class="current-picker">请选择 ▼</div>
+              <span style="color: #faad14; font-size: 11px; margin-left: 8px;">⚠️ 交互层级深</span>
+            </div>
+            
+            <!-- Location -->
+            <div class="current-field">
+              <div class="current-field-label">存放位置</div>
+              <div class="current-field-value">请输入存放位置</div>
+            </div>
+            
+            <!-- Maintenance -->
+            <div class="current-field">
+              <div class="current-field-label">年维护费</div>
+              <div class="current-field-value">¥ 0.00</div>
+            </div>
+            
+            <!-- Tags - Missing -->
+            <div class="current-field" style="background: #fff1f0;">
+              <div class="current-field-label">标签</div>
+              <span style="color: #ff4d4f; font-size: 13px;">❌ 功能缺失</span>
+            </div>
+            
+            <!-- Asset Type - Not Implemented -->
+            <div class="current-field" style="background: #fff1f0;">
+              <div class="current-field-label">资产类型</div>
+              <span style="color: #ff4d4f; font-size: 13px;">❌ 未实现（实物/金融资产区分）</span>
+            </div>
+            
+            <!-- Bottom Button -->
+            <div class="mockup-bottom-btn" style="background: linear-gradient(135deg, #52c41a, #73d13d); margin: 16px;">保存</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Differences Table -->
+  <div class="differences-section">
+    <div class="differences-title">核心差异分析</div>
+    
+    <div class="diff-item">
+      <div class="label">图片区域</div>
+      <div class="reference">顶部大图 120px 居中独立</div>
+      <div class="current">嵌入表单行 80px 左对齐</div>
+      <div class="impact">视觉权重低，不突出，用户拍照意愿下降</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">类型选择</div>
+      <div class="reference">SegmentedControl 一眼看全</div>
+      <div class="current">下拉 Picker 点击弹出</div>
+      <div class="impact">交互步骤多 2 次，高频决策效率低</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">分类选择</div>
+      <div class="reference">图标网格 一屏看全</div>
+      <div class="current">下拉 Picker 文字列表</div>
+      <div class="impact">丢失 emoji 视觉锚点，选择效率大幅下降</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">当前价值</div>
+      <div class="reference">"同购入价"快捷按钮</div>
+      <div class="current">无快捷操作</div>
+      <div class="impact">70% 场景需重复输入，效率损失</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">预期寿命</div>
+      <div class="reference">单位"年" + "不限"选项</div>
+      <div class="current">单位"天"无快捷选项</div>
+      <div class="impact">用户心智模型不匹配（年 vs 天），认知负担增加</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">使用频率</div>
+      <div class="reference">横向图标按钮组</div>
+      <div class="current">下拉 Picker</div>
+      <div class="impact">交互层级深，所有选项不可同时可见</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">状态字段</div>
+      <div class="reference">录入时不显示（默认服役中）</div>
+      <div class="current">显示在基础信息区</div>
+      <div class="impact">99% 新资产是服役中，字段是噪音</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">标签</div>
+      <div class="reference">多选标签选择器</div>
+      <div class="current">无</div>
+      <div class="impact">功能缺失，统计页无法按标签聚合</div>
+    </div>
+    
+    <div class="diff-item">
+      <div class="label">资产类型</div>
+      <div class="reference">实物/金融资产区分</div>
+      <div class="current">未实现</div>
+      <div class="impact">金融资产无预期寿命/使用频率等字段，当前模型不适配</div>
+    </div>
+  </div>
+  
+  <!-- Recommendations -->
+  <div class="recommendations-section">
+    <div class="recommendations-title">优化建议（按优先级排序）</div>
+    
+    <div class="rec-item">
+      <span class="priority high">P0</span>
+      <strong>分类选择器改为图标网格</strong> — 21 个分类带 emoji，网格布局让扫描速度远快于文字列表。直接影响首页分类筛选视觉一致性。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority high">P0</span>
+      <strong>预期寿命单位改为"年"</strong> — 用户思维是"用 3 年"，不是"1095 天"。后端存天数不变，前端用年输入并自动换算。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority high">P0</span>
+      <strong>当前价值添加"同购入价"快捷按钮</strong> — 约 70% 新购资产当前价值=购入价，一键消除重复输入。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority medium">P1</span>
+      <strong>图片区域提升视觉权重</strong> — 顶部独立大图区域 120px 居中，增加拍照意愿，资产识别度更高。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority medium">P1</span>
+      <strong>使用频率改为图标按钮组</strong> — 5 个互斥选项同时可见，无需展开 Picker，交互更直观。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority medium">P1</span>
+      <strong>状态字段移到编辑模式</strong> — 录入时隐藏（默认服役中），编辑时才显示，减少录入噪音。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority medium">P1</span>
+      <strong>新增标签字段</strong> — 多选标签选择器，支持统计页按标签聚合（如"旅行装备"标签）。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority low">P2</span>
+      <strong>新增资产类型字段</strong> — SegmentedControl 选择实物/金融资产，金融资产隐藏实物属性字段（预期寿命、使用频率等）。
+    </div>
+    
+    <div class="rec-item">
+      <span class="priority low">P2</span>
+      <strong>预期寿命添加"不限"选项</strong> — 某些资产无明确预期寿命（如房产），提供快捷选项。
+    </div>
+  </div>
+  
+  <!-- Impact on Dashboard/Statistics -->
+  <div class="recommendations-section" style="margin-top: 30px;">
+    <div class="recommendations-title" style="color: #13c2c2; border-color: #13c2c2;">总览/统计场景关联性优化</div>
+    
+    <div class="rec-item" style="background: #e6fffb; border-left-color: #13c2c2;">
+      <strong>分类图标网格 → 首页分类筛选</strong> — 录入时的图标选择，直接作为首页快速筛选入口，视觉一致性强化。
+    </div>
+    
+    <div class="rec-item" style="background: #e6fffb; border-left-color: #13c2c2;">
+      <strong>使用频率 → 低使用率预警</strong> — 录入时填的频率，直接驱动"闲置资产"统计模块，提升资产盘点意识。
+    </div>
+    
+    <div class="rec-item" style="background: #e6fffb; border-left-color: #13c2c2;">
+      <strong>预期寿命（年） → 资产到期提醒</strong> — 统计页展示"即将到期资产"列表，提前预警置换需求。
+    </div>
+    
+    <div class="rec-item" style="background: #e6fffb; border-left-color: #13c2c2;">
+      <strong>标签 → 自定义统计维度</strong> — 用户可按标签查看资产分布，比固定分类更灵活，满足个性化聚合需求。
+    </div>
+    
+    <div class="rec-item" style="background: #e6fffb; border-left-color: #13c2c2;">
+      <strong>"同购入价" → 收益率基准</strong> — 当前价值与购入价关系准确记录，直接影响统计页收益率计算准确性。
+    </div>
+  </div>
+</body>
+</html>
