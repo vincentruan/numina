@@ -1,0 +1,231 @@
+<h2>完整设计方案确认</h2>
+<p class="subtitle">所有决策汇总 — 请确认后进入实施计划</p>
+
+<style>
+.phone-frame {
+  width: 260px;
+  background: #1a1a2e;
+  border-radius: 24px;
+  padding: 10px;
+  border: 2px solid #333;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.phone-screen {
+  background: #0d0d1a;
+  border-radius: 16px;
+  overflow: hidden;
+  max-height: 620px;
+  overflow-y: auto;
+}
+.phone-screen::-webkit-scrollbar { width: 3px; }
+.phone-screen::-webkit-scrollbar-thumb { background: #333; }
+.form-header {
+  background: #0d0d1a; padding: 10px 12px 8px;
+  display: flex; align-items: center; gap: 8px;
+  border-bottom: 1px solid #1e1e30;
+  position: sticky; top: 0; z-index: 10;
+}
+.back-btn { color: #4a9eff; font-size: 16px; }
+.header-title { font-size: 14px; font-weight: 600; color: #e0e0e0; flex: 1; }
+.save-btn { color: #4a9eff; font-size: 12px; font-weight: 600; }
+.img-area {
+  padding: 16px; display: flex; flex-direction: column;
+  align-items: center; border-bottom: 1px solid #1e1e30;
+  background: #0d0d1a;
+}
+.img-circle {
+  width: 76px; height: 76px; border-radius: 14px;
+  background: #1e1e30; border: 2px dashed #333;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  color: #555; font-size: 22px;
+}
+.img-hint { font-size: 9px; color: #555; margin-top: 5px; }
+.type-seg {
+  display: flex; margin: 8px 12px;
+  background: #1e1e30; border-radius: 9px; padding: 3px;
+}
+.type-seg-item {
+  flex: 1; text-align: center; padding: 6px;
+  border-radius: 7px; font-size: 11px; color: #888;
+}
+.type-seg-item.active { background: #4a9eff; color: white; font-weight: 600; }
+.section-header {
+  padding: 7px 12px 3px;
+  font-size: 9px; color: #555;
+  text-transform: uppercase; letter-spacing: 0.8px;
+}
+.form-row {
+  padding: 8px 12px; display: flex; align-items: center;
+  border-bottom: 1px solid #1a1a2a; background: #111120;
+}
+.row-label { font-size: 11px; color: #888; width: 64px; flex-shrink: 0; }
+.row-value { font-size: 11px; color: #e0e0e0; flex: 1; }
+.row-ph { font-size: 11px; color: #444; flex: 1; }
+.row-arrow { color: #444; font-size: 10px; }
+.row-tag { font-size: 9px; background: rgba(74,158,255,0.2); color: #4a9eff; padding: 2px 5px; border-radius: 4px; margin-left: 4px; }
+.cat-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 5px; padding: 6px 12px;
+  background: #111120; border-bottom: 1px solid #1a1a2a;
+}
+.cat-item {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 5px 2px; border-radius: 7px;
+  background: #1e1e30; border: 1.5px solid transparent;
+}
+.cat-item.sel { border-color: #4a9eff; background: rgba(74,158,255,0.12); }
+.cat-item .e { font-size: 14px; }
+.cat-item .n { font-size: 8px; color: #888; margin-top: 2px; }
+.cat-item.sel .n { color: #4a9eff; }
+.freq-wrap {
+  padding: 6px 12px; background: #111120; border-bottom: 1px solid #1a1a2a;
+}
+.freq-label { font-size: 11px; color: #888; margin-bottom: 5px; }
+.freq-row { display: flex; gap: 4px; }
+.freq-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 5px 2px; border-radius: 7px;
+  background: #1e1e30; border: 1.5px solid transparent;
+}
+.freq-item.sel { border-color: #4a9eff; background: rgba(74,158,255,0.12); }
+.freq-item .fi { font-size: 13px; }
+.freq-item .ft { font-size: 8px; color: #888; margin-top: 2px; }
+.freq-item.sel .ft { color: #4a9eff; }
+.tag-row {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  padding: 7px 12px; background: #111120; border-bottom: 1px solid #1a1a2a;
+}
+.tag-chip { font-size: 9px; padding: 3px 7px; border-radius: 10px; background: #1e1e30; color: #888; border: 1px solid #2a2a3e; }
+.tag-add { font-size: 9px; padding: 3px 7px; border-radius: 10px; color: #4a9eff; border: 1px solid #4a9eff; background: rgba(74,158,255,0.08); }
+.submit-btn {
+  margin: 10px 12px; background: #4a9eff; color: white;
+  border-radius: 9px; padding: 10px;
+  text-align: center; font-size: 12px; font-weight: 600;
+}
+.badge { display: inline-block; font-size: 9px; padding: 2px 6px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+.badge-new { background: rgba(74,158,255,0.2); color: #4a9eff; }
+.badge-changed { background: rgba(255,169,77,0.2); color: #ffa94d; }
+.badge-removed { background: rgba(255,100,100,0.2); color: #ff6b6b; }
+</style>
+
+<div style="display:flex; gap:32px; align-items:flex-start; flex-wrap:wrap;">
+
+  <!-- Phone mockup -->
+  <div style="flex-shrink:0;">
+    <div class="phone-frame">
+      <div class="phone-screen">
+        <div class="form-header">
+          <span class="back-btn">‹</span>
+          <span class="header-title">添加资产</span>
+          <span class="save-btn">保存</span>
+        </div>
+
+        <!-- 图片：顶部独立区域 -->
+        <div class="img-area">
+          <div class="img-circle">📷<span style="font-size:8px;margin-top:2px;color:#555">添加图片</span></div>
+          <span class="img-hint">点击拍照或从相册选择</span>
+        </div>
+
+        <!-- 资产类型：SegmentedControl -->
+        <div class="type-seg">
+          <div class="type-seg-item active">实物资产</div>
+          <div class="type-seg-item">金融资产</div>
+        </div>
+
+        <!-- 基本信息 -->
+        <div class="section-header">基本信息</div>
+        <div class="form-row"><span class="row-label">名称</span><span class="row-ph">请输入资产名称</span></div>
+        <div class="form-row"><span class="row-label">分类</span><span class="row-value">📱 数码</span></div>
+        <div class="cat-grid">
+          <div class="cat-item"><span class="e">🏠</span><span class="n">房产</span></div>
+          <div class="cat-item"><span class="e">🚗</span><span class="n">车辆</span></div>
+          <div class="cat-item sel"><span class="e">📱</span><span class="n">数码</span></div>
+          <div class="cat-item"><span class="e">📺</span><span class="n">家电</span></div>
+          <div class="cat-item"><span class="e">🛋️</span><span class="n">家具</span></div>
+          <div class="cat-item"><span class="e">💎</span><span class="n">珠宝</span></div>
+          <div class="cat-item"><span class="e">👔</span><span class="n">服饰</span></div>
+          <div class="cat-item"><span class="e">⚽</span><span class="n">运动</span></div>
+        </div>
+        <div class="form-row"><span class="row-label">购入价格</span><span class="row-value">¥ 5,999</span></div>
+        <div class="form-row"><span class="row-label">当前价值</span><span class="row-value">¥ 5,999</span><span class="row-tag">同购入价</span></div>
+        <div class="form-row"><span class="row-label">购入日期</span><span class="row-value">2024-01-15</span><span class="row-arrow">›</span></div>
+
+        <!-- 实物资产信息 -->
+        <div class="section-header">实物资产信息</div>
+        <div class="freq-wrap">
+          <div class="freq-label">使用频率</div>
+          <div class="freq-row">
+            <div class="freq-item sel"><span class="fi">📅</span><span class="ft">每天</span></div>
+            <div class="freq-item"><span class="fi">📆</span><span class="ft">每周</span></div>
+            <div class="freq-item"><span class="fi">🗓️</span><span class="ft">每月</span></div>
+            <div class="freq-item"><span class="fi">💤</span><span class="ft">偶尔</span></div>
+            <div class="freq-item"><span class="fi">📦</span><span class="ft">闲置</span></div>
+          </div>
+        </div>
+        <div class="form-row"><span class="row-label">预期寿命</span><span class="row-value">3 年</span><span style="font-size:9px;color:#4a9eff;margin-left:4px">不限</span></div>
+        <div class="form-row"><span class="row-label">存放位置</span><span class="row-ph">可选</span></div>
+        <div class="form-row"><span class="row-label">年维护费</span><span class="row-ph">¥ 可选</span></div>
+
+        <!-- 标签与备注 -->
+        <div class="section-header">标签与备注</div>
+        <div class="tag-row">
+          <span class="tag-chip">工作</span>
+          <span class="tag-chip">数码</span>
+          <span class="tag-add">+ 添加标签</span>
+        </div>
+        <div class="form-row"><span class="row-label">备注</span><span class="row-ph">可选</span></div>
+
+        <div class="submit-btn">添加资产</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Change summary -->
+  <div style="flex:1; min-width:280px;">
+    <h3 style="color:#e0e0e0; margin-bottom:16px;">变更清单</h3>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#ff6b6b;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">P0 — 必须做</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#ccc;">
+        <div>✦ 分类选择器 <span class="badge badge-changed">Picker → 4列图标网格</span></div>
+        <div>✦ 预期寿命单位 <span class="badge badge-changed">天 → 年，加"不限"</span></div>
+        <div>✦ 当前价值 <span class="badge badge-new">加"同购入价"按钮</span></div>
+        <div>✦ 状态字段 <span class="badge badge-removed">新建时隐藏</span></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#ffa94d;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">P1 — 应该做</div>
+      <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;color:#ccc;">
+        <div>✦ 图片区域 <span class="badge badge-changed">行内 → 顶部独立 76px 居中</span></div>
+        <div>✦ 资产类型 <span class="badge badge-changed">Picker → SegmentedControl</span></div>
+        <div>✦ 使用频率 <span class="badge badge-changed">Picker → 图标按钮组</span></div>
+        <div>✦ 标签字段 <span class="badge badge-new">新增多选标签选择器</span></div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:20px;">
+      <div style="font-size:11px;color:#74c0fc;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">字段顺序调整</div>
+      <div style="font-size:12px;color:#888;line-height:1.8;">
+        实物资产信息区：<br>
+        <span style="color:#e87e7e">旧：存放位置 → 预期寿命(天) → 年维护费 → 使用频率</span><br>
+        <span style="color:#7ee8b8">新：使用频率 → 预期寿命(年) → 存放位置 → 年维护费</span>
+      </div>
+    </div>
+
+    <div>
+      <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">新增组件</div>
+      <div style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#888;">
+        <div>• <code style="color:#4a9eff">CategoryGrid.vue</code> — 分类图标网格</div>
+        <div>• <code style="color:#4a9eff">UsageFreqSelector.vue</code> — 使用频率按钮组</div>
+        <div>• <code style="color:#4a9eff">TagSelector.vue</code> — 标签多选选择器</div>
+      </div>
+    </div>
+
+    <div style="margin-top:20px;padding:12px;background:rgba(74,158,255,0.08);border-left:3px solid #4a9eff;border-radius:4px;font-size:12px;color:#aaa;">
+      <strong style="color:#4a9eff">后端无改动</strong>：所有字段已存在于数据库和 API。预期寿命仅前端换算（年↔天），标签 API 已有（asset_tags 表）。
+    </div>
+  </div>
+
+</div>

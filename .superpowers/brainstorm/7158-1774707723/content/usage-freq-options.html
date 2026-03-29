@@ -1,0 +1,186 @@
+<h2>使用频率：哪种交互方式更直观？</h2>
+<p class="subtitle">5个选项：每天 / 每周 / 每月 / 偶尔 / 闲置</p>
+
+<style>
+.phone-frame {
+  width: 300px;
+  background: #1a1a2e;
+  border-radius: 20px;
+  padding: 12px;
+  border: 2px solid #333;
+}
+.phone-screen {
+  background: #0f0f1a;
+  border-radius: 12px;
+  overflow: hidden;
+  padding: 12px;
+}
+.field-label {
+  font-size: 11px;
+  color: #888;
+  margin-bottom: 8px;
+}
+
+/* Option A: icon button row */
+.freq-row {
+  display: flex;
+  gap: 6px;
+}
+.freq-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: #1e1e30;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+.freq-btn.selected {
+  border-color: #4a9eff;
+  background: rgba(74,158,255,0.15);
+}
+.freq-btn .icon { font-size: 18px; }
+.freq-btn .text { font-size: 10px; color: #aaa; margin-top: 4px; }
+.freq-btn.selected .text { color: #4a9eff; }
+
+/* Option B: segmented with text only */
+.seg-control {
+  display: flex;
+  background: #1e1e30;
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 7px 2px;
+  border-radius: 8px;
+  font-size: 11px;
+  color: #888;
+  cursor: pointer;
+}
+.seg-item.selected {
+  background: #4a9eff;
+  color: white;
+  font-weight: 600;
+}
+
+/* Option C: chip tags */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 20px;
+  background: #1e1e30;
+  border: 2px solid transparent;
+  font-size: 12px;
+  color: #aaa;
+  cursor: pointer;
+}
+.chip.selected {
+  border-color: #4a9eff;
+  background: rgba(74,158,255,0.15);
+  color: #4a9eff;
+}
+.chip .icon { font-size: 14px; }
+
+.mock-field {
+  background: #1e1e30;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.mock-field .flabel { font-size: 12px; color: #888; }
+.mock-field .fvalue { font-size: 12px; color: #e0e0e0; }
+</style>
+
+<div class="cards">
+
+  <!-- Option A: icon button row -->
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; display:flex; justify-content:center;">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="mock-field"><span class="flabel">存放位置</span><span class="fvalue">客厅</span></div>
+          <div class="mock-field"><span class="flabel">预期寿命</span><span class="fvalue">3 年</span></div>
+          <div class="mock-field"><span class="flabel">年维护费</span><span class="fvalue">¥ 500</span></div>
+          <div class="field-label">使用频率</div>
+          <div class="freq-row">
+            <div class="freq-btn selected"><span class="icon">📅</span><span class="text">每天</span></div>
+            <div class="freq-btn"><span class="icon">📆</span><span class="text">每周</span></div>
+            <div class="freq-btn"><span class="icon">🗓️</span><span class="text">每月</span></div>
+            <div class="freq-btn"><span class="icon">💤</span><span class="text">偶尔</span></div>
+            <div class="freq-btn"><span class="icon">📦</span><span class="text">闲置</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — 图标按钮组（推荐）</h3>
+      <p>5个选项横向排列，图标+文字，一目了然，点击直接切换。与参考设计一致。</p>
+    </div>
+  </div>
+
+  <!-- Option B: segmented text only -->
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; display:flex; justify-content:center;">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="mock-field"><span class="flabel">存放位置</span><span class="fvalue">客厅</span></div>
+          <div class="mock-field"><span class="flabel">预期寿命</span><span class="fvalue">3 年</span></div>
+          <div class="mock-field"><span class="flabel">年维护费</span><span class="fvalue">¥ 500</span></div>
+          <div class="field-label">使用频率</div>
+          <div class="seg-control">
+            <div class="seg-item selected">每天</div>
+            <div class="seg-item">每周</div>
+            <div class="seg-item">每月</div>
+            <div class="seg-item">偶尔</div>
+            <div class="seg-item">闲置</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — 分段控件（纯文字）</h3>
+      <p>SegmentedControl 样式，紧凑，无图标。5个选项文字较短时适合，但"偶尔"和"闲置"在小屏可能挤压。</p>
+    </div>
+  </div>
+
+  <!-- Option C: chip tags -->
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding: 16px; display:flex; justify-content:center;">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="mock-field"><span class="flabel">存放位置</span><span class="fvalue">客厅</span></div>
+          <div class="mock-field"><span class="flabel">预期寿命</span><span class="fvalue">3 年</span></div>
+          <div class="mock-field"><span class="flabel">年维护费</span><span class="fvalue">¥ 500</span></div>
+          <div class="field-label">使用频率</div>
+          <div class="chip-row">
+            <div class="chip selected"><span class="icon">📅</span>每天</div>
+            <div class="chip"><span class="icon">📆</span>每周</div>
+            <div class="chip"><span class="icon">🗓️</span>每月</div>
+            <div class="chip"><span class="icon">💤</span>偶尔</div>
+            <div class="chip"><span class="icon">📦</span>闲置</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — 胶囊标签组</h3>
+      <p>圆角胶囊样式，图标+文字，自动换行。视觉更柔和，但5个选项可能换行到第二行，占用更多垂直空间。</p>
+    </div>
+  </div>
+
+</div>

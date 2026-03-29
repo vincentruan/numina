@@ -1,0 +1,331 @@
+<h2>资产录入表单：整体布局对比</h2>
+<p class="subtitle">P0+P1 全部优化后的完整表单结构，两种组织方式</p>
+
+<style>
+.phone-frame {
+  width: 280px;
+  background: #1a1a2e;
+  border-radius: 24px;
+  padding: 10px;
+  border: 2px solid #333;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.phone-screen {
+  background: #0d0d1a;
+  border-radius: 16px;
+  overflow: hidden;
+  max-height: 560px;
+  overflow-y: auto;
+}
+.phone-screen::-webkit-scrollbar { width: 3px; }
+.phone-screen::-webkit-scrollbar-thumb { background: #333; }
+
+/* Header */
+.form-header {
+  background: #0d0d1a;
+  padding: 12px 14px 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #1e1e30;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.back-btn { color: #4a9eff; font-size: 16px; }
+.header-title { font-size: 15px; font-weight: 600; color: #e0e0e0; flex: 1; }
+.save-btn { color: #4a9eff; font-size: 13px; font-weight: 600; }
+
+/* Image area */
+.img-area-top {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border-bottom: 1px solid #1e1e30;
+  background: #0d0d1a;
+}
+.img-circle {
+  width: 80px; height: 80px;
+  border-radius: 16px;
+  background: #1e1e30;
+  border: 2px dashed #333;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  font-size: 22px;
+}
+.img-hint { font-size: 10px; color: #555; margin-top: 6px; }
+
+/* Type segmented */
+.type-seg {
+  display: flex;
+  margin: 10px 14px;
+  background: #1e1e30;
+  border-radius: 10px;
+  padding: 3px;
+}
+.type-seg-item {
+  flex: 1;
+  text-align: center;
+  padding: 7px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #888;
+}
+.type-seg-item.active {
+  background: #4a9eff;
+  color: white;
+  font-weight: 600;
+}
+
+/* Section */
+.form-section {
+  margin: 0 0 2px;
+}
+.section-header {
+  padding: 8px 14px 4px;
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+.form-row {
+  padding: 9px 14px;
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid #1a1a2a;
+  background: #111120;
+}
+.row-label { font-size: 12px; color: #888; width: 72px; flex-shrink: 0; }
+.row-value { font-size: 12px; color: #e0e0e0; flex: 1; }
+.row-value.placeholder { color: #444; }
+.row-arrow { color: #444; font-size: 10px; }
+.row-tag { font-size: 10px; background: rgba(74,158,255,0.2); color: #4a9eff; padding: 2px 6px; border-radius: 4px; }
+
+/* Category grid inline */
+.cat-grid-inline {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px 14px;
+  background: #111120;
+  border-bottom: 1px solid #1a1a2a;
+}
+.cat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 2px;
+  border-radius: 8px;
+  background: #1e1e30;
+  border: 1.5px solid transparent;
+}
+.cat-item.sel { border-color: #4a9eff; background: rgba(74,158,255,0.12); }
+.cat-item .e { font-size: 16px; }
+.cat-item .n { font-size: 9px; color: #888; margin-top: 2px; }
+.cat-item.sel .n { color: #4a9eff; }
+
+/* Freq buttons inline */
+.freq-inline {
+  display: flex;
+  gap: 5px;
+  padding: 8px 14px;
+  background: #111120;
+  border-bottom: 1px solid #1a1a2a;
+}
+.freq-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 2px;
+  border-radius: 8px;
+  background: #1e1e30;
+  border: 1.5px solid transparent;
+}
+.freq-item.sel { border-color: #4a9eff; background: rgba(74,158,255,0.12); }
+.freq-item .fi { font-size: 14px; }
+.freq-item .ft { font-size: 9px; color: #888; margin-top: 2px; }
+.freq-item.sel .ft { color: #4a9eff; }
+
+/* Tags */
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 8px 14px;
+  background: #111120;
+  border-bottom: 1px solid #1a1a2a;
+}
+.tag-chip {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: #1e1e30;
+  color: #888;
+  border: 1px solid #2a2a3e;
+}
+.tag-chip.add { color: #4a9eff; border-color: #4a9eff; background: rgba(74,158,255,0.1); }
+
+/* Submit */
+.submit-btn {
+  margin: 12px 14px;
+  background: #4a9eff;
+  color: white;
+  border-radius: 10px;
+  padding: 11px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+</style>
+
+<div class="split">
+
+  <!-- Option A: flat single scroll -->
+  <div class="mockup" data-choice="a" onclick="toggleSelect(this)" style="cursor:pointer">
+    <div class="mockup-header">A — 单页线性滚动（推荐）</div>
+    <div class="mockup-body" style="display:flex;justify-content:center;padding:16px">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="form-header">
+            <span class="back-btn">‹</span>
+            <span class="header-title">添加资产</span>
+            <span class="save-btn">保存</span>
+          </div>
+
+          <!-- Image top -->
+          <div class="img-area-top">
+            <div class="img-circle">📷<span style="font-size:9px;margin-top:2px">添加图片</span></div>
+          </div>
+
+          <!-- Type segmented -->
+          <div class="type-seg">
+            <div class="type-seg-item active">实物资产</div>
+            <div class="type-seg-item">金融资产</div>
+          </div>
+
+          <!-- Basic info -->
+          <div class="form-section">
+            <div class="section-header">基本信息</div>
+            <div class="form-row"><span class="row-label">名称</span><span class="row-value placeholder">请输入资产名称</span></div>
+            <div class="form-row"><span class="row-label">分类</span><span class="row-value placeholder">选择分类</span><span class="row-arrow">›</span></div>
+            <!-- Category grid expands inline -->
+            <div class="cat-grid-inline">
+              <div class="cat-item sel"><span class="e">🏠</span><span class="n">房产</span></div>
+              <div class="cat-item"><span class="e">🚗</span><span class="n">车辆</span></div>
+              <div class="cat-item"><span class="e">📱</span><span class="n">数码</span></div>
+              <div class="cat-item"><span class="e">📺</span><span class="n">家电</span></div>
+              <div class="cat-item"><span class="e">🛋️</span><span class="n">家具</span></div>
+              <div class="cat-item"><span class="e">💎</span><span class="n">珠宝</span></div>
+              <div class="cat-item"><span class="e">👔</span><span class="n">服饰</span></div>
+              <div class="cat-item"><span class="e">⚽</span><span class="n">运动</span></div>
+            </div>
+            <div class="form-row"><span class="row-label">购入价格</span><span class="row-value placeholder">¥ 0.00</span></div>
+            <div class="form-row"><span class="row-label">当前价值</span><span class="row-value placeholder">¥ 0.00</span><span class="row-tag">同购入价</span></div>
+            <div class="form-row"><span class="row-label">购入日期</span><span class="row-value placeholder">选择日期</span><span class="row-arrow">›</span></div>
+          </div>
+
+          <!-- Physical info -->
+          <div class="form-section">
+            <div class="section-header">实物资产信息</div>
+            <div class="form-row"><span class="row-label">存放位置</span><span class="row-value placeholder">可选</span></div>
+            <div class="form-row"><span class="row-label">预期寿命</span><span class="row-value placeholder">_ 年</span><span style="font-size:10px;color:#555">不限</span></div>
+            <div class="form-row"><span class="row-label">年维护费</span><span class="row-value placeholder">¥ 可选</span></div>
+            <div class="form-row" style="flex-direction:column;align-items:flex-start;gap:6px">
+              <span class="row-label">使用频率</span>
+              <div class="freq-inline" style="padding:0;width:100%">
+                <div class="freq-item sel"><span class="fi">📅</span><span class="ft">每天</span></div>
+                <div class="freq-item"><span class="fi">📆</span><span class="ft">每周</span></div>
+                <div class="freq-item"><span class="fi">🗓️</span><span class="ft">每月</span></div>
+                <div class="freq-item"><span class="fi">💤</span><span class="ft">偶尔</span></div>
+                <div class="freq-item"><span class="fi">📦</span><span class="ft">闲置</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tags & notes -->
+          <div class="form-section">
+            <div class="section-header">标签与备注</div>
+            <div class="tags-row">
+              <span class="tag-chip">旅行装备</span>
+              <span class="tag-chip add">+ 添加标签</span>
+            </div>
+            <div class="form-row"><span class="row-label">备注</span><span class="row-value placeholder">可选</span></div>
+          </div>
+
+          <div class="submit-btn">添加资产</div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;font-size:13px;color:#aaa">
+      所有字段在一个页面线性排列，向下滚动即可完成录入。分类网格内嵌展开，无弹窗。
+    </div>
+  </div>
+
+  <!-- Option B: tabbed sections -->
+  <div class="mockup" data-choice="b" onclick="toggleSelect(this)" style="cursor:pointer">
+    <div class="mockup-header">B — 分步骤 Tab 录入</div>
+    <div class="mockup-body" style="display:flex;justify-content:center;padding:16px">
+      <div class="phone-frame">
+        <div class="phone-screen">
+          <div class="form-header">
+            <span class="back-btn">‹</span>
+            <span class="header-title">添加资产</span>
+            <span class="save-btn">下一步</span>
+          </div>
+
+          <!-- Step indicator -->
+          <div style="display:flex;padding:10px 14px;gap:6px;align-items:center;background:#111120;border-bottom:1px solid #1a1a2a">
+            <div style="flex:1;height:3px;background:#4a9eff;border-radius:2px"></div>
+            <div style="flex:1;height:3px;background:#1e1e30;border-radius:2px"></div>
+            <div style="flex:1;height:3px;background:#1e1e30;border-radius:2px"></div>
+            <span style="font-size:10px;color:#555;margin-left:4px">1/3</span>
+          </div>
+
+          <div style="padding:10px 14px;font-size:11px;color:#4a9eff;font-weight:600">步骤一：基本信息</div>
+
+          <!-- Image top -->
+          <div class="img-area-top" style="padding:12px">
+            <div class="img-circle">📷<span style="font-size:9px;margin-top:2px">添加图片</span></div>
+          </div>
+
+          <div class="type-seg">
+            <div class="type-seg-item active">实物资产</div>
+            <div class="type-seg-item">金融资产</div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-row"><span class="row-label">名称</span><span class="row-value placeholder">请输入资产名称</span></div>
+            <div class="form-row"><span class="row-label">分类</span><span class="row-value placeholder">选择分类</span><span class="row-arrow">›</span></div>
+            <div class="cat-grid-inline">
+              <div class="cat-item sel"><span class="e">🏠</span><span class="n">房产</span></div>
+              <div class="cat-item"><span class="e">🚗</span><span class="n">车辆</span></div>
+              <div class="cat-item"><span class="e">📱</span><span class="n">数码</span></div>
+              <div class="cat-item"><span class="e">📺</span><span class="n">家电</span></div>
+              <div class="cat-item"><span class="e">🛋️</span><span class="n">家具</span></div>
+              <div class="cat-item"><span class="e">💎</span><span class="n">珠宝</span></div>
+              <div class="cat-item"><span class="e">👔</span><span class="n">服饰</span></div>
+              <div class="cat-item"><span class="e">⚽</span><span class="n">运动</span></div>
+            </div>
+            <div class="form-row"><span class="row-label">购入价格</span><span class="row-value placeholder">¥ 0.00</span></div>
+            <div class="form-row"><span class="row-label">当前价值</span><span class="row-value placeholder">¥ 0.00</span><span class="row-tag">同购入价</span></div>
+            <div class="form-row"><span class="row-label">购入日期</span><span class="row-value placeholder">选择日期</span><span class="row-arrow">›</span></div>
+          </div>
+
+          <div style="display:flex;gap:8px;margin:12px 14px">
+            <div style="flex:1;background:#1e1e30;color:#888;border-radius:10px;padding:10px;text-align:center;font-size:12px">取消</div>
+            <div style="flex:2;background:#4a9eff;color:white;border-radius:10px;padding:10px;text-align:center;font-size:12px;font-weight:600">下一步 →</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="padding:0 16px 16px;font-size:13px;color:#aaa">
+      分3步：①基本信息 → ②资产详情 → ③标签备注。每步聚焦更少字段，但需要多次点击"下一步"。
+    </div>
+  </div>
+
+</div>
