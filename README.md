@@ -138,6 +138,18 @@ npm run build
 - **家庭汇总**：查看所有家庭成员的资产汇总
 - **数据隔离**：不同家庭数据完全隔离
 
+## 📚 项目文档
+
+| 文档 | 说明 |
+|------|------|
+| [架构文档](./docs/ARCHITECTURE.md) | 技术栈、系统架构、模块划分 |
+| [数据模型](./docs/DATA_MODELS.md) | 实体关系、字段定义、分类体系 |
+| [API 规范](./docs/API_SPEC.md) | 端点列表、认证方式、请求响应格式 |
+| [前端组件](./docs/FRONTEND_COMPONENTS.md) | 页面路由、组件职责、Store 结构 |
+| [编码规范](./docs/CODING_STANDARDS.md) | Vue 3 / FastAPI 编码风格 |
+| [Git 工作流](./docs/GIT_WORKFLOW.md) | 分支策略、Commit 格式、PR 流程 |
+| [测试规范](./tests/docs/TEST_SPEC.md) | 测试账号、测试数据、E2E 测试 |
+
 ## 🗂️ 项目结构
 
 ```
