@@ -12,6 +12,7 @@ from app.schemas.dashboard import (
     AllocationItem,
     AllocationResponse,
     DailyCostItem,
+    ExpiringSoonItem,
     InvestmentReturnItem,
     LowUsageItem,
     OverviewResponse,
@@ -403,3 +404,64 @@ def get_home_assets(db: Session, user: User, limit: int = 5) -> dict:
             result[status] = items
 
     return result
+
+
+def get_expiring_soon_assets(db: Session, user: User, days_threshold: int = 90) -> list[ExpiringSoonItem]:
+    """
+    Get assets approaching end of expected lifespan.
+    
+    For physical assets (electronics), expiration is normal lifecycle - show with muted color.
+    For financial assets (accounts, subscriptions), expiration needs attention - show with alert color.
+    """
+    default_currency = user.default_currency or "CNY"
+    today = date.today()
+    
+    # Query assets with expected lifespan
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived == False,
+            Asset.status == "in_use",  # Only active assets
+            Asset.purchase_date != None,
+            Asset.expected_lifespan_days != None,
+        )
+        .all()
+    )
+    
+    items = []
+    for a in assets:
+        if not a.purchase_date or not a.expected_lifespan_days:
+            continue
+            
+        # Calculate remaining days
+        expiry_date = a.purchase_date + timedelta(days=a.expected_lifespan_days)
+        remaining_days = (expiry_date - today).days
+        
+        # Only include assets within threshold (including already expired)
+        if remaining_days <= days_threshold:
+            asset_currency = a.currency or "CNY"
+            current_value_converted = ExchangeRateService.convert(
+                a.current_value or 0, asset_currency, default_currency, db
+            )
+            
+            items.append(
+                ExpiringSoonItem(
+                    id=a.id,
+                    name=a.name,
+                    category_name=a.category.name if a.category else "",
+                    icon=a.category.icon if a.category else "",
+                    asset_type=a.asset_type,
+                    purchase_date=a.purchase_date.isoformat(),
+                    expected_lifespan_days=a.expected_lifespan_days,
+                    remaining_days=remaining_days,
+                    current_value=round(current_value_converted, 2),
+                    currency=default_currency,
+                    original_value=a.current_value or 0,
+                )
+            )
+    
+    # Sort by remaining days (most urgent first)
+    items.sort(key=lambda x: x.remaining_days)
+    return items

@@ -7,6 +7,7 @@ from app.models.user import User
 from app.schemas.dashboard import (
     AllocationResponse,
     DailyCostItem,
+    ExpiringSoonItem,
     InvestmentReturnItem,
     LowUsageItem,
     OverviewResponse,
@@ -92,3 +93,18 @@ def get_home_assets(
 ):
     """Get assets grouped by status for home page display."""
     return dashboard_service.get_home_assets(db, user, limit)
+
+
+@router.get("/expiring-soon", response_model=list[ExpiringSoonItem])
+def get_expiring_soon(
+    days_threshold: int = Query(90, ge=1, le=365),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """
+    Get assets approaching end of expected lifespan.
+    
+    Physical assets (electronics) - normal lifecycle, show with muted color.
+    Financial assets (accounts, subscriptions) - needs attention, show with alert color.
+    """
+    return dashboard_service.get_expiring_soon_assets(db, user, days_threshold)

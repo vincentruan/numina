@@ -81,3 +81,18 @@ class InvestmentReturnItem(BaseModel):
     currency: str = "CNY"
     original_purchase_price: float = 0.0
     original_current_value: float = 0.0
+
+
+class ExpiringSoonItem(BaseModel):
+    """Asset approaching end of expected lifespan."""
+    id: str
+    name: str
+    category_name: str
+    icon: str
+    asset_type: str  # 'physical' or 'financial'
+    purchase_date: str | None = None
+    expected_lifespan_days: int | None = None
+    remaining_days: int | None = None  # negative = already past expected lifespan
+    current_value: float
+    currency: str = "CNY"
+    original_value: float = 0.0

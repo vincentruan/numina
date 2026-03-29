@@ -1,6 +1,20 @@
 import http from './index'
 import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset } from '@/types'
 
+export interface ExpiringSoonItem {
+  id: string
+  name: string
+  category_name: string
+  icon: string
+  asset_type: 'physical' | 'financial'
+  purchase_date: string | null
+  expected_lifespan_days: number | null
+  remaining_days: number | null
+  current_value: number
+  currency: string
+  original_value: number
+}
+
 export function getOverview() {
   return http.get<DashboardOverview>('/dashboard/overview')
 }
@@ -23,6 +37,10 @@ export function getDailyCostRanking(limit = 10) {
 
 export function getLowUsageAssets() {
   return http.get<LowUsageItem[]>('/dashboard/low-usage-assets')
+}
+
+export function getExpiringSoon(daysThreshold = 90) {
+  return http.get<ExpiringSoonItem[]>('/dashboard/expiring-soon', { params: { days_threshold: daysThreshold } })
 }
 
 export function getInvestmentReturns(limit = 10) {

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
-import type { ActivityItem } from '@/api/dashboard'
+import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const overview = ref<DashboardOverview | null>(null)
@@ -12,6 +12,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const topAssets = ref<TopAssetItem[]>([])
   const dailyCostRanking = ref<DailyCostItem[]>([])
   const lowUsageAssets = ref<LowUsageItem[]>([])
+  const expiringSoonAssets = ref<ExpiringSoonItem[]>([])
   const investmentReturns = ref<InvestmentReturnItem[]>([])
   const recentActivities = ref<ActivityItem[]>([])
   const statesSummary = ref<StatesSummaryResponse | null>(null)
@@ -49,6 +50,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     lowUsageAssets.value = res.data
   }
 
+  async function fetchExpiringSoonAssets(daysThreshold = 90) {
+    const res = await dashboardApi.getExpiringSoon(daysThreshold)
+    expiringSoonAssets.value = res.data
+  }
+
   async function fetchInvestmentReturns() {
     const res = await dashboardApi.getInvestmentReturns()
     investmentReturns.value = res.data
@@ -82,6 +88,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchHomeAssets(),
         fetchAllocation(),
         fetchTrend(),
+        fetchLowUsageAssets(),
+        fetchExpiringSoonAssets(),
       ])
     } finally {
       loading.value = false
@@ -90,9 +98,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
 
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
-    lowUsageAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
+    lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
-    fetchDailyCostRanking, fetchLowUsageAssets, fetchInvestmentReturns,
+    fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll
   }
 })

@@ -35,6 +35,14 @@
           </template>
         </StatusSummaryGrid>
 
+        <!-- Alert Cards: Idle + Expiring Soon -->
+        <AlertCards
+          v-if="hasAlertCards"
+          :idle-assets="dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle')"
+          :expiring-assets="dashboardStore.expiringSoonAssets"
+          @select-status="onStatusSelect"
+        />
+
         <!-- Category Navigation (Sticky, shown when scrolled) -->
         <div v-if="showCategoryNav && categories.length > 1" class="category-nav-sticky">
           <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
@@ -210,6 +218,7 @@ import type { Asset } from '@/types'
 import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
+import AlertCards from '@/components/dashboard/AlertCards.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 
@@ -243,6 +252,13 @@ const currentSort = ref<string>('created_at_desc')
 
 const overview = computed(() => dashboardStore.overview)
 const categories = computed(() => categoryStore.categories)
+
+// Alert cards visibility
+const hasAlertCards = computed(() => {
+  const idleCount = dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle').length
+  const expiringCount = dashboardStore.expiringSoonAssets.length
+  return idleCount > 0 || expiringCount > 0
+})
 
 const statusLabelMap: Record<string, string> = {
   in_use: '服役中',
