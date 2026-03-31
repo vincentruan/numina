@@ -28,9 +28,6 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 - 📱 **移动优先** - 响应式设计，适配手机浏览器访问
 - 🐳 **一键部署** - Docker Compose 快速启动，支持局域网和云端部署
 
-### 🎯 设计灵感
-
-本项目参考了"有数"App 的功能设计，通过逆向工程分析其数据模型和业务逻辑，并在此基础上扩展了金融资产管理、负债追踪、多用户家庭汇总等功能。
 
 ## 🛠️ 技术栈
 
@@ -344,7 +341,6 @@ docker-compose restart backend
 
 ## 🙏 致谢
 
-- 设计灵感来自"有数"App
 - UI 组件库：[Vant](https://vant-ui.github.io/)
 - 图表库：[Apache ECharts](https://echarts.apache.org/)
 - 后端框架：[FastAPI](https://fastapi.tiangolo.com/)
