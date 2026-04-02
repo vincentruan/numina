@@ -17,7 +17,7 @@
 
 ## 测试环境要求
 
-- 服务运行在 `http://localhost/numina/`（通过 Docker Compose 启动）
+- 服务运行在 `http://localhost/`（通过 Docker Compose 启动）
 - 已安装 `jq`（用于 JSON 解析）
 - 截图测试需要 Node.js + Puppeteer
 
