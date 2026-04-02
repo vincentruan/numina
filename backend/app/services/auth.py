@@ -158,7 +158,6 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     _check_rate_limit(req.username)
 
     user = db.query(User).filter(User.username == req.username, User.is_active == True).first()
-
     # Timing attack protection: always execute bcrypt to ensure consistent response time
     if user is None:
         # User not found - verify against dummy hash to consume similar time

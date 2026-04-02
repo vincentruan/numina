@@ -54,6 +54,7 @@ def test_login_nonexistent_user(client):
         "password": "password123"
     })
     assert response.status_code == 401
+    assert "用户名或密码错误" in response.json()["detail"]
 
 
 def test_refresh_token(client, auth_headers):

@@ -46,7 +46,12 @@ http.interceptors.response.use(
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Don't try to refresh if this was already a refresh request
+      // Don't try to refresh if this was a login or refresh request
+      if (originalRequest.url?.includes('/auth/login')) {
+        showToast(error.response.data?.detail || '用户名或密码错误')
+        return Promise.reject(error)
+      }
+      
       if (originalRequest.url?.includes('/auth/refresh')) {
         clearAuth()
         router.push('/login')
