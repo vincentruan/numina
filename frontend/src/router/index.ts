@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getToken } from '@/utils/storage'
 
 const router = createRouter({
-  history: createWebHistory('/numina/'),
+  history: createWebHistory('/'),
   routes: [
     {
       path: '/login',

@@ -1,0 +1,50 @@
+# Numina Production Docker Compose Configuration
+# Usage: docker compose -f docker-compose.production.yml up -d --build
+#
+# Prerequisites:
+# 1. Clone repository to ~/data/numina
+# 2. Copy .env.production.example to .env.production and configure
+# 3. Run: docker compose -f docker-compose.production.yml up -d --build
+
+services:
+  backend:
+    build: ./backend
+    container_name: numina-backend
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env.production
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - UPLOAD_DIR=/app/data/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    # Don't expose backend port externally
+    expose:
+      - "8000"
+
+  frontend:
+    build: ./frontend
+    container_name: numina-frontend
+    restart: unless-stopped
+    # Don't expose frontend port externally
+    expose:
+      - "80"
+
+  nginx:
+    image: nginx:alpine
+    container_name: numina-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.production.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data/uploads:/app/data/uploads:ro
+    depends_on:
+      - backend
+      - frontend

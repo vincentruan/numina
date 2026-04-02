@@ -5,7 +5,7 @@ import Components from 'unplugin-vue-components/vite'
 import { VantResolver } from '@vant/auto-import-resolver'
 
 export default defineConfig({
-  base: '/numina/',
+  base: '/',
   plugins: [
     vue(),
     Components({
@@ -19,10 +19,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/numina/api': {
+      '/api': {
         target: 'http://localhost:8000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/numina/, '')
+        changeOrigin: true
       }
     }
   }
