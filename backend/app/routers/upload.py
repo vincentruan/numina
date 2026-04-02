@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.auth.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
+from app.services.file_validation import detect_image_format, validate_image_magic_bytes
+from app.services.security_log import _log_security_event, SecurityEventType
 
 router = APIRouter(prefix="/upload", tags=["upload"])
 
@@ -45,6 +47,22 @@ async def upload_image(
         raise HTTPException(
             status_code=400,
             detail=f"文件大小超过限制（最大 5MB）"
+        )
+
+    # Validate magic bytes - security enhancement
+    ext_without_dot = ext.lstrip(".")
+    if not validate_image_magic_bytes(content, ext_without_dot):
+        # Detect actual format for logging
+        actual_format = detect_image_format(content)
+        _log_security_event(
+            SecurityEventType.UPLOAD_MAGIC_BYTES_MISMATCH,
+            user_id=user.id,
+            claimed_format=ext_without_dot,
+            actual_format=actual_format or "unknown",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"文件内容与声明格式不匹配，可能存在安全风险"
         )
 
     # Generate unique filename

@@ -9,10 +9,12 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.scheduler import fetch_rates_job, scheduler, setup_exchange_rate_schedule
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.services.exchange_rate import ExchangeRateService
+from app.services.security_log import setup_security_logging
 from app.services.snapshot import auto_generate_daily_snapshots
 
 # Import all models so Base.metadata knows about them
@@ -68,6 +70,10 @@ async def lifespan(app: FastAPI):
     if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
         logger.warning("生产环境 CORS_ORIGINS 设置为 ['*']，建议配置具体域名。")
 
+    # Initialize security logging
+    setup_security_logging()
+    logger.info("安全日志已初始化")
+
     try:
         setup_exchange_rate_schedule()
         scheduler.start()
@@ -82,6 +88,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Numina - 家庭资产可视化", version="1.0.0", lifespan=lifespan)
+
+# Add rate limiting middleware (before CORS)
+app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,

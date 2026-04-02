@@ -16,6 +16,19 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["*"]
     ENVIRONMENT: str = "development"  # development / production
 
+    # Cache configuration
+    CACHE_BACKEND: str = "memory"  # "memory" or "redis"
+    REDIS_URL: str = "redis://localhost:6379/0"
+
+    # Rate limiting
+    LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
+    LOGIN_RATE_LIMIT_LOCKOUT_SECONDS: int = 900  # 15 minutes
+    GLOBAL_RATE_LIMIT_PER_MINUTE: int = 100
+
+    # Security settings
+    BCRYPT_ROUNDS: int = 12
+    ENABLE_SECURITY_LOGGING: bool = True
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

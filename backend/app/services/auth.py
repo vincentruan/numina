@@ -15,43 +15,108 @@ from app.schemas.auth import (
     TokenResponse,
     UpdateProfileRequest,
 )
+from app.services.security_log import _log_security_event, SecurityEventType
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
 _login_attempts: dict[str, tuple[int, float]] = {}
 _MAX_ATTEMPTS = 5
 _LOCKOUT_SECONDS = 15 * 60  # 15 minutes
 
+# Dummy hash cache for timing attack protection
+_dummy_hash_cache: str | None = None
+
+
+def _get_rate_limit_settings():
+    """Get rate limit settings from config."""
+    try:
+        from app.config import settings
+        return settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_LOCKOUT_SECONDS
+    except (ImportError, AttributeError):
+        return _MAX_ATTEMPTS, _LOCKOUT_SECONDS
+
+
+def _get_dummy_hash() -> str:
+    """Get or create a dummy hash for timing attack protection."""
+    global _dummy_hash_cache
+    if _dummy_hash_cache is None:
+        # Use default rounds (12) for dummy hash
+        _dummy_hash_cache = bcrypt.hashpw(b"dummy_password", bcrypt.gensalt(rounds=12)).decode("utf-8")
+    return _dummy_hash_cache
+
 
 def _check_rate_limit(username: str) -> None:
-    if username not in _login_attempts:
-        return
-    count, first_time = _login_attempts[username]
-    if count >= _MAX_ATTEMPTS:
-        elapsed = time.time() - first_time
-        if elapsed < _LOCKOUT_SECONDS:
-            remaining = int((_LOCKOUT_SECONDS - elapsed) / 60) + 1
+    """Check if user is rate limited due to too many failed login attempts."""
+    max_attempts, lockout_seconds = _get_rate_limit_settings()
+
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"login_attempts:{username}"
+        count = cache.get(key)
+        if count is not None and int(count) >= max_attempts:
+            ttl = cache.get_ttl(key) or 0
+            remaining = max(1, (ttl // 60) + 1)
+            _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
                 detail=f"登录失败次数过多，请 {remaining} 分钟后重试",
             )
-        # Lockout expired, reset
-        del _login_attempts[username]
+    except Exception:
+        # Fallback to in-memory if cache not available
+        if username not in _login_attempts:
+            return
+        count, first_time = _login_attempts[username]
+        if count >= max_attempts:
+            elapsed = time.time() - first_time
+            if elapsed < lockout_seconds:
+                remaining = int((lockout_seconds - elapsed) / 60) + 1
+                _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"登录失败次数过多，请 {remaining} 分钟后重试",
+                )
+            del _login_attempts[username]
 
 
 def _record_failed_login(username: str) -> None:
-    if username in _login_attempts:
-        count, first_time = _login_attempts[username]
-        _login_attempts[username] = (count + 1, first_time)
-    else:
-        _login_attempts[username] = (1, time.time())
+    """Record a failed login attempt."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"login_attempts:{username}"
+        cache.increment(key)
+        # Set TTL on first attempt
+        _, lockout_seconds = _get_rate_limit_settings()
+        if cache.get(key) == 1:
+            cache.set(key, 1, ttl_seconds=lockout_seconds)
+    except Exception:
+        # Fallback to in-memory
+        if username in _login_attempts:
+            count, first_time = _login_attempts[username]
+            _login_attempts[username] = (count + 1, first_time)
+        else:
+            _login_attempts[username] = (1, time.time())
 
 
 def _clear_failed_login(username: str) -> None:
-    _login_attempts.pop(username, None)
+    """Clear failed login attempts for a user."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"login_attempts:{username}"
+        cache.delete(key)
+    except Exception:
+        _login_attempts.pop(username, None)
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    """Hash password with bcrypt. Uses configured rounds from settings."""
+    try:
+        from app.config import settings
+        rounds = settings.BCRYPT_ROUNDS
+    except (ImportError, AttributeError):
+        rounds = 12  # Default fallback
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
@@ -93,11 +158,24 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     _check_rate_limit(req.username)
 
     user = db.query(User).filter(User.username == req.username, User.is_active == True).first()
-    if not user or not verify_password(req.password, user.password_hash):
+
+    # Timing attack protection: always execute bcrypt to ensure consistent response time
+    if user is None:
+        # User not found - verify against dummy hash to consume similar time
+        dummy_hash = _get_dummy_hash()
+        bcrypt.checkpw(req.password.encode("utf-8"), dummy_hash.encode("utf-8"))
         _record_failed_login(req.username)
+        _log_security_event(SecurityEventType.LOGIN_FAILED_USER_NOT_FOUND, username=req.username)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+
+    # User found - normal verification
+    if not verify_password(req.password, user.password_hash):
+        _record_failed_login(req.username)
+        _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, username=req.username, user_id=user.id)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
 
     _clear_failed_login(req.username)
+    _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
     return TokenResponse(
         access_token=create_access_token({"sub": user.id}),
         refresh_token=create_refresh_token({"sub": user.id}),
