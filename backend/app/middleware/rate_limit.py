@@ -1,4 +1,19 @@
-"""Global API rate limiting middleware."""
+"""Global API rate limiting middleware.
+
+Rate Limiting Strategy:
+- Uses in-memory storage (class-level dict) for rate limit counters
+- Limits: 100 requests per minute per client (configurable via GLOBAL_RATE_LIMIT_PER_MINUTE)
+- Client identification: Authenticated users by token prefix, unauthenticated by IP
+
+Trade-offs:
+- Single-worker deployment: Works as expected
+- Multi-worker deployment: Each worker maintains independent rate limit state.
+  This means the effective limit = workers × configured limit.
+  For distributed rate limiting, implement RedisCacheBackend and modify
+  _check_rate_limit() to use the cache layer.
+
+See design.md for detailed trade-off analysis.
+"""
 
 from fastapi import Request, HTTPException, status
 from starlette.middleware.base import BaseHTTPMiddleware

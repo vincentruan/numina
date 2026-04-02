@@ -38,8 +38,14 @@ def setup_security_logging() -> None:
         logs_dir = Path("logs")
         logs_dir.mkdir(exist_ok=True)
 
-        # File handler for security events
-        handler = logging.FileHandler("logs/security.log")
+        # File handler with rotation (keep 7 days)
+        from logging.handlers import TimedRotatingFileHandler
+        handler = TimedRotatingFileHandler(
+            "logs/security.log",
+            when="midnight",
+            backupCount=7,
+            encoding="utf-8"
+        )
         handler.setFormatter(logging.Formatter(
             "%(asctime)s - %(levelname)s - %(message)s"
         ))

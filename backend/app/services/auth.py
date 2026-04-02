@@ -1,3 +1,19 @@
+"""Authentication service with security enhancements.
+
+Security Features:
+- Timing attack protection: Dummy bcrypt verification for non-existent users
+- Configurable bcrypt rounds via BCRYPT_ROUNDS setting
+- Login rate limiting by username (5 attempts, 15 min lockout)
+
+Rate Limiting Trade-offs:
+- Username-based rate limiting prevents brute-force attacks on specific accounts
+- Limitation: Attackers can try different usernames to bypass the limit
+- Mitigation: Global API rate limiting (by IP) provides a second defense layer
+- Future: Consider adding IP-based rate limiting as additional layer
+
+See design.md for detailed trade-off analysis.
+"""
+
 import time
 from uuid import uuid4
 
@@ -39,8 +55,13 @@ def _get_dummy_hash() -> str:
     """Get or create a dummy hash for timing attack protection."""
     global _dummy_hash_cache
     if _dummy_hash_cache is None:
-        # Use default rounds (12) for dummy hash
-        _dummy_hash_cache = bcrypt.hashpw(b"dummy_password", bcrypt.gensalt(rounds=12)).decode("utf-8")
+        # Use configured rounds from settings
+        try:
+            from app.config import settings
+            rounds = settings.BCRYPT_ROUNDS
+        except (ImportError, AttributeError):
+            rounds = 12  # Default fallback
+        _dummy_hash_cache = bcrypt.hashpw(b"dummy_password", bcrypt.gensalt(rounds=rounds)).decode("utf-8")
     return _dummy_hash_cache
 
 
