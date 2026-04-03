@@ -21,6 +21,7 @@ class SecurityEventType:
     TOKEN_REFRESH_FAILED = "token_refresh_failed"
     UPLOAD_MAGIC_BYTES_MISMATCH = "upload_magic_bytes_mismatch"
     GLOBAL_RATE_LIMITED = "global_rate_limited"
+    CAPTCHA_VERIFICATION_FAILED = "captcha_verification_failed"
 
 
 def _log_security_event(

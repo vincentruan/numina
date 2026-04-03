@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # Security settings
     BCRYPT_ROUNDS: int = 12
     ENABLE_SECURITY_LOGGING: bool = True
+    ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
 
     # Logging configuration
     LOG_LEVEL: str = "INFO"
@@ -53,3 +54,12 @@ if settings.SECRET_KEY == _DEFAULT_SECRET:
     else:
         settings.SECRET_KEY = secrets.token_urlsafe(32)
         logger.warning("SECRET_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")
+
+# ALTCHA HMAC key validation for production
+if settings.ENVIRONMENT == "production" and not settings.ALTCHA_HMAC_KEY:
+    raise RuntimeError(
+        "ALTCHA_HMAC_KEY 未配置！生产环境必须设置 ALTCHA_HMAC_KEY 环境变量。"
+    )
+elif not settings.ALTCHA_HMAC_KEY:
+    settings.ALTCHA_HMAC_KEY = secrets.token_urlsafe(32)
+    logger.warning("ALTCHA_HMAC_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")

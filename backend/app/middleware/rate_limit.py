@@ -33,6 +33,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/api/health",
         "/api/v1/auth/login",
         "/api/v1/auth/register",
+        "/api/v1/captcha/challenge",  # Allow challenge fetch before auth attempt
     }
 
     # Paths that don't count towards rate limit

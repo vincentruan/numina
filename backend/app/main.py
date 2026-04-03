@@ -38,6 +38,7 @@ from app.routers import export as export_router
 from app.routers import import_ as import_router
 from app.routers import activities as activities_router
 from app.routers import upload
+from app.routers import captcha
 
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,7 @@ app.include_router(wishes.router, prefix="/api/v1")
 app.include_router(currencies_router.router, prefix="/api/v1")
 app.include_router(activities_router.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
+app.include_router(captcha.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
