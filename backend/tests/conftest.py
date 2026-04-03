@@ -8,6 +8,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.seed.categories import seed_categories
+from app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -38,6 +39,8 @@ def db():
         # Reset rate limit store after each test
         if hasattr(RateLimitMiddleware, "_rate_store"):
             RateLimitMiddleware._rate_store.clear()
+        # Reset captcha payload cache
+        reset_captcha_payload_cache()
 
 
 @pytest.fixture(scope="function")
