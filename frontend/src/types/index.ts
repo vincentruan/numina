@@ -209,6 +209,7 @@ export interface StatesSummaryResponse {
 export interface LoginRequest {
   username: string
   password: string
+  altcha?: string
 }
 
 export interface RegisterRequest {
@@ -216,6 +217,7 @@ export interface RegisterRequest {
   username: string
   display_name: string
   password: string
+  altcha?: string
 }
 
 export interface JoinFamilyRequest {
@@ -223,6 +225,7 @@ export interface JoinFamilyRequest {
   username: string
   display_name: string
   password: string
+  altcha?: string
 }
 
 export interface AuthResponse {

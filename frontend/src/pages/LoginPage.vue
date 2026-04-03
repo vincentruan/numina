@@ -24,6 +24,9 @@
         />
       </van-cell-group>
 
+      <!-- ALTCHA captcha widget -->
+      <AltchaWidget v-model="form.altcha" />
+
       <div class="form-actions">
         <van-button round block type="primary" native-type="submit" :loading="loading">
           登录
@@ -44,6 +47,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
+import AltchaWidget from '@/components/common/AltchaWidget.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -51,7 +55,8 @@ const loading = ref(false)
 
 const form = ref({
   username: '',
-  password: ''
+  password: '',
+  altcha: undefined as string | undefined
 })
 
 async function onSubmit() {
