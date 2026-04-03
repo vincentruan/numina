@@ -2,11 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
 from app.database import get_db
 from app.models.currency import Currency
 from app.models.exchange_rate import ExchangeRate
-from app.models.user import User
 from app.schemas.currency import CurrencyResponse, RateResponse
 
 router = APIRouter(prefix="/currencies", tags=["currencies"])
@@ -15,9 +13,11 @@ router = APIRouter(prefix="/currencies", tags=["currencies"])
 @router.get("", response_model=list[CurrencyResponse])
 def list_currencies(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> list[CurrencyResponse]:
-    """List all currencies: favorites first, then alphabetical by code."""
+    """List all currencies: favorites first, then alphabetical by code.
+
+    This endpoint is public as currencies are reference data, not user-specific.
+    """
     currencies = (
         db.query(Currency)
         .order_by(Currency.is_favorite.desc(), Currency.sort_order.asc(), Currency.code.asc())
@@ -29,9 +29,11 @@ def list_currencies(
 @router.get("/rates", response_model=dict[str, RateResponse])
 def list_rates(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> dict[str, RateResponse]:
-    """Return the latest rate for each currency."""
+    """Return the latest rate for each currency.
+
+    This endpoint is public as exchange rates are reference data, not user-specific.
+    """
     # Subquery: max fetched_at per target_currency
     subq = (
         db.query(
@@ -63,9 +65,11 @@ def list_rates(
 def get_rate(
     code: str,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> RateResponse:
-    """Return the latest rate for a single currency code."""
+    """Return the latest rate for a single currency code.
+
+    This endpoint is public as exchange rates are reference data, not user-specific.
+    """
     from datetime import datetime
 
     if code.upper() == "CNY":

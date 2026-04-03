@@ -6,22 +6,13 @@
         开发模式：验证码已禁用
       </van-notice-bar>
     </div>
-    <!-- ALTCHA widget for production -->
-    <div v-else ref="widgetContainer" class="altcha-widget-wrapper">
-      <altcha-widget
-        ref="altchaRef"
-        :challengeurl="challengeUrl"
-        :strings="stringsJson"
-        name="altcha"
-        hidelogo
-        hidefooter
-      />
-    </div>
+    <!-- ALTCHA widget for production - rendered client-side only -->
+    <div v-else v-html="widgetHtml" class="altcha-widget-wrapper"></div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 
 const props = defineProps<{
   modelValue?: string
@@ -31,52 +22,55 @@ const emit = defineEmits<{
   'update:modelValue': [value: string | undefined]
 }>()
 
-const altchaRef = ref<HTMLElement | null>(null)
-const widgetContainer = ref<HTMLElement | null>(null)
 const isProduction = import.meta.env.PROD
+const isMounted = ref(false)
 
-const challengeUrl = '/api/v1/captcha/challenge'
-
-// Chinese localization strings
-const stringsJson = JSON.stringify({
-  label: '点击验证',
-  labelVerified: '验证通过',
-  labelVerifying: '验证中...',
-  labelLoading: '加载中...',
-  error: '验证失败，请重试',
+// Widget HTML template
+const widgetHtml = computed(() => {
+  if (!isMounted.value) return ''
+  return `
+    <altcha-widget
+      challengeurl="/api/v1/captcha/challenge"
+      name="altcha"
+      hidelogo
+      hidefooter
+      strings='{"label":"点击验证","labelVerified":"验证通过","labelVerifying":"验证中...","labelLoading":"加载中...","error":"验证失败，请重试"}'
+    ></altcha-widget>
+  `
 })
 
-// Watch for altcha-widget change event
 onMounted(() => {
+  isMounted.value = true
+
   if (!isProduction) {
     // In development mode, emit undefined to skip captcha
     emit('update:modelValue', undefined)
     return
   }
 
-  // Wait for the widget to be available
-  setTimeout(() => {
-    const widget = altchaRef.value
-    if (widget) {
-      widget.addEventListener('change', ((event: Event) => {
+  // Listen for the altcha change event on the container
+  const container = document.querySelector('.altcha-widget-wrapper')
+  if (container) {
+    container.addEventListener('change', ((event: Event) => {
+      const target = event.target as HTMLElement
+      if (target.tagName.toLowerCase() === 'altcha-widget') {
         const customEvent = event as CustomEvent
         const payload = customEvent.detail?.payload
-        if (payload) {
-          emit('update:modelValue', payload)
-        } else {
-          emit('update:modelValue', undefined)
-        }
-      }) as EventListener)
-    }
-  }, 100)
+        emit('update:modelValue', payload || undefined)
+      }
+    }) as EventListener)
+  }
 })
 
 // Expose reset method for parent components
 defineExpose({
   reset: () => {
-    if (altchaRef.value && 'reset' in altchaRef.value) {
-      ;(altchaRef.value as any).reset()
-      emit('update:modelValue', undefined)
+    if (isProduction) {
+      const widget = document.querySelector('altcha-widget') as any
+      if (widget && widget.reset) {
+        widget.reset()
+        emit('update:modelValue', undefined)
+      }
     }
   },
 })
