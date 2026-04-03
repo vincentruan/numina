@@ -48,7 +48,7 @@
       </van-cell-group>
 
       <!-- ALTCHA captcha widget -->
-      <AltchaWidget v-model="form.altcha" />
+      <AltchaWidget ref="altchaRef" v-model="form.altcha" endpoint="register" />
 
       <div class="form-actions">
         <van-button round block type="primary" native-type="submit" :loading="loading">
@@ -74,6 +74,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const confirmPassword = ref('')
+const altchaRef = ref()
 
 const form = ref({
   family_name: '',
@@ -89,8 +90,18 @@ async function onSubmit() {
     await authStore.register(form.value)
     showToast('注册成功')
     router.push('/')
-  } catch {
-    // Error handled by interceptor
+  } catch (error: any) {
+    // Handle captcha-related errors
+    const detail = error.response?.data?.detail || ''
+    const status = error.response?.status
+
+    if (status === 503) {
+      showToast('验证服务暂时不可用，请稍后重试')
+    } else if (detail.includes('验证码')) {
+      // Captcha error - reset widget but preserve form data
+      altchaRef.value?.reset()
+      showToast(detail)
+    }
   } finally {
     loading.value = false
   }
