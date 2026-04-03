@@ -4,9 +4,9 @@ import logging
 import pytest
 from pathlib import Path
 
+from app.core.logging_config import setup_logging
 from app.services.security_log import (
     SecurityEventType,
-    setup_security_logging,
     _log_security_event,
 )
 
@@ -24,21 +24,22 @@ class TestSecurityEventType:
         assert hasattr(SecurityEventType, "GLOBAL_RATE_LIMITED")
 
 
-class TestSetupSecurityLogging:
-    """Tests for setup_security_logging function."""
+class TestSecurityLoggerSetup:
+    """Tests for security logger setup via unified logging."""
 
-    def test_creates_logs_directory(self, tmp_path, monkeypatch):
-        """Test that logs directory is created."""
-        # Change to temp directory
-        monkeypatch.chdir(tmp_path)
-        setup_security_logging()
-        assert Path("logs").exists()
+    def test_security_logger_configured_via_setup_logging(self, tmp_path, monkeypatch):
+        """Test that security logger is configured through setup_logging."""
+        log_dir = tmp_path / "logs"
+        setup_logging(log_dir=str(log_dir))
+        assert log_dir.exists()
+        assert (log_dir / "security.log").exists()
 
-    def test_configures_logger(self):
-        """Test that logger is configured."""
+    def test_security_logger_has_handler(self, tmp_path):
+        """Test that security logger has a handler after setup."""
+        log_dir = tmp_path / "logs"
+        setup_logging(log_dir=str(log_dir))
         logger = logging.getLogger("security")
-        # Just verify it doesn't raise an error
-        setup_security_logging()
+        assert len(logger.handlers) >= 1
 
 
 class TestLogSecurityEvent:

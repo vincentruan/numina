@@ -824,7 +824,7 @@ Wait ~30 seconds for the build to complete.
 
 - [ ] **Step 2: Open the asset form and verify all P0 items**
 
-Navigate to `http://localhost/numina/assets/new` and check:
+Navigate to `http://localhost/assets/new` and check:
 
 | Check | Expected |
 |-------|----------|

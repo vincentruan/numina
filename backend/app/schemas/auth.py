@@ -20,6 +20,7 @@ class RegisterRequest(BaseModel):
     password: str
     display_name: str
     family_name: str
+    altcha: str | None = None  # Captcha payload (required in production)
 
     @field_validator("password")
     @classmethod
@@ -30,6 +31,7 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+    altcha: str | None = None  # Captcha payload (required in production)
 
 
 class TokenResponse(BaseModel):
@@ -47,6 +49,7 @@ class JoinFamilyRequest(BaseModel):
     password: str
     display_name: str
     invite_code: str
+    altcha: str | None = None  # Captcha payload (required in production)
 
     @field_validator("password")
     @classmethod

@@ -1,13 +1,13 @@
-import logging
 from datetime import datetime
 
 import httpx
 from sqlalchemy.orm import Session
 
+from app.core.logging_config import get_logger
 from app.models.currency import Currency
 from app.models.exchange_rate import ExchangeRate
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExchangeRateService:

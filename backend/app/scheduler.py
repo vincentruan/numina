@@ -1,12 +1,12 @@
-import logging
 import random
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+from app.core.logging_config import get_logger
 from app.database import SessionLocal
 from app.services.exchange_rate import ExchangeRateService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 scheduler = BackgroundScheduler()
 

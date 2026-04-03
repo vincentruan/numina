@@ -1,13 +1,12 @@
 """Security event logging service."""
 
-import logging
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from app.config import settings
+from app.core.logging_config import get_logger
 
-logger = logging.getLogger("security")
+logger = get_logger("security")
 
 
 class SecurityEventType:
@@ -22,34 +21,7 @@ class SecurityEventType:
     TOKEN_REFRESH_FAILED = "token_refresh_failed"
     UPLOAD_MAGIC_BYTES_MISMATCH = "upload_magic_bytes_mismatch"
     GLOBAL_RATE_LIMITED = "global_rate_limited"
-
-
-def setup_security_logging() -> None:
-    """Configure security logger with appropriate handlers."""
-    if not settings.ENABLE_SECURITY_LOGGING:
-        return
-
-    # Set level
-    logger.setLevel(logging.INFO)
-
-    # Add handler if not already configured
-    if not logger.handlers:
-        # Ensure logs directory exists
-        logs_dir = Path("logs")
-        logs_dir.mkdir(exist_ok=True)
-
-        # File handler with rotation (keep 7 days)
-        from logging.handlers import TimedRotatingFileHandler
-        handler = TimedRotatingFileHandler(
-            "logs/security.log",
-            when="midnight",
-            backupCount=7,
-            encoding="utf-8"
-        )
-        handler.setFormatter(logging.Formatter(
-            "%(asctime)s - %(levelname)s - %(message)s"
-        ))
-        logger.addHandler(handler)
+    CAPTCHA_VERIFICATION_FAILED = "captcha_verification_failed"
 
 
 def _log_security_event(

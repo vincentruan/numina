@@ -8,13 +8,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
+from app.core.logging_config import setup_logging
 from app.database import Base, SessionLocal, engine
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.scheduler import fetch_rates_job, scheduler, setup_exchange_rate_schedule
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.services.exchange_rate import ExchangeRateService
-from app.services.security_log import setup_security_logging
 from app.services.snapshot import auto_generate_daily_snapshots
 
 # Import all models so Base.metadata knows about them
@@ -38,6 +38,7 @@ from app.routers import export as export_router
 from app.routers import import_ as import_router
 from app.routers import activities as activities_router
 from app.routers import upload
+from app.routers import captcha
 
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,18 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize unified logging configuration
+    setup_logging(
+        log_level=settings.LOG_LEVEL,
+        log_dir=settings.LOG_DIR,
+        log_format=settings.LOG_FORMAT,
+        max_bytes=settings.LOG_MAX_BYTES,
+        backup_count=settings.LOG_BACKUP_COUNT,
+        rotation_mode=settings.LOG_ROTATION_MODE,
+        retention_days=settings.LOG_RETENTION_DAYS,
+    )
+    logger.info("统一日志配置已初始化")
+
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -70,9 +83,9 @@ async def lifespan(app: FastAPI):
     if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
         logger.warning("生产环境 CORS_ORIGINS 设置为 ['*']，建议配置具体域名。")
 
-    # Initialize security logging
-    setup_security_logging()
-    logger.info("安全日志已初始化")
+    # Security logging is now configured via setup_logging()
+    if settings.ENABLE_SECURITY_LOGGING:
+        logger.info("安全日志已启用（使用统一日志配置）")
 
     try:
         setup_exchange_rate_schedule()
@@ -113,6 +126,7 @@ app.include_router(wishes.router, prefix="/api/v1")
 app.include_router(currencies_router.router, prefix="/api/v1")
 app.include_router(activities_router.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
+app.include_router(captcha.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
