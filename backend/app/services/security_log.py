@@ -22,6 +22,7 @@ class SecurityEventType:
     UPLOAD_MAGIC_BYTES_MISMATCH = "upload_magic_bytes_mismatch"
     GLOBAL_RATE_LIMITED = "global_rate_limited"
     CAPTCHA_VERIFICATION_FAILED = "captcha_verification_failed"
+    CAPTCHA_REPLAY_ATTACK = "captcha_replay_attack"
 
 
 def _log_security_event(
