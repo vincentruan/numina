@@ -1,9 +1,10 @@
-import logging
 import secrets
 
 from pydantic_settings import BaseSettings
 
-logger = logging.getLogger(__name__)
+from app.core.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 _DEFAULT_SECRET = "CHANGE_ME_IN_PRODUCTION"
 
@@ -28,6 +29,16 @@ class Settings(BaseSettings):
     # Security settings
     BCRYPT_ROUNDS: int = 12
     ENABLE_SECURITY_LOGGING: bool = True
+    ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
+
+    # Logging configuration
+    LOG_LEVEL: str = "INFO"
+    LOG_DIR: str = "logs"
+    LOG_MAX_BYTES: int = 10 * 1024 * 1024  # 10MB
+    LOG_BACKUP_COUNT: int = 10
+    LOG_RETENTION_DAYS: int = 30
+    LOG_ROTATION_MODE: str = "size"  # "size" or "time"
+    LOG_FORMAT: str | None = None  # Uses default format if None
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
@@ -43,3 +54,12 @@ if settings.SECRET_KEY == _DEFAULT_SECRET:
     else:
         settings.SECRET_KEY = secrets.token_urlsafe(32)
         logger.warning("SECRET_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")
+
+# ALTCHA HMAC key validation for production
+if settings.ENVIRONMENT == "production" and not settings.ALTCHA_HMAC_KEY:
+    raise RuntimeError(
+        "ALTCHA_HMAC_KEY 未配置！生产环境必须设置 ALTCHA_HMAC_KEY 环境变量。"
+    )
+elif not settings.ALTCHA_HMAC_KEY:
+    settings.ALTCHA_HMAC_KEY = secrets.token_urlsafe(32)
+    logger.warning("ALTCHA_HMAC_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")

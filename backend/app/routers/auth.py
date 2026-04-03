@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.auth.captcha import verify_captcha
 from app.auth.deps import get_current_user
 from app.database import get_db
 from app.models.user import User
@@ -20,12 +21,20 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(req: RegisterRequest, db: Session = Depends(get_db)):
+def register(
+    req: RegisterRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_captcha),
+):
     return auth_service.register(db, req)
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(req: LoginRequest, db: Session = Depends(get_db)):
+def login(
+    req: LoginRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_captcha),
+):
     return auth_service.login(db, req)
 
 
@@ -35,7 +44,11 @@ def refresh(req: RefreshRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/family/join", response_model=TokenResponse)
-def join_family(req: JoinFamilyRequest, db: Session = Depends(get_db)):
+def join_family(
+    req: JoinFamilyRequest,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_captcha),
+):
     return auth_service.join_family(db, req)
 
 

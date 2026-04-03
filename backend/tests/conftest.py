@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.seed.categories import seed_categories
 
 # Use in-memory SQLite for tests
@@ -22,6 +23,10 @@ TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engin
 @pytest.fixture(scope="function")
 def db():
     """Create a fresh database for each test"""
+    # Reset rate limit store before each test
+    if hasattr(RateLimitMiddleware, "_rate_store"):
+        RateLimitMiddleware._rate_store.clear()
+
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     seed_categories(session)
@@ -30,6 +35,9 @@ def db():
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+        # Reset rate limit store after each test
+        if hasattr(RateLimitMiddleware, "_rate_store"):
+            RateLimitMiddleware._rate_store.clear()
 
 
 @pytest.fixture(scope="function")
