@@ -125,10 +125,6 @@ data/*.json
 .claude/settings.local.json
 
 # ===========================
-# Reverse Engineering
-# ===========================
-.re/
-# ===========================
 # AI prompts (temporary)
 # ===========================
 .prompt-*.md
@@ -137,3 +133,5 @@ data/*.json
 /package.json
 /package-lock.json
 .env.production
+
+.superpowers/
