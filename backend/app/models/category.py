@@ -13,7 +13,7 @@ class Category(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     family_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("families.id"), nullable=True)
     name: Mapped[str] = mapped_column(String(50), nullable=False)
-    icon: Mapped[str] = mapped_column(String(10), nullable=False)
+    icon: Mapped[str] = mapped_column(String(50), nullable=False)
     color: Mapped[str] = mapped_column(String(20), default="#6366F1")
     asset_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'physical' or 'financial'
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
