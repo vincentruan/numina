@@ -2,7 +2,9 @@
   <div class="asset-list-item" @click="$emit('click')">
     <div class="item-main">
       <div class="item-icon" :style="{ background: asset.category?.color || '#1989fa' }">
-        {{ asset.category?.icon || '📦' }}
+        <svg class="icon-svg" aria-hidden="true">
+          <use :href="`#${getIconId(asset.category?.icon)}`" />
+        </svg>
       </div>
       <div class="item-info">
         <div class="item-header">
@@ -97,6 +99,20 @@ function formatPrice(price: number | null | undefined): string {
   }
   return price.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
 }
+
+/**
+ * Get the icon ID for a category icon.
+ * If the icon is already an icon ID (starts with 'icon-'), use it directly.
+ * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
+ */
+function getIconId(icon: string | undefined): string {
+  if (!icon) return 'icon-other'
+  if (icon.startsWith('icon-')) {
+    return icon
+  }
+  // Fallback for emoji or unknown icons
+  return 'icon-other'
+}
 </script>
 
 <style scoped>
@@ -128,8 +144,13 @@ function formatPrice(price: number | null | undefined): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
   flex-shrink: 0;
+}
+.icon-svg {
+  width: 20px;
+  height: 20px;
+  fill: white;
+  color: white;
 }
 
 .item-info {

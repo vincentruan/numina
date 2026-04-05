@@ -10,7 +10,9 @@
         <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
       </div>
       <div v-else class="card-icon" :style="{ background: asset.category?.color || '#1989fa' }">
-        {{ asset.category?.icon || '📦' }}
+        <svg class="icon-svg" aria-hidden="true">
+          <use :href="`#${getIconId(asset.category?.icon)}`" />
+        </svg>
       </div>
     </div>
     <div class="card-right">
@@ -86,6 +88,20 @@ function formatPrice(price: number | null | undefined): string {
   return currency.format(price)
 }
 
+/**
+ * Get the icon ID for a category icon.
+ * If the icon is already an icon ID (starts with 'icon-'), use it directly.
+ * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
+ */
+function getIconId(icon: string | undefined): string {
+  if (!icon) return 'icon-other'
+  if (icon.startsWith('icon-')) {
+    return icon
+  }
+  // Fallback for emoji or unknown icons
+  return 'icon-other'
+}
+
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
   in_use: { text: '服役中', type: 'success' },
   idle: { text: '闲置', type: 'warning' },
@@ -150,7 +166,12 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
+}
+.icon-svg {
+  width: 36px;
+  height: 36px;
+  fill: white;
+  color: white;
 }
 .card-right {
   flex: 1;

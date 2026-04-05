@@ -369,6 +369,7 @@ cd tests && node take-screenshots.js
 
 ## Conventions
 
+- **Documented solutions**: `docs/solutions/` contains documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - UI text and error messages are in Chinese (简体中文). Currency defaults to CNY.
 - No linter/formatter configured — match existing code style by reading neighboring files.
 - No `as any`, `@ts-ignore`, or `@ts-expect-error` — fix types properly.

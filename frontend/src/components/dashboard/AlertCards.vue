@@ -6,7 +6,11 @@
       class="alert-card idle-card"
       @click="$emit('select-status', 'idle')"
     >
-      <div class="card-icon">📦</div>
+      <div class="card-icon">
+        <svg class="icon-svg" aria-hidden="true">
+          <use href="#icon-idle" />
+        </svg>
+      </div>
       <div class="card-content">
         <div class="card-title">闲置资产</div>
         <div class="card-value">{{ idleCount }} 项未使用</div>
@@ -21,7 +25,11 @@
       :class="{ 'has-financial': hasFinancialExpiring }"
       @click="showExpiringSheet = true"
     >
-      <div class="card-icon">{{ hasFinancialExpiring ? '⚠️' : '📅' }}</div>
+      <div class="card-icon">
+        <svg class="icon-svg" aria-hidden="true">
+          <use :href="hasFinancialExpiring ? '#icon-warning' : '#icon-expiring'" />
+        </svg>
+      </div>
       <div class="card-content">
         <div class="card-title">即将到期</div>
         <div class="card-value">
@@ -50,7 +58,11 @@
           }"
           @click="goToAsset(item.id)"
         >
-          <div class="item-icon">{{ item.icon }}</div>
+          <div class="item-icon">
+            <svg class="icon-svg-small" aria-hidden="true">
+              <use :href="`#${getIconId(item.icon)}`" />
+            </svg>
+          </div>
           <div class="item-content">
             <div class="item-name">{{ item.name }}</div>
             <div class="item-meta">
@@ -124,6 +136,20 @@ function goToAsset(id: string) {
   showExpiringSheet.value = false
   router.push(`/assets/${id}`)
 }
+
+/**
+ * Get the icon ID for an asset category icon.
+ * If the icon is already an icon ID (starts with 'icon-'), use it directly.
+ * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
+ */
+function getIconId(icon: string | undefined): string {
+  if (!icon) return 'icon-other'
+  if (icon.startsWith('icon-')) {
+    return icon
+  }
+  // Fallback for emoji or unknown icons
+  return 'icon-other'
+}
 </script>
 
 <style scoped>
@@ -182,8 +208,12 @@ function goToAsset(id: string) {
 }
 
 .card-icon {
-  font-size: 24px;
   margin-right: 10px;
+}
+.icon-svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
 }
 
 .card-content {
@@ -244,8 +274,12 @@ function goToAsset(id: string) {
 }
 
 .item-icon {
-  font-size: 24px;
   margin-right: 12px;
+}
+.icon-svg-small {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
 }
 
 .item-content {

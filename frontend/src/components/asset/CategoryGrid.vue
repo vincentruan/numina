@@ -10,7 +10,9 @@
           :class="{ selected: modelValue === cat.id }"
           @click="$emit('update:modelValue', cat.id)"
         >
-          <span class="icon">{{ cat.icon }}</span>
+          <svg class="icon" aria-hidden="true">
+            <use :href="`#${getIconId(cat.icon)}`" />
+          </svg>
           <span class="name">{{ cat.name }}</span>
         </div>
       </div>
@@ -25,7 +27,9 @@
           :class="{ selected: modelValue === cat.id }"
           @click="$emit('update:modelValue', cat.id)"
         >
-          <span class="icon">{{ cat.icon }}</span>
+          <svg class="icon" aria-hidden="true">
+            <use :href="`#${getIconId(cat.icon)}`" />
+          </svg>
           <span class="name">{{ cat.name }}</span>
         </div>
       </div>
@@ -51,6 +55,19 @@ const physicalCategories = computed(() =>
 const financialCategories = computed(() =>
   props.categories.filter(c => c.asset_type === 'financial')
 )
+
+/**
+ * Get the icon ID for a category icon.
+ * If the icon is already an icon ID (starts with 'icon-'), use it directly.
+ * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
+ */
+function getIconId(icon: string): string {
+  if (icon.startsWith('icon-')) {
+    return icon
+  }
+  // Fallback for emoji or unknown icons (custom user categories)
+  return 'icon-other'
+}
 </script>
 
 <style scoped>
@@ -78,13 +95,24 @@ const financialCategories = computed(() =>
   background: var(--van-background-2);
   border: 1.5px solid transparent;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.grid-item:active {
+  transform: scale(0.95);
+}
+.grid-item:focus-visible {
+  outline: 2px solid var(--van-primary-color);
+  outline-offset: 2px;
 }
 .grid-item.selected {
   border-color: var(--van-primary-color);
   background: color-mix(in srgb, var(--van-primary-color) 12%, transparent);
 }
-.icon { font-size: 22px; }
+.icon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
 .name {
   font-size: 10px;
   color: var(--van-text-color-2);
