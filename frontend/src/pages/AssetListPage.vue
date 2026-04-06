@@ -19,7 +19,11 @@
 
     <!-- Asset List -->
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <div v-if="assetStore.assets.length">
+      <!-- Loading Skeleton -->
+      <div v-if="assetStore.loading" class="asset-list">
+        <AssetCardSkeleton v-for="i in 3" :key="i" />
+      </div>
+      <div v-else-if="assetStore.assets.length">
         <!-- Card View -->
         <div v-if="viewMode === 'card'" class="asset-list">
           <AssetCard
@@ -58,6 +62,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
+import AssetCardSkeleton from '@/components/common/AssetCardSkeleton.vue'
 
 const { t } = useI18n()
 const assetStore = useAssetStore()
