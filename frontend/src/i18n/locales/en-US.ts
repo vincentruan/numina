@@ -104,6 +104,7 @@ export default {
     themeLight: 'Light',
     themeDark: 'Dark',
     themeSystem: 'System',
+    themeColor: 'Theme Color',
     language: 'Language',
     languageZhCN: '简体中文',
     languageEnUS: 'English',

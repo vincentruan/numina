@@ -9,6 +9,11 @@
 
     <van-cell-group inset :title="t('settings.userSettings')" class="section">
       <van-cell :title="t('settings.theme')" :value="themeLabel" @click="showThemePicker = true" is-link />
+      <van-cell :title="t('settings.themeColor')" @click="showThemeColorPicker = true" is-link>
+        <template #value>
+          <span class="theme-color-preview" :style="{ backgroundColor: currentThemeColor }"></span>
+        </template>
+      </van-cell>
       <van-cell :title="t('settings.language')" :value="languageLabel" @click="showLanguagePicker = true" is-link />
       <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" @click="showCurrencyPicker = true" is-link />
       <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" @click="showViewModePicker = true" is-link />
@@ -65,6 +70,28 @@
       />
     </van-popup>
 
+    <!-- Theme Color Picker -->
+    <van-popup v-model:show="showThemeColorPicker" round position="bottom">
+      <div class="theme-color-picker">
+        <div class="color-picker-header">
+          <span>选择主题色</span>
+          <van-icon name="cross" @click="showThemeColorPicker = false" />
+        </div>
+        <div class="color-options">
+          <div
+            v-for="color in themeColorOptions"
+            :key="color.value"
+            class="color-option"
+            :class="{ active: currentThemeColor === color.value }"
+            :style="{ backgroundColor: color.value }"
+            @click="selectThemeColor(color.value)"
+          >
+            <van-icon v-if="currentThemeColor === color.value" name="success" />
+          </div>
+        </div>
+      </div>
+    </van-popup>
+
     <!-- Edit Family Title Dialog -->
     <van-dialog
       v-model:show="showTitleDialog"
@@ -100,15 +127,35 @@ onMounted(() => {
   if (!familyStore.family) {
     familyStore.fetchFamily()
   }
+  // Initialize theme color from localStorage
+  const savedColor = localStorage.getItem('theme-primary')
+  if (savedColor) {
+    document.documentElement.style.setProperty('--theme-primary', savedColor)
+    document.documentElement.style.setProperty('--van-primary-color', savedColor)
+  }
 })
 
 const showThemePicker = ref(false)
 const showLanguagePicker = ref(false)
 const showCurrencyPicker = ref(false)
 const showViewModePicker = ref(false)
+const showThemeColorPicker = ref(false)
 const showTitleDialog = ref(false)
 const editTitleValue = ref('')
 const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
+
+const themeColorOptions = [
+  { name: '蓝色', value: '#007aff' },
+  { name: '紫色', value: '#5856d6' },
+  { name: '绿色', value: '#34c759' },
+  { name: '橙色', value: '#ff9500' },
+  { name: '红色', value: '#ff3b30' },
+  { name: '粉色', value: '#ff2d55' },
+  { name: '青色', value: '#5ac8fa' },
+  { name: '金色', value: '#ffcc00' },
+]
+
+const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 
 const themeOptions = [
   { text: `☀️ ${t('settings.themeLight')}`, value: 'light' },
@@ -193,6 +240,15 @@ async function onTitleConfirm() {
 }
 
 
+function selectThemeColor(color: string) {
+  currentThemeColor.value = color
+  localStorage.setItem('theme-primary', color)
+  document.documentElement.style.setProperty('--theme-primary', color)
+  document.documentElement.style.setProperty('--van-primary-color', color)
+  showThemeColorPicker.value = false
+  showToast('主题色已更改')
+}
+
 async function onLogout() {
   try {
     await showConfirmDialog({ title: '确认', message: t('settings.logoutConfirm') })
@@ -214,5 +270,50 @@ async function onLogout() {
 }
 .actions {
   padding: 24px 16px;
+}
+.theme-color-preview {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.theme-color-picker {
+  padding: 16px;
+}
+.color-picker-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  font-weight: 500;
+}
+.color-options {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.color-option {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: transform 0.2s;
+}
+.color-option.active {
+  border-color: var(--text-primary);
+}
+.color-option:active {
+  transform: scale(0.95);
+}
+.color-option :deep(.van-icon) {
+  color: #fff;
+  font-size: 20px;
+}
+[data-theme='dark'] .color-option.active {
+  border-color: var(--text-primary);
 }
 </style>
