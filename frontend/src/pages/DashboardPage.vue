@@ -1,6 +1,9 @@
 <template>
   <div class="dashboard-page">
-    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+    <!-- Skeleton Loading State -->
+    <DashboardSkeleton v-if="dashboardStore.loading && !overview?.asset_count" />
+
+    <van-pull-refresh v-else v-model="refreshing" @refresh="onRefresh">
       <!-- Empty State for new users -->
       <div v-if="!dashboardStore.loading && overview?.asset_count === 0" class="empty-dashboard">
         <van-empty description="开始记录你的第一项资产">
@@ -221,6 +224,7 @@ import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AlertCards from '@/components/dashboard/AlertCards.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
+import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 
 const { t } = useI18n()
 
