@@ -1,5 +1,25 @@
 <template>
-  <div class="asset-list-item" @click="$emit('click')">
+  <div
+    class="asset-list-item"
+    :class="{ 'selection-mode': selectable, 'selected': selected }"
+    @click="$emit('click')"
+    @touchstart="startLongPress"
+    @touchend="cancelLongPress"
+    @touchmove="cancelLongPress"
+    @contextmenu.prevent="triggerLongPress"
+    role="listitem"
+    :aria-label="`${asset.name}, ${statusText}, ${currency.format(asset.purchase_price || 0)}购入`"
+    :aria-selected="selected"
+    tabindex="0"
+    @keydown.enter="$emit('click')"
+    @keydown.space.prevent="toggleSelect"
+  >
+    <div v-if="selectable" class="selection-checkbox" aria-hidden="true">
+      <van-checkbox
+        :model-value="selected"
+        @update:model-value="$emit('update:selected', $event)"
+      />
+    </div>
     <div class="item-main">
       <div class="item-icon" :style="{ background: asset.category?.color || '#1989fa' }">
         <svg class="icon-svg" aria-hidden="true">
@@ -39,19 +59,54 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onUnmounted } from 'vue'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
 
 const props = defineProps<{
   asset: Asset
+  selectable?: boolean
+  selected?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
+  'update:selected': [value: boolean]
+  longpress: []
 }>()
 
 const currency = useCurrency()
+
+// Long press detection
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+const LONG_PRESS_DURATION = 500 // 500ms
+
+function startLongPress() {
+  longPressTimer = setTimeout(() => {
+    emit('longpress')
+  }, LONG_PRESS_DURATION)
+}
+
+function cancelLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function triggerLongPress() {
+  emit('longpress')
+}
+
+function toggleSelect() {
+  if (props.selectable) {
+    emit('update:selected', !props.selected)
+  }
+}
+
+onUnmounted(() => {
+  cancelLongPress()
+})
 
 const statusType = computed(() => {
   switch (props.asset.status) {
@@ -122,13 +177,37 @@ function getIconId(icon: string | undefined): string {
   padding: 12px 14px;
   border-bottom: 1px solid var(--separator);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 .asset-list-item:active {
   background: var(--bg-tertiary);
 }
 .asset-list-item:last-child {
   border-bottom: none;
+}
+
+/* Selection mode styles */
+.asset-list-item.selection-mode {
+  border-left: 3px solid transparent;
+}
+.asset-list-item.selection-mode.selected {
+  border-left-color: var(--van-primary-color);
+  background: rgba(25, 137, 250, 0.05);
+}
+[data-theme='dark'] .asset-list-item.selection-mode.selected {
+  background: rgba(10, 132, 255, 0.1);
+}
+
+/* Selection checkbox */
+.selection-checkbox {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+/* Accessibility - Focus styles */
+.asset-list-item:focus-visible {
+  outline: 2px solid var(--van-primary-color);
+  outline-offset: -2px;
 }
 
 .item-main {
