@@ -12,39 +12,57 @@
           label="家庭名称"
           placeholder="请输入家庭名称"
           :rules="[{ required: true, message: '请输入家庭名称' }]"
+          @blur="validateField('family_name')"
         />
         <van-field
           v-model="form.username"
           label="用户名"
           placeholder="请输入用户名"
           :rules="[{ required: true, message: '请输入用户名' }]"
+          @blur="validateField('username')"
         />
         <van-field
           v-model="form.display_name"
           label="显示名称"
           placeholder="请输入显示名称"
           :rules="[{ required: true, message: '请输入显示名称' }]"
+          @blur="validateField('display_name')"
         />
-        <van-field
-          v-model="form.password"
-          type="password"
-          label="密码"
-          placeholder="请输入密码(至少6位)"
-          :rules="[
-            { required: true, message: '请输入密码' },
-            { validator: (v: string) => v.length >= 6, message: '密码至少6位' }
-          ]"
-        />
-        <van-field
-          v-model="confirmPassword"
-          type="password"
-          label="确认密码"
-          placeholder="请再次输入密码"
-          :rules="[
-            { required: true, message: '请确认密码' },
-            { validator: (v: string) => v === form.password, message: '两次密码不一致' }
-          ]"
-        />
+        <div class="password-field-wrapper">
+          <van-field
+            v-model="form.password"
+            :type="showPassword ? 'text' : 'password'"
+            label="密码"
+            placeholder="请输入密码(至少6位)"
+            :rules="[
+              { required: true, message: '请输入密码' },
+              { validator: validatePassword, message: '密码至少6位' }
+            ]"
+            @blur="validateField('password')"
+          >
+            <template #right-icon>
+              <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
+            </template>
+          </van-field>
+          <PasswordStrengthIndicator :password="form.password" />
+        </div>
+        <div class="password-field-wrapper">
+          <van-field
+            v-model="confirmPassword"
+            :type="showConfirmPassword ? 'text' : 'password'"
+            label="确认密码"
+            placeholder="请再次输入密码"
+            :rules="[
+              { required: true, message: '请确认密码' },
+              { validator: validateConfirmPassword, message: '两次密码不一致' }
+            ]"
+            @blur="validateField('confirm')"
+          >
+            <template #right-icon>
+              <van-icon :name="showConfirmPassword ? 'eye-o' : 'closed-eye'" @click="showConfirmPassword = !showConfirmPassword" />
+            </template>
+          </van-field>
+        </div>
       </van-cell-group>
 
       <!-- ALTCHA captcha widget -->
@@ -69,12 +87,15 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
+import PasswordStrengthIndicator from '@/components/common/PasswordStrengthIndicator.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const confirmPassword = ref('')
 const altchaRef = ref()
+const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 
 const form = ref({
   family_name: '',
@@ -83,6 +104,20 @@ const form = ref({
   password: '',
   altcha: undefined as string | undefined
 })
+
+// Real-time validation functions
+function validatePassword(value: string): boolean {
+  return value.length >= 6
+}
+
+function validateConfirmPassword(value: string): boolean {
+  return value === form.value.password
+}
+
+function validateField(field: string) {
+  // Trigger real-time validation feedback
+  // Vant's van-field handles this via :rules prop
+}
 
 async function onSubmit() {
   loading.value = true
@@ -136,6 +171,13 @@ async function onSubmit() {
   width: 100%;
   max-width: 400px;
 }
+.password-field-wrapper {
+  position: relative;
+}
+.password-field-wrapper :deep(.van-field__right-icon) {
+  cursor: pointer;
+  color: var(--van-field-right-icon-color);
+}
 .form-actions {
   padding: 24px 16px 0;
 }
@@ -145,7 +187,7 @@ async function onSubmit() {
 }
 .register-links a {
   color: rgba(255, 255, 255, 0.9);
-  text-decoration: none;
+  textDecoration: none;
   font-size: 14px;
 }
 </style>
