@@ -1,8 +1,23 @@
 <template>
-  <div class="asset-card" @click="$emit('click')">
-    <div v-if="selectable" class="selection-overlay">
+  <div
+    class="asset-card"
+    :class="{ 'selection-mode': selectable, 'selected': selected }"
+    @click="$emit('click')"
+    @touchstart="startLongPress"
+    @touchend="cancelLongPress"
+    @touchmove="cancelLongPress"
+    @contextmenu.prevent="triggerLongPress"
+    role="listitem"
+    :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
+    :aria-selected="selected"
+    tabindex="0"
+    @keydown.enter="$emit('click')"
+    @keydown.space.prevent="toggleSelect"
+  >
+    <div v-if="selectable" class="selection-overlay" aria-hidden="true">
       <van-checkbox
         :model-value="selected"
+        @update:model-value="$emit('update:selected', $event)"
       />
     </div>
     <div class="card-left">
@@ -45,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
 
@@ -55,13 +70,45 @@ const props = defineProps<{
   selected?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
   'update:selected': [value: boolean]
+  longpress: []
 }>()
 
 const currency = useCurrency()
 const imageError = ref(false)
+
+// Long press detection
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+const LONG_PRESS_DURATION = 500 // 500ms
+
+function startLongPress() {
+  longPressTimer = setTimeout(() => {
+    emit('longpress')
+  }, LONG_PRESS_DURATION)
+}
+
+function cancelLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+function triggerLongPress() {
+  emit('longpress')
+}
+
+function toggleSelect() {
+  if (props.selectable) {
+    emit('update:selected', !props.selected)
+  }
+}
+
+onUnmounted(() => {
+  cancelLongPress()
+})
 
 const imageUrl = computed(() => {
   if (!props.asset.image_url) return ''
@@ -123,13 +170,29 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   margin-bottom: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
 }
 [data-theme='dark'] .asset-card {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .asset-card:active {
   transform: scale(0.98);
+}
+/* Selection mode styles */
+.asset-card.selection-mode {
+  border: 2px solid transparent;
+}
+.asset-card.selection-mode.selected {
+  border-color: var(--van-primary-color);
+  background: rgba(25, 137, 250, 0.05);
+}
+[data-theme='dark'] .asset-card.selection-mode.selected {
+  background: rgba(10, 132, 255, 0.1);
+}
+/* Accessibility - Focus styles */
+.asset-card:focus-visible {
+  outline: 2px solid var(--van-primary-color);
+  outline-offset: 2px;
 }
 .selection-overlay {
   position: absolute;
