@@ -46,6 +46,21 @@
           @select-status="onStatusSelect"
         />
 
+        <!-- Charts Section (Expandable) -->
+        <div v-if="overview && overview.asset_count > 0" class="charts-section">
+          <div class="charts-toggle" @click="showCharts = !showCharts">
+            <span class="charts-toggle-title">数据可视化</span>
+            <van-icon :name="showCharts ? 'arrow-up' : 'arrow-down'" />
+          </div>
+          <template v-if="showCharts">
+            <TrendLineChart
+              :data="dashboardStore.trend"
+              @period-change="onPeriodChange"
+            />
+            <AllocationPieChart :data="dashboardStore.allocation" />
+          </template>
+        </div>
+
         <!-- Category Navigation (Sticky, shown when scrolled) -->
         <div v-if="showCategoryNav && categories.length > 1" class="category-nav-sticky">
           <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
@@ -222,6 +237,8 @@ import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/s
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AlertCards from '@/components/dashboard/AlertCards.vue'
+import TrendLineChart from '@/components/charts/TrendLineChart.vue'
+import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
@@ -233,6 +250,7 @@ const categoryStore = useCategoryStore()
 const assetStore = useAssetStore()
 const authStore = useAuthStore()
 const refreshing = ref(false)
+const showCharts = ref(false)
 const activeStatus = ref<string | null>(null)
 const viewMode = ref<'card' | 'list'>('card')
 const overviewCardRef = ref()
@@ -470,6 +488,10 @@ function onStatusSelect(status: string | null) {
   activeStatus.value = status
 }
 
+function onPeriodChange(period: 'month' | 'quarter' | 'year') {
+  dashboardStore.fetchTrend(period)
+}
+
 function selectSort(value: string) {
   currentSort.value = value
   showSortPopup.value = false
@@ -699,6 +721,28 @@ onUnmounted(() => {
 .dashboard-page {
   background: var(--bg-secondary);
   min-height: 100vh;
+}
+
+/* Charts Section */
+.charts-section {
+  margin: 12px;
+}
+.charts-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.charts-toggle-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.charts-toggle :deep(.van-icon) {
+  color: var(--text-secondary);
 }
 
 /* Toolbar Icons */
