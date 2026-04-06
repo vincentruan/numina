@@ -28,6 +28,9 @@ def db():
     if hasattr(RateLimitMiddleware, "_rate_store"):
         RateLimitMiddleware._rate_store.clear()
 
+    # Reset cache (including registration rate limits)
+    reset_rate_limit_cache()
+
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     seed_categories(session)
@@ -39,8 +42,9 @@ def db():
         # Reset rate limit store after each test
         if hasattr(RateLimitMiddleware, "_rate_store"):
             RateLimitMiddleware._rate_store.clear()
-        # Reset captcha payload cache
+# Reset captcha payload cache and rate limit cache
         reset_captcha_payload_cache()
+        reset_rate_limit_cache()
 
 
 @pytest.fixture(scope="function")

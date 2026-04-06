@@ -50,7 +50,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
       ">
         ${asset.image_url
           ? `<img src="${asset.image_url}" style="width: 100%; height: 100%; object-fit: cover;" />`
-          : `<div style="font-size: 120px;">${asset.category?.icon || '📦'}</div>`
+          : `<div style="font-size: 32px; font-weight: bold; color: #667eea;">${asset.category?.name || '资产'}</div>`
         }
       </div>
 
@@ -76,7 +76,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         margin-bottom: 24px;
         align-self: flex-start;
       ">
-        ${asset.category?.icon || ''} ${asset.category?.name || '未分类'}
+        ${asset.category?.name || '未分类'}
       </div>
 
       <!-- 数据网格 -->
@@ -194,15 +194,14 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
   const totalDailyCost = assets.reduce((sum, asset) => sum + (asset.daily_cost || 0), 0)
 
   // 按分类统计
-  const categoryStats = new Map<string, { name: string; icon: string; count: number }>()
+  const categoryStats = new Map<string, { name: string; count: number }>()
   assets.forEach(asset => {
     const categoryName = asset.category?.name || '未分类'
-    const categoryIcon = asset.category?.icon || '📦'
     const existing = categoryStats.get(categoryName)
     if (existing) {
       existing.count++
     } else {
-      categoryStats.set(categoryName, { name: categoryName, icon: categoryIcon, count: 1 })
+      categoryStats.set(categoryName, { name: categoryName, count: 1 })
     }
   })
 
@@ -231,7 +230,6 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
         border-bottom: 1px solid #f0f0f0;
       ">
         <div style="display: flex; align-items: center; gap: 12px;">
-          <span style="font-size: 32px;">${cat.icon}</span>
           <span style="font-size: 22px; color: #1a1a1a;">${cat.name}</span>
         </div>
         <span style="

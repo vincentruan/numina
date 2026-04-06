@@ -258,6 +258,14 @@ Liability N──1 Asset (optional linked_asset_id)
 
 **Financial (8):** 🏦存款, 📊基金, 📈股票, 📜债券, 🛡️保险, 💰理财产品, ₿数字货币, 💳其他金融
 
+### Documented Solutions
+
+`docs/solutions/` — documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
+
+Key categories:
+- `best-practices/` — security hardening, coding patterns, architectural decisions
+- `security-issues/` — vulnerability fixes and security patterns
+
 ## Testing
 
 ### Backend Unit Tests
@@ -369,6 +377,7 @@ cd tests && node take-screenshots.js
 
 ## Conventions
 
+- **Documented solutions**: `docs/solutions/` contains documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - UI text and error messages are in Chinese (简体中文). Currency defaults to CNY.
 - No linter/formatter configured — match existing code style by reading neighboring files.
 - No `as any`, `@ts-ignore`, or `@ts-expect-error` — fix types properly.

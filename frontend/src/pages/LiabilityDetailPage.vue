@@ -25,7 +25,12 @@
         <van-cell title="名称" :value="liability.name" />
         <van-cell title="类型">
           <template #value>
-            <span>{{ categoryIcon }} {{ categoryText }}</span>
+            <span>{{ categoryText }}</span>
+          </template>
+          <template #icon>
+            <svg class="type-icon-svg" aria-hidden="true">
+              <use :href="`#${categoryIcon}`" />
+            </svg>
           </template>
         </van-cell>
         <van-cell title="状态">
@@ -115,15 +120,15 @@ const paymentAmount = ref('')
 const liability = computed(() => liabilityStore.currentLiability)
 
 const categoryMap: Record<string, { text: string; icon: string }> = {
-  mortgage: { text: '房贷', icon: '🏠' },
-  car_loan: { text: '车贷', icon: '🚗' },
-  credit_card: { text: '信用卡', icon: '💳' },
-  personal_loan: { text: '个人贷款', icon: '💰' },
-  other: { text: '其他', icon: '📋' }
+  mortgage: { text: '房贷', icon: 'icon-mortgage' },
+  car_loan: { text: '车贷', icon: 'icon-car-loan' },
+  credit_card: { text: '信用卡', icon: 'icon-credit-card' },
+  personal_loan: { text: '个人贷款', icon: 'icon-personal-loan' },
+  other: { text: '其他', icon: 'icon-other-liability' }
 }
 
 const categoryText = computed(() => categoryMap[liability.value?.category || '']?.text || '')
-const categoryIcon = computed(() => categoryMap[liability.value?.category || '']?.icon || '📋')
+const categoryIcon = computed(() => categoryMap[liability.value?.category || '']?.icon || 'icon-other-liability')
 
 const paidAmount = computed(() => {
   if (!liability.value) return 0
@@ -231,5 +236,11 @@ onMounted(() => {
   color: var(--text-tertiary);
   margin-bottom: 12px;
   text-align: center;
+}
+.type-icon-svg {
+  width: 18px;
+  height: 18px;
+  margin-right: 4px;
+  fill: currentColor;
 }
 </style>
