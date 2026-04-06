@@ -1,12 +1,29 @@
 """Tests for global rate limiting middleware."""
 
+import base64
+import json
 import time
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.rate_limit import RateLimitMiddleware, _decode_jwt_user_id
+
+
+def _create_mock_jwt(user_id: str) -> str:
+    """Create a mock JWT token for testing.
+
+    Creates a minimal JWT-like token with just the sub claim.
+    """
+    header = {"alg": "HS256", "typ": "JWT"}
+    payload = {"sub": user_id}
+
+    def encode(obj):
+        return base64.urlsafe_b64encode(json.dumps(obj).encode()).rstrip(b"=").decode()
+
+    # Create a minimal token (not cryptographically valid, but parseable)
+    return f"{encode(header)}.{encode(payload)}.signature"
 
 
 @pytest.fixture(autouse=True)
@@ -99,21 +116,40 @@ class TestGlobalRateLimit:
 class TestClientIdentification:
     """Tests for client identification in rate limiting."""
 
-    def test_authenticated_user_identified_by_token(self):
-        """Test that authenticated users are identified by token prefix."""
+    def test_authenticated_user_identified_by_user_id(self):
+        """Test that authenticated users are identified by decoded user_id from JWT."""
+        # Create a mock JWT token with a user_id
+        user_id = str(uuid.uuid4())
+        mock_token = _create_mock_jwt(user_id)
+
         # Mock request with Authorization header
         class MockRequest:
             class Client:
                 host = "192.168.1.1"
             client = Client()
-            headers = {"Authorization": "Bearer abcdefghijklmnopqrstuvwxyz1234567890"}
+            headers = {"Authorization": f"Bearer {mock_token}"}
             url = type('obj', (object,), {'path': '/api/v1/assets'})()
 
         middleware = RateLimitMiddleware(None)
         client_id = middleware._get_client_id(MockRequest())
 
-        assert client_id.startswith("user:")
-        assert len(client_id) == len("user:") + 20  # First 20 chars of token
+        assert client_id == f"user:{user_id}"
+
+    def test_authenticated_user_with_invalid_token_falls_back_to_ip(self):
+        """Test that invalid tokens fall back to IP-based identification."""
+        # Mock request with invalid token
+        class MockRequest:
+            class Client:
+                host = "192.168.1.1"
+            client = Client()
+            headers = {"Authorization": "Bearer invalid_token"}
+            url = type('obj', (object,), {'path': '/api/v1/assets'})()
+
+        middleware = RateLimitMiddleware(None)
+        client_id = middleware._get_client_id(MockRequest())
+
+        # Should fall back to IP
+        assert client_id == "ip:192.168.1.1"
 
     def test_unauthenticated_user_identified_by_ip(self):
         """Test that unauthenticated users are identified by IP."""

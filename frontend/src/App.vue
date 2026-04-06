@@ -42,7 +42,7 @@ watch(() => authStore.user?.language, (lang) => {
   }
 }, { immediate: true })
 
-onMounted(() => {
+onMounted(async () => {
   // Set initial theme
   document.documentElement.setAttribute('data-theme', resolvedTheme.value)
   // Set initial language
@@ -52,6 +52,19 @@ onMounted(() => {
   // Listen for system theme changes
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)
+
+  // Load SVG sprite sheet for icons
+  try {
+    const response = await fetch('/icons.svg')
+    const svgText = await response.text()
+    const container = document.createElement('div')
+    container.id = 'svg-sprite-sheet'
+    container.innerHTML = svgText
+    container.style.display = 'none'
+    document.body.insertBefore(container, document.body.firstChild)
+  } catch (e) {
+    console.error('Failed to load SVG sprite sheet:', e)
+  }
 })
 
 onUnmounted(() => {

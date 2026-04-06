@@ -13,11 +13,13 @@
             <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
           </div>
           <div v-else class="hero-icon" :style="{ background: 'rgba(255,255,255,0.15)' }">
-            {{ asset.category?.icon || '📦' }}
+            <svg class="icon-svg-hero" aria-hidden="true">
+              <use :href="`#${getIconId(asset.category?.icon)}`" />
+            </svg>
           </div>
           <div class="hero-info">
             <div class="hero-name">{{ asset.name }}</div>
-            <div class="hero-category">{{ asset.category?.icon }} {{ asset.category?.name || '未分类' }}</div>
+            <div class="hero-category">{{ asset.category?.name || '未分类' }}</div>
             <div class="hero-usage">
               <span v-if="daysUsed > 0" class="usage-badge">已使用 {{ daysUsed }} 天</span>
               <span v-if="asset.expected_lifespan_days" class="usage-badge lifespan">预计 {{ asset.expected_lifespan_days }} 天</span>
@@ -70,7 +72,9 @@
         <van-cell title="类型" :value="typeText" />
         <van-cell title="分类" :value="asset.category?.name || '未分类'">
           <template #icon>
-            <span class="cat-icon">{{ asset.category?.icon }}</span>
+            <svg class="cat-icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(asset.category?.icon)}`" />
+            </svg>
           </template>
         </van-cell>
         <van-cell title="购入价格">
@@ -271,6 +275,20 @@ const returnText = computed(() => {
   return `${sign}¥${diff.toLocaleString()} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
 })
 
+/**
+ * Get the icon ID for a category icon.
+ * If the icon is already an icon ID (starts with 'icon-'), use it directly.
+ * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
+ */
+function getIconId(icon: string | undefined): string {
+  if (!icon) return 'icon-other'
+  if (icon.startsWith('icon-')) {
+    return icon
+  }
+  // Fallback for emoji or unknown icons
+  return 'icon-other'
+}
+
 async function onRetire() {
   try {
     await showConfirmDialog({ title: '确认退役', message: `确定要将「${asset.value?.name}」标记为退役吗？` })
@@ -365,8 +383,13 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
   flex-shrink: 0;
+}
+.icon-svg-hero {
+  width: 40px;
+  height: 40px;
+  fill: white;
+  color: white;
 }
 .hero-info {
   flex: 1;
@@ -448,8 +471,11 @@ onMounted(async () => {
   top: 12px;
   right: 12px;
 }
-.cat-icon {
+.cat-icon-svg {
+  width: 18px;
+  height: 18px;
   margin-right: 4px;
+  fill: currentColor;
 }
 .daily-cost {
   color: #ff976a;

@@ -16,6 +16,10 @@ class RedisCacheBackend(CacheBackend):
 
         Args:
             redis_url: Redis connection URL (e.g., redis://localhost:6379/0)
+
+        Raises:
+            NotImplementedError: Redis backend is not yet implemented.
+                Factory will catch this and fall back to memory cache.
         """
         # Placeholder: self._client = redis.from_url(redis_url)
         self._redis_url = redis_url

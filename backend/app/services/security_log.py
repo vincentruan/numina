@@ -17,6 +17,7 @@ class SecurityEventType:
     LOGIN_FAILED_USER_NOT_FOUND = "login_failed_user_not_found"
     LOGIN_RATE_LIMITED = "login_rate_limited"
     REGISTER_SUCCESS = "register_success"
+    REGISTER_RATE_LIMITED = "register_rate_limited"
     TOKEN_REFRESH_SUCCESS = "token_refresh_success"
     TOKEN_REFRESH_FAILED = "token_refresh_failed"
     UPLOAD_MAGIC_BYTES_MISMATCH = "upload_magic_bytes_mismatch"

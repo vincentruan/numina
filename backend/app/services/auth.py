@@ -4,12 +4,13 @@ Security Features:
 - Timing attack protection: Dummy bcrypt verification for non-existent users
 - Configurable bcrypt rounds via BCRYPT_ROUNDS setting
 - Login rate limiting by username (5 attempts, 15 min lockout)
+- Registration rate limiting by IP (5 attempts per hour)
 
 Rate Limiting Trade-offs:
 - Username-based rate limiting prevents brute-force attacks on specific accounts
 - Limitation: Attackers can try different usernames to bypass the limit
 - Mitigation: Global API rate limiting (by IP) provides a second defense layer
-- Future: Consider adding IP-based rate limiting as additional layer
+- Registration rate limiting prevents bulk account creation
 
 See design.md for detailed trade-off analysis.
 """
@@ -18,7 +19,7 @@ import time
 from uuid import uuid4
 
 import bcrypt
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy.orm import Session
 
 from app.auth.deps import create_access_token, create_refresh_token
@@ -51,6 +52,15 @@ def _get_rate_limit_settings():
         return _MAX_ATTEMPTS, _LOCKOUT_SECONDS
 
 
+def _get_register_rate_limit_settings():
+    """Get registration rate limit settings from config."""
+    try:
+        from app.config import settings
+        return settings.REGISTER_RATE_LIMIT_PER_HOUR
+    except (ImportError, AttributeError):
+        return 5  # Default: 5 per hour
+
+
 def _get_dummy_hash() -> str:
     """Get or create a dummy hash for timing attack protection."""
     global _dummy_hash_cache
@@ -63,6 +73,54 @@ def _get_dummy_hash() -> str:
             rounds = 12  # Default fallback
         _dummy_hash_cache = bcrypt.hashpw(b"dummy_password", bcrypt.gensalt(rounds=rounds)).decode("utf-8")
     return _dummy_hash_cache
+
+
+def _get_client_ip(request: Request) -> str:
+    """Get real client IP from request with trusted proxy validation."""
+    from app.middleware.rate_limit import _get_real_client_ip
+    return _get_real_client_ip(request)
+
+
+def _check_register_rate_limit(client_ip: str) -> None:
+    """Check if IP is rate limited for registration.
+
+    Limits registration to REGISTER_RATE_LIMIT_PER_HOUR per IP per hour.
+    """
+    max_per_hour = _get_register_rate_limit_settings()
+
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"register_attempts:{client_ip}"
+        count = cache.get(key)
+        if count is not None and int(count) >= max_per_hour:
+            ttl = cache.get_ttl(key) or 0
+            remaining_minutes = max(1, ttl // 60)
+            _log_security_event(SecurityEventType.REGISTER_RATE_LIMITED, client_ip=client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"注册请求过于频繁，请 {remaining_minutes} 分钟后重试",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        # If cache not available, allow registration (fail open)
+        pass
+
+
+def _record_register_attempt(client_ip: str) -> None:
+    """Record a registration attempt for rate limiting."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"register_attempts:{client_ip}"
+        count = cache.increment(key)
+        # Set TTL on first attempt (1 hour = 3600 seconds)
+        if count == 1:
+            cache.set(key, 1, ttl_seconds=3600)
+    except Exception:
+        # If cache not available, skip tracking
+        pass
 
 
 def _check_rate_limit(username: str) -> None:
@@ -144,7 +202,20 @@ def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def register(db: Session, req: RegisterRequest) -> TokenResponse:
+def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> TokenResponse:
+    """Register a new user with rate limiting.
+
+    Args:
+        db: Database session
+        req: Registration request
+        client_ip: Client IP for rate limiting
+
+    Returns:
+        TokenResponse with access and refresh tokens
+    """
+    # Check registration rate limit
+    _check_register_rate_limit(client_ip)
+
     if db.query(User).filter(User.username == req.username).first():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
 
@@ -168,6 +239,10 @@ def register(db: Session, req: RegisterRequest) -> TokenResponse:
     )
     db.add(user)
     db.commit()
+
+    # Record successful registration for rate limiting
+    _record_register_attempt(client_ip)
+    _log_security_event(SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id)
 
     return TokenResponse(
         access_token=create_access_token({"sub": user.id}),

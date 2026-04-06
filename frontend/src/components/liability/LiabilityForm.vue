@@ -181,19 +181,19 @@ const startPickerValue = ref([
 const endPickerValue = ref([...startPickerValue.value])
 
 const categoryColumns = [
-  { text: '🏠 房贷', value: 'mortgage' },
-  { text: '🚗 车贷', value: 'car_loan' },
-  { text: '💳 信用卡', value: 'credit_card' },
-  { text: '💰 个人贷款', value: 'personal_loan' },
-  { text: '📋 其他', value: 'other' }
+  { text: '房贷', value: 'mortgage' },
+  { text: '车贷', value: 'car_loan' },
+  { text: '信用卡', value: 'credit_card' },
+  { text: '个人贷款', value: 'personal_loan' },
+  { text: '其他', value: 'other' }
 ]
 
 const categoryDisplayMap: Record<string, string> = {
-  mortgage: '🏠 房贷',
-  car_loan: '🚗 车贷',
-  credit_card: '💳 信用卡',
-  personal_loan: '💰 个人贷款',
-  other: '📋 其他'
+  mortgage: '房贷',
+  car_loan: '车贷',
+  credit_card: '信用卡',
+  personal_loan: '个人贷款',
+  other: '其他'
 }
 
 const categoryDisplay = computed(() => categoryDisplayMap[form.value.category] || '')
