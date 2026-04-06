@@ -1,43 +1,53 @@
 <template>
-  <div class="alert-cards">
-    <!-- Idle Assets Card — emphasized color (amber/orange) -->
-    <div
-      v-if="idleCount > 0"
-      class="alert-card idle-card"
-      @click="$emit('select-status', 'idle')"
-    >
-      <div class="card-icon">
-        <svg class="icon-svg" aria-hidden="true">
-          <use href="#icon-idle" />
-        </svg>
-      </div>
-      <div class="card-content">
-        <div class="card-title">闲置资产</div>
-        <div class="card-value">{{ idleCount }} 项未使用</div>
-      </div>
-      <van-icon name="arrow" class="card-arrow" />
+  <div class="alert-cards-container">
+    <!-- Collapse Toggle Button -->
+    <div v-if="hasAlerts" class="alert-toggle" @click="toggleCollapsed">
+      <span class="toggle-label">提醒</span>
+      <span class="toggle-count">{{ totalAlertCount }}</span>
+      <van-icon :name="isCollapsed ? 'arrow-down' : 'arrow-up'" class="toggle-icon" />
     </div>
 
-    <!-- Expiring Soon Card — muted color for physical assets, subtle alert for financial -->
-    <div
-      v-if="expiringAssets.length > 0"
-      class="alert-card expiring-card"
-      :class="{ 'has-financial': hasFinancialExpiring }"
-      @click="showExpiringSheet = true"
-    >
-      <div class="card-icon">
-        <svg class="icon-svg" aria-hidden="true">
-          <use :href="hasFinancialExpiring ? '#icon-warning' : '#icon-expiring'" />
-        </svg>
-      </div>
-      <div class="card-content">
-        <div class="card-title">即将到期</div>
-        <div class="card-value">
-          {{ expiringAssets.length }} 项资产
-          <span v-if="expiredCount > 0" class="expired-hint">({{ expiredCount }} 已过期)</span>
+    <!-- Alert Cards (Collapsible) -->
+    <div class="alert-cards" :class="{ collapsed: isCollapsed }">
+      <!-- Idle Assets Card — emphasized color (amber/orange) -->
+      <div
+        v-if="idleCount > 0"
+        class="alert-card idle-card"
+        @click="$emit('select-status', 'idle')"
+      >
+        <div class="card-icon">
+          <svg class="icon-svg" aria-hidden="true">
+            <use href="#icon-idle" />
+          </svg>
         </div>
+        <div class="card-content">
+          <div class="card-title">闲置资产</div>
+          <div class="card-value">{{ idleCount }} 项未使用</div>
+        </div>
+        <van-icon name="arrow" class="card-arrow" />
       </div>
-      <van-icon name="arrow" class="card-arrow" />
+
+      <!-- Expiring Soon Card — muted color for physical assets, subtle alert for financial -->
+      <div
+        v-if="expiringAssets.length > 0"
+        class="alert-card expiring-card"
+        :class="{ 'has-financial': hasFinancialExpiring }"
+        @click="showExpiringSheet = true"
+      >
+        <div class="card-icon">
+          <svg class="icon-svg" aria-hidden="true">
+            <use :href="hasFinancialExpiring ? '#icon-warning' : '#icon-expiring'" />
+          </svg>
+        </div>
+        <div class="card-content">
+          <div class="card-title">即将到期</div>
+          <div class="card-value">
+            {{ expiringAssets.length }} 项资产
+            <span v-if="expiredCount > 0" class="expired-hint">({{ expiredCount }} 已过期)</span>
+          </div>
+        </div>
+        <van-icon name="arrow" class="card-arrow" />
+      </div>
     </div>
 
     <!-- Expiring Soon Sheet -->
@@ -89,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem } from '@/api/dashboard'
@@ -105,6 +115,15 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const showExpiringSheet = ref(false)
+const isCollapsed = ref(true) // Default collapsed
+
+// Load collapse state from localStorage
+onMounted(() => {
+  const saved = localStorage.getItem('alert-cards-collapsed')
+  if (saved !== null) {
+    isCollapsed.value = saved === 'true'
+  }
+})
 
 const idleCount = computed(() => props.idleAssets.length)
 
@@ -115,6 +134,15 @@ const hasFinancialExpiring = computed(() =>
 const expiredCount = computed(() =>
   props.expiringAssets.filter(a => (a.remaining_days ?? 0) < 0).length
 )
+
+const hasAlerts = computed(() => idleCount.value > 0 || props.expiringAssets.length > 0)
+
+const totalAlertCount = computed(() => idleCount.value + props.expiringAssets.length)
+
+function toggleCollapsed() {
+  isCollapsed.value = !isCollapsed.value
+  localStorage.setItem('alert-cards-collapsed', String(isCollapsed.value))
+}
 
 function formatRemaining(days: number | null): string {
   if (days === null) return '-'
@@ -153,11 +181,59 @@ function getIconId(icon: string | undefined): string {
 </script>
 
 <style scoped>
+.alert-cards-container {
+  padding: 0 12px;
+}
+
+/* Collapse Toggle Button */
+.alert-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.alert-toggle:active {
+  background: var(--van-background-2);
+}
+.toggle-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.toggle-count {
+  font-size: 12px;
+  color: #ee0a24;
+  background: rgba(238, 10, 36, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+[data-theme='dark'] .toggle-count {
+  background: rgba(238, 10, 36, 0.15);
+}
+.toggle-icon {
+  font-size: 14px;
+  color: var(--text-tertiary);
+}
+
+/* Alert Cards (Collapsible) */
 .alert-cards {
   display: flex;
   gap: 12px;
-  padding: 0 12px;
-  margin-bottom: 12px;
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+  max-height: 100px;
+  opacity: 1;
+  overflow: hidden;
+}
+.alert-cards.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding: 0;
+  margin-bottom: 0;
 }
 
 .alert-card {
