@@ -13,6 +13,9 @@
   --separator: #3c3c4329;
   --card-bg: #ffffff;
   --van-primary-color: #007aff;
+  --theme-primary: #007aff;
+  --theme-gradient-start: #007aff;
+  --theme-gradient-end: #5856d6;
 }
 
 [data-theme='dark'] {

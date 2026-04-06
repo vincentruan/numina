@@ -104,6 +104,7 @@ export default {
     themeLight: '浅色模式',
     themeDark: '深色模式',
     themeSystem: '跟随系统',
+    themeColor: '主题色',
     language: '语言',
     languageZhCN: '简体中文',
     languageEnUS: 'English',
