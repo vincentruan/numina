@@ -20,11 +20,21 @@ class Settings(BaseSettings):
     # Cache configuration
     CACHE_BACKEND: str = "memory"  # "memory" or "redis"
     REDIS_URL: str = "redis://localhost:6379/0"
+    # Granular Redis config (for production security)
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str | None = None  # Required in production
+    REDIS_USE_TLS: bool = False
 
     # Rate limiting
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5
     LOGIN_RATE_LIMIT_LOCKOUT_SECONDS: int = 900  # 15 minutes
     GLOBAL_RATE_LIMIT_PER_MINUTE: int = 100
+    REGISTER_RATE_LIMIT_PER_HOUR: int = 5  # Registration rate limit per IP
+
+    # Trusted proxy configuration (for X-Forwarded-For validation)
+    TRUSTED_PROXY_IPS: list[str] = []  # e.g., ["10.0.0.1", "172.16.0.0/12"]
 
     # Security settings
     BCRYPT_ROUNDS: int = 12

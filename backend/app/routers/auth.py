@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.auth.captcha import verify_captcha
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.middleware.rate_limit import _get_real_client_ip
 from app.models.user import User
 from app.schemas.auth import (
     JoinFamilyRequest,
@@ -23,10 +24,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/register", response_model=TokenResponse)
 def register(
     req: RegisterRequest,
+    request: Request,
     db: Session = Depends(get_db),
     _: None = Depends(verify_captcha),
 ):
-    return auth_service.register(db, req)
+    client_ip = _get_real_client_ip(request)
+    return auth_service.register(db, req, client_ip)
 
 
 @router.post("/login", response_model=TokenResponse)
