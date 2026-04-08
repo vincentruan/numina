@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.core.logging_config import setup_logging
@@ -80,8 +81,7 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
-        logger.warning("生产环境 CORS_ORIGINS 设置为 ['*']，建议配置具体域名。")
+    # CORS validation is now enforced in config.py
 
     # Security logging is now configured via setup_logging()
     if settings.ENABLE_SECURITY_LOGGING:
@@ -102,8 +102,54 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Numina - 家庭资产可视化", version="1.0.0", lifespan=lifespan)
 
-# Add rate limiting middleware (before CORS)
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses (defense in depth).
+
+    These headers provide additional protection even when Nginx/Cloudflare
+    handles the primary security layer.
+    """
+
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+
+        # Skip for health check (minimal overhead)
+        if request.url.path == "/api/health":
+            return response
+
+        # X-Content-Type-Options: Prevent MIME type sniffing
+        response.headers["X-Content-Type-Options"] = "nosniff"
+
+        # X-Frame-Options: Prevent clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+
+        # X-XSS-Protection: Legacy XSS filter (modern browsers use CSP)
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+
+        # Referrer-Policy: Control referrer information
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+        # Permissions-Policy: Disable unnecessary browser features
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+        # HSTS: Force HTTPS (only in production with HTTPS)
+        # Note: Cloudflare handles HTTPS, but this adds defense in depth
+        if settings.ENVIRONMENT == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+        # Cache-Control: Prevent sensitive data caching
+        # Only apply to API endpoints (static files handled by Nginx)
+        if request.url.path.startswith("/api/"):
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+
+        return response
+
+
+# Add rate limiting middleware (first to execute on request)
 app.add_middleware(RateLimitMiddleware)
+
+# Add security headers middleware (last to modify response)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
