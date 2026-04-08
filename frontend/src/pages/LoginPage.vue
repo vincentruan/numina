@@ -83,10 +83,11 @@ async function onSubmit() {
     await authStore.login(form.value)
     showToast('登录成功')
     router.push('/')
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle captcha-related errors
-    const detail = error.response?.data?.detail || ''
-    const status = error.response?.status
+    const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
+    const detail = axiosError.response?.data?.detail || ''
+    const status = axiosError.response?.status
 
     if (status === 503) {
       showToast('验证服务暂时不可用，请稍后重试')
