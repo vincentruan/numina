@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getToken } from '@/utils/storage'
+import { getUser } from '@/utils/storage'
 
 const router = createRouter({
   history: createWebHistory('/'),
@@ -132,15 +132,15 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  const token = getToken()
+  const isLoggedIn = !!getUser()
   if (to.meta.guest) {
-    if (token) {
+    if (isLoggedIn) {
       next('/')
     } else {
       next()
     }
   } else {
-    if (!token) {
+    if (!isLoggedIn) {
       next('/login')
     } else {
       next()
