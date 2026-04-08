@@ -4,7 +4,8 @@ import { useAuthStore } from '@/stores/auth'
 export function useAuth() {
   const authStore = useAuthStore()
 
-  const isLoggedIn = computed(() => !!authStore.token)
+  // Check login status by user presence (token is in httpOnly Cookie)
+  const isLoggedIn = computed(() => !!authStore.user)
   const currentUser = computed(() => authStore.user)
   const isOwner = computed(() => authStore.user?.role === 'owner')
 
