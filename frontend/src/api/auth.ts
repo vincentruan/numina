@@ -1,3 +1,12 @@
+/**
+ * Authentication API endpoints.
+ *
+ * Cookie-based auth:
+ * - login/register/joinFamily: Server sets httpOnly Cookie
+ * - logout: Clears server Cookie
+ * - No manual token handling needed
+ */
+
 import http from './index'
 import type { LoginRequest, RegisterRequest, JoinFamilyRequest, AuthResponse, User } from '@/types'
 
@@ -13,12 +22,12 @@ export function joinFamily(data: JoinFamilyRequest) {
   return http.post<AuthResponse>('/auth/family/join', data)
 }
 
-export function getMe() {
-  return http.get<User>('/auth/me')
+export function logout() {
+  return http.post('/auth/logout')
 }
 
-export function refreshToken(refreshToken: string) {
-  return http.post<AuthResponse>('/auth/refresh', { refresh_token: refreshToken })
+export function getMe() {
+  return http.get<User>('/auth/me')
 }
 
 interface UpdateSettingsRequest {
