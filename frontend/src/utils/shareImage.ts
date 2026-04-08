@@ -3,6 +3,31 @@ import type { Asset } from '@/types'
 import { formatCurrency, formatDate } from './format'
 
 /**
+ * HTML escape function for XSS prevention.
+ * Escapes special characters to prevent script injection in innerHTML.
+ */
+function escapeHtml(str: string): string {
+  if (!str) return ''
+  const div = document.createElement('div')
+  div.textContent = str  // textContent automatically escapes HTML
+  return div.innerHTML
+}
+
+/**
+ * Safely escape and validate image URL.
+ * Only allows safe URL schemes (http, https, data for base64 images).
+ */
+function safeImageUrl(url: string | undefined): string {
+  if (!url) return ''
+  // Only allow http, https, and data:image URLs
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+    return escapeHtml(url)
+  }
+  // Reject potentially dangerous URLs (javascript:, vbscript:, etc.)
+  return ''
+}
+
+/**
  * 生成单个资产卡片图片
  */
 export async function generateAssetCard(asset: Asset): Promise<Blob> {
@@ -48,9 +73,9 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         margin-bottom: 24px;
         overflow: hidden;
       ">
-        ${asset.image_url
-          ? `<img src="${asset.image_url}" style="width: 100%; height: 100%; object-fit: cover;" />`
-          : `<div style="font-size: 32px; font-weight: bold; color: #667eea;">${asset.category?.name || '资产'}</div>`
+        ${safeImageUrl(asset.image_url)
+          ? `<img src="${safeImageUrl(asset.image_url)}" style="width: 100%; height: 100%; object-fit: cover;" />`
+          : `<div style="font-size: 32px; font-weight: bold; color: #667eea;">${escapeHtml(asset.category?.name || '资产')}</div>`
         }
       </div>
 
@@ -63,7 +88,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      ">${asset.name}</h2>
+      ">${escapeHtml(asset.name)}</h2>
 
       <!-- 分类标签 -->
       <div style="
@@ -76,7 +101,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         margin-bottom: 24px;
         align-self: flex-start;
       ">
-        ${asset.category?.name || '未分类'}
+        ${escapeHtml(asset.category?.name || '未分类')}
       </div>
 
       <!-- 数据网格 -->
@@ -219,7 +244,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   `
 
-  // 构建分类列表 HTML
+  // 构建分类列表 HTML（XSS-safe: escape category names）
   const categoryListHTML = Array.from(categoryStats.values())
     .map(cat => `
       <div style="
@@ -230,7 +255,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
         border-bottom: 1px solid #f0f0f0;
       ">
         <div style="display: flex; align-items: center; gap: 12px;">
-          <span style="font-size: 22px; color: #1a1a1a;">${cat.name}</span>
+          <span style="font-size: 22px; color: #1a1a1a;">${escapeHtml(cat.name)}</span>
         </div>
         <span style="
           font-size: 24px;
