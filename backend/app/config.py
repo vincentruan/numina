@@ -73,3 +73,9 @@ if settings.ENVIRONMENT == "production" and not settings.ALTCHA_HMAC_KEY:
 elif not settings.ALTCHA_HMAC_KEY:
     settings.ALTCHA_HMAC_KEY = secrets.token_urlsafe(32)
     logger.warning("ALTCHA_HMAC_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")
+
+# CORS production validation - must configure specific domains
+if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
+    raise RuntimeError(
+        "CORS_ORIGINS 设置为 ['*']！生产环境必须配置具体域名，不允许全开放。"
+    )
