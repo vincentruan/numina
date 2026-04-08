@@ -4,7 +4,7 @@
  */
 
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
-import { getTierConfig, STAR_COLORS, type DeviceTier, type StarLayerConfig } from './starField.config'
+import { getTierConfig, getScaledCount, STAR_COLORS, type DeviceTier, type StarLayerConfig } from './starField.config'
 import { getTier } from '@/utils/deviceTier'
 
 // Base frame time for animation normalization (60fps = 16.67ms)
@@ -159,8 +159,10 @@ export function useStarField(canvasRef: Ref<HTMLCanvasElement | null>) {
     // Cap DPR
     dpr = Math.min(window.devicePixelRatio || 1, config.dprCap)
 
-    canvasWidth = rect.width
-    canvasHeight = rect.height
+    // Fall back to window dimensions if getBoundingClientRect returns 0
+    // (can happen when canvas has no CSS size set, or before first paint)
+    canvasWidth = rect.width > 0 ? rect.width : window.innerWidth
+    canvasHeight = rect.height > 0 ? rect.height : window.innerHeight
 
     // Set canvas internal dimensions
     canvas.width = canvasWidth * dpr
@@ -172,15 +174,26 @@ export function useStarField(canvasRef: Ref<HTMLCanvasElement | null>) {
   }
 
   /**
-   * Create all star layers
+   * Create all star layers with density scaling based on viewport area.
+   * Base counts in config are calibrated for a 375×812 mobile viewport;
+   * larger viewports get proportionally more stars (capped at 4× for high tier,
+   * 2× for low tier to stay lightweight).
    */
   function createAllStars(): void {
     if (!config) return
 
+    const viewportArea = canvasWidth * canvasHeight
+    // Low tier uses a lower cap to avoid performance issues on weak devices
+    const maxMultiplier = config.fps <= 18 ? 2 : 4
+
+    const farCount = getScaledCount(config.farStars.count, viewportArea, maxMultiplier)
+    const midCount = getScaledCount(config.midStars.count, viewportArea, maxMultiplier)
+    const nearCount = getScaledCount(config.nearStars.count, viewportArea, maxMultiplier)
+
     stars = [
-      ...createStars(config.farStars, 'far', canvasWidth, canvasHeight),
-      ...createStars(config.midStars, 'mid', canvasWidth, canvasHeight),
-      ...createStars(config.nearStars, 'near', canvasWidth, canvasHeight),
+      ...createStars({ ...config.farStars, count: farCount }, 'far', canvasWidth, canvasHeight),
+      ...createStars({ ...config.midStars, count: midCount }, 'mid', canvasWidth, canvasHeight),
+      ...createStars({ ...config.nearStars, count: nearCount }, 'near', canvasWidth, canvasHeight),
     ]
   }
 
@@ -221,7 +234,7 @@ export function useStarField(canvasRef: Ref<HTMLCanvasElement | null>) {
     const speed = random(meteorConfig.minSpeed, meteorConfig.maxSpeed)
     const angle = random(Math.PI * 0.15, Math.PI * 0.35) // 27-63 degrees, moving down-right
 
-    inactiveMeteor.x = random(0, canvasWidth * 0.8)
+    inactiveMeteor.x = random(-canvasWidth * 0.1, canvasWidth * 0.7)
     inactiveMeteor.y = random(-50, canvasHeight * 0.3)
     inactiveMeteor.vx = Math.cos(angle) * speed
     inactiveMeteor.vy = Math.sin(angle) * speed
@@ -303,8 +316,15 @@ export function useStarField(canvasRef: Ref<HTMLCanvasElement | null>) {
       ctx.beginPath()
       ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2)
 
-      // Color based on layer and alpha
-      const color = star.layer === 'near' ? STAR_COLORS.bright : STAR_COLORS.primary
+      // Color based on layer: far=white, mid=light blue or faint purple accent, near=warm white
+      let color: string
+      if (star.layer === 'near') {
+        color = STAR_COLORS.bright
+      } else if (star.layer === 'mid' && Math.random() < 0.2) {
+        color = STAR_COLORS.accent
+      } else {
+        color = STAR_COLORS.primary
+      }
       ctx.fillStyle = color.replace('1)', `${star.alpha})`)
       ctx.fill()
     }
