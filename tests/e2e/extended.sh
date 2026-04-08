@@ -3,7 +3,7 @@
 # 补充覆盖：资产更新/删除/估值、负债详情/更新/删除、心愿更新/删除
 # 分类CRUD、标签CRUD、家庭成员管理、邀请码重新生成、快照、活动日志、数据一致性
 
-BASE_URL="http://localhost/numina/api/v1"
+BASE_URL="http://localhost/api/v1"
 PASS=0
 FAIL=0
 TOKEN=""
