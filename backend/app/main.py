@@ -132,6 +132,23 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Permissions-Policy: Disable unnecessary browser features
         response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
 
+        # Content-Security-Policy: XSS protection
+        # Note: Vue SPA requires 'unsafe-inline' for styles/scripts
+        # This is a trade-off: CSP strictness vs SPA functionality
+        # Future: use nonce-based CSP for stricter protection
+        csp_policy = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline'; "  # Vue SPA needs inline scripts
+            "style-src 'self' 'unsafe-inline'; "   # shareImage.ts needs inline styles
+            "img-src 'self' data: https:; "         # Allow base64 and HTTPS images
+            "font-src 'self'; "
+            "connect-src 'self'; "                  # API calls only to same origin
+            "frame-ancestors 'none'; "              # Equivalent to X-Frame-Options: DENY
+            "base-uri 'self'; "
+            "form-action 'self'; "
+        )
+        response.headers["Content-Security-Policy"] = csp_policy
+
         # HSTS: Force HTTPS (only in production with HTTPS)
         # Note: Cloudflare handles HTTPS, but this adds defense in depth
         if settings.ENVIRONMENT == "production":
