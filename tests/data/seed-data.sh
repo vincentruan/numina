@@ -8,7 +8,7 @@
 
 set -e
 
-BASE_URL="http://localhost/numina/api/v1"
+BASE_URL="http://localhost/api/v1"
 TOKEN=""
 
 # 颜色输出
