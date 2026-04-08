@@ -5,10 +5,14 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/app/data
+    env_file:
+      - .env.local
     environment:
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
-      - CORS_ORIGINS=["*"]
+      - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s

@@ -34,7 +34,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 
 const props = defineProps<{
   modelValue?: string
@@ -74,7 +74,7 @@ const widgetHtml = computed(() => {
   `
 })
 
-onMounted(() => {
+onMounted(async () => {
   isMounted.value = true
 
   if (!isProduction) {
@@ -83,49 +83,61 @@ onMounted(() => {
     return
   }
 
-  // Listen for the altcha change event on the container
-  const container = document.querySelector('.altcha-widget-wrapper')
-  if (container) {
-    container.addEventListener('change', ((event: Event) => {
-      const target = event.target as HTMLElement
-      if (target.tagName.toLowerCase() === 'altcha-widget') {
-        const customEvent = event as CustomEvent
-        const payload = customEvent.detail?.payload
-        emit('update:modelValue', payload || undefined)
-      }
-    }) as EventListener)
+  // Wait for v-html DOM to be updated (widgetHtml computed depends on isMounted)
+  await nextTick()
 
-    // Listen for state changes (loading, computing, verified, error)
-    container.addEventListener('statechange', ((event: Event) => {
-      const target = event.target as HTMLElement
-      if (target.tagName.toLowerCase() === 'altcha-widget') {
-        const customEvent = event as CustomEvent
-        const state = customEvent.detail?.state
+  // ALTCHA widget emits custom events that may not bubble properly
+  // We need to listen directly on the widget element
+  const setupWidgetListeners = () => {
+    const widget = document.querySelector('altcha-widget')
+    if (!widget) {
+      // Widget not ready yet, retry after a short delay
+      setTimeout(setupWidgetListeners, 100)
+      return
+    }
 
-        // ALTCHA State enum values: UNVERIFIED, VERIFYING, VERIFIED, ERROR, EXPIRED, CODE
-        if (state === 'VERIFYING') {
-          isComputing.value = true
-          errorMessage.value = ''
+    // ALTCHA stores payload in a hidden input element
+    // Read from hidden input when state changes to VERIFIED
+    widget.addEventListener('statechange', ((event: Event) => {
+      const customEvent = event as CustomEvent
+      const state = customEvent.detail?.state?.toString().toUpperCase()
+
+      // ALTCHA State enum values: UNVERIFIED, VERIFYING, VERIFIED, ERROR, EXPIRED, CODE
+      if (state === 'VERIFYING') {
+        isComputing.value = true
+        errorMessage.value = ''
+        showSuccess.value = false
+      } else if (state === 'VERIFIED') {
+        isComputing.value = false
+        showSuccess.value = true
+        errorMessage.value = ''
+
+        // Read payload from hidden input created by ALTCHA
+        // Need to wait for DOM to update - ALTCHA sets the hidden input after firing the event
+        setTimeout(() => {
+          const hiddenInput = document.querySelector('input[name="altcha"]') as HTMLInputElement
+          if (hiddenInput?.value) {
+            emit('update:modelValue', hiddenInput.value)
+          }
+        }, 50)
+
+        // Brief success indicator (500ms)
+        setTimeout(() => {
           showSuccess.value = false
-        } else if (state === 'VERIFIED') {
-          isComputing.value = false
-          showSuccess.value = true
-          errorMessage.value = ''
-          // Brief success indicator (500ms)
-          setTimeout(() => {
-            showSuccess.value = false
-          }, 500)
-        } else if (state === 'ERROR' || state === 'EXPIRED') {
-          isComputing.value = false
-          showSuccess.value = false
-          errorMessage.value = state === 'EXPIRED' ? '验证码已过期，请重新验证' : '验证失败，请重试'
-        } else {
-          isComputing.value = false
-          showSuccess.value = false
-        }
+        }, 500)
+      } else if (state === 'ERROR' || state === 'EXPIRED') {
+        isComputing.value = false
+        showSuccess.value = false
+        errorMessage.value = state === 'EXPIRED' ? '验证码已过期，请重新验证' : '验证失败，请重试'
+      } else {
+        isComputing.value = false
+        showSuccess.value = false
       }
     }) as EventListener)
   }
+
+  // Start setup after a small delay to ensure widget is rendered
+  setTimeout(setupWidgetListeners, 50)
 })
 
 // Expose reset method for parent components
