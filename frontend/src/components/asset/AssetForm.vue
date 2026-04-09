@@ -229,6 +229,7 @@ import { getTags, createTag as apiCreateTag } from '@/api/tags'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
+import { getIconId } from '@/utils/icon'
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
@@ -318,10 +319,6 @@ const selectedCategoryName = computed(() => {
 function selectCategory(id: string) {
   form.value.category_id = id
   showCategoryPicker.value = false
-}
-
-function getIconId(icon: string): string {
-  return icon.startsWith('icon-') ? icon : 'icon-other'
 }
 
 // Image upload state
