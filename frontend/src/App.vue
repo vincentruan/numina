@@ -24,7 +24,7 @@ function handleSystemThemeChange(e: MediaQueryListEvent) {
 }
 
 const resolvedTheme = computed(() => {
-  const theme = authStore.user?.theme || 'light'
+  const theme = authStore.user?.theme || 'system'
   if (theme === 'system') {
     return systemIsDark.value ? 'dark' : 'light'
   }
