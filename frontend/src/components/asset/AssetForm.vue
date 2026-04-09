@@ -42,13 +42,34 @@
         :rules="[{ required: true, message: '请输入名称' }]"
       />
 
-      <!-- P0: Category — inline icon grid -->
-      <van-cell title="分类" />
-      <CategoryGrid
-        v-model="form.category_id"
-        :categories="categories"
-        :asset-type="form.asset_type"
+      <!-- P0: Category — tap-to-open popup picker -->
+      <van-field
+        :model-value="selectedCategoryName"
+        is-link
+        readonly
+        label="分类"
+        placeholder="请选择分类"
+        @click="showCategoryPicker = true"
       />
+      <van-popup v-model:show="showCategoryPicker" position="bottom" round>
+        <div class="category-popup">
+          <div v-if="filteredCategories.length === 0" class="category-empty">暂无分类</div>
+          <div v-else class="category-grid-popup">
+            <div
+              v-for="cat in filteredCategories"
+              :key="cat.id"
+              class="category-item"
+              :class="{ selected: form.category_id === cat.id }"
+              @click="selectCategory(cat.id)"
+            >
+              <svg class="cat-icon" aria-hidden="true">
+                <use :href="`#${getIconId(cat.icon)}`" />
+              </svg>
+              <span class="cat-name">{{ cat.name }}</span>
+            </div>
+          </div>
+        </div>
+      </van-popup>
 
       <van-field
         v-model="form.purchase_price"
@@ -206,9 +227,9 @@ import type { Asset, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags, createTag as apiCreateTag } from '@/api/tags'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
-import CategoryGrid from './CategoryGrid.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
+import { getIconId } from '@/utils/icon'
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
@@ -264,6 +285,7 @@ function syncPurchasePrice() {
 function onTypeChange(type: 'physical' | 'financial') {
   if (form.value.asset_type === type) return
   form.value.asset_type = type
+  form.value.category_id = ''
   if (type === 'financial') {
     form.value.location = ''
     form.value.expected_lifespan_days = null
@@ -283,6 +305,21 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   CNY: '¥', USD: '$', EUR: '€', GBP: '£', JPY: '¥', HKD: 'HK$',
 }
 const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || form.value.currency)
+
+// Category picker
+const showCategoryPicker = ref(false)
+const filteredCategories = computed(() =>
+  props.categories.filter(c => c.asset_type === form.value.asset_type)
+)
+const selectedCategoryName = computed(() => {
+  const cat = props.categories.find(c => c.id === form.value.category_id)
+  return cat?.name ?? ''
+})
+
+function selectCategory(id: string) {
+  form.value.category_id = id
+  showCategoryPicker.value = false
+}
 
 // Image upload state
 const fileList = ref<{ url: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
@@ -491,5 +528,56 @@ function onSubmit() {
 :deep(.van-cell-group__title) {
   font-size: 13px;
   color: var(--text-tertiary);
+}
+
+/* Category popup */
+.category-popup {
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.category-empty {
+  text-align: center;
+  padding: 24px 0;
+  font-size: 14px;
+  color: var(--van-text-color-3);
+}
+.category-grid-popup {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--van-background-2);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.category-item:active {
+  transform: scale(0.95);
+}
+.category-item.selected {
+  border-color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 12%, transparent);
+}
+.cat-icon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+.cat-name {
+  font-size: 10px;
+  color: var(--van-text-color-2);
+  margin-top: 4px;
+  text-align: center;
+  line-height: 1.2;
+}
+.category-item.selected .cat-name {
+  color: var(--van-primary-color);
 }
 </style>
