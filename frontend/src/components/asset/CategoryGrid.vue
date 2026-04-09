@@ -40,6 +40,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Category } from '@/types'
+import { getIconId } from '@/utils/icon'
 
 const props = defineProps<{
   modelValue: string
@@ -55,19 +56,6 @@ const physicalCategories = computed(() =>
 const financialCategories = computed(() =>
   props.categories.filter(c => c.asset_type === 'financial')
 )
-
-/**
- * Get the icon ID for a category icon.
- * If the icon is already an icon ID (starts with 'icon-'), use it directly.
- * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
- */
-function getIconId(icon: string): string {
-  if (icon.startsWith('icon-')) {
-    return icon
-  }
-  // Fallback for emoji or unknown icons (custom user categories)
-  return 'icon-other'
-}
 </script>
 
 <style scoped>
