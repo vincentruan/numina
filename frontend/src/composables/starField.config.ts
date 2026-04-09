@@ -147,7 +147,7 @@ const HIGH_TIER_CONFIG: TierConfig = {
   fps: 30,
   dprCap: 2,
   farStars: {
-    count: 100,
+    count: 150,
     minRadius: 0.5,
     maxRadius: 1,
     minAlpha: 0.3,
@@ -159,7 +159,7 @@ const HIGH_TIER_CONFIG: TierConfig = {
     twinkleChance: 0.15,
   },
   midStars: {
-    count: 40,
+    count: 60,
     minRadius: 1,
     maxRadius: 1.5,
     minAlpha: 0.4,
@@ -171,7 +171,7 @@ const HIGH_TIER_CONFIG: TierConfig = {
     twinkleChance: 0.35,
   },
   nearStars: {
-    count: 10,
+    count: 15,
     minRadius: 1.5,
     maxRadius: 2.5,
     minAlpha: 0.6,
@@ -184,7 +184,7 @@ const HIGH_TIER_CONFIG: TierConfig = {
   },
   meteor: {
     enabled: true,
-    maxActive: 2,
+    maxActive: 3,
     spawnChance: 0.002,
     minSpeed: 10,
     maxSpeed: 15,
@@ -216,6 +216,22 @@ export function getTotalStarCount(tier: DeviceTier): number {
 }
 
 /**
+ * Base density area: standard mobile viewport (375×812)
+ * Star counts in tier configs are calibrated for this area.
+ */
+const BASE_DENSITY_AREA = 375 * 812
+
+/**
+ * Scale a base star count proportionally to the actual viewport area.
+ * Multiplier is clamped to [1, maxMultiplier] so counts never go below
+ * the mobile baseline and never explode on very large monitors.
+ */
+export function getScaledCount(baseCount: number, viewportArea: number, maxMultiplier = 4): number {
+  const multiplier = Math.min(Math.max(viewportArea / BASE_DENSITY_AREA, 1), maxMultiplier)
+  return Math.round(baseCount * multiplier)
+}
+
+/**
  * Star colors - soft whites and light blues to complement the purple-blue gradient
  * The gradient is #667eea (blue-purple) → #764ba2 (purple)
  */
@@ -226,6 +242,8 @@ export const STAR_COLORS = {
   secondary: 'rgba(200, 220, 255, 1)',
   // Bright stars - warmer white
   bright: 'rgba(255, 250, 245, 1)',
+  // Accent - faint purple, complements the #764ba2 gradient end
+  accent: 'rgba(180, 160, 255, 1)',
 }
 
 /**

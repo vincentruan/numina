@@ -52,7 +52,7 @@ watch(() => props.modelValue, (newVal) => {
   align-items: center;
   gap: 2px;
   padding: 2px 6px;
-  background: var(--van-gray-2);
+  background: var(--van-active-color);
   border-radius: 4px;
   cursor: pointer;
   margin-right: 4px;
