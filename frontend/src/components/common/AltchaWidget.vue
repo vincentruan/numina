@@ -220,9 +220,9 @@ defineExpose({
   margin: 12px 16px;
   padding: 0 16px;
   height: 52px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 8px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 0 0 1px var(--separator);
   cursor: pointer;
   user-select: none;
   transition: box-shadow 0.2s ease;
@@ -268,9 +268,9 @@ defineExpose({
 .checkbox-box {
   width: 18px;
   height: 18px;
-  border: 1.5px solid #c8c9cc;
+  border: 1.5px solid var(--separator);
   border-radius: 3px;
-  background: #fff;
+  background: var(--card-bg);
   transition: border-color 0.2s;
 }
 
@@ -291,7 +291,7 @@ defineExpose({
 }
 
 .progress-ring__track {
-  stroke: #e8e8e8;
+  stroke: var(--separator);
 }
 
 .progress-ring__arc {
@@ -370,7 +370,7 @@ defineExpose({
 
 .captcha-label__text {
   font-size: 14px;
-  color: #323233;
+  color: var(--text-primary);
   line-height: 1;
 }
 
@@ -395,7 +395,7 @@ defineExpose({
 
 .captcha-brand__text {
   font-size: 10px;
-  color: #c8c9cc;
+  color: var(--text-tertiary);
   letter-spacing: 0.5px;
   font-weight: 500;
 }
