@@ -30,6 +30,17 @@ def seed_categories(db):
 
     existing = db.query(Category).filter(Category.is_system == True).first()
     if existing:
+        # Migrate any system categories still using emoji icons to sprite IDs
+        icon_map = {cat["name"]: cat["icon"] for cat in SYSTEM_CATEGORIES}
+        rows = db.query(Category).filter(
+            Category.is_system == True,
+            ~Category.icon.like("icon-%"),
+        ).all()
+        for cat in rows:
+            if cat.name in icon_map:
+                cat.icon = icon_map[cat.name]
+        if rows:
+            db.commit()
         return
 
     for cat_data in SYSTEM_CATEGORIES:

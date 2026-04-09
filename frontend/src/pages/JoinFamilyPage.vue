@@ -25,26 +25,38 @@
           placeholder="请输入显示名称"
           :rules="[{ required: true, message: '请输入显示名称' }]"
         />
-        <van-field
-          v-model="form.password"
-          type="password"
-          label="密码"
-          placeholder="请输入密码(至少6位)"
-          :rules="[
-            { required: true, message: '请输入密码' },
-            { validator: (v: string) => v.length >= 6, message: '密码至少6位' }
-          ]"
-        />
-        <van-field
-          v-model="confirmPassword"
-          type="password"
-          label="确认密码"
-          placeholder="请再次输入密码"
-          :rules="[
-            { required: true, message: '请确认密码' },
-            { validator: (v: string) => v === form.password, message: '两次密码不一致' }
-          ]"
-        />
+        <div class="password-field-wrapper">
+          <van-field
+            v-model="form.password"
+            :type="showPassword ? 'text' : 'password'"
+            label="密码"
+            placeholder="请输入密码(至少6位)"
+            :rules="[
+              { required: true, message: '请输入密码' },
+              { validator: (v: string) => v.length >= 6, message: '密码至少6位' }
+            ]"
+          >
+            <template #right-icon>
+              <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
+            </template>
+          </van-field>
+        </div>
+        <div class="password-field-wrapper">
+          <van-field
+            v-model="confirmPassword"
+            :type="showConfirmPassword ? 'text' : 'password'"
+            label="确认密码"
+            placeholder="请再次输入密码"
+            :rules="[
+              { required: true, message: '请确认密码' },
+              { validator: (v: string) => v === form.password, message: '两次密码不一致' }
+            ]"
+          >
+            <template #right-icon>
+              <van-icon :name="showConfirmPassword ? 'eye-o' : 'closed-eye'" @click="showConfirmPassword = !showConfirmPassword" />
+            </template>
+          </van-field>
+        </div>
       </van-cell-group>
 
       <!-- ALTCHA captcha widget -->
@@ -77,6 +89,8 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const confirmPassword = ref('')
 const altchaRef = ref()
+const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 
 const form = ref({
   invite_code: '',
@@ -153,5 +167,9 @@ async function onSubmit() {
 .divider {
   color: rgba(255, 255, 255, 0.5);
   margin: 0 12px;
+}
+.password-field-wrapper :deep(.van-field__right-icon) {
+  cursor: pointer;
+  color: var(--van-field-right-icon-color);
 }
 </style>

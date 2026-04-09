@@ -23,14 +23,20 @@
             placeholder="请输入用户名"
             :rules="[{ required: true, message: '请输入用户名' }]"
           />
-          <van-field
-            v-model="form.password"
-            type="password"
-            name="password"
-            label="密码"
-            placeholder="请输入密码"
-            :rules="[{ required: true, message: '请输入密码' }]"
-          />
+          <div class="password-field-wrapper">
+            <van-field
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              name="password"
+              label="密码"
+              placeholder="请输入密码"
+              :rules="[{ required: true, message: '请输入密码' }]"
+            >
+              <template #right-icon>
+                <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
+              </template>
+            </van-field>
+          </div>
         </van-cell-group>
 
         <!-- ALTCHA captcha widget -->
@@ -64,6 +70,7 @@ const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const altchaRef = ref()
+const showPassword = ref(false)
 
 // Canvas ref for star field animation
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -176,5 +183,9 @@ async function onSubmit() {
 .divider {
   color: rgba(255, 255, 255, 0.5);
   margin: 0 12px;
+}
+.password-field-wrapper :deep(.van-field__right-icon) {
+  cursor: pointer;
+  color: var(--van-field-right-icon-color);
 }
 </style>
