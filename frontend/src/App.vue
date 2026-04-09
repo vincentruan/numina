@@ -6,6 +6,7 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
+
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
@@ -42,7 +43,7 @@ watch(() => authStore.user?.language, (lang) => {
   }
 }, { immediate: true })
 
-onMounted(async () => {
+onMounted(() => {
   // Set initial theme
   document.documentElement.setAttribute('data-theme', resolvedTheme.value)
   // Set initial language
@@ -52,19 +53,6 @@ onMounted(async () => {
   // Listen for system theme changes
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)
-
-  // Load SVG sprite sheet for icons
-  try {
-    const response = await fetch('/icons.svg')
-    const svgText = await response.text()
-    const container = document.createElement('div')
-    container.id = 'svg-sprite-sheet'
-    container.innerHTML = svgText
-    container.style.display = 'none'
-    document.body.insertBefore(container, document.body.firstChild)
-  } catch (e) {
-    console.error('Failed to load SVG sprite sheet:', e)
-  }
 })
 
 onUnmounted(() => {
