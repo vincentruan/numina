@@ -44,7 +44,7 @@
 
       <!-- P0: Category — tap-to-open popup picker -->
       <van-field
-        :value="selectedCategoryName"
+        :model-value="selectedCategoryName"
         is-link
         readonly
         label="分类"
