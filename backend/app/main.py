@@ -32,6 +32,10 @@ from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.activity import Activity  # noqa: F401
 from app.models.exchange_rate import ExchangeRate  # noqa: F401
 from app.models.currency import Currency  # noqa: F401
+from app.models.storage_backend import StorageBackend  # noqa: F401
+from app.models.cached_file import CachedFile  # noqa: F401
+from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
+from app.models.sync_event import SyncEvent  # noqa: F401
 
 from app.routers import auth, assets, liabilities, categories, tags, dashboard, family, wishes
 from app.routers import currencies as currencies_router
