@@ -12,7 +12,7 @@ from app.config import settings
 from app.core.logging_config import setup_logging
 from app.database import Base, SessionLocal, engine
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.scheduler import fetch_rates_job, scheduler, setup_exchange_rate_schedule
+from app.scheduler import fetch_rates_job, scheduler, setup_exchange_rate_schedule, setup_file_sync_schedule
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.services.exchange_rate import ExchangeRateService
@@ -44,6 +44,7 @@ from app.routers import import_ as import_router
 from app.routers import activities as activities_router
 from app.routers import upload
 from app.routers import captcha
+from app.routers import files as files_router
 
 
 logger = logging.getLogger(__name__)
@@ -93,6 +94,7 @@ async def lifespan(app: FastAPI):
 
     try:
         setup_exchange_rate_schedule()
+        setup_file_sync_schedule()
         scheduler.start()
         logger.info("APScheduler 已启动")
     except Exception as e:
@@ -194,6 +196,7 @@ app.include_router(currencies_router.router, prefix="/api/v1")
 app.include_router(activities_router.router, prefix="/api/v1")
 app.include_router(upload.router, prefix="/api/v1")
 app.include_router(captcha.router, prefix="/api/v1")
+app.include_router(files_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))

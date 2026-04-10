@@ -1,0 +1,121 @@
+"""File management endpoints — delete and URL retrieval."""
+import os
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.auth.deps import get_current_user
+from app.database import get_db
+from app.models.cached_file import CachedFile
+from app.models.file_remote_location import FileRemoteLocation
+from app.models.storage_backend import StorageBackend as StorageBackendModel
+from app.models.user import User
+from app.config import settings
+from app.core.logging_config import get_logger
+from app.services.storage.local import LocalStorageBackend
+from app.services.storage.factory import get_backend_for_type
+from app.scheduler import _decrypt_config
+
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/files", tags=["files"])
+
+
+def _get_owned_file(file_id: str, user: User, db: Session) -> CachedFile:
+    """Fetch a CachedFile owned by the user's family, or raise 404."""
+    cached_file = (
+        db.query(CachedFile)
+        .filter_by(id=file_id, family_id=user.family_id)
+        .first()
+    )
+    if cached_file is None or cached_file.deleted_at is not None:
+        raise HTTPException(status_code=404, detail="文件不存在")
+    return cached_file
+
+
+@router.delete("/{file_id}", status_code=204)
+async def delete_file(
+    file_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Soft-delete a file: remove from local disk and all synced remote backends."""
+    cached_file = _get_owned_file(file_id, user, db)
+
+    # Delete from local disk
+    local_backend = LocalStorageBackend(settings.UPLOAD_DIR)
+    try:
+        remote_path = str(
+            os.path.relpath(cached_file.local_path, settings.UPLOAD_DIR)
+        )
+        await local_backend.delete(remote_path)
+    except Exception as e:
+        logger.warning(f"本地文件删除失败: {e}")
+
+    # Delete from all synced remote backends
+    locations = (
+        db.query(FileRemoteLocation)
+        .filter_by(file_id=file_id)
+        .filter(FileRemoteLocation.sync_status == "synced")
+        .all()
+    )
+    for loc in locations:
+        backend_row = db.query(StorageBackendModel).filter_by(id=loc.backend_id).first()
+        if backend_row is None:
+            continue
+        try:
+            config = _decrypt_config(backend_row.config)
+            if config:
+                backend = get_backend_for_type(backend_row.backend_type, config)
+                await backend.delete(loc.remote_path or "")
+        except Exception as e:
+            logger.warning(f"远程文件删除失败 [{backend_row.id}]: {e}")
+        loc.sync_status = "deleted"
+
+    # Soft-delete the cached_file record
+    cached_file.deleted_at = datetime.now()
+    db.commit()
+
+
+@router.get("/{file_id}/url")
+def get_file_url(
+    file_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the best available URL for a file.
+
+    Prefers the default backend's synced URL; falls back to local /uploads/ URL.
+    Supports historical files uploaded under a now-retired backend.
+    """
+    cached_file = _get_owned_file(file_id, user, db)
+
+    # Try default backend first
+    default_backend = (
+        db.query(StorageBackendModel)
+        .filter_by(is_default=True, is_active=True)
+        .first()
+    )
+    if default_backend is not None:
+        loc = (
+            db.query(FileRemoteLocation)
+            .filter_by(file_id=file_id, backend_id=default_backend.id, sync_status="synced")
+            .first()
+        )
+        if loc is not None and loc.remote_url:
+            return {"url": loc.remote_url, "source": "remote"}
+
+    # Fall back to any synced remote location (historical backend compatibility)
+    any_synced = (
+        db.query(FileRemoteLocation)
+        .filter_by(file_id=file_id, sync_status="synced")
+        .first()
+    )
+    if any_synced is not None and any_synced.remote_url:
+        return {"url": any_synced.remote_url, "source": "remote"}
+
+    # Fall back to local URL
+    local_backend = LocalStorageBackend(settings.UPLOAD_DIR)
+    remote_path = os.path.relpath(cached_file.local_path, settings.UPLOAD_DIR)
+    return {"url": local_backend.get_url(remote_path), "source": "local"}
