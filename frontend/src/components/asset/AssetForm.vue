@@ -176,9 +176,9 @@
         </template>
       </van-field>
 
-      <van-field v-model="form.location" label="存放位置" placeholder="可选" />
+      <van-field v-model="form.location" label="存放位置" placeholder="可选，如：书房" />
 
-      <van-field v-model="form.annual_maintenance_cost" type="number" label="年维护费" placeholder="可选">
+      <van-field v-model="form.annual_maintenance_cost" type="number" label="年维护费" placeholder="可选，单位：元">
         <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
     </van-cell-group>

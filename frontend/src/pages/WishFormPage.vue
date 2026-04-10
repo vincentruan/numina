@@ -22,7 +22,7 @@
           name="description"
           label="描述"
           type="textarea"
-          placeholder="可选"
+          placeholder="可选，详细描述心愿内容"
           rows="2"
           autosize
         />
@@ -31,7 +31,7 @@
           name="expected_price"
           label="预期价格"
           type="number"
-          placeholder="可选"
+          placeholder="可选，单位：元"
         >
           <template #left-icon>
             <CurrencyButton v-model="form.currency" />
