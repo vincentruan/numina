@@ -41,6 +41,10 @@ class Settings(BaseSettings):
     ENABLE_SECURITY_LOGGING: bool = True
     ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
 
+    # File storage configuration
+    UPLOAD_DIR: str = "./data/uploads"
+    FILE_SYNC_INTERVAL_MINUTES: int = 15
+
     # Logging configuration
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"

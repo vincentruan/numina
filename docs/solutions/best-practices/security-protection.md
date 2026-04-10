@@ -1,7 +1,7 @@
 ---
 title: Numina 安全防护最佳实践
 date: 2026-04-02
-category: docs/solutions/best-practices/
+category: best-practices
 module: security
 problem_type: best_practice
 component: authentication

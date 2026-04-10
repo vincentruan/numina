@@ -1,7 +1,7 @@
 ---
 title: Redis Cache Backend Fail-Fast Strategy
 date: 2026-04-03
-category: docs/solutions/best-practices/
+category: best-practices
 module: cache
 problem_type: best_practice
 component: authentication
