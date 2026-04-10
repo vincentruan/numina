@@ -1,0 +1,153 @@
+<template>
+  <div class="ai-disposal-page">
+    <PageHeader title="闲置资产清仓" />
+
+    <div v-if="loading" class="loading-state">
+      <van-loading size="32" type="spinner" />
+    </div>
+
+    <div v-else-if="!suggestions.length" class="empty-state">
+      <van-empty image="success" description="暂无处置建议" />
+      <div class="actions">
+        <van-button plain block :loading="refreshing" @click="onRefresh">扫描闲置资产</van-button>
+      </div>
+    </div>
+
+    <template v-else>
+      <div class="summary-bar">
+        <span>{{ suggestions.length }} 项待处置资产</span>
+        <van-button size="mini" plain :loading="refreshing" @click="onRefresh">重新扫描</van-button>
+      </div>
+
+      <van-swipe-cell v-for="s in suggestions" :key="s.id" class="suggestion-item">
+        <div class="suggestion-card">
+          <div class="card-top">
+            <div class="asset-info">
+              <span class="asset-name">{{ s.asset_name }}</span>
+              <span class="category-tag">{{ s.category_name }}</span>
+            </div>
+            <div class="score-badge" :class="scoreClass(s.inefficiency_score)">
+              {{ s.inefficiency_score }}
+            </div>
+          </div>
+
+          <div v-if="s.estimated_resale_range" class="resale-range">
+            估算转售价：{{ s.estimated_resale_range }}
+          </div>
+
+          <div class="channel-row">
+            <van-icon name="shop-o" size="14" />
+            <span>推荐渠道：{{ s.suggested_channel }}</span>
+          </div>
+
+          <p v-if="s.suggestion" class="suggestion-text">{{ s.suggestion }}</p>
+
+          <div v-if="s.daily_cost" class="daily-cost">
+            持续损耗：¥{{ s.daily_cost.toFixed(1) }}/天
+          </div>
+        </div>
+        <template #right>
+          <van-button square type="warning" text="忽略" class="dismiss-btn" @click="onDismiss(s.id)" />
+        </template>
+      </van-swipe-cell>
+    </template>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { showToast } from 'vant'
+import { getDisposalSuggestions, refreshDisposalSuggestions, dismissDisposalSuggestion } from '@/api/ai'
+import PageHeader from '@/components/common/PageHeader.vue'
+
+const loading = ref(false)
+const refreshing = ref(false)
+const suggestions = ref<any[]>([])
+
+function scoreClass(score: number) {
+  if (score >= 70) return 'score-high'
+  if (score >= 40) return 'score-medium'
+  return 'score-low'
+}
+
+async function loadSuggestions() {
+  loading.value = true
+  try {
+    const res = await getDisposalSuggestions()
+    suggestions.value = res.data
+  } catch {
+    showToast('加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function onRefresh() {
+  refreshing.value = true
+  try {
+    await refreshDisposalSuggestions()
+    await loadSuggestions()
+    showToast('扫描完成')
+  } catch {
+    showToast('扫描失败，请检查 AI 配置')
+  } finally {
+    refreshing.value = false
+  }
+}
+
+async function onDismiss(id: string) {
+  try {
+    await dismissDisposalSuggestion(id)
+    suggestions.value = suggestions.value.filter(s => s.id !== id)
+  } catch {
+    showToast('操作失败')
+  }
+}
+
+onMounted(loadSuggestions)
+</script>
+
+<style scoped>
+.ai-disposal-page {
+  background: var(--bg-secondary);
+  min-height: 100vh;
+  padding-bottom: 24px;
+}
+.loading-state { display: flex; justify-content: center; padding: 60px; }
+.empty-state { padding: 40px 16px; }
+.actions { padding: 0 16px; }
+.summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.suggestion-item { margin: 8px 16px; border-radius: 12px; overflow: hidden; }
+.suggestion-card { background: var(--bg-primary); padding: 14px 16px; }
+.card-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+.asset-info { display: flex; flex-direction: column; gap: 4px; }
+.asset-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.category-tag {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: var(--bg-secondary); color: var(--text-secondary);
+  align-self: flex-start;
+}
+.score-badge {
+  width: 40px; height: 40px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700;
+}
+.score-high { background: #fce4ec; color: #c62828; }
+.score-medium { background: #fff8e1; color: #f57f17; }
+.score-low { background: #e8f5e9; color: #2e7d32; }
+.resale-range { font-size: 13px; color: var(--text-primary); font-weight: 500; margin-bottom: 6px; }
+.channel-row {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--text-secondary); margin-bottom: 6px;
+}
+.suggestion-text { font-size: 13px; color: var(--text-secondary); margin: 0 0 6px; line-height: 1.5; }
+.daily-cost { font-size: 12px; color: #f44336; }
+.dismiss-btn { height: 100%; }
+</style>

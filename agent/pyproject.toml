@@ -1,0 +1,16 @@
+[project]
+name = "numina-agent"
+version = "0.1.0"
+description = "Numina AI Agent 微服务"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "httpx>=0.28.0",
+    "apscheduler>=3.11.2",
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "cryptography>=42.0.0",
+]

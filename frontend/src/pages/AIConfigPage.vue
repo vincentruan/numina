@@ -1,0 +1,205 @@
+<template>
+  <div class="ai-config-page">
+    <PageHeader title="AI 智能助手" />
+
+    <!-- AI Enable Toggle (owner only) -->
+    <van-cell-group inset title="AI 功能">
+      <van-cell title="启用 AI 助手" center>
+        <template #value>
+          <van-switch
+            v-model="aiEnabled"
+            :disabled="!isOwner || saving"
+            @change="onToggleAI"
+          />
+        </template>
+      </van-cell>
+    </van-cell-group>
+
+    <!-- Provider Config (owner only, shown when enabled) -->
+    <template v-if="isOwner">
+      <van-cell-group inset title="服务商配置" class="section">
+        <van-cell title="AI 服务商" :value="providerLabel" is-link @click="showProviderPicker = true" />
+        <van-field
+          v-model="apiKeyInput"
+          label="API Key"
+          :placeholder="maskedKey || '请输入 API Key'"
+          type="password"
+          clearable
+          :disabled="saving"
+        />
+      </van-cell-group>
+
+      <div class="actions">
+        <van-button
+          block
+          type="primary"
+          :loading="saving"
+          :disabled="!canSave"
+          @click="onSave"
+        >
+          保存配置
+        </van-button>
+        <van-button
+          block
+          plain
+          class="test-btn"
+          :loading="testing"
+          :disabled="!aiStore.config?.ai_enabled"
+          @click="onTest"
+        >
+          测试连接
+        </van-button>
+      </div>
+    </template>
+
+    <!-- Non-owner view -->
+    <template v-else>
+      <van-cell-group inset class="section">
+        <van-cell
+          title="当前状态"
+          :value="aiStore.config?.ai_enabled ? '已启用' : '未启用'"
+        />
+        <van-cell
+          v-if="aiStore.config?.ai_provider"
+          title="服务商"
+          :value="providerLabel"
+        />
+      </van-cell-group>
+      <div class="tip">
+        <van-icon name="info-o" />
+        <span>AI 功能由家庭管理员配置</span>
+      </div>
+    </template>
+
+    <!-- Provider Picker -->
+    <van-popup v-model:show="showProviderPicker" round position="bottom">
+      <van-picker
+        :columns="providerOptions"
+        @confirm="onProviderConfirm"
+        @cancel="showProviderPicker = false"
+      />
+    </van-popup>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { showToast } from 'vant'
+import { useAuthStore } from '@/stores/auth'
+import { useAIStore } from '@/stores/ai'
+import PageHeader from '@/components/common/PageHeader.vue'
+
+const authStore = useAuthStore()
+const aiStore = useAIStore()
+
+const saving = ref(false)
+const testing = ref(false)
+const showProviderPicker = ref(false)
+const apiKeyInput = ref('')
+const selectedProvider = ref<string | null>(null)
+const aiEnabled = ref(false)
+
+const isOwner = computed(() => authStore.user?.role === 'owner')
+
+const maskedKey = computed(() => aiStore.config?.ai_api_key_masked ?? null)
+
+const providerOptions = [
+  { text: 'Anthropic (Claude)', value: 'anthropic' },
+  { text: 'OpenAI (GPT)', value: 'openai' },
+]
+
+const providerLabel = computed(() => {
+  const p = selectedProvider.value ?? aiStore.config?.ai_provider
+  if (p === 'anthropic') return 'Anthropic (Claude)'
+  if (p === 'openai') return 'OpenAI (GPT)'
+  return '未选择'
+})
+
+const canSave = computed(() =>
+  !saving.value && (selectedProvider.value !== null || apiKeyInput.value.trim() !== '')
+)
+
+onMounted(async () => {
+  await aiStore.fetchConfig()
+  aiEnabled.value = aiStore.config?.ai_enabled ?? false
+  selectedProvider.value = aiStore.config?.ai_provider ?? null
+})
+
+async function onToggleAI(val: boolean) {
+  saving.value = true
+  try {
+    await aiStore.updateConfig({ ai_enabled: val })
+    showToast(val ? 'AI 助手已启用' : 'AI 助手已关闭')
+  } catch {
+    aiEnabled.value = !val
+    showToast('操作失败，请重试')
+  } finally {
+    saving.value = false
+  }
+}
+
+function onProviderConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
+  selectedProvider.value = selectedOptions[0].value
+  showProviderPicker.value = false
+}
+
+async function onSave() {
+  saving.value = true
+  try {
+    const payload: { ai_provider?: string | null; ai_api_key?: string | null } = {}
+    if (selectedProvider.value !== null) payload.ai_provider = selectedProvider.value
+    if (apiKeyInput.value.trim()) payload.ai_api_key = apiKeyInput.value.trim()
+    await aiStore.updateConfig(payload)
+    apiKeyInput.value = ''
+    showToast('配置已保存')
+  } catch {
+    showToast('保存失败，请重试')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function onTest() {
+  testing.value = true
+  try {
+    const result = await aiStore.testConnection()
+    if (result.data.success) {
+      showToast(`连接成功（${result.data.latency_ms ?? '-'}ms）`)
+    } else {
+      showToast(`连接失败：${result.data.message}`)
+    }
+  } catch {
+    showToast('测试失败，请检查配置')
+  } finally {
+    testing.value = false
+  }
+}
+</script>
+
+<style scoped>
+.ai-config-page {
+  background: var(--bg-secondary);
+  min-height: 100vh;
+  padding-bottom: 20px;
+}
+.section {
+  margin-top: 12px;
+}
+.actions {
+  padding: 16px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.test-btn {
+  margin-top: 0;
+}
+.tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 16px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+</style>
