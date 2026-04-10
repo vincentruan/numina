@@ -19,7 +19,8 @@ class RedisCacheBackend(CacheBackend):
 
         Raises:
             NotImplementedError: Redis backend is not yet implemented.
-                Factory will catch this and fall back to memory cache.
+                The factory will propagate this error — configure CACHE_BACKEND=memory
+                for development, or implement this backend before using Redis in production.
         """
         # Placeholder: self._client = redis.from_url(redis_url)
         self._redis_url = redis_url
