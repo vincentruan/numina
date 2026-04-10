@@ -1,5 +1,4 @@
 import asyncio
-import json
 import random
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -8,6 +7,7 @@ from app.config import settings
 from app.core.logging_config import get_logger
 from app.database import SessionLocal
 from app.services.exchange_rate import ExchangeRateService
+from app.services.storage.config_crypto import decrypt_config, encrypt_config
 from app.services.storage.factory import get_backend_for_type
 
 logger = get_logger(__name__)
@@ -46,7 +46,7 @@ async def file_sync_job() -> None:
             return
 
         # Decrypt config
-        config = _decrypt_config(default_backend_row.config)
+        config = decrypt_config(default_backend_row.config)
         if config is None:
             logger.warning("无法解密存储后端配置，跳过同步")
             return
@@ -55,7 +55,8 @@ async def file_sync_job() -> None:
 
         pending = (
             db.query(FileRemoteLocation)
-            .filter_by(backend_id=default_backend_row.id, sync_status="pending")
+            .filter_by(backend_id=default_backend_row.id)
+            .filter(FileRemoteLocation.sync_status.in_(["pending", "failed"]))
             .filter(FileRemoteLocation.retry_count < 3)
             .all()
         )
@@ -69,8 +70,7 @@ async def file_sync_job() -> None:
                 continue
 
             try:
-                with open(cached_file.local_path, "rb") as f:
-                    content = f.read()
+                content = await asyncio.to_thread(_read_file, cached_file.local_path)
 
                 remote_path = await backend.save(content, _filename_from_path(cached_file.local_path), cached_file.date_dir)
                 loc.sync_status = "synced"
@@ -85,20 +85,23 @@ async def file_sync_job() -> None:
                     await asyncio.sleep(1)
 
             except FileNotFoundError:
-                loc.sync_status = "failed"
-                loc.last_error = f"本地文件不存在: {cached_file.local_path}"
                 loc.retry_count += 1
+                loc.last_error = f"本地文件不存在: {cached_file.local_path}"
+                if loc.retry_count >= 3:
+                    loc.sync_status = "failed"
                 db.commit()
             except StorageError as e:
-                loc.sync_status = "failed"
-                loc.last_error = str(e)
                 loc.retry_count += 1
+                loc.last_error = str(e)
+                if loc.retry_count >= 3:
+                    loc.sync_status = "failed"
                 db.commit()
                 logger.warning(f"文件同步失败: {cached_file.id}: {e}")
             except Exception as e:
-                loc.sync_status = "failed"
-                loc.last_error = str(e)
                 loc.retry_count += 1
+                loc.last_error = str(e)
+                if loc.retry_count >= 3:
+                    loc.sync_status = "failed"
                 db.commit()
                 logger.exception(f"文件同步异常: {cached_file.id}: {e}")
 
@@ -113,44 +116,15 @@ def _filename_from_path(local_path: str) -> str:
     return Path(local_path).name
 
 
+def _read_file(local_path: str) -> bytes:
+    with open(local_path, "rb") as f:
+        return f.read()
+
+
 def _now():
     from datetime import datetime
     return datetime.now()
 
-
-def _decrypt_config(config_text: str | None) -> dict | None:
-    """Decrypt the storage backend config JSON. Returns None on failure."""
-    if not config_text:
-        return None
-    try:
-        data = json.loads(config_text)
-        # If config is already plaintext dict (dev/test), return as-is
-        if isinstance(data, dict):
-            return data
-    except (json.JSONDecodeError, Exception):
-        pass
-    # Try Fernet decryption
-    try:
-        import base64
-        import hashlib
-        from cryptography.fernet import Fernet
-        key = base64.urlsafe_b64encode(hashlib.sha256(settings.SECRET_KEY.encode()).digest())
-        f = Fernet(key)
-        decrypted = f.decrypt(config_text.encode())
-        return json.loads(decrypted)
-    except Exception as e:
-        logger.warning(f"存储后端配置解密失败: {e}")
-        return None
-
-
-def encrypt_config(config: dict) -> str:
-    """Encrypt a config dict for storage in storage_backends.config."""
-    import base64
-    import hashlib
-    from cryptography.fernet import Fernet
-    key = base64.urlsafe_b64encode(hashlib.sha256(settings.SECRET_KEY.encode()).digest())
-    f = Fernet(key)
-    return f.encrypt(json.dumps(config).encode()).decode()
 
 
 def setup_exchange_rate_schedule() -> None:
@@ -176,5 +150,7 @@ def setup_file_sync_schedule() -> None:
         minutes=settings.FILE_SYNC_INTERVAL_MINUTES,
         id="file_sync",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     logger.info(f"文件同步任务已配置（每 {settings.FILE_SYNC_INTERVAL_MINUTES} 分钟）")

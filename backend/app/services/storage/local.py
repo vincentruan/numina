@@ -24,8 +24,10 @@ class LocalStorageBackend(StorageBackend):
         return f"images/{date_dir}/{filename}"
 
     async def delete(self, remote_path: str) -> None:
-        """Remove file from disk. Logs a warning if not found."""
-        file_path = self._upload_dir / remote_path
+        """Remove file from disk. Raises ValueError if path escapes upload_dir."""
+        file_path = (self._upload_dir / remote_path).resolve()
+        if not str(file_path).startswith(str(self._upload_dir.resolve())):
+            raise ValueError(f"路径越界，拒绝删除: {remote_path}")
         try:
             os.remove(file_path)
         except FileNotFoundError:

@@ -77,3 +77,30 @@ class TestWebDAVStorageBackend:
              patch.object(backend._client, "put", new=AsyncMock(return_value=make_response(204))):
             result = run(backend.save(b"updated", "photo.jpg", "20260410"))
         assert result == "20260410/photo.jpg"
+
+
+class TestWebDAVURLValidation:
+    @pytest.mark.parametrize("url", [
+        "http://127.0.0.1/files",
+        "http://localhost/files",
+        "http://169.254.169.254/latest/meta-data",
+        "http://10.0.0.1/dav",
+        "http://172.16.0.1/dav",
+        "http://192.168.1.1/dav",
+        "http://[::1]/dav",
+        "ftp://example.com/dav",
+        "file:///etc/passwd",
+    ])
+    def test_blocked_urls_raise_value_error(self, url):
+        with pytest.raises(ValueError):
+            WebDAVStorageBackend(base_url=url, username="u", password="p")
+
+    @pytest.mark.parametrize("url", [
+        "https://dav.example.com/files",
+        "http://dav.example.com/files",
+        "https://my-nas.local/dav",
+    ])
+    def test_allowed_urls_do_not_raise(self, url):
+        # Should not raise — domain names are allowed (DNS resolves at request time)
+        backend = WebDAVStorageBackend(base_url=url, username="u", password="p")
+        assert backend._base_url == url.rstrip("/")

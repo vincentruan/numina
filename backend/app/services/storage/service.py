@@ -1,9 +1,11 @@
 """StorageService — orchestrates file upload, dedup, and DB persistence."""
 import hashlib
+import os
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -40,16 +42,33 @@ class StorageService:
             .filter_by(sha256=sha256, family_id=user.family_id)
             .first()
         )
-        if existing is not None and existing.deleted_at is None:
-            remote_path = str(
-                Path(existing.local_path).relative_to(settings.UPLOAD_DIR)
-            )
-            return FileRecordResponse(
-                file_id=existing.id,
-                url=backend.get_url(remote_path),
-                filename=existing.original_filename,
-                size_bytes=existing.size_bytes,
-            )
+        if existing is not None:
+            if existing.deleted_at is None:
+                # Active duplicate — return existing record
+                remote_path = str(
+                    Path(existing.local_path).relative_to(settings.UPLOAD_DIR)
+                )
+                return FileRecordResponse(
+                    file_id=existing.id,
+                    url=backend.get_url(remote_path),
+                    filename=existing.original_filename,
+                    size_bytes=existing.size_bytes,
+                )
+            else:
+                # Soft-deleted duplicate — resurrect it
+                existing.deleted_at = None
+                existing.user_id = user.id
+                existing.original_filename = original_filename
+                db.commit()
+                remote_path = str(
+                    Path(existing.local_path).relative_to(settings.UPLOAD_DIR)
+                )
+                return FileRecordResponse(
+                    file_id=existing.id,
+                    url=backend.get_url(remote_path),
+                    filename=original_filename,
+                    size_bytes=existing.size_bytes,
+                )
 
         # New file — persist to disk
         filename = f"{uuid4().hex}{ext}"
@@ -86,7 +105,32 @@ class StorageService:
             )
             db.add(remote_loc)
 
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError:
+            # Concurrent upload of identical bytes won the race — roll back,
+            # clean up the orphaned disk file, and return the winner's record.
+            db.rollback()
+            try:
+                os.remove(local_path)
+            except OSError:
+                pass
+            winner = (
+                db.query(CachedFile)
+                .filter_by(sha256=sha256, family_id=user.family_id)
+                .filter(CachedFile.deleted_at.is_(None))
+                .first()
+            )
+            if winner is not None:
+                winner_path = str(Path(winner.local_path).relative_to(settings.UPLOAD_DIR))
+                return FileRecordResponse(
+                    file_id=winner.id,
+                    url=backend.get_url(winner_path),
+                    filename=winner.original_filename,
+                    size_bytes=winner.size_bytes,
+                )
+            # Extremely unlikely: winner was soft-deleted between race and here
+            raise
 
         return FileRecordResponse(
             file_id=cached_file.id,

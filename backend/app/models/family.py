@@ -3,7 +3,7 @@ import string
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -22,6 +22,11 @@ class Family(Base):
     invite_code: Mapped[str] = mapped_column(String(6), unique=True, default=generate_invite_code)
     created_by: Mapped[str] = mapped_column(String(36), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    # AI 功能配置
+    ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ai_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'anthropic' | 'openai'
+    ai_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # AES-256 Fernet 加密
 
     members = relationship("User", back_populates="family")
     categories = relationship("Category", back_populates="family")

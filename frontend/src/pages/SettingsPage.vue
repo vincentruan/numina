@@ -5,6 +5,13 @@
     <van-cell-group inset :title="t('settings.dataManagement')">
       <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
       <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
+      <van-cell title="AI 智能助手" icon="smile-o" is-link to="/settings/ai" />
+      <van-cell title="家庭资产体检" icon="chart-trending-o" is-link to="/ai/report" />
+      <van-cell title="资产老化预警" icon="warning-o" is-link to="/ai/alerts" />
+      <van-cell title="闲置资产清仓" icon="delete-o" is-link to="/ai/disposal" />
+      <van-cell title="负债优化顾问" icon="balance-o" is-link to="/ai/liability" />
+      <van-cell title="AI 问答助手" icon="chat-o" is-link to="/ai/chat" />
+      <van-cell title="配置漂移检测" icon="aim" is-link to="/ai/allocation" />
     </van-cell-group>
 
     <van-cell-group inset :title="t('settings.userSettings')" class="section">

@@ -109,7 +109,7 @@ class TestFileSyncJob:
         assert loc_updated.remote_path == "20260410/test.jpg"
         mock_backend.save.assert_called_once()
     def test_sync_job_marks_failed_on_storage_error(self, db, tmp_path):
-        """Sync job sets sync_status=failed and increments retry_count on StorageError."""
+        """Sync job increments retry_count on StorageError; marks failed after 3 attempts."""
         from app.scheduler import file_sync_job
 
         local_file = tmp_path / "test.jpg"
@@ -129,9 +129,33 @@ class TestFileSyncJob:
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
-        assert loc_updated.sync_status == "failed"
+        assert loc_updated.sync_status == "pending"  # still retryable after first failure
         assert loc_updated.retry_count == 1
         assert "connection refused" in (loc_updated.last_error or "")
+
+    def test_sync_job_marks_failed_after_max_retries(self, db, tmp_path):
+        """Sync job marks status=failed when retry_count reaches 3."""
+        from app.scheduler import file_sync_job
+
+        local_file = tmp_path / "test.jpg"
+        local_file.write_bytes(b"data")
+
+        backend = _make_backend(db)
+        cf = _make_cached_file(db, family_id="fam-max2", user_id="usr-max2", local_path=str(local_file))
+        loc = _make_location(db, cf.id, backend.id, sync_status="pending", retry_count=2)
+
+        mock_backend = AsyncMock()
+        mock_backend.save = AsyncMock(side_effect=StorageConnectionError("still down"))
+
+        loc_id = loc.id
+
+        with patch("app.scheduler.SessionLocal", return_value=db), \
+             patch("app.scheduler.get_backend_for_type", return_value=mock_backend):
+            run(file_sync_job())
+
+        loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
+        assert loc_updated.sync_status == "failed"
+        assert loc_updated.retry_count == 3
 
     def test_sync_job_skips_rows_with_max_retries(self, db, tmp_path):
         """Rows with retry_count >= 3 are skipped."""
@@ -177,7 +201,9 @@ class TestDeleteFileEndpoint:
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
 
-        resp = client.delete(f"/api/v1/files/{cf.id}", headers=headers)
+        with patch("app.routers.files.settings") as mock_settings:
+            mock_settings.UPLOAD_DIR = str(tmp_path)
+            resp = client.delete(f"/api/v1/files/{cf.id}", headers=headers)
         assert resp.status_code == 204
 
         db.refresh(cf)
@@ -192,7 +218,9 @@ class TestDeleteFileEndpoint:
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
 
-        client.delete(f"/api/v1/files/{cf.id}", headers=headers)
+        with patch("app.routers.files.settings") as mock_settings:
+            mock_settings.UPLOAD_DIR = str(tmp_path)
+            client.delete(f"/api/v1/files/{cf.id}", headers=headers)
         assert not local_file.exists()
 
     def test_delete_file_not_found(self, client, db):
@@ -220,7 +248,9 @@ class TestDeleteFileEndpoint:
         mock_backend = AsyncMock()
         mock_backend.delete = AsyncMock()
 
-        with patch("app.routers.files.get_backend_for_type", return_value=mock_backend):
+        with patch("app.routers.files.settings") as mock_settings, \
+             patch("app.routers.files.get_backend_for_type", return_value=mock_backend):
+            mock_settings.UPLOAD_DIR = str(tmp_path)
             resp = client.delete(f"/api/v1/files/{cf.id}", headers=headers)
 
         assert resp.status_code == 204
@@ -238,11 +268,13 @@ class TestGetFileUrlEndpoint:
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
 
-        resp = client.get(f"/api/v1/files/{cf.id}/url", headers=headers)
+        with patch("app.routers.files.settings") as mock_settings:
+            mock_settings.UPLOAD_DIR = str(tmp_path)
+            resp = client.get(f"/api/v1/files/{cf.id}/url", headers=headers)
         assert resp.status_code == 200
         data = resp.json()
         assert data["source"] == "local"
-        assert "/uploads/" in data["url"]
+        assert "photo.jpg" in data["url"]
 
     def test_get_url_returns_remote_when_synced(self, client, db, tmp_path):
         user_id, family_id, token = _register_and_get_ids(client)

@@ -1,5 +1,7 @@
 """WebDAV storage backend."""
+import ipaddress
 import mimetypes
+from urllib.parse import urlparse
 
 import httpx
 
@@ -8,6 +10,41 @@ from app.services.storage.base import (
     StorageBackend,
     StorageConnectionError,
 )
+
+# Private/reserved IPv4 ranges that must not be reachable via user-supplied URLs
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("127.0.0.0/8"),      # loopback
+    ipaddress.ip_network("10.0.0.0/8"),        # RFC 1918
+    ipaddress.ip_network("172.16.0.0/12"),     # RFC 1918
+    ipaddress.ip_network("192.168.0.0/16"),    # RFC 1918
+    ipaddress.ip_network("169.254.0.0/16"),    # link-local / AWS metadata
+    ipaddress.ip_network("::1/128"),           # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),          # IPv6 ULA
+    ipaddress.ip_network("fe80::/10"),         # IPv6 link-local
+]
+
+
+def _validate_webdav_url(url: str) -> None:
+    """Raise ValueError if url is not a safe http/https URL for WebDAV use."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"WebDAV URL 必须使用 http 或 https 协议，当前: {parsed.scheme!r}")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("WebDAV URL 缺少主机名")
+    # Block well-known loopback hostnames
+    if hostname.lower() in ("localhost", "localhost.localdomain"):
+        raise ValueError(f"WebDAV URL 指向受限主机名，拒绝: {hostname}")
+    try:
+        addr = ipaddress.ip_address(hostname)
+        for net in _BLOCKED_NETWORKS:
+            if addr in net:
+                raise ValueError(f"WebDAV URL 指向受限地址范围，拒绝: {hostname}")
+    except ValueError as exc:
+        # Re-raise our own errors; ip_address() raises ValueError for domain names
+        if "WebDAV" in str(exc) or "受限" in str(exc):
+            raise
+        # hostname is a domain name — allow it (DNS resolution happens at request time)
 
 
 class WebDAVStorageBackend(StorageBackend):
@@ -20,6 +57,7 @@ class WebDAVStorageBackend(StorageBackend):
         password: str,
         verify_ssl: bool = True,
     ) -> None:
+        _validate_webdav_url(base_url)
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(
             auth=httpx.BasicAuth(username, password),

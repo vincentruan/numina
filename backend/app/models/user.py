@@ -26,6 +26,9 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    # AI 功能
+    ai_chat_last_read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
     family = relationship("Family", back_populates="members")
     assets = relationship("Asset", back_populates="user")
     liabilities = relationship("Liability", back_populates="user")

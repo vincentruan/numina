@@ -122,6 +122,41 @@ const router = createRouter({
           component: () => import('@/pages/TagManagePage.vue')
         },
         {
+          path: 'settings/ai',
+          name: 'AIConfig',
+          component: () => import('@/pages/AIConfigPage.vue')
+        },
+        {
+          path: 'ai/report',
+          name: 'AIReport',
+          component: () => import('@/pages/AIReportPage.vue')
+        },
+        {
+          path: 'ai/alerts',
+          name: 'AIAlerts',
+          component: () => import('@/pages/AIAlertsPage.vue')
+        },
+        {
+          path: 'ai/disposal',
+          name: 'AIDisposal',
+          component: () => import('@/pages/AIDisposalPage.vue')
+        },
+        {
+          path: 'ai/liability',
+          name: 'AILiability',
+          component: () => import('@/pages/AILiabilityAdvisorPage.vue')
+        },
+        {
+          path: 'ai/chat',
+          name: 'AIChat',
+          component: () => import('@/pages/AIChatPage.vue')
+        },
+        {
+          path: 'ai/allocation',
+          name: 'AIAllocation',
+          component: () => import('@/pages/AIAllocationPage.vue')
+        },
+        {
           path: 'stats',
           name: 'DataStats',
           component: () => import('@/pages/DataStatsPage.vue')

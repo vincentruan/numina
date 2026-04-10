@@ -13,12 +13,35 @@ services:
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
+      - AGENT_BASE_URL=http://numina-agent:8001
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+
+  agent:
+    build: ./agent
+    container_name: numina-agent
+    restart: unless-stopped
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - BACKEND_BASE_URL=http://numina-backend:8000
+      - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
   frontend:
     build: ./frontend

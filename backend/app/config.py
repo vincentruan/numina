@@ -44,6 +44,15 @@ class Settings(BaseSettings):
     # File storage configuration
     UPLOAD_DIR: str = "./data/uploads"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
+    # Dedicated encryption key for storage backend credentials.
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    # If unset, falls back to SECRET_KEY-derived key (not recommended for production).
+    STORAGE_ENCRYPTION_KEY: str = ""
+
+    # AI Agent 配置
+    AI_ENCRYPTION_KEY: str = ""  # Fernet key，生产环境必填（用 Fernet.generate_key() 生成）
+    AGENT_INTERNAL_TOKEN: str = ""  # agent ↔ backend service-to-service token
+    AGENT_BASE_URL: str = "http://agent:8001"  # agent 服务内部地址
 
     # Logging configuration
     LOG_LEVEL: str = "INFO"
@@ -82,4 +91,11 @@ elif not settings.ALTCHA_HMAC_KEY:
 if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
     raise RuntimeError(
         "CORS_ORIGINS 设置为 ['*']！生产环境必须配置具体域名，不允许全开放。"
+    )
+
+# Storage encryption key validation
+if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
+    raise RuntimeError(
+        "STORAGE_ENCRYPTION_KEY 未配置！生产环境必须设置独立的存储加密密钥，"
+        "避免与 SECRET_KEY 共用导致密钥轮换风险。"
     )

@@ -22,7 +22,7 @@ def get_backend_for_type(backend_type: str, config: dict) -> StorageBackend:
         config: Decrypted config dict for the backend.
 
     Returns:
-        StorageBackend instance.
+        StorageBackend instance (cached by type+config identity).
 
     Raises:
         ValueError: If backend_type is not registered.
@@ -34,20 +34,26 @@ def get_backend_for_type(backend_type: str, config: dict) -> StorageBackend:
     # GitHub and WebDAV are registered lazily to avoid import-time httpx dependency
     if backend_type == "github":
         from app.services.storage.github import GitHubStorageBackend  # noqa: PLC0415
-        return GitHubStorageBackend(
-            token=config["token"],
-            repo=config["repo"],
-            branch=config.get("branch", "main"),
-        )
+        key = f"github:{config.get('repo')}:{config.get('branch', 'main')}"
+        if key not in _instances:
+            _instances[key] = GitHubStorageBackend(
+                token=config["token"],
+                repo=config["repo"],
+                branch=config.get("branch", "main"),
+            )
+        return _instances[key]  # type: ignore[return-value]
 
     if backend_type == "webdav":
         from app.services.storage.webdav import WebDAVStorageBackend  # noqa: PLC0415
-        return WebDAVStorageBackend(
-            base_url=config["url"],
-            username=config["username"],
-            password=config["password"],
-            verify_ssl=config.get("verify_ssl", True),
-        )
+        key = f"webdav:{config.get('url')}:{config.get('username')}"
+        if key not in _instances:
+            _instances[key] = WebDAVStorageBackend(
+                base_url=config["url"],
+                username=config["username"],
+                password=config["password"],
+                verify_ssl=config.get("verify_ssl", True),
+            )
+        return _instances[key]  # type: ignore[return-value]
 
     raise ValueError(f"未知存储后端类型: {backend_type}")
 

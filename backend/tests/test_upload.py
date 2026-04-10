@@ -1,7 +1,10 @@
 """Tests for the upload router and StorageService."""
 import io
+import os
+from unittest.mock import patch
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.models.cached_file import CachedFile
 from app.models.file_remote_location import FileRemoteLocation
@@ -117,3 +120,39 @@ def test_upload_with_remote_backend(client, auth_headers, db):
     assert loc is not None
     assert loc.sync_status == "pending"
     assert loc.backend_id == "test-backend-1"
+
+
+# ---------------------------------------------------------------------------
+# Test 8: concurrent upload race — IntegrityError on INSERT → returns winner's record
+# ---------------------------------------------------------------------------
+def test_upload_concurrent_race_returns_winner(client, auth_headers, db, tmp_path):
+    """Simulate the race: first upload succeeds, second hits IntegrityError on commit.
+    The loser should recover gracefully and return the winner's file_id.
+    """
+    import hashlib
+    sha256 = hashlib.sha256(JPEG_CONTENT).hexdigest()
+
+    # Get family_id from auth_headers fixture via a real upload first
+    resp_first = _upload(client, auth_headers, JPEG_CONTENT)
+    assert resp_first.status_code == 200
+    winner_file_id = resp_first.json()["file_id"]
+
+    # Now simulate a second concurrent upload that hits IntegrityError on commit
+    # by patching db.commit to raise IntegrityError once, then succeed
+    original_commit = db.commit
+    call_count = {"n": 0}
+
+    def patched_commit():
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            db.rollback()
+            raise IntegrityError("UNIQUE constraint failed", {}, None)
+        return original_commit()
+
+    with patch.object(db, "commit", side_effect=patched_commit):
+        resp_second = _upload(client, auth_headers, JPEG_CONTENT)
+
+    assert resp_second.status_code == 200
+    assert resp_second.json()["file_id"] == winner_file_id
+    # Still only one DB row
+    assert db.query(CachedFile).filter_by(sha256=sha256).count() == 1

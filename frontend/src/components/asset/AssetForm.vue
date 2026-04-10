@@ -40,7 +40,12 @@
         label="名称"
         placeholder="请输入资产名称"
         :rules="[{ required: true, message: '请输入名称' }]"
-      />
+        @blur="onNameBlur"
+      >
+        <template v-if="aiSuggesting" #right-icon>
+          <van-loading size="16" />
+        </template>
+      </van-field>
 
       <!-- P0: Category — tap-to-open popup picker -->
       <van-field
@@ -156,6 +161,7 @@
         type="digit"
         label="预期寿命"
         placeholder="请输入年限"
+        :class="{ 'ai-fill': aiFilledFields.has('expected_lifespan_years') }"
       >
         <template #extra>
           <span class="unit-label">年</span>
@@ -210,7 +216,7 @@
           />
         </template>
       </van-cell>
-      <van-field v-model="form.notes" type="textarea" label="备注" placeholder="可选" rows="2" autosize />
+      <van-field v-model="form.notes" type="textarea" label="备注" placeholder="可选" rows="2" autosize :class="{ 'ai-fill': aiFilledFields.has('notes') }" />
     </van-cell-group>
 
     <div class="form-actions">
@@ -226,6 +232,8 @@ import { ref, computed, watch } from 'vue'
 import type { Asset, Category, Tag } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags, createTag as apiCreateTag } from '@/api/tags'
+import { suggestAssetFields } from '@/api/ai'
+import { useAIStore } from '@/stores/ai'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
@@ -241,6 +249,8 @@ const props = withDefaults(defineProps<{
   loading: false,
   categories: () => []
 })
+
+const aiStore = useAIStore()
 
 const emit = defineEmits<{
   submit: [data: Partial<Asset>]
@@ -339,6 +349,60 @@ async function fetchTags() {
 
 function onTagCreated(tag: Tag) {
   availableTags.value.push(tag)
+}
+
+// AI suggest
+const aiSuggesting = ref(false)
+const aiFilledFields = ref<Set<string>>(new Set())
+
+async function onNameBlur() {
+  if (props.isEdit) return
+  const name = form.value.name?.trim()
+  if (!name || name.length < 2) return
+  if (!aiStore.aiEnabled) return
+
+  const categoryName = props.categories.find(c => c.id === form.value.category_id)?.name ?? ''
+
+  aiSuggesting.value = true
+  try {
+    const res = await suggestAssetFields({
+      name,
+      category: categoryName,
+      asset_type: form.value.asset_type,
+    })
+    const s = res.data
+    const filled = new Set<string>()
+
+    if (form.value.asset_type === 'physical') {
+      if (s.expected_lifespan_years != null && !expectedLifeYears.value) {
+        expectedLifeYears.value = String(s.expected_lifespan_years)
+        filled.add('expected_lifespan_years')
+      }
+      if (s.usage_frequency && form.value.usage_frequency === 'daily') {
+        form.value.usage_frequency = s.usage_frequency
+        filled.add('usage_frequency')
+      }
+    }
+    if (s.notes_hint && !form.value.notes) {
+      form.value.notes = s.notes_hint
+      filled.add('notes')
+    }
+    if (s.suggested_tags?.length && !selectedTagIds.value.length) {
+      // Match suggested tag names to existing tags
+      const matched = availableTags.value
+        .filter(t => s.suggested_tags.includes(t.name))
+        .map(t => t.id)
+      if (matched.length) {
+        selectedTagIds.value = matched
+        filled.add('tags')
+      }
+    }
+    aiFilledFields.value = filled
+  } catch {
+    // silent — AI suggest is non-critical
+  } finally {
+    aiSuggesting.value = false
+  }
 }
 
 // Populate form from initialData (edit mode)
@@ -524,6 +588,15 @@ function onSubmit() {
 }
 .form-actions {
   padding: 16px;
+}
+/* AI-filled field highlight */
+:deep(.ai-fill .van-field__control) {
+  background: color-mix(in srgb, var(--van-primary-color) 8%, transparent);
+  border-radius: 4px;
+  transition: background 0.3s;
+}
+[data-theme='dark'] :deep(.ai-fill .van-field__control) {
+  background: color-mix(in srgb, var(--van-primary-color) 15%, transparent);
 }
 :deep(.van-cell-group__title) {
   font-size: 13px;

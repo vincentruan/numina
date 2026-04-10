@@ -1,6 +1,6 @@
 """File management endpoints — delete and URL retrieval."""
-import os
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -15,11 +15,24 @@ from app.config import settings
 from app.core.logging_config import get_logger
 from app.services.storage.local import LocalStorageBackend
 from app.services.storage.factory import get_backend_for_type
-from app.scheduler import _decrypt_config
+from app.services.storage.config_crypto import decrypt_config
 
 logger = get_logger(__name__)
 
 router = APIRouter(prefix="/files", tags=["files"])
+
+
+def _safe_relative_path(local_path: str, upload_dir: str) -> str:
+    """Return the path of local_path relative to upload_dir.
+
+    Raises HTTPException 500 if local_path escapes upload_dir (path traversal guard).
+    """
+    resolved = Path(local_path).resolve()
+    base = Path(upload_dir).resolve()
+    if not str(resolved).startswith(str(base)):
+        logger.error(f"路径越界检测: {local_path!r} 不在 {upload_dir!r} 内")
+        raise HTTPException(status_code=500, detail="文件路径异常")
+    return str(resolved.relative_to(base))
 
 
 def _get_owned_file(file_id: str, user: User, db: Session) -> CachedFile:
@@ -46,10 +59,10 @@ async def delete_file(
     # Delete from local disk
     local_backend = LocalStorageBackend(settings.UPLOAD_DIR)
     try:
-        remote_path = str(
-            os.path.relpath(cached_file.local_path, settings.UPLOAD_DIR)
-        )
+        remote_path = _safe_relative_path(cached_file.local_path, settings.UPLOAD_DIR)
         await local_backend.delete(remote_path)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.warning(f"本地文件删除失败: {e}")
 
@@ -65,13 +78,18 @@ async def delete_file(
         if backend_row is None:
             continue
         try:
-            config = _decrypt_config(backend_row.config)
+            config = decrypt_config(backend_row.config)
             if config:
                 backend = get_backend_for_type(backend_row.backend_type, config)
                 await backend.delete(loc.remote_path or "")
+                loc.sync_status = "deleted"
+            else:
+                loc.sync_status = "failed"
+                loc.last_error = "无法解密存储后端配置"
         except Exception as e:
             logger.warning(f"远程文件删除失败 [{backend_row.id}]: {e}")
-        loc.sync_status = "deleted"
+            loc.sync_status = "failed"
+            loc.last_error = str(e)
 
     # Soft-delete the cached_file record
     cached_file.deleted_at = datetime.now()
@@ -117,5 +135,5 @@ def get_file_url(
 
     # Fall back to local URL
     local_backend = LocalStorageBackend(settings.UPLOAD_DIR)
-    remote_path = os.path.relpath(cached_file.local_path, settings.UPLOAD_DIR)
+    remote_path = _safe_relative_path(cached_file.local_path, settings.UPLOAD_DIR)
     return {"url": local_backend.get_url(remote_path), "source": "local"}
