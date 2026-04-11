@@ -8,13 +8,14 @@
       <van-tab title="已取消" name="cancelled" />
     </van-tabs>
 
-    <div class="list-content">
+    <div class="list-content" role="list" aria-label="心愿清单">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
         <template v-if="filteredWishes.length">
           <div
             v-for="wish in filteredWishes"
             :key="wish.id"
             class="wish-card"
+            role="listitem"
             @click="$router.push(`/wishes/${wish.id}`)"
           >
             <div class="wish-header">
@@ -30,7 +31,12 @@
               </span>
             </div>
             <div v-if="wish.category" class="wish-category">
-              {{ wish.category.icon }} {{ wish.category.name }}
+              <div class="wish-category-icon" style="background: #1989fa">
+                <svg class="icon-svg" aria-hidden="true">
+                  <use :href="`#${getIconId(wish.category.icon)}`" />
+                </svg>
+              </div>
+              <span>{{ wish.category.name }}</span>
             </div>
             <div v-if="wish.description" class="wish-notes">{{ wish.description }}</div>
           </div>
@@ -50,6 +56,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { getWishes } from '@/api/wishes'
 import type { Wish } from '@/types'
+import { getIconId } from '@/utils/icon'
 
 const wishes = ref<Wish[]>([])
 const activeTab = ref<'pending' | 'realized' | 'cancelled'>('pending')
@@ -154,5 +161,24 @@ onMounted(loadWishes)
   font-size: 12px;
   color: var(--text-tertiary);
   margin-top: 4px;
+}
+.wish-category {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wish-category-icon {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.icon-svg {
+  width: 12px;
+  height: 12px;
+  color: #fff;
 }
 </style>

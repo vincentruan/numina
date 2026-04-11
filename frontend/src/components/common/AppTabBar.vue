@@ -2,7 +2,7 @@
   <van-tabbar :model-value="activeTab" @change="onTabChange">
     <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
     <van-tabbar-item name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
-    <van-tabbar-item name="add" icon="add-o">
+    <van-tabbar-item name="add" icon="add-o" aria-label="添加资产">
       <template #icon="{ active: isActive }">
         <div class="add-btn" :class="{ active: isActive }">
           <van-icon name="plus" size="24" />
@@ -64,15 +64,15 @@ function onTabChange(name: string | number) {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #1989fa;
+  background: #1565c0;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-top: -10px;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(25, 137, 250, 0.4);
+  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.4);
 }
 .add-btn.active {
-  background: #0d7de8;
+  background: #0d47a1;
 }
 </style>

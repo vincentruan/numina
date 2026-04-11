@@ -9,7 +9,7 @@
     @contextmenu.prevent="triggerLongPress"
     role="listitem"
     :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
-    :aria-selected="selected"
+    :aria-checked="selectable ? selected : undefined"
     tabindex="0"
     @keydown.enter="$emit('click')"
     @keydown.space.prevent="toggleSelect"
@@ -63,6 +63,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
+import { getIconId } from '@/utils/icon'
 
 const props = defineProps<{
   asset: Asset
@@ -133,20 +134,6 @@ const daysUsed = computed(() => {
 function formatPrice(price: number | null | undefined): string {
   if (price == null) return '-'
   return currency.format(price)
-}
-
-/**
- * Get the icon ID for a category icon.
- * If the icon is already an icon ID (starts with 'icon-'), use it directly.
- * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
- */
-function getIconId(icon: string | undefined): string {
-  if (!icon) return 'icon-other'
-  if (icon.startsWith('icon-')) {
-    return icon
-  }
-  // Fallback for emoji or unknown icons
-  return 'icon-other'
 }
 
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
