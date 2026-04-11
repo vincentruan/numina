@@ -9,7 +9,6 @@
     @contextmenu.prevent="triggerLongPress"
     role="listitem"
     :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
-    :aria-checked="selectable ? selected : undefined"
     tabindex="0"
     @keydown.enter="$emit('click')"
     @keydown.space.prevent="toggleSelect"
@@ -20,6 +19,15 @@
         @update:model-value="$emit('update:selected', $event)"
       />
     </div>
+    <input
+      v-if="selectable"
+      type="checkbox"
+      class="sr-only"
+      :checked="selected"
+      :aria-label="`选择 ${asset.name}`"
+      tabindex="-1"
+      @change="$emit('update:selected', ($event.target as HTMLInputElement).checked)"
+    />
     <div class="card-left">
       <div v-if="asset.image_url && !imageError" class="card-image">
         <img :src="imageUrl" :alt="asset.name" @error="onImageError" />

@@ -64,7 +64,7 @@ function onTabChange(name: string | number) {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #1565c0;
+  background: var(--color-action-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -73,6 +73,6 @@ function onTabChange(name: string | number) {
   box-shadow: 0 2px 8px rgba(21, 101, 192, 0.4);
 }
 .add-btn.active {
-  background: #0d47a1;
+  background: var(--color-action-primary-active);
 }
 </style>

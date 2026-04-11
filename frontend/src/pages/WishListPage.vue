@@ -171,7 +171,7 @@ onMounted(loadWishes)
   width: 20px;
   height: 20px;
   border-radius: 4px;
-  background: #1565c0;
+  background: var(--color-action-primary);
   display: flex;
   align-items: center;
   justify-content: center;
