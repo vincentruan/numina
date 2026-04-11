@@ -31,7 +31,7 @@
               </span>
             </div>
             <div v-if="wish.category" class="wish-category">
-              <div class="wish-category-icon" style="background: #1989fa">
+              <div class="wish-category-icon">
                 <svg class="icon-svg" aria-hidden="true">
                   <use :href="`#${getIconId(wish.category.icon)}`" />
                 </svg>
@@ -171,6 +171,7 @@ onMounted(loadWishes)
   width: 20px;
   height: 20px;
   border-radius: 4px;
+  background: #1565c0;
   display: flex;
   align-items: center;
   justify-content: center;
