@@ -1,5 +1,5 @@
 <template>
-  <div class="login-page">
+  <div class="login-page" role="main" aria-label="登录">
     <!-- Cosmic star background canvas -->
     <canvas
       ref="canvasRef"
@@ -167,6 +167,11 @@ async function onSubmit() {
 
 .form-actions {
   padding: 24px 16px 0;
+}
+/* Override Vant primary color on login button for WCAG AA contrast */
+.form-actions :deep(.van-button--primary) {
+  --van-button-primary-background: var(--color-action-primary);
+  --van-button-primary-border-color: var(--color-action-primary);
 }
 
 .login-links {
