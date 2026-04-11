@@ -89,7 +89,7 @@ function onSelect(status: string | null) {
   opacity: 0.7;
 }
 .status-tab.active {
-  background: #1989fa;
+  background: var(--color-action-primary);
   color: #fff;
 }
 .tab-label {

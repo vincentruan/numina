@@ -8,9 +8,10 @@
       <van-tab title="已取消" name="cancelled" />
     </van-tabs>
 
-    <div class="list-content" role="list" aria-label="心愿清单">
+    <div class="list-content">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
         <template v-if="filteredWishes.length">
+          <div role="list" aria-label="心愿清单">
           <div
             v-for="wish in filteredWishes"
             :key="wish.id"
@@ -39,6 +40,7 @@
               <span>{{ wish.category.name }}</span>
             </div>
             <div v-if="wish.description" class="wish-notes">{{ wish.description }}</div>
+          </div>
           </div>
         </template>
         <van-empty v-else description="暂无心愿" />

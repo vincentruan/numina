@@ -264,15 +264,15 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 }
 .card-days {
   font-size: 10px;
-  color: var(--van-primary-color);
-  background: rgba(25, 137, 250, 0.1);
+  color: var(--color-action-primary);
+  background: rgba(21, 101, 192, 0.1);
   padding: 1px 6px;
   border-radius: 8px;
   line-height: 1.4;
 }
 [data-theme='dark'] .card-days {
-  color: #0a84ff;
-  background: rgba(10, 132, 255, 0.15);
+  color: #90caf9;
+  background: rgba(21, 101, 192, 0.2);
 }
 .card-row-prices {
   display: flex;

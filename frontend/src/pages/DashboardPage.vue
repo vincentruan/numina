@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-page">
+  <div class="dashboard-page" role="main" aria-label="家庭资产总览">
     <!-- Skeleton Loading State -->
     <DashboardSkeleton v-if="dashboardStore.loading && !overview?.asset_count" />
 
@@ -805,15 +805,15 @@ onUnmounted(() => {
 .view-toggle,
 .category-toggle {
   font-size: 13px;
-  color: #1989fa;
+  color: var(--color-action-primary);
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  background: rgba(25, 137, 250, 0.1);
+  background: rgba(21, 101, 192, 0.1);
 }
 [data-theme='dark'] .view-toggle,
 [data-theme='dark'] .category-toggle {
-  background: rgba(25, 137, 250, 0.15);
+  background: rgba(21, 101, 192, 0.15);
 }
 .view-toggle:active,
 .category-toggle:active {
