@@ -379,7 +379,11 @@ cd tests && node take-screenshots.js
 
 - **Documented solutions**: `docs/solutions/` contains documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - UI text and error messages are in Chinese (简体中文). Currency defaults to CNY.
-- No linter/formatter configured — match existing code style by reading neighboring files.
+- **Linting/formatting:** Each module has its own tooling — see module-level `CLAUDE.md` for commands.
+  - Frontend: ESLint (`npm run lint`) + Prettier (`npm run format`) + vue-tsc (`npm run typecheck`)
+  - Backend: ruff (`uv run ruff check .` / `uv run ruff format .`) + mypy (`uv run mypy app/`)
+  - Agent: ruff (`uv run ruff check .` / `uv run ruff format .`) + mypy (`uv run mypy . --exclude vendor`)
+  - Incremental formatting: format only files you touch — do not reformat entire modules in one commit.
 - No `as any`, `@ts-ignore`, or `@ts-expect-error` — fix types properly.
 - Minimal changes: fix what's asked, don't refactor unrelated code.
 - Always run `uv run pytest tests/ -v` (from `backend/`) after backend changes.

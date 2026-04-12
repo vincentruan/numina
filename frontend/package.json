@@ -9,7 +9,11 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write src",
+    "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
     "@vant/touch-emulator": "^1.5.0",
@@ -35,6 +39,7 @@
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-vue": "^10.8.0",
+    "globals": "^17.4.0",
     "happy-dom": "^20.8.9",
     "prettier": "^3.8.2",
     "typescript": "~5.9.3",
