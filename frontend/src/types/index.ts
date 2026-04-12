@@ -371,13 +371,13 @@ export interface AIReport {
   summary: string
   data_completeness_score: number
   net_worth_health?: AIReportSection & {
-    data?: { net_worth?: number; mom_change_pct?: number }
+    data?: { net_worth?: number; total_assets?: number; total_liabilities?: number; mom_change_pct?: number }
   }
   allocation_analysis?: AIReportSection & {
     data?: { items?: AllocationItem[] }
   }
   liability_pressure?: AIReportSection & {
-    data?: { count?: number; total_remaining?: number }
+    data?: { count?: number; total_liabilities?: number; total_assets?: number }
   }
   asset_efficiency?: AIReportSection & {
     data?: { low_usage_count?: number; total_daily_cost?: number }
