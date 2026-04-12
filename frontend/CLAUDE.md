@@ -23,7 +23,7 @@ npm run test:run      # vitest run — run tests once (no watch)
 
 ## Key Conventions
 
-- **Vant components are auto-imported** via `unplugin-vue-components`. Do not manually import them — ESLint is configured to allow this.
+- **Vant components are auto-imported** via `unplugin-vue-components` (build tooling). Do not manually import them.
 - **Path alias `@/`** maps to `src/`. Configured in both `vite.config.ts` and `tsconfig.app.json`.
 - **`<script setup lang="ts">`** only — no Options API, no `defineComponent`.
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly.
