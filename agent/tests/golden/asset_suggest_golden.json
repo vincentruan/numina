@@ -1,0 +1,23 @@
+{
+  "capability": "suggest",
+  "summary": "根据资产类别「车辆」，建议填写以下字段：预期使用年限8-10年，年维护费用约5000-15000元，使用频率建议选择「daily」或「weekly」。",
+  "scorecards": [],
+  "risk_flags": [],
+  "recommendations": [
+    {"priority": "medium", "title": "建议填写购买日期", "body": "购买日期用于计算资产老化进度和剩余寿命估算", "action_type": "suggestion"},
+    {"priority": "low", "title": "建议填写年维护费用", "body": "年维护费用用于计算持有成本和资产效率评分", "action_type": "suggestion"}
+  ],
+  "rule_based_findings": [
+    {"source": "rule", "content": "车辆类资产预期寿命通常为8-12年", "confidence": 1.0}
+  ],
+  "ai_inferences": [
+    {"source": "ai", "content": "基于资产类别推断，建议设置使用频率为daily或weekly", "confidence": 0.7}
+  ],
+  "disclaimers": [
+    "建议字段值仅供参考，请根据实际情况填写"
+  ],
+  "fallback_used": false,
+  "followup_actions": [],
+  "ui_blocks": [],
+  "needs_confirmation": []
+}

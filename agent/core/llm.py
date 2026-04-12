@@ -12,6 +12,14 @@ class LLMClient:
     def __init__(self, provider: str, api_key: str) -> None:
         self.provider = provider
         self.api_key = api_key
+        self._anthropic_client = None
+        self._openai_client = None
+        if provider == "anthropic":
+            import anthropic
+            self._anthropic_client = anthropic.AsyncAnthropic(api_key=api_key, timeout=30.0)
+        elif provider == "openai":
+            from openai import AsyncOpenAI
+            self._openai_client = AsyncOpenAI(api_key=api_key, timeout=30.0)
 
     async def complete(self, prompt: str, max_tokens: int = 512, system: str | None = None) -> str:
         """发送单次补全请求，返回文本响应。"""
@@ -23,9 +31,6 @@ class LLMClient:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
     async def _complete_anthropic(self, prompt: str, max_tokens: int, system: str | None) -> str:
-        import anthropic
-
-        client = anthropic.AsyncAnthropic(api_key=self.api_key)
         kwargs: dict[str, Any] = {
             "model": "claude-haiku-4-5",
             "max_tokens": max_tokens,
@@ -34,19 +39,16 @@ class LLMClient:
         if system:
             kwargs["system"] = system
 
-        message = await client.messages.create(**kwargs)
+        message = await self._anthropic_client.messages.create(**kwargs)
         return message.content[0].text
 
     async def _complete_openai(self, prompt: str, max_tokens: int, system: str | None) -> str:
-        from openai import AsyncOpenAI
-
-        client = AsyncOpenAI(api_key=self.api_key)
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
 
-        response = await client.chat.completions.create(
+        response = await self._openai_client.chat.completions.create(
             model="gpt-4o-mini",
             max_tokens=max_tokens,
             messages=messages,

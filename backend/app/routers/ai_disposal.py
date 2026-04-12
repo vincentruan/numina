@@ -78,7 +78,9 @@ async def refresh_disposal_suggestions(
             AIDisposalSuggestion.is_dismissed == False,
         ).delete()
 
-        for s in data.get("suggestions", []):
+        # AgentResponse shape: suggestions are in recommendations; legacy shape used "suggestions" key
+        raw_suggestions = data.get("suggestions") or data.get("recommendations", [])
+        for s in raw_suggestions:
             db.add(AIDisposalSuggestion(
                 family_id=current_user.family_id,
                 asset_id=s["asset_id"],
@@ -96,7 +98,7 @@ async def refresh_disposal_suggestions(
         logger.error(f"写入处置建议失败: {e}")
         raise HTTPException(status_code=500, detail="数据写入失败")
 
-    return {"refreshed": len(data.get("suggestions", []))}
+    return {"refreshed": len(raw_suggestions)}
 
 
 @router.post("/{suggestion_id}/dismiss")

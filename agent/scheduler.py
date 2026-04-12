@@ -1,4 +1,34 @@
-"""Agent 定时任务调度器（APScheduler）。"""
+"""Agent 定时任务调度器（APScheduler）。
+
+# OD-3: APScheduler async bridge decision
+# ─────────────────────────────────────────
+# We use AsyncIOScheduler so all jobs run as native coroutines on the FastAPI
+# event loop. This avoids the RuntimeError that would occur if jobs were run in
+# APScheduler's default ThreadPoolExecutor and tried to call asyncio.wait_for()
+# without a running event loop.
+#
+# When USE_DEERFLOW=True, scheduled jobs must call orchestrator.dispatch() with
+# an explicit timeout budget (recommended: 60 s, shorter than DEERFLOW_TIMEOUT_SECONDS)
+# to prevent a DeerFlow hang from blocking the scheduler indefinitely.
+#
+# Scheduler dispatch contract (for future job implementations):
+#   async def _dispatch_for_family(family_id: str, capability: str) -> None:
+#       try:
+#           await asyncio.wait_for(
+#               orchestrator.dispatch(capability, family_id),
+#               timeout=60,
+#           )
+#       except asyncio.TimeoutError:
+#           logger.warning(f"[scheduler] dispatch timed out family={family_id} cap={capability}")
+#       except Exception as e:
+#           logger.warning(f"[scheduler] dispatch failed family={family_id}: {e}")
+#           # Skip this family — do not abort the full scheduled run
+#
+# Each job must:
+#   - Enumerate families one at a time (not batch) to limit blast radius
+#   - Skip and log a warning if FamilyContext fetch fails for a family
+#   - Scope each FamilyContext to exactly one family_id validated before dispatch
+"""
 
 import logging
 

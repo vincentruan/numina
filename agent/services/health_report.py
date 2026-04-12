@@ -9,6 +9,7 @@
 
 import json
 import logging
+import re
 from datetime import datetime
 
 from core.backend_client import BackendClient
@@ -108,19 +109,33 @@ def _compute_data_completeness(overview: dict, allocation: dict, trend: dict) ->
     return min(score, 100.0)
 
 
-async def generate_health_report(family_id: str, llm: LLMClient) -> dict:
-    """生成家庭资产体检报告，返回报告 JSON dict。"""
-    client = BackendClient(family_id=family_id)
+async def generate_health_report(
+    family_id: str,
+    llm: LLMClient,
+    ctx: "RedactedContext | None" = None,
+) -> dict:
+    """生成家庭资产体检报告，返回报告 JSON dict。
 
-    try:
-        overview = await client.get_dashboard_overview()
-        allocation = await client.get_dashboard_allocation()
-        trend = await client.get_dashboard_trend(period="year")
-        low_usage = await client.get_dashboard_low_usage()
-        liabilities = await client.get_liabilities()
-    except Exception as e:
-        logger.error(f"[health_report] 拉取数据失败 family={family_id}: {e}")
-        raise
+    优先使用已脱敏的 ctx（由 Orchestrator 传入），避免重复拉取数据和绕过 PII 脱敏。
+    仅当 ctx 为 None 时（直接调用 legacy 路径）才自行拉取数据。
+    """
+    if ctx is not None:
+        overview = ctx.dashboard_overview
+        allocation = ctx.dashboard_allocation
+        trend = ctx.dashboard_trend
+        low_usage = ctx.low_usage_assets
+        liabilities = ctx.liabilities
+    else:
+        client = BackendClient(family_id=family_id)
+        try:
+            overview = await client.get_dashboard_overview()
+            allocation = await client.get_dashboard_allocation()
+            trend = await client.get_dashboard_trend(period="year")
+            low_usage = await client.get_dashboard_low_usage()
+            liabilities = await client.get_liabilities()
+        except Exception as e:
+            logger.error(f"[health_report] 拉取数据失败 family={family_id}: {e}")
+            raise
 
     data_summary = _build_data_summary(overview, allocation, trend, low_usage, liabilities)
     data_completeness = _compute_data_completeness(overview, allocation, trend)
@@ -129,10 +144,15 @@ async def generate_health_report(family_id: str, llm: LLMClient) -> dict:
 
     try:
         raw = await llm.complete(prompt, max_tokens=800)
-        # Extract JSON from response
-        start = raw.find("{")
-        end = raw.rfind("}") + 1
-        report_data = json.loads(raw[start:end])
+        # Strip markdown code fences if present, then fall back to brace extraction
+        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
+        if fence_match:
+            json_str = fence_match.group(1)
+        else:
+            start = raw.find("{")
+            end = raw.rfind("}") + 1
+            json_str = raw[start:end]
+        report_data = json.loads(json_str)
     except Exception as e:
         logger.error(f"[health_report] LLM 解析失败 family={family_id}: {e}")
         raise ValueError(f"LLM 响应解析失败: {e}")

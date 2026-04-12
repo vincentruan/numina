@@ -77,7 +77,9 @@ async def refresh_alerts(
             AIAssetAlert.is_dismissed == False,
         ).delete()
 
-        for alert in data.get("alerts", []):
+        # AgentResponse shape: alerts are in risk_flags; legacy shape used "alerts" key
+        raw_alerts = data.get("alerts") or data.get("risk_flags", [])
+        for alert in raw_alerts:
             db.add(AIAssetAlert(
                 family_id=current_user.family_id,
                 asset_id=alert["asset_id"],
@@ -94,7 +96,7 @@ async def refresh_alerts(
         logger.error(f"写入预警数据失败: {e}")
         raise HTTPException(status_code=500, detail="数据写入失败")
 
-    return {"refreshed": len(data.get("alerts", []))}
+    return {"refreshed": len(raw_alerts)}
 
 
 @router.post("/{alert_id}/dismiss")

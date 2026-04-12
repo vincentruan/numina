@@ -1,0 +1,30 @@
+{
+  "capability": "liability",
+  "summary": "家庭负债以房贷为主（约75万），车贷约7.5万，月供合计约4000-8000元。利率结构以固定利率为主，期限结构合理。以上分析仅供参考。",
+  "scorecards": [
+    {"name": "还款压力", "score": 2.5, "max_score": 5.0, "label": "偏高", "color": "yellow"},
+    {"name": "利率水平", "score": 3.5, "max_score": 5.0, "label": "较好", "color": "green"},
+    {"name": "期限结构", "score": 3.0, "max_score": 5.0, "label": "一般", "color": "yellow"}
+  ],
+  "risk_flags": [
+    {"level": "medium", "title": "月供占比偏高", "description": "月供总额估算超过月收入35%（月收入未录入，基于估算）"}
+  ],
+  "recommendations": [
+    {"priority": "medium", "title": "关注车贷到期安排", "body": "车贷预计2027年4月到期，建议提前规划还款资金", "action_type": "suggestion"}
+  ],
+  "rule_based_findings": [
+    {"source": "rule", "content": "共2笔活跃负债，总额约82.5万元", "confidence": 1.0},
+    {"source": "rule", "content": "车贷剩余36个月，利率5.8%高于房贷4.2%", "confidence": 1.0}
+  ],
+  "ai_inferences": [
+    {"source": "ai", "content": "利率结构以固定利率为主，利率上升风险相对可控", "confidence": 0.6}
+  ],
+  "disclaimers": [
+    "负债金额为区间估算，实际数值以合同为准",
+    "本分析不构成贷款建议或债务重组建议"
+  ],
+  "fallback_used": false,
+  "followup_actions": [],
+  "ui_blocks": [],
+  "needs_confirmation": []
+}

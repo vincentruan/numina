@@ -162,6 +162,14 @@
       <div class="bottom-spacer" />
     </van-pull-refresh>
 
+    <!-- Add Asset FAB -->
+    <van-floating-bubble
+      v-if="!selectionMode"
+      icon="plus"
+      aria-label="添加资产"
+      @click="$router.push('/assets/new')"
+    />
+
     <!-- Sort Popup -->
     <van-popup v-model:show="showSortPopup" position="bottom" round>
       <div class="sort-popup">
