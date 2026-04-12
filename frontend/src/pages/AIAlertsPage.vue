@@ -23,7 +23,7 @@
         <div class="alert-card" :class="`severity-${alert.severity}`">
           <div class="alert-header">
             <span class="alert-type-badge">{{ alertTypeLabel(alert.alert_type) }}</span>
-            <span class="severity-dot" :class="`dot-${alert.severity}`" />
+          <span class="severity-dot" :class="`dot-${alert.severity}`" :aria-label="({ high: '高严重度', medium: '中严重度', low: '低严重度' } as Record<string, string>)[alert.severity]" role="img" />
           </div>
           <div class="alert-name">{{ alert.asset_name }}</div>
           <div v-if="alert.remaining_life_days != null" class="alert-meta">

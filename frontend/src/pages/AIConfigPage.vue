@@ -23,10 +23,19 @@
           v-model="apiKeyInput"
           label="API Key"
           :placeholder="maskedKey || '请输入 API Key'"
-          type="password"
+          :type="showApiKey ? 'text' : 'password'"
           clearable
           :disabled="saving"
-        />
+        >
+          <template #right-icon>
+            <van-icon
+              :name="showApiKey ? 'eye-o' : 'closed-eye'"
+              @click="showApiKey = !showApiKey"
+              style="cursor: pointer"
+              :aria-label="showApiKey ? '隐藏 API Key' : '显示 API Key'"
+            />
+          </template>
+        </van-field>
       </van-cell-group>
 
       <div class="actions">
@@ -108,6 +117,7 @@ const showProviderPicker = ref(false)
 const apiKeyInput = ref('')
 const selectedProvider = ref<string | null>(null)
 const aiEnabled = ref(false)
+const showApiKey = ref(false)
 
 const isOwner = computed(() => authStore.user?.role === 'owner')
 

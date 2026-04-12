@@ -11,7 +11,11 @@
             v-for="s in suggestions"
             :key="s"
             class="chip"
+            role="button"
+            tabindex="0"
             @click="onChipClick(s)"
+            @keydown.enter="onChipClick(s)"
+            @keydown.space.prevent="onChipClick(s)"
           >{{ s }}</span>
         </div>
       </div>
@@ -41,6 +45,7 @@
     <div class="input-bar">
       <van-field
         v-model="inputText"
+        aria-label="向 AI 提问"
         placeholder="问我关于你家资产的问题..."
         :disabled="asking"
         clearable
@@ -165,7 +170,7 @@ onMounted(async () => {
 .ai-chat-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100dvh - 50px - env(safe-area-inset-bottom));
   background: var(--bg-secondary);
 }
 .chat-body {
@@ -200,7 +205,11 @@ onMounted(async () => {
   color: var(--van-primary-color);
   font-size: 13px;
   cursor: pointer;
-  border: 1px solid color-mix(in srgb, var(--van-primary-color) 30%, transparent);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+.chip:focus-visible {
+  outline: 2px solid var(--van-primary-color);
+  outline-offset: 2px;
 }
 .message-row {
   display: flex;
@@ -230,7 +239,7 @@ onMounted(async () => {
   align-items: flex-start;
 }
 .ai-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--van-primary-color);
   flex-shrink: 0;
@@ -238,7 +247,7 @@ onMounted(async () => {
 }
 .bubble-text { flex: 1; }
 .msg-time {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   margin-top: 3px;
   padding: 0 4px;

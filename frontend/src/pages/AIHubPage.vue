@@ -357,7 +357,7 @@ onMounted(async () => {
 
 .hub-greeting-sub {
   font-size: 13px;
-  color: rgba(255,255,255,0.75);
+  color: rgba(255,255,255,0.92);
 }
 
 /* Score ring */
@@ -411,8 +411,8 @@ onMounted(async () => {
 }
 
 .score-label {
-  font-size: 10px;
-  color: rgba(255,255,255,0.85);
+  font-size: 12px;
+  color: rgba(255,255,255,0.9);
   line-height: 1;
 }
 
@@ -422,20 +422,23 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   margin-top: 12px;
-  font-size: 11px;
-  color: rgba(255,255,255,0.85);
+  font-size: 12px;
+  color: rgba(255,255,255,0.92);
   position: relative;
 }
 
 .refresh-btn {
   background: none;
   border: none;
-  padding: 4px;
-  color: rgba(255,255,255,0.85);
+  padding: 10px;
+  min-width: 44px;
+  min-height: 44px;
+  color: rgba(255,255,255,0.92);
   cursor: pointer;
   display: flex;
   align-items: center;
-  border-radius: 4px;
+  justify-content: center;
+  border-radius: 8px;
   transition: color 0.15s;
 }
 
@@ -631,7 +634,7 @@ onMounted(async () => {
 }
 
 .feature-desc {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--text-secondary);
   text-align: center;
   line-height: 1.3;
@@ -681,8 +684,8 @@ onMounted(async () => {
 }
 
 .chat-send {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: rgba(99,102,241,0.15);
@@ -708,5 +711,19 @@ onMounted(async () => {
 /* Dark mode */
 [data-theme='dark'] .hub-header {
   background: linear-gradient(135deg, #3730a3 0%, #5b21b6 100%);
+}
+
+/* Focus rings for interactive cards */
+.report-summary-card:focus-visible,
+.report-empty-card:focus-visible,
+.feature-card:focus-visible,
+.chat-send:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.report-stat-label {
+  font-size: 12px;
+  color: var(--text-secondary);
 }
 </style>

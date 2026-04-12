@@ -43,7 +43,7 @@
         </div>
 
         <!-- Strategy Tabs -->
-        <van-tabs v-model:active="activeTab" class="strategy-tabs">
+        <van-tabs v-model:active="activeTab" class="strategy-tabs" aria-label="还款策略">
           <van-tab
             v-for="strategy in data.strategies"
             :key="strategy.strategy"
@@ -58,7 +58,7 @@
                 优先还款：<strong>{{ strategy.priority_debt }}</strong>
               </div>
               <div v-if="data.recommended_strategy === strategy.strategy" class="recommended-badge">
-                ✓ 推荐方案
+                <van-icon name="success" aria-hidden="true" /> 推荐方案
               </div>
               <div class="order-list">
                 <div
@@ -186,11 +186,13 @@ onMounted(async () => {
 .savings-hint { font-size: 13px; color: #4caf50; margin-bottom: 4px; }
 .priority-hint { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
 .recommended-badge {
-  display: inline-block;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
   padding: 2px 10px;
   border-radius: 10px;
-  background: color-mix(in srgb, var(--van-primary-color) 15%, transparent);
+  background: rgba(99, 102, 241, 0.15);
   color: var(--van-primary-color);
   margin-bottom: 12px;
 }

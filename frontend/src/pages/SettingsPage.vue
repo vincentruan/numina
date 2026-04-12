@@ -5,6 +5,9 @@
     <van-cell-group inset :title="t('settings.dataManagement')">
       <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
       <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
+    </van-cell-group>
+
+    <van-cell-group inset title="AI 智能功能" class="section">
       <van-cell title="AI 智能助手" icon="smile-o" is-link to="/settings/ai" />
       <van-cell title="家庭资产体检" icon="chart-trending-o" is-link to="/ai/report" />
       <van-cell title="资产老化预警" icon="warning-o" is-link to="/ai/alerts" />
@@ -91,7 +94,13 @@
             class="color-option"
             :class="{ active: currentThemeColor === color.value }"
             :style="{ backgroundColor: color.value }"
+            :aria-label="color.name"
+            role="radio"
+            :aria-checked="currentThemeColor === color.value"
+            tabindex="0"
             @click="selectThemeColor(color.value)"
+            @keydown.enter="selectThemeColor(color.value)"
+            @keydown.space.prevent="selectThemeColor(color.value)"
           >
             <van-icon v-if="currentThemeColor === color.value" name="success" />
           </div>

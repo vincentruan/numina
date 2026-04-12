@@ -25,6 +25,7 @@
             <span class="target-pct">{{ editTargets[cat] }}%</span>
           </div>
           <div class="target-total" :class="{ error: targetTotal !== 100 }">
+            <van-icon v-if="targetTotal !== 100" name="warning-o" aria-hidden="true" />
             合计：{{ targetTotal }}%（需等于100%）
           </div>
           <div class="target-actions">

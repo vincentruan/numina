@@ -140,7 +140,7 @@ onMounted(loadSuggestions)
   font-size: 14px; font-weight: 700;
 }
 .score-high { background: #fce4ec; color: #c62828; }
-.score-medium { background: #fff8e1; color: #f57f17; }
+.score-medium { background: #fff8e1; color: #92400e; }
 .score-low { background: #e8f5e9; color: #2e7d32; }
 .resale-range { font-size: 13px; color: var(--text-primary); font-weight: 500; margin-bottom: 6px; }
 .channel-row {

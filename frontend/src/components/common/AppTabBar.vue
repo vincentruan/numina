@@ -24,7 +24,7 @@
           </svg>
         </div>
       </template>
-      <span></span>
+      <span class="ai-tab-label">AI</span>
     </van-tabbar-item>
     <van-tabbar-item name="liabilities" icon="bill-o">{{ t('nav.liabilities') }}</van-tabbar-item>
     <van-tabbar-item name="stats" icon="bar-chart-o">{{ t('nav.stats') }}</van-tabbar-item>
@@ -90,5 +90,10 @@ function onTabChange(name: string | number) {
 }
 .ai-btn.active {
   box-shadow: 0 2px 18px rgba(124, 58, 237, 0.7);
+}
+.ai-tab-label {
+  font-size: 10px;
+  color: var(--van-tabbar-item-text-color, #7d7e80);
+  margin-top: 2px;
 }
 </style>

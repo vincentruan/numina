@@ -47,7 +47,7 @@
       <!-- Report cards -->
       <div class="cards-section">
         <ReportCard
-          icon="💰"
+          icon="balance-o"
           title="净资产健康"
           :score="currentReport.net_worth_health?.score ?? 0"
           :narrative="currentReport.net_worth_health?.narrative ?? ''"
@@ -67,7 +67,7 @@
         </ReportCard>
 
         <ReportCard
-          icon="📊"
+          icon="bar-chart-o"
           title="资产配置"
           :score="currentReport.allocation_analysis?.score ?? 0"
           :narrative="currentReport.allocation_analysis?.narrative ?? ''"
@@ -88,7 +88,7 @@
         </ReportCard>
 
         <ReportCard
-          icon="🏦"
+          icon="bill-o"
           title="负债压力"
           :score="currentReport.liability_pressure?.score ?? 0"
           :narrative="currentReport.liability_pressure?.narrative ?? ''"
@@ -102,7 +102,7 @@
         </ReportCard>
 
         <ReportCard
-          icon="⚡"
+          icon="chart-trending-o"
           title="资产效率"
           :score="currentReport.asset_efficiency?.score ?? 0"
           :narrative="currentReport.asset_efficiency?.narrative ?? ''"
@@ -278,7 +278,7 @@ onUnmounted(() => {
 .report-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
 }
 .cards-section {

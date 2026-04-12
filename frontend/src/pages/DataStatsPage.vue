@@ -1,6 +1,6 @@
 <template>
   <div class="data-stats-page">
-    <van-nav-bar title="数据统计" />
+    <PageHeader title="数据统计" />
 
     <!-- Summary Cards -->
     <div class="summary-section">
@@ -47,6 +47,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useDashboardStore } from '@/stores/dashboard'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const dashboardStore = useDashboardStore()
 

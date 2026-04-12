@@ -2,7 +2,7 @@
   <div class="report-card">
     <div class="card-header">
       <div class="card-title-row">
-        <span class="card-icon">{{ icon }}</span>
+        <van-icon :name="icon" class="card-icon" aria-hidden="true" />
         <span class="card-title">{{ title }}</span>
       </div>
       <ReportScoreBadge :score="score" :max="5" />
@@ -43,6 +43,7 @@ defineProps<{
 }
 .card-icon {
   font-size: 20px;
+  color: var(--van-primary-color);
 }
 .card-title {
   font-size: 15px;
