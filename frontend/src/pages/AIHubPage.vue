@@ -159,7 +159,7 @@ const chatInput = ref('')
 
 const userName = computed(() => getUser()?.display_name || '用户')
 
-const displayScore = computed(() => currentReport.value?.overall_score ?? '--')
+const displayScore = computed(() => currentReport.value?.overall_score ?? '?')
 
 const scoreArc = computed(() => {
   const s = currentReport.value?.overall_score ?? 0
@@ -412,7 +412,7 @@ onMounted(async () => {
 
 .score-label {
   font-size: 10px;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255,255,255,0.85);
   line-height: 1;
 }
 
@@ -423,7 +423,7 @@ onMounted(async () => {
   gap: 6px;
   margin-top: 12px;
   font-size: 11px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.85);
   position: relative;
 }
 
@@ -431,7 +431,7 @@ onMounted(async () => {
   background: none;
   border: none;
   padding: 4px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.85);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -439,7 +439,7 @@ onMounted(async () => {
   transition: color 0.15s;
 }
 
-.refresh-btn:hover { color: rgba(255,255,255,0.9); }
+.refresh-btn:hover { color: #fff; }
 .refresh-btn:disabled { opacity: 0.4; cursor: default; }
 
 /* ── Report summary card ── */
