@@ -22,7 +22,7 @@ onMounted(() => {
 <style scoped>
 .main-layout {
   min-height: 100vh;
-  padding-bottom: 50px;
+  padding-bottom: calc(50px + env(safe-area-inset-bottom));
   background-color: var(--bg-secondary);
 }
 </style>

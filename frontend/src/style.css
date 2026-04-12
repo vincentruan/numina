@@ -22,7 +22,7 @@
   --bg-tertiary: #ffffff;
   --text-primary: #000000;
   --text-secondary: #3c3c43;
-  --text-tertiary: #3c3c4399;
+  --text-tertiary: #6e6e73;
   --separator: #3c3c4329;
   --card-bg: #ffffff;
   --van-primary-color: #007aff;
@@ -41,7 +41,7 @@
   --bg-tertiary: #2c2c2e;
   --text-primary: #ffffff;
   --text-secondary: #ebebf5;
-  --text-tertiary: #ebebf599;
+  --text-tertiary: #adadb8;
   --separator: #38383a;
   --card-bg: #1c1c1e;
   --van-primary-color: #0a84ff;
@@ -56,7 +56,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg-secondary);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 #app {

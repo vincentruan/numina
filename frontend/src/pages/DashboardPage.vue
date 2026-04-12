@@ -73,8 +73,9 @@
           <div class="section-header">
             <span class="section-title">{{ sectionTitle }}</span>
             <div class="section-actions">
-              <span class="view-toggle" @click="toggleViewMode">
-                {{ viewMode === 'card' ? '☰' : '▦' }}
+              <span class="view-toggle" @click="toggleViewMode" :aria-label="viewMode === 'card' ? '切换列表视图' : '切换卡片视图'">
+                <svg v-if="viewMode === 'card'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
               </span>
               <span class="category-toggle" @click="toggleCategoryView">
                 {{ showCategoryGroups ? '列表' : '分类' }}

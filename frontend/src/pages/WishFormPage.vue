@@ -31,6 +31,7 @@
           name="expected_price"
           label="预期价格"
           type="number"
+          inputmode="decimal"
           placeholder="可选，单位：元"
         >
           <template #left-icon>

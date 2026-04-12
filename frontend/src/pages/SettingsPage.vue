@@ -165,9 +165,9 @@ const themeColorOptions = [
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 
 const themeOptions = [
-  { text: `☀️ ${t('settings.themeLight')}`, value: 'light' },
-  { text: `🌙 ${t('settings.themeDark')}`, value: 'dark' },
-  { text: `⚙️ ${t('settings.themeSystem')}`, value: 'system' },
+  { text: t('settings.themeLight'), value: 'light' },
+  { text: t('settings.themeDark'), value: 'dark' },
+  { text: t('settings.themeSystem'), value: 'system' },
 ]
 
 const languageOptions = [

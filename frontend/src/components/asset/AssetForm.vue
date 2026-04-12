@@ -78,7 +78,7 @@
 
       <van-field
         v-model="form.purchase_price"
-        type="number"
+        type="number" inputmode="decimal"
         label="购入价格"
         placeholder="请输入购入价格"
         :rules="[{ required: true, message: '请输入购入价格' }]"
@@ -91,7 +91,7 @@
       <!-- P0: current_value — with "同购入价" button -->
       <van-field
         v-model="form.current_value"
-        type="number"
+        type="number" inputmode="decimal"
         label="当前价值"
         placeholder="请输入当前价值"
         :rules="[{ required: true, message: '请输入当前价值' }]"
@@ -178,7 +178,7 @@
 
       <van-field v-model="form.location" label="存放位置" placeholder="可选，如：书房" />
 
-      <van-field v-model="form.annual_maintenance_cost" type="number" label="年维护费" placeholder="可选，单位：元">
+      <van-field v-model="form.annual_maintenance_cost" type="number" inputmode="decimal" label="年维护费" placeholder="可选，单位：元">
         <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
     </van-cell-group>
@@ -186,7 +186,7 @@
     <!-- Financial asset fields -->
     <van-cell-group v-if="form.asset_type === 'financial'" inset title="金融资产信息">
       <van-field v-model="form.institution" label="金融机构" placeholder="请输入金融机构" />
-      <van-field v-model="form.interest_rate" type="number" label="利率(%)" placeholder="请输入利率" />
+      <van-field v-model="form.interest_rate" type="number" inputmode="decimal" label="利率(%)" placeholder="请输入利率" />
       <van-field
         v-model="form.maturity_date"
         is-link

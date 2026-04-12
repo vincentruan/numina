@@ -58,9 +58,10 @@
         </div>
       </div>
       <div class="card-row-bottom">
-        <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
-          ⏱ 日均 {{ currency.format(asset.daily_cost) }}
-        </span>
+          <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
+            <van-icon name="clock-o" size="12" aria-hidden="true" />
+            日均 {{ currency.format(asset.daily_cost) }}
+          </span>
         <span v-else class="card-daily-cost-placeholder" />
       </div>
     </div>

@@ -7,7 +7,7 @@
       :class="{ selected: modelValue === opt.value }"
       @click="$emit('update:modelValue', opt.value)"
     >
-      <span class="icon">{{ opt.icon }}</span>
+      <van-icon :name="opt.icon" class="icon" aria-hidden="true" />
       <span class="label">{{ opt.label }}</span>
     </div>
   </div>
@@ -18,11 +18,11 @@ defineProps<{ modelValue: string }>()
 defineEmits<{ 'update:modelValue': [value: string] }>()
 
 const options = [
-  { value: 'daily',   icon: '📅', label: '每天' },
-  { value: 'weekly',  icon: '📆', label: '每周' },
-  { value: 'monthly', icon: '🗓️', label: '每月' },
-  { value: 'rarely',  icon: '💤', label: '偶尔' },
-  { value: 'idle',    icon: '📦', label: '闲置' },
+  { value: 'daily',   icon: 'clock-o',      label: '每天' },
+  { value: 'weekly',  icon: 'calendar-o',   label: '每周' },
+  { value: 'monthly', icon: 'notes-o',      label: '每月' },
+  { value: 'rarely',  icon: 'pause-circle-o', label: '偶尔' },
+  { value: 'idle',    icon: 'bag-o',        label: '闲置' },
 ]
 </script>
 
@@ -48,7 +48,7 @@ const options = [
   border-color: var(--van-primary-color);
   background: color-mix(in srgb, var(--van-primary-color) 12%, transparent);
 }
-.icon { font-size: 18px; }
+.icon { font-size: 20px; color: var(--van-text-color); }
 .label {
   font-size: 10px;
   color: var(--van-text-color-2);

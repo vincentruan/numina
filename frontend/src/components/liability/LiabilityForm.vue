@@ -27,7 +27,7 @@
 
       <van-field
         v-model="form.original_amount"
-        type="number"
+        type="number" inputmode="decimal"
         label="原始金额"
         placeholder="请输入原始金额"
         :rules="[{ required: true, message: '请输入原始金额' }]"
@@ -39,7 +39,7 @@
 
       <van-field
         v-model="form.remaining_amount"
-        type="number"
+        type="number" inputmode="decimal"
         label="剩余金额"
         placeholder="请输入剩余金额"
         :rules="[{ required: true, message: '请输入剩余金额' }]"
@@ -51,7 +51,7 @@
 
       <van-field
         v-model="form.monthly_payment"
-        type="number"
+        type="number" inputmode="decimal"
         label="月供"
         placeholder="请输入月供金额"
         :rules="[{ required: true, message: '请输入月供' }]"
@@ -61,7 +61,7 @@
 
       <van-field
         v-model="form.interest_rate"
-        type="number"
+        type="number" inputmode="decimal"
         label="利率(%)"
         placeholder="请输入年利率"
         :rules="[{ required: true, message: '请输入利率' }]"
