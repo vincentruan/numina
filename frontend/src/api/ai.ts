@@ -1,4 +1,5 @@
 import http from './index'
+import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse, ChatMessage } from '@/types'
 
 export interface AIConfig {
   ai_enabled: boolean
@@ -28,7 +29,7 @@ export const testAIConfig = () =>
   http.post<AIConfigTestResult>('/ai/config/test')
 
 export interface AIReportResponse {
-  report: Record<string, any> | null
+  report: AIReport | null
   generated_at?: string
 }
 
@@ -57,7 +58,7 @@ export const suggestAssetFields = (data: AssetSuggestRequest) =>
 
 // Asset alerts
 export const getAssetAlerts = () =>
-  http.get<any[]>('/ai/asset-alerts')
+  http.get<AssetAlert[]>('/ai/asset-alerts')
 
 export const refreshAssetAlerts = () =>
   http.post('/ai/asset-alerts/refresh')
@@ -67,7 +68,7 @@ export const dismissAssetAlert = (id: string) =>
 
 // Disposal suggestions
 export const getDisposalSuggestions = () =>
-  http.get<any[]>('/ai/disposal-suggestions')
+  http.get<DisposalSuggestion[]>('/ai/disposal-suggestions')
 
 export const refreshDisposalSuggestions = () =>
   http.post('/ai/disposal-suggestions/refresh')
@@ -77,27 +78,30 @@ export const dismissDisposalSuggestion = (id: string) =>
 
 // Liability advice
 export const getLiabilityAdvice = () =>
-  http.get('/ai/liability-advice')
+  http.get<LiabilityAdviceResponse>('/ai/liability-advice')
 
 // Allocation target & drift
 export const getAllocationTarget = () =>
-  http.get('/ai/allocation-target')
+  http.get<{ has_target: boolean; category_targets?: Record<string, number>; drift_threshold?: number }>('/ai/allocation-target')
 
 export const setAllocationTarget = (data: { category_targets: Record<string, number>; drift_threshold: number }) =>
   http.put('/ai/allocation-target', data)
 
 export const checkAllocationDrift = () =>
-  http.get('/ai/allocation-target/check')
+  http.get<AllocationDriftResponse>('/ai/allocation-target/check')
 
 // Chat
 export const sendChatMessage = (question: string) =>
   http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question })
 
 export const getChatHistory = () =>
-  http.get<any[]>('/ai/chat/history')
+  http.get<ChatMessage[]>('/ai/chat/history')
 
 export const clearChatHistory = () =>
   http.delete('/ai/chat/history')
 
 export const markChatRead = () =>
   http.put('/ai/chat/read')
+
+export const createWsTicket = () =>
+  http.post<{ ticket: string }>('/ai/report/ws-ticket')

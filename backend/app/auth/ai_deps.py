@@ -1,6 +1,7 @@
 """AI 功能相关的 FastAPI dependencies。"""
 
 import hmac
+
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 

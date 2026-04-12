@@ -69,12 +69,14 @@ async def chat(
             # AgentResponse shape: summary carries the answer text
             answer = resp_data.get("summary") or resp_data.get("answer", "")
     except httpx.TimeoutException:
-        answer = "抱歉，AI 服务响应超时，请稍后再试。"
+        db.rollback()
+        raise HTTPException(status_code=504, detail="AI 服务响应超时，请稍后再试") from None
     except Exception as e:
         logger.error(f"调用 agent chat 失败: {e}")
-        answer = "抱歉，AI 服务暂时不可用，请稍后再试。"
+        db.rollback()
+        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后再试") from e
 
-    # Save assistant message
+    # Save assistant message only on success
     assistant_msg = AIChatMessage(
         family_id=current_user.family_id,
         role="assistant",

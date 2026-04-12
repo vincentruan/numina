@@ -307,3 +307,88 @@ export interface RateResponse {
 export interface RatesResponse {
   [code: string]: RateResponse
 }
+
+// ── AI types ──────────────────────────────────────────────────────────────────
+
+export interface AssetAlert {
+  id: string
+  asset_id: string
+  asset_name: string
+  alert_type: string
+  severity: 'low' | 'medium' | 'high'
+  suggestion: string | null
+  remaining_life_days: number | null
+  daily_cost: number | null
+  created_at: string
+}
+
+export interface DisposalSuggestion {
+  id: string
+  asset_id: string
+  asset_name: string
+  reason: string
+  inefficiency_score: number | null
+  estimated_resale_range: string | null
+  suggested_channel: string | null
+  created_at: string
+}
+
+export interface LiabilityStrategy {
+  name: string
+  description: string
+  order: Array<{ id: string; name: string; rate: number }>
+  estimated_interest_saved: number | null
+}
+
+export interface LiabilityAdviceResponse {
+  has_liabilities: boolean
+  total_remaining: number
+  strategies: LiabilityStrategy[]
+  recommended_strategy: string | null
+}
+
+export interface AllocationDriftItem {
+  category: string
+  target_pct: number
+  actual_pct: number
+  drift_pct: number
+}
+
+export interface AllocationDriftResponse {
+  has_target: boolean
+  drifted: boolean
+  items: AllocationDriftItem[]
+}
+
+export interface AIReportSection {
+  score?: number
+  label?: string
+  data?: Record<string, unknown>
+}
+
+export interface AIReport {
+  overall_score: number
+  summary: string
+  data_completeness_score: number
+  net_worth_health?: AIReportSection & {
+    data?: { net_worth?: number; mom_change_pct?: number }
+  }
+  allocation_analysis?: AIReportSection & {
+    data?: { items?: AllocationItem[] }
+  }
+  liability_pressure?: AIReportSection & {
+    data?: { count?: number; total_remaining?: number }
+  }
+  asset_efficiency?: AIReportSection & {
+    data?: { low_usage_count?: number; total_daily_cost?: number }
+  }
+  suggestions?: string[]
+  risk_flags?: string[]
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+}

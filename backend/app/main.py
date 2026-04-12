@@ -41,6 +41,7 @@ from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_chat_message import AIChatMessage  # noqa: F401
+from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 
 from app.routers import auth, assets, liabilities, categories, tags, dashboard, family, wishes
 from app.routers import currencies as currencies_router
