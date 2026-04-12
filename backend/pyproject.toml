@@ -28,6 +28,8 @@ dev = [
     "pytest-cov>=6.0.0",
     # 集成测试依赖
     "docker>=7.0.0",
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
 ]
 
 [tool.pytest.ini_options]
@@ -36,3 +38,20 @@ pythonpath = ["."]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
 ]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_return_any = true
+plugins = ["pydantic.mypy"]
