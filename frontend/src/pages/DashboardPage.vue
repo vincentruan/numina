@@ -48,8 +48,18 @@
 
         <!-- Charts Section (Expandable) -->
         <div v-if="overview && overview.asset_count > 0" class="charts-section">
-          <div class="charts-toggle" @click="showCharts = !showCharts">
+          <div
+            class="charts-toggle"
+            @click="showCharts = !showCharts"
+            role="button"
+            tabindex="0"
+            @keydown.enter="showCharts = !showCharts"
+            @keydown.space.prevent="showCharts = !showCharts"
+            :aria-expanded="showCharts"
+            aria-label="数据可视化图表"
+          >
             <span class="charts-toggle-title">数据可视化</span>
+            <span class="charts-toggle-hint">{{ showCharts ? '收起' : '展开' }}</span>
             <van-icon :name="showCharts ? 'arrow-up' : 'arrow-down'" />
           </div>
           <template v-if="showCharts">
@@ -259,7 +269,7 @@ const categoryStore = useCategoryStore()
 const assetStore = useAssetStore()
 const authStore = useAuthStore()
 const refreshing = ref(false)
-const showCharts = ref(false)
+const showCharts = ref(true)
 const activeStatus = ref<string | null>(null)
 const viewMode = ref<'card' | 'list'>('card')
 const overviewCardRef = ref()
@@ -749,6 +759,12 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+  flex: 1;
+}
+.charts-toggle-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-right: 4px;
 }
 .charts-toggle :deep(.van-icon) {
   color: var(--text-secondary);

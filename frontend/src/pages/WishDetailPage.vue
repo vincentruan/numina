@@ -108,6 +108,7 @@
                 name="purchase_price"
                 label="购入价格"
                 type="number"
+                inputmode="decimal"
                 placeholder="请输入购入价格"
                 :rules="[{ required: true, message: '请输入购入价格' }]"
               />
