@@ -1,5 +1,6 @@
 """AI 功能相关的 FastAPI dependencies。"""
 
+import hmac
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -47,7 +48,7 @@ def verify_agent_token(
         )
 
     expected = f"Bearer {settings.AGENT_INTERNAL_TOKEN}"
-    if authorization != expected:
+    if not hmac.compare_digest(authorization, expected):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid agent token",

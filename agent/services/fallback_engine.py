@@ -4,27 +4,15 @@ This is the final backstop: if the legacy path also raises, return a hardcoded
 safe AgentResponse rather than propagating the exception.
 """
 
+import contextlib
 import json
 import logging
-import uuid
-from typing import Optional
 
 from schemas.context import RedactedContext
 from schemas.response import AgentResponse
 from services.output_mapper import output_mapper
 
 logger = logging.getLogger(__name__)
-
-# Capability → legacy service function mapping
-_CAPABILITY_MAP: dict[str, str] = {
-    "report": "services.health_report.generate_health_report",
-    "suggest": "services.asset_suggest.suggest_asset_fields",
-    "alerts": "services.aging_alert.scan_aging_alerts",
-    "disposal": "services.disposal_advisor.scan_disposal_suggestions",
-    "liability": "services.liability_advisor.analyze_liabilities",
-    "allocation": "services.allocation_advisor.analyze_allocation",
-    "chat": "services.chat.answer_question",
-}
 
 _SAFE_RESPONSE = AgentResponse(
     capability="unknown",
@@ -76,10 +64,8 @@ class FallbackEngine:
             # Parse free_text JSON for asset fields; fall back to stub if missing
             fields: dict = {}
             if ctx.free_text:
-                try:
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
                     fields = json.loads(ctx.free_text)
-                except (json.JSONDecodeError, ValueError):
-                    pass
             if fields.get("name") and fields.get("category"):
                 from services.asset_suggest import suggest_asset_fields
                 return await suggest_asset_fields(

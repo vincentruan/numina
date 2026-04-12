@@ -65,6 +65,7 @@ class TestOrchestratorFallbackPath:
             mock_settings.AGENT_INTERNAL_TOKEN = "tok"
             MockClient.return_value.get_family_ai_config = AsyncMock(return_value=config)
             mock_redactor.redact.return_value = redacted
+            mock_redactor.redact_text.return_value = ("ok", [])
             mock_fallback.run = AsyncMock(return_value=safe_response)
             # Patch _build_context to avoid real HTTP calls
             orchestrator._build_context = AsyncMock(
@@ -101,6 +102,7 @@ class TestOrchestratorFallbackPath:
             mock_settings.AGENT_INTERNAL_TOKEN = "tok"
             MockClient.return_value.get_family_ai_config = AsyncMock(return_value=config)
             mock_redactor.redact.return_value = redacted
+            mock_redactor.redact_text.return_value = ("fallback", [])
             mock_fallback.run = AsyncMock(return_value=safe_response)
             orchestrator._build_context = AsyncMock(
                 return_value=MagicMock(family_id="fam-1")
@@ -129,6 +131,7 @@ class TestOrchestratorAuditLogging:
             mock_settings.AGENT_INTERNAL_TOKEN = "tok"
             MockClient.return_value.get_family_ai_config = AsyncMock(return_value=config)
             mock_redactor.redact.return_value = redacted
+            mock_redactor.redact_text.return_value = ("done", [])
             mock_fallback.run = AsyncMock(return_value=ok_response)
             orchestrator._build_context = AsyncMock(
                 return_value=MagicMock(family_id="fam-1")

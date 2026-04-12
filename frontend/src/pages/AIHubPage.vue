@@ -46,7 +46,7 @@
     </div>
 
     <!-- Report summary card -->
-    <div v-if="currentReport" class="report-summary-card" @click="$router.push('/ai/report')" role="button" tabindex="0" aria-label="查看完整资产体检报告">
+    <div v-if="currentReport" class="report-summary-card" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')" role="button" tabindex="0" aria-label="查看完整资产体检报告">
       <div class="report-summary-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>

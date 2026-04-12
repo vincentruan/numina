@@ -1,13 +1,19 @@
 """DeerFlowAdapter — async wrapper around DeerFlowClient.stream()."""
 
 import asyncio
+import json
 import logging
+import os
+from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
-from typing import AsyncGenerator
 
 from schemas.context import RedactedContext
 from services.deerflow_adapter.client_factory import get_deerflow_client
-from services.deerflow_adapter.exceptions import DeerFlowError, DeerFlowSkillNotFoundError, DeerFlowTimeoutError
+from services.deerflow_adapter.exceptions import (
+    DeerFlowError,
+    DeerFlowSkillNotFoundError,
+    DeerFlowTimeoutError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +37,13 @@ class DeerFlowAdapter:
         self._timeout = timeout_seconds
 
     async def dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
-        """Dispatch a skill call and return the full response string."""
-        async with _SEMAPHORE:
+        """Dispatch a skill call and return the full response string.
+
+        _CHECKPOINTER_LOCK serializes SqliteSaver writes across concurrent calls,
+        preventing SQLITE_BUSY. The lock is held on the async side (before the
+        executor call) so it works correctly across threads.
+        """
+        async with _SEMAPHORE, _CHECKPOINTER_LOCK:
             try:
                 loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
@@ -46,10 +57,10 @@ class DeerFlowAdapter:
                     timeout=self._timeout,
                 )
                 return result
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 raise DeerFlowTimeoutError(
                     f"DeerFlow skill '{skill_name}' timed out after {self._timeout}s"
-                )
+                ) from None
             except DeerFlowSkillNotFoundError:
                 raise
             except DeerFlowError:
@@ -67,15 +78,12 @@ class DeerFlowAdapter:
     def _sync_dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
         """Synchronous DeerFlow call — runs in thread pool executor."""
         try:
-            # Build prompt from redacted context
             prompt = self._build_prompt(skill_name, context)
-            # stream() returns a sync generator of StreamEvent objects
             chunks = []
             for event in self._client.stream(
                 message=prompt,
                 thread_id=thread_id,
             ):
-                # Collect AI text events
                 if hasattr(event, "data") and isinstance(event.data, str):
                     chunks.append(event.data)
                 elif isinstance(event, str):
@@ -89,6 +97,19 @@ class DeerFlowAdapter:
 
     def _build_prompt(self, skill_name: str, context: RedactedContext) -> str:
         """Build a skill-dispatch prompt from the redacted context."""
-        import json
         ctx_dict = context.model_dump(exclude={"redaction_log"})
         return f"[SKILL:{skill_name}]\n{json.dumps(ctx_dict, ensure_ascii=False, indent=2)}"
+
+
+def _make_adapter() -> DeerFlowAdapter | None:
+    """Construct the module-level singleton from settings. Returns None if config is missing."""
+    try:
+        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
+        return DeerFlowAdapter(config_path=config_path, timeout_seconds=120)
+    except Exception as e:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(f"DeerFlow adapter init failed: {e}")
+        return None
+
+
+deerflow_adapter: DeerFlowAdapter | None = _make_adapter()

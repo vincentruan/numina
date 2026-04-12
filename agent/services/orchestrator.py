@@ -14,7 +14,6 @@ All exceptions are caught here; callers always receive an AgentResponse.
 import logging
 import time
 import uuid
-from typing import Optional
 
 from config import settings
 from core.backend_client import BackendClient
@@ -43,17 +42,17 @@ class Orchestrator:
         self,
         capability: str,
         family_id: str,
-        user_id: Optional[str] = None,
-        free_text: Optional[str] = None,
+        user_id: str | None = None,
+        free_text: str | None = None,
     ) -> AgentResponse:
         """Run the full pipeline. Never raises — always returns AgentResponse."""
         audit_id = str(uuid.uuid4())
         start_ms = int(time.monotonic() * 1000)
         fallback_used = False
         deerflow_attempted = False
-        skill_triggered: Optional[str] = None
-        error_type: Optional[str] = None
-        response: Optional[AgentResponse] = None
+        skill_triggered: str | None = None
+        error_type: str | None = None
+        response: AgentResponse | None = None
 
         try:
             # ── 1. Fetch AI config & build policy ──────────────────────────
@@ -136,10 +135,9 @@ class Orchestrator:
             if response is None:
                 response = self._safe_response(capability, audit_id)
             # Redact LLM output before writing to audit log
-            from services.pii_redactor import _redact_free_text
             raw_summary = response.summary[:200] if response.summary else None
             if raw_summary:
-                raw_summary, _ = _redact_free_text(raw_summary)
+                raw_summary = pii_redactor.redact_text(raw_summary)[0]
             audit_logger.log_call(AuditEntry(
                 family_id=family_id,
                 capability=capability,
@@ -160,33 +158,37 @@ class Orchestrator:
         self,
         client: BackendClient,
         family_id: str,
-        free_text: Optional[str],
+        free_text: str | None,
     ) -> FamilyContext:
         """Fetch all family data from backend and assemble FamilyContext."""
         try:
             liabilities = await client.get_liabilities()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[orchestrator] fetch liabilities failed family={family_id}: {e}")
             liabilities = []
         try:
             dashboard_overview = await client.get_dashboard_overview()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[orchestrator] fetch dashboard_overview failed family={family_id}: {e}")
             dashboard_overview = {}
         try:
             dashboard_allocation = await client.get_dashboard_allocation()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[orchestrator] fetch dashboard_allocation failed family={family_id}: {e}")
             dashboard_allocation = {}
         try:
             dashboard_trend = await client.get_dashboard_trend()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[orchestrator] fetch dashboard_trend failed family={family_id}: {e}")
             dashboard_trend = {}
         try:
             low_usage_assets = await client.get_dashboard_low_usage()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[orchestrator] fetch low_usage_assets failed family={family_id}: {e}")
             low_usage_assets = []
         assets: list[dict] = []   # no backend endpoint yet — context will be empty
         members: list[dict] = []  # no backend endpoint yet — context will be empty
-        if not assets:
-            logger.debug("[orchestrator] assets not fetched — no backend endpoint available")
+        logger.debug("[orchestrator] assets/members not fetched — no backend endpoint available")
 
         return FamilyContext(
             family_id=family_id,

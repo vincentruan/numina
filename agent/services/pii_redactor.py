@@ -1,9 +1,12 @@
 """PII 脱敏服务：统一入口，结构化数据 + 自由文本双路径。"""
 
 import re
-from typing import Optional
 
-from core.desensitize import desensitize_assets, desensitize_liabilities, desensitize_members
+from core.desensitize import (
+    desensitize_assets,
+    desensitize_liabilities,
+    desensitize_members,
+)
 from schemas.context import FamilyContext, RedactedContext
 
 # 自由文本 PII 正则模式
@@ -29,6 +32,10 @@ def _redact_free_text(text: str) -> tuple[str, list[str]]:
 class PIIRedactor:
     """统一 PII 脱敏入口。"""
 
+    def redact_text(self, text: str) -> tuple[str, list[str]]:
+        """对任意文本应用正则脱敏，返回（脱敏后文本, 脱敏日志）。供审计日志等外部调用使用。"""
+        return _redact_free_text(text)
+
     def redact(self, ctx: FamilyContext) -> RedactedContext:
         """脱敏 FamilyContext，返回 RedactedContext。"""
         log: list[str] = []
@@ -47,7 +54,7 @@ class PIIRedactor:
             log.append("members:name")
 
         # 自由文本脱敏
-        redacted_free_text: Optional[str] = None
+        redacted_free_text: str | None = None
         if ctx.free_text is not None:
             redacted_free_text, text_log = _redact_free_text(ctx.free_text)
             log.extend(text_log)

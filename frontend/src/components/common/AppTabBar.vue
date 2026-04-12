@@ -66,7 +66,8 @@ const tabToRoute: Record<string, string> = {
 }
 
 function onTabChange(name: string | number) {
-  const target = tabToRoute[name as string]
+  if (typeof name !== 'string') return
+  const target = tabToRoute[name]
   if (target && route.path !== target) {
     router.push(target)
   }

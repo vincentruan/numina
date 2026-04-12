@@ -44,7 +44,7 @@
           v-show="!canSave"
           id="save-config-hint"
           class="tip"
-          :aria-hidden="canSave ? 'true' : undefined"
+          :aria-hidden="canSave"
         >
           <van-icon name="info-o" />
           <span>请选择 AI 提供商并填写 API Key</span>
