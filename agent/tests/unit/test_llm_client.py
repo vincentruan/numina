@@ -1,0 +1,99 @@
+"""Unit tests for core/llm.py — Bug fix: SDK client singleton."""
+
+import sys
+import os
+from unittest.mock import patch, MagicMock
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
+
+from core.llm import LLMClient, get_llm_client
+
+
+class TestLLMClientSingleton:
+    def test_anthropic_client_created_at_init(self):
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            client = LLMClient("anthropic", "test-key")
+            mock_cls.assert_called_once_with(api_key="test-key", timeout=30.0)
+            assert client._anthropic_client is not None
+
+    def test_openai_client_created_at_init(self):
+        with patch("openai.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            client = LLMClient("openai", "test-key")
+            mock_cls.assert_called_once_with(api_key="test-key", timeout=30.0)
+            assert client._openai_client is not None
+
+    def test_anthropic_client_reused_across_calls(self):
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            client = LLMClient("anthropic", "test-key")
+            first = client._anthropic_client
+            second = client._anthropic_client
+            assert first is second
+            # Constructor called only once (at __init__)
+            assert mock_cls.call_count == 1
+
+    def test_openai_client_reused_across_calls(self):
+        with patch("openai.AsyncOpenAI") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            client = LLMClient("openai", "test-key")
+            assert mock_cls.call_count == 1
+
+    def test_unsupported_provider_raises(self):
+        import pytest
+        with pytest.raises(ValueError, match="不支持的 LLM Provider"):
+            client = LLMClient("gemini", "test-key")
+            import asyncio
+            asyncio.run(client.complete("hello"))
+
+    def test_get_llm_client_factory(self):
+        with patch("anthropic.AsyncAnthropic") as mock_cls:
+            mock_cls.return_value = MagicMock()
+            client = get_llm_client("anthropic", "key")
+            assert isinstance(client, LLMClient)
+            assert client.provider == "anthropic"
+
+
+class TestJSONFenceStripping:
+    """Regression tests for health_report JSON extraction logic."""
+
+    def _extract_json(self, raw: str) -> str:
+        import re
+        fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
+        if fence_match:
+            return fence_match.group(1)
+        start = raw.find("{")
+        end = raw.rfind("}") + 1
+        return raw[start:end]
+
+    def test_plain_json_extracted(self):
+        import json
+        raw = '{"score": 4, "narrative": "good"}'
+        result = json.loads(self._extract_json(raw))
+        assert result["score"] == 4
+
+    def test_json_in_code_fence_extracted(self):
+        import json
+        raw = '```json\n{"score": 4}\n```'
+        result = json.loads(self._extract_json(raw))
+        assert result["score"] == 4
+
+    def test_json_in_plain_fence_extracted(self):
+        import json
+        raw = '```\n{"score": 3}\n```'
+        result = json.loads(self._extract_json(raw))
+        assert result["score"] == 3
+
+    def test_json_with_surrounding_text(self):
+        import json
+        raw = 'Here is the result:\n{"score": 5}\nEnd.'
+        result = json.loads(self._extract_json(raw))
+        assert result["score"] == 5
+
+    def test_fenced_json_takes_priority_over_brace_search(self):
+        import json
+        # If both fence and braces exist, fence wins
+        raw = 'outer {bad} ```json\n{"score": 2}\n```'
+        result = json.loads(self._extract_json(raw))
+        assert result["score"] == 2

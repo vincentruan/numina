@@ -65,7 +65,9 @@ async def chat(
                 },
             )
             resp.raise_for_status()
-            answer = resp.json().get("answer", "")
+            resp_data = resp.json()
+            # AgentResponse shape: summary carries the answer text
+            answer = resp_data.get("summary") or resp_data.get("answer", "")
     except httpx.TimeoutException:
         answer = "抱歉，AI 服务响应超时，请稍后再试。"
     except Exception as e:

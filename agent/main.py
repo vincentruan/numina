@@ -12,6 +12,7 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    settings.validate_required()
     from scheduler import setup_schedules, scheduler
     setup_schedules()
     scheduler.start()

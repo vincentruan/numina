@@ -310,12 +310,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: var(--van-primary-color);
+  background: var(--color-action-primary);
   color: #fff;
   gap: 8px;
 }
 [data-theme='dark'] .selection-bar {
-  background: #0a84ff;
+  background: var(--color-action-primary);
 }
 .selection-count {
   font-size: 14px;

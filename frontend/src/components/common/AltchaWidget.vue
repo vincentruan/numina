@@ -85,8 +85,8 @@
         {{ errorMessage }}
       </div>
 
-      <!-- Hidden altcha-widget for challenge/payload — never visible -->
-      <div class="altcha-hidden" aria-hidden="true" v-html="widgetHtml"></div>
+      <!-- Hidden altcha-widget for challenge/payload — never visible, not keyboard-reachable -->
+      <div class="altcha-hidden" v-html="widgetHtml"></div>
     </template>
   </div>
 </template>
@@ -120,6 +120,7 @@ const widgetHtml = computed(() => {
       hidelogo
       hidefooter
       auto="onload"
+      tabindex="-1"
       strings='{"label":"点击验证","labelVerified":"验证通过","labelVerifying":"验证中...","labelLoading":"加载中...","error":"验证失败，请重试"}'
     ></altcha-widget>
   `

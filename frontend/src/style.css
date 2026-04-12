@@ -1,3 +1,16 @@
+/* Screen-reader only utility — visually hidden but accessible to AT */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -16,6 +29,9 @@
   --theme-primary: #007aff;
   --theme-gradient-start: #007aff;
   --theme-gradient-end: #5856d6;
+  /* WCAG AA contrast-safe action blue (≥4.5:1 with white) */
+  --color-action-primary: #1565c0;
+  --color-action-primary-active: #0d47a1;
 }
 
 [data-theme='dark'] {

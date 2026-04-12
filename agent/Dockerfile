@@ -5,6 +5,11 @@ WORKDIR /app
 # 安装 uv
 RUN pip install uv --no-cache-dir
 
+# 安装 DeerFlow harness（vendor 目录由 scripts/vendor-harness.sh 预先填充）
+COPY vendor/deerflow-harness /opt/deerflow-harness
+# 同时复制到 vendor/ 目录以满足 pyproject.toml workspace 配置
+COPY vendor/deerflow-harness /app/vendor/deerflow-harness
+
 COPY pyproject.toml .
 RUN uv pip install --system -e .
 

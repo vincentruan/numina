@@ -27,6 +27,7 @@ def desensitize_liabilities(liabilities: list[dict]) -> list[dict]:
         result.append({
             "category": li.get("category", "其他"),
             "remaining_amount_range": _amount_to_range(li.get("remaining_amount")),
+            "remaining_amount_range_mid": _amount_to_range_mid(li.get("remaining_amount")),
             "monthly_payment_range": _amount_to_range(li.get("monthly_payment")),
             "interest_rate": li.get("interest_rate"),
             "end_date_ym": _date_to_ym(li.get("end_date")),
@@ -48,6 +49,30 @@ def desensitize_members(members: list[dict]) -> list[dict]:
             "total_value": m.get("total_value"),
         })
     return result
+
+
+def _amount_to_range_mid(amount: float | None) -> float:
+    """返回金额区间的中间值（用于估算汇总）。"""
+    if amount is None:
+        return 0.0
+    if amount < 500:
+        return 250.0
+    elif amount < 1000:
+        return 750.0
+    elif amount < 5000:
+        return 3000.0
+    elif amount < 10000:
+        return 7500.0
+    elif amount < 50000:
+        return 30000.0
+    elif amount < 100000:
+        return 75000.0
+    elif amount < 500000:
+        return 300000.0
+    elif amount < 1000000:
+        return 750000.0
+    else:
+        return 1500000.0
 
 
 def _amount_to_range(amount: float | None) -> str:

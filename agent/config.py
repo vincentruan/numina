@@ -16,7 +16,18 @@ class AgentSettings(BaseSettings):
     # 日志
     LOG_LEVEL: str = "INFO"
 
+    # DeerFlow 集成开关（默认关闭，迁移验证后开启）
+    USE_DEERFLOW: bool = False
+
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    def validate_required(self) -> None:
+        """启动时校验必填配置，缺失则快速失败。"""
+        if not self.AGENT_INTERNAL_TOKEN:
+            raise ValueError(
+                "AGENT_INTERNAL_TOKEN 未配置。"
+                "请在环境变量或 .env 文件中设置此值。"
+            )
 
 
 settings = AgentSettings()

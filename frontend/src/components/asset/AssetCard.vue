@@ -9,7 +9,6 @@
     @contextmenu.prevent="triggerLongPress"
     role="listitem"
     :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
-    :aria-selected="selected"
     tabindex="0"
     @keydown.enter="$emit('click')"
     @keydown.space.prevent="toggleSelect"
@@ -20,6 +19,15 @@
         @update:model-value="$emit('update:selected', $event)"
       />
     </div>
+    <input
+      v-if="selectable"
+      type="checkbox"
+      class="sr-only"
+      :checked="selected"
+      :aria-label="`选择 ${asset.name}`"
+      tabindex="-1"
+      @change="$emit('update:selected', ($event.target as HTMLInputElement).checked)"
+    />
     <div class="card-left">
       <div v-if="asset.image_url && !imageError" class="card-image">
         <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
@@ -63,6 +71,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
+import { getIconId } from '@/utils/icon'
 
 const props = defineProps<{
   asset: Asset
@@ -133,20 +142,6 @@ const daysUsed = computed(() => {
 function formatPrice(price: number | null | undefined): string {
   if (price == null) return '-'
   return currency.format(price)
-}
-
-/**
- * Get the icon ID for a category icon.
- * If the icon is already an icon ID (starts with 'icon-'), use it directly.
- * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
- */
-function getIconId(icon: string | undefined): string {
-  if (!icon) return 'icon-other'
-  if (icon.startsWith('icon-')) {
-    return icon
-  }
-  // Fallback for emoji or unknown icons
-  return 'icon-other'
 }
 
 const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
@@ -269,15 +264,15 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 }
 .card-days {
   font-size: 10px;
-  color: var(--van-primary-color);
-  background: rgba(25, 137, 250, 0.1);
+  color: var(--color-action-primary);
+  background: rgba(21, 101, 192, 0.1);
   padding: 1px 6px;
   border-radius: 8px;
   line-height: 1.4;
 }
 [data-theme='dark'] .card-days {
-  color: #0a84ff;
-  background: rgba(10, 132, 255, 0.15);
+  color: #90caf9;
+  background: rgba(21, 101, 192, 0.2);
 }
 .card-row-prices {
   display: flex;

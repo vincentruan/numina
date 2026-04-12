@@ -157,6 +157,11 @@ const router = createRouter({
           component: () => import('@/pages/AIAllocationPage.vue')
         },
         {
+          path: 'ai',
+          name: 'AIHub',
+          component: () => import('@/pages/AIHubPage.vue')
+        },
+        {
           path: 'stats',
           name: 'DataStats',
           component: () => import('@/pages/DataStatsPage.vue')

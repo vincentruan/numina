@@ -27,6 +27,9 @@ services:
     build: ./agent
     container_name: numina-agent
     restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - agent_logs:/app/logs  # OD-7: persist audit logs across container restarts
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - BACKEND_BASE_URL=http://numina-backend:8000
@@ -104,3 +107,4 @@ services:
 volumes:
   mysql_data:
   postgres_data:
+  agent_logs:  # OD-7: named volume for agent audit logs — persists across container restarts

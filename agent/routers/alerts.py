@@ -5,8 +5,7 @@ import logging
 from fastapi import APIRouter, Header, HTTPException
 
 from config import settings
-from core.llm import LLMClient
-from services.aging_alert import scan_aging_alerts
+from services.orchestrator import orchestrator
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
 logger = logging.getLogger(__name__)
@@ -16,16 +15,14 @@ logger = logging.getLogger(__name__)
 async def generate_aging_alerts(
     x_family_id: str = Header(..., alias="X-Family-Id"),
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    x_user_id: str = Header(None, alias="X-User-Id"),
 ):
     if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
         raise HTTPException(status_code=401, detail="invalid token")
 
-    from core.backend_client import BackendClient
-    client = BackendClient(family_id=x_family_id)
-    ai_config = await client.get_family_ai_config()
-    if not ai_config.get("ai_enabled"):
-        raise HTTPException(status_code=403, detail="AI 功能未启用")
-
-    llm = LLMClient(provider=ai_config["ai_provider"], api_key=ai_config["api_key"])
-    alerts = await scan_aging_alerts(family_id=x_family_id, llm=llm)
-    return {"alerts": alerts}
+    response = await orchestrator.dispatch(
+        capability="alerts",
+        family_id=x_family_id,
+        user_id=x_user_id,
+    )
+    return response.model_dump()

@@ -35,10 +35,20 @@
           type="primary"
           :loading="saving"
           :disabled="!canSave"
+          :aria-describedby="!canSave ? 'save-config-hint' : undefined"
           @click="onSave"
         >
           保存配置
         </van-button>
+        <div
+          v-show="!canSave"
+          id="save-config-hint"
+          class="tip"
+          :aria-hidden="canSave ? 'true' : undefined"
+        >
+          <van-icon name="info-o" />
+          <span>请选择 AI 提供商并填写 API Key</span>
+        </div>
         <van-button
           block
           plain
