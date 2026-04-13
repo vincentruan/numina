@@ -1,13 +1,13 @@
 <template>
   <div class="altcha-container">
-    <!-- Dev mode: silent pass-through -->
-    <div v-if="!isProduction" class="altcha-dev-notice">
+    <!-- Dev mode or captcha disabled: silent pass-through -->
+    <div v-if="!isProduction || !captchaEnabled" class="altcha-dev-notice">
       <van-notice-bar color="#1989fa" background="#ecf9ff">
-        开发模式：验证码已禁用
+        {{ !isProduction ? '开发模式：验证码已禁用' : '测试环境：验证码已禁用' }}
       </van-notice-bar>
     </div>
 
-    <!-- Production: custom unified UI -->
+    <!-- Production + captcha enabled: custom unified UI -->
     <template v-else>
       <!-- Captcha card — matches van-cell-group inset style -->
       <div
@@ -105,6 +105,7 @@ const emit = defineEmits<{
 
 const isProduction = import.meta.env.PROD
 const isMounted = ref(false)
+const captchaEnabled = ref(false)
 const errorMessage = ref('')
 
 type CaptchaState = 'idle' | 'verifying' | 'verified' | 'error'
@@ -178,13 +179,24 @@ onMounted(async () => {
     emit('update:modelValue', undefined)
     return
   }
+  try {
+    const res = await fetch('/api/v1/captcha/config')
+    const data = await res.json()
+    captchaEnabled.value = data.captcha_enabled === true
+  } catch {
+    captchaEnabled.value = true // fail-safe: assume enabled
+  }
+  if (!captchaEnabled.value) {
+    emit('update:modelValue', undefined)
+    return
+  }
   await nextTick()
   setTimeout(setupWidgetListeners, 50)
 })
 
 defineExpose({
   reset: () => {
-    if (isProduction) {
+    if (isProduction && captchaEnabled.value) {
       const widget = document.querySelector('altcha-widget') as any
       if (widget?.reset) widget.reset()
       emit('update:modelValue', undefined)

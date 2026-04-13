@@ -19,6 +19,12 @@ DIFFICULTY_MAP = {
 DEFAULT_DIFFICULTY = 50000  # Backward compatible default
 
 
+@router.get("/config")
+def get_captcha_config():
+    """Return whether captcha is enabled for the current environment."""
+    return {"captcha_enabled": settings.ENVIRONMENT == "production"}
+
+
 @router.get("/challenge")
 def get_challenge(endpoint: str | None = None):
     """Generate an ALTCHA challenge for the client to solve.
