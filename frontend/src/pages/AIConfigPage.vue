@@ -36,6 +36,27 @@
             />
           </template>
         </van-field>
+        <van-field
+          v-model="baseUrlInput"
+          label="Base URL"
+          placeholder="留空使用默认端点（可选）"
+          clearable
+          :disabled="saving"
+        />
+        <van-field
+          v-model="modelIdInput"
+          label="模型 ID"
+          placeholder="留空使用 provider 默认模型（可选）"
+          clearable
+          :disabled="saving"
+        />
+        <van-field
+          v-model="visionModelIdInput"
+          label="图像模型 ID"
+          placeholder="留空使用主模型（可选）"
+          clearable
+          :disabled="saving"
+        />
       </van-cell-group>
 
       <div class="actions">
@@ -83,6 +104,21 @@
           title="服务商"
           :value="providerLabel"
         />
+        <van-cell
+          v-if="aiStore.config?.ai_base_url"
+          title="Base URL"
+          :value="aiStore.config.ai_base_url"
+        />
+        <van-cell
+          v-if="aiStore.config?.ai_model_id"
+          title="模型 ID"
+          :value="aiStore.config.ai_model_id"
+        />
+        <van-cell
+          v-if="aiStore.config?.ai_vision_model_id"
+          title="图像模型 ID"
+          :value="aiStore.config.ai_vision_model_id"
+        />
       </van-cell-group>
       <div class="tip">
         <van-icon name="info-o" />
@@ -115,6 +151,9 @@ const saving = ref(false)
 const testing = ref(false)
 const showProviderPicker = ref(false)
 const apiKeyInput = ref('')
+const baseUrlInput = ref('')
+const modelIdInput = ref('')
+const visionModelIdInput = ref('')
 const selectedProvider = ref<string | null>(null)
 const aiEnabled = ref(false)
 const showApiKey = ref(false)
@@ -143,6 +182,9 @@ onMounted(async () => {
   await aiStore.fetchConfig()
   aiEnabled.value = aiStore.config?.ai_enabled ?? false
   selectedProvider.value = aiStore.config?.ai_provider ?? null
+  baseUrlInput.value = aiStore.config?.ai_base_url ?? ''
+  modelIdInput.value = aiStore.config?.ai_model_id ?? ''
+  visionModelIdInput.value = aiStore.config?.ai_vision_model_id ?? ''
 })
 
 async function onToggleAI(val: boolean) {
@@ -166,9 +208,12 @@ function onProviderConfirm({ selectedOptions }: { selectedOptions: Array<{ text:
 async function onSave() {
   saving.value = true
   try {
-    const payload: { ai_provider?: string | null; ai_api_key?: string | null } = {}
+    const payload: { ai_provider?: string | null; ai_api_key?: string | null; ai_base_url?: string | null; ai_model_id?: string | null; ai_vision_model_id?: string | null } = {}
     if (selectedProvider.value !== null) payload.ai_provider = selectedProvider.value
     if (apiKeyInput.value.trim()) payload.ai_api_key = apiKeyInput.value.trim()
+    payload.ai_base_url = baseUrlInput.value.trim() || null
+    payload.ai_model_id = modelIdInput.value.trim() || null
+    payload.ai_vision_model_id = visionModelIdInput.value.trim() || null
     await aiStore.updateConfig(payload)
     apiKeyInput.value = ''
     showToast('配置已保存')
