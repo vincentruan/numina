@@ -27,6 +27,9 @@ class Family(Base):
     ai_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ai_provider: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'anthropic' | 'openai'
     ai_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)  # AES-256 Fernet 加密
+    ai_base_url: Mapped[str | None] = mapped_column(Text, nullable=True)  # 自定义 API Base URL，NULL 表示使用默认端点
+    ai_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # 主模型 ID，NULL 使用 provider 默认
+    ai_vision_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # 图像模型 ID，NULL 使用主模型
 
     members = relationship("User", back_populates="family")
     categories = relationship("Category", back_populates="family")

@@ -137,6 +137,9 @@ def internal_get_ai_config(
         "ai_enabled": family.ai_enabled,
         "ai_provider": family.ai_provider,
         "api_key": api_key,  # 明文，仅在内部网络传输
+        "ai_base_url": family.ai_base_url,
+        "ai_model_id": family.ai_model_id,
+        "ai_vision_model_id": family.ai_vision_model_id,
     }
 
 
