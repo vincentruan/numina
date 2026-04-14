@@ -16,7 +16,7 @@ import * as path from 'path'
  */
 
 const SNAPSHOT_PATH = path.resolve(__dirname, '../fixtures/openapi.snapshot.json')
-const BACKEND_OPENAPI_URL = 'http://localhost:8000/openapi.json'
+const BACKEND_OPENAPI_URL = 'http://localhost/openapi.json'
 
 test('API 契约未发生变化 (openapi.json snapshot)', async ({ request }) => {
   // 获取当前 openapi.json

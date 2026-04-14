@@ -37,10 +37,11 @@ test('routes.ts covers all route names in frontend/src/router/index.ts', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 for (const route of PROTECTED_ROUTES) {
   test(`unauthenticated: ${route.name} (${route.path}) → redirects to /login`, async ({ page }) => {
-    // Ensure no auth state from a previous test
+    // Each test gets a fresh page but shares the browser context (and its localStorage).
+    // Navigate to the app origin first so we can clear localStorage via evaluate,
+    // then navigate to the target route.
     await page.goto('/')
     await page.evaluate(() => localStorage.removeItem('numina_user'))
-
     await page.goto(route.path)
     await expect(page).toHaveURL(/\/login/)
   })
@@ -62,8 +63,8 @@ test.describe('authenticated: guest routes redirect to /', () => {
     test(`authenticated: ${route.name} (${route.path}) → redirects to /`, async ({ page }) => {
       await emptyFamily(page)
       await page.goto(route.path)
-      // Should redirect to dashboard (root path)
-      await expect(page).toHaveURL(/^\/?$|^\/$/)
+      // Should redirect to dashboard (root path) — match full URL ending with /
+      await expect(page).toHaveURL(/\/$/)
     })
   }
 })

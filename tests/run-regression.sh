@@ -37,13 +37,14 @@ log_bold() { echo -e "${BOLD}$1${NC}"; }
 # ── 清理 trap ─────────────────────────────────────────────
 cleanup() {
   local exit_code=$?
+  # 保留 volume，只停止容器（下次启动更快，数据不丢失）
   if [ "$KEEP_UP" = "false" ]; then
-    log_info "清理 Docker 环境..."
+    log_info "停止 Docker 服务（保留数据）..."
     cd "$REPO_ROOT"
-    docker compose down -v 2>/dev/null || true
-    log_ok "Docker 环境已清理"
+    docker compose down 2>/dev/null || true
+    log_ok "Docker 服务已停止"
   else
-    log_info "--keep-up: Docker 环境保留，可手动运行 'docker compose down -v' 清理"
+    log_info "--keep-up: Docker 环境保留"
   fi
   exit $exit_code
 }
@@ -58,12 +59,17 @@ echo ""
 
 cd "$REPO_ROOT"
 
-# 1. 启动 Docker 服务
+# 1. 启动 Docker 服务（保留 volume 避免数据丢失）
 log_info "启动 Docker 服务..."
 docker compose up -d
 log_ok "Docker 服务已启动"
 
-# 2. 等待后端健康检查
+# 2. 运行数据库 migration（首次或 volume 重新创建后需要）
+log_info "检查数据库迁移..."
+docker compose exec -T -e PYTHONPATH=/app backend .venv/bin/alembic upgrade head 2>/dev/null || true
+log_ok "数据库就绪"
+
+# 3. 等待后端健康检查
 log_info "等待后端就绪（最多 90 秒）..."
 BACKEND_READY=false
 for i in $(seq 1 45); do

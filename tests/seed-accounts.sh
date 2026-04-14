@@ -17,8 +17,8 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-log_ok()   { echo -e "${GREEN}✓ $1${NC}"; }
-log_info() { echo -e "${YELLOW}ℹ $1${NC}"; }
+log_ok()   { echo -e "${GREEN}✓ $1${NC}" >&2; }
+log_info() { echo -e "${YELLOW}ℹ $1${NC}" >&2; }
 log_err()  { echo -e "${RED}✗ $1${NC}" >&2; }
 
 # 注册账号，返回 access_token（已存在则登录）
@@ -35,13 +35,13 @@ register_or_login() {
 
   local http_code body
   http_code=$(echo "$resp" | tail -1)
-  body=$(echo "$resp" | head -n -1)
+  body=$(echo "$resp" | sed '$d')
 
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
     echo "$body" | jq -r '.access_token'
     return 0
-  elif [ "$http_code" = "409" ]; then
-    log_info "账号 $username 已存在，直接登录"
+  elif [ "$http_code" = "409" ] || [ "$http_code" = "400" ]; then
+    log_info "账号 $username 已存在 ($http_code)，直接登录"
     local login_resp
     login_resp=$(curl -sL -X POST "$BASE_URL/auth/login" \
       -H "Content-Type: application/json" \
@@ -68,9 +68,11 @@ get_category_id() {
 # 检查资产数量（避免重复创建）
 get_asset_count() {
   local token="$1"
-  curl -sL "$BASE_URL/assets" \
-    -H "Authorization: Bearer $token" \
-    | jq -r '.total // (.items | length) // 0' 2>/dev/null || echo "0"
+  local resp
+  resp=$(curl -sL "$BASE_URL/assets" \
+    -H "Authorization: Bearer $token")
+  # 支持响应格式：数组 或 {total: N, items: [...]} 或 {items: [...]}
+  echo "$resp" | jq -r 'if type == "array" then length elif (.total | type) == "number" then .total elif (.items | type) == "array" then .items | length else 0 end' 2>/dev/null || echo "0"
 }
 
 echo ""
@@ -142,8 +144,12 @@ if [ -z "$TOKEN_RICH" ] || [ "$TOKEN_RICH" = "null" ]; then
 fi
 
 RICH_ASSET_COUNT=$(get_asset_count "$TOKEN_RICH")
-if [ "$RICH_ASSET_COUNT" != "0" ]; then
-  log_info "test_rich 已有 $RICH_ASSET_COUNT 个资产，跳过种子数据"
+RICH_LIABILITY_COUNT=$(curl -sL "$BASE_URL/liabilities" \
+  -H "Authorization: Bearer $TOKEN_RICH" \
+  | jq -r 'if type == "array" then length elif (.total | type) == "number" then .total elif (.items | type) == "array" then .items | length else 0 end' 2>/dev/null || echo "0")
+
+if [ "$RICH_ASSET_COUNT" != "0" ] && [ "$RICH_LIABILITY_COUNT" != "0" ]; then
+  log_info "test_rich 已有 $RICH_ASSET_COUNT 个资产 + $RICH_LIABILITY_COUNT 个负债，跳过种子数据"
   log_ok "test_rich 就绪"
 else
   log_info "为 test_rich 创建种子数据..."
@@ -188,8 +194,8 @@ else
   create_asset "{\"name\":\"测试存款\",\"asset_type\":\"financial\",\"category_id\":\"$CAT_DEPOSIT_R\",\"purchase_price\":200000,\"current_value\":200000,\"currency\":\"CNY\",\"purchase_date\":\"2024-01-01\",\"institution\":\"测试银行\"}"
 
   # 负债（2 个）
-  create_liability "{\"name\":\"测试房贷\",\"liability_type\":\"mortgage\",\"total_amount\":3000000,\"remaining_amount\":2800000,\"currency\":\"CNY\",\"interest_rate\":4.2,\"monthly_payment\":15000,\"start_date\":\"2020-01-01\",\"end_date\":\"2050-01-01\",\"institution\":\"测试银行\"}"
-  create_liability "{\"name\":\"测试车贷\",\"liability_type\":\"car_loan\",\"total_amount\":200000,\"remaining_amount\":100000,\"currency\":\"CNY\",\"interest_rate\":5.0,\"monthly_payment\":4000,\"start_date\":\"2022-06-01\",\"end_date\":\"2026-06-01\",\"institution\":\"测试银行\"}"
+  create_liability "{\"name\":\"测试房贷\",\"category\":\"mortgage\",\"original_amount\":3000000,\"remaining_amount\":2800000,\"currency\":\"CNY\",\"interest_rate\":4.2,\"monthly_payment\":15000,\"start_date\":\"2020-01-01\",\"end_date\":\"2050-01-01\",\"institution\":\"测试银行\"}"
+  create_liability "{\"name\":\"测试车贷\",\"category\":\"car_loan\",\"original_amount\":200000,\"remaining_amount\":100000,\"currency\":\"CNY\",\"interest_rate\":5.0,\"monthly_payment\":4000,\"start_date\":\"2022-06-01\",\"end_date\":\"2026-06-01\",\"institution\":\"测试银行\"}"
 
   # 心愿（2 个）
   create_wish "{\"name\":\"测试心愿1\",\"target_amount\":50000,\"currency\":\"CNY\",\"priority\":\"high\",\"description\":\"E2E 测试心愿\"}"

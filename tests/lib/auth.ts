@@ -24,9 +24,20 @@ export async function loginAs(page: Page, username: string, password: string): P
     const body = await loginResp.text()
     throw new Error(`loginAs failed for "${username}": HTTP ${loginResp.status()} — ${body}`)
   }
+  const loginData = await loginResp.json()
+  const accessToken: string = loginData.access_token
 
-  // 2. Fetch user object (login response is TokenResponse, does not include user fields)
-  const meResp = await page.request.get('/api/v1/auth/me')
+  // 2. Fetch user object using Bearer token (avoids cookie-based rate limit issues)
+  //    Retry once on 429 with a short backoff.
+  let meResp = await page.request.get('/api/v1/auth/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (meResp.status() === 429) {
+    await page.waitForTimeout(2000)
+    meResp = await page.request.get('/api/v1/auth/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    })
+  }
   if (!meResp.ok()) {
     throw new Error(`GET /auth/me failed: HTTP ${meResp.status()}`)
   }

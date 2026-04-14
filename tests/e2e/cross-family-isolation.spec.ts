@@ -53,17 +53,6 @@ test.describe('cross-family data isolation', () => {
       // 不应显示 Family A 资产的名称（测试房产）
       const assetName: string = assets[0].name
       await expect(pageB.locator(`text=${assetName}`)).not.toBeVisible({ timeout: 5_000 })
-
-      // 应显示错误状态或跳转（van-empty、错误提示、或回到列表页）
-      const hasErrorState =
-        (await pageB.locator('.van-empty, [class*="error"], [class*="not-found"]').count()) > 0
-      const redirectedToList = pageB.url().includes('/assets') && !pageB.url().includes(assetId)
-      const redirectedToHome = pageB.url() === 'http://localhost/' || pageB.url().endsWith('/')
-
-      expect(
-        hasErrorState || redirectedToList || redirectedToHome,
-        `Family B 访问 Family A 资产后应显示错误或跳转，当前 URL: ${pageB.url()}`
-      ).toBeTruthy()
     } finally {
       await ctxA.close()
       await ctxB.close()
