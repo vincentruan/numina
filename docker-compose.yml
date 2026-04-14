@@ -104,6 +104,24 @@ services:
       timeout: 5s
       retries: 5
 
+  # Playwright E2E runner（使用 --profile test 启动）
+  # 主要用于 CI 环境；本地开发直接在 host 运行 tests/run-regression.sh
+  playwright:
+    image: ${X_DOCKER_MIRROR:-mcr.microsoft.com}/playwright:v1.52.0-noble
+    container_name: numina-playwright
+    working_dir: /tests
+    volumes:
+      - ./tests:/tests
+    command: npx playwright test
+    depends_on:
+      backend:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    network_mode: host
+    profiles:
+      - test
+
 volumes:
   mysql_data:
   postgres_data:
