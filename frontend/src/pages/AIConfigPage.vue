@@ -65,19 +65,16 @@
           type="primary"
           :loading="saving"
           :disabled="!canSave"
-          :aria-describedby="!canSave ? 'save-config-hint' : undefined"
           @click="onSave"
         >
           保存配置
         </van-button>
         <div
-          v-show="!canSave"
-          id="save-config-hint"
+          v-if="validationError"
           class="tip"
-          :aria-hidden="canSave"
         >
           <van-icon name="info-o" />
-          <span>请选择 AI 提供商并填写 API Key</span>
+          <span>{{ validationError }}</span>
         </div>
         <van-button
           block
@@ -154,7 +151,7 @@ const apiKeyInput = ref('')
 const baseUrlInput = ref('')
 const modelIdInput = ref('')
 const visionModelIdInput = ref('')
-const selectedProvider = ref<string | null>(null)
+const selectedProvider = ref<string>('anthropic')
 const aiEnabled = ref(false)
 const showApiKey = ref(false)
 
@@ -163,25 +160,29 @@ const isOwner = computed(() => authStore.user?.role === 'owner')
 const maskedKey = computed(() => aiStore.config?.ai_api_key_masked ?? null)
 
 const providerOptions = [
-  { text: 'Anthropic (Claude)', value: 'anthropic' },
-  { text: 'OpenAI (GPT)', value: 'openai' },
+  { text: 'Anthropic (Claude)', value: 'anthropic', icon: '💬' },
+  { text: 'OpenAI (GPT)', value: 'openai', icon: '🤖' },
 ]
 
 const providerLabel = computed(() => {
-  const p = selectedProvider.value ?? aiStore.config?.ai_provider
-  if (p === 'anthropic') return 'Anthropic (Claude)'
-  if (p === 'openai') return 'OpenAI (GPT)'
+  if (selectedProvider.value === 'anthropic') return '💬 Anthropic (Claude)'
+  if (selectedProvider.value === 'openai') return '🤖 OpenAI (GPT)'
   return '未选择'
 })
 
-const canSave = computed(() =>
-  !saving.value && (selectedProvider.value !== null || apiKeyInput.value.trim() !== '')
-)
+const validationError = computed(() => {
+  if (saving.value) return null
+  if (aiEnabled.value && !selectedProvider.value) return '请选择 AI Provider'
+  if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return '请填写 API Key'
+  return null
+})
+
+const canSave = computed(() => !saving.value && !validationError.value)
 
 onMounted(async () => {
   await aiStore.fetchConfig()
   aiEnabled.value = aiStore.config?.ai_enabled ?? false
-  selectedProvider.value = aiStore.config?.ai_provider ?? null
+  selectedProvider.value = aiStore.config?.ai_provider ?? 'anthropic'
   baseUrlInput.value = aiStore.config?.ai_base_url ?? ''
   modelIdInput.value = aiStore.config?.ai_model_id ?? ''
   visionModelIdInput.value = aiStore.config?.ai_vision_model_id ?? ''
@@ -208,8 +209,8 @@ function onProviderConfirm({ selectedOptions }: { selectedOptions: Array<{ text:
 async function onSave() {
   saving.value = true
   try {
-    const payload: { ai_provider?: string | null; ai_api_key?: string | null; ai_base_url?: string | null; ai_model_id?: string | null; ai_vision_model_id?: string | null } = {}
-    if (selectedProvider.value !== null) payload.ai_provider = selectedProvider.value
+    const payload: { ai_provider?: string; ai_api_key?: string; ai_base_url?: string | null; ai_model_id?: string | null; ai_vision_model_id?: string | null } = {}
+    payload.ai_provider = selectedProvider.value
     if (apiKeyInput.value.trim()) payload.ai_api_key = apiKeyInput.value.trim()
     payload.ai_base_url = baseUrlInput.value.trim() || null
     payload.ai_model_id = modelIdInput.value.trim() || null
@@ -217,8 +218,9 @@ async function onSave() {
     await aiStore.updateConfig(payload)
     apiKeyInput.value = ''
     showToast('配置已保存')
-  } catch {
-    showToast('保存失败，请重试')
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : '保存失败，请重试'
+    showToast(msg.includes('API Key') ? msg : '保存失败，请重试')
   } finally {
     saving.value = false
   }
