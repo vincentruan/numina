@@ -110,19 +110,24 @@
     <!-- Chat input -->
     <div class="chat-entry">
       <div class="chat-input-wrap">
+        <button class="chat-expand-btn" @click="toggleExpand" :aria-label="expanded ? '收起输入框' : '展开输入框'">
+          <svg v-if="!expanded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
+        </button>
         <div class="chat-sparkle" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
           </svg>
         </div>
-        <input
+        <textarea
           v-model="chatInput"
           class="chat-input"
-          type="text"
           placeholder="问我任何关于家庭资产的问题…"
-          @keydown.enter="startChat"
+          @keydown.enter.exact.prevent="startChat"
           aria-label="向 AI 提问"
-        />
+          rows="1"
+          :style="{ height: expanded ? '140px' : '52px' }"
+        ></textarea>
         <button
           class="chat-send"
           :class="{ active: chatInput.trim() }"
@@ -156,6 +161,7 @@ const currentReport = ref<Record<string, any> | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const chatInput = ref('')
+const expanded = ref(false)
 
 const userName = computed(() => getUser()?.display_name || '用户')
 
@@ -266,6 +272,10 @@ function startChat() {
   router.push({ path: '/ai/chat', query: { q } })
 }
 
+function toggleExpand() {
+  expanded.value = !expanded.value
+}
+
 const features = [
   {
     route: '/ai/report',
@@ -315,7 +325,7 @@ onMounted(async () => {
 .ai-hub-page {
   background: var(--bg-secondary);
   min-height: 100vh;
-  padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  padding-bottom: 120px;
 }
 
 /* ── Header ── */
@@ -642,10 +652,18 @@ onMounted(async () => {
 
 /* ── Chat entry ── */
 .chat-entry {
-  padding: 12px 16px 0;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 8px 16px 12px;
+  background: var(--bg-primary, #fff);
+  border-top: 1px solid var(--border-color, #eee);
 }
 
 .chat-input-wrap {
+  position: relative;
   display: flex;
   align-items: center;
   background: var(--card-bg);
@@ -677,6 +695,27 @@ onMounted(async () => {
   color: var(--text-primary);
   outline: none;
   min-width: 0;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  transition: height 0.15s ease;
+}
+
+.chat-expand-btn {
+  position: absolute;
+  top: -26px;
+  right: 0;
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-color, #eee);
+  border-radius: 6px 6px 0 0;
+  border-bottom: none;
+  padding: 3px 6px;
+  cursor: pointer;
+  color: var(--text-secondary, #999);
+  display: flex;
+  align-items: center;
 }
 
 .chat-input::placeholder {

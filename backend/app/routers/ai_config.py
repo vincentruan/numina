@@ -44,6 +44,9 @@ def get_ai_config(
         ai_enabled=family.ai_enabled,
         ai_provider=family.ai_provider,
         ai_api_key_masked=api_key_masked,
+        ai_base_url=family.ai_base_url,
+        ai_model_id=family.ai_model_id,
+        ai_vision_model_id=family.ai_vision_model_id,
     )
 
 
@@ -56,10 +59,31 @@ def update_ai_config(
     """更新 AI 配置（仅 owner）。"""
     family = _get_family(db, current_user)
 
+    # 配置校验：如果 AI 开启但缺少必要配置，拒绝保存
+    if payload.ai_enabled is True or (payload.ai_enabled is None and family.ai_enabled):
+        provider = payload.ai_provider if payload.ai_provider is not None else family.ai_provider
+        api_key = payload.ai_api_key if payload.ai_api_key is not None else (family.ai_api_key_encrypted is not None)
+        if provider and not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="启用 AI 功能需要配置 API Key",
+            )
+        if api_key and not provider:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="配置 API Key 需要选择 AI Provider",
+            )
+
     if payload.ai_enabled is not None:
         family.ai_enabled = payload.ai_enabled
     if payload.ai_provider is not None:
         family.ai_provider = payload.ai_provider
+    if payload.ai_base_url is not None or "ai_base_url" in (payload.model_fields_set or set()):
+        family.ai_base_url = payload.ai_base_url
+    if payload.ai_model_id is not None or "ai_model_id" in (payload.model_fields_set or set()):
+        family.ai_model_id = payload.ai_model_id
+    if payload.ai_vision_model_id is not None or "ai_vision_model_id" in (payload.model_fields_set or set()):
+        family.ai_vision_model_id = payload.ai_vision_model_id
     if payload.ai_api_key is not None:
         if payload.ai_api_key == "":
             # 清空 API Key
@@ -94,6 +118,9 @@ def update_ai_config(
         ai_enabled=family.ai_enabled,
         ai_provider=family.ai_provider,
         ai_api_key_masked=api_key_masked,
+        ai_base_url=family.ai_base_url,
+        ai_model_id=family.ai_model_id,
+        ai_vision_model_id=family.ai_vision_model_id,
     )
 
 

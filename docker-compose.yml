@@ -54,7 +54,7 @@ services:
       - "28080:80"
 
   nginx:
-    image: ${X_DOCKER_MIRROR:-docker.xuanyuan.me}/library/nginx:alpine
+    image: nginx:alpine
     container_name: numina-nginx
     restart: unless-stopped
     ports:
@@ -67,7 +67,7 @@ services:
 
   # 可选 MySQL 服务（使用 --profile mysql 启动）
   mysql:
-    image: ${X_DOCKER_MIRROR:-docker.xuanyuan.me}/library/mysql:8.0
+    image: mysql:8.0
     container_name: numina-mysql
     restart: unless-stopped
     environment:
@@ -87,7 +87,7 @@ services:
 
   # 可选 PostgreSQL 服务（使用 --profile postgres 启动）
   postgres:
-    image: ${X_DOCKER_MIRROR:-docker.xuanyuan.me}/library/postgres:15
+    image: postgres:15
     container_name: numina-postgres
     restart: unless-stopped
     environment:
@@ -103,6 +103,24 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # Playwright E2E runner（使用 --profile test 启动）
+  # 主要用于 CI 环境；本地开发直接在 host 运行 tests/run-regression.sh
+  playwright:
+    image: ${X_DOCKER_MIRROR:-mcr.microsoft.com}/playwright:v1.52.0-noble
+    container_name: numina-playwright
+    working_dir: /tests
+    volumes:
+      - ./tests:/tests
+    command: npx playwright test
+    depends_on:
+      backend:
+        condition: service_healthy
+      agent:
+        condition: service_healthy
+    network_mode: host
+    profiles:
+      - test
 
 volumes:
   mysql_data:

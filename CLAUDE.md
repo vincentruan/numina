@@ -2,6 +2,45 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Behavioral Guidelines
+
+### 1. Think Before Coding
+
+Before implementing, state assumptions explicitly. If multiple interpretations exist, present them — don't pick silently. If a simpler approach exists, say so. If something is unclear, stop and ask.
+
+### 2. Simplicity First
+
+Minimum code that solves the problem. Nothing speculative.
+
+- No features beyond what was asked.
+- No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+
+Ask: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
+
+### 3. Surgical Changes
+
+Touch only what you must. When editing existing code:
+
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken.
+- Match existing style, even if you'd do it differently.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Remove imports/variables/functions that **your** changes made unused, but leave pre-existing dead code alone.
+
+Every changed line should trace directly to the user's request.
+
+### 4. Goal-Driven Execution
+
+Transform tasks into verifiable goals before starting:
+
+- "Fix the bug" → write a test that reproduces it, then make it pass.
+- "Add validation" → write tests for invalid inputs, then make them pass.
+- "Refactor X" → ensure tests pass before and after.
+
+For multi-step tasks, state a brief plan with explicit verify steps before coding.
+
 ## Project Overview
 
 Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visualization and management system. It helps families track, manage, and visualize their assets and liabilities across multiple members with role-based access control.

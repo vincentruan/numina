@@ -68,6 +68,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -79,6 +80,7 @@ interface Message {
   created_at: string
 }
 
+const route = useRoute()
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
@@ -162,6 +164,11 @@ onMounted(async () => {
     await scrollToBottom()
   } catch {
     // no history
+  }
+  const q = route.query.q
+  if (typeof q === 'string' && q.trim()) {
+    inputText.value = q.trim()
+    await onSend()
   }
 })
 </script>

@@ -5,21 +5,41 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+# Provider 默认模型（当 model_id 未配置时使用）
+_DEFAULT_MODEL: dict[str, str] = {
+    "anthropic": "claude-haiku-4-5",
+    "openai": "gpt-4o-mini",
+}
+
 
 class LLMClient:
     """统一 LLM 调用接口，支持 Anthropic 和 OpenAI。"""
 
-    def __init__(self, provider: str, api_key: str) -> None:
+    def __init__(
+        self,
+        provider: str,
+        api_key: str,
+        model_id: str | None = None,
+        vision_model_id: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         self.provider = provider
-        self.api_key = api_key
+        self.model_id = model_id or _DEFAULT_MODEL.get(provider, "")
+        self.vision_model_id = vision_model_id or self.model_id
         self._anthropic_client = None
         self._openai_client = None
         if provider == "anthropic":
             import anthropic
-            self._anthropic_client = anthropic.AsyncAnthropic(api_key=api_key, timeout=30.0)
+            kwargs: dict[str, Any] = {"api_key": api_key, "timeout": 30.0}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._anthropic_client = anthropic.AsyncAnthropic(**kwargs)
         elif provider == "openai":
             from openai import AsyncOpenAI
-            self._openai_client = AsyncOpenAI(api_key=api_key, timeout=30.0)
+            kwargs = {"api_key": api_key, "timeout": 30.0}
+            if base_url:
+                kwargs["base_url"] = base_url
+            self._openai_client = AsyncOpenAI(**kwargs)
 
     async def complete(self, prompt: str, max_tokens: int = 512, system: str | None = None) -> str:
         """发送单次补全请求，返回文本响应。"""
@@ -30,15 +50,23 @@ class LLMClient:
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
 
+    async def complete_vision(self, prompt: str, image_data: str, max_tokens: int = 512, system: str | None = None) -> str:
+        """发送图像理解请求，返回文本响应。使用 vision_model_id。"""
+        if self.provider == "anthropic":
+            return await self._complete_anthropic_vision(prompt, image_data, max_tokens, system)
+        elif self.provider == "openai":
+            return await self._complete_openai_vision(prompt, image_data, max_tokens, system)
+        else:
+            raise ValueError(f"不支持的 LLM Provider: {self.provider}")
+
     async def _complete_anthropic(self, prompt: str, max_tokens: int, system: str | None) -> str:
         kwargs: dict[str, Any] = {
-            "model": "claude-haiku-4-5",
+            "model": self.model_id,
             "max_tokens": max_tokens,
             "messages": [{"role": "user", "content": prompt}],
         }
         if system:
             kwargs["system"] = system
-
         message = await self._anthropic_client.messages.create(**kwargs)
         return message.content[0].text
 
@@ -47,15 +75,49 @@ class LLMClient:
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": prompt})
-
         response = await self._openai_client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=self.model_id,
+            max_tokens=max_tokens,
+            messages=messages,
+        )
+        return response.choices[0].message.content or ""
+
+    async def _complete_anthropic_vision(self, prompt: str, image_data: str, max_tokens: int, system: str | None) -> str:
+        kwargs: dict[str, Any] = {
+            "model": self.vision_model_id,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": [
+                {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": image_data}},
+                {"type": "text", "text": prompt},
+            ]}],
+        }
+        if system:
+            kwargs["system"] = system
+        message = await self._anthropic_client.messages.create(**kwargs)
+        return message.content[0].text
+
+    async def _complete_openai_vision(self, prompt: str, image_data: str, max_tokens: int, system: str | None) -> str:
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": [
+            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}},
+            {"type": "text", "text": prompt},
+        ]})
+        response = await self._openai_client.chat.completions.create(
+            model=self.vision_model_id,
             max_tokens=max_tokens,
             messages=messages,
         )
         return response.choices[0].message.content or ""
 
 
-def get_llm_client(provider: str, api_key: str) -> LLMClient:
+def get_llm_client(
+    provider: str,
+    api_key: str,
+    model_id: str | None = None,
+    vision_model_id: str | None = None,
+    base_url: str | None = None,
+) -> LLMClient:
     """工厂函数，创建 LLM 客户端实例。"""
-    return LLMClient(provider=provider, api_key=api_key)
+    return LLMClient(provider=provider, api_key=api_key, model_id=model_id, vision_model_id=vision_model_id, base_url=base_url)

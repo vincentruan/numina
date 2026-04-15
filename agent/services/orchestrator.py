@@ -86,7 +86,13 @@ class Orchestrator:
             if not provider or not api_key:
                 return self._safe_response(capability, audit_id, "AI 服务商或 API Key 未配置")
 
-            llm = LLMClient(provider=provider, api_key=api_key)
+            llm = LLMClient(
+                provider=provider,
+                api_key=api_key,
+                model_id=ai_config.get("ai_model_id"),
+                vision_model_id=ai_config.get("ai_vision_model_id"),
+                base_url=ai_config.get("ai_base_url"),
+            )
 
             # ── 4. Fetch family context ────────────────────────────────────
             raw_context = await self._build_context(client, family_id, free_text)

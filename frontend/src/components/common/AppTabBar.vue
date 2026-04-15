@@ -4,27 +4,24 @@
     <van-tabbar-item name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
     <van-tabbar-item name="ai" aria-label="AI 智能助手">
       <template #icon="{ active: isActive }">
-        <div class="ai-btn" :class="{ active: isActive }">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <!-- Brain outline -->
-            <path d="M9.5 2a2.5 2.5 0 0 1 5 0"/>
-            <path d="M9 2.5C6.5 3 4 5.5 4 9c0 1.5.5 2.8 1.3 3.8"/>
-            <path d="M15 2.5C17.5 3 20 5.5 20 9c0 1.5-.5 2.8-1.3 3.8"/>
-            <path d="M5.3 12.8C4.5 14 4 15.5 4 17a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5c0-1.5-.5-3-1.3-4.2"/>
-            <!-- Neural nodes -->
-            <circle cx="12" cy="10" r="1.2" fill="currentColor" stroke="none"/>
-            <circle cx="8.5" cy="13" r="1" fill="currentColor" stroke="none"/>
-            <circle cx="15.5" cy="13" r="1" fill="currentColor" stroke="none"/>
-            <circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/>
-            <!-- Connections -->
-            <line x1="12" y1="11.2" x2="8.5" y2="12"/>
-            <line x1="12" y1="11.2" x2="15.5" y2="12"/>
-            <line x1="8.5" y1="14" x2="12" y2="15"/>
-            <line x1="15.5" y1="14" x2="12" y2="15"/>
-          </svg>
-        </div>
+        <svg class="ai-brain-icon" :class="{ active: isActive }" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <!-- Brain outline -->
+          <path d="M9.5 2a2.5 2.5 0 0 1 5 0"/>
+          <path d="M9 2.5C6.5 3 4 5.5 4 9c0 1.5.5 2.8 1.3 3.8"/>
+          <path d="M15 2.5C17.5 3 20 5.5 20 9c0 1.5-.5 2.8-1.3 3.8"/>
+          <path d="M5.3 12.8C4.5 14 4 15.5 4 17a5 5 0 0 0 5 5h6a5 5 0 0 0 5-5c0-1.5-.5-3-1.3-4.2"/>
+          <!-- Neural nodes -->
+          <circle cx="12" cy="10" r="1.2" fill="currentColor" stroke="none"/>
+          <circle cx="8.5" cy="13" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="15.5" cy="13" r="1" fill="currentColor" stroke="none"/>
+          <circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/>
+          <!-- Connections -->
+          <line x1="12" y1="11.2" x2="8.5" y2="12"/>
+          <line x1="12" y1="11.2" x2="15.5" y2="12"/>
+          <line x1="8.5" y1="14" x2="12" y2="15"/>
+          <line x1="15.5" y1="14" x2="12" y2="15"/>
+        </svg>
       </template>
-      <span class="ai-tab-label">AI</span>
     </van-tabbar-item>
     <van-tabbar-item name="liabilities" icon="bill-o">{{ t('nav.liabilities') }}</van-tabbar-item>
     <van-tabbar-item name="stats" icon="bar-chart-o">{{ t('nav.stats') }}</van-tabbar-item>
@@ -75,25 +72,11 @@ function onTabChange(name: string | number) {
 </script>
 
 <style scoped>
-.ai-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: -10px;
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.5);
-  transition: box-shadow 0.2s ease;
-}
-.ai-btn.active {
-  box-shadow: 0 2px 18px rgba(124, 58, 237, 0.7);
-}
-.ai-tab-label {
-  font-size: 10px;
+.ai-brain-icon {
   color: var(--van-tabbar-item-text-color, #7d7e80);
-  margin-top: 2px;
+  transition: color 0.2s ease;
+}
+.ai-brain-icon.active {
+  color: var(--van-tabbar-item-active-color, #1989fa);
 }
 </style>

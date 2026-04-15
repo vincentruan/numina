@@ -5,12 +5,18 @@ export interface AIConfig {
   ai_enabled: boolean
   ai_provider: string | null
   ai_api_key_masked: string | null
+  ai_base_url: string | null
+  ai_model_id: string | null
+  ai_vision_model_id: string | null
 }
 
 export interface AIConfigUpdate {
   ai_enabled?: boolean
   ai_provider?: string | null
   ai_api_key?: string | null
+  ai_base_url?: string | null
+  ai_model_id?: string | null
+  ai_vision_model_id?: string | null
 }
 
 export interface AIConfigTestResult {
