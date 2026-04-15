@@ -332,6 +332,62 @@ class TestChildPinAuth:
         assert resp.status_code == 401
         assert resp.json()["detail"] == "密码错误"
 
+    def test_pin_login_succeeds_after_lockout_expires(self, client, db):
+        """After lockout window passes, child can login again and fail count resets."""
+        from datetime import datetime, timedelta
+        from app.models.user import User
+
+        family_id = _get_family_id(client)
+        child = _create_child_user(db, family_id)
+
+        # Manually set locked-out state with an expired lockout time
+        child.pin_fail_count = 3
+        child.pin_locked_until = datetime.utcnow() - timedelta(minutes=1)
+        db.commit()
+
+        # Login should succeed — lockout has expired
+        resp = client.post("/api/v1/auth/child/login", json={
+            "child_id": child.id,
+            "pin_sequence": VALID_PIN,
+        })
+        assert resp.status_code == 200
+
+        # Verify DB state reset
+        db.refresh(child)
+        assert child.pin_fail_count == 0
+        assert child.pin_locked_until is None
+
+    def test_child_refresh_with_expired_token_returns_401(self, client):
+        """Expired child refresh token is rejected."""
+        from datetime import datetime, timedelta
+        from jose import jwt
+        from app.auth.deps import ALGORITHM
+        from app.config import settings
+
+        expired_token = jwt.encode(
+            {"sub": "fake-id", "type": "refresh", "token_version": 0,
+             "exp": datetime.utcnow() - timedelta(seconds=1)},
+            settings.SECRET_KEY,
+            algorithm=ALGORITHM,
+        )
+        client.cookies.set("child_refresh_token", expired_token)
+        resp = client.post("/api/v1/auth/child/refresh")
+        assert resp.status_code == 401
+
+    def test_verify_parent_password_wrong_returns_401(self, client, db):
+        """Wrong parent password returns 401."""
+        family_id = _get_family_id(client)
+        child = _create_child_user(db, family_id)
+
+        login_resp = client.post("/api/v1/auth/child/login", json={
+            "child_id": child.id,
+            "pin_sequence": VALID_PIN,
+        })
+        assert login_resp.status_code == 200
+
+        resp = client.post("/api/v1/auth/child/verify-parent", json={"password": "WrongPassword999!"})
+        assert resp.status_code == 401
+
 
 class TestTimingAttackProtection:
     """Tests for timing attack protection in login."""

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.children import (
@@ -27,7 +27,7 @@ def _require_owner(user: User) -> User:
 def create_child(
     req: CreateChildRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     _require_owner(user)
     child = children_service.create_child(db, user.family_id, req)
@@ -37,7 +37,7 @@ def create_child(
 @router.get("/children", response_model=list[ChildResponse])
 def list_children(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     children = children_service.list_children(db, user.family_id)
     return [ChildResponse.model_validate(c) for c in children]
@@ -48,7 +48,7 @@ def update_child(
     child_id: str,
     req: UpdateChildRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     _require_owner(user)
     child = children_service.update_child(db, child_id, user.family_id, req)
@@ -59,7 +59,7 @@ def update_child(
 def deactivate_child(
     child_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     _require_owner(user)
     children_service.deactivate_child(db, child_id, user.family_id)
@@ -70,7 +70,7 @@ def deactivate_child(
 def unlock_child_pin(
     child_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     _require_owner(user)
     children_service.unlock_child_pin(db, child_id, user.family_id)
@@ -81,7 +81,7 @@ def unlock_child_pin(
 def force_logout_child(
     child_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     _require_owner(user)
     children_service.force_logout_child(db, child_id, user.family_id)
@@ -93,7 +93,7 @@ def force_logout_child(
 )
 def create_bind_token(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     _require_owner(user)
     bind_token = children_service.create_bind_token(db, user.family_id)

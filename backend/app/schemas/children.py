@@ -1,19 +1,6 @@
 from pydantic import BaseModel, ConfigDict, field_validator
 
-ALLOWED_EMOJIS = {
-    "🐱",
-    "🐶",
-    "🐸",
-    "🦊",
-    "🐼",
-    "🐨",
-    "🦁",
-    "🐯",
-    "🌟",
-    "🌈",
-    "🍎",
-    "🎈",
-}
+from app.constants.pin import ALLOWED_EMOJIS
 
 
 class CreateChildRequest(BaseModel):

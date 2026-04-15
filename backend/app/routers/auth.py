@@ -246,6 +246,27 @@ def child_logout(
     return {"message": "已退出儿童模式"}
 
 
+@router.get("/child/bind")
+def get_child_bind_info(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Validate bind token and return family info with children.
+
+    Used by independent child devices to get selectable accounts.
+    Token is single-use — marked as used after this call.
+    """
+    from app.schemas.children import ChildResponse
+    from app.services import children as children_service
+
+    family, children = children_service.get_bind_info(db, token)
+    return {
+        "family_id": family.id,
+        "family_name": family.name,
+        "children": [ChildResponse.model_validate(c) for c in children],
+    }
+
+
 @router.get("/child/family/{family_id}/children")
 def get_family_children(
     family_id: str,
@@ -253,7 +274,10 @@ def get_family_children(
 ):
     """Return active children for a family — no auth required.
 
-    Used by independent child devices on re-visits to list selectable accounts.
+    Intentional design: independent child devices need to list selectable accounts
+    on re-visits without any token. Only non-sensitive fields are exposed:
+    id, display_name, avatar_color, is_active (via ChildResponse).
+    Fields NOT exposed: pin_hash, pin_fail_count, pin_locked_until, token_version.
     """
     from app.schemas.children import ChildResponse
 

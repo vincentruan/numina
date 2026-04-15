@@ -2,6 +2,8 @@ import re
 
 from pydantic import BaseModel, field_validator
 
+from app.constants.pin import ALLOWED_EMOJIS
+
 
 def validate_password_strength(password: str) -> str:
     if len(password) < 8:
@@ -118,21 +120,8 @@ class UpdateSettingsRequest(BaseModel):
     view_mode: str | None = None
 
 
+
 # Child authentication schemas
-ALLOWED_EMOJIS = [
-    "🐱",
-    "🐶",
-    "🐸",
-    "🦊",
-    "🐼",
-    "🐨",
-    "🦁",
-    "🐯",
-    "🌟",
-    "🌈",
-    "🍎",
-    "🎈",
-]
 
 
 class ChildPinLoginRequest(BaseModel):

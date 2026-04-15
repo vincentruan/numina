@@ -176,8 +176,8 @@ const router = createRouter({
         { path: 'wishes', name: 'ChildWishes', component: () => import('@/pages/child/ChildWishesPage.vue') },
         { path: 'tasks', name: 'ChildTasks', component: () => import('@/pages/child/ChildTasksPage.vue') },
         { path: 'treasures', name: 'ChildTreasures', component: () => import('@/pages/child/ChildTreasuresPage.vue') },
-        { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue') },
-        { path: 'pin', name: 'ChildPinLogin', component: () => import('@/pages/ChildPinLoginPage.vue') },
+        { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue'), meta: { guest: true } },
+        { path: 'pin', name: 'ChildPinLogin', component: () => import('@/pages/ChildPinLoginPage.vue'), meta: { guest: true } },
         { path: 'bind', name: 'ChildBind', component: () => import('@/pages/ChildBindPage.vue'), meta: { guest: true } },
       ]
     }

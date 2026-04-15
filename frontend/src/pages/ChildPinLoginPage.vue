@@ -65,9 +65,9 @@ const route = useRoute()
 const router = useRouter()
 const childAuthStore = useChildAuthStore()
 
-const childId = route.params.childId as string
-const displayName = route.params.displayName as string
-const avatarColor = route.params.avatarColor as string
+const childId = route.query.childId as string
+const displayName = route.query.displayName as string
+const avatarColor = route.query.avatarColor as string
 
 const pin = ref<string[]>([])
 const shaking = ref(false)

@@ -57,7 +57,7 @@ onMounted(async () => {
 function selectChild(child: ChildUser) {
   router.push({
     name: 'ChildPinLogin',
-    params: {
+    query: {
       childId: child.id,
       displayName: child.display_name,
       avatarColor: child.avatar_color,

@@ -144,6 +144,13 @@ def test_owner_force_logout_child(client, db):
 # Happy path: bind token + GET family children (no auth)
 # ---------------------------------------------------------------------------
 
+def test_get_family_children_nonexistent_family_returns_empty(client):
+    """Non-existent family_id returns empty list (not 404)."""
+    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 def test_bind_token_and_get_family_children(client):
     headers = _register_owner(client)
     _create_child(client, headers)
@@ -300,7 +307,8 @@ class TestRequireAdult:
         resp = client.get("/api/v1/assets", headers=headers)
         assert resp.status_code == 200
 
-    def test_child_can_access_family_children(self, client):
+    def test_child_blocked_from_family_children(self, client):
+        # C3 fix: child tokens must NOT be able to enumerate siblings
         owner_headers = _register_owner(client)
         child_resp = _create_child(client, owner_headers)
         child_id = child_resp.json()["id"]
@@ -316,4 +324,4 @@ class TestRequireAdult:
         client.cookies.clear()
 
         resp = client.get("/api/v1/family/children", headers={"Authorization": f"Bearer {child_token}"})
-        assert resp.status_code == 200
+        assert resp.status_code == 403

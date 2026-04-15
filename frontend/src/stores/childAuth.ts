@@ -2,7 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import type { ChildUser } from '@/types'
 import { childPinLogin, verifyParentPassword, childLogout } from '@/api/children'
-import { setUser } from '@/utils/storage'
+import { setUser, removeUser } from '@/utils/storage'
 
 export const useChildAuthStore = defineStore('childAuth', () => {
   const childUser = ref<ChildUser | null>(null)
@@ -41,6 +41,7 @@ export const useChildAuthStore = defineStore('childAuth', () => {
     await verifyParentPassword(password)
     await childLogout()
     childUser.value = null
+    removeUser()  // clear child role from localStorage so route guard sees no user
   }
 
   function clearChildSession() {
