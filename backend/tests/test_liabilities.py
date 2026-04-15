@@ -16,7 +16,7 @@ def sample_liability(client, auth_headers):
         "institution": "招商银行"
     })
     assert response.status_code == 201
-    return response.json()
+    return response.json()["data"]
 
 
 def test_create_liability(client, auth_headers):
@@ -31,7 +31,7 @@ def test_create_liability(client, auth_headers):
         "institution": "工商银行"
     })
     assert response.status_code == 201
-    data = response.json()
+    data = response.json()["data"]
     assert data["name"] == "车贷"
     assert data["category"] == "car_loan"
     assert data["original_amount"] == 200000
@@ -43,7 +43,7 @@ def test_list_liabilities(client, auth_headers, sample_liability):
     """Test listing liabilities"""
     response = client.get("/api/v1/liabilities", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert len(data) >= 1
     assert data[0]["name"] == "招商银行房贷"
 
@@ -53,7 +53,7 @@ def test_get_liability_detail(client, auth_headers, sample_liability):
     lid = sample_liability["id"]
     response = client.get(f"/api/v1/liabilities/{lid}", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["name"] == "招商银行房贷"
     assert data["interest_rate"] == 4.2
 
@@ -65,7 +65,7 @@ def test_update_liability(client, auth_headers, sample_liability):
         "monthly_payment": 13000
     })
     assert response.status_code == 200
-    assert response.json()["monthly_payment"] == 13000
+    assert response.json()["data"]["monthly_payment"] == 13000
 
 
 def test_record_payment(client, auth_headers, sample_liability):
@@ -75,7 +75,7 @@ def test_record_payment(client, auth_headers, sample_liability):
         "amount": 12000
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["remaining_amount"] == 1788000  # 1800000 - 12000
     assert data["is_active"] is True
 
@@ -91,14 +91,14 @@ def test_record_payment_full_payoff(client, auth_headers):
         "monthly_payment": 500
     })
     assert create_response.status_code == 201
-    lid = create_response.json()["id"]
+    lid = create_response.json()["data"]["id"]
 
     # Pay it off completely
     response = client.put(f"/api/v1/liabilities/{lid}/payment", headers=auth_headers, json={
         "amount": 500
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["remaining_amount"] == 0
     assert data["is_active"] is False
 

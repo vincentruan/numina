@@ -2,8 +2,7 @@
 
 import logging
 
-import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -11,6 +10,7 @@ from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.ai_allocation_target import AIAllocationTarget
 from app.models.user import User
 
@@ -103,4 +103,4 @@ async def check_drift(
             return resp.json()
     except Exception as e:
         logger.error(f"调用 agent allocation drift 失败: {e}")
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)

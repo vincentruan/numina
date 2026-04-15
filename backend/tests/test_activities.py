@@ -2,12 +2,12 @@ def test_recent_activities_empty(client, auth_headers):
     """Returns empty list when no activities exist."""
     response = client.get("/api/v1/activities/recent", headers=auth_headers)
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["data"] == []
 
 
 def test_activities_after_asset_create(client, auth_headers):
     """Creating an asset should log an activity."""
-    categories = client.get("/api/v1/categories", headers=auth_headers).json()
+    categories = client.get("/api/v1/categories", headers=auth_headers).json()["data"]
     category_id = next(c["id"] for c in categories if c["asset_type"] == "physical")
 
     client.post("/api/v1/assets", headers=auth_headers, json={
@@ -19,7 +19,7 @@ def test_activities_after_asset_create(client, auth_headers):
 
     response = client.get("/api/v1/activities/recent", headers=auth_headers)
     assert response.status_code == 200
-    activities = response.json()
+    activities = response.json()["data"]
     assert len(activities) >= 1
 
     activity = activities[0]
@@ -32,7 +32,7 @@ def test_activities_after_asset_create(client, auth_headers):
 
 def test_activities_limit(client, auth_headers):
     """Limit parameter caps the number of returned activities."""
-    categories = client.get("/api/v1/categories", headers=auth_headers).json()
+    categories = client.get("/api/v1/categories", headers=auth_headers).json()["data"]
     category_id = next(c["id"] for c in categories if c["asset_type"] == "physical")
 
     for i in range(5):
@@ -44,12 +44,12 @@ def test_activities_limit(client, auth_headers):
 
     response = client.get("/api/v1/activities/recent?limit=3", headers=auth_headers)
     assert response.status_code == 200
-    assert len(response.json()) <= 3
+    assert len(response.json()["data"]) <= 3
 
 
 def test_activities_family_isolation(client, auth_headers, second_user_headers):
     """Activities are scoped to the user's family."""
-    categories = client.get("/api/v1/categories", headers=auth_headers).json()
+    categories = client.get("/api/v1/categories", headers=auth_headers).json()["data"]
     category_id = next(c["id"] for c in categories if c["asset_type"] == "physical")
 
     client.post("/api/v1/assets", headers=auth_headers, json={
@@ -60,7 +60,7 @@ def test_activities_family_isolation(client, auth_headers, second_user_headers):
 
     response = client.get("/api/v1/activities/recent", headers=second_user_headers)
     assert response.status_code == 200
-    assert response.json() == []
+    assert response.json()["data"] == []
 
 
 def test_activities_require_auth(client):

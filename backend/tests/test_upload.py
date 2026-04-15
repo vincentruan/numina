@@ -30,7 +30,7 @@ def _upload(client, auth_headers, content: bytes, filename: str = "test.jpg"):
 def test_upload_valid_jpeg(client, auth_headers, db):
     resp = _upload(client, auth_headers, JPEG_CONTENT)
     assert resp.status_code == 200
-    data = resp.json()
+    data = resp.json()["data"]
     assert "url" in data
     assert "file_id" in data
     assert data["filename"] == "test.jpg"
@@ -47,11 +47,11 @@ def test_upload_valid_jpeg(client, auth_headers, db):
 def test_upload_dedup(client, auth_headers, db):
     resp1 = _upload(client, auth_headers, JPEG_CONTENT)
     assert resp1.status_code == 200
-    file_id_1 = resp1.json()["file_id"]
+    file_id_1 = resp1.json()["data"]["file_id"]
 
     resp2 = _upload(client, auth_headers, JPEG_CONTENT)
     assert resp2.status_code == 200
-    file_id_2 = resp2.json()["file_id"]
+    file_id_2 = resp2.json()["data"]["file_id"]
 
     assert file_id_1 == file_id_2
     # Only one DB row
@@ -93,7 +93,7 @@ def test_upload_magic_bytes_mismatch(client, auth_headers, db):
 def test_upload_no_remote_backend(client, auth_headers, db):
     resp = _upload(client, auth_headers, JPEG_CONTENT)
     assert resp.status_code == 200
-    file_id = resp.json()["file_id"]
+    file_id = resp.json()["data"]["file_id"]
     count = db.query(FileRemoteLocation).filter_by(file_id=file_id).count()
     assert count == 0
 
@@ -114,7 +114,7 @@ def test_upload_with_remote_backend(client, auth_headers, db):
 
     resp = _upload(client, auth_headers, JPEG_CONTENT)
     assert resp.status_code == 200
-    file_id = resp.json()["file_id"]
+    file_id = resp.json()["data"]["file_id"]
 
     loc = db.query(FileRemoteLocation).filter_by(file_id=file_id).first()
     assert loc is not None
@@ -135,7 +135,7 @@ def test_upload_concurrent_race_returns_winner(client, auth_headers, db, tmp_pat
     # Get family_id from auth_headers fixture via a real upload first
     resp_first = _upload(client, auth_headers, JPEG_CONTENT)
     assert resp_first.status_code == 200
-    winner_file_id = resp_first.json()["file_id"]
+    winner_file_id = resp_first.json()["data"]["file_id"]
 
     # Now simulate a second concurrent upload that hits IntegrityError on commit
     # by patching db.commit to raise IntegrityError once, then succeed
@@ -153,6 +153,6 @@ def test_upload_concurrent_race_returns_winner(client, auth_headers, db, tmp_pat
         resp_second = _upload(client, auth_headers, JPEG_CONTENT)
 
     assert resp_second.status_code == 200
-    assert resp_second.json()["file_id"] == winner_file_id
+    assert resp_second.json()["data"]["file_id"] == winner_file_id
     # Still only one DB row
     assert db.query(CachedFile).filter_by(sha256=sha256).count() == 1

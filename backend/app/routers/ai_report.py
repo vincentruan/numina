@@ -19,6 +19,7 @@ from app.auth.ai_deps import require_ai_enabled, require_owner
 from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.ai_report import AIReport
 from app.models.ai_ws_ticket import AIWsTicket
 from app.models.user import User
@@ -82,8 +83,7 @@ async def trigger_generate(
         pending.status = "error"
         db.commit()
         logger.error(f"调用 agent 生成报告失败: {e}")
-        from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后重试") from e
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     pending.report_json = report_data
     pending.overall_score = report_data.get("overall_score")

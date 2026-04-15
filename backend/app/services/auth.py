@@ -19,8 +19,10 @@ import time
 from uuid import uuid4
 
 import bcrypt
-from fastapi import HTTPException, Request, status
+from fastapi import Request
 from sqlalchemy.orm import Session
+
+from app.errors import AppError, ErrorCode
 
 from app.auth.deps import create_access_token, create_refresh_token
 from app.models.family import Family, generate_invite_code
@@ -97,11 +99,8 @@ def _check_register_rate_limit(client_ip: str) -> None:
             ttl = cache.get_ttl(key) or 0
             remaining_minutes = max(1, ttl // 60)
             _log_security_event(SecurityEventType.REGISTER_RATE_LIMITED, client_ip=client_ip)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"注册请求过于频繁，请 {remaining_minutes} 分钟后重试",
-            )
-    except HTTPException:
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+    except AppError:
         raise
     except Exception:
         # If cache not available, allow registration (fail open)
@@ -136,10 +135,7 @@ def _check_rate_limit(username: str) -> None:
             ttl = cache.get_ttl(key) or 0
             remaining = max(1, (ttl // 60) + 1)
             _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail=f"登录失败次数过多，请 {remaining} 分钟后重试",
-            )
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
     except Exception:
         # Fallback to in-memory if cache not available
         if username not in _login_attempts:
@@ -150,10 +146,7 @@ def _check_rate_limit(username: str) -> None:
             if elapsed < lockout_seconds:
                 remaining = int((lockout_seconds - elapsed) / 60) + 1
                 _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=f"登录失败次数过多，请 {remaining} 分钟后重试",
-                )
+                raise AppError(ErrorCode.AUTH_RATE_LIMITED)
             del _login_attempts[username]
 
 
@@ -217,7 +210,7 @@ def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> T
     _check_register_rate_limit(client_ip)
 
     if db.query(User).filter(User.username == req.username).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
+        raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
 
     family_id = str(uuid4())
     user_id = str(uuid4())
@@ -261,13 +254,13 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         bcrypt.checkpw(req.password.encode("utf-8"), dummy_hash.encode("utf-8"))
         _record_failed_login(req.username)
         _log_security_event(SecurityEventType.LOGIN_FAILED_USER_NOT_FOUND, username=req.username)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # User found - normal verification
     if not verify_password(req.password, user.password_hash):
         _record_failed_login(req.username)
         _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, username=req.username, user_id=user.id)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     _clear_failed_login(req.username)
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
@@ -287,13 +280,13 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         user_id = payload.get("sub")
         token_type = payload.get("type")
         if user_id is None or token_type != "refresh":
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的刷新令牌")
+            raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的刷新令牌")
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     return TokenResponse(
         access_token=create_access_token({"sub": user.id}),
@@ -303,11 +296,11 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
 
 def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     if db.query(User).filter(User.username == req.username).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="用户名已存在")
+        raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
 
     family = db.query(Family).filter(Family.invite_code == req.invite_code).first()
     if not family:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="邀请码无效")
+        raise AppError(ErrorCode.AUTH_INVITE_CODE_INVALID)
 
     user = User(
         family_id=family.id,

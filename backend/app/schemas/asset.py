@@ -157,10 +157,17 @@ class BatchUpdateStatusRequest(BaseModel):
     status: str  # 'active' or 'archived'
 
 
+class BatchItemError(BaseModel):
+    id: str
+    error_code: str
+    message: str
+
+
 class BatchOperationResponse(BaseModel):
     success_count: int
     failed_count: int
-    errors: list[str]
+    partial: bool
+    errors: list[BatchItemError]
 
 
 class BatchExportResponse(BaseModel):

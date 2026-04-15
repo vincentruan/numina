@@ -1,10 +1,11 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.user import User
 from app.schemas.file_record import FileRecordResponse
 from app.services.file_validation import detect_image_format, validate_image_magic_bytes
@@ -27,20 +28,14 @@ async def upload_image(
     # Validate file extension
     ext = Path(file.filename).suffix.lower() if file.filename else ""
     if ext not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=400,
-            detail="不支持的文件格式，仅支持 jpg/png/webp"
-        )
+        raise AppError(ErrorCode.FILE_FORMAT_INVALID)
 
     # Read file content
     content = await file.read()
 
     # Validate file size
     if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail="文件大小超过限制（最大 5MB）"
-        )
+        raise AppError(ErrorCode.FILE_SIZE_EXCEEDED)
 
     # Validate magic bytes - security enhancement
     ext_without_dot = ext.lstrip(".")
@@ -52,9 +47,6 @@ async def upload_image(
             claimed_format=ext_without_dot,
             actual_format=actual_format or "unknown",
         )
-        raise HTTPException(
-            status_code=400,
-            detail="文件内容与声明格式不匹配，可能存在安全风险"
-        )
+        raise AppError(ErrorCode.FILE_CONTENT_MISMATCH)
 
     return await StorageService.upload_file(content, file.filename or "upload", ext, user, db)

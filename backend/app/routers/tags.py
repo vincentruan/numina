@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.tag import Tag
 from app.models.user import User
 from app.schemas.tag import TagCreate, TagResponse, TagUpdate
@@ -40,7 +41,7 @@ def update_tag(
 ):
     tag = db.query(Tag).filter(Tag.id == tag_id, Tag.family_id == user.family_id).first()
     if not tag:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="标签不存在")
+        raise AppError(ErrorCode.TAG_NOT_FOUND)
     if req.name is not None:
         tag.name = req.name
     if req.color is not None:
@@ -58,7 +59,7 @@ def delete_tag(
 ):
     tag = db.query(Tag).filter(Tag.id == tag_id, Tag.family_id == user.family_id).first()
     if not tag:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="标签不存在")
+        raise AppError(ErrorCode.TAG_NOT_FOUND)
     db.delete(tag)
     db.commit()
     return {"detail": "已删除"}

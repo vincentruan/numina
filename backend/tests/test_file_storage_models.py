@@ -48,9 +48,9 @@ def _register_user_and_get_ids(client):
         "family_name": "Storage Family",
     })
     assert resp.status_code == 200
-    token = resp.json()["access_token"]
+    token = resp.json()["data"]["access_token"]
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
-    user_data = me.json()
+    user_data = me.json()["data"]
     return user_data["id"], user_data["family_id"]
 
 
@@ -96,10 +96,10 @@ class TestCachedFileModel:
             "family_name": "Storage Family 2",
         })
         assert resp2.status_code == 200
-        token2 = resp2.json()["access_token"]
+        token2 = resp2.json()["data"]["access_token"]
         me2 = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token2}"})
-        user_id2 = me2.json()["id"]
-        family_id2 = me2.json()["family_id"]
+        user_id2 = me2.json()["data"]["id"]
+        family_id2 = me2.json()["data"]["family_id"]
 
         # Same sha256, different families — should not raise
         cf1 = _make_cached_file(db, family_id=family_id1, user_id=user_id1, sha256="shared_hash")

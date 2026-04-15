@@ -4,13 +4,14 @@ import logging
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.ai_asset_alert import AIAssetAlert
 from app.models.user import User
 
@@ -68,7 +69,7 @@ async def refresh_alerts(
             data = resp.json()
     except Exception as e:
         logger.error(f"调用 agent alerts 失败: {e}")
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
 
     # Clear old undismissed alerts and insert new ones atomically
     try:
@@ -94,7 +95,7 @@ async def refresh_alerts(
     except Exception as e:
         db.rollback()
         logger.error(f"写入预警数据失败: {e}")
-        raise HTTPException(status_code=500, detail="数据写入失败")
+        raise AppError(ErrorCode.AI_DATA_WRITE_FAILED)
 
     return {"refreshed": len(raw_alerts)}
 
@@ -110,7 +111,7 @@ def dismiss_alert(
         AIAssetAlert.family_id == current_user.family_id,
     ).first()
     if not alert:
-        raise HTTPException(status_code=404, detail="预警不存在")
+        raise AppError(ErrorCode.AI_ALERT_NOT_FOUND)
     alert.is_dismissed = True
     alert.dismissed_at = datetime.utcnow()
     db.commit()

@@ -1,6 +1,6 @@
-from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.errors import AppError, ErrorCode
 from app.models.family import Family, generate_invite_code
 from app.models.user import User
 
@@ -16,7 +16,7 @@ def get_family_members(db: Session, user: User) -> list[User]:
 
 def update_family_title(db: Session, owner: User, custom_title: str | None) -> Family:
     if owner.role != 'owner':
-        raise HTTPException(status_code=403, detail="只有家庭创建者可以修改家庭标题")
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     family = db.query(Family).filter(Family.id == owner.family_id).first()
     family.custom_title = custom_title
     db.commit()
@@ -34,12 +34,12 @@ def regenerate_invite_code(db: Session, user: User) -> Family:
 
 def update_member_role(db: Session, owner: User, member_id: str, new_role: str) -> User:
     if owner.role != 'owner':
-        raise HTTPException(status_code=403, detail="只有家庭创建者可以修改成员角色")
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     member = db.query(User).filter(User.id == member_id, User.family_id == owner.family_id).first()
     if not member:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     if new_role not in ('owner', 'member'):
-        raise HTTPException(status_code=422, detail="角色必须是 owner 或 member")
+        raise AppError(ErrorCode.VALIDATION_ERROR)
     member.role = new_role
     db.commit()
     db.refresh(member)
@@ -48,11 +48,11 @@ def update_member_role(db: Session, owner: User, member_id: str, new_role: str) 
 
 def remove_member(db: Session, owner: User, member_id: str) -> None:
     if owner.role != 'owner':
-        raise HTTPException(status_code=403, detail="只有家庭创建者可以移除成员")
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     if owner.id == member_id:
-        raise HTTPException(status_code=400, detail="不能移除自己")
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     member = db.query(User).filter(User.id == member_id, User.family_id == owner.family_id).first()
     if not member:
-        raise HTTPException(status_code=404, detail="成员不存在")
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     member.is_active = False
     db.commit()

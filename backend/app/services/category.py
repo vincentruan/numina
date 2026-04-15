@@ -1,6 +1,6 @@
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
 from app.models.category import Category
 from app.models.user import User
@@ -37,11 +37,11 @@ def create_category(db: Session, user: User, req: CategoryCreate) -> Category:
 def update_category(db: Session, user: User, category_id: str, req: CategoryUpdate) -> Category:
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
+        raise AppError(ErrorCode.CATEGORY_NOT_FOUND)
     if category.is_system:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="系统分类不可修改")
+        raise AppError(ErrorCode.CATEGORY_SYSTEM_READONLY)
     if category.family_id != user.family_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权修改此分类")
+        raise AppError(ErrorCode.CATEGORY_FORBIDDEN)
 
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -54,15 +54,15 @@ def update_category(db: Session, user: User, category_id: str, req: CategoryUpda
 def delete_category(db: Session, user: User, category_id: str) -> None:
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
+        raise AppError(ErrorCode.CATEGORY_NOT_FOUND)
     if category.is_system:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="系统分类不可删除")
+        raise AppError(ErrorCode.CATEGORY_SYSTEM_READONLY)
     if category.family_id != user.family_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权删除此分类")
+        raise AppError(ErrorCode.CATEGORY_FORBIDDEN)
 
     asset_count = db.query(Asset).filter(Asset.category_id == category_id).count()
     if asset_count > 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="该分类下还有资产，无法删除")
+        raise AppError(ErrorCode.CATEGORY_FORBIDDEN)
 
     db.delete(category)
     db.commit()

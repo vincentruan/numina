@@ -4,11 +4,12 @@
 并以 X-Family-Id header 中的 family_id 为边界过滤数据。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import verify_agent_token
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.family import Family
 from app.models.user import User
 from app.services import dashboard as dashboard_service
@@ -32,7 +33,7 @@ def _get_mock_user(family_id: str, db: Session) -> User:
             .first()
         )
     if not user:
-        raise HTTPException(status_code=404, detail="家庭无活跃成员")
+        raise AppError(ErrorCode.FAMILY_NO_ACTIVE_MEMBERS)
     return user
 
 
