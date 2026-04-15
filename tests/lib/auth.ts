@@ -25,7 +25,7 @@ export async function loginAs(page: Page, username: string, password: string): P
     throw new Error(`loginAs failed for "${username}": HTTP ${loginResp.status()} — ${body}`)
   }
   const loginData = await loginResp.json()
-  const accessToken: string = loginData.access_token
+  const accessToken: string = loginData.data?.access_token ?? loginData.access_token
 
   // 2. Fetch user object using Bearer token (avoids cookie-based rate limit issues)
   //    Retry once on 429 with a short backoff.
@@ -41,7 +41,8 @@ export async function loginAs(page: Page, username: string, password: string): P
   if (!meResp.ok()) {
     throw new Error(`GET /auth/me failed: HTTP ${meResp.status()}`)
   }
-  const user = await meResp.json()
+  const meBody = await meResp.json()
+  const user = meBody.data ?? meBody
 
   // 3. Navigate to root so localStorage is accessible in this origin
   await page.goto('/')
