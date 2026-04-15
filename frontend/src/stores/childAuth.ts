@@ -39,9 +39,14 @@ export const useChildAuthStore = defineStore('childAuth', () => {
 
   async function returnToAdult(password: string) {
     await verifyParentPassword(password)
-    await childLogout()
+    // Clear local session first so route guard sees no child user even if logout request fails
     childUser.value = null
-    removeUser()  // clear child role from localStorage so route guard sees no user
+    removeUser()
+    try {
+      await childLogout()
+    } catch {
+      // Best-effort: server-side cookie cleared when it expires
+    }
   }
 
   function clearChildSession() {
