@@ -24,10 +24,11 @@ import ipaddress
 import logging
 from typing import Optional
 
-from fastapi import Request, HTTPException, status
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
+from app.errors import AppError, ErrorCode
 from app.services.security_log import _log_security_event, SecurityEventType
 
 logger = logging.getLogger(__name__)
@@ -186,10 +187,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Note: For distributed deployments, replace with cache layer
         if not self._check_rate_limit(client_id):
             _log_security_event(SecurityEventType.GLOBAL_RATE_LIMITED, client_id=client_id, path=request.url.path)
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="请求次数过多，请稍后重试",
-            )
+            raise AppError(ErrorCode.RATE_LIMITED)
 
         return await call_next(request)
 

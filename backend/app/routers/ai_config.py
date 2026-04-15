@@ -3,13 +3,14 @@
 import time
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled, require_owner
 from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.family import Family
 from app.models.user import User
 from app.schemas.ai_config import AIConfigResponse, AIConfigTestResult, AIConfigUpdate
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/ai", tags=["ai-config"])
 def _get_family(db: Session, user: User) -> Family:
     family = db.query(Family).filter(Family.id == user.family_id).first()
     if not family:
-        raise HTTPException(status_code=404, detail="Family not found")
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
     return family
 
 
@@ -64,15 +65,9 @@ def update_ai_config(
         provider = payload.ai_provider if payload.ai_provider is not None else family.ai_provider
         api_key = payload.ai_api_key if payload.ai_api_key is not None else (family.ai_api_key_encrypted is not None)
         if provider and not api_key:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="启用 AI 功能需要配置 API Key",
-            )
+            raise AppError(ErrorCode.AI_CONFIG_MISSING_API_KEY)
         if api_key and not provider:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="配置 API Key 需要选择 AI Provider",
-            )
+            raise AppError(ErrorCode.AI_CONFIG_MISSING_PROVIDER)
 
     if payload.ai_enabled is not None:
         family.ai_enabled = payload.ai_enabled
@@ -91,10 +86,7 @@ def update_ai_config(
         else:
             encrypted = encrypt_api_key(payload.ai_api_key)
             if encrypted is None:
-                raise HTTPException(
-                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                    detail="AI_ENCRYPTION_KEY 未配置，无法安全存储 API Key",
-                )
+                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
             family.ai_api_key_encrypted = encrypted
 
     db.commit()

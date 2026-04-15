@@ -4,13 +4,14 @@ import logging
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.ai_disposal_suggestion import AIDisposalSuggestion
 from app.models.user import User
 
@@ -69,7 +70,7 @@ async def refresh_disposal_suggestions(
             data = resp.json()
     except Exception as e:
         logger.error(f"调用 agent disposal 失败: {e}")
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
 
     # Clear old undismissed suggestions and insert new ones atomically
     try:
@@ -96,7 +97,7 @@ async def refresh_disposal_suggestions(
     except Exception as e:
         db.rollback()
         logger.error(f"写入处置建议失败: {e}")
-        raise HTTPException(status_code=500, detail="数据写入失败")
+        raise AppError(ErrorCode.AI_DATA_WRITE_FAILED)
 
     return {"refreshed": len(raw_suggestions)}
 
@@ -112,7 +113,7 @@ def dismiss_suggestion(
         AIDisposalSuggestion.family_id == current_user.family_id,
     ).first()
     if not s:
-        raise HTTPException(status_code=404, detail="建议不存在")
+        raise AppError(ErrorCode.AI_SUGGESTION_NOT_FOUND)
     s.is_dismissed = True
     s.dismissed_at = datetime.utcnow()
     db.commit()

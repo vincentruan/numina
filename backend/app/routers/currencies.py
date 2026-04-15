@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.currency import Currency
 from app.models.exchange_rate import ExchangeRate
 from app.schemas.currency import CurrencyResponse, RateResponse
@@ -82,5 +83,5 @@ def get_rate(
         .first()
     )
     if row is None:
-        raise HTTPException(status_code=404, detail=f"汇率数据不存在: {code}")
+        raise AppError(ErrorCode.EXCHANGE_RATE_NOT_FOUND)
     return RateResponse(rate=row.rate, fetched_at=row.fetched_at.isoformat())

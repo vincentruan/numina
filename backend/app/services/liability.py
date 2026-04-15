@@ -1,6 +1,6 @@
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.errors import AppError, ErrorCode
 from app.models.liability import Liability
 from app.models.user import User
 from app.schemas.liability import LiabilityCreate, LiabilityUpdate
@@ -20,7 +20,7 @@ def get_liability(db: Session, user: User, liability_id: str) -> Liability:
         .first()
     )
     if not liability:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="负债不存在")
+        raise AppError(ErrorCode.LIABILITY_NOT_FOUND)
     return liability
 
 

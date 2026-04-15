@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
 from app.models.liability import Liability
 from app.models.user import User
@@ -105,8 +106,7 @@ def get_member_summary(
         .first()
     )
     if not member:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="成员不存在")
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
 
     total_assets = (
         db.query(sqlfunc.coalesce(sqlfunc.sum(Asset.current_value), 0))
@@ -159,7 +159,7 @@ def regenerate_invite_code(
     user: User = Depends(get_current_user),
 ):
     if user.role != 'owner':
-        raise HTTPException(status_code=403, detail="只有家庭创建者可以重新生成邀请码")
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     family = family_service.regenerate_invite_code(db, user)
     return {"invite_code": family.invite_code}
 

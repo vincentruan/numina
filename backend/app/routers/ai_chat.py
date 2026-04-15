@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.ai_chat_message import AIChatMessage
 from app.models.user import User
 
@@ -42,7 +43,7 @@ async def chat(
 ):
     """发送问题，获取 AI 回答，并持久化对话历史。"""
     if not body.question.strip():
-        raise HTTPException(status_code=422, detail="问题不能为空")
+        raise AppError(ErrorCode.AI_QUESTION_EMPTY)
 
     # Save user message
     user_msg = AIChatMessage(
@@ -70,11 +71,11 @@ async def chat(
             answer = resp_data.get("summary") or resp_data.get("answer", "")
     except httpx.TimeoutException:
         db.rollback()
-        raise HTTPException(status_code=504, detail="AI 服务响应超时，请稍后再试") from None
+        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
         logger.error(f"调用 agent chat 失败: {e}")
         db.rollback()
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用，请稍后再试") from e
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
     # Save assistant message only on success
     assistant_msg = AIChatMessage(

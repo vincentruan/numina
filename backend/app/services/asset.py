@@ -1,12 +1,19 @@
 from datetime import date
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
 
+from app.errors.codes import ErrorCode
+from app.errors.exceptions import AppError
 from app.models.asset import Asset, asset_tags
 from app.models.tag import Tag
 from app.models.user import User
-from app.schemas.asset import AssetCreate, AssetUpdate
+from app.schemas.asset import (
+    AssetCreate,
+    AssetUpdate,
+    BatchItemError,
+    BatchOperationResponse,
+)
 
 
 def list_assets(
@@ -55,7 +62,7 @@ def get_asset(db: Session, user: User, asset_id: str) -> Asset:
         .first()
     )
     if not asset:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="资产不存在")
+        raise AppError(ErrorCode.ASSET_NOT_FOUND)
     return asset
 
 
@@ -146,7 +153,7 @@ def update_asset_value(db: Session, user: User, asset_id: str, value: float) -> 
 def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     asset = get_asset(db, user, asset_id)
     if asset.status == 'sold':
-        raise HTTPException(status_code=400, detail="资产已卖出")
+        raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
 
     asset.status = 'sold'
     asset.sell_price = req.sell_price
@@ -184,7 +191,7 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
 def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
     asset = get_asset(db, user, asset_id)
     if asset.status == 'sold':
-        raise HTTPException(status_code=400, detail="已卖出的资产不能退役")
+        raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
     asset.status = 'retired'
     asset.retire_date = date.today()
     db.commit()
@@ -195,7 +202,7 @@ def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
 def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
     asset = get_asset(db, user, asset_id)
     if asset.status not in ('retired', 'idle'):
-        raise HTTPException(status_code=400, detail="只有退役或闲置的资产可以恢复服役")
+        raise AppError(ErrorCode.ASSET_FORBIDDEN)
     asset.status = 'in_use'
     asset.retire_date = None
     db.commit()
@@ -214,9 +221,9 @@ def get_valuations(db: Session, user: User, asset_id: str) -> list:
     )
 
 
-def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
+def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> BatchOperationResponse:
     """Batch archive assets. Returns success/failed counts and errors."""
-    errors = []
+    errors: list[BatchItemError] = []
     success_count = 0
 
     for asset_id in asset_ids:
@@ -224,31 +231,47 @@ def batch_archive_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
             asset = get_asset(db, user, asset_id)
             asset.is_archived = True
             success_count += 1
-        except HTTPException as e:
-            errors.append(f"资产 {asset_id}: {e.detail}")
-        except Exception as e:
-            errors.append(f"资产 {asset_id}: 操作失败")
+        except (HTTPException, AppError) as e:
+            if isinstance(e, AppError):
+                error_code = e.code.value
+                message = str(e)
+            else:
+                error_code = ErrorCode.INTERNAL_ERROR.value
+                message = getattr(e, "detail", "操作失败")
+            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+        except Exception:
+            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
 
-    db.commit()
-    return {
-        "success_count": success_count,
-        "failed_count": len(asset_ids) - success_count,
-        "errors": errors,
-    }
+    failed_count = len(asset_ids) - success_count
+    try:
+        db.commit()
+    except Exception:
+        return BatchOperationResponse(
+            success_count=0,
+            failed_count=len(asset_ids),
+            partial=False,
+            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+        )
+    return BatchOperationResponse(
+        success_count=success_count,
+        failed_count=failed_count,
+        partial=failed_count > 0 and success_count > 0,
+        errors=errors,
+    )
 
 
-def batch_update_category(db: Session, user: User, asset_ids: list[str], category_id: str) -> dict:
+def batch_update_category(db: Session, user: User, asset_ids: list[str], category_id: str) -> BatchOperationResponse:
     """Batch update asset category. Returns success/failed counts and errors."""
     from app.models.category import Category
 
     # Verify category exists and belongs to user's family or is system category
     category = db.query(Category).filter(Category.id == category_id).first()
     if not category:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
+        raise AppError(ErrorCode.CATEGORY_NOT_FOUND)
     if category.family_id is not None and category.family_id != user.family_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权使用该分类")
+        raise AppError(ErrorCode.CATEGORY_FORBIDDEN)
 
-    errors = []
+    errors: list[BatchItemError] = []
     success_count = 0
 
     for asset_id in asset_ids:
@@ -256,20 +279,36 @@ def batch_update_category(db: Session, user: User, asset_ids: list[str], categor
             asset = get_asset(db, user, asset_id)
             asset.category_id = category_id
             success_count += 1
-        except HTTPException as e:
-            errors.append(f"资产 {asset_id}: {e.detail}")
-        except Exception as e:
-            errors.append(f"资产 {asset_id}: 操作失败")
+        except (HTTPException, AppError) as e:
+            if isinstance(e, AppError):
+                error_code = e.code.value
+                message = str(e)
+            else:
+                error_code = ErrorCode.INTERNAL_ERROR.value
+                message = getattr(e, "detail", "操作失败")
+            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+        except Exception:
+            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
 
-    db.commit()
-    return {
-        "success_count": success_count,
-        "failed_count": len(asset_ids) - success_count,
-        "errors": errors,
-    }
+    failed_count = len(asset_ids) - success_count
+    try:
+        db.commit()
+    except Exception:
+        return BatchOperationResponse(
+            success_count=0,
+            failed_count=len(asset_ids),
+            partial=False,
+            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+        )
+    return BatchOperationResponse(
+        success_count=success_count,
+        failed_count=failed_count,
+        partial=failed_count > 0 and success_count > 0,
+        errors=errors,
+    )
 
 
-def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: list[str]) -> dict:
+def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: list[str]) -> BatchOperationResponse:
     """Batch update asset tags. Returns success/failed counts and errors."""
     # Verify tags exist and belong to user's family
     valid_tags = []
@@ -280,13 +319,9 @@ def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: li
         ).all()
 
         if len(valid_tags) != len(tag_ids):
-            invalid_ids = set(tag_ids) - {t.id for t in valid_tags}
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"无效的标签ID: {', '.join(invalid_ids)}"
-            )
+            raise AppError(ErrorCode.TAG_NOT_FOUND)
 
-    errors = []
+    errors: list[BatchItemError] = []
     success_count = 0
 
     for asset_id in asset_ids:
@@ -294,30 +329,43 @@ def batch_update_tags(db: Session, user: User, asset_ids: list[str], tag_ids: li
             asset = get_asset(db, user, asset_id)
             asset.tags = valid_tags
             success_count += 1
-        except HTTPException as e:
-            errors.append(f"资产 {asset_id}: {e.detail}")
-        except Exception as e:
-            errors.append(f"资产 {asset_id}: 操作失败")
+        except (HTTPException, AppError) as e:
+            if isinstance(e, AppError):
+                error_code = e.code.value
+                message = str(e)
+            else:
+                error_code = ErrorCode.INTERNAL_ERROR.value
+                message = getattr(e, "detail", "操作失败")
+            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+        except Exception:
+            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
 
-    db.commit()
-    return {
-        "success_count": success_count,
-        "failed_count": len(asset_ids) - success_count,
-        "errors": errors,
-    }
+    failed_count = len(asset_ids) - success_count
+    try:
+        db.commit()
+    except Exception:
+        return BatchOperationResponse(
+            success_count=0,
+            failed_count=len(asset_ids),
+            partial=False,
+            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+        )
+    return BatchOperationResponse(
+        success_count=success_count,
+        failed_count=failed_count,
+        partial=failed_count > 0 and success_count > 0,
+        errors=errors,
+    )
 
 
-def batch_update_status(db: Session, user: User, asset_ids: list[str], status: str) -> dict:
+def batch_update_status(db: Session, user: User, asset_ids: list[str], status: str) -> BatchOperationResponse:
     """Batch update asset status. Returns success/failed counts and errors."""
     valid_statuses = ['active', 'archived']
     if status not in valid_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"无效的状态值，可选值: {', '.join(valid_statuses)}"
-        )
+        raise AppError(ErrorCode.VALIDATION_ERROR)
 
     is_archived = (status == 'archived')
-    errors = []
+    errors: list[BatchItemError] = []
     success_count = 0
 
     for asset_id in asset_ids:
@@ -325,17 +373,33 @@ def batch_update_status(db: Session, user: User, asset_ids: list[str], status: s
             asset = get_asset(db, user, asset_id)
             asset.is_archived = is_archived
             success_count += 1
-        except HTTPException as e:
-            errors.append(f"资产 {asset_id}: {e.detail}")
-        except Exception as e:
-            errors.append(f"资产 {asset_id}: 操作失败")
+        except (HTTPException, AppError) as e:
+            if isinstance(e, AppError):
+                error_code = e.code.value
+                message = str(e)
+            else:
+                error_code = ErrorCode.INTERNAL_ERROR.value
+                message = getattr(e, "detail", "操作失败")
+            errors.append(BatchItemError(id=asset_id, error_code=error_code, message=message))
+        except Exception:
+            errors.append(BatchItemError(id=asset_id, error_code=ErrorCode.INTERNAL_ERROR.value, message="内部错误"))
 
-    db.commit()
-    return {
-        "success_count": success_count,
-        "failed_count": len(asset_ids) - success_count,
-        "errors": errors,
-    }
+    failed_count = len(asset_ids) - success_count
+    try:
+        db.commit()
+    except Exception:
+        return BatchOperationResponse(
+            success_count=0,
+            failed_count=len(asset_ids),
+            partial=False,
+            errors=[BatchItemError(id=aid, error_code=ErrorCode.INTERNAL_ERROR.value, message="提交失败") for aid in asset_ids],
+        )
+    return BatchOperationResponse(
+        success_count=success_count,
+        failed_count=failed_count,
+        partial=failed_count > 0 and success_count > 0,
+        errors=errors,
+    )
 
 
 def batch_export_assets(db: Session, user: User, asset_ids: list[str]) -> dict:

@@ -7,7 +7,7 @@ def test_register_success(client):
         "family_name": "New Family"
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert "access_token" in data
     assert "refresh_token" in data
     assert data["token_type"] == "bearer"
@@ -22,7 +22,7 @@ def test_register_duplicate_username(client, auth_headers):
         "family_name": "Another Family"
     })
     assert response.status_code == 400
-    assert "用户名已存在" in response.json()["detail"]
+    assert response.json()["code"] == "AUTH_USERNAME_EXISTS"
 
 
 def test_login_success(client, auth_headers):
@@ -32,7 +32,7 @@ def test_login_success(client, auth_headers):
         "password": "TestPass123"
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert "access_token" in data
     assert "refresh_token" in data
 
@@ -44,7 +44,7 @@ def test_login_wrong_password(client, auth_headers):
         "password": "wrongpassword"
     })
     assert response.status_code == 401
-    assert "用户名或密码错误" in response.json()["detail"]
+    assert response.json()["code"] == "AUTH_INVALID_CREDENTIALS"
 
 
 def test_login_nonexistent_user(client):
@@ -54,7 +54,7 @@ def test_login_nonexistent_user(client):
         "password": "password123"
     })
     assert response.status_code == 401
-    assert "用户名或密码错误" in response.json()["detail"]
+    assert response.json()["code"] == "AUTH_INVALID_CREDENTIALS"
 
 
 def test_refresh_token(client, auth_headers):
@@ -64,7 +64,7 @@ def test_refresh_token(client, auth_headers):
         "refresh_token": refresh_token
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert "access_token" in data
     assert "refresh_token" in data
 
@@ -73,7 +73,7 @@ def test_get_me(client, auth_headers):
     """Test getting current user info"""
     response = client.get("/api/v1/auth/me", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["username"] == "testuser"
     assert data["display_name"] == "Test User"
     assert "password_hash" not in data  # Should not expose password
@@ -89,7 +89,7 @@ def test_join_family_success(client, auth_headers):
     """Test joining a family with valid invite code"""
     # Get the invite code from the first user's family
     family_response = client.get("/api/v1/family", headers=auth_headers)
-    invite_code = family_response.json()["invite_code"]
+    invite_code = family_response.json()["data"]["invite_code"]
 
     # Create a new user and join the family
     response = client.post("/api/v1/auth/family/join", json={
@@ -99,13 +99,13 @@ def test_join_family_success(client, auth_headers):
         "invite_code": invite_code
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert "access_token" in data
 
     # Verify the new user is in the same family
     new_user_headers = {"Authorization": f"Bearer {data['access_token']}"}
     me_response = client.get("/api/v1/auth/me", headers=new_user_headers)
-    assert me_response.json()["family_id"] == family_response.json()["id"]
+    assert me_response.json()["data"]["family_id"] == family_response.json()["data"]["id"]
 
 
 def test_join_family_invalid_code(client):

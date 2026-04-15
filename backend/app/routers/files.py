@@ -2,11 +2,12 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.cached_file import CachedFile
 from app.models.file_remote_location import FileRemoteLocation
 from app.models.storage_backend import StorageBackend as StorageBackendModel
@@ -31,7 +32,7 @@ def _safe_relative_path(local_path: str, upload_dir: str) -> str:
     base = Path(upload_dir).resolve()
     if not str(resolved).startswith(str(base)):
         logger.error(f"路径越界检测: {local_path!r} 不在 {upload_dir!r} 内")
-        raise HTTPException(status_code=500, detail="文件路径异常")
+        raise AppError(ErrorCode.FILE_PATH_INVALID)
     return str(resolved.relative_to(base))
 
 
@@ -43,7 +44,7 @@ def _get_owned_file(file_id: str, user: User, db: Session) -> CachedFile:
         .first()
     )
     if cached_file is None or cached_file.deleted_at is not None:
-        raise HTTPException(status_code=404, detail="文件不存在")
+        raise AppError(ErrorCode.FILE_NOT_FOUND)
     return cached_file
 
 

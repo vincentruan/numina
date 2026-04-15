@@ -5,13 +5,13 @@ import pytest
 
 @pytest.fixture
 def category_id(client, auth_headers):
-    categories = client.get("/api/v1/categories", headers=auth_headers).json()
+    categories = client.get("/api/v1/categories", headers=auth_headers).json()["data"]
     return next(c["id"] for c in categories if c["asset_type"] == "physical")
 
 
 @pytest.fixture
 def financial_category_id(client, auth_headers):
-    categories = client.get("/api/v1/categories", headers=auth_headers).json()
+    categories = client.get("/api/v1/categories", headers=auth_headers).json()["data"]
     return next(c["id"] for c in categories if c["asset_type"] == "financial")
 
 

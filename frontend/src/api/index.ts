@@ -17,6 +17,14 @@ import { showToast } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 
+interface ApiEnvelope<T = unknown> {
+  code: string
+  message: string
+  data: T
+  request_id?: string
+  details?: Array<{ field: string; code: string; msg: string }>
+}
+
 const http = axios.create({
   baseURL: '/api/v1',
   timeout: 15000,
@@ -57,7 +65,22 @@ function onRefreshFailed(error: unknown) {
 
 // Response interceptor - handle 401 with automatic refresh
 http.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const url = response.config.url ?? ''
+    const isAuthEndpoint = url.includes('/auth/')
+
+    // If response has envelope format, unwrap for non-auth endpoints
+    if (
+      !isAuthEndpoint &&
+      response.data &&
+      typeof response.data === 'object' &&
+      'code' in response.data &&
+      (response.data as ApiEnvelope).code === 'OK'
+    ) {
+      return { ...response, data: (response.data as ApiEnvelope).data }
+    }
+    return response
+  },
   async (error) => {
     const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
 
@@ -66,7 +89,7 @@ http.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/login') ||
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/family/join')) {
-        showToast(error.response.data?.detail || '用户名或密码错误')
+        showToast(error.response.data?.message || error.response.data?.detail || '用户名或密码错误')
         return Promise.reject(error)
       }
 
@@ -74,7 +97,7 @@ http.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/refresh')) {
         clearAuth()
         router.push('/login')
-        showToast('登录已过期，请重新登录')
+        showToast(error.response.data?.message || error.response.data?.detail || '登录已过期，请重新登录')
         return Promise.reject(error)
       }
 
@@ -107,7 +130,8 @@ http.interceptors.response.use(
         onRefreshFailed(refreshError)
         clearAuth()
         router.push('/login')
-        showToast('登录已过期，请重新登录')
+        const re = refreshError as { response?: { data?: { message?: string; detail?: string } } }
+        showToast(re.response?.data?.message || re.response?.data?.detail || '登录已过期，请重新登录')
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -118,14 +142,23 @@ http.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       if (status === 403) {
-        showToast('没有权限执行此操作')
-      } else if (status === 422 && data?.detail) {
-        const msg = Array.isArray(data.detail)
-          ? data.detail.map((e: any) => e.msg).join('; ')
-          : data.detail
-        showToast(msg)
+        showToast(data?.message || data?.detail || '没有权限执行此操作')
+      } else if (status === 422) {
+        if (data?.details && Array.isArray(data.details)) {
+          // New envelope format: details array with field-level errors
+          const msg = data.details.map((e: { msg: string }) => e.msg).join('; ')
+          showToast(msg || data.message || '输入校验失败')
+        } else if (data?.detail) {
+          // Old format fallback
+          const msg = Array.isArray(data.detail)
+            ? data.detail.map((e: { msg: string }) => e.msg).join('; ')
+            : data.detail
+          showToast(msg)
+        } else {
+          showToast(data?.message || '输入校验失败')
+        }
       } else if (status !== 401) {
-        showToast(data?.detail || '请求失败，请稍后重试')
+        showToast(data?.message || data?.detail || '请求失败，请稍后重试')
       }
     } else {
       showToast('网络连接失败')

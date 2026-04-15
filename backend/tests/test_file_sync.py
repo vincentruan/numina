@@ -24,9 +24,9 @@ def _register_and_get_ids(client):
         "family_name": "Sync Family",
     })
     assert resp.status_code == 200
-    token = resp.json()["access_token"]
+    token = resp.json()["data"]["access_token"]
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
-    data = me.json()
+    data = me.json()["data"]
     return data["id"], data["family_id"], token
 
 
@@ -272,7 +272,7 @@ class TestGetFileUrlEndpoint:
             mock_settings.UPLOAD_DIR = str(tmp_path)
             resp = client.get(f"/api/v1/files/{cf.id}/url", headers=headers)
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["source"] == "local"
         assert "photo.jpg" in data["url"]
 
@@ -291,7 +291,7 @@ class TestGetFileUrlEndpoint:
 
         resp = client.get(f"/api/v1/files/{cf.id}/url", headers=headers)
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert data["source"] == "remote"
         assert data["url"] == "http://localhost/20260410/photo.jpg"
 

@@ -14,7 +14,7 @@ class TestEndpointSpecificDifficulty:
         """Test that missing endpoint parameter returns default difficulty."""
         response = client.get("/api/v1/captcha/challenge")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         # Challenge response should contain algorithm, challenge, max_number, salt, signature
         assert "challenge" in data
         assert "max_number" in data
@@ -25,28 +25,28 @@ class TestEndpointSpecificDifficulty:
         """Test that login endpoint returns lower difficulty (30000)."""
         response = client.get("/api/v1/captcha/challenge?endpoint=login")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["max_number"] == 30000
 
     def test_challenge_register_difficulty(self, client):
         """Test that register endpoint returns higher difficulty (100000)."""
         response = client.get("/api/v1/captcha/challenge?endpoint=register")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["max_number"] == 100000
 
     def test_challenge_join_family_difficulty(self, client):
         """Test that join-family endpoint returns higher difficulty (100000)."""
         response = client.get("/api/v1/captcha/challenge?endpoint=join-family")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["max_number"] == 100000
 
     def test_challenge_unknown_endpoint_uses_default(self, client):
         """Test that unknown endpoint returns default difficulty."""
         response = client.get("/api/v1/captcha/challenge?endpoint=unknown")
         assert response.status_code == 200
-        data = response.json()
+        data = response.json()["data"]
         assert data["max_number"] == 50000
 
 

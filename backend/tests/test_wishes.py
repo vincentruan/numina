@@ -5,7 +5,7 @@ import pytest
 def category_id(client, auth_headers):
     response = client.get("/api/v1/categories", headers=auth_headers)
     assert response.status_code == 200
-    categories = response.json()
+    categories = response.json()["data"]
     physical = [c for c in categories if c["asset_type"] == "physical"]
     assert len(physical) > 0
     return physical[0]["id"]
@@ -21,7 +21,7 @@ def sample_wish(client, auth_headers):
         "currency": "CNY",
     })
     assert response.status_code == 201
-    return response.json()
+    return response.json()["data"]
 
 
 def test_create_wish(client, auth_headers):
@@ -31,7 +31,7 @@ def test_create_wish(client, auth_headers):
         "priority": "medium",
     })
     assert response.status_code == 201
-    data = response.json()
+    data = response.json()["data"]
     assert data["name"] == "索尼相机"
     assert data["expected_price"] == 8000
     assert data["priority"] == "medium"
@@ -42,7 +42,7 @@ def test_create_wish(client, auth_headers):
 def test_list_wishes(client, auth_headers, sample_wish):
     response = client.get("/api/v1/wishes", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert len(data) == 1
     assert data[0]["name"] == "MacBook Pro"
 
@@ -50,18 +50,18 @@ def test_list_wishes(client, auth_headers, sample_wish):
 def test_list_wishes_filter_by_status(client, auth_headers, sample_wish):
     response = client.get("/api/v1/wishes?status=pending", headers=auth_headers)
     assert response.status_code == 200
-    assert len(response.json()) == 1
+    assert len(response.json()["data"]) == 1
 
     response = client.get("/api/v1/wishes?status=realized", headers=auth_headers)
     assert response.status_code == 200
-    assert len(response.json()) == 0
+    assert len(response.json()["data"]) == 0
 
 
 def test_get_wish(client, auth_headers, sample_wish):
     wish_id = sample_wish["id"]
     response = client.get(f"/api/v1/wishes/{wish_id}", headers=auth_headers)
     assert response.status_code == 200
-    assert response.json()["name"] == "MacBook Pro"
+    assert response.json()["data"]["name"] == "MacBook Pro"
 
 
 def test_update_wish(client, auth_headers, sample_wish):
@@ -71,7 +71,7 @@ def test_update_wish(client, auth_headers, sample_wish):
         "expected_price": 18000,
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
     assert data["name"] == "MacBook Pro M4"
     assert data["expected_price"] == 18000
 
@@ -94,13 +94,13 @@ def test_realize_wish(client, auth_headers, sample_wish, category_id):
         "category_id": category_id,
     })
     assert response.status_code == 201
-    asset = response.json()
+    asset = response.json()["data"]
     assert asset["name"] == "MacBook Pro"
     assert asset["purchase_price"] == 14500
 
     # Wish should now be realized
     wish_response = client.get(f"/api/v1/wishes/{wish_id}", headers=auth_headers)
-    wish = wish_response.json()
+    wish = wish_response.json()["data"]
     assert wish["status"] == "realized"
     assert wish["realized_asset_id"] == asset["id"]
 

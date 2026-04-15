@@ -32,7 +32,7 @@ test.describe('cross-family data isolation', () => {
       const assetsResp = await pageA.request.get('/api/v1/assets')
       expect(assetsResp.ok()).toBeTruthy()
       const assetsData = await assetsResp.json()
-      const assets = assetsData.items ?? assetsData
+      const assets = assetsData.data?.items ?? assetsData.data ?? assetsData.items ?? assetsData
       expect(assets.length, 'test_rich 应有资产').toBeGreaterThan(0)
       const assetId: string = assets[0].id
 
@@ -70,7 +70,7 @@ test.describe('cross-family data isolation', () => {
       const liabResp = await pageA.request.get('/api/v1/liabilities')
       expect(liabResp.ok()).toBeTruthy()
       const liabilities = await liabResp.json()
-      const items = liabilities.items ?? liabilities
+      const items = liabilities.data?.items ?? liabilities.data ?? liabilities.items ?? liabilities
       expect(items.length, 'test_rich 应有负债').toBeGreaterThan(0)
       const liabilityId: string = items[0].id
 
@@ -106,7 +106,7 @@ test.describe('cross-family data isolation', () => {
       const wishResp = await pageA.request.get('/api/v1/wishes')
       expect(wishResp.ok()).toBeTruthy()
       const wishes = await wishResp.json()
-      const items = wishes.items ?? wishes
+      const items = wishes.data?.items ?? wishes.data ?? wishes.items ?? wishes
       expect(items.length, 'test_rich 应有心愿').toBeGreaterThan(0)
       const wishId: string = items[0].id
 

@@ -4,63 +4,87 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.core.logging_config import setup_logging
 from app.database import Base, SessionLocal, engine
+from app.error_handlers import (
+    app_error_handler,
+    http_exception_handler,
+    storage_error_handler,
+    validation_error_handler,
+)
+from app.errors.exceptions import AppError
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.scheduler import fetch_rates_job, scheduler, setup_exchange_rate_schedule, setup_file_sync_schedule
+from app.middleware.request_id import RequestIDMiddleware
+from app.models.activity import Activity  # noqa: F401
+from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
+from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
+from app.models.ai_chat_message import AIChatMessage  # noqa: F401
+from app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
+from app.models.ai_report import AIReport  # noqa: F401
+from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
+from app.models.asset import Asset  # noqa: F401
+from app.models.cached_file import CachedFile  # noqa: F401
+from app.models.category import Category  # noqa: F401
+from app.models.currency import Currency  # noqa: F401
+from app.models.exchange_rate import ExchangeRate  # noqa: F401
+from app.models.family import Family  # noqa: F401
+from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
+from app.models.liability import Liability  # noqa: F401
+from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.snapshot import AssetSnapshot  # noqa: F401
+from app.models.storage_backend import StorageBackend  # noqa: F401
+from app.models.sync_event import SyncEvent  # noqa: F401
+from app.models.tag import Tag  # noqa: F401
+
+# Import all models so Base.metadata knows about them
+from app.models.user import User  # noqa: F401
+from app.models.valuation import AssetValuation  # noqa: F401
+from app.models.wish import Wish  # noqa: F401
+from app.responses import EnvelopeResponse
+from app.routers import activities as activities_router
+from app.routers import ai_alerts as ai_alerts_router
+from app.routers import ai_allocation as ai_allocation_router
+from app.routers import ai_chat as ai_chat_router
+from app.routers import ai_config as ai_config_router
+from app.routers import ai_disposal as ai_disposal_router
+from app.routers import ai_internal as ai_internal_router
+from app.routers import ai_liability as ai_liability_router
+from app.routers import ai_report as ai_report_router
+from app.routers import ai_suggest as ai_suggest_router
+from app.routers import (
+    assets,
+    auth,
+    captcha,
+    categories,
+    dashboard,
+    family,
+    liabilities,
+    tags,
+    upload,
+    wishes,
+)
+from app.routers import currencies as currencies_router
+from app.routers import export as export_router
+from app.routers import files as files_router
+from app.routers import import_ as import_router
+from app.scheduler import (
+    scheduler,
+    setup_exchange_rate_schedule,
+    setup_file_sync_schedule,
+)
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.services.exchange_rate import ExchangeRateService
 from app.services.snapshot import auto_generate_daily_snapshots
-
-# Import all models so Base.metadata knows about them
-from app.models.user import User  # noqa: F401
-from app.models.family import Family  # noqa: F401
-from app.models.category import Category  # noqa: F401
-from app.models.asset import Asset  # noqa: F401
-from app.models.liability import Liability  # noqa: F401
-from app.models.snapshot import AssetSnapshot  # noqa: F401
-from app.models.tag import Tag  # noqa: F401
-from app.models.wish import Wish  # noqa: F401
-from app.models.payment_record import PaymentRecord  # noqa: F401
-from app.models.valuation import AssetValuation  # noqa: F401
-from app.models.activity import Activity  # noqa: F401
-from app.models.exchange_rate import ExchangeRate  # noqa: F401
-from app.models.currency import Currency  # noqa: F401
-from app.models.storage_backend import StorageBackend  # noqa: F401
-from app.models.cached_file import CachedFile  # noqa: F401
-from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
-from app.models.sync_event import SyncEvent  # noqa: F401
-from app.models.ai_report import AIReport  # noqa: F401
-from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
-from app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
-from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
-from app.models.ai_chat_message import AIChatMessage  # noqa: F401
-from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
-
-from app.routers import auth, assets, liabilities, categories, tags, dashboard, family, wishes
-from app.routers import currencies as currencies_router
-from app.routers import export as export_router
-from app.routers import import_ as import_router
-from app.routers import activities as activities_router
-from app.routers import upload
-from app.routers import captcha
-from app.routers import files as files_router
-from app.routers import ai_config as ai_config_router
-from app.routers import ai_internal as ai_internal_router
-from app.routers import ai_report as ai_report_router
-from app.routers import ai_suggest as ai_suggest_router
-from app.routers import ai_alerts as ai_alerts_router
-from app.routers import ai_disposal as ai_disposal_router
-from app.routers import ai_liability as ai_liability_router
-from app.routers import ai_allocation as ai_allocation_router
-from app.routers import ai_chat as ai_chat_router
-
+from app.services.storage.base import StorageError
 
 logger = logging.getLogger(__name__)
 
@@ -121,7 +145,12 @@ async def lifespan(app: FastAPI):
     logger.info("APScheduler 已停止")
 
 
-app = FastAPI(title="Numina - 家庭资产可视化", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="Numina - 家庭资产可视化", version="1.0.0", lifespan=lifespan, default_response_class=EnvelopeResponse)
+
+app.add_exception_handler(AppError, app_error_handler)
+app.add_exception_handler(RequestValidationError, validation_error_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(StorageError, storage_error_handler)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -196,6 +225,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestIDMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(assets.router, prefix="/api/v1")
@@ -230,4 +260,4 @@ app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return JSONResponse({"status": "ok"})

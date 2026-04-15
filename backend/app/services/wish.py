@@ -1,6 +1,6 @@
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
+from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
 from app.models.wish import Wish
 from app.models.user import User
@@ -26,7 +26,7 @@ def get_wish(db: Session, user: User, wish_id: str) -> Wish:
         .first()
     )
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="心愿不存在")
+        raise AppError(ErrorCode.NOT_FOUND)
     return wish
 
 
@@ -49,7 +49,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
 def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
     wish = get_wish(db, user, wish_id)
     if wish.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限修改此心愿")
+        raise AppError(ErrorCode.FORBIDDEN)
 
     update_data = req.model_dump(exclude_unset=True)
     for key, value in update_data.items():
@@ -62,7 +62,7 @@ def update_wish(db: Session, user: User, wish_id: str, req: WishUpdate) -> Wish:
 def delete_wish(db: Session, user: User, wish_id: str) -> None:
     wish = get_wish(db, user, wish_id)
     if wish.user_id != user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权限删除此心愿")
+        raise AppError(ErrorCode.FORBIDDEN)
     db.delete(wish)
     db.commit()
 
@@ -71,12 +71,12 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
     wish = get_wish(db, user, wish_id)
 
     if wish.status == "realized":
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="心愿已实现")
+        raise AppError(ErrorCode.VALIDATION_ERROR)
 
     # Determine category_id
     category_id = req.category_id if req.category_id else wish.category_id
     if not category_id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="必须提供分类")
+        raise AppError(ErrorCode.VALIDATION_ERROR)
 
     try:
         # Create asset
@@ -101,6 +101,9 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
         db.commit()
         db.refresh(asset)
         return asset
-    except Exception as e:
+    except AppError:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"转化失败: {str(e)}")
+        raise
+    except Exception:
+        db.rollback()
+        raise AppError(ErrorCode.INTERNAL_ERROR)

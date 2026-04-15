@@ -6,7 +6,7 @@ def setup_test_data(client, auth_headers):
     """Create test assets and liabilities for dashboard tests"""
     # Get categories
     cat_response = client.get("/api/v1/categories", headers=auth_headers)
-    categories = cat_response.json()
+    categories = cat_response.json()["data"]
     physical_cat = [c for c in categories if c["asset_type"] == "physical"][0]
     financial_cat = [c for c in categories if c["asset_type"] == "financial"][0]
 
@@ -56,7 +56,7 @@ def test_dashboard_overview(client, auth_headers, setup_test_data):
     """Test dashboard overview endpoint"""
     response = client.get("/api/v1/dashboard/overview", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     assert "total_assets" in data
     assert "total_liabilities" in data
@@ -76,7 +76,7 @@ def test_dashboard_allocation(client, auth_headers, setup_test_data):
     """Test asset allocation endpoint"""
     response = client.get("/api/v1/dashboard/allocation", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     assert "items" in data
     assert "total" in data
@@ -92,7 +92,7 @@ def test_dashboard_trend(client, auth_headers, setup_test_data):
 
     response = client.get("/api/v1/dashboard/trend?period=month", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     assert "points" in data
     points = data["points"]
@@ -106,7 +106,7 @@ def test_dashboard_top_assets(client, auth_headers, setup_test_data):
     """Test top assets endpoint"""
     response = client.get("/api/v1/dashboard/top-assets?limit=5", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     assert len(data) == 3  # We created 3 assets
     # Should be sorted by value descending
@@ -120,7 +120,7 @@ def test_dashboard_daily_cost_ranking(client, auth_headers, setup_test_data):
     """Test daily cost ranking endpoint"""
     response = client.get("/api/v1/dashboard/daily-cost-ranking", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     # Should have assets with daily_cost calculated
     assert len(data) >= 1
@@ -135,7 +135,7 @@ def test_dashboard_low_usage_assets(client, auth_headers, setup_test_data):
     """Test low usage assets endpoint"""
     response = client.get("/api/v1/dashboard/low-usage-assets", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     # Should find the idle treadmill
     assert len(data) >= 1
@@ -148,7 +148,7 @@ def test_dashboard_investment_returns(client, auth_headers, setup_test_data):
     """Test investment returns endpoint"""
     response = client.get("/api/v1/dashboard/investment-returns", headers=auth_headers)
     assert response.status_code == 200
-    data = response.json()
+    data = response.json()["data"]
 
     # Should only have financial assets
     assert len(data) == 1

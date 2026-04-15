@@ -72,7 +72,7 @@ def auth_headers(client):
         "family_name": "Test Family"
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json().get("data", response.json())
     return {
         "Authorization": f"Bearer {data['access_token']}",
         "_refresh_token": data["refresh_token"],
@@ -89,7 +89,7 @@ def second_user_headers(client):
         "family_name": "Test Family 2"
     })
     assert response.status_code == 200
-    data = response.json()
+    data = response.json().get("data", response.json())
     return {
         "Authorization": f"Bearer {data['access_token']}",
         "_refresh_token": data["refresh_token"],

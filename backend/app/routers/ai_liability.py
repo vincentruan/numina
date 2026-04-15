@@ -3,11 +3,12 @@
 import logging
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 
 from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import get_current_user
 from app.config import settings
+from app.errors import AppError, ErrorCode
 from app.models.user import User
 
 router = APIRouter(prefix="/ai/liability-advice", tags=["ai-liability"])
@@ -32,7 +33,7 @@ async def get_liability_advice(
             resp.raise_for_status()
             return resp.json()
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="AI 服务响应超时")
+        raise AppError(ErrorCode.AI_SERVICE_TIMEOUT)
     except Exception as e:
         logger.error(f"调用 agent liability 失败: {e}")
-        raise HTTPException(status_code=503, detail="AI 服务暂时不可用")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
