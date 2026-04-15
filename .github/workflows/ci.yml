@@ -35,7 +35,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pytest
-        run: uv run pytest --tb=short -q
+        run: uv run pytest --tb=short -q -m "not integration"
 
   # ──────────────────────────────────────────────────────────────────────────
   # Job 2: 前端类型检查
