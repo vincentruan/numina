@@ -80,8 +80,7 @@ jobs:
     needs: [backend-test, frontend-typecheck]
 
     env:
-      # GitHub Actions 在境外运行，使用官方镜像（不需要国内镜像）
-      X_DOCKER_MIRROR: ""
+      # GitHub Actions 在境外运行，使用官方镜像
 
     steps:
       - uses: actions/checkout@v4
