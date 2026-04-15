@@ -106,7 +106,10 @@ jobs:
           EOF
 
       - name: Start Docker stack
-        run: docker compose up -d
+        run: |
+          # Build only essential services (skip agent which requires vendor/deerflow-harness)
+          docker compose build backend frontend nginx
+          docker compose up -d backend frontend nginx
 
       - name: Wait for backend health
         run: |
