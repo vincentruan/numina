@@ -12,8 +12,15 @@ from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.auth.captcha import verify_captcha
-from app.auth.cookies import set_auth_cookies, clear_auth_cookies
+from app.auth.cookies import (
+    clear_auth_cookies,
+    clear_child_auth_cookies,
+    set_auth_cookies,
+    set_child_auth_cookies,
+)
 from app.auth.deps import (
+    get_child_refresh_token_from_cookie,
+    get_current_child_user,
     get_current_user,
     get_current_user_from_cookie,
     get_refresh_token_from_cookie,
@@ -22,6 +29,8 @@ from app.database import get_db
 from app.middleware.rate_limit import _get_real_client_ip
 from app.models.user import User
 from app.schemas.auth import (
+    ChildPinLoginRequest,
+    ChildRefreshResponse,
     JoinFamilyRequest,
     LoginRequest,
     RefreshRequest,
@@ -30,6 +39,7 @@ from app.schemas.auth import (
     UpdateProfileRequest,
     UpdateSettingsRequest,
     UserResponse,
+    VerifyParentPasswordRequest,
 )
 from app.services import auth as auth_service
 
@@ -171,3 +181,87 @@ def update_settings(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/child/login", response_model=TokenResponse)
+def child_login(
+    response: Response,
+    req: ChildPinLoginRequest,
+    db: Session = Depends(get_db),
+):
+    """Child PIN login — no captcha required.
+
+    Sets child-specific httpOnly cookies and returns tokens in body.
+    """
+    tokens = auth_service.child_pin_login(db, req.child_id, req.pin_sequence)
+    set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return tokens
+
+
+@router.post("/child/refresh", response_model=ChildRefreshResponse)
+def child_refresh(
+    response: Response,
+    refresh_tok: str = Depends(get_child_refresh_token_from_cookie),
+    db: Session = Depends(get_db),
+):
+    """Refresh child access token using child refresh cookie."""
+    tokens = auth_service.child_refresh_token(db, refresh_tok)
+    # Only update the access token cookie; refresh token stays the same
+    from app.auth.deps import CHILD_ACCESS_TOKEN_COOKIE
+    from app.config import settings
+
+    response.set_cookie(
+        key=CHILD_ACCESS_TOKEN_COOKIE,
+        value=tokens.access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="strict",
+        path="/",
+    )
+    return {"message": "token refreshed"}
+
+
+@router.post("/child/verify-parent")
+def child_verify_parent(
+    req: VerifyParentPasswordRequest,
+    db: Session = Depends(get_db),
+    child_user: User = Depends(get_current_child_user),
+):
+    """Verify parent password while in child mode.
+
+    Used to gate adult-only actions on shared devices.
+    """
+    auth_service.verify_parent_password(db, child_user, req.password)
+    return {"message": "verified"}
+
+
+@router.post("/child/logout")
+def child_logout(
+    response: Response,
+    child_user: User = Depends(get_current_child_user),
+):
+    """Logout from child mode and clear child auth cookies."""
+    clear_child_auth_cookies(response)
+    return {"message": "已退出儿童模式"}
+
+
+@router.get("/child/family/{family_id}/children")
+def get_family_children(
+    family_id: str,
+    db: Session = Depends(get_db),
+):
+    """Return active children for a family — no auth required.
+
+    Used by independent child devices on re-visits to list selectable accounts.
+    """
+    from app.schemas.children import ChildResponse
+
+    children = (
+        db.query(User)
+        .filter(
+            User.family_id == family_id, User.role == "child", User.is_active
+        )
+        .all()
+    )
+    return [ChildResponse.model_validate(c) for c in children]

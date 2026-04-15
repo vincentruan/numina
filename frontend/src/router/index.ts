@@ -167,25 +167,69 @@ const router = createRouter({
           component: () => import('@/pages/DataStatsPage.vue')
         }
       ]
+    },
+    {
+      path: '/child',
+      component: () => import('@/layouts/ChildLayout.vue'),
+      children: [
+        { path: '', name: 'ChildHome', component: () => import('@/pages/child/ChildHomePage.vue') },
+        { path: 'wishes', name: 'ChildWishes', component: () => import('@/pages/child/ChildWishesPage.vue') },
+        { path: 'tasks', name: 'ChildTasks', component: () => import('@/pages/child/ChildTasksPage.vue') },
+        { path: 'treasures', name: 'ChildTreasures', component: () => import('@/pages/child/ChildTreasuresPage.vue') },
+        { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue') },
+        { path: 'pin', name: 'ChildPinLogin', component: () => import('@/pages/ChildPinLoginPage.vue') },
+        { path: 'bind', name: 'ChildBind', component: () => import('@/pages/ChildBindPage.vue'), meta: { guest: true } },
+      ]
     }
   ]
 })
 
 router.beforeEach((to, _from, next) => {
-  const isLoggedIn = !!getUser()
+  const user = getUser()
+  const isLoggedIn = !!user
+  const isChild = user?.role === 'child'
+  const isChildBindRoute = to.path.startsWith('/child/bind')
+
+  // Child bind route — accessible without session
+  if (isChildBindRoute) {
+    next()
+    return
+  }
+
+  // Guest routes (login, register, join-family)
   if (to.meta.guest) {
     if (isLoggedIn) {
-      next('/')
+      next(isChild ? '/child/' : '/')
     } else {
       next()
     }
-  } else {
-    if (!isLoggedIn) {
-      next('/login')
-    } else {
-      next()
-    }
+    return
   }
+
+  // Not logged in — redirect to login
+  if (!isLoggedIn) {
+    next('/login')
+    return
+  }
+
+  // Child user — only /child/* allowed
+  if (isChild) {
+    if (to.path.startsWith('/child')) {
+      next()
+    } else {
+      next('/child/')
+    }
+    return
+  }
+
+  // Adult user — block /child/* routes
+  if (to.path.startsWith('/child')) {
+    next('/')
+    return
+  }
+
+  // Adult user on adult route — allow
+  next()
 })
 
 export default router

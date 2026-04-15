@@ -93,7 +93,7 @@ class JoinFamilyRequest(BaseModel):
 class UserResponse(BaseModel):
     id: str
     family_id: str
-    username: str
+    username: str | None  # NULL for child accounts
     display_name: str
     avatar_color: str
     role: str
@@ -116,3 +116,47 @@ class UpdateSettingsRequest(BaseModel):
     language: str | None = None
     default_currency: str | None = None
     view_mode: str | None = None
+
+
+# Child authentication schemas
+ALLOWED_EMOJIS = [
+    "🐱",
+    "🐶",
+    "🐸",
+    "🦊",
+    "🐼",
+    "🐨",
+    "🦁",
+    "🐯",
+    "🌟",
+    "🌈",
+    "🍎",
+    "🎈",
+]
+
+
+class ChildPinLoginRequest(BaseModel):
+    child_id: str  # User UUID
+    pin_sequence: list[str]  # 4 emojis from ALLOWED_EMOJIS
+
+    @field_validator("pin_sequence")
+    @classmethod
+    def validate_pin_sequence(cls, v: list[str]) -> list[str]:
+        if len(v) != 4:
+            raise ValueError("PIN 必须是 4 个表情")
+        for emoji in v:
+            if emoji not in ALLOWED_EMOJIS:
+                raise ValueError(f"无效的表情: {emoji}")
+        return v
+
+
+class VerifyParentRequest(BaseModel):
+    password: str  # Parent's password to verify adult identity on shared device
+
+
+class VerifyParentPasswordRequest(BaseModel):
+    password: str
+
+
+class ChildRefreshResponse(BaseModel):
+    message: str = "token refreshed"

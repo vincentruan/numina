@@ -38,6 +38,8 @@ class Settings(BaseSettings):
 
     # Security settings
     BCRYPT_ROUNDS: int = 12
+    PIN_BCRYPT_ROUNDS: int = 8  # Lower cost for child PIN (still secure for 4-emoji)
+    CHILD_REFRESH_TOKEN_EXPIRE_DAYS: int = 3650  # ~10 years for child sessions
     ENABLE_SECURITY_LOGGING: bool = True
     ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
 
@@ -50,7 +52,9 @@ class Settings(BaseSettings):
     STORAGE_ENCRYPTION_KEY: str = ""
 
     # AI Agent 配置
-    AI_ENCRYPTION_KEY: str = ""  # Fernet key，生产环境必填（用 Fernet.generate_key() 生成）
+    AI_ENCRYPTION_KEY: str = (
+        ""  # Fernet key，生产环境必填（用 Fernet.generate_key() 生成）
+    )
     AGENT_INTERNAL_TOKEN: str = ""  # agent ↔ backend service-to-service token
     AGENT_BASE_URL: str = "http://agent:8001"  # agent 服务内部地址
 
@@ -71,9 +75,7 @@ settings = Settings()
 # Auto-generate a random key for dev convenience, but warn in production
 if settings.SECRET_KEY == _DEFAULT_SECRET:
     if settings.ENVIRONMENT == "production":
-        raise RuntimeError(
-            "SECRET_KEY 未配置！生产环境必须设置 SECRET_KEY 环境变量。"
-        )
+        raise RuntimeError("SECRET_KEY 未配置！生产环境必须设置 SECRET_KEY 环境变量。")
     else:
         settings.SECRET_KEY = secrets.token_urlsafe(32)
         logger.warning("SECRET_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")

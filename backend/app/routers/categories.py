@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryResponse, CategoryUpdate
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 @router.get("", response_model=list[CategoryResponse])
 def list_categories(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return category_service.list_categories(db, user)
 
@@ -22,7 +22,7 @@ def list_categories(
 def create_category(
     req: CategoryCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return category_service.create_category(db, user, req)
 
@@ -32,7 +32,7 @@ def update_category(
     category_id: str,
     req: CategoryUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return category_service.update_category(db, user, category_id, req)
 
@@ -41,7 +41,7 @@ def update_category(
 def delete_category(
     category_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     category_service.delete_category(db, user, category_id)
     return {"detail": "已删除"}

@@ -6,7 +6,7 @@ import httpx
 from fastapi import APIRouter, Depends
 
 from app.auth.ai_deps import require_ai_enabled
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.config import settings
 from app.errors import AppError, ErrorCode
 from app.models.user import User
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("")
 async def get_liability_advice(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
 ):
     """获取负债优化建议（实时调用 agent）。"""

@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.cached_file import CachedFile
@@ -51,7 +51,7 @@ def _get_owned_file(file_id: str, user: User, db: Session) -> CachedFile:
 @router.delete("/{file_id}", status_code=204)
 async def delete_file(
     file_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     """Soft-delete a file: remove from local disk and all synced remote backends."""
@@ -100,7 +100,7 @@ async def delete_file(
 @router.get("/{file_id}/url")
 def get_file_url(
     file_id: str,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     """Return the best available URL for a file.

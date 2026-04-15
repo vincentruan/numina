@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
@@ -25,7 +25,7 @@ class UpdateRoleRequest(BaseModel):
 @router.get("/", response_model=FamilyResponse)
 def get_family(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     family = family_service.get_family_info(db, user)
     members = family_service.get_family_members(db, user)
@@ -42,7 +42,7 @@ def get_family(
 def update_family_title(
     body: UpdateFamilyTitleRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     family = family_service.update_family_title(db, user, body.custom_title)
     members = family_service.get_family_members(db, user)
@@ -59,7 +59,7 @@ def update_family_title(
 @router.get("/members", response_model=list[UserResponse])
 def get_members(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     members = family_service.get_family_members(db, user)
     return [UserResponse.model_validate(m) for m in members]
@@ -68,7 +68,7 @@ def get_members(
 @router.get("/aggregate")
 def get_aggregate(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     family_id = user.family_id
     total_assets = (
@@ -98,7 +98,7 @@ def get_aggregate(
 def get_member_summary(
     member_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     member = (
         db.query(User)
@@ -137,7 +137,7 @@ def update_member_role(
     member_id: str,
     body: UpdateRoleRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     member = family_service.update_member_role(db, user, member_id, body.role)
     return UserResponse.model_validate(member)
@@ -147,7 +147,7 @@ def update_member_role(
 def remove_member(
     member_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     family_service.remove_member(db, user, member_id)
     return {"detail": "已移除"}
@@ -156,7 +156,7 @@ def remove_member(
 @router.post("/invite-code")
 def regenerate_invite_code(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     if user.role != 'owner':
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
@@ -167,7 +167,7 @@ def regenerate_invite_code(
 @router.post("/snapshots/generate")
 def trigger_snapshots(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     snapshots = generate_snapshots(db, user.family_id)
     return {"detail": f"已生成 {len(snapshots)} 条快照"}

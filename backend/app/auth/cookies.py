@@ -19,7 +19,12 @@ References:
 
 from fastapi import Response
 
-from app.auth.deps import ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE
+from app.auth.deps import (
+    ACCESS_TOKEN_COOKIE,
+    CHILD_ACCESS_TOKEN_COOKIE,
+    CHILD_REFRESH_TOKEN_COOKIE,
+    REFRESH_TOKEN_COOKIE,
+)
 from app.config import settings
 
 
@@ -70,5 +75,60 @@ def clear_auth_cookies(response: Response) -> None:
     )
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE,
+        path="/",
+    )
+
+
+def set_child_auth_cookies(
+    response: Response,
+    access_token: str,
+    refresh_token: str,
+) -> None:
+    """Set child authentication cookies on response.
+
+    Child tokens have longer expiry (10 years) for persistent sessions.
+
+    Args:
+        response: FastAPI response object
+        access_token: JWT access token (15 min expiry, same as adult)
+        refresh_token: JWT refresh token (10 year expiry)
+    """
+    # Child access token cookie (same short-lived as adult)
+    response.set_cookie(
+        key=CHILD_ACCESS_TOKEN_COOKIE,
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 15 min = 900s
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="strict",
+        path="/",
+    )
+
+    # Child refresh token cookie (10 years for persistent sessions)
+    # Browser cookie max_age capped at 400 days per RFC 6265bis
+    # Token itself has 3650 days expiry; cookie is refreshed on each login
+    response.set_cookie(
+        key=CHILD_REFRESH_TOKEN_COOKIE,
+        value=refresh_token,
+        max_age=400 * 24 * 60 * 60,  # 400 days = 34,560,000s (browser max)
+        httponly=True,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="strict",
+        path="/",
+    )
+
+
+def clear_child_auth_cookies(response: Response) -> None:
+    """Clear child authentication cookies on logout.
+
+    Args:
+        response: FastAPI response object
+    """
+    response.delete_cookie(
+        key=CHILD_ACCESS_TOKEN_COOKIE,
+        path="/",
+    )
+    response.delete_cookie(
+        key=CHILD_REFRESH_TOKEN_COOKIE,
         path="/",
     )

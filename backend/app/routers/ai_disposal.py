@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("")
 def get_disposal_suggestions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     suggestions = (
@@ -52,7 +52,7 @@ def get_disposal_suggestions(
 
 @router.post("/refresh")
 async def refresh_disposal_suggestions(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
@@ -105,7 +105,7 @@ async def refresh_disposal_suggestions(
 @router.post("/{suggestion_id}/dismiss")
 def dismiss_suggestion(
     suggestion_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     s = db.query(AIDisposalSuggestion).filter(
