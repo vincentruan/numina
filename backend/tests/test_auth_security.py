@@ -330,7 +330,7 @@ class TestChildPinAuth:
             "password": "WrongPassword999",
         })
         assert resp.status_code == 401
-        assert resp.json()["message"] == "密码错误"
+        assert resp.json()["message"] == "用户名或密码错误"
 
     def test_pin_login_succeeds_after_lockout_expires(self, client, db):
         """After lockout window passes, child can login again and fail count resets."""

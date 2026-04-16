@@ -392,7 +392,7 @@ def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> Toke
     # Check lockout (after dummy bcrypt to avoid timing leak on locked state)
     if child.pin_locked_until is not None and child.pin_locked_until > datetime.utcnow():
         bcrypt.checkpw(b"dummy", _get_dummy_hash().encode("utf-8"))
-        raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+        raise AppError(ErrorCode.AUTH_PIN_LOCKED, details={"locked_until": child.pin_locked_until.isoformat()})
 
     # Verify PIN using bcrypt.checkpw
     normalized = unicodedata.normalize("NFC", "".join(pin_sequence))
@@ -429,6 +429,10 @@ def _record_child_pin_failure(db: Session, child: User) -> None:
 
     count += 1
     _child_pin_attempts[child_id] = (count, first_time)
+
+    # Update DB pin_fail_count
+    child.pin_fail_count = count
+    db.commit()
 
     if count >= _CHILD_PIN_MAX_ATTEMPTS:
         child.pin_locked_until = datetime.utcnow() + timedelta(minutes=_CHILD_PIN_LOCKOUT_MINUTES)
