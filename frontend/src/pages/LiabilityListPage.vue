@@ -2,7 +2,7 @@
   <div class="liability-list-page">
     <PageHeader title="负债" :show-back="false" />
 
-    <van-tabs v-model:active="activeTab" @change="onTabChange" sticky>
+    <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
       <van-tab title="还款中" name="active" />
       <van-tab title="已结清" name="inactive" />
     </van-tabs>
@@ -14,7 +14,7 @@
         <span>合计 ¥{{ totalAmount.toLocaleString() }}</span>
       </div>
 
-      <div class="liability-list" v-if="liabilityStore.liabilities.length">
+      <div v-if="liabilityStore.liabilities.length" class="liability-list">
         <LiabilityCard
           v-for="item in liabilityStore.liabilities"
           :key="item.id"

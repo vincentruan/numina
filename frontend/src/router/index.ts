@@ -165,6 +165,16 @@ const router = createRouter({
           path: 'stats',
           name: 'DataStats',
           component: () => import('@/pages/DataStatsPage.vue')
+        },
+        {
+          path: 'chore-approvals',
+          name: 'ChoreApprovals',
+          component: () => import('@/pages/ChoreApprovalsPage.vue')
+        },
+        {
+          path: 'wish-review',
+          name: 'WishReview',
+          component: () => import('@/pages/WishReviewPage.vue')
         }
       ]
     },

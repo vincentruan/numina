@@ -2,7 +2,7 @@ import http from './index'
 import type { ChildUser, ChildBindInfo } from '@/types'
 
 export async function childPinLogin(childId: string, pin: string[]): Promise<void> {
-  await http.post('/auth/child/login', { child_id: childId, pin })
+  await http.post('/auth/child/login', { child_id: childId, pin_sequence: pin })
 }
 
 export async function verifyParentPassword(password: string): Promise<void> {

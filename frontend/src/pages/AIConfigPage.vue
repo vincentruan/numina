@@ -30,9 +30,9 @@
           <template #right-icon>
             <van-icon
               :name="showApiKey ? 'eye-o' : 'closed-eye'"
-              @click="showApiKey = !showApiKey"
               style="cursor: pointer"
               :aria-label="showApiKey ? '隐藏 API Key' : '显示 API Key'"
+              @click="showApiKey = !showApiKey"
             />
           </template>
         </van-field>

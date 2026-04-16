@@ -32,7 +32,7 @@
         </template>
         <template v-else-if="reportGeneratedAt">
           <span>报告生成于 {{ reportAge }}</span>
-          <button class="refresh-btn" @click="() => refreshReport()" :disabled="reportLoading" aria-label="刷新报告">
+          <button class="refresh-btn" :disabled="reportLoading" aria-label="刷新报告" @click="() => refreshReport()">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -46,7 +46,7 @@
     </div>
 
     <!-- Report summary card -->
-    <div v-if="currentReport" class="report-summary-card" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')" role="button" tabindex="0" aria-label="查看完整资产体检报告">
+    <div v-if="currentReport" class="report-summary-card" role="button" tabindex="0" aria-label="查看完整资产体检报告" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
       <div class="report-summary-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
@@ -78,7 +78,7 @@
       </div>
     </div>
 
-    <div v-else-if="!reportLoading" class="report-empty-card" @click="generateReport" role="button" tabindex="0" aria-label="立即生成资产体检报告">
+    <div v-else-if="!reportLoading" class="report-empty-card" role="button" tabindex="0" aria-label="立即生成资产体检报告" @click="generateReport">
       <div class="report-empty-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -97,8 +97,8 @@
           :key="feat.route"
           class="feature-card"
           role="listitem"
-          @click="$router.push(feat.route)"
           :aria-label="feat.title + '：' + feat.desc"
+          @click="$router.push(feat.route)"
         >
           <div class="feature-icon" aria-hidden="true" v-html="feat.svg"></div>
           <span class="feature-title">{{ feat.title }}</span>
@@ -110,7 +110,7 @@
     <!-- Chat input -->
     <div class="chat-entry">
       <div class="chat-input-wrap">
-        <button class="chat-expand-btn" @click="toggleExpand" :aria-label="expanded ? '收起输入框' : '展开输入框'">
+        <button class="chat-expand-btn" :aria-label="expanded ? '收起输入框' : '展开输入框'" @click="toggleExpand">
           <svg v-if="!expanded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
         </button>
@@ -123,17 +123,17 @@
           v-model="chatInput"
           class="chat-input"
           placeholder="问我任何关于家庭资产的问题…"
-          @keydown.enter.exact.prevent="startChat"
           aria-label="向 AI 提问"
           rows="1"
           :style="{ height: expanded ? '140px' : '52px' }"
+          @keydown.enter.exact.prevent="startChat"
         ></textarea>
         <button
           class="chat-send"
           :class="{ active: chatInput.trim() }"
-          @click="startChat"
           :disabled="!chatInput.trim()"
           aria-label="发送"
+          @click="startChat"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>

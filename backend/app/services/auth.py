@@ -16,6 +16,7 @@ See design.md for detailed trade-off analysis.
 """
 
 import time
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 import bcrypt
@@ -288,9 +289,14 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     if not user:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
+    # Validate token_version to support force-logout
+    claim_version = payload.get("token_version", 0)
+    if claim_version != user.token_version:
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
     return TokenResponse(
         access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        refresh_token=create_refresh_token({"sub": user.id, "token_version": user.token_version}),
     )
 
 
@@ -327,3 +333,134 @@ def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def verify_parent_password(db: Session, child_user: User, password: str) -> None:
+    """Verify that the given password matches any parent (owner/member) in the child's family.
+
+    Used to gate adult-only actions on shared devices while in child mode.
+    Always runs bcrypt to prevent timing-based family membership enumeration.
+
+    Raises:
+        AppError(AUTH_INVALID_CREDENTIALS): if no parent password matches
+    """
+    parents = (
+        db.query(User)
+        .filter(
+            User.family_id == child_user.family_id,
+            User.role.in_(["owner", "member"]),
+            User.is_active == True,
+            User.password_hash.isnot(None),
+        )
+        .all()
+    )
+
+    # Always run at least one bcrypt verify for timing consistency
+    if not parents:
+        bcrypt.checkpw(password.encode("utf-8"), _get_dummy_hash().encode("utf-8"))
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    for parent in parents:
+        if verify_password(password, parent.password_hash):
+            return
+
+    raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+
+# ---------------------------------------------------------------------------
+# Child PIN auth
+# ---------------------------------------------------------------------------
+
+_CHILD_PIN_MAX_ATTEMPTS = 3
+_CHILD_PIN_LOCKOUT_MINUTES = 15
+
+
+def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> TokenResponse:
+    """Verify child PIN and return tokens. Enforces lockout after 3 failures."""
+    from app.auth.deps import create_access_token, create_child_refresh_token
+    import unicodedata
+
+    child = db.query(User).filter(
+        User.id == child_id, User.is_active == True, User.role == "child"
+    ).first()
+
+    # Timing attack protection: always run bcrypt even if child not found
+    if not child or child.pin_hash is None:
+        bcrypt.checkpw(b"dummy", _get_dummy_hash().encode("utf-8"))
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    # Check lockout (after dummy bcrypt to avoid timing leak on locked state)
+    if child.pin_locked_until is not None and child.pin_locked_until > datetime.utcnow():
+        bcrypt.checkpw(b"dummy", _get_dummy_hash().encode("utf-8"))
+        raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+
+    # Verify PIN using bcrypt.checkpw
+    normalized = unicodedata.normalize("NFC", "".join(pin_sequence))
+    if not bcrypt.checkpw(normalized.encode("utf-8"), child.pin_hash.encode("utf-8")):
+        _record_child_pin_failure(db, child)
+        _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, user_id=child.id)
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    # Success — clear lockout state and reset fail counter
+    child.pin_locked_until = None
+    child.pin_fail_count = 0
+    _child_pin_attempts.pop(child.id, None)
+    db.commit()
+
+    _log_security_event(SecurityEventType.LOGIN_SUCCESS, user_id=child.id)
+    return TokenResponse(
+        access_token=create_access_token({"sub": child.id, "role": "child"}),
+        refresh_token=create_child_refresh_token({"sub": child.id, "role": "child", "token_version": child.token_version}),
+    )
+
+
+# Child PIN failure tracking: {child_id: (fail_count, first_fail_time)}
+_child_pin_attempts: dict[str, tuple[int, float]] = {}
+
+
+def _record_child_pin_failure(db: Session, child: User) -> None:
+    child_id = child.id
+    now = time.time()
+    count, first_time = _child_pin_attempts.get(child_id, (0, now))
+
+    # Reset window if first failure was > lockout period ago
+    if now - first_time > _CHILD_PIN_LOCKOUT_MINUTES * 60:
+        count, first_time = 0, now
+
+    count += 1
+    _child_pin_attempts[child_id] = (count, first_time)
+
+    if count >= _CHILD_PIN_MAX_ATTEMPTS:
+        child.pin_locked_until = datetime.utcnow() + timedelta(minutes=_CHILD_PIN_LOCKOUT_MINUTES)
+        db.commit()
+        del _child_pin_attempts[child_id]
+
+
+def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
+    """Refresh child access token using child refresh token."""
+    from jose import JWTError, jwt
+    from app.config import settings
+    from app.auth.deps import ALGORITHM, create_access_token
+
+    try:
+        payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        token_type = payload.get("type")
+        if user_id is None or token_type != "refresh":
+            raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+    except JWTError:
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
+    child = db.query(User).filter(User.id == user_id, User.is_active == True).first()
+    if not child or child.pin_hash is None:
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
+    # Validate token_version to support force-logout
+    claim_version = payload.get("token_version", 0)
+    if claim_version != child.token_version:
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
+    return TokenResponse(
+        access_token=create_access_token({"sub": child.id, "role": "child"}),
+        refresh_token=refresh_tok,  # keep same refresh token
+    )

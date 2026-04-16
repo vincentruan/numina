@@ -7,10 +7,11 @@ from app.auth.deps import require_adult
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
+from app.models.family import Family
 from app.models.liability import Liability
 from app.models.user import User
 from app.schemas.auth import UserResponse
-from app.schemas.family import FamilyResponse, MemberSummary, UpdateFamilyTitleRequest
+from app.schemas.family import FamilyResponse, FamilySettingsUpdate, FamilySettingsResponse, MemberSummary, UpdateFamilyTitleRequest
 from app.services import family as family_service
 from app.services.snapshot import generate_snapshots
 
@@ -171,3 +172,21 @@ def trigger_snapshots(
 ):
     snapshots = generate_snapshots(db, user.family_id)
     return {"detail": f"已生成 {len(snapshots)} 条快照"}
+
+
+@router.patch("/settings", response_model=FamilySettingsResponse)
+def update_family_settings(
+    body: FamilySettingsUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    if user.role != "owner":
+        raise HTTPException(status_code=403, detail="只有家庭创建者可以修改家庭设置")
+    family = db.query(Family).filter_by(id=user.family_id).first()
+    if body.auto_approve_hours is not None:
+        family.auto_approve_hours = body.auto_approve_hours
+    if body.ai_enabled is not None:
+        family.ai_enabled = body.ai_enabled
+    db.commit()
+    db.refresh(family)
+    return FamilySettingsResponse(auto_approve_hours=family.auto_approve_hours, ai_enabled=family.ai_enabled)
