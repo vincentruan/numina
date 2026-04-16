@@ -3,7 +3,7 @@
 import hmac
 from datetime import datetime, timedelta
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.family import Family
 from app.models.user import User
+from app.services.audit_log import write_audit_log
 
 # Agent JWT TTL: 5 minutes (short-lived, per-request)
 _AGENT_TOKEN_TTL_SECONDS = 300
@@ -59,6 +60,7 @@ def create_agent_token(family_id: str, agent_instance_id: str = "backend") -> st
 
 
 def verify_agent_token(
+    request: Request,
     authorization: str = Header(..., alias="Authorization"),
     x_family_id: str = Header(..., alias="X-Family-Id"),
     db: Session = Depends(get_db),
@@ -68,6 +70,8 @@ def verify_agent_token(
     Accepts two formats (for backward compatibility during migration):
     1. JWT Bearer token with 'fid' claim (new, preferred)
     2. Static HMAC Bearer token + X-Family-Id header (legacy)
+
+    Sets request.state.agent_id from JWT 'agt' claim when available.
     """
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
@@ -84,7 +88,14 @@ def verify_agent_token(
             # Validate X-Family-Id matches JWT claim (defense in depth)
             if jwt_family_id != x_family_id:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="family_id mismatch")
+            # Inject agent identity into request state for audit logging
+            request.state.agent_id = payload.get("agt", "unknown")
             _validate_family_exists(db, jwt_family_id)
+            write_audit_log(
+                "agent_request", "success",
+                family_id=jwt_family_id,
+                detail=f"agent_id={request.state.agent_id} path={request.url.path}",
+            )
             return jwt_family_id
     except JWTError:
         pass  # Fall through to legacy HMAC check
@@ -97,6 +108,7 @@ def verify_agent_token(
     if not hmac.compare_digest(token, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
 
+    request.state.agent_id = "legacy"
     _validate_family_exists(db, x_family_id)
     return x_family_id
 
