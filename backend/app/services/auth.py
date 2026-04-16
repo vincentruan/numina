@@ -239,8 +239,8 @@ def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> T
     _log_security_event(SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
     )
 
 
@@ -266,8 +266,8 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     _clear_failed_login(req.username)
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
     )
 
 
@@ -302,8 +302,8 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
 
     _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id, "token_version": user.token_version}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "token_version": user.token_version}),
     )
 
 
@@ -327,8 +327,8 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     db.refresh(user)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
     )
 
 

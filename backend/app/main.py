@@ -23,6 +23,7 @@ from app.error_handlers import (
 from app.errors.exceptions import AppError
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.family_context import FamilyContextMiddleware
 from app.models.activity import Activity  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
@@ -224,6 +225,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # Add rate limiting middleware (first to execute on request)
 app.add_middleware(RateLimitMiddleware)
+
+# Inject family_id from JWT into request.state for all authenticated routes
+app.add_middleware(FamilyContextMiddleware)
 
 # Add security headers middleware (last to modify response)
 app.add_middleware(SecurityHeadersMiddleware)
