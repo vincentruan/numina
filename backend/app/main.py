@@ -40,6 +40,7 @@ from app.models.family import Family  # noqa: F401
 from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.security_audit_log import SecurityAuditLog  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.storage_backend import StorageBackend  # noqa: F401
 from app.models.sync_event import SyncEvent  # noqa: F401
@@ -90,6 +91,7 @@ from app.scheduler import (
     scheduler,
     setup_exchange_rate_schedule,
     setup_file_sync_schedule,
+    setup_audit_log_purge_schedule,
 )
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
@@ -145,6 +147,7 @@ async def lifespan(app: FastAPI):
     try:
         setup_exchange_rate_schedule()
         setup_file_sync_schedule()
+        setup_audit_log_purge_schedule()
         scheduler.start()
         logger.info("APScheduler 已启动")
     except Exception as e:

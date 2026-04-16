@@ -154,3 +154,24 @@ def setup_file_sync_schedule() -> None:
         coalesce=True,
     )
     logger.info(f"文件同步任务已配置（每 {settings.FILE_SYNC_INTERVAL_MINUTES} 分钟）")
+
+
+def audit_log_purge_job() -> None:
+    """APScheduler job: purge security audit log entries older than 90 days."""
+    from app.services.audit_log import purge_old_audit_logs
+    purge_old_audit_logs(retention_days=90)
+
+
+def setup_audit_log_purge_schedule() -> None:
+    """Schedule daily audit log purge at 03:00."""
+    scheduler.add_job(
+        audit_log_purge_job,
+        trigger="cron",
+        hour=3,
+        minute=0,
+        id="audit_log_purge",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("审计日志清理任务已配置（每日 03:00）")

@@ -35,6 +35,7 @@ from app.schemas.auth import (
     TokenResponse,
     UpdateProfileRequest,
 )
+from app.services.audit_log import write_audit_log
 from app.services.security_log import _log_security_event, SecurityEventType
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
@@ -304,10 +305,12 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     if not verify_password(req.password, user.password_hash):
         _record_failed_login(req.username)
         _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, username=req.username, user_id=user.id)
+        write_audit_log("login_failed", "failure", user_id=user.id, family_id=user.family_id, detail="wrong_password")
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     _clear_failed_login(req.username)
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
+    write_audit_log("login_success", "success", user_id=user.id, family_id=user.family_id)
     return TokenResponse(
         access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
         refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
@@ -347,6 +350,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
 
     _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
+    write_audit_log("token_refresh", "success", user_id=user.id, family_id=user.family_id)
     return TokenResponse(
         access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
         refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "token_version": user.token_version}),
@@ -394,6 +398,7 @@ def change_password(db: Session, user: User, old_password: str, new_password: st
     # Revoke all tokens issued before now
     revoke_all_user_tokens(user.id)
     _log_security_event(SecurityEventType.PASSWORD_CHANGE_SUCCESS, user_id=user.id)
+    write_audit_log("password_change", "success", user_id=user.id, family_id=user.family_id)
 
 
 def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
