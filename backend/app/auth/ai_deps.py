@@ -117,13 +117,3 @@ def _validate_family_exists(db: Session, family_id: str) -> None:
     family = db.query(Family).filter(Family.id == family_id).first()
     if not family:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Family not found")
-
-    # 验证 family 存在
-    family = db.query(Family).filter(Family.id == x_family_id).first()
-    if not family:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Family {x_family_id} not found",
-        )
-
-    return x_family_id
