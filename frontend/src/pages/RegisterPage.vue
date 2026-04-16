@@ -139,15 +139,17 @@ async function onSubmit() {
     setErrors(error)
 
     // Handle captcha-related errors
-    const detail = error.response?.data?.detail || ''
+    const code = error.response?.data?.code || ''
+    const message = error.response?.data?.message || ''
     const status = error.response?.status
 
-    if (status === 503) {
-      showToast('验证服务暂时不可用，请稍后重试')
-    } else if (detail.includes('验证码')) {
+    const isCaptchaError = code.startsWith('CAPTCHA_')
+    if (status === 503 || code === 'CAPTCHA_SERVICE_UNAVAILABLE') {
+      showToast(message || '验证服务暂时不可用，请稍后重试')
+    } else if (isCaptchaError) {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()
-      showToast(detail)
+      showToast(message)
     }
   } finally {
     loading.value = false

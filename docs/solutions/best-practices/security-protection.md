@@ -254,7 +254,7 @@ if attempts >= config.LOGIN_RATE_LIMIT_MAX_ATTEMPTS:
 if cache.get(f"login_locked:{username}"):
     remaining_seconds = cache.get_ttl(f"login_locked:{username}")
     remaining_minutes = remaining_seconds // 60  # 转换为分钟
-    raise HTTPException(status_code=429, detail=f"登录失败次数过多，请 {remaining_minutes} 分钟后重试")
+    raise AppError(ErrorCode.AUTH_RATE_LIMITED, details={"reset_at": remaining_minutes})
 ```
 
 ## Related
