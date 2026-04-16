@@ -92,7 +92,7 @@
             编辑
           </van-button>
         </template>
-        <van-button block type="danger" plain @click="onDelete" :loading="deleting" class="delete-btn">
+        <van-button block type="danger" plain :loading="deleting" class="delete-btn" @click="onDelete">
           删除
         </van-button>
       </div>
@@ -118,8 +118,8 @@
                 label="购入日期"
                 placeholder="点击选择"
                 readonly
-                @click="showDatePicker = true"
                 :rules="[{ required: true, message: '请选择购入日期' }]"
+                @click="showDatePicker = true"
               />
               <van-field
                 v-model="selectedCategoryName"

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.asset import Asset
 from app.models.category import Category
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/export", tags=["export"])
 @router.get("/assets/csv")
 def export_assets_csv(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     assets = (
         db.query(Asset)
@@ -64,7 +64,7 @@ def export_assets_csv(
 @router.get("/liabilities/csv")
 def export_liabilities_csv(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     liabilities = (
         db.query(Liability)
@@ -106,7 +106,7 @@ def export_liabilities_csv(
 @router.get("/all/json")
 def export_all_json(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     family_id = user.family_id
 

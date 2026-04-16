@@ -9,7 +9,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
@@ -37,7 +37,7 @@ class ChatRequest(BaseModel):
 @router.post("")
 async def chat(
     body: ChatRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
@@ -96,7 +96,7 @@ async def chat(
 @router.get("/history")
 def get_history(
     limit: int = 20,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     messages = (
@@ -119,7 +119,7 @@ def get_history(
 
 @router.delete("/history")
 def clear_history(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     db.query(AIChatMessage).filter(
@@ -131,7 +131,7 @@ def clear_history(
 
 @router.put("/read")
 def mark_read(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     """更新 ai_chat_last_read_at，清除未读红点。"""

@@ -4,11 +4,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth import deps as auth_deps
 from app.database import Base, get_db
 from app.main import app
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.seed.categories import seed_categories
 from app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
+
+# Import all models to ensure they're registered with Base.metadata
+# This is required for Base.metadata.create_all() to create all tables
+from app.models.user import User  # noqa: F401
+from app.models.family import Family  # noqa: F401
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -27,6 +34,10 @@ def db():
     # Reset rate limit store before each test
     if hasattr(RateLimitMiddleware, "_rate_store"):
         RateLimitMiddleware._rate_store.clear()
+
+    # Reset JTI revocation stores
+    auth_deps._revoked_jtis.clear()
+    auth_deps._user_revocation_times.clear()
 
     # Reset cache (including registration rate limits)
     reset_rate_limit_cache()

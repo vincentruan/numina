@@ -3,7 +3,7 @@
     <PageHeader :title="t('asset.title')" :show-back="false" />
 
     <!-- Filter Tabs -->
-    <van-tabs v-model:active="activeTab" @change="onTabChange" sticky aria-label="资产类型筛选">
+    <van-tabs v-model:active="activeTab" sticky aria-label="资产类型筛选" @change="onTabChange">
       <van-tab :title="t('asset.all')" name="all" />
       <van-tab :title="t('asset.physical')" name="physical" />
       <van-tab :title="t('asset.financial')" name="financial" />
@@ -14,12 +14,12 @@
       <van-search
         v-model="searchText"
         :placeholder="t('asset.search')"
+        aria-label="搜索资产"
         @search="onSearch"
         @clear="onSearch"
-        aria-label="搜索资产"
       />
       <van-dropdown-menu>
-        <van-dropdown-item v-model="sortBy" :options="sortOptions" @change="onSearch" aria-label="排序方式" />
+        <van-dropdown-item v-model="sortBy" :options="sortOptions" aria-label="排序方式" @change="onSearch" />
       </van-dropdown-menu>
     </div>
 
@@ -28,13 +28,13 @@
       <span class="selection-count" aria-live="polite">
         已选择 {{ selectedAssets.length }} 项
       </span>
-      <van-button size="small" @click="selectAll" aria-label="全选">
+      <van-button size="small" aria-label="全选" @click="selectAll">
         {{ isAllSelected ? '取消全选' : '全选' }}
       </van-button>
-      <van-button size="small" type="danger" @click="confirmBatchDelete" :disabled="selectedAssets.length === 0" aria-label="批量删除">
+      <van-button size="small" type="danger" :disabled="selectedAssets.length === 0" aria-label="批量删除" @click="confirmBatchDelete">
         删除
       </van-button>
-      <van-button size="small" @click="exitSelectionMode" aria-label="退出选择模式">
+      <van-button size="small" aria-label="退出选择模式" @click="exitSelectionMode">
         取消
       </van-button>
     </div>
@@ -132,9 +132,9 @@
       :title="t('asset.batchDelete')"
       :message="`确定要删除 ${selectedAssets.length} 项资产吗？此操作不可撤销。`"
       show-cancel-button
-      @confirm="executeBatchDelete"
       aria-modal="true"
       aria-label="批量删除确认"
+      @confirm="executeBatchDelete"
     />
   </div>
 </template>

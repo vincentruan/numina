@@ -12,15 +12,15 @@
     </van-cell-group>
 
     <van-cell-group inset :title="t('settings.userSettings')" class="section">
-      <van-cell :title="t('settings.theme')" :value="themeLabel" @click="showThemePicker = true" is-link />
-      <van-cell :title="t('settings.themeColor')" @click="showThemeColorPicker = true" is-link>
+      <van-cell :title="t('settings.theme')" :value="themeLabel" is-link @click="showThemePicker = true" />
+      <van-cell :title="t('settings.themeColor')" is-link @click="showThemeColorPicker = true">
         <template #value>
           <span class="theme-color-preview" :style="{ backgroundColor: currentThemeColor }"></span>
         </template>
       </van-cell>
-      <van-cell :title="t('settings.language')" :value="languageLabel" @click="showLanguagePicker = true" is-link />
-      <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" @click="showCurrencyPicker = true" is-link />
-      <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" @click="showViewModePicker = true" is-link />
+      <van-cell :title="t('settings.language')" :value="languageLabel" is-link @click="showLanguagePicker = true" />
+      <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" is-link @click="showCurrencyPicker = true" />
+      <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" is-link @click="showViewModePicker = true" />
     </van-cell-group>
 
     <van-cell-group inset :title="t('settings.accountInfo')" class="section">

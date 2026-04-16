@@ -15,8 +15,8 @@
         :key="opt.value"
         class="sort-btn"
         :class="{ active: sortBy === opt.value }"
-        @click="toggleSort(opt.value)"
         :aria-label="`按${opt.label}排序`"
+        @click="toggleSort(opt.value)"
       >
         {{ opt.label }}
         <span v-if="sortBy === opt.value" class="sort-dir" aria-hidden="true">
@@ -35,9 +35,9 @@
               class="wish-card"
               role="listitem"
               tabindex="0"
+              :aria-label="`${wish.name}，${priorityText(wish.priority)}优先级`"
               @click="$router.push(`/wishes/${wish.id}`)"
               @keydown.enter="$router.push(`/wishes/${wish.id}`)"
-              :aria-label="`${wish.name}，${priorityText(wish.priority)}优先级`"
             >
               <div class="wish-header">
                 <span class="wish-name">{{ wish.name }}</span>

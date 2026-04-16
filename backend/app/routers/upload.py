@@ -3,7 +3,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, UploadFile
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.user import User
@@ -21,7 +21,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 @router.post("/image", response_model=FileRecordResponse)
 async def upload_image(
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     """Upload an image file and return its URL."""

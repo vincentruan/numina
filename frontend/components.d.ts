@@ -20,6 +20,7 @@ declare module 'vue' {
     AssetForm: typeof import('./src/components/asset/AssetForm.vue')['default']
     AssetListItem: typeof import('./src/components/asset/AssetListItem.vue')['default']
     CategoryGrid: typeof import('./src/components/asset/CategoryGrid.vue')['default']
+    ChildTabBar: typeof import('./src/components/child/ChildTabBar.vue')['default']
     CurrencyButton: typeof import('./src/components/common/CurrencyButton.vue')['default']
     CurrencyPicker: typeof import('./src/components/common/CurrencyPicker.vue')['default']
     CurrencySelector: typeof import('./src/components/common/CurrencySelector.vue')['default']

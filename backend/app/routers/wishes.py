@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.asset import AssetResponse
@@ -15,28 +15,28 @@ router = APIRouter(prefix="/wishes", tags=["wishes"])
 def list_wishes(
     status: str | None = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return wish_service.list_wishes(db, user, status)
 
 
 @router.post("/", response_model=WishResponse, status_code=201)
-def create_wish(req: WishCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def create_wish(req: WishCreate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     return wish_service.create_wish(db, user, req)
 
 
 @router.get("/{wish_id}", response_model=WishResponse)
-def get_wish(wish_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def get_wish(wish_id: str, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     return wish_service.get_wish(db, user, wish_id)
 
 
 @router.put("/{wish_id}", response_model=WishResponse)
-def update_wish(wish_id: str, req: WishUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def update_wish(wish_id: str, req: WishUpdate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     return wish_service.update_wish(db, user, wish_id, req)
 
 
 @router.delete("/{wish_id}")
-def delete_wish(wish_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def delete_wish(wish_id: str, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     wish_service.delete_wish(db, user, wish_id)
     return {"detail": "已删除"}
 
@@ -46,7 +46,7 @@ def realize_wish(
     wish_id: str,
     req: WishRealizeRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = wish_service.realize_wish(db, user, wish_id, req)
     # Return asset response with computed fields

@@ -5,7 +5,7 @@
       <p class="app-subtitle">创建一个新的家庭账本</p>
     </div>
 
-    <van-form @submit="onSubmit" class="register-form">
+    <van-form class="register-form" @submit="onSubmit">
       <van-cell-group inset>
         <van-field
           v-model="form.family_name"

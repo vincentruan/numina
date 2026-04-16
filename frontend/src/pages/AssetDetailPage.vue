@@ -177,12 +177,12 @@
           <van-button block type="warning" plain @click="$router.push(`/assets/${asset.id}/sell`)">
             出售资产
           </van-button>
-          <van-button block type="default" plain @click="onRetire" :loading="acting">
+          <van-button block type="default" plain :loading="acting" @click="onRetire">
             报废/退役
           </van-button>
         </template>
         <template v-else-if="asset.status === 'retired'">
-          <van-button block type="success" plain @click="onReactivate" :loading="acting">
+          <van-button block type="success" plain :loading="acting" @click="onReactivate">
             恢复服役
           </van-button>
           <van-button block type="primary" plain @click="$router.push(`/assets/${asset.id}/edit`)">
@@ -194,7 +194,7 @@
             编辑
           </van-button>
         </template>
-        <van-button block type="danger" plain @click="onDelete" :loading="deleting" class="delete-btn">
+        <van-button block type="danger" plain :loading="deleting" class="delete-btn" @click="onDelete">
           删除
         </van-button>
       </div>

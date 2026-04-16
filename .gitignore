@@ -110,6 +110,7 @@ docker-compose.override.yml
 data/*.csv
 data/*.json
 !data/.gitkeep
+backend/data/uploads/
 
 # ===========================
 # Environment & Secrets

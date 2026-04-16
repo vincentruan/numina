@@ -14,7 +14,7 @@
         <p class="app-subtitle">家庭资产可视化管理</p>
       </div>
 
-      <van-form @submit="onSubmit" class="login-form">
+      <van-form class="login-form" @submit="onSubmit">
         <van-cell-group inset>
           <van-field
             v-model="form.username"

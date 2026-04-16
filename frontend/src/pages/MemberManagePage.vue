@@ -39,7 +39,7 @@
 
     <!-- Regenerate Invite Code -->
     <div class="actions">
-      <van-button block plain type="primary" @click="onRegenerate" :loading="regenerating">
+      <van-button block plain type="primary" :loading="regenerating" @click="onRegenerate">
         重新生成邀请码
       </van-button>
     </div>

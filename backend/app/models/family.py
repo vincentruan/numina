@@ -3,7 +3,7 @@ import string
 from datetime import datetime
 from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -31,7 +31,11 @@ class Family(Base):
     ai_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # 主模型 ID，NULL 使用 provider 默认
     ai_vision_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)  # 图像模型 ID，NULL 使用主模型
 
+    # 儿童星星币系统配置
+    auto_approve_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)  # 1-168，仅 owner 可修改
+
     members = relationship("User", back_populates="family")
     categories = relationship("Category", back_populates="family")
     tags = relationship("Tag", back_populates="family")
     snapshots = relationship("AssetSnapshot", back_populates="family")
+    child_bind_tokens = relationship("ChildBindToken", back_populates="family")

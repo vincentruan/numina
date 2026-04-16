@@ -23,6 +23,7 @@ from app.error_handlers import (
 from app.errors.exceptions import AppError
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.family_context import FamilyContextMiddleware
 from app.models.activity import Activity  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
@@ -39,6 +40,7 @@ from app.models.family import Family  # noqa: F401
 from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.security_audit_log import SecurityAuditLog  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.storage_backend import StorageBackend  # noqa: F401
 from app.models.sync_event import SyncEvent  # noqa: F401
@@ -48,11 +50,21 @@ from app.models.tag import Tag  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.wish import Wish  # noqa: F401
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
+from app.models.chore import ChoreTemplate, ChoreInstance  # noqa: F401
+from app.models.coin_transaction import CoinTransaction  # noqa: F401
+from app.models.child_wish import ChildWish  # noqa: F401
+from app.models.child_milestone import ChildMilestone  # noqa: F401
 from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
 from app.routers import ai_allocation as ai_allocation_router
 from app.routers import ai_chat as ai_chat_router
+from app.routers import children as children_router
+from app.routers import chores as chores_router
+from app.routers import coins as coins_router
+from app.routers import child_wishes as child_wishes_router
+from app.routers import milestones as milestones_router
 from app.routers import ai_config as ai_config_router
 from app.routers import ai_disposal as ai_disposal_router
 from app.routers import ai_internal as ai_internal_router
@@ -79,6 +91,7 @@ from app.scheduler import (
     scheduler,
     setup_exchange_rate_schedule,
     setup_file_sync_schedule,
+    setup_audit_log_purge_schedule,
 )
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
@@ -134,6 +147,7 @@ async def lifespan(app: FastAPI):
     try:
         setup_exchange_rate_schedule()
         setup_file_sync_schedule()
+        setup_audit_log_purge_schedule()
         scheduler.start()
         logger.info("APScheduler 已启动")
     except Exception as e:
@@ -215,6 +229,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 # Add rate limiting middleware (first to execute on request)
 app.add_middleware(RateLimitMiddleware)
 
+# Inject family_id from JWT into request.state for all authenticated routes
+app.add_middleware(FamilyContextMiddleware)
+
 # Add security headers middleware (last to modify response)
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -251,6 +268,11 @@ app.include_router(ai_disposal_router.router, prefix="/api/v1")
 app.include_router(ai_liability_router.router, prefix="/api/v1")
 app.include_router(ai_allocation_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.router, prefix="/api/v1")
+app.include_router(children_router.router, prefix="/api/v1")
+app.include_router(chores_router.router, prefix="/api/v1")
+app.include_router(coins_router.router, prefix="/api/v1")
+app.include_router(child_wishes_router.router, prefix="/api/v1")
+app.include_router(milestones_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))

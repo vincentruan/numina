@@ -14,8 +14,8 @@
         readonly
         label="类别"
         placeholder="选择负债类别"
-        @click="showCategoryPicker = true"
         :rules="[{ required: true, message: '请选择类别' }]"
+        @click="showCategoryPicker = true"
       />
       <van-popup v-model:show="showCategoryPicker" position="bottom" round>
         <van-picker

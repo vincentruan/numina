@@ -21,6 +21,7 @@ from app.models.payment_record import PaymentRecord  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from app.models.child_wish import ChildWish  # noqa: F401
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
