@@ -45,6 +45,49 @@ _LOCKOUT_SECONDS = 15 * 60  # 15 minutes
 # Dummy hash cache for timing attack protection
 _dummy_hash_cache: str | None = None
 
+# Refresh rate limit: 10 per minute per user_id
+_REFRESH_RATE_LIMIT_PER_MINUTE = 10
+# Password change rate limit: 3 per hour per user_id
+_PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR = 3
+
+
+def _check_refresh_rate_limit(user_id: str) -> None:
+    """Limit token refresh to 10 per minute per user."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"refresh_attempts:{user_id}"
+        count = cache.get(key)
+        if count is not None and int(count) >= _REFRESH_RATE_LIMIT_PER_MINUTE:
+            _log_security_event(SecurityEventType.TOKEN_REFRESH_FAILED, user_id=user_id, reason="rate_limited")
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+        new_count = cache.increment(key)
+        if new_count == 1:
+            cache.set(key, 1, ttl_seconds=60)
+    except AppError:
+        raise
+    except Exception:
+        pass
+
+
+def _check_password_change_rate_limit(user_id: str) -> None:
+    """Limit password changes to 3 per hour per user."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"password_change_attempts:{user_id}"
+        count = cache.get(key)
+        if count is not None and int(count) >= _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR:
+            _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user_id, reason="rate_limited")
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+        new_count = cache.increment(key)
+        if new_count == 1:
+            cache.set(key, 1, ttl_seconds=3600)
+    except AppError:
+        raise
+    except Exception:
+        pass
+
 
 def _get_rate_limit_settings():
     """Get rate limit settings from config."""
@@ -291,10 +334,13 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     if not user:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
-    # Validate token_version to support force-logout
+# Validate token_version to support force-logout
     claim_version = payload.get("token_version", 0)
     if claim_version != user.token_version:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
+    # Rate limit refresh attempts per user
+    _check_refresh_rate_limit(user_id)
 
     # Revoke the old refresh token JTI so it can't be reused
     if old_jti:
@@ -335,6 +381,8 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
 def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
     """Change user password and revoke all existing tokens."""
     from app.auth.deps import revoke_all_user_tokens
+
+    _check_password_change_rate_limit(user.id)
 
     if not verify_password(old_password, user.password_hash):
         _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user.id)

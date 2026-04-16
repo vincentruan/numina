@@ -552,3 +552,52 @@ class TestLoginErrorMessage:
         assert response2.status_code == 401
         assert response1.json()["detail"] == response2.json()["detail"]
         assert response1.json()["detail"] == "用户名或密码错误"
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting
+# ---------------------------------------------------------------------------
+
+def test_refresh_rate_limit(client, auth_headers):
+    """Exceeding 10 refresh calls per minute per user triggers 429."""
+    from app.services import auth as auth_service
+    from jose import jwt
+    from app.config import settings
+    from app.auth.deps import ALGORITHM
+
+    token = auth_headers["Authorization"].split(" ")[1]
+    user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
+
+    # Exhaust the rate limit directly via the service function
+    from app.services.cache.factory import get_rate_limit_cache
+    cache = get_rate_limit_cache()
+    key = f"refresh_attempts:{user_id}"
+    cache.set(key, auth_service._REFRESH_RATE_LIMIT_PER_MINUTE, ttl_seconds=60)
+
+    resp = client.post("/api/v1/auth/refresh", json={
+        "refresh_token": auth_headers["_refresh_token"]
+    })
+    assert resp.status_code == 429
+
+
+def test_password_change_rate_limit(client, auth_headers):
+    """Exceeding 3 password change attempts per hour triggers 429."""
+    from app.services import auth as auth_service
+    from jose import jwt
+    from app.config import settings
+    from app.auth.deps import ALGORITHM
+
+    token = auth_headers["Authorization"].split(" ")[1]
+    user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
+
+    from app.services.cache.factory import get_rate_limit_cache
+    cache = get_rate_limit_cache()
+    key = f"password_change_attempts:{user_id}"
+    cache.set(key, auth_service._PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+
+    resp = client.post(
+        "/api/v1/auth/me/password",
+        json={"old_password": "TestPass123", "new_password": "NewPass456"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 429
