@@ -30,6 +30,19 @@ _VALIDATION_CODE_MAP = {
     "string_pattern_mismatch": "INVALID_FORMAT",
     "int_type": "INVALID_TYPE",
     "float_type": "INVALID_TYPE",
+    "string_type": "INVALID_TYPE",
+    "bool_type": "INVALID_TYPE",
+    "int_parsing_error": "INVALID_TYPE",
+    "int_parsing": "INVALID_TYPE",
+    "float_parsing_error": "INVALID_TYPE",
+    "float_parsing": "INVALID_TYPE",
+    "greater_than": "INVALID_VALUE",
+    "greater_than_equal": "INVALID_VALUE",
+    "less_than": "INVALID_VALUE",
+    "less_than_equal": "INVALID_VALUE",
+    "enum": "INVALID_VALUE",
+    "url_type": "INVALID_FORMAT",
+    "datetime_type": "INVALID_FORMAT",
 }
 
 
@@ -88,7 +101,9 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
             template = _get_message("VALIDATION_TOO_LONG", lang)
             msg = template.format(max_length=ctx["max_length"])
         else:
-            msg = error.get("msg", code)
+            locale_key = f"VALIDATION_{code}"
+            locale_msg = _get_message(locale_key, lang)
+            msg = locale_msg if locale_msg != locale_key else error.get("msg", code)
         details.append({"field": field, "code": code, "msg": msg})
     message = _get_message("VALIDATION_ERROR", lang)
     return JSONResponse(

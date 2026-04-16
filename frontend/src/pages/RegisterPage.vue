@@ -12,6 +12,7 @@
           label="家庭名称"
           placeholder="请输入家庭名称"
           :rules="[{ required: true, message: '请输入家庭名称' }]"
+          :error-message="getError('family_name')?.msg"
           @blur="validateField('family_name')"
         />
         <van-field
@@ -19,6 +20,7 @@
           label="用户名"
           placeholder="请输入用户名"
           :rules="[{ required: true, message: '请输入用户名' }]"
+          :error-message="getError('username')?.msg"
           @blur="validateField('username')"
         />
         <van-field
@@ -38,6 +40,7 @@
               { required: true, message: '请输入密码' },
               { validator: validatePassword, message: '密码至少6位' }
             ]"
+            :error-message="getError('password')?.msg"
             @blur="validateField('password')"
           >
             <template #right-icon>
@@ -82,12 +85,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
 import PasswordStrengthIndicator from '@/components/common/PasswordStrengthIndicator.vue'
+import { useValidationErrors, validationErrorsKey } from '@/composables/useValidationErrors'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -96,6 +100,10 @@ const confirmPassword = ref('')
 const altchaRef = ref()
 const showPassword = ref(false)
 const showConfirmPassword = ref(false)
+
+const validationErrorsComposable = useValidationErrors()
+const { setErrors, clearErrors, getError } = validationErrorsComposable
+provide(validationErrorsKey, validationErrorsComposable)
 
 const form = ref({
   family_name: '',
@@ -120,12 +128,16 @@ function validateField(field: string) {
 }
 
 async function onSubmit() {
+  clearErrors()
   loading.value = true
   try {
     await authStore.register(form.value)
     showToast('注册成功')
     router.push('/')
   } catch (error: any) {
+    // Handle field-level validation errors (422)
+    setErrors(error)
+
     // Handle captcha-related errors
     const detail = error.response?.data?.detail || ''
     const status = error.response?.status
