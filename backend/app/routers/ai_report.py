@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled, require_owner
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
@@ -39,7 +39,7 @@ def _latest_report(family_id: str, db: Session) -> AIReport | None:
 
 @router.get("")
 def get_report(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     """获取家庭最新体检报告。"""
@@ -51,7 +51,7 @@ def get_report(
 
 @router.post("/generate")
 async def trigger_generate(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
@@ -97,7 +97,7 @@ async def trigger_generate(
 
 @router.post("/ws-ticket")
 def create_ws_ticket(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),

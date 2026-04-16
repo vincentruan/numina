@@ -6,7 +6,7 @@
       </template>
     </PageHeader>
 
-    <van-tabs v-model:active="activeTab" @change="onTabChange" sticky>
+    <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
       <van-tab title="实物" name="physical" />
       <van-tab title="金融" name="financial" />
     </van-tabs>

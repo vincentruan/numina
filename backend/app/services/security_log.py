@@ -1,6 +1,5 @@
 """Security event logging service."""
 
-from datetime import datetime
 from typing import Any
 
 from app.config import settings
@@ -24,6 +23,10 @@ class SecurityEventType:
     GLOBAL_RATE_LIMITED = "global_rate_limited"
     CAPTCHA_VERIFICATION_FAILED = "captcha_verification_failed"
     CAPTCHA_REPLAY_ATTACK = "captcha_replay_attack"
+    # Child PIN authentication events
+    CHILD_PIN_SUCCESS = "child_pin_success"
+    CHILD_PIN_FAILED = "child_pin_failed"
+    CHILD_PIN_RATE_LIMITED = "child_pin_rate_limited"
 
 
 def _log_security_event(
@@ -46,7 +49,11 @@ def _log_security_event(
     # Log at appropriate level
     if event_type.endswith("_success"):
         logger.info(message)
-    elif event_type.endswith("_failed") or event_type.endswith("_blocked") or event_type.endswith("_limited"):
+    elif (
+        event_type.endswith("_failed")
+        or event_type.endswith("_blocked")
+        or event_type.endswith("_limited")
+    ):
         logger.warning(message)
     else:
         logger.info(message)

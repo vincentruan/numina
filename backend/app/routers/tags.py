@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.tag import Tag
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/tags", tags=["tags"])
 @router.get("/", response_model=list[TagResponse])
 def list_tags(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return db.query(Tag).filter(Tag.family_id == user.family_id).all()
 
@@ -23,7 +23,7 @@ def list_tags(
 def create_tag(
     req: TagCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     tag = Tag(family_id=user.family_id, name=req.name, color=req.color)
     db.add(tag)
@@ -37,7 +37,7 @@ def update_tag(
     tag_id: str,
     req: TagUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     tag = db.query(Tag).filter(Tag.id == tag_id, Tag.family_id == user.family_id).first()
     if not tag:
@@ -55,7 +55,7 @@ def update_tag(
 def delete_tag(
     tag_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     tag = db.query(Tag).filter(Tag.id == tag_id, Tag.family_id == user.family_id).first()
     if not tag:

@@ -392,3 +392,16 @@ export interface ChatMessage {
   content: string
   created_at: string
 }
+
+export interface ChildUser {
+  id: string
+  display_name: string
+  avatar_color: string
+  is_active: boolean
+}
+
+export interface ChildBindInfo {
+  family_id: string
+  family_name: string
+  children: ChildUser[]
+}

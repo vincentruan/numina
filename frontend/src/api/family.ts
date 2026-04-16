@@ -24,3 +24,10 @@ export function removeMember(userId: string) {
 export function updateFamilyTitle(custom_title: string | null) {
   return http.patch<Family>('/family/title', { custom_title })
 }
+
+export function updateFamilySettings(settings: { autoApproveHours?: number; aiEnabled?: boolean }) {
+  const body: Record<string, unknown> = {}
+  if (settings.autoApproveHours !== undefined) body.auto_approve_hours = settings.autoApproveHours
+  if (settings.aiEnabled !== undefined) body.ai_enabled = settings.aiEnabled
+  return http.patch<{ auto_approve_hours: number; ai_enabled: boolean }>('/family/settings', body)
+}

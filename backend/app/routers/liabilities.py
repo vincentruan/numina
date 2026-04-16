@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.liability import (
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/liabilities", tags=["liabilities"])
 def list_liabilities(
     is_active: bool | None = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return liability_service.list_liabilities(db, user, is_active)
 
@@ -29,7 +29,7 @@ def list_liabilities(
 def create_liability(
     req: LiabilityCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     liability = liability_service.create_liability(db, user, req)
     record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", liability.original_amount)
@@ -40,7 +40,7 @@ def create_liability(
 def get_liability(
     liability_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return liability_service.get_liability(db, user, liability_id)
 
@@ -50,7 +50,7 @@ def update_liability(
     liability_id: str,
     req: LiabilityUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return liability_service.update_liability(db, user, liability_id, req)
 
@@ -59,7 +59,7 @@ def update_liability(
 def delete_liability(
     liability_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     liability_service.delete_liability(db, user, liability_id)
     return {"detail": "已删除"}
@@ -70,7 +70,7 @@ def record_payment(
     liability_id: str,
     req: PaymentRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     liability = liability_service.record_payment(db, user, liability_id, req.amount)
     record_activity(db, user, "payment", "liability", liability_id, f"还款「{liability.name}」", req.amount)
@@ -81,6 +81,6 @@ def record_payment(
 def get_payments(
     liability_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return liability_service.get_payments(db, user, liability_id)

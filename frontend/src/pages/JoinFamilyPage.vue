@@ -5,7 +5,7 @@
       <p class="app-subtitle">使用邀请码加入已有家庭</p>
     </div>
 
-    <van-form @submit="onSubmit" class="join-form">
+    <van-form class="join-form" @submit="onSubmit">
       <van-cell-group inset>
         <van-field
           v-model="form.invite_code"

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled, require_owner
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
@@ -29,7 +29,7 @@ def _get_family(db: Session, user: User) -> Family:
 
 @router.get("/config", response_model=AIConfigResponse)
 def get_ai_config(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ) -> AIConfigResponse:
     """获取当前家庭 AI 配置（所有成员可查看）。"""

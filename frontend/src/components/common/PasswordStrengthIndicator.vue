@@ -1,5 +1,5 @@
 <template>
-  <div class="password-strength" v-if="password">
+  <div v-if="password" class="password-strength">
     <div class="strength-bars">
       <div
         v-for="i in 4"

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.asset import Asset
 from app.models.category import Category
@@ -24,7 +24,7 @@ class ImportRequest(BaseModel):
 def import_json(
     req: ImportRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     family_id = user.family_id
     data = req.data

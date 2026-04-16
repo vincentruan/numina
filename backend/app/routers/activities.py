@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.activity import Activity
 from app.models.user import User
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/activities", tags=["activities"])
 def get_recent_activities(
     limit: int = Query(20, le=50),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     activities = (
         db.query(Activity)

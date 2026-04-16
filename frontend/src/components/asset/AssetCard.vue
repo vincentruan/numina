@@ -2,14 +2,14 @@
   <div
     class="asset-card"
     :class="{ 'selection-mode': selectable, 'selected': selected }"
+    role="listitem"
+    :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
+    tabindex="0"
     @click="$emit('click')"
     @touchstart="startLongPress"
     @touchend="cancelLongPress"
     @touchmove="cancelLongPress"
     @contextmenu.prevent="triggerLongPress"
-    role="listitem"
-    :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
-    tabindex="0"
     @keydown.enter="$emit('click')"
     @keydown.space.prevent="toggleSelect"
   >

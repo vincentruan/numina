@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 @router.get("")
 def get_alerts(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     alerts = (
@@ -51,7 +51,7 @@ def get_alerts(
 
 @router.post("/refresh")
 async def refresh_alerts(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
@@ -103,7 +103,7 @@ async def refresh_alerts(
 @router.post("/{alert_id}/dismiss")
 def dismiss_alert(
     alert_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     alert = db.query(AIAssetAlert).filter(

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.asset import AssetCreate, AssetResponse, AssetSellRequest, AssetSellResponse, AssetUpdate, AssetValueUpdate, ValuationResponse, BatchAssetRequest, BatchUpdateCategoryRequest, BatchUpdateTagsRequest, BatchUpdateStatusRequest, BatchOperationResponse, BatchExportResponse
@@ -27,7 +27,7 @@ def list_assets(
     search: str | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     assets = asset_service.list_assets(db, user, category_id, asset_type, status, tag_id, search, sort)
     return [_to_response(a) for a in assets]
@@ -37,7 +37,7 @@ def list_assets(
 def create_asset(
     req: AssetCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = asset_service.create_asset(db, user, req)
     record_activity(db, user, "create", "asset", asset.id, f"添加资产「{asset.name}」", asset.purchase_price)
@@ -48,7 +48,7 @@ def create_asset(
 def get_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = asset_service.get_asset(db, user, asset_id)
     return _to_response(asset)
@@ -59,7 +59,7 @@ def update_asset(
     asset_id: str,
     req: AssetUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = asset_service.update_asset(db, user, asset_id, req)
     return _to_response(asset)
@@ -69,7 +69,7 @@ def update_asset(
 def delete_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset_service.archive_asset(db, user, asset_id)
     return {"detail": "已归档"}
@@ -80,7 +80,7 @@ def update_value(
     asset_id: str,
     req: AssetValueUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = asset_service.update_asset_value(db, user, asset_id, req.current_value)
     return _to_response(asset)
@@ -91,7 +91,7 @@ def sell_asset(
     asset_id: str,
     req: AssetSellRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     result = asset_service.sell_asset(db, user, asset_id, req)
     record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result['name']}」", req.sell_price)
@@ -102,7 +102,7 @@ def sell_asset(
 def retire_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = asset_service.retire_asset(db, user, asset_id)
     record_activity(db, user, "retire", "asset", asset_id, f"退役资产「{asset.name}」")
@@ -113,7 +113,7 @@ def retire_asset(
 def reactivate_asset(
     asset_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     asset = asset_service.reactivate_asset(db, user, asset_id)
     record_activity(db, user, "reactivate", "asset", asset_id, f"恢复资产「{asset.name}」")
@@ -124,7 +124,7 @@ def reactivate_asset(
 def get_valuations(
     asset_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     return asset_service.get_valuations(db, user, asset_id)
 
@@ -134,7 +134,7 @@ def get_valuations(
 def batch_archive_assets(
     req: BatchAssetRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     """批量归档资产"""
     return asset_service.batch_archive_assets(db, user, req.asset_ids)
@@ -144,7 +144,7 @@ def batch_archive_assets(
 def batch_update_category(
     req: BatchUpdateCategoryRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     """批量修改资产分类"""
     return asset_service.batch_update_category(db, user, req.asset_ids, req.category_id)
@@ -154,7 +154,7 @@ def batch_update_category(
 def batch_update_tags(
     req: BatchUpdateTagsRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     """批量修改资产标签"""
     return asset_service.batch_update_tags(db, user, req.asset_ids, req.tag_ids)
@@ -164,7 +164,7 @@ def batch_update_tags(
 def batch_update_status(
     req: BatchUpdateStatusRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     """批量修改资产状态"""
     return asset_service.batch_update_status(db, user, req.asset_ids, req.status)
@@ -174,7 +174,7 @@ def batch_update_status(
 def batch_export_assets(
     req: BatchAssetRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_adult),
 ):
     """批量导出资产数据"""
     return asset_service.batch_export_assets(db, user, req.asset_ids)

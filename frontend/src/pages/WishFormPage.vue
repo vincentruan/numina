@@ -3,8 +3,8 @@
     <van-nav-bar
       :title="isEdit ? '编辑心愿' : '添加心愿'"
       left-arrow
-      @click-left="$router.back()"
       :right-text="isEdit ? '删除' : ''"
+      @click-left="$router.back()"
       @click-right="onDelete"
     />
 

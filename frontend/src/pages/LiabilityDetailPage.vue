@@ -70,7 +70,7 @@
         <van-button block type="primary" plain @click="$router.push(`/liabilities/${liability.id}/edit`)">
           编辑
         </van-button>
-        <van-button block type="danger" plain @click="onDelete" :loading="deleting">
+        <van-button block type="danger" plain :loading="deleting" @click="onDelete">
           删除
         </van-button>
       </div>
