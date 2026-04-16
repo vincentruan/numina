@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.user import User
 from app.schemas.children import (
     ChildBindTokenResponse,
@@ -17,9 +18,7 @@ router = APIRouter(prefix="/family", tags=["children"])
 
 def _require_owner(user: User) -> User:
     if user.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="只有家庭创建者可以执行此操作"
-        )
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     return user
 
 

@@ -157,8 +157,8 @@ def _get_family_id(client) -> str:
         "family_name": "Test Family",
     })
     assert resp.status_code == 200
-    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {resp.json()['access_token']}"})
-    return me.json()["family_id"]
+    me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {resp.json()['data']['access_token']}"})
+    return me.json()["data"]["family_id"]
 
 
 VALID_PIN = ["🐱", "🐶", "🐸", "🦊"]
@@ -178,7 +178,7 @@ class TestChildPinAuth:
             "pin_sequence": VALID_PIN,
         })
         assert resp.status_code == 200
-        data = resp.json()
+        data = resp.json()["data"]
         assert "access_token" in data
         assert "refresh_token" in data
         # Child cookies should be set
@@ -221,7 +221,7 @@ class TestChildPinAuth:
         # Use the child_refresh_token cookie set during login
         refresh_resp = client.post("/api/v1/auth/child/refresh")
         assert refresh_resp.status_code == 200
-        assert refresh_resp.json()["message"] == "token refreshed"
+        assert refresh_resp.json()["data"]["message"] == "token refreshed"
         assert "child_access_token" in refresh_resp.cookies
 
     def test_wrong_pin_returns_401(self, client, db):
@@ -258,7 +258,7 @@ class TestChildPinAuth:
             "pin_sequence": VALID_PIN,
         })
         assert resp.status_code == 423
-        assert "locked_until" in resp.json()["detail"]
+        assert "locked_until" in resp.json()["details"]
 
     def test_nonexistent_child_id_returns_401(self, client, db):
         """Non-existent child_id returns 401 (same as wrong PIN)."""
@@ -313,7 +313,7 @@ class TestChildPinAuth:
             "password": "ParentPass123",
         })
         assert resp.status_code == 200
-        assert resp.json()["message"] == "verified"
+        assert resp.json()["data"]["message"] == "verified"
 
     def test_verify_parent_password_wrong_password_returns_401(self, client, db):
         """verify-parent with wrong password returns 401."""
@@ -330,7 +330,7 @@ class TestChildPinAuth:
             "password": "WrongPassword999",
         })
         assert resp.status_code == 401
-        assert resp.json()["detail"] == "密码错误"
+        assert resp.json()["message"] == "密码错误"
 
     def test_pin_login_succeeds_after_lockout_expires(self, client, db):
         """After lockout window passes, child can login again and fail count resets."""

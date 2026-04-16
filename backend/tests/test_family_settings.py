@@ -11,12 +11,12 @@ def child_token(client, auth_headers):
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
-    child_id = resp.json()["id"]
+    child_id = resp.json()["data"]["id"]
     login = client.post("/api/v1/auth/child/login", json={
         "child_id": child_id,
         "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
     })
-    token = login.json()["access_token"]
+    token = login.json()["data"]["access_token"]
     client.cookies.delete("access_token")
     return {"Authorization": f"Bearer {token}"}
 
@@ -24,19 +24,19 @@ def child_token(client, auth_headers):
 def test_owner_can_update_auto_approve_hours(client, auth_headers):
     resp = client.patch("/api/v1/family/settings", headers=auth_headers, json={"auto_approve_hours": 48})
     assert resp.status_code == 200
-    assert resp.json()["auto_approve_hours"] == 48
+    assert resp.json()["data"]["auto_approve_hours"] == 48
 
 
 def test_auto_approve_hours_min_boundary(client, auth_headers):
     resp = client.patch("/api/v1/family/settings", headers=auth_headers, json={"auto_approve_hours": 1})
     assert resp.status_code == 200
-    assert resp.json()["auto_approve_hours"] == 1
+    assert resp.json()["data"]["auto_approve_hours"] == 1
 
 
 def test_auto_approve_hours_max_boundary(client, auth_headers):
     resp = client.patch("/api/v1/family/settings", headers=auth_headers, json={"auto_approve_hours": 168})
     assert resp.status_code == 200
-    assert resp.json()["auto_approve_hours"] == 168
+    assert resp.json()["data"]["auto_approve_hours"] == 168
 
 
 def test_auto_approve_hours_too_low(client, auth_headers):

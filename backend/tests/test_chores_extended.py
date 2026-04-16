@@ -16,12 +16,12 @@ def child_user(client, auth_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert resp.status_code == 201
-    child = resp.json()
+    child = resp.json()["data"]
     login = client.post("/api/v1/auth/child/login", json={
         "child_id": child["id"],
         "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
     })
-    token = login.json()["access_token"]
+    token = login.json()["data"]["access_token"]
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -34,12 +34,12 @@ def child_user2(client, auth_headers):
         "pin": ["🐶", "🌟", "🎈", "🐱"],
     })
     assert resp.status_code == 201
-    child = resp.json()
+    child = resp.json()["data"]
     login = client.post("/api/v1/auth/child/login", json={
         "child_id": child["id"],
         "pin_sequence": ["🐶", "🌟", "🎈", "🐱"],
     })
-    token = login.json()["access_token"]
+    token = login.json()["data"]["access_token"]
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -55,7 +55,7 @@ def daily_template(client, auth_headers, child_user):
         "assignee_ids": [child_user["id"]],
     })
     assert resp.status_code == 201
-    return resp.json()
+    return resp.json()["data"]
 
 
 @pytest.fixture
@@ -69,7 +69,7 @@ def weekly_template(client, auth_headers, child_user):
         "assignee_ids": [child_user["id"]],
     })
     assert resp.status_code == 201
-    return resp.json()
+    return resp.json()["data"]
 
 
 @pytest.fixture
@@ -83,13 +83,13 @@ def pool_template(client, auth_headers):
         "assignee_ids": [],
     })
     assert resp.status_code == 201
-    return resp.json()
+    return resp.json()["data"]
 
 
 def _get_instance(client, child_headers, date):
     resp = client.get(f"/api/v1/child/chores?date={date}", headers=child_headers)
     assert resp.status_code == 200
-    return resp.json()[0]
+    return resp.json()["data"][0]
 
 
 def _complete_and_approve(client, child_headers, auth_headers, instance_id):
@@ -105,7 +105,7 @@ def test_streak_first_approval_is_one(client, child_user, daily_template, auth_h
     inst = _get_instance(client, child_user["headers"], "2026-04-15")
     _complete_and_approve(client, child_user["headers"], auth_headers, inst["id"])
     resp = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"])
-    approved = next(i for i in resp.json() if i["id"] == inst["id"])
+    approved = next(i for i in resp.json()["data"] if i["id"] == inst["id"])
     assert approved["streak_count"] == 1
 
 
@@ -117,7 +117,7 @@ def test_streak_consecutive_days_increments(client, child_user, daily_template, 
     inst2 = _get_instance(client, child_user["headers"], "2026-04-16")
     _complete_and_approve(client, child_user["headers"], auth_headers, inst2["id"])
     resp = client.get("/api/v1/child/chores?date=2026-04-16", headers=child_user["headers"])
-    approved = next(i for i in resp.json() if i["id"] == inst2["id"])
+    approved = next(i for i in resp.json()["data"] if i["id"] == inst2["id"])
     assert approved["streak_count"] == 2
 
 
@@ -129,7 +129,7 @@ def test_streak_non_consecutive_resets_to_one(client, child_user, daily_template
     inst3 = _get_instance(client, child_user["headers"], "2026-04-17")
     _complete_and_approve(client, child_user["headers"], auth_headers, inst3["id"])
     resp = client.get("/api/v1/child/chores?date=2026-04-17", headers=child_user["headers"])
-    approved = next(i for i in resp.json() if i["id"] == inst3["id"])
+    approved = next(i for i in resp.json()["data"] if i["id"] == inst3["id"])
     assert approved["streak_count"] == 1
 
 
@@ -141,7 +141,7 @@ def test_streak_weekly_consecutive_increments(client, child_user, weekly_templat
     inst2 = _get_instance(client, child_user["headers"], "2026-04-20")
     _complete_and_approve(client, child_user["headers"], auth_headers, inst2["id"])
     resp = client.get("/api/v1/child/chores?date=2026-04-20", headers=child_user["headers"])
-    approved = next(i for i in resp.json() if i["id"] == inst2["id"])
+    approved = next(i for i in resp.json()["data"] if i["id"] == inst2["id"])
     assert approved["streak_count"] == 2
 
 
@@ -164,7 +164,7 @@ def test_auto_approve_triggers_on_list(client, child_user, daily_template, auth_
     resp = client.get("/api/v1/family/chore-approvals", headers=auth_headers)
     assert resp.status_code == 200
     # Instance should NOT appear in pending (it was auto-approved)
-    pending_ids = {i["id"] for i in resp.json()}
+    pending_ids = {i["id"] for i in resp.json()["data"]}
     assert inst["id"] not in pending_ids
 
     # Verify coin transaction was written
@@ -174,10 +174,10 @@ def test_auto_approve_triggers_on_list(client, child_user, daily_template, auth_
         "child_id": child_user["id"],
         "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
     })
-    child_token = login.json()["access_token"]
+    child_token = login.json()["data"]["access_token"]
     child_headers = {"Authorization": f"Bearer {child_token}"}
     bal_resp = client.get("/api/v1/child/coins/balance", headers=child_headers)
-    assert bal_resp.json()["balance"] == 5  # coin_reward from daily_template
+    assert bal_resp.json()["data"]["balance"] == 5  # coin_reward from daily_template
 
 
 # ---------------------------------------------------------------------------
@@ -207,10 +207,10 @@ def test_pool_template_visible_to_all_children(client, child_user, child_user2, 
     assert resp1.status_code == 200
     assert resp2.status_code == 200
     # Both children see the pool chore
-    assert len(resp1.json()) == 1
-    assert len(resp2.json()) == 1
+    assert len(resp1.json()["data"]) == 1
+    assert len(resp2.json()["data"]) == 1
     # Pool chores share the same instance (first-come-first-served)
-    assert resp1.json()[0]["id"] == resp2.json()[0]["id"]
+    assert resp1.json()["data"][0]["id"] == resp2.json()["data"][0]["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -223,8 +223,8 @@ def test_weekly_same_week_idempotent(client, child_user, weekly_template):
     resp_fri = client.get("/api/v1/child/chores?date=2026-04-17", headers=child_user["headers"])
     assert resp_mon.status_code == 200
     assert resp_fri.status_code == 200
-    ids_mon = {i["id"] for i in resp_mon.json()}
-    ids_fri = {i["id"] for i in resp_fri.json()}
+    ids_mon = {i["id"] for i in resp_mon.json()["data"]}
+    ids_fri = {i["id"] for i in resp_fri.json()["data"]}
     assert ids_mon == ids_fri
 
 
@@ -241,7 +241,7 @@ def test_parent_grant_cross_family_rejected(client, auth_headers):
         "password": "TestPass123",
         "family_name": "Other Family",
     })
-    other_token = r.json()["access_token"]
+    other_token = r.json()["data"]["access_token"]
     other_headers = {"Authorization": f"Bearer {other_token}"}
     # Clear cookie so first family's auth_headers still works via Bearer
     client.cookies.delete("access_token")
@@ -252,7 +252,7 @@ def test_parent_grant_cross_family_rejected(client, auth_headers):
         "avatar_color": "#AABBCC",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
-    other_child_id = child_resp.json()["id"]
+    other_child_id = child_resp.json()["data"]["id"]
 
     # Try to grant coins to other family's child using first family's parent token
     resp = client.post("/api/v1/family/coins/grant", headers=auth_headers, json={

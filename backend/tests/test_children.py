@@ -19,7 +19,7 @@ def _register_owner(client):
         "family_name": "Test Family",
     })
     assert resp.status_code == 200
-    return {"Authorization": f"Bearer {resp.json()['access_token']}"}
+    return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
 
 
 def _register_member(client):
@@ -31,11 +31,11 @@ def _register_member(client):
         "family_name": "Member Family",
     })
     assert owner_resp.status_code == 200
-    owner_headers = {"Authorization": f"Bearer {owner_resp.json()['access_token']}"}
+    owner_headers = {"Authorization": f"Bearer {owner_resp.json()['data']['access_token']}"}
 
     # Get invite code
     family_resp = client.get("/api/v1/family/info", headers=owner_headers)
-    invite_code = family_resp.json()["invite_code"]
+    invite_code = family_resp.json()["data"]["invite_code"]
 
     member_resp = client.post("/api/v1/auth/family/join", json={
         "username": "member1",
@@ -44,7 +44,7 @@ def _register_member(client):
         "invite_code": invite_code,
     })
     assert member_resp.status_code == 200
-    return {"Authorization": f"Bearer {member_resp.json()['access_token']}"}
+    return {"Authorization": f"Bearer {member_resp.json()['data']['access_token']}"}
 
 
 def _create_child(client, headers, pin=None):
@@ -64,7 +64,7 @@ def test_owner_creates_child(client):
     headers = _register_owner(client)
     resp = _create_child(client, headers)
     assert resp.status_code == 201
-    data = resp.json()
+    data = resp.json()["data"]
     assert data["display_name"] == "小明"
     assert data["is_active"] is True
     assert "id" in data
@@ -75,7 +75,7 @@ def test_child_appears_in_list(client):
     _create_child(client, headers)
     resp = client.get("/api/v1/family/children", headers=headers)
     assert resp.status_code == 200
-    children = resp.json()
+    children = resp.json()["data"]
     assert len(children) == 1
     assert children[0]["display_name"] == "小明"
 
@@ -86,13 +86,13 @@ def test_child_appears_in_list(client):
 
 def test_owner_resets_child_pin(client):
     headers = _register_owner(client)
-    child_id = _create_child(client, headers).json()["id"]
+    child_id = _create_child(client, headers).json()["data"]["id"]
 
     resp = client.patch(f"/api/v1/family/children/{child_id}", json={
         "pin": VALID_PIN_2,
     }, headers=headers)
     assert resp.status_code == 200
-    assert resp.json()["id"] == child_id
+    assert resp.json()["data"]["id"] == child_id
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ def test_owner_resets_child_pin(client):
 
 def test_owner_unlocks_child(client, db):
     headers = _register_owner(client)
-    child_id = _create_child(client, headers).json()["id"]
+    child_id = _create_child(client, headers).json()["data"]["id"]
 
     # Manually lock the child in DB
     from app.models.user import User
@@ -113,7 +113,7 @@ def test_owner_unlocks_child(client, db):
 
     resp = client.post(f"/api/v1/family/children/{child_id}/unlock", headers=headers)
     assert resp.status_code == 200
-    assert resp.json()["message"] == "已解锁"
+    assert resp.json()["data"]["message"] == "已解锁"
 
     db.refresh(child)
     assert child.pin_locked_until is None
@@ -126,7 +126,7 @@ def test_owner_unlocks_child(client, db):
 
 def test_owner_force_logout_child(client, db):
     headers = _register_owner(client)
-    child_id = _create_child(client, headers).json()["id"]
+    child_id = _create_child(client, headers).json()["data"]["id"]
 
     from app.models.user import User
     child = db.query(User).filter(User.id == child_id).first()
@@ -134,7 +134,7 @@ def test_owner_force_logout_child(client, db):
 
     resp = client.post(f"/api/v1/family/children/{child_id}/force-logout", headers=headers)
     assert resp.status_code == 200
-    assert resp.json()["message"] == "已强制退出"
+    assert resp.json()["data"]["message"] == "已强制退出"
 
     db.refresh(child)
     assert child.token_version == original_version + 1
@@ -148,7 +148,7 @@ def test_get_family_children_nonexistent_family_returns_empty(client):
     """Non-existent family_id returns empty list (not 404)."""
     resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
     assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.json()["data"] == []
 
 
 def test_bind_token_and_get_family_children(client):
@@ -157,19 +157,19 @@ def test_bind_token_and_get_family_children(client):
 
     # Get family_id
     family_resp = client.get("/api/v1/family/info", headers=headers)
-    family_id = family_resp.json()["id"]
+    family_id = family_resp.json()["data"]["id"]
 
     # Generate bind token
     token_resp = client.post("/api/v1/family/child-bind-token", headers=headers)
     assert token_resp.status_code == 201
-    token_data = token_resp.json()
+    token_data = token_resp.json()["data"]
     assert "token" in token_data
     assert token_data["bind_url"].startswith("/child/bind?token=")
 
     # GET children without auth
     children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children")
     assert children_resp.status_code == 200
-    children = children_resp.json()
+    children = children_resp.json()["data"]
     assert len(children) == 1
     assert children[0]["display_name"] == "小明"
 
@@ -191,7 +191,7 @@ def test_member_cannot_create_child(client):
 def test_bind_token_used_twice(client, db):
     headers = _register_owner(client)
     token_resp = client.post("/api/v1/family/child-bind-token", headers=headers)
-    token_str = token_resp.json()["token"]
+    token_str = token_resp.json()["data"]["token"]
 
     # Use it once via service directly
     from app.services.children import get_bind_info
@@ -211,7 +211,7 @@ def test_bind_token_used_twice(client, db):
 def test_expired_bind_token(client, db):
     headers = _register_owner(client)
     token_resp = client.post("/api/v1/family/child-bind-token", headers=headers)
-    token_str = token_resp.json()["token"]
+    token_str = token_resp.json()["data"]["token"]
 
     # Expire it manually
     from app.models.child_bind_token import ChildBindToken
@@ -256,7 +256,7 @@ def test_three_children_all_returned(client):
 
     resp = client.get("/api/v1/family/children", headers=headers)
     assert resp.status_code == 200
-    assert len(resp.json()) == 3
+    assert len(resp.json()["data"]) == 3
 
 
 # ---------------------------------------------------------------------------
@@ -271,14 +271,14 @@ def _get_child_token(client) -> str:
     """
     owner_headers = _register_owner(client)
     child_resp = _create_child(client, owner_headers)
-    child_id = child_resp.json()["id"]
+    child_id = child_resp.json()["data"]["id"]
 
     login_resp = client.post("/api/v1/auth/child/login", json={
         "child_id": child_id,
         "pin_sequence": VALID_PIN,
     })
     assert login_resp.status_code == 200
-    child_token = login_resp.json()["access_token"]
+    child_token = login_resp.json()["data"]["access_token"]
 
     # Clear all cookies so the adult access_token cookie doesn't shadow
     # the child Bearer token in subsequent requests.
@@ -311,14 +311,14 @@ class TestRequireAdult:
         # C3 fix: child tokens must NOT be able to enumerate siblings
         owner_headers = _register_owner(client)
         child_resp = _create_child(client, owner_headers)
-        child_id = child_resp.json()["id"]
+        child_id = child_resp.json()["data"]["id"]
 
         login_resp = client.post("/api/v1/auth/child/login", json={
             "child_id": child_id,
             "pin_sequence": VALID_PIN,
         })
         assert login_resp.status_code == 200
-        child_token = login_resp.json()["access_token"]
+        child_token = login_resp.json()["data"]["access_token"]
 
         # Clear adult cookies so child Bearer token is used
         client.cookies.clear()

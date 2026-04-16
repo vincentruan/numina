@@ -17,7 +17,7 @@ def child_user(client, auth_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert resp.status_code == 201
-    child = resp.json()
+    child = resp.json()["data"]
 
     # Login as child
     login_resp = client.post("/api/v1/auth/child/login", json={
@@ -25,7 +25,7 @@ def child_user(client, auth_headers):
         "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert login_resp.status_code == 200
-    token = login_resp.json()["access_token"]
+    token = login_resp.json()["data"]["access_token"]
     # Remove parent's access_token cookie so child Bearer token isn't shadowed
     client.cookies.delete("access_token")
     return {
@@ -46,7 +46,7 @@ def daily_template(client, auth_headers, child_user):
         "assignee_ids": [child_user["id"]],
     })
     assert resp.status_code == 201
-    return resp.json()
+    return resp.json()["data"]
 
 
 @pytest.fixture
@@ -61,7 +61,7 @@ def pool_template(client, auth_headers):
         "assignee_ids": [],
     })
     assert resp.status_code == 201
-    return resp.json()
+    return resp.json()["data"]
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ def test_create_template_assigned(client, auth_headers, child_user):
         "assignee_ids": [child_user["id"]],
     })
     assert resp.status_code == 201
-    data = resp.json()
+    data = resp.json()["data"]
     assert data["name"] == "刷牙"
     assert data["coin_reward"] == 2
     assert data["frequency"] == "daily"
@@ -94,7 +94,7 @@ def test_create_template_pool(client, auth_headers):
         "assignee_ids": [],
     })
     assert resp.status_code == 201
-    assert resp.json()["assignment_type"] == "pool"
+    assert resp.json()["data"]["assignment_type"] == "pool"
 
 
 def test_create_template_assigned_requires_assignees(client, auth_headers):
@@ -133,7 +133,7 @@ def test_child_cannot_create_template(client, child_user):
 def test_list_templates(client, auth_headers, daily_template):
     resp = client.get("/api/v1/family/chore-templates", headers=auth_headers)
     assert resp.status_code == 200
-    assert len(resp.json()) >= 1
+    assert len(resp.json()["data"]) >= 1
 
 
 def test_update_template(client, auth_headers, daily_template):
@@ -143,8 +143,8 @@ def test_update_template(client, auth_headers, daily_template):
         json={"name": "大扫除", "coin_reward": 10},
     )
     assert resp.status_code == 200
-    assert resp.json()["name"] == "大扫除"
-    assert resp.json()["coin_reward"] == 10
+    assert resp.json()["data"]["name"] == "大扫除"
+    assert resp.json()["data"]["coin_reward"] == 10
 
 
 def test_toggle_template(client, auth_headers, daily_template):
@@ -153,7 +153,7 @@ def test_toggle_template(client, auth_headers, daily_template):
         headers=auth_headers,
     )
     assert resp.status_code == 200
-    assert resp.json()["is_active"] is False
+    assert resp.json()["data"]["is_active"] is False
 
 
 def test_delete_template(client, auth_headers, daily_template):
@@ -171,7 +171,7 @@ def test_delete_template(client, auth_headers, daily_template):
 def test_get_chores_creates_instances(client, child_user, daily_template):
     resp = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"])
     assert resp.status_code == 200
-    instances = resp.json()
+    instances = resp.json()["data"]
     assert len(instances) == 1
     assert instances[0]["chore_name"] == "扫地"
     assert instances[0]["status"] == "available"
@@ -183,8 +183,8 @@ def test_get_chores_idempotent(client, child_user, daily_template):
     resp2 = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"])
     assert resp1.status_code == 200
     assert resp2.status_code == 200
-    ids1 = {i["id"] for i in resp1.json()}
-    ids2 = {i["id"] for i in resp2.json()}
+    ids1 = {i["id"] for i in resp1.json()["data"]}
+    ids2 = {i["id"] for i in resp2.json()["data"]}
     assert ids1 == ids2
 
 
@@ -196,14 +196,14 @@ def test_disabled_template_not_generated(client, auth_headers, child_user, daily
     )
     resp = client.get("/api/v1/child/chores?date=2026-04-16", headers=child_user["headers"])
     assert resp.status_code == 200
-    assert len(resp.json()) == 0
+    assert len(resp.json()["data"]) == 0
 
 
 def test_pool_template_generates_per_child(client, auth_headers, child_user, pool_template):
     """Pool template generates an instance for the child."""
     resp = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"])
     assert resp.status_code == 200
-    names = [i["chore_name"] for i in resp.json()]
+    names = [i["chore_name"] for i in resp.json()["data"]]
     assert "浇花" in names
 
 
@@ -212,16 +212,16 @@ def test_pool_template_generates_per_child(client, auth_headers, child_user, poo
 # ---------------------------------------------------------------------------
 
 def test_mark_complete(client, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
 
     resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
     assert resp.status_code == 200
-    assert resp.json()["status"] == "pending_approval"
+    assert resp.json()["data"]["status"] == "pending_approval"
 
 
 def test_mark_complete_twice_fails(client, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
     resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
@@ -229,34 +229,34 @@ def test_mark_complete_twice_fails(client, child_user, daily_template):
 
 
 def test_approve_instance(client, auth_headers, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
 
     resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["status"] == "approved"
+    assert resp.json()["data"]["status"] == "approved"
 
     # Balance should increase
     balance_resp = client.get("/api/v1/child/coins/balance", headers=child_user["headers"])
     assert balance_resp.status_code == 200
-    assert balance_resp.json()["balance"] == 5  # coin_reward
+    assert balance_resp.json()["data"]["balance"] == 5  # coin_reward
 
 
 def test_approve_writes_coin_transaction(client, auth_headers, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
     client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=auth_headers)
 
-    ledger = client.get("/api/v1/child/coins/ledger", headers=child_user["headers"]).json()
+    ledger = client.get("/api/v1/child/coins/ledger", headers=child_user["headers"]).json()["data"]
     assert len(ledger) == 1
     assert ledger[0]["amount"] == 5
     assert ledger[0]["transaction_type"] == "chore_earn"
 
 
 def test_reject_instance(client, auth_headers, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
 
@@ -266,11 +266,11 @@ def test_reject_instance(client, auth_headers, child_user, daily_template):
         json={"return_to_redo": False},
     )
     assert resp.status_code == 200
-    assert resp.json()["status"] == "rejected"
+    assert resp.json()["data"]["status"] == "rejected"
 
 
 def test_reject_return_to_redo(client, auth_headers, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
 
@@ -280,11 +280,11 @@ def test_reject_return_to_redo(client, auth_headers, child_user, daily_template)
         json={"return_to_redo": True},
     )
     assert resp.status_code == 200
-    assert resp.json()["status"] == "available"
+    assert resp.json()["data"]["status"] == "available"
 
 
 def test_child_cannot_approve(client, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
 
@@ -299,7 +299,7 @@ def test_child_cannot_approve(client, child_user, daily_template):
 def test_balance_starts_at_zero(client, child_user):
     resp = client.get("/api/v1/child/coins/balance", headers=child_user["headers"])
     assert resp.status_code == 200
-    assert resp.json()["balance"] == 0
+    assert resp.json()["data"]["balance"] == 0
 
 
 def test_child_cannot_view_other_childs_ledger(client, auth_headers, child_user):
@@ -315,7 +315,7 @@ def test_child_cannot_view_other_childs_ledger(client, auth_headers, child_user)
     # child_user tries to get balance — should only see their own
     resp = client.get("/api/v1/child/coins/balance", headers=child_user["headers"])
     assert resp.status_code == 200
-    assert resp.json()["balance"] == 0  # their own balance, not other child's
+    assert resp.json()["data"]["balance"] == 0  # their own balance, not other child's
 
 
 def test_parent_grant(client, auth_headers, child_user):
@@ -325,9 +325,9 @@ def test_parent_grant(client, auth_headers, child_user):
         "reason": "表现很棒！",
     })
     assert resp.status_code == 201
-    assert resp.json()["amount"] == 10
+    assert resp.json()["data"]["amount"] == 10
 
-    balance = client.get("/api/v1/child/coins/balance", headers=child_user["headers"]).json()
+    balance = client.get("/api/v1/child/coins/balance", headers=child_user["headers"]).json()["data"]
     assert balance["balance"] == 10
 
 
@@ -341,10 +341,10 @@ def test_parent_grant_invalid_amount(client, auth_headers, child_user):
 
 
 def test_ledger_relative_time(client, auth_headers, child_user, daily_template):
-    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
     client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=auth_headers)
 
-    ledger = client.get("/api/v1/child/coins/ledger", headers=child_user["headers"]).json()
+    ledger = client.get("/api/v1/child/coins/ledger", headers=child_user["headers"]).json()["data"]
     assert ledger[0]["relative_time"] in ("今天", "昨天") or "天前" in ledger[0]["relative_time"]

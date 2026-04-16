@@ -181,7 +181,7 @@ def update_family_settings(
     user: User = Depends(require_adult),
 ):
     if user.role != "owner":
-        raise HTTPException(status_code=403, detail="只有家庭创建者可以修改家庭设置")
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     family = db.query(Family).filter_by(id=user.family_id).first()
     if body.auto_approve_hours is not None:
         family.auto_approve_hours = body.auto_approve_hours
