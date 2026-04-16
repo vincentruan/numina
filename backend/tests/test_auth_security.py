@@ -550,8 +550,8 @@ class TestLoginErrorMessage:
         # Both should return 401 with same error message
         assert response1.status_code == 401
         assert response2.status_code == 401
-        assert response1.json()["detail"] == response2.json()["detail"]
-        assert response1.json()["detail"] == "用户名或密码错误"
+        assert response1.json()["message"] == response2.json()["message"]
+        assert response1.json()["message"] == "用户名或密码错误"
 
 
 # ---------------------------------------------------------------------------
