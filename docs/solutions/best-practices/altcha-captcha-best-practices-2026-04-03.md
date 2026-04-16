@@ -55,7 +55,7 @@ async def verify_captcha(request: Request) -> None:
 
     if cache.get(cache_key):
         _log_security_event(SecurityEventType.CAPTCHA_REPLAY_ATTACK, client_id=...)
-        raise HTTPException(status_code=400, detail="验证码验证失败，请重试")
+        raise AppError(ErrorCode.CAPTCHA_REPLAY)  # → 400, localized via zh-CN/en-US
 
     # Store hash with TTL matching challenge expiry (typically 1 hour)
     cache.set(cache_key, "1", ttl_seconds=3600)
@@ -66,10 +66,7 @@ async def verify_captcha(request: Request) -> None:
 ```python
 except Exception as e:
     logger.error(f"Captcha cache error: {e}")
-    raise HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="验证服务暂时不可用",
-    )
+    raise AppError(ErrorCode.CAPTCHA_SERVICE_UNAVAILABLE)  # → 503, localized
 ```
 
 ### 2. Endpoint-Specific Difficulty Tuning

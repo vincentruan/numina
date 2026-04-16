@@ -3,12 +3,13 @@
 import hashlib
 import logging
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.logging_config import get_logger
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.services.cache import get_captcha_payload_cache
 from app.services.security_log import _log_security_event, SecurityEventType
 
@@ -29,8 +30,10 @@ async def verify_captcha(
         db: Database session (unused but kept for dependency injection pattern)
 
     Raises:
-        HTTPException: 400 with specific error message if captcha verification fails
-        HTTPException: 503 if captcha service (cache) is unavailable
+        AppError: CAPTCHA_MISSING if captcha is absent or empty
+        AppError: CAPTCHA_INVALID if captcha verification fails
+        AppError: CAPTCHA_REPLAY if captcha payload was already used
+        AppError: CAPTCHA_SERVICE_UNAVAILABLE if captcha cache is unavailable
     """
     # Skip verification in development mode
     if settings.ENVIRONMENT != "production":
@@ -41,10 +44,7 @@ async def verify_captcha(
     try:
         body = await request.json()
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请完成验证码验证",
-        )
+        raise AppError(ErrorCode.CAPTCHA_MISSING)
 
     altcha = body.get("altcha")
 
@@ -55,10 +55,7 @@ async def verify_captcha(
             client_id=request.client.host if request.client else "unknown",
             error_type="missing",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="请完成验证码验证",
-        )
+        raise AppError(ErrorCode.CAPTCHA_MISSING)
 
     # Handle empty altcha field
     if altcha == "":
@@ -67,10 +64,7 @@ async def verify_captcha(
             client_id=request.client.host if request.client else "unknown",
             error_type="empty",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码不能为空",
-        )
+        raise AppError(ErrorCode.CAPTCHA_MISSING)
 
     # Verify the solution
     from altcha import verify_solution
@@ -83,10 +77,7 @@ async def verify_captcha(
             client_id=request.client.host if request.client else "unknown",
             error_type="invalid",
         )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="验证码验证失败，请重试",
-        )
+        raise AppError(ErrorCode.CAPTCHA_INVALID)
 
     # R23: Replay attack prevention
     # Compute SHA-256 hash of payload and check if already used
@@ -100,18 +91,12 @@ async def verify_captcha(
                 SecurityEventType.CAPTCHA_REPLAY_ATTACK,
                 client_id=request.client.host if request.client else "unknown",
             )
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="验证码验证失败，请重试",
-            )
+            raise AppError(ErrorCode.CAPTCHA_REPLAY)
         # Store hash with 1 hour TTL (matches challenge expiry)
         cache.set(cache_key, "1", ttl_seconds=3600)
-    except HTTPException:
+    except AppError:
         raise
     except Exception as e:
         # Fail-closed: if cache unavailable, reject request
         logger.error(f"Captcha cache error: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="验证服务暂时不可用",
-        )
+        raise AppError(ErrorCode.CAPTCHA_SERVICE_UNAVAILABLE)
