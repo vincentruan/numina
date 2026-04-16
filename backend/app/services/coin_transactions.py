@@ -10,6 +10,18 @@ from app.models.user import User
 from app.schemas.chore import GrantRequest
 
 
+def get_total_earned(db: Session, child_user_id: str, family_id: str | None = None) -> int:
+    """Return total coins ever earned (sum of positive transactions only)."""
+    q = db.query(func.sum(CoinTransaction.amount)).filter(
+        CoinTransaction.child_user_id == child_user_id,
+        CoinTransaction.amount > 0,
+    )
+    if family_id is not None:
+        q = q.filter(CoinTransaction.family_id == family_id)
+    result = q.scalar()
+    return result or 0
+
+
 def get_balance(db: Session, child_user_id: str) -> int:
     """Return current coin balance for a child. Always returns an integer."""
     result = db.query(func.sum(CoinTransaction.amount)).filter(

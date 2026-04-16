@@ -52,6 +52,7 @@ from app.models.child_bind_token import ChildBindToken  # noqa: F401
 from app.models.chore import ChoreTemplate, ChoreInstance  # noqa: F401
 from app.models.coin_transaction import CoinTransaction  # noqa: F401
 from app.models.child_wish import ChildWish  # noqa: F401
+from app.models.child_milestone import ChildMilestone  # noqa: F401
 from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
@@ -61,6 +62,7 @@ from app.routers import children as children_router
 from app.routers import chores as chores_router
 from app.routers import coins as coins_router
 from app.routers import child_wishes as child_wishes_router
+from app.routers import milestones as milestones_router
 from app.routers import ai_config as ai_config_router
 from app.routers import ai_disposal as ai_disposal_router
 from app.routers import ai_internal as ai_internal_router
@@ -263,6 +265,7 @@ app.include_router(children_router.router, prefix="/api/v1")
 app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")
 app.include_router(child_wishes_router.router, prefix="/api/v1")
+app.include_router(milestones_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))

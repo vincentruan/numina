@@ -54,6 +54,7 @@ class ChoreInstance(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     streak_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    streak_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     template = relationship("ChoreTemplate", back_populates="instances")

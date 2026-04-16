@@ -124,6 +124,7 @@ class ParentWishResponse(BaseModel):
     realized_asset_id: str | None
     created_at: datetime
     updated_at: datetime
+    milestone_triggered: str | None = None
 
 
 class ChildWishStatsSimItem(BaseModel):

@@ -15,7 +15,11 @@ from app.models.family import Family
 logger = logging.getLogger(__name__)
 
 
-def _fallback_narrative(chore_name: str, coins: int) -> tuple[str, str]:
+def _fallback_narrative(chore_name: str, coins: int, multiplier: float = 1.0) -> tuple[str, str]:
+    if multiplier >= 2.0:
+        return f"你完成了{chore_name}！连续打卡双倍奖励，获得 {coins} 颗星 🔥🔥", "🔥"
+    if multiplier >= 1.5:
+        return f"你完成了{chore_name}！连续打卡加成，获得 {coins} 颗星 🔥", "🔥"
     return f"你完成了{chore_name}！获得 {coins} 颗星", "⭐"
 
 
@@ -25,15 +29,23 @@ async def generate_narrative(
     chore_name: str,
     coins: int,
     streak: int,
+    multiplier: float = 1.0,
 ) -> tuple[str, str]:
     """Return (narrative_text, emoji). Never raises — falls back to fixed template."""
     if not family.ai_enabled:
-        return _fallback_narrative(chore_name, coins)
+        return _fallback_narrative(chore_name, coins, multiplier)
+
+    bonus_hint = ""
+    if multiplier >= 2.0:
+        bonus_hint = "今天是双倍奖励日！"
+    elif multiplier >= 1.5:
+        bonus_hint = "今天是1.5倍奖励日！"
 
     prompt = (
         f"请用不超过30个中文字，为一个叫{child_name}的小朋友写一句鼓励的话。"
         f"他/她刚完成了家务：{chore_name}，获得了{coins}颗星星币。"
         f"{'连续完成了' + str(streak) + '天，' if streak > 1 else ''}"
+        f"{bonus_hint}"
         f"请在句子前加1-3个相关表情符号，格式：表情 文字。只输出这一句话，不要其他内容。"
     )
 

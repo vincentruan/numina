@@ -233,39 +233,36 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
         db.rollback()
         raise HTTPException(status.HTTP_409_CONFLICT, "审批状态已变更，请刷新后重试")
 
-    # Compute streak
+    # Compute streak and multiplier
     streak = _compute_streak(db, instance)
+    multiplier = _get_streak_multiplier(streak)
+    actual_amount = round(instance.coin_reward * multiplier)
+    bonus = actual_amount - instance.coin_reward
     db.execute(
-        text("UPDATE chore_instances SET streak_count=:streak WHERE id=:id"),
-        {"streak": streak, "id": instance_id},
+        text("UPDATE chore_instances SET streak_count=:streak, streak_bonus=:bonus WHERE id=:id"),
+        {"streak": streak, "bonus": bonus, "id": instance_id},
     )
 
-    # Commit status + streak UPDATEs NOW — before coin insert.
-    # This ensures IntegrityError on the coin insert cannot roll back the approval.
-    db.commit()
-    db.refresh(instance)
-
-    # Get family for AI config — guard against deleted rows
+    # Generate narrative before committing (async, 2s timeout, fallback on error)
     family = db.query(Family).filter(Family.id == parent_user.family_id).first()
     child = db.query(User).filter(User.id == instance.child_user_id).first()
     if not family or not child:
-        # Approval already committed; skip narrative, write fallback coin tx
-        narrative, emoji = f"你完成了{instance.chore_name}！获得 {instance.coin_reward} 颗星", "⭐"
+        narrative, emoji = f"你完成了{instance.chore_name}！获得 {actual_amount} 颗星", "⭐"
     else:
-        # Generate narrative (async, 2s timeout, fallback on error)
         narrative, emoji = await generate_narrative(
-            family, child.display_name, instance.chore_name, instance.coin_reward, streak
+            family, child.display_name, instance.chore_name, actual_amount, streak, multiplier
         )
 
-    # Write CoinTransaction (idempotent via unique constraint)
+    # Single commit: status + streak + CoinTransaction all atomic
     tx = CoinTransaction(
         family_id=parent_user.family_id,
         child_user_id=instance.child_user_id,
-        amount=instance.coin_reward,
+        amount=actual_amount,
         transaction_type="chore_earn",
         ref_id=instance_id,
         narrative=narrative,
         narrative_emoji=emoji,
+        streak_bonus=bonus if bonus > 0 else None,
     )
     try:
         db.add(tx)
@@ -274,6 +271,15 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
         db.rollback()  # already written (idempotent)
 
     db.refresh(instance)
+
+    # Check milestones after primary transaction — failure never blocks approval
+    from app.services.milestones import check_and_record_milestones
+    milestone = check_and_record_milestones(
+        db, instance.child_user_id, parent_user.family_id,
+        {"instance": instance},
+    )
+    instance._milestone_triggered = milestone  # transient attr for response
+
     return instance
 
 
@@ -327,31 +333,56 @@ def _auto_approve(db: Session, instance: ChoreInstance, family: Family) -> None:
         return  # already processed
 
     streak = _compute_streak(db, instance)
+    multiplier = _get_streak_multiplier(streak)
+    actual_amount = round(instance.coin_reward * multiplier)
+    bonus = actual_amount - instance.coin_reward
     db.execute(
-        text("UPDATE chore_instances SET streak_count=:streak WHERE id=:id"),
-        {"streak": streak, "id": instance.id},
+        text("UPDATE chore_instances SET streak_count=:streak, streak_bonus=:bonus WHERE id=:id"),
+        {"streak": streak, "bonus": bonus, "id": instance.id},
     )
 
-    narrative = f"你完成了{instance.chore_name}！获得 {instance.coin_reward} 颗星"
+    if multiplier >= 2.0:
+        narrative = f"你完成了{instance.chore_name}！连续打卡双倍奖励，获得 {actual_amount} 颗星 🔥🔥"
+    elif multiplier >= 1.5:
+        narrative = f"你完成了{instance.chore_name}！连续打卡加成，获得 {actual_amount} 颗星 🔥"
+    else:
+        narrative = f"你完成了{instance.chore_name}！获得 {actual_amount} 颗星"
     tx = CoinTransaction(
         family_id=family.id,
         child_user_id=instance.child_user_id,
-        amount=instance.coin_reward,
+        amount=actual_amount,
         transaction_type="chore_earn",
         ref_id=instance.id,
         narrative=narrative,
-        narrative_emoji="⭐",
+        narrative_emoji="🔥" if multiplier > 1.0 else "⭐",
+        streak_bonus=bonus if bonus > 0 else None,
     )
     try:
         db.add(tx)
         db.commit()
     except IntegrityError:
         db.rollback()
+        return
+
+    db.refresh(instance)
+
+    # Check milestones — failure never blocks auto-approve
+    from app.services.milestones import check_and_record_milestones
+    check_and_record_milestones(db, instance.child_user_id, family.id, {"instance": instance})
 
 
 # ---------------------------------------------------------------------------
 # streak_count computation
 # ---------------------------------------------------------------------------
+
+
+def _get_streak_multiplier(streak: int) -> float:
+    """Return coin multiplier based on streak count."""
+    if streak >= 14:
+        return 2.0
+    if streak >= 7:
+        return 1.5
+    return 1.0
 
 def _compute_streak(db: Session, instance: ChoreInstance) -> int:
     """Compute streak count based on previous approved instances."""

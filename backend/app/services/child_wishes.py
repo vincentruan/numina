@@ -350,7 +350,16 @@ def realize_child_wish(
         wish.realized_asset_id = asset.id
         db.commit()
         db.refresh(wish)
-        return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+
+        # Check milestones after primary transaction — failure never blocks realize
+        from app.services.milestones import check_and_record_milestones
+        milestone = check_and_record_milestones(
+            db, wish.child_user_id, wish.family_id,
+            {"wish": wish},
+        )
+        resp = _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+        resp.milestone_triggered = milestone
+        return resp
     except HTTPException:
         raise
     except Exception as e:

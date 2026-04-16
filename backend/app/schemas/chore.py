@@ -108,6 +108,8 @@ class ChoreInstanceResponse(BaseModel):
     submitted_at: datetime | None = None
     approved_at: datetime | None = None
     streak_count: int
+    streak_bonus: int = 0
+    milestone_triggered: str | None = None
 
 
 class ApproveRequest(BaseModel):

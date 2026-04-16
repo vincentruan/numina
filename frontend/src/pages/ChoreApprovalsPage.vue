@@ -4,6 +4,8 @@
       <h2>家务审批</h2>
     </div>
 
+    <div v-if="toastMsg" class="bonus-toast">{{ toastMsg }}</div>
+
     <div v-if="loading" class="loading">加载中...</div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -39,6 +41,14 @@ const pending = ref<ChoreInstance[]>([])
 const loading = ref(true)
 const error = ref('')
 const actioningId = ref<string | null>(null)
+const toastMsg = ref('')
+let toastTimer: ReturnType<typeof setTimeout> | null = null
+
+function showToast(msg: string) {
+  toastMsg.value = msg
+  if (toastTimer) clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastMsg.value = '' }, 3000)
+}
 
 async function load() {
   loading.value = true
@@ -55,8 +65,12 @@ async function load() {
 async function approve(instanceId: string) {
   actioningId.value = instanceId
   try {
-    await approveChore(instanceId)
+    const result = await approveChore(instanceId)
     pending.value = pending.value.filter(i => i.id !== instanceId)
+    if (result.streak_bonus > 0) {
+      const multiplier = result.streak_count >= 14 ? '2x' : result.streak_count >= 7 ? '1.5x' : `${(result.streak_bonus / result.coin_reward + 1).toFixed(1)}x`
+      showToast(`🔥 连续打卡 ${result.streak_count} 天！获得 ${multiplier} 奖励 +${result.streak_bonus} ⭐`)
+    }
   } catch {
     error.value = '操作失败，请重试'
   } finally {
@@ -135,4 +149,19 @@ onMounted(load)
 .btn-reject { background: #dc3545; color: #fff; }
 .card-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 .error-msg { background: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+.bonus-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ff6d00;
+  color: #fff;
+  border-radius: 20px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  white-space: nowrap;
+}
 </style>

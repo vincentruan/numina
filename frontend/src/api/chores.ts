@@ -63,6 +63,8 @@ export interface ChoreInstance {
   submitted_at: string | null
   approved_at: string | null
   streak_count: number
+  streak_bonus: number
+  milestone_triggered: string | null
 }
 
 export async function getMyChores(date: string): Promise<ChoreInstance[]> {

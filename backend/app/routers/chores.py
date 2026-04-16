@@ -89,7 +89,10 @@ async def approve_instance(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    return await chore_service.approve_instance_async(db, user, instance_id)
+    instance = await chore_service.approve_instance_async(db, user, instance_id)
+    resp = ChoreInstanceResponse.model_validate(instance)
+    resp.milestone_triggered = getattr(instance, "_milestone_triggered", None)
+    return resp
 
 
 @router.post("/family/chore-approvals/{instance_id}/reject", response_model=ChoreInstanceResponse)
