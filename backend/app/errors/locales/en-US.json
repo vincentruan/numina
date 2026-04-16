@@ -7,6 +7,7 @@
   "AUTH_FAMILY_NOT_FOUND": "Family not found",
   "AUTH_INVITE_CODE_INVALID": "Invalid invite code",
   "AUTH_USERNAME_EXISTS": "Username already exists",
+  "AUTH_PASSWORD_INCORRECT": "Current password is incorrect",
   "ASSET_NOT_FOUND": "Asset not found",
   "ASSET_ALREADY_SOLD": "Asset has already been sold",
   "ASSET_FORBIDDEN": "You do not have permission to access this asset",

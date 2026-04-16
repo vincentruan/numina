@@ -135,4 +135,5 @@ backend/data/uploads/
 /package-lock.json
 .env.production
 
-.superpowers/
+.superpowers/.worktrees
+.worktrees/

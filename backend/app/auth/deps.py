@@ -10,7 +10,10 @@ Cookie Configuration:
 - sameSite: strict (CSRF protection, same-site requests only)
 """
 
+import time
 from datetime import datetime, timedelta
+from typing import Optional
+from uuid import uuid4
 
 from fastapi import Cookie, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
@@ -32,24 +35,72 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=F
 
 ALGORITHM = "HS256"
 
+# JTI revocation store: {jti: expiry_unix_timestamp}
+# Entries expire automatically; cleaned up lazily on each revoke call.
+_revoked_jtis: dict[str, float] = {}
+
+# Per-user revocation timestamps: {user_id: revoked_before_unix_timestamp}
+# Any token with iat <= this value is considered revoked.
+_user_revocation_times: dict[str, float] = {}
+
+
+def revoke_jti(jti: str, ttl_seconds: float) -> None:
+    """Mark a single JTI as revoked for ttl_seconds."""
+    _revoked_jtis[jti] = time.time() + ttl_seconds
+    # Lazy cleanup of already-expired entries
+    now = time.time()
+    expired = [k for k, exp in list(_revoked_jtis.items()) if exp < now]
+    for k in expired:
+        del _revoked_jtis[k]
+
+
+def revoke_all_user_tokens(user_id: str) -> None:
+    """Revoke all tokens for a user issued up to this moment."""
+    _user_revocation_times[user_id] = time.time()
+
+
+def _is_jti_revoked(jti: str) -> bool:
+    exp = _revoked_jtis.get(jti)
+    if exp is None:
+        return False
+    if time.time() > exp:
+        del _revoked_jtis[jti]
+        return False
+    return True
+
+
+def _is_token_revoked_for_user(user_id: str, iat: float) -> bool:
+    revoked_before = _user_revocation_times.get(user_id)
+    if revoked_before is None:
+        return False
+    return iat <= revoked_before
+
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "access"})
+    now = datetime.utcnow()
+    expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "type": "access", "jti": str(uuid4()), "iat": now})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict) -> str:
     """Create refresh token for adult users.
 
-    Embeds token_version for session revocation support.
+    Embeds token_version for session revocation support and JTI for single-use rotation.
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    now = datetime.utcnow()
+    expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     # Embed token_version (defaults to 0 for backward compat)
     token_version = to_encode.get("token_version", 0)
-    to_encode.update({"exp": expire, "type": "refresh", "token_version": token_version})
+    to_encode.update({
+        "exp": expire,
+        "type": "refresh",
+        "jti": str(uuid4()),
+        "iat": now,
+        "token_version": token_version,
+    })
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -75,7 +126,13 @@ def _verify_token(token: str, expected_type: str = "access") -> str | None:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         token_type: str = payload.get("type")
+        jti: str | None = payload.get("jti")
+        iat = payload.get("iat")
         if user_id is None or token_type != expected_type:
+            return None
+        if jti and _is_jti_revoked(jti):
+            return None
+        if iat is not None and _is_token_revoked_for_user(user_id, float(iat)):
             return None
         return user_id
     except JWTError:

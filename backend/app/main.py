@@ -23,6 +23,7 @@ from app.error_handlers import (
 from app.errors.exceptions import AppError
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
+from app.middleware.family_context import FamilyContextMiddleware
 from app.models.activity import Activity  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
@@ -39,6 +40,7 @@ from app.models.family import Family  # noqa: F401
 from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.security_audit_log import SecurityAuditLog  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.storage_backend import StorageBackend  # noqa: F401
 from app.models.sync_event import SyncEvent  # noqa: F401
@@ -89,6 +91,7 @@ from app.scheduler import (
     scheduler,
     setup_exchange_rate_schedule,
     setup_file_sync_schedule,
+    setup_audit_log_purge_schedule,
 )
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
@@ -144,6 +147,7 @@ async def lifespan(app: FastAPI):
     try:
         setup_exchange_rate_schedule()
         setup_file_sync_schedule()
+        setup_audit_log_purge_schedule()
         scheduler.start()
         logger.info("APScheduler 已启动")
     except Exception as e:
@@ -224,6 +228,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # Add rate limiting middleware (first to execute on request)
 app.add_middleware(RateLimitMiddleware)
+
+# Inject family_id from JWT into request.state for all authenticated routes
+app.add_middleware(FamilyContextMiddleware)
 
 # Add security headers middleware (last to modify response)
 app.add_middleware(SecurityHeadersMiddleware)

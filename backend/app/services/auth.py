@@ -35,6 +35,7 @@ from app.schemas.auth import (
     TokenResponse,
     UpdateProfileRequest,
 )
+from app.services.audit_log import write_audit_log
 from app.services.security_log import _log_security_event, SecurityEventType
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
@@ -44,6 +45,49 @@ _LOCKOUT_SECONDS = 15 * 60  # 15 minutes
 
 # Dummy hash cache for timing attack protection
 _dummy_hash_cache: str | None = None
+
+# Refresh rate limit: 10 per minute per user_id
+_REFRESH_RATE_LIMIT_PER_MINUTE = 10
+# Password change rate limit: 3 per hour per user_id
+_PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR = 3
+
+
+def _check_refresh_rate_limit(user_id: str) -> None:
+    """Limit token refresh to 10 per minute per user."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"refresh_attempts:{user_id}"
+        count = cache.get(key)
+        if count is not None and int(count) >= _REFRESH_RATE_LIMIT_PER_MINUTE:
+            _log_security_event(SecurityEventType.TOKEN_REFRESH_FAILED, user_id=user_id, reason="rate_limited")
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+        new_count = cache.increment(key)
+        if new_count == 1:
+            cache.set(key, 1, ttl_seconds=60)
+    except AppError:
+        raise
+    except Exception:
+        pass
+
+
+def _check_password_change_rate_limit(user_id: str) -> None:
+    """Limit password changes to 3 per hour per user."""
+    try:
+        from app.services.cache.factory import get_rate_limit_cache
+        cache = get_rate_limit_cache()
+        key = f"password_change_attempts:{user_id}"
+        count = cache.get(key)
+        if count is not None and int(count) >= _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR:
+            _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user_id, reason="rate_limited")
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+        new_count = cache.increment(key)
+        if new_count == 1:
+            cache.set(key, 1, ttl_seconds=3600)
+    except AppError:
+        raise
+    except Exception:
+        pass
 
 
 def _get_rate_limit_settings():
@@ -239,8 +283,8 @@ def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> T
     _log_security_event(SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
     )
 
 
@@ -261,27 +305,31 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     if not verify_password(req.password, user.password_hash):
         _record_failed_login(req.username)
         _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, username=req.username, user_id=user.id)
+        write_audit_log("login_failed", "failure", user_id=user.id, family_id=user.family_id, detail="wrong_password")
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     _clear_failed_login(req.username)
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
+    write_audit_log("login_success", "success", user_id=user.id, family_id=user.family_id)
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
     )
 
 
 def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     from jose import JWTError, jwt
     from app.config import settings
-    from app.auth.deps import ALGORITHM
+    from app.auth.deps import ALGORITHM, revoke_jti, _verify_token
+
+    # Use _verify_token so JTI revocation check is applied
+    user_id = _verify_token(refresh_tok, "refresh")
+    if user_id is None:
+        raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     try:
         payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        user_id = payload.get("sub")
-        token_type = payload.get("type")
-        if user_id is None or token_type != "refresh":
-            raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+        old_jti = payload.get("jti")
     except JWTError:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
@@ -289,14 +337,23 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     if not user:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
-    # Validate token_version to support force-logout
+# Validate token_version to support force-logout
     claim_version = payload.get("token_version", 0)
     if claim_version != user.token_version:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
+    # Rate limit refresh attempts per user
+    _check_refresh_rate_limit(user_id)
+
+    # Revoke the old refresh token JTI so it can't be reused
+    if old_jti:
+        revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+
+    _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
+    write_audit_log("token_refresh", "success", user_id=user.id, family_id=user.family_id)
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id, "token_version": user.token_version}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "token_version": user.token_version}),
     )
 
 
@@ -320,9 +377,28 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     db.refresh(user)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id}),
-        refresh_token=create_refresh_token({"sub": user.id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
     )
+
+
+def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
+    """Change user password and revoke all existing tokens."""
+    from app.auth.deps import revoke_all_user_tokens
+
+    _check_password_change_rate_limit(user.id)
+
+    if not verify_password(old_password, user.password_hash):
+        _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user.id)
+        raise AppError(ErrorCode.AUTH_PASSWORD_INCORRECT)
+
+    user.password_hash = hash_password(new_password)
+    db.commit()
+
+    # Revoke all tokens issued before now
+    revoke_all_user_tokens(user.id)
+    _log_security_event(SecurityEventType.PASSWORD_CHANGE_SUCCESS, user_id=user.id)
+    write_audit_log("password_change", "success", user_id=user.id, family_id=user.family_id)
 
 
 def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
