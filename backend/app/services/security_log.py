@@ -27,6 +27,9 @@ class SecurityEventType:
     CHILD_PIN_SUCCESS = "child_pin_success"
     CHILD_PIN_FAILED = "child_pin_failed"
     CHILD_PIN_RATE_LIMITED = "child_pin_rate_limited"
+    # Password change events
+    PASSWORD_CHANGE_SUCCESS = "password_change_success"
+    PASSWORD_CHANGE_FAILED = "password_change_failed"
 
 
 def _log_security_event(

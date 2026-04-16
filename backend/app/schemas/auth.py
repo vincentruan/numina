@@ -120,8 +120,19 @@ class UpdateSettingsRequest(BaseModel):
     view_mode: str | None = None
 
 
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
+    @field_validator("new_password")
+    @classmethod
+    def check_new_password(cls, v: str) -> str:
+        return validate_password_strength(v)
+
+
+# ---------------------------------------------------------------------------
 # Child authentication schemas
+# ---------------------------------------------------------------------------
 
 
 class ChildPinLoginRequest(BaseModel):

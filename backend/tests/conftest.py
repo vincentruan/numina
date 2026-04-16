@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth import deps as auth_deps
 from app.database import Base, get_db
 from app.main import app
 from app.middleware.rate_limit import RateLimitMiddleware
@@ -33,6 +34,10 @@ def db():
     # Reset rate limit store before each test
     if hasattr(RateLimitMiddleware, "_rate_store"):
         RateLimitMiddleware._rate_store.clear()
+
+    # Reset JTI revocation stores
+    auth_deps._revoked_jtis.clear()
+    auth_deps._user_revocation_times.clear()
 
     # Reset cache (including registration rate limits)
     reset_rate_limit_cache()

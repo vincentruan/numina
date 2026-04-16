@@ -29,6 +29,7 @@ from app.database import get_db
 from app.middleware.rate_limit import _get_real_client_ip
 from app.models.user import User
 from app.schemas.auth import (
+    ChangePasswordRequest,
     ChildPinLoginRequest,
     ChildRefreshResponse,
     JoinFamilyRequest,
@@ -181,6 +182,22 @@ def update_settings(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.post("/me/password")
+def change_password(
+    req: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """修改密码，成功后吊销该用户所有现存 token，需重新登录。"""
+    auth_service.change_password(db, user, req.old_password, req.new_password)
+    return {"message": "密码已修改，请重新登录"}
+
+
+# ---------------------------------------------------------------------------
+# Child authentication endpoints
+# ---------------------------------------------------------------------------
 
 
 @router.post("/child/login", response_model=TokenResponse)
