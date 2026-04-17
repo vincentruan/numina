@@ -24,8 +24,9 @@ class CoinTransaction(Base):
     # chore_earn: AI-generated; parent_grant: parent-written
     narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
     narrative_emoji: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    # Bonus coins from streak multiplier (actual_amount - base_reward). NULL for non-chore transactions.
-    streak_bonus: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Bonus coins from streak multiplier (actual_amount - base_reward).
+    # 0 for non-bonus chore transactions, NULL for non-chore transactions (wish_spend, parent_grant).
+    streak_bonus: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     __table_args__ = (

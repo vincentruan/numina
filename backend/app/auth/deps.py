@@ -154,6 +154,12 @@ def get_current_user(
     IMPORTANT: Bearer token takes precedence to prevent session hijacking.
     If a client explicitly provides a Bearer token, that identity MUST be used,
     regardless of any cookies the browser may have from other sessions.
+
+    This prevents a critical vulnerability where:
+    - UserA sends Bearer token (authenticated as UserA)
+    - Browser has UserB's cookie (from prior login)
+    - Without this fix: returns UserB (wrong identity, data leak)
+    - With this fix: returns UserA (correct identity from Bearer)
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -164,6 +170,7 @@ def get_current_user(
     user_id = None
 
     # SECURITY: Bearer token takes precedence over Cookie
+    # This prevents session hijacking when API clients send explicit tokens
     if token:
         user_id = _verify_token(token, "access")
 
