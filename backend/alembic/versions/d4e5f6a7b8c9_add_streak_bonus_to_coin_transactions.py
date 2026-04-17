@@ -17,10 +17,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        'coin_transactions',
-        sa.Column('streak_bonus', sa.Integer(), nullable=True, comment='Bonus coins from streak multiplier (actual_amount - base_reward). NULL for non-chore transactions.'),
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    existing_cols = {c['name'] for c in inspector.get_columns('coin_transactions')}
+    if 'streak_bonus' not in existing_cols:
+        op.add_column(
+            'coin_transactions',
+            sa.Column('streak_bonus', sa.Integer(), nullable=True, comment='Bonus coins from streak multiplier (actual_amount - base_reward). NULL for non-chore transactions.'),
+        )
     # Ensure triggered_at on child_milestones stores timezone-aware timestamps
     with op.batch_alter_table('child_milestones') as batch_op:
         batch_op.alter_column(

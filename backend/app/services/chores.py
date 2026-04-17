@@ -303,6 +303,8 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
     each instance so the response schema can expose them without a second query.
     """
     family = db.query(Family).filter(Family.id == parent_user.family_id).first()
+    if family is None:
+        return []
     pending = (
         db.query(ChoreInstance)
         .filter(

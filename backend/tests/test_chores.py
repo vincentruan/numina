@@ -364,3 +364,53 @@ def test_pending_approvals_include_child_fields(client, auth_headers, child_user
     assert item["child_user_id"] == child_user["id"]
     assert item["child_display_name"] == "小明"
     assert item["child_avatar_color"] == "#FF5733"
+
+
+# ---------------------------------------------------------------------------
+# Access control: approval endpoints require owner role
+# ---------------------------------------------------------------------------
+
+def _register_member_in_family(client, owner_headers) -> dict:
+    """Join the owner's family as a member, return member auth headers."""
+    family_resp = client.get("/api/v1/family/info", headers=owner_headers)
+    invite_code = family_resp.json()["data"]["invite_code"]
+    resp = client.post("/api/v1/auth/family/join", json={
+        "username": "member_chore",
+        "display_name": "Member",
+        "password": "MemberPass1",
+        "invite_code": invite_code,
+    })
+    assert resp.status_code == 200
+    return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
+
+
+def test_member_cannot_approve_chore(client, auth_headers, child_user, daily_template):
+    """Member role gets 403 on approve — endpoint requires owner."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    member_headers = _register_member_in_family(client, auth_headers)
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=member_headers)
+    assert resp.status_code == 403
+
+
+def test_member_cannot_reject_chore(client, auth_headers, child_user, daily_template):
+    """Member role gets 403 on reject — endpoint requires owner."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    member_headers = _register_member_in_family(client, auth_headers)
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/reject", headers=member_headers)
+    assert resp.status_code == 403
+
+
+def test_cross_family_owner_cannot_approve_chore(client, auth_headers, child_user, daily_template, second_user_headers):
+    """Owner from a different family gets 404 on approve (instance not in their family)."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=second_user_headers)
+    assert resp.status_code == 404
