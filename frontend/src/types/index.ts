@@ -4,7 +4,7 @@ export interface User {
   username: string
   display_name: string
   avatar_color: string
-  role: 'owner' | 'member'
+  role: 'owner' | 'member' | 'child'
   is_active: boolean
   theme: string
   language: string
