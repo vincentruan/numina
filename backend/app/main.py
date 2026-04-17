@@ -221,7 +221,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         # Cache-Control: Prevent sensitive data caching
         # Only apply to API endpoints (static files handled by Nginx)
-        if request.url.path.startswith("/api/"):
+        # Exclude stable read-only endpoints that intentionally use private, max-age=300
+        # to allow browser caching (data changes rarely and is family-scoped).
+        _CACHEABLE_API_PATHS = {
+            "/api/v1/categories",
+            "/api/v1/family/members",
+            "/api/v1/family/info",
+            "/api/v1/family/",
+        }
+        if request.url.path.startswith("/api/") and request.url.path not in _CACHEABLE_API_PATHS:
             response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
 
         return response
