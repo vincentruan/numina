@@ -133,7 +133,10 @@ def get_or_create_instances(db: Session, child_user: User, date_str: str) -> lis
     instances = []
     for template in templates:
         bucket = _date_to_bucket(date_str, template.frequency)
-        instance = _get_or_create_instance(db, template, child_user.id, child_user.family_id, bucket)
+        # Pool chores use family_id as the instance owner so all children share one instance.
+        # Assigned chores use the child's own user_id.
+        owner_id = child_user.family_id if template.assignment_type == "pool" else child_user.id
+        instance = _get_or_create_instance(db, template, owner_id, child_user.family_id, bucket)
         if instance:
             instances.append(instance)
 
