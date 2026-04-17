@@ -62,9 +62,21 @@ def _check_milestones(
     wish = context.get("wish")
     triggered: list[str] = []
 
+    # Batch-fetch all existing once-per-child milestones in one query (eliminates N+1)
+    existing_once_per_child = set(
+        m.milestone_type
+        for m in db.query(ChildMilestone).filter(
+            ChildMilestone.child_user_id == child_user_id,
+            ChildMilestone.family_id == family_id,
+            ChildMilestone.milestone_type.in_(_ONCE_PER_CHILD),
+        ).all()
+    )
+
     # 1. first_chore — triggered by any chore approval
     if instance is not None:
-        if _try_record_once(db, child_user_id, family_id, "first_chore", instance.id, "chore_instance"):
+        if _try_record_once_cached(
+            db, child_user_id, family_id, "first_chore", instance.id, "chore_instance", existing_once_per_child
+        ):
             triggered.append("first_chore")
 
     # 2. streak milestones — per cycle, triggered by chore approval
@@ -109,12 +121,16 @@ def _check_milestones(
         total = get_total_earned(db, child_user_id, family_id)
         for threshold, mtype in [(50, "coins_50"), (200, "coins_200")]:
             if total >= threshold:
-                if _try_record_once(db, child_user_id, family_id, mtype, ref_id, ref_type):
+                if _try_record_once_cached(
+                    db, child_user_id, family_id, mtype, ref_id, ref_type, existing_once_per_child
+                ):
                     triggered.append(mtype)
 
     # 4. first_wish_realized — triggered by wish realization
     if wish is not None:
-        if _try_record_once(db, child_user_id, family_id, "first_wish_realized", wish.id, "child_wish"):
+        if _try_record_once_cached(
+            db, child_user_id, family_id, "first_wish_realized", wish.id, "child_wish", existing_once_per_child
+        ):
             triggered.append("first_wish_realized")
 
     # Return the most notable milestone for the UI toast (priority order)
@@ -125,6 +141,31 @@ def _check_milestones(
         if m in triggered:
             return m
     return None
+
+
+def _try_record_once_cached(
+    db: Session,
+    child_user_id: str,
+    family_id: str,
+    milestone_type: str,
+    ref_id: str,
+    ref_type: str,
+    existing_cache: set[str],
+) -> bool:
+    """Record a once-per-child milestone using pre-fetched cache. Returns True if newly recorded."""
+    if milestone_type in existing_cache:
+        return False
+    try:
+        _insert_milestone(db, child_user_id, family_id, milestone_type, ref_id, ref_type)
+        existing_cache.add(milestone_type)  # update cache to prevent duplicate in same call
+        return True
+    except IntegrityError:
+        db.rollback()
+        _audit_logger.debug(
+            "milestone_dedup_race | child=%s family=%s type=%s — IntegrityError caught",
+            child_user_id, family_id, milestone_type,
+        )
+        return False
 
 
 def _try_record_once(
