@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
@@ -12,9 +12,11 @@ router = APIRouter(prefix="/categories", tags=["categories"])
 
 @router.get("", response_model=list[CategoryResponse])
 def list_categories(
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
+    response.headers["Cache-Control"] = "private, max-age=300"
     return category_service.list_categories(db, user)
 
 

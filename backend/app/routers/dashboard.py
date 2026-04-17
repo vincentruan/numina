@@ -1,4 +1,7 @@
+import random
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
@@ -15,6 +18,7 @@ from app.schemas.dashboard import (
     TrendResponse,
 )
 from app.services import dashboard as dashboard_service
+from app.services.cache.factory import get_dashboard_cache
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -103,8 +107,48 @@ def get_expiring_soon(
 ):
     """
     Get assets approaching end of expected lifespan.
-    
+
     Physical assets (electronics) - normal lifecycle, show with muted color.
     Financial assets (accounts, subscriptions) - needs attention, show with alert color.
     """
     return dashboard_service.get_expiring_soon_assets(db, user, days_threshold)
+
+
+@router.get("/bundle")
+def get_bundle(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Get all dashboard data in a single request.
+
+    Combines overview, states-summary, home-assets, allocation, trend,
+    low-usage-assets, and expiring-soon into one cached response.
+    Uses fixed default parameters matching frontend fetchAll() defaults.
+    """
+    cache = get_dashboard_cache()
+    cache_key = f"dashboard:bundle:{user.family_id}"
+
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JSONResponse(content=cached)
+
+    overview = dashboard_service.get_overview(db, user)
+    states_summary = dashboard_service.get_states_summary(db, user)
+    home_assets = dashboard_service.get_home_assets(db, user, limit=5)
+    allocation = dashboard_service.get_allocation(db, user)
+    trend = dashboard_service.get_trend(db, user, period="month")
+    low_usage_assets = dashboard_service.get_low_usage_assets(db, user)
+    expiring_soon = dashboard_service.get_expiring_soon_assets(db, user, days_threshold=90)
+
+    bundle = {
+        "overview": overview.model_dump(),
+        "statesSummary": states_summary,
+        "homeAssets": home_assets,
+        "allocation": allocation.model_dump(),
+        "trend": trend.model_dump(),
+        "lowUsageAssets": [item.model_dump() for item in low_usage_assets],
+        "expiringSoon": [item.model_dump() for item in expiring_soon],
+    }
+
+    cache.set(cache_key, bundle, ttl_seconds=random.randint(60, 90))
+    return JSONResponse(content=bundle)

@@ -15,6 +15,9 @@ _rate_limit_cache: CacheBackend | None = None
 # Global cache instance for captcha payload registry
 _captcha_payload_cache: CacheBackend | None = None
 
+# Global cache instance for dashboard bundle
+_dashboard_cache: CacheBackend | None = None
+
 
 def get_rate_limit_cache() -> CacheBackend:
     """Get or create the rate limit cache backend.
@@ -78,3 +81,46 @@ def reset_captcha_payload_cache() -> None:
     if _captcha_payload_cache is not None:
         _captcha_payload_cache.clear()
     _captcha_payload_cache = None
+
+
+def get_dashboard_cache() -> CacheBackend:
+    """Get or create the dashboard bundle cache backend.
+
+    Uses singleton pattern to reuse cache instance.
+
+    Returns:
+        CacheBackend instance (MemoryCacheBackend by default)
+
+    Raises:
+        NotImplementedError: If CACHE_BACKEND=redis but RedisCacheBackend is not available.
+            In cluster deployments, Redis must be available - silent fallback to memory
+            would cause inconsistent behavior across nodes.
+    """
+    global _dashboard_cache
+    if _dashboard_cache is None:
+        if settings.CACHE_BACKEND == "redis":
+            _dashboard_cache = RedisCacheBackend(settings.REDIS_URL)
+        else:
+            _dashboard_cache = MemoryCacheBackend()
+    return _dashboard_cache
+
+
+def reset_dashboard_cache() -> None:
+    """Reset dashboard cache for testing.
+
+    Clears existing cache and resets to None so next call creates fresh instance.
+    """
+    global _dashboard_cache
+    if _dashboard_cache is not None:
+        _dashboard_cache.clear()
+    _dashboard_cache = None
+
+
+def invalidate_dashboard_bundle(family_id: str) -> None:
+    """Invalidate dashboard bundle cache for a specific family.
+
+    Args:
+        family_id: The family ID whose cache should be invalidated
+    """
+    cache = get_dashboard_cache()
+    cache.delete(f"dashboard:bundle:{family_id}")
