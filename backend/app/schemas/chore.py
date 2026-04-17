@@ -110,6 +110,9 @@ class ChoreInstanceResponse(BaseModel):
     streak_count: int
     streak_bonus: int = 0
     milestone_triggered: str | None = None
+    child_user_id: str | None = None
+    child_display_name: str | None = None
+    child_avatar_color: str | None = None
 
 
 class ApproveRequest(BaseModel):

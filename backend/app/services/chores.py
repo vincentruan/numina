@@ -297,7 +297,11 @@ def reject_instance(db: Session, parent_user: User, instance_id: str, return_to_
 
 
 def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance]:
-    """Return pending approvals, triggering auto-approve for timed-out instances."""
+    """Return pending approvals, triggering auto-approve for timed-out instances.
+
+    Attaches child identity fields (_child_display_name, _child_avatar_color) to
+    each instance so the response schema can expose them without a second query.
+    """
     family = db.query(Family).filter(Family.id == parent_user.family_id).first()
     pending = (
         db.query(ChoreInstance)
@@ -319,6 +323,18 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
             _auto_approve(db, instance, family)
         else:
             result.append(instance)
+
+    # Batch-fetch child users to avoid N+1
+    child_ids = {i.child_user_id for i in result if i.child_user_id}
+    child_map: dict[str, User] = {}
+    if child_ids:
+        children = db.query(User).filter(User.id.in_(child_ids)).all()
+        child_map = {u.id: u for u in children}
+
+    for instance in result:
+        child = child_map.get(instance.child_user_id) if instance.child_user_id else None
+        instance._child_display_name = child.display_name if child else None
+        instance._child_avatar_color = child.avatar_color if child else None
 
     return result
 

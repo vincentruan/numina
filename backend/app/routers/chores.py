@@ -80,7 +80,14 @@ def list_pending_approvals(
     user: User = Depends(require_adult),
 ):
     """Returns pending approvals. Triggers lazy auto-approve for timed-out instances."""
-    return chore_service.list_pending_approvals(db, user)
+    instances = chore_service.list_pending_approvals(db, user)
+    result = []
+    for instance in instances:
+        resp = ChoreInstanceResponse.model_validate(instance)
+        resp.child_display_name = getattr(instance, "_child_display_name", None)
+        resp.child_avatar_color = getattr(instance, "_child_avatar_color", None)
+        result.append(resp)
+    return result
 
 
 @router.post("/family/chore-approvals/{instance_id}/approve", response_model=ChoreInstanceResponse)

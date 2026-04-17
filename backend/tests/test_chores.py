@@ -348,3 +348,19 @@ def test_ledger_relative_time(client, auth_headers, child_user, daily_template):
 
     ledger = client.get("/api/v1/child/coins/ledger", headers=child_user["headers"]).json()["data"]
     assert ledger[0]["relative_time"] in ("今天", "昨天") or "天前" in ledger[0]["relative_time"]
+
+
+def test_pending_approvals_include_child_fields(client, auth_headers, child_user, daily_template):
+    """GET /family/chore-approvals returns child identity fields on each item."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    resp = client.get("/api/v1/family/chore-approvals", headers=auth_headers)
+    assert resp.status_code == 200
+    items = resp.json()["data"]
+    assert len(items) == 1
+    item = items[0]
+    assert item["child_user_id"] == child_user["id"]
+    assert item["child_display_name"] == "小明"
+    assert item["child_avatar_color"] == "#FF5733"

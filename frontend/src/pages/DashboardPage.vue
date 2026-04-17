@@ -25,6 +25,9 @@
           :month-over-month-change="overview?.month_over_month_change"
         />
 
+        <!-- Pending Chore Approvals (owner only) -->
+        <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
+
         <!-- Status Summary Grid + Toolbar -->
         <StatusSummaryGrid
           :summary="dashboardStore.statesSummary"
@@ -225,12 +228,14 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useCategoryStore } from '@/stores/category'
 import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
+import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateCategory, batchUpdateTags, batchUpdateStatus, batchExportAssets } from '@/api/assets'
 import type { Asset } from '@/types'
 import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AlertCards from '@/components/dashboard/AlertCards.vue'
+import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
@@ -241,6 +246,7 @@ const dashboardStore = useDashboardStore()
 const categoryStore = useCategoryStore()
 const assetStore = useAssetStore()
 const authStore = useAuthStore()
+const choreStore = useChoreStore()
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 const viewMode = ref<'card' | 'list'>('card')
@@ -679,6 +685,9 @@ function handleScroll() {
 
 async function onRefresh() {
   await dashboardStore.fetchAll()
+  if (authStore.user?.role === 'owner') {
+    await choreStore.fetchPendingApprovals()
+  }
   refreshing.value = false
 }
 
@@ -689,6 +698,9 @@ onMounted(() => {
   }
   dashboardStore.fetchAll()
   categoryStore.fetchCategories()
+  if (authStore.user?.role === 'owner') {
+    choreStore.fetchPendingApprovals()
+  }
   window.addEventListener('scroll', handleScroll)
 })
 
