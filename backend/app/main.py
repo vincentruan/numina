@@ -65,6 +65,7 @@ from app.routers import chores as chores_router
 from app.routers import coins as coins_router
 from app.routers import child_wishes as child_wishes_router
 from app.routers import milestones as milestones_router
+from app.routers import treasures as treasures_router
 from app.routers import ai_config as ai_config_router
 from app.routers import ai_disposal as ai_disposal_router
 from app.routers import ai_internal as ai_internal_router
@@ -273,6 +274,7 @@ app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")
 app.include_router(child_wishes_router.router, prefix="/api/v1")
 app.include_router(milestones_router.router, prefix="/api/v1")
+app.include_router(treasures_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))

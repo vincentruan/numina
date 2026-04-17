@@ -1,45 +1,57 @@
 <template>
-  <div class="ledger-page">
-    <div class="balance-card">
-      <p class="balance-label">我的星星币</p>
-      <p class="balance-value">⭐ {{ balance }}</p>
+  <div class="treasures-page">
+    <!-- Header summary -->
+    <div class="summary-card">
+      <p class="summary-title">🏆 我的宝贝</p>
+      <p v-if="treasures.length > 0" class="summary-desc">
+        你已经赚到了 <strong>{{ treasures.length }}</strong> 件宝贝！
+      </p>
+      <p v-if="totalCoins > 0" class="summary-coins">共花费 {{ totalCoins }} 颗星 ⭐</p>
     </div>
 
     <div v-if="loading" class="loading">加载中...</div>
 
-    <div v-else-if="transactions.length === 0" class="empty">
-      <p>还没有记录，快去完成家务吧！</p>
+    <div v-else-if="treasures.length === 0" class="empty">
+      <p class="empty-emoji">🎁</p>
+      <p class="empty-text">还没有宝贝，快去完成家务赚星星币吧！</p>
     </div>
 
-    <div v-else class="tx-list">
-      <div v-for="tx in transactions" :key="tx.id" class="tx-card">
-        <span class="tx-emoji">{{ tx.narrative_emoji || '⭐' }}</span>
-        <div class="tx-info">
-          <p class="tx-narrative">{{ tx.narrative || tx.transaction_type }}</p>
-          <p class="tx-time">{{ tx.relative_time }}</p>
+    <div v-else class="grid">
+      <div v-for="item in treasures" :key="item.id" class="treasure-card">
+        <van-image
+          v-if="item.image_url"
+          :src="item.image_url"
+          width="100%"
+          height="100px"
+          fit="cover"
+          radius="12px 12px 0 0"
+        />
+        <div v-else class="placeholder-img">🎁</div>
+        <div class="card-body">
+          <p class="card-name">{{ item.name }}</p>
+          <p v-if="item.purchase_date" class="card-date">{{ item.purchase_date }}</p>
+          <p v-if="item.coins_spent != null" class="card-coins">⭐ {{ item.coins_spent }}</p>
         </div>
-        <span class="tx-amount" :class="tx.amount > 0 ? 'positive' : 'negative'">
-          {{ tx.amount > 0 ? '+' : '' }}{{ tx.amount }}
-        </span>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getCoinBalance, getCoinLedger, type CoinTransaction } from '@/api/coins'
+import { computed, onMounted, ref } from 'vue'
+import { listTreasures, type TreasureItem } from '@/api/treasures'
 
-const balance = ref(0)
-const transactions = ref<CoinTransaction[]>([])
+const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
+
+const totalCoins = computed(() =>
+  treasures.value.reduce((sum, t) => sum + (t.coins_spent ?? 0), 0),
+)
 
 async function load() {
   loading.value = true
   try {
-    const [bal, txs] = await Promise.all([getCoinBalance(), getCoinLedger()])
-    balance.value = bal
-    transactions.value = txs
+    treasures.value = await listTreasures()
   } finally {
     loading.value = false
   }
@@ -49,43 +61,93 @@ onMounted(load)
 </script>
 
 <style scoped>
-.ledger-page {
+.treasures-page {
   padding: 16px;
-  background: #FFF9E6;
+  background: #fff9e6;
   min-height: 100vh;
 }
-.balance-card {
+
+.summary-card {
   background: linear-gradient(135deg, #f5a623, #f7c948);
   border-radius: 16px;
-  padding: 24px;
+  padding: 20px;
   text-align: center;
   margin-bottom: 20px;
   color: #fff;
 }
-.balance-label { font-size: 14px; margin: 0; opacity: 0.9; }
-.balance-value { font-size: 36px; font-weight: bold; margin: 8px 0 0; }
-.loading, .empty {
+.summary-title {
+  font-size: 20px;
+  font-weight: bold;
+  margin: 0 0 6px;
+}
+.summary-desc {
+  font-size: 14px;
+  margin: 0 0 4px;
+  opacity: 0.95;
+}
+.summary-coins {
+  font-size: 14px;
+  margin: 0;
+  opacity: 0.9;
+}
+
+.loading,
+.empty {
   text-align: center;
-  margin-top: 40px;
+  margin-top: 60px;
   color: #999;
+}
+.empty-emoji {
+  font-size: 56px;
+  margin: 0 0 12px;
+}
+.empty-text {
   font-size: 15px;
 }
-.tx-list { display: flex; flex-direction: column; gap: 10px; }
-.tx-card {
-  display: flex;
-  align-items: center;
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
 }
-.tx-emoji { font-size: 24px; }
-.tx-info { flex: 1; }
-.tx-narrative { font-size: 14px; color: #333; margin: 0; }
-.tx-time { font-size: 12px; color: #999; margin: 2px 0 0; }
-.tx-amount { font-size: 18px; font-weight: bold; }
-.tx-amount.positive { color: #f5a623; }
-.tx-amount.negative { color: #e74c3c; }
-</style>
 
+.treasure-card {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+}
+
+.placeholder-img {
+  height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40px;
+  background: #fef3c7;
+}
+
+.card-body {
+  padding: 10px 12px;
+}
+.card-name {
+  font-size: 14px;
+  font-weight: bold;
+  color: #333;
+  margin: 0 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-date {
+  font-size: 11px;
+  color: #aaa;
+  margin: 0 0 4px;
+}
+.card-coins {
+  font-size: 13px;
+  font-weight: bold;
+  color: #f5a623;
+  margin: 0;
+}
+</style>

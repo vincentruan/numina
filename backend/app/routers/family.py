@@ -14,6 +14,7 @@ from app.schemas.auth import UserResponse
 from app.schemas.family import FamilyResponse, FamilySettingsUpdate, FamilySettingsResponse, MemberSummary, UpdateFamilyTitleRequest
 from app.services import family as family_service
 from app.services.snapshot import generate_snapshots
+from app.services import coin_transactions as coin_service
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -187,6 +188,51 @@ def update_family_settings(
         family.auto_approve_hours = body.auto_approve_hours
     if body.ai_enabled is not None:
         family.ai_enabled = body.ai_enabled
+    if body.coin_copper_to_silver is not None:
+        family.coin_copper_to_silver = body.coin_copper_to_silver
+    if body.coin_silver_to_gold is not None:
+        family.coin_silver_to_gold = body.coin_silver_to_gold
     db.commit()
     db.refresh(family)
-    return FamilySettingsResponse(auto_approve_hours=family.auto_approve_hours, ai_enabled=family.ai_enabled)
+    return FamilySettingsResponse(
+        auto_approve_hours=family.auto_approve_hours,
+        ai_enabled=family.ai_enabled,
+        coin_copper_to_silver=family.coin_copper_to_silver,
+        coin_silver_to_gold=family.coin_silver_to_gold,
+    )
+
+
+@router.get("/settings", response_model=FamilySettingsResponse)
+def get_family_settings(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    family = db.query(Family).filter_by(id=user.family_id).first()
+    return FamilySettingsResponse(
+        auto_approve_hours=family.auto_approve_hours,
+        ai_enabled=family.ai_enabled,
+        coin_copper_to_silver=family.coin_copper_to_silver,
+        coin_silver_to_gold=family.coin_silver_to_gold,
+    )
+
+
+class ChildBalanceResponse(BaseModel):
+    balance: int
+
+
+@router.get("/children/{child_id}/balance", response_model=ChildBalanceResponse)
+def get_child_balance(
+    child_id: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Parent queries a specific child's coin balance."""
+    child = db.query(User).filter(
+        User.id == child_id,
+        User.family_id == user.family_id,
+        User.role == "child",
+    ).first()
+    if not child:
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
+    balance = coin_service.get_balance(db, child_id)
+    return {"balance": balance}

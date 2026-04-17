@@ -17,7 +17,7 @@ class CoinTransaction(Base):
     child_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
     # Positive = credit (earn), negative = debit (spend). Integer copper coins.
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
-    # 'chore_earn' | 'wish_spend' | 'parent_grant'
+    # 'chore_earn' | 'wish_spend' | 'parent_grant' | 'gift_sent' | 'gift_received'
     transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
     # No FK — application-layer validation only
     ref_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

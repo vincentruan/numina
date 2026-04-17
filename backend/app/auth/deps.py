@@ -145,14 +145,15 @@ def get_current_user(
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
     db: Session = Depends(get_db),
 ) -> User:
-    """Get current user from either Cookie or Bearer token.
+    """Get current user from Bearer token or Cookie.
 
-    Priority:
-    1. httpOnly Cookie (recommended for web)
-    2. Bearer token header (for API clients)
+    Priority (SECURITY-CRITICAL):
+    1. Bearer token header — used when explicitly provided (API clients)
+    2. httpOnly Cookie — fallback for browser sessions without Bearer
 
-    This dual-mode authentication supports both web browsers (Cookie)
-    and API clients like mobile apps or CLI tools (Bearer token).
+    IMPORTANT: Bearer token takes precedence to prevent session hijacking.
+    If a client explicitly provides a Bearer token, that identity MUST be used,
+    regardless of any cookies the browser may have from other sessions.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -160,14 +161,15 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    # Try Cookie first (recommended for web)
     user_id = None
-    if access_token_cookie:
-        user_id = _verify_token(access_token_cookie, "access")
 
-    # Fallback to Bearer token (for API clients)
-    if user_id is None and token:
+    # SECURITY: Bearer token takes precedence over Cookie
+    if token:
         user_id = _verify_token(token, "access")
+
+    # Fallback to Cookie only when no Bearer token provided
+    if user_id is None and access_token_cookie:
+        user_id = _verify_token(access_token_cookie, "access")
 
     if user_id is None:
         raise credentials_exception
@@ -235,10 +237,15 @@ def get_current_child_user(
     ),
     db: Session = Depends(get_db),
 ) -> User:
-    """Get current child user from child_access_token cookie.
+    """Get current child user from Bearer token or Cookie.
 
-    Similar to get_current_user but reads from child-specific cookie.
-    Used by child-authenticated endpoints (verify-parent, logout).
+    Priority (SECURITY-CRITICAL):
+    1. Bearer token header — used when explicitly provided (API clients)
+    2. httpOnly Cookie — fallback for browser sessions without Bearer
+
+    IMPORTANT: Bearer token takes precedence to prevent session hijacking.
+    If a client explicitly provides a Bearer token, that identity MUST be used,
+    regardless of any cookies the browser may have from other sessions.
 
     Returns:
         User object with role='child'
@@ -251,14 +258,15 @@ def get_current_child_user(
         detail="无法验证儿童凭据",
     )
 
-    # Try Cookie first
     user_id = None
-    if child_access_token_cookie:
-        user_id = _verify_token(child_access_token_cookie, "access")
 
-    # Fallback to Bearer token
-    if user_id is None and token:
+    # SECURITY: Bearer token takes precedence over Cookie
+    if token:
         user_id = _verify_token(token, "access")
+
+    # Fallback to Cookie only when no Bearer token provided
+    if user_id is None and child_access_token_cookie:
+        user_id = _verify_token(child_access_token_cookie, "access")
 
     if user_id is None:
         raise credentials_exception
