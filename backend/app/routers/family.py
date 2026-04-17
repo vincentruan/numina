@@ -12,6 +12,7 @@ from app.models.liability import Liability
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.family import FamilyResponse, FamilySettingsUpdate, FamilySettingsResponse, MemberSummary, UpdateFamilyTitleRequest
+from app.schemas.coin import ChildBalanceResponse
 from app.services import family as family_service
 from app.services.snapshot import generate_snapshots
 from app.services import coin_transactions as coin_service
@@ -216,10 +217,6 @@ def get_family_settings(
     )
 
 
-class ChildBalanceResponse(BaseModel):
-    balance: int
-
-
 @router.get("/children/{child_id}/balance", response_model=ChildBalanceResponse)
 def get_child_balance(
     child_id: str,
@@ -236,3 +233,104 @@ def get_child_balance(
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     balance = coin_service.get_balance(db, child_id)
     return {"balance": balance}
+
+
+@router.get("/children/balances", response_model=dict[str, int])
+def get_all_child_balances(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Return {child_user_id: balance} for all children in the family.
+
+    Single GROUP BY query — avoids N+1 when parent dashboard loads balances
+    for multiple children simultaneously.
+    """
+    from sqlalchemy import func as sa_func
+    from app.models.coin_transaction import CoinTransaction as CT
+
+    # Get all child IDs in this family
+    children = db.query(User.id).filter(
+        User.family_id == user.family_id,
+        User.role == "child",
+        User.is_active == True,
+    ).all()
+    child_ids = [c.id for c in children]
+    if not child_ids:
+        return {}
+
+    # Single aggregation query
+    rows = (
+        db.query(CT.child_user_id, sa_func.sum(CT.amount).label("balance"))
+        .filter(CT.child_user_id.in_(child_ids))
+        .group_by(CT.child_user_id)
+        .all()
+    )
+    balance_map = {row.child_user_id: row.balance or 0 for row in rows}
+    # Ensure children with no transactions appear with balance 0
+    for cid in child_ids:
+        balance_map.setdefault(cid, 0)
+    return balance_map
+
+
+class ChoreStats(BaseModel):
+    completed_this_week: int
+    total_this_week: int
+
+
+@router.get("/children/chore-stats", response_model=dict[str, ChoreStats])
+def get_children_chore_stats(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Return weekly chore completion stats for all children in the family.
+
+    Returns {child_user_id: {completed_this_week, total_this_week}}.
+    'completed_this_week' = approved instances in the current ISO week.
+    'total_this_week' = all instances (any status) in the current ISO week.
+    """
+    from datetime import date, timedelta
+    from app.models.chore import ChoreInstance
+
+    # Current ISO week bucket: YYYY-Www
+    today = date.today()
+    iso_year, iso_week, _ = today.isocalendar()
+    week_bucket = f"{iso_year}-W{iso_week:02d}"
+
+    children = db.query(User.id).filter(
+        User.family_id == user.family_id,
+        User.role == "child",
+        User.is_active == True,
+    ).all()
+    child_ids = [c.id for c in children]
+    if not child_ids:
+        return {}
+
+    # Single query: count total and approved per child for this week
+    rows = (
+        db.query(
+            ChoreInstance.child_user_id,
+            sqlfunc.count(ChoreInstance.id).label("total"),
+            sqlfunc.sum(
+                sqlfunc.case((ChoreInstance.status == "approved", 1), else_=0)
+            ).label("completed"),
+        )
+        .filter(
+            ChoreInstance.family_id == user.family_id,
+            ChoreInstance.child_user_id.in_(child_ids),
+            ChoreInstance.date_bucket == week_bucket,
+        )
+        .group_by(ChoreInstance.child_user_id)
+        .all()
+    )
+
+    stats: dict[str, ChoreStats] = {
+        row.child_user_id: ChoreStats(
+            completed_this_week=row.completed or 0,
+            total_this_week=row.total or 0,
+        )
+        for row in rows
+    }
+    # Ensure all children appear even with no chores this week
+    for cid in child_ids:
+        stats.setdefault(cid, ChoreStats(completed_this_week=0, total_this_week=0))
+    return stats

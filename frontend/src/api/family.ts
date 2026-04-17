@@ -53,3 +53,18 @@ export function updateFamilySettings(settings: {
 export function getChildBalance(childId: string) {
   return http.get<{ balance: number }>(`/family/children/${childId}/balance`)
 }
+
+/** Batch fetch all child balances in one request. Returns {child_user_id: balance}. */
+export function getAllChildBalances() {
+  return http.get<Record<string, number>>('/family/children/balances')
+}
+
+export interface ChoreStats {
+  completed_this_week: number
+  total_this_week: number
+}
+
+/** Fetch weekly chore completion stats for all children. Returns {child_user_id: ChoreStats}. */
+export function getChildrenChoreStats() {
+  return http.get<Record<string, ChoreStats>>('/family/children/chore-stats')
+}

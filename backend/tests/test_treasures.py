@@ -37,13 +37,44 @@ def test_treasures_empty(client, auth_headers, child_user):
 
 
 def test_treasures_shows_child_assets(client, auth_headers, child_user, category_id):
-    """Treasures endpoint returns successfully (assets owned by child would appear here)."""
-    # Note: In production, child assets are created via wish fulfillment flow.
-    # This test verifies the endpoint works; integration tests would verify the full flow.
-    resp = client.get("/api/v1/child/treasures", headers=child_user["headers"])
-    assert resp.status_code == 200
-    # Empty list is expected since we haven't created any child-owned assets via wish flow
-    assert isinstance(resp.json()["data"], list)
+    """Wish-fulfilled assets appear in the treasures gallery with coins_spent populated."""
+    # 1. Child creates a wish
+    wish_resp = client.post("/api/v1/child/wishes", headers=child_user["headers"], json={
+        "name": "新玩具",
+        "priority": "high",
+    })
+    assert wish_resp.status_code == 201
+    wish_id = wish_resp.json()["data"]["id"]
+
+    # 2. Parent grants coins so child can afford the wish
+    client.post("/api/v1/family/coins/grant", headers=auth_headers, json={
+        "child_user_id": child_user["id"],
+        "amount": 50,
+        "reason": "测试赠送",
+    })
+
+    # 3. Parent approves wish with cost=30
+    approve_resp = client.post(f"/api/v1/family/child-wishes/{wish_id}/approve", headers=auth_headers, json={
+        "star_coin_cost": 30,
+    })
+    assert approve_resp.status_code == 200
+
+    # 4. Child requests redemption
+    client.post(f"/api/v1/child/wishes/{wish_id}/request-redemption", headers=child_user["headers"])
+
+    # 5. Parent realizes the wish (creates asset atomically)
+    realize_resp = client.post(f"/api/v1/family/child-wishes/{wish_id}/realize", headers=auth_headers, json={
+        "category_id": category_id,
+    })
+    assert realize_resp.status_code == 200
+
+    # 6. Verify the asset appears in child's treasures with correct coins_spent
+    treasures_resp = client.get("/api/v1/child/treasures", headers=child_user["headers"])
+    assert treasures_resp.status_code == 200
+    treasures = treasures_resp.json()["data"]
+    assert len(treasures) == 1
+    assert treasures[0]["name"] == "新玩具"
+    assert treasures[0]["coins_spent"] == 30
 
 
 def test_treasures_cross_family_isolation(client, auth_headers, child_user, second_user_headers, category_id):

@@ -20,6 +20,8 @@ def list_treasures(
 ):
     """获取儿童用户的宝贝画廊（通过心愿兑现的资产）"""
     # Single query: assets LEFT JOIN wishes LEFT JOIN coin_transactions
+    # Use DISTINCT ON asset.id to prevent duplicate rows when a wish has
+    # multiple wish_spend transactions (e.g. due to retries).
     rows = (
         db.query(Asset, ChildWish, CoinTransaction)
         .outerjoin(ChildWish, ChildWish.realized_asset_id == Asset.id)
@@ -33,13 +35,19 @@ def list_treasures(
         .all()
     )
 
-    return [
-        TreasureItem(
+    # Deduplicate by asset id — keep first occurrence (largest coins_spent wins
+    # if there are multiple wish_spend rows, but in practice there should be one).
+    seen: set[str] = set()
+    result: list[TreasureItem] = []
+    for asset, _wish, tx in rows:
+        if asset.id in seen:
+            continue
+        seen.add(asset.id)
+        result.append(TreasureItem(
             id=asset.id,
             name=asset.name,
             image_url=asset.image_url,
             purchase_date=asset.purchase_date,
             coins_spent=abs(tx.amount) if tx else None,
-        )
-        for asset, _wish, tx in rows
-    ]
+        ))
+    return result

@@ -65,6 +65,11 @@ uv run alembic revision --autogenerate -m "description"   # create migration
 uv run alembic upgrade head                                # apply migrations
 ```
 
+> **IMPORTANT — Deployment order:** Always run `uv run alembic upgrade head` **before** starting the app.
+> The app calls `Base.metadata.create_all()` on startup which creates tables for fresh installs,
+> but it does **not** apply Alembic migrations to existing databases. Skipping this step will cause
+> `OperationalError: no such column` on any endpoint that reads newly added columns.
+
 ## Incremental Formatting
 
 Format only files you touch. Do not run `uv run ruff format .` on the entire codebase in a single commit — it creates noise in blame history.

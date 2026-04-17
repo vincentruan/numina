@@ -10,6 +10,7 @@ from app.auth.deps import get_current_child_user, require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.chore import GrantRequest
+from app.schemas.coin import GiftRequest, GiftResponse, SiblingResponse
 from app.services import coin_transactions as coin_service
 
 router = APIRouter(tags=["coins"])
@@ -81,24 +82,6 @@ def grant_coins(
 ):
     tx = coin_service.write_parent_grant(db, user, req)
     return {"id": tx.id, "amount": tx.amount, "narrative": tx.narrative}
-
-
-class SiblingResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    display_name: str
-    avatar_color: str | None
-
-
-class GiftRequest(BaseModel):
-    to_child_id: str
-    amount: int
-    emoji_reason: str | None = None
-
-
-class GiftResponse(BaseModel):
-    sent_amount: int
-    to_display_name: str
 
 
 @router.get("/child/coins/siblings", response_model=list[SiblingResponse])

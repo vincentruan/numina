@@ -74,6 +74,18 @@
                   <span class="stat-value">{{ childBalances[child.id] ?? '…' }} ⭐</span>
                 </div>
                 <div class="stat">
+                  <span class="stat-label">本周家务</span>
+                  <span class="stat-value">
+                    {{ childChoreStats[child.id]?.completed_this_week ?? '…' }}/{{ childChoreStats[child.id]?.total_this_week ?? '…' }}
+                  </span>
+                </div>
+                <div class="stat">
+                  <span class="stat-label">进行中心愿</span>
+                  <span class="stat-value" :class="{ 'has-pending': (childWishCounts[child.id] ?? 0) > 0 }">
+                    {{ childWishCounts[child.id] ?? 0 }}
+                  </span>
+                </div>
+                <div class="stat">
                   <span class="stat-label">待审家务</span>
                   <span class="stat-value" :class="{ 'has-pending': totalPendingChores > 0 }">
                     {{ totalPendingChores }}
@@ -89,10 +101,37 @@
               <div class="child-mgmt-actions">
                 <van-button size="mini" plain type="primary" to="/family/chore-approvals">审批家务</van-button>
                 <van-button size="mini" plain type="primary" to="/family/wish-review">审批心愿</van-button>
+                <van-button size="mini" plain type="success" @click="openGrantSheet(child)">赠送星星</van-button>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Manual coin grant bottom sheet -->
+        <van-popup v-model:show="showGrantSheet" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">⭐ 赠送星星币给 {{ grantTargetChild?.display_name }}</p>
+          <van-field
+            v-model="grantAmountStr"
+            type="digit"
+            label="数量"
+            placeholder="输入星星币数量"
+            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          />
+          <van-field
+            v-model="grantReason"
+            label="原因"
+            placeholder="例：今天表现很棒！"
+            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          />
+          <van-button
+            block
+            type="primary"
+            :disabled="!grantAmountStr || parseInt(grantAmountStr) <= 0"
+            :loading="grantingCoins"
+            style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
+            @click="doGrant"
+          >确认赠送</van-button>
+        </van-popup>
       </template>
 
       <van-loading v-else class="page-loading" />
@@ -108,7 +147,8 @@ import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import MemberCard from '@/components/family/MemberCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { updateFamilySettings, getChildBalance } from '@/api/family'
+import { updateFamilySettings, getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'
+import { grantCoins } from '@/api/coins'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 
@@ -123,8 +163,17 @@ const silverToGoldStr = ref(String(familyStore.coinSilverToGold))
 
 // Child dashboard data
 const childBalances = ref<Record<string, number>>({})
+const childChoreStats = ref<Record<string, ChoreStats>>({})
+const childWishCounts = ref<Record<string, number>>({})
 const totalPendingChores = ref(0)
 const totalPendingWishes = ref(0)
+
+// Manual grant sheet state
+const showGrantSheet = ref(false)
+const grantTargetChild = ref<{ id: string; display_name: string } | null>(null)
+const grantAmountStr = ref('')
+const grantReason = ref('')
+const grantingCoins = ref(false)
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const childMembers = computed(() =>
   familyStore.members.filter(m => m.role === 'child'),
@@ -169,13 +218,17 @@ async function saveCoinRates() {
 async function loadChildDashboard() {
   if (!isOwner.value || childMembers.value.length === 0) return
 
-  // Load all child balances in parallel
-  const balanceResults = await Promise.allSettled(
-    childMembers.value.map(c => getChildBalance(c.id).then(r => ({ id: c.id, balance: r.data.balance }))),
-  )
-  balanceResults.forEach(r => {
-    if (r.status === 'fulfilled') childBalances.value[r.value.id] = r.value.balance
-  })
+  // Load all child balances in a single batch request (avoids N+1)
+  try {
+    const res = await getAllChildBalances()
+    childBalances.value = res.data
+  } catch { /* non-critical */ }
+
+  // Load weekly chore completion stats per child
+  try {
+    const res = await getChildrenChoreStats()
+    childChoreStats.value = res.data
+  } catch { /* non-critical */ }
 
   // Load total pending chore approvals (family-wide)
   try {
@@ -183,13 +236,46 @@ async function loadChildDashboard() {
     totalPendingChores.value = choreApprovals.length
   } catch { /* non-critical */ }
 
-  // Load total pending wishes (pending_review + redemption_requested)
+  // Load wishes — compute per-child active wish counts and total pending
   try {
     const wishes = await listParentChildWishes()
     totalPendingWishes.value = wishes.filter(
       w => w.status === 'pending_review' || w.status === 'redemption_requested',
     ).length
+    // Per-child: count active wishes (pending_review + active + redemption_requested)
+    const counts: Record<string, number> = {}
+    for (const w of wishes) {
+      if (['pending_review', 'active', 'redemption_requested'].includes(w.status)) {
+        counts[w.child_user_id] = (counts[w.child_user_id] ?? 0) + 1
+      }
+    }
+    childWishCounts.value = counts
   } catch { /* non-critical */ }
+}
+
+function openGrantSheet(child: { id: string; display_name: string }) {
+  grantTargetChild.value = child
+  grantAmountStr.value = ''
+  grantReason.value = ''
+  showGrantSheet.value = true
+}
+
+async function doGrant() {
+  const amount = parseInt(grantAmountStr.value)
+  if (!grantTargetChild.value || !amount || amount <= 0) return
+  grantingCoins.value = true
+  try {
+    await grantCoins(grantTargetChild.value.id, amount, grantReason.value || '父母奖励')
+    showToast(`已赠送 ${amount} ⭐ 给 ${grantTargetChild.value.display_name}`)
+    showGrantSheet.value = false
+    // Refresh balances
+    const res = await getAllChildBalances()
+    childBalances.value = res.data
+  } catch {
+    showToast('赠送失败，请重试')
+  } finally {
+    grantingCoins.value = false
+  }
 }
 
 async function onRefresh() {
@@ -201,7 +287,8 @@ async function onRefresh() {
 onMounted(async () => {
   await familyStore.fetchFamily()
   if (isOwner.value) {
-    await familyStore.loadCoinConfig()
+    // Coin config already loaded by App.vue on mount for adult users.
+    // Sync string refs from store (which has the loaded values).
     copperToSilverStr.value = String(familyStore.coinCopperToSilver)
     silverToGoldStr.value = String(familyStore.coinSilverToGold)
     await loadChildDashboard()
@@ -306,5 +393,14 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.sheet-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 12px;
+  text-align: center;
 }
 </style>
