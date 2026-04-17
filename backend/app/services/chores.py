@@ -236,7 +236,7 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
     # Compute streak and multiplier
     streak = _compute_streak(db, instance)
     multiplier = _get_streak_multiplier(streak)
-    actual_amount = round(instance.coin_reward * multiplier)
+    actual_amount = int(instance.coin_reward * multiplier)
     bonus = actual_amount - instance.coin_reward
     db.execute(
         text("UPDATE chore_instances SET streak_count=:streak, streak_bonus=:bonus WHERE id=:id"),
@@ -262,7 +262,7 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
         ref_id=instance_id,
         narrative=narrative,
         narrative_emoji=emoji,
-        streak_bonus=bonus if bonus > 0 else None,
+        streak_bonus=bonus,
     )
     try:
         db.add(tx)
@@ -334,7 +334,7 @@ def _auto_approve(db: Session, instance: ChoreInstance, family: Family) -> None:
 
     streak = _compute_streak(db, instance)
     multiplier = _get_streak_multiplier(streak)
-    actual_amount = round(instance.coin_reward * multiplier)
+    actual_amount = int(instance.coin_reward * multiplier)
     bonus = actual_amount - instance.coin_reward
     db.execute(
         text("UPDATE chore_instances SET streak_count=:streak, streak_bonus=:bonus WHERE id=:id"),
@@ -355,7 +355,7 @@ def _auto_approve(db: Session, instance: ChoreInstance, family: Family) -> None:
         ref_id=instance.id,
         narrative=narrative,
         narrative_emoji="🔥" if multiplier > 1.0 else "⭐",
-        streak_bonus=bonus if bonus > 0 else None,
+        streak_bonus=bonus,
     )
     try:
         db.add(tx)

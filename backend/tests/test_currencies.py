@@ -48,6 +48,7 @@ def test_get_rate_not_found(client, auth_headers):
     assert response.status_code == 404
 
 
-def test_currencies_require_auth(client):
+def test_currencies_public_endpoint(client):
+    """Currencies are reference data, not user-specific, so endpoint is public."""
     response = client.get("/api/v1/currencies")
-    assert response.status_code == 401
+    assert response.status_code == 200
