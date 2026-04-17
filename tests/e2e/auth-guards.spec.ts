@@ -5,6 +5,7 @@ import { emptyFamily } from '../lib/fixtures'
 import {
   PROTECTED_ROUTES,
   GUEST_ROUTES,
+  PUBLIC_ROUTES,
   extractRouteNamesFromSource,
 } from '../lib/routes'
 
@@ -22,6 +23,7 @@ test('routes.ts covers all route names in frontend/src/router/index.ts', () => {
   const knownNames = new Set([
     ...PROTECTED_ROUTES.map((r) => r.name),
     ...GUEST_ROUTES.map((r) => r.name),
+    ...PUBLIC_ROUTES.map((r) => r.name),
   ])
 
   const missing = routerNames.filter((name) => !knownNames.has(name))

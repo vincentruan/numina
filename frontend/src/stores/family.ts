@@ -8,6 +8,10 @@ export const useFamilyStore = defineStore('family', () => {
   const members = ref<User[]>([])
   const loading = ref(false)
 
+  // Coin tier exchange rates (loaded from family settings, defaults match backend)
+  const coinCopperToSilver = ref(10)
+  const coinSilverToGold = ref(10)
+
   async function fetchFamily() {
     loading.value = true
     try {
@@ -22,6 +26,16 @@ export const useFamilyStore = defineStore('family', () => {
   async function fetchMembers() {
     const res = await familyApi.getMembers()
     members.value = res.data
+  }
+
+  async function loadCoinConfig() {
+    try {
+      const res = await familyApi.getFamilySettings()
+      coinCopperToSilver.value = res.data.coin_copper_to_silver
+      coinSilverToGold.value = res.data.coin_silver_to_gold
+    } catch {
+      // Keep defaults on failure — non-critical
+    }
   }
 
   async function regenerateInviteCode() {
@@ -48,5 +62,10 @@ export const useFamilyStore = defineStore('family', () => {
     family.value = res.data
   }
 
-  return { family, members, loading, fetchFamily, fetchMembers, regenerateInviteCode, updateMemberRole, removeMember, updateFamilyTitle }
+  return {
+    family, members, loading,
+    coinCopperToSilver, coinSilverToGold,
+    fetchFamily, fetchMembers, loadCoinConfig,
+    regenerateInviteCode, updateMemberRole, removeMember, updateFamilyTitle,
+  }
 })

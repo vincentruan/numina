@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,7 @@ from app.auth.deps import get_current_child_user, require_adult
 from app.database import get_db
 from app.models.user import User
 from app.schemas.chore import GrantRequest
+from app.schemas.coin import GiftRequest, GiftResponse, SiblingResponse
 from app.services import coin_transactions as coin_service
 
 router = APIRouter(tags=["coins"])
@@ -81,3 +82,33 @@ def grant_coins(
 ):
     tx = coin_service.write_parent_grant(db, user, req)
     return {"id": tx.id, "amount": tx.amount, "narrative": tx.narrative}
+
+
+@router.get("/child/coins/siblings", response_model=list[SiblingResponse])
+def list_siblings(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """List other children in the same family (potential gift recipients)."""
+    siblings = (
+        db.query(User)
+        .filter(
+            User.family_id == child.family_id,
+            User.role == "child",
+            User.id != child.id,
+            User.is_active == True,
+        )
+        .all()
+    )
+    return siblings
+
+
+@router.post("/child/coins/gift", response_model=GiftResponse, status_code=201)
+def gift_coins(
+    req: GiftRequest,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Send coins to a sibling."""
+    debit, _, recipient_name = coin_service.gift_coins(db, child, req.to_child_id, req.amount, req.emoji_reason)
+    return {"sent_amount": req.amount, "to_display_name": recipient_name}

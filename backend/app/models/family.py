@@ -33,6 +33,8 @@ class Family(Base):
 
     # 儿童星星币系统配置
     auto_approve_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)  # 1-168，仅 owner 可修改
+    coin_copper_to_silver: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    coin_silver_to_gold: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
 
     members = relationship("User", back_populates="family")
     categories = relationship("Category", back_populates="family")

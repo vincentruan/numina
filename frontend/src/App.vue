@@ -53,6 +53,11 @@ onMounted(() => {
   // Listen for system theme changes
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)
+
+  // Load coin config for adult users (children don't have access to /family/settings)
+  if (authStore.user && authStore.user.role !== 'child') {
+    familyStore.loadCoinConfig()
+  }
 })
 
 onUnmounted(() => {

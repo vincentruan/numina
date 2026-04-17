@@ -43,6 +43,63 @@ def list_transactions(db: Session, child_user_id: str, family_id: str) -> list[C
     )
 
 
+def gift_coins(
+    db: Session,
+    sender: User,
+    to_child_id: str,
+    amount: int,
+    emoji_reason: str | None,
+) -> tuple[CoinTransaction, CoinTransaction, str]:
+    """Transfer coins from one child to a sibling in the same family.
+
+    Returns (debit_tx, credit_tx, recipient_display_name).
+    """
+    if amount <= 0:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "赠送数量必须大于0")
+
+    # Validate recipient is a child in the same family
+    recipient = db.query(User).filter(
+        User.id == to_child_id,
+        User.family_id == sender.family_id,
+        User.role == "child",
+        User.id != sender.id,
+    ).first()
+    if not recipient:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "兄弟姐妹不存在或不属于该家庭")
+
+    # Check sender balance
+    balance = get_balance(db, sender.id)
+    if balance < amount:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "星星币余额不足")
+
+    narrative = emoji_reason or "🎁"
+
+    debit = CoinTransaction(
+        family_id=sender.family_id,
+        child_user_id=sender.id,
+        amount=-amount,
+        transaction_type="gift_sent",
+        ref_id=None,
+        narrative=f"赠送给 {recipient.display_name}",
+        narrative_emoji=narrative,
+    )
+    credit = CoinTransaction(
+        family_id=sender.family_id,
+        child_user_id=to_child_id,
+        amount=amount,
+        transaction_type="gift_received",
+        ref_id=None,
+        narrative=f"来自 {sender.display_name} 的礼物",
+        narrative_emoji=narrative,
+    )
+    db.add(debit)
+    db.add(credit)
+    db.commit()
+    db.refresh(debit)
+    db.refresh(credit)
+    return debit, credit, recipient.display_name
+
+
 def write_parent_grant(db: Session, parent_user: User, req: GrantRequest) -> CoinTransaction:
     """Write a parent_grant transaction directly (no approval queue)."""
     # Validate child belongs to same family
