@@ -44,6 +44,15 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'AIAllocation', path: '/ai/allocation' },
   { name: 'AIHub', path: '/ai' },
   { name: 'DataStats', path: '/stats' },
+  // Family — chore & wish management
+  { name: 'ChoreApprovals', path: '/family/chore-approvals' },
+  { name: 'WishReview', path: '/family/wish-review' },
+  // Child routes (authenticated via child session)
+  { name: 'ChildHome', path: '/child' },
+  { name: 'ChildWishes', path: '/child/wishes' },
+  { name: 'ChildTasks', path: '/child/tasks' },
+  { name: 'ChildLedger', path: '/child/ledger' },
+  { name: 'ChildTreasures', path: '/child/treasures' },
 ]
 
 /** Routes accessible only to guests. Authenticated access → redirect to / */
@@ -51,6 +60,17 @@ export const GUEST_ROUTES: RouteEntry[] = [
   { name: 'Login', path: '/login' },
   { name: 'Register', path: '/register' },
   { name: 'JoinFamily', path: '/join-family' },
+]
+
+/**
+ * Public routes — accessible regardless of adult auth state.
+ * These are child-specific auth pages that use their own session mechanism.
+ * Adult authenticated users are NOT redirected away from these routes.
+ */
+export const PUBLIC_ROUTES: RouteEntry[] = [
+  { name: 'ChildSelect', path: '/child/select' },
+  { name: 'ChildPinLogin', path: '/child/pin' },
+  { name: 'ChildBind', path: '/child/bind' },
 ]
 
 /**

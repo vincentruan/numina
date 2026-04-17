@@ -38,7 +38,7 @@ register_or_login() {
   body=$(echo "$resp" | sed '$d')
 
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
-    echo "$body" | jq -r '.data.access_token'
+    echo "$body" | jq -r '.access_token // .data.access_token'
     return 0
   elif [ "$http_code" = "409" ] || [ "$http_code" = "400" ]; then
     log_info "账号 $username 已存在 ($http_code)，直接登录"
@@ -46,7 +46,7 @@ register_or_login() {
     login_resp=$(curl -sL -X POST "$BASE_URL/auth/login" \
       -H "Content-Type: application/json" \
       -d "{\"username\":\"$username\",\"password\":\"$password\"}")
-    echo "$login_resp" | jq -r '.data.access_token'
+    echo "$login_resp" | jq -r '.access_token // .data.access_token'
     return 0
   else
     log_err "注册 $username 失败: HTTP $http_code — $body"
@@ -72,7 +72,7 @@ get_asset_count() {
   resp=$(curl -sL "$BASE_URL/assets" \
     -H "Authorization: Bearer $token")
   # 支持响应格式：数组 或 {total: N, items: [...]} 或 {items: [...]}
-  echo "$resp" | jq -r 'if (.data | type) == "array" then .data | length elif (.data.total | type) == "number" then .data.total elif (.data.items | type) == "array" then .data.items | length else 0 end' 2>/dev/null || echo "0"
+  echo "$resp" | jq -r 'if type == "array" then length elif (.data | type) == "array" then .data | length elif (.data.total | type) == "number" then .data.total elif (.data.items | type) == "array" then .data.items | length else 0 end' 2>/dev/null || echo "0"
 }
 
 echo ""
@@ -146,7 +146,7 @@ fi
 RICH_ASSET_COUNT=$(get_asset_count "$TOKEN_RICH")
 RICH_LIABILITY_COUNT=$(curl -sL "$BASE_URL/liabilities" \
   -H "Authorization: Bearer $TOKEN_RICH" \
-  | jq -r 'if (.data | type) == "array" then .data | length elif (.data.total | type) == "number" then .data.total elif (.data.items | type) == "array" then .data.items | length else 0 end' 2>/dev/null || echo "0")
+  | jq -r 'if type == "array" then length elif (.data | type) == "array" then .data | length elif (.data.total | type) == "number" then .data.total elif (.data.items | type) == "array" then .data.items | length else 0 end' 2>/dev/null || echo "0")
 
 if [ "$RICH_ASSET_COUNT" != "0" ] && [ "$RICH_LIABILITY_COUNT" != "0" ]; then
   log_info "test_rich 已有 $RICH_ASSET_COUNT 个资产 + $RICH_LIABILITY_COUNT 个负债，跳过种子数据"
