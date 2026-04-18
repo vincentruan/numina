@@ -447,11 +447,6 @@ def test_member_cannot_list_approvals(client, auth_headers, child_user, daily_te
     assert resp.status_code == 403
 
 
-    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
-    assert row is not None
-    assert row.submitted_by_user_id == child_user["id"]
-
-
 def test_pool_chore_approve_credits_submitter(client, db, auth_headers, child_user, pool_template):
     """Approving a pool chore credits coins to the submitting child, not the family account."""
     from app.models.coin_transaction import CoinTransaction

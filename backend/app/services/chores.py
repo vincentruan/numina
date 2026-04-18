@@ -280,7 +280,7 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
     # Check milestones after primary transaction — failure never blocks approval
     from app.services.milestones import check_and_record_milestones
     milestone = check_and_record_milestones(
-        db, instance.child_user_id, parent_user.family_id,
+        db, coin_recipient_id, parent_user.family_id,
         {"instance": instance},
     )
     instance._milestone_triggered = milestone  # transient attr for response
