@@ -22,7 +22,12 @@ DEFAULT_DIFFICULTY = 50000  # Backward compatible default
 @router.get("/config")
 def get_captcha_config():
     """Return whether captcha is enabled for the current environment."""
-    return {"captcha_enabled": settings.ENVIRONMENT == "production"}
+    try:
+        return {"captcha_enabled": settings.ENVIRONMENT == "production"}
+    except Exception as e:
+        import logging
+        logging.exception(f"get_captcha_config error: {e}")
+        raise
 
 
 @router.get("/challenge")

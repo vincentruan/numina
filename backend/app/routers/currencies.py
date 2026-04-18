@@ -19,12 +19,17 @@ def list_currencies(
 
     This endpoint is public as currencies are reference data, not user-specific.
     """
-    currencies = (
-        db.query(Currency)
-        .order_by(Currency.is_favorite.desc(), Currency.sort_order.asc(), Currency.code.asc())
-        .all()
-    )
-    return [CurrencyResponse.model_validate(c) for c in currencies]
+    try:
+        currencies = (
+            db.query(Currency)
+            .order_by(Currency.is_favorite.desc(), Currency.sort_order.asc(), Currency.code.asc())
+            .all()
+        )
+        return [CurrencyResponse.model_validate(c) for c in currencies]
+    except Exception as e:
+        import logging
+        logging.exception(f"list_currencies error: {e}")
+        raise
 
 
 @router.get("/rates", response_model=dict[str, RateResponse])
