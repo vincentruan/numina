@@ -501,3 +501,40 @@ def test_auto_approve_timeout(client, db, auth_headers, child_user, daily_templa
     assert tx is not None
     assert tx.child_user_id == child_user["id"]
     assert tx.amount == daily_template["coin_reward"]
+
+
+def test_child_token_cannot_access_approval_endpoints(client, auth_headers, child_user, daily_template):
+    """Child Bearer token is rejected (403) on all three approval endpoints."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    child_headers = child_user["headers"]
+    assert client.get("/api/v1/family/chore-approvals", headers=child_headers).status_code == 403
+    assert client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=child_headers).status_code == 403
+    assert client.post(f"/api/v1/family/chore-approvals/{instance_id}/reject", json={"return_to_redo": False}, headers=child_headers).status_code == 403
+
+
+def test_cross_family_child_cannot_complete_chore(client, auth_headers, child_user, daily_template, second_user_headers):
+    """Child from family A cannot mark complete a chore instance belonging to family B."""
+    # Get instance from family A
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+
+    # Create a child in family B
+    child_b_resp = client.post("/api/v1/family/children", headers=second_user_headers, json={
+        "display_name": "家庭B孩子",
+        "avatar_color": "#FF5733",
+        "pin": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert child_b_resp.status_code == 201
+    child_b = child_b_resp.json()["data"]
+    login_resp = client.post("/api/v1/auth/child/login", json={
+        "child_id": child_b["id"],
+        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    child_b_headers = {"Authorization": f"Bearer {login_resp.json()['data']['access_token']}"}
+
+    # Family B child cannot complete family A's chore instance
+    resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_b_headers)
+    assert resp.status_code == 404

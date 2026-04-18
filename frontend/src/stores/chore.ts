@@ -4,7 +4,7 @@ import { showFailToast } from 'vant'
 import * as choreApi from '@/api/chores'
 
 export const useChoreStore = defineStore('chore', () => {
-  const pendingApprovals = ref<choreApi.ChoreInstance[]>([])
+  const pendingApprovals = ref<choreApi.PendingApprovalInstance[]>([])
 
   const pendingCount = computed(() => pendingApprovals.value.length)
 

@@ -65,9 +65,12 @@ export interface ChoreInstance {
   streak_count: number
   streak_bonus: number
   milestone_triggered: string | null
-  // Child identity fields — populated on pending-approval responses
-  child_user_id: string | null
-  child_display_name: string | null
+}
+
+/** Extends ChoreInstance with child identity fields present on pending-approval responses. */
+export interface PendingApprovalInstance extends ChoreInstance {
+  child_user_id: string
+  child_display_name: string
   child_avatar_color: string | null
 }
 
@@ -81,7 +84,7 @@ export async function markChoreComplete(instanceId: string): Promise<ChoreInstan
   return res.data
 }
 
-export async function getPendingApprovals(): Promise<ChoreInstance[]> {
+export async function getPendingApprovals(): Promise<PendingApprovalInstance[]> {
   const res = await http.get('/family/chore-approvals')
   return res.data
 }

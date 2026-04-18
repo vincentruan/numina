@@ -339,10 +339,10 @@ def require_adult(user: User = Depends(get_current_user)) -> User:
     """Require the current user to be an adult (owner or member).
 
     Child tokens are already rejected by get_current_user via _assert_not_child.
-    Use this dependency (instead of get_current_user directly) on endpoints that
-    are semantically adult-only, so the intent is explicit in the route signature
-    and the child-blocking invariant is preserved even if get_current_user changes.
+    This explicit check is defense-in-depth: if get_current_user ever changes,
+    require_adult still enforces the invariant independently.
     """
+    _assert_not_child(user)
     return user
 
 
