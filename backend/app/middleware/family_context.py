@@ -58,9 +58,12 @@ class FamilyContextMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
     def _extract_token(self, request: Request) -> str | None:
-        cookie_token = request.cookies.get("access_token")
-        if cookie_token:
-            return cookie_token
+        # Check cookies first (handle mock requests in tests)
+        if hasattr(request, "cookies"):
+            cookie_token = request.cookies.get("access_token")
+            if cookie_token:
+                return cookie_token
+        # Then check Authorization header
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             return auth[7:]
