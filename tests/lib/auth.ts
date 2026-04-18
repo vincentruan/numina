@@ -86,8 +86,10 @@ export async function loginAsChild(
   childDisplayName: string,
   pin: string[]
 ): Promise<{ childId: string; parentToken: string }> {
+  const context = page.context()
+
   // 1. Parent login to get token for family/children lookup
-  const parentLoginResp = await page.request.post('/api/v1/auth/login', {
+  const parentLoginResp = await context.request.post('/api/v1/auth/login', {
     data: { username: parentUsername, password: parentPassword },
   })
   if (!parentLoginResp.ok()) {
@@ -98,7 +100,7 @@ export async function loginAsChild(
   const parentToken: string = parentLoginData.data?.access_token ?? parentLoginData.access_token
 
   // 2. Find child by display_name
-  const childrenResp = await page.request.get('/api/v1/family/children', {
+  const childrenResp = await context.request.get('/api/v1/family/children', {
     headers: { Authorization: `Bearer ${parentToken}` },
   })
   if (!childrenResp.ok()) {
@@ -116,8 +118,8 @@ export async function loginAsChild(
   }
   const childId = child.id
 
-  // 3. Child PIN login — browser context receives httpOnly child_access_token cookie
-  const childLoginResp = await page.request.post('/api/v1/auth/child/login', {
+  // 3. Child PIN login via context.request
+  const childLoginResp = await context.request.post('/api/v1/auth/child/login', {
     data: { child_id: childId, pin_sequence: pin },
   })
   if (!childLoginResp.ok()) {
@@ -127,13 +129,19 @@ export async function loginAsChild(
   const childLoginData = await childLoginResp.json()
   const childToken: string = childLoginData.data?.access_token ?? childLoginData.access_token
 
-  // 4. Fetch child user object
-  let meResp = await page.request.get('/api/v1/auth/me', {
+  // 4. Sync cookies from APIRequestContext to BrowserContext
+  const cookies = await context.request.storageState()
+  if (cookies.cookies && cookies.cookies.length > 0) {
+    await context.addCookies(cookies.cookies)
+  }
+
+  // 5. Fetch child user object
+  let meResp = await context.request.get('/api/v1/auth/me', {
     headers: { Authorization: `Bearer ${childToken}` },
   })
   if (meResp.status() === 429) {
     await page.waitForTimeout(2000)
-    meResp = await page.request.get('/api/v1/auth/me', {
+    meResp = await context.request.get('/api/v1/auth/me', {
       headers: { Authorization: `Bearer ${childToken}` },
     })
   }
