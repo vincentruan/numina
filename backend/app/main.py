@@ -174,18 +174,21 @@ app.add_exception_handler(StarletteHTTPException, http_exception_handler)
 app.add_exception_handler(StorageError, storage_error_handler)
 
 
-# Catch-all exception handler for debugging
+# Catch-all exception handler for unhandled errors
 async def catch_all_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    import traceback
-    tb = traceback.format_exc()
     logger.exception(f"Unhandled exception on {request.url.path}: {exc}")
     request_id = getattr(request.state, "request_id", "unknown")
+    # Include traceback only in development for debugging
+    traceback_info = None
+    if settings.ENVIRONMENT == "development":
+        import traceback
+        traceback_info = traceback.format_exc()
     return JSONResponse(
         status_code=500,
         content={
             "code": "INTERNAL_ERROR",
-            "message": str(exc),
-            "traceback": tb,
+            "message": str(exc) if settings.ENVIRONMENT == "development" else "Internal server error",
+            "traceback": traceback_info,
             "data": None,
             "request_id": request_id,
         },

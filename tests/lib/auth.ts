@@ -64,9 +64,7 @@ export async function loginAs(page: Page, username: string, password: string): P
     })
   }
   if (!meResp.ok()) {
-    const errorBody = await meResp.text()
-    console.error(`[loginAs] GET /auth/me failed: HTTP ${meResp.status()} — ${errorBody}`)
-    throw new Error(`GET /auth/me failed: HTTP ${meResp.status()} — ${errorBody}`)
+    throw new Error(`GET /auth/me failed: HTTP ${meResp.status()}`)
   }
   const meBody = await meResp.json()
   const user = meBody.data ?? meBody
