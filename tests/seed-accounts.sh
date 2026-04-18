@@ -212,7 +212,7 @@ log_info "初始化 test_child（test_rich 家庭的儿童账号）..."
 # 检查是否已有名为 test_child 的儿童
 CHILDREN_RESP=$(curl -sL "$BASE_URL/family/children" \
   -H "Authorization: Bearer $TOKEN_RICH")
-CHILD_ID=$(echo "$CHILDREN_RESP" | jq -r '.[] | select(.display_name=="test_child") | .id' 2>/dev/null | head -1)
+CHILD_ID=$(echo "$CHILDREN_RESP" | jq -r '.data[] | select(.display_name=="test_child") | .id' 2>/dev/null | head -1)
 
 if [ -z "$CHILD_ID" ] || [ "$CHILD_ID" = "null" ]; then
   log_info "创建 test_child..."
@@ -241,7 +241,7 @@ log_info "初始化「测试家务」模板..."
 
 TEMPLATES_RESP=$(curl -sL "$BASE_URL/family/chore-templates" \
   -H "Authorization: Bearer $TOKEN_RICH")
-TEMPLATE_ID=$(echo "$TEMPLATES_RESP" | jq -r '.[] | select(.name=="测试家务") | .id' 2>/dev/null | head -1)
+TEMPLATE_ID=$(echo "$TEMPLATES_RESP" | jq -r '.data[] | select(.name=="测试家务") | .id' 2>/dev/null | head -1)
 
 if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
   log_info "创建「测试家务」模板..."
