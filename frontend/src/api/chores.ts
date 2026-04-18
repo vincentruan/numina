@@ -69,8 +69,8 @@ export interface ChoreInstance {
 
 /** Extends ChoreInstance with child identity fields present on pending-approval responses. */
 export interface PendingApprovalInstance extends ChoreInstance {
-  child_user_id: string
-  child_display_name: string
+  child_user_id: string | null
+  child_display_name: string | null
   child_avatar_color: string | null
 }
 

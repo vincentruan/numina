@@ -35,9 +35,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getPendingApprovals, approveChore, rejectChore, type ChoreInstance } from '@/api/chores'
+import { getPendingApprovals, approveChore, rejectChore, type PendingApprovalInstance } from '@/api/chores'
 
-const pending = ref<ChoreInstance[]>([])
+const pending = ref<PendingApprovalInstance[]>([])
 const loading = ref(true)
 const error = ref('')
 const actioningId = ref<string | null>(null)
