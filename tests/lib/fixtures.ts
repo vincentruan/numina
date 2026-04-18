@@ -4,6 +4,7 @@ import { loginAs } from './auth'
 export interface Credentials {
   username: string
   password: string
+  accessToken?: string
 }
 
 /**
@@ -12,8 +13,8 @@ export interface Credentials {
  * (e.g. route guard tests, empty-state tests).
  */
 export async function emptyFamily(page: Page): Promise<Credentials> {
-  await loginAs(page, 'test_empty', 'TestEmpty123!')
-  return { username: 'test_empty', password: 'TestEmpty123!' }
+  const accessToken = await loginAs(page, 'test_empty', 'TestEmpty123!')
+  return { username: 'test_empty', password: 'TestEmpty123!', accessToken }
 }
 
 /**
@@ -25,8 +26,8 @@ export async function emptyFamily(page: Page): Promise<Credentials> {
  * across all tests in the suite.
  */
 export async function richFamily(page: Page): Promise<Credentials> {
-  await loginAs(page, 'test_rich', 'TestRich123!')
-  return { username: 'test_rich', password: 'TestRich123!' }
+  const accessToken = await loginAs(page, 'test_rich', 'TestRich123!')
+  return { username: 'test_rich', password: 'TestRich123!', accessToken }
 }
 
 /**
@@ -36,6 +37,6 @@ export async function richFamily(page: Page): Promise<Credentials> {
  * NOTE: Tests using this fixture must be read-only.
  */
 export async function singleAsset(page: Page): Promise<Credentials> {
-  await loginAs(page, 'test_asset', 'TestAsset123!')
-  return { username: 'test_asset', password: 'TestAsset123!' }
+  const accessToken = await loginAs(page, 'test_asset', 'TestAsset123!')
+  return { username: 'test_asset', password: 'TestAsset123!', accessToken }
 }

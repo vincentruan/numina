@@ -28,8 +28,11 @@ test.describe('cross-family data isolation', () => {
 
     try {
       // Family A 登录，获取第一个资产的 ID
-      await richFamily(pageA)
-      const assetsResp = await pageA.request.get('/api/v1/assets')
+      const credsA = await richFamily(pageA)
+      const tokenA = credsA.accessToken!
+      const assetsResp = await pageA.request.get('/api/v1/assets', {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      })
       expect(assetsResp.ok()).toBeTruthy()
       const assetsData = await assetsResp.json()
       const assets = assetsData.data?.items ?? assetsData.data ?? assetsData.items ?? assetsData
@@ -37,10 +40,13 @@ test.describe('cross-family data isolation', () => {
       const assetId: string = assets[0].id
 
       // Family B 登录，尝试直接访问 Family A 的资产 URL
-      await emptyFamily(pageB)
+      const credsB = await emptyFamily(pageB)
+      const tokenB = credsB.accessToken!
 
       // 1. API 层隔离：直接请求应返回 404
-      const apiResp = await pageB.request.get(`/api/v1/assets/${assetId}`)
+      const apiResp = await pageB.request.get(`/api/v1/assets/${assetId}`, {
+        headers: { Authorization: `Bearer ${tokenB}` },
+      })
       expect(
         apiResp.status(),
         `Family B 访问 Family A 资产 API 应返回 404，实际: ${apiResp.status()}`
@@ -66,18 +72,24 @@ test.describe('cross-family data isolation', () => {
     const pageB = await ctxB.newPage()
 
     try {
-      await richFamily(pageA)
-      const liabResp = await pageA.request.get('/api/v1/liabilities')
+      const credsA = await richFamily(pageA)
+      const tokenA = credsA.accessToken!
+      const liabResp = await pageA.request.get('/api/v1/liabilities', {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      })
       expect(liabResp.ok()).toBeTruthy()
       const liabilities = await liabResp.json()
       const items = liabilities.data?.items ?? liabilities.data ?? liabilities.items ?? liabilities
       expect(items.length, 'test_rich 应有负债').toBeGreaterThan(0)
       const liabilityId: string = items[0].id
 
-      await emptyFamily(pageB)
+      const credsB = await emptyFamily(pageB)
+      const tokenB = credsB.accessToken!
 
       // API 层隔离
-      const apiResp = await pageB.request.get(`/api/v1/liabilities/${liabilityId}`)
+      const apiResp = await pageB.request.get(`/api/v1/liabilities/${liabilityId}`, {
+        headers: { Authorization: `Bearer ${tokenB}` },
+      })
       expect(
         apiResp.status(),
         `Family B 访问 Family A 负债 API 应返回 404，实际: ${apiResp.status()}`
@@ -102,18 +114,24 @@ test.describe('cross-family data isolation', () => {
     const pageB = await ctxB.newPage()
 
     try {
-      await richFamily(pageA)
-      const wishResp = await pageA.request.get('/api/v1/wishes')
+      const credsA = await richFamily(pageA)
+      const tokenA = credsA.accessToken!
+      const wishResp = await pageA.request.get('/api/v1/wishes', {
+        headers: { Authorization: `Bearer ${tokenA}` },
+      })
       expect(wishResp.ok()).toBeTruthy()
       const wishes = await wishResp.json()
       const items = wishes.data?.items ?? wishes.data ?? wishes.items ?? wishes
       expect(items.length, 'test_rich 应有心愿').toBeGreaterThan(0)
       const wishId: string = items[0].id
 
-      await emptyFamily(pageB)
+      const credsB = await emptyFamily(pageB)
+      const tokenB = credsB.accessToken!
 
       // API 层隔离
-      const apiResp = await pageB.request.get(`/api/v1/wishes/${wishId}`)
+      const apiResp = await pageB.request.get(`/api/v1/wishes/${wishId}`, {
+        headers: { Authorization: `Bearer ${tokenB}` },
+      })
       expect(
         apiResp.status(),
         `Family B 访问 Family A 心愿 API 应返回 404，实际: ${apiResp.status()}`

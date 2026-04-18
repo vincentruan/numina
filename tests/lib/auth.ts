@@ -12,10 +12,13 @@ import type { Page } from '@playwright/test'
  *   4. Injects localStorage['numina_user'] with the user object so the Vue
  *      router guard's getUser() check passes.
  *
+ * Returns the access token for tests that need to make authenticated API calls
+ * via page.request (which may not reliably send cookies in some environments).
+ *
  * After this call, Axios sends the cookie automatically on all requests
  * (withCredentials: true is set in the frontend API client).
  */
-export async function loginAs(page: Page, username: string, password: string): Promise<void> {
+export async function loginAs(page: Page, username: string, password: string): Promise<string> {
   // 1. Login — browser context receives httpOnly auth cookie
   const loginResp = await page.request.post('/api/v1/auth/login', {
     data: { username, password },
@@ -51,6 +54,8 @@ export async function loginAs(page: Page, username: string, password: string): P
   await page.evaluate((u) => {
     localStorage.setItem('numina_user', JSON.stringify(u))
   }, user)
+
+  return accessToken
 }
 
 /**
