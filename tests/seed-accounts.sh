@@ -204,6 +204,65 @@ else
   log_ok "test_rich 就绪（6 资产 + 2 负债 + 2 心愿）"
 fi
 
+# ──────────────────────────────────────────────
+# 4. test_child — test_rich 家庭的儿童账号
+# ──────────────────────────────────────────────
+log_info "初始化 test_child（test_rich 家庭的儿童账号）..."
+
+# 检查是否已有名为 test_child 的儿童
+CHILDREN_RESP=$(curl -sL "$BASE_URL/family/children" \
+  -H "Authorization: Bearer $TOKEN_RICH")
+CHILD_ID=$(echo "$CHILDREN_RESP" | jq -r '.[] | select(.display_name=="test_child") | .id' 2>/dev/null | head -1)
+
+if [ -z "$CHILD_ID" ] || [ "$CHILD_ID" = "null" ]; then
+  log_info "创建 test_child..."
+  CREATE_CHILD_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/family/children" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"display_name":"test_child","avatar_color":"#FF6B6B","pin":["🐱","🐶","🐸","🦊"]}')
+  CHILD_HTTP=$(echo "$CREATE_CHILD_RESP" | tail -1)
+  CHILD_BODY=$(echo "$CREATE_CHILD_RESP" | sed '$d')
+  if [ "$CHILD_HTTP" = "200" ] || [ "$CHILD_HTTP" = "201" ]; then
+    CHILD_ID=$(echo "$CHILD_BODY" | jq -r '.id // .data.id')
+    log_ok "test_child 创建成功（id: $CHILD_ID）"
+  else
+    log_err "创建 test_child 失败: HTTP $CHILD_HTTP — $CHILD_BODY"
+    exit 1
+  fi
+else
+  log_info "test_child 已存在，跳过（id: $CHILD_ID）"
+fi
+log_ok "test_child 就绪"
+
+# ──────────────────────────────────────────────
+# 5. 家务模板 — test_rich 家庭的测试家务
+# ──────────────────────────────────────────────
+log_info "初始化「测试家务」模板..."
+
+TEMPLATES_RESP=$(curl -sL "$BASE_URL/family/chore-templates" \
+  -H "Authorization: Bearer $TOKEN_RICH")
+TEMPLATE_ID=$(echo "$TEMPLATES_RESP" | jq -r '.[] | select(.name=="测试家务") | .id' 2>/dev/null | head -1)
+
+if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
+  log_info "创建「测试家务」模板..."
+  CREATE_TPL_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/family/chore-templates" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"name":"测试家务","emoji":"🧹","coin_reward":10,"recurrence":"daily"}')
+  TPL_HTTP=$(echo "$CREATE_TPL_RESP" | tail -1)
+  TPL_BODY=$(echo "$CREATE_TPL_RESP" | sed '$d')
+  if [ "$TPL_HTTP" = "200" ] || [ "$TPL_HTTP" = "201" ]; then
+    TEMPLATE_ID=$(echo "$TPL_BODY" | jq -r '.id // .data.id')
+    log_ok "「测试家务」模板创建成功（id: $TEMPLATE_ID）"
+  else
+    log_err "创建「测试家务」模板失败: HTTP $TPL_HTTP — $TPL_BODY"
+    exit 1
+  fi
+else
+  log_info "「测试家务」模板已存在，跳过（id: $TEMPLATE_ID）"
+fi
+log_ok "「测试家务」模板就绪"
+
 echo ""
 echo "=========================================="
 echo "测试账号初始化完成"
