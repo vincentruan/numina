@@ -83,7 +83,9 @@ const actioningId = ref<string | null>(null)
 
 function formatRelativeTime(isoStr: string | null): string {
   if (!isoStr) return ''
-  const diff = Date.now() - new Date(isoStr).getTime()
+  const t = new Date(isoStr).getTime()
+  if (Number.isNaN(t)) return ''
+  const diff = Date.now() - t
   const mins = Math.floor(diff / 60000)
   if (mins < 1) return '刚刚'
   if (mins < 60) return `${mins}分钟前`

@@ -9,8 +9,12 @@ export const useChoreStore = defineStore('chore', () => {
   const pendingCount = computed(() => pendingApprovals.value.length)
 
   async function fetchPendingApprovals() {
-    const items = await choreApi.getPendingApprovals()
-    pendingApprovals.value = items
+    try {
+      const items = await choreApi.getPendingApprovals()
+      pendingApprovals.value = items
+    } catch {
+      showFailToast('加载待审批家务失败')
+    }
   }
 
   async function approvePendingChore(id: string) {
@@ -20,10 +24,14 @@ export const useChoreStore = defineStore('chore', () => {
     try {
       await choreApi.approveChore(id)
     } catch {
-      // Re-find position in case concurrent operations shifted the array
-      const restoreIdx = pendingApprovals.value.findIndex(i => i.id === removed.id)
-      if (restoreIdx === -1) {
-        pendingApprovals.value.splice(idx, 0, removed)
+      // Resync from server to avoid stale state after concurrent fetch
+      try {
+        await fetchPendingApprovals()
+      } catch {
+        // If resync also fails, restore the item so the user can retry
+        if (!pendingApprovals.value.find(i => i.id === removed.id)) {
+          pendingApprovals.value.splice(idx, 0, removed)
+        }
       }
       showFailToast('审批失败，请重试')
     }
@@ -36,10 +44,14 @@ export const useChoreStore = defineStore('chore', () => {
     try {
       await choreApi.rejectChore(id, returnToRedo)
     } catch {
-      // Re-find position in case concurrent operations shifted the array
-      const restoreIdx = pendingApprovals.value.findIndex(i => i.id === removed.id)
-      if (restoreIdx === -1) {
-        pendingApprovals.value.splice(idx, 0, removed)
+      // Resync from server to avoid stale state after concurrent fetch
+      try {
+        await fetchPendingApprovals()
+      } catch {
+        // If resync also fails, restore the item so the user can retry
+        if (!pendingApprovals.value.find(i => i.id === removed.id)) {
+          pendingApprovals.value.splice(idx, 0, removed)
+        }
       }
       showFailToast('操作失败，请重试')
     }

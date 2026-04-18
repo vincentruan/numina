@@ -447,18 +447,62 @@ def test_member_cannot_list_approvals(client, auth_headers, child_user, daily_te
     assert resp.status_code == 403
 
 
-def test_pool_chore_mark_complete_sets_submitted_by_user_id(client, db, auth_headers, child_user, pool_template):
-    """Pool chore mark_complete works and sets submitted_by_user_id to the submitting child."""
-    from app.models.chore import ChoreInstance
+    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    assert row is not None
+    assert row.submitted_by_user_id == child_user["id"]
+
+
+def test_pool_chore_approve_credits_submitter(client, db, auth_headers, child_user, pool_template):
+    """Approving a pool chore credits coins to the submitting child, not the family account."""
+    from app.models.coin_transaction import CoinTransaction
 
     instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     pool_instance = next(i for i in instances if i["template_id"] == pool_template["id"])
     instance_id = pool_instance["id"]
 
-    resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["data"]["status"] == "pending_approval"
 
+    # CoinTransaction must be credited to the actual child, not the family_id
+    tx = db.query(CoinTransaction).filter(CoinTransaction.ref_id == instance_id).first()
+    assert tx is not None
+    assert tx.child_user_id == child_user["id"]
+
+    # Child's balance should reflect the reward
+    balance = client.get("/api/v1/child/coins/balance", headers=child_user["headers"]).json()["data"]
+    assert balance["balance"] == pool_template["coin_reward"]
+
+
+def test_auto_approve_timeout(client, db, auth_headers, child_user, daily_template):
+    """Instances past auto_approve_hours are auto-approved when list_pending_approvals is called."""
+    from datetime import datetime, timedelta
+    from app.models.chore import ChoreInstance
+    from app.models.coin_transaction import CoinTransaction
+
+    # Mark chore complete
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    # Backdate submitted_at beyond auto_approve_hours (default 24h)
     row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
-    assert row is not None
-    assert row.submitted_by_user_id == child_user["id"]
+    row.submitted_at = datetime.utcnow() - timedelta(hours=25)
+    db.commit()
+
+    # Calling list_pending_approvals triggers auto-approve for timed-out instances
+    resp = client.get("/api/v1/family/chore-approvals", headers=auth_headers)
+    assert resp.status_code == 200
+    # Instance should be auto-approved and removed from pending list
+    pending_ids = [i["id"] for i in resp.json()["data"]]
+    assert instance_id not in pending_ids
+
+    # Verify DB state: status == approved
+    db.refresh(row)
+    assert row.status == "approved"
+
+    # Verify coin transaction was created for the correct child
+    tx = db.query(CoinTransaction).filter(CoinTransaction.ref_id == instance_id).first()
+    assert tx is not None
+    assert tx.child_user_id == child_user["id"]
+    assert tx.amount == daily_template["coin_reward"]

@@ -26,7 +26,7 @@ def upgrade() -> None:
                 sa.Column(
                     'submitted_by_user_id',
                     sa.String(36),
-                    sa.ForeignKey('users.id'),
+                    sa.ForeignKey('users.id', name='fk_chore_instances_submitted_by_user_id'),
                     nullable=True,
                     comment='Actual child who submitted — needed for pool chores where child_user_id is family_id',
                 )

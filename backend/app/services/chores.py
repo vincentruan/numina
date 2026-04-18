@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, text
+from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -219,7 +219,6 @@ def mark_complete(db: Session, child_user: User, instance_id: str) -> ChoreInsta
 async def approve_instance_async(db: Session, parent_user: User, instance_id: str) -> ChoreInstance:
     """Approve a chore instance atomically and write CoinTransaction."""
     from app.services.chore_narrative import generate_narrative
-    from sqlalchemy import text
 
     instance = _get_family_instance(db, parent_user, instance_id)
     if instance.status != "pending_approval":
@@ -249,7 +248,9 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
 
     # Generate narrative before committing (async, 2s timeout, fallback on error)
     family = db.query(Family).filter(Family.id == parent_user.family_id).first()
-    child = db.query(User).filter(User.id == instance.child_user_id).first()
+    # For pool chores child_user_id == family_id; use submitted_by_user_id for the actual child
+    coin_recipient_id = instance.submitted_by_user_id or instance.child_user_id
+    child = db.query(User).filter(User.id == coin_recipient_id).first()
     if not family or not child:
         narrative, emoji = f"你完成了{instance.chore_name}！获得 {actual_amount} 颗星", "⭐"
     else:
@@ -260,7 +261,7 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
     # Single commit: status + streak + CoinTransaction all atomic
     tx = CoinTransaction(
         family_id=parent_user.family_id,
-        child_user_id=instance.child_user_id,
+        child_user_id=coin_recipient_id,
         amount=actual_amount,
         transaction_type="chore_earn",
         ref_id=instance_id,
@@ -327,20 +328,26 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
         else:
             result.append(instance)
 
-    # Batch-fetch child users to avoid N+1
-    # Use submitted_by_user_id (actual submitter) when available, fall back to child_user_id
+    # Batch-fetch child users to avoid N+1.
+    # For pool chores child_user_id == family_id (not a real user), so always prefer
+    # submitted_by_user_id when set; only fall back to child_user_id for assigned chores
+    # where child_user_id is a real user ID.
     submitter_ids = {
-        i.submitted_by_user_id or i.child_user_id
+        i.submitted_by_user_id if i.submitted_by_user_id else (
+            i.child_user_id if i.child_user_id != i.family_id else None
+        )
         for i in result
-        if i.submitted_by_user_id or i.child_user_id
-    }
+    } - {None}
     child_map: dict[str, User] = {}
     if submitter_ids:
         children = db.query(User).filter(User.id.in_(submitter_ids)).all()
         child_map = {u.id: u for u in children}
 
     for instance in result:
-        lookup_id = instance.submitted_by_user_id or instance.child_user_id
+        # For pool chores child_user_id == family_id — use submitted_by_user_id instead
+        lookup_id = instance.submitted_by_user_id or (
+            instance.child_user_id if instance.child_user_id != instance.family_id else None
+        )
         child = child_map.get(lookup_id) if lookup_id else None
         instance._child_display_name = child.display_name if child else None
         instance._child_avatar_color = child.avatar_color if child else None
@@ -375,9 +382,11 @@ def _auto_approve(db: Session, instance: ChoreInstance, family: Family) -> None:
         narrative = f"你完成了{instance.chore_name}！连续打卡加成，获得 {actual_amount} 颗星 🔥"
     else:
         narrative = f"你完成了{instance.chore_name}！获得 {actual_amount} 颗星"
+    # For pool chores child_user_id == family_id; use submitted_by_user_id for the actual child
+    coin_recipient_id = instance.submitted_by_user_id or instance.child_user_id
     tx = CoinTransaction(
         family_id=family.id,
-        child_user_id=instance.child_user_id,
+        child_user_id=coin_recipient_id,
         amount=actual_amount,
         transaction_type="chore_earn",
         ref_id=instance.id,
@@ -396,7 +405,7 @@ def _auto_approve(db: Session, instance: ChoreInstance, family: Family) -> None:
 
     # Check milestones — failure never blocks auto-approve
     from app.services.milestones import check_and_record_milestones
-    check_and_record_milestones(db, instance.child_user_id, family.id, {"instance": instance})
+    check_and_record_milestones(db, coin_recipient_id, family.id, {"instance": instance})
 
 
 # ---------------------------------------------------------------------------
@@ -471,7 +480,6 @@ def _get_child_instance(db: Session, child_user: User, instance_id: str) -> Chor
     Pool chores use child_user_id = family_id (shared instance).
     Both are valid for a child to act on.
     """
-    from sqlalchemy import or_
     instance = db.query(ChoreInstance).filter(
         ChoreInstance.id == instance_id,
         ChoreInstance.family_id == child_user.family_id,

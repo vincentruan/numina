@@ -12,7 +12,7 @@ Cookie Configuration:
 
 import time
 from datetime import datetime, timedelta
-from typing import Optional
+
 from uuid import uuid4
 
 from fastapi import Cookie, Depends, HTTPException, Request, status
