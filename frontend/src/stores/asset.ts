@@ -15,6 +15,9 @@ const _pendingCreateOperations: Map<string, Promise<Asset>> = new Map()
 const _pendingUpdateOperations: Map<string, Promise<Asset>> = new Map()
 const _pendingDeleteOperations: Map<string, Promise<void>> = new Map()
 
+// Operation timeout (30s) - prevents memory leak from stuck promises
+const OPERATION_TIMEOUT_MS = 30_000
+
 function isSyncing(id: string): boolean {
   return _syncingIds.has(id)
 }
@@ -122,10 +125,29 @@ export const useAssetStore = defineStore('asset', () => {
     // Store pending operation BEFORE starting async work (critical for dedup)
     _pendingCreateOperations.set(dedupKey, operationPromise)
 
+    // Timeout handler to prevent memory leak
+    const timeoutId = setTimeout(() => {
+      if (_pendingCreateOperations.has(dedupKey)) {
+        console.warn('[createAsset] Timeout - cleaning up stuck operation', tempId)
+        _pendingCreateOperations.delete(dedupKey)
+        _syncingIds.delete(tempId)
+        // Remove temp asset on timeout
+        const timeoutIdx = assets.value.findIndex(a => a.id === tempId)
+        if (timeoutIdx !== -1) {
+          assets.value.splice(timeoutIdx, 1)
+        }
+        if (currentAsset.value?.id === tempId) {
+          currentAsset.value = null
+        }
+        rejectPromise!(new Error('Operation timed out'))
+      }
+    }, OPERATION_TIMEOUT_MS)
+
     // Start async work in background
     ;(async () => {
       try {
         const res = await assetApi.createAsset(data)
+        clearTimeout(timeoutId)
         const serverAsset = res.data
 
         // On success: find by tempId, replace with server response
@@ -140,9 +162,11 @@ export const useAssetStore = defineStore('asset', () => {
         }
 
         _syncingIds.delete(tempId)
+        _pendingCreateOperations.delete(dedupKey)
         useDashboardStore().invalidateDashboard()
         resolvePromise!(serverAsset)
       } catch (error) {
+        clearTimeout(timeoutId)
         // On error: rollback by removing temp asset
         console.warn('[createAsset] Rollback - removing temp asset', tempId)
         const idx = assets.value.findIndex(a => a.id === tempId)
@@ -153,9 +177,8 @@ export const useAssetStore = defineStore('asset', () => {
           currentAsset.value = null
         }
         _syncingIds.delete(tempId)
-        rejectPromise!(error)
-      } finally {
         _pendingCreateOperations.delete(dedupKey)
+        rejectPromise!(error)
       }
     })()
 
@@ -205,10 +228,29 @@ export const useAssetStore = defineStore('asset', () => {
     // Store pending operation
     _pendingUpdateOperations.set(dedupKey, operationPromise)
 
+    // Timeout handler to prevent memory leak
+    const timeoutId = setTimeout(() => {
+      if (_pendingUpdateOperations.has(dedupKey)) {
+        console.warn('[updateAsset] Timeout - cleaning up stuck operation', id)
+        _pendingUpdateOperations.delete(dedupKey)
+        _syncingIds.delete(id)
+        // Rollback to original on timeout
+        const timeoutIdx = assets.value.findIndex(a => a.id === id)
+        if (timeoutIdx !== -1) {
+          assets.value[timeoutIdx] = originalAsset
+        }
+        if (currentAsset.value?.id === id) {
+          currentAsset.value = originalAsset
+        }
+        rejectPromise!(new Error('Operation timed out'))
+      }
+    }, OPERATION_TIMEOUT_MS)
+
     // 7. Start async work
     ;(async () => {
       try {
         const res = await assetApi.updateAsset(id, data)
+        clearTimeout(timeoutId)
         const serverAsset = res.data
 
         // On success: use server response
@@ -221,9 +263,11 @@ export const useAssetStore = defineStore('asset', () => {
         }
 
         _syncingIds.delete(id)
+        _pendingUpdateOperations.delete(dedupKey)
         useDashboardStore().invalidateDashboard()
         resolvePromise!(serverAsset)
       } catch (error) {
+        clearTimeout(timeoutId)
         // On error: rollback to original
         console.warn('[updateAsset] Rollback - restoring original asset', id)
         const currentIdx = assets.value.findIndex(a => a.id === id)
@@ -234,9 +278,8 @@ export const useAssetStore = defineStore('asset', () => {
           currentAsset.value = originalAsset
         }
         _syncingIds.delete(id)
-        rejectPromise!(error)
-      } finally {
         _pendingUpdateOperations.delete(dedupKey)
+        rejectPromise!(error)
       }
     })()
 
@@ -251,25 +294,29 @@ export const useAssetStore = defineStore('asset', () => {
       return existingOp
     }
 
-    // 2. Find asset and its index before removal
+    // 2. Find asset and capture neighbor references for rollback positioning
     const idx = assets.value.findIndex(a => a.id === id)
     if (idx === -1) {
       // Asset not found, fall back to pessimistic API call
       return assetApi.deleteAsset(id).then(() => undefined)
     }
 
-    // 3. Snapshot deleted asset + its index for rollback
+    // 3. Snapshot deleted asset + neighbor IDs for rollback (avoid stale index problem)
     const deletedAsset = JSON.parse(JSON.stringify(assets.value[idx])) as Asset
-    const originalIndex = idx
+    const prevNeighborId = idx > 0 ? assets.value[idx - 1].id : null
+    const nextNeighborId = idx < assets.value.length - 1 ? assets.value[idx + 1].id : null
+
+    // Track whether this delete cleared currentAsset (for rollback)
+    const wasCurrentAsset = currentAsset.value?.id === id
 
     // 4. Remove from assets list (optimistic)
     assets.value.splice(idx, 1)
-    if (currentAsset.value?.id === id) {
+    if (wasCurrentAsset) {
       currentAsset.value = null
     }
     _syncingIds.add(id)
 
-    // 5. Create operation Promise
+    // 5. Create operation Promise with timeout
     let resolvePromise: () => void
     let rejectPromise: (reason: unknown) => void
     const operationPromise = new Promise<void>((resolve, reject) => {
@@ -280,30 +327,58 @@ export const useAssetStore = defineStore('asset', () => {
     // Store pending operation
     _pendingDeleteOperations.set(dedupKey, operationPromise)
 
+    // Timeout handler to prevent memory leak
+    const timeoutId = setTimeout(() => {
+      if (_pendingDeleteOperations.has(dedupKey)) {
+        console.warn('[deleteAsset] Timeout - cleaning up stuck operation', id)
+        _pendingDeleteOperations.delete(dedupKey)
+        _syncingIds.delete(id)
+        rejectPromise!(new Error('Operation timed out'))
+      }
+    }, OPERATION_TIMEOUT_MS)
+
     // 6. Start async work
     ;(async () => {
       try {
         await assetApi.deleteAsset(id)
 
         // On success: no further action needed, asset already removed
+        clearTimeout(timeoutId)
         _syncingIds.delete(id)
+        _pendingDeleteOperations.delete(dedupKey)
         useDashboardStore().invalidateDashboard()
         resolvePromise!()
       } catch (error) {
-        // On error: re-insert at saved index
+        clearTimeout(timeoutId)
+        // On error: re-insert at correct position using neighbor references
         console.warn('[deleteAsset] Rollback - re-inserting deleted asset', id)
-        assets.value.splice(originalIndex, 0, deletedAsset)
-        if (currentAsset.value?.id === id || currentAsset.value === null) {
+        const rollbackIdx = findInsertIndex(prevNeighborId, nextNeighborId)
+        assets.value.splice(rollbackIdx, 0, deletedAsset)
+        // Only restore currentAsset if this delete operation originally cleared it
+        if (wasCurrentAsset) {
           currentAsset.value = deletedAsset
         }
         _syncingIds.delete(id)
-        rejectPromise!(error)
-      } finally {
         _pendingDeleteOperations.delete(dedupKey)
+        rejectPromise!(error)
       }
     })()
 
     return operationPromise
+  }
+
+  // Helper: Find correct insertion index using neighbor references
+  function findInsertIndex(prevId: string | null, nextId: string | null): number {
+    if (prevId !== null) {
+      const prevIdx = assets.value.findIndex(a => a.id === prevId)
+      if (prevIdx !== -1) return prevIdx + 1
+    }
+    if (nextId !== null) {
+      const nextIdx = assets.value.findIndex(a => a.id === nextId)
+      if (nextIdx !== -1) return nextIdx
+    }
+    // Fallback: insert at end if neighbors not found
+    return assets.value.length
   }
 
   async function updateValue(id: string, value: number) {
