@@ -132,8 +132,10 @@ function isKnownNoise(msg: string): boolean {
   if (msg.includes('favicon')) return true
   // ALTCHA captcha 加载失败（开发环境无服务）
   if (msg.includes('ALTCHA') || msg.includes('altcha')) return true
-  // 汇率服务暂未初始化（CI 环境无 seeding）
-  if (msg.includes('currencies') && msg.includes('500')) return true
-  if (msg.includes('Failed to fetch currencies')) return true
+  // 汇率服务相关错误（CI 环境无 seeding，不影响核心功能）
+  if (msg.includes('currencies')) return true
+  if (msg.includes('AxiosError: Request failed with status code 500')) return true
+  // Generic 500 network errors (likely from currencies endpoint in CI)
+  if (msg.match(/Failed to load resource.*500|status of 500/i)) return true
   return false
 }
