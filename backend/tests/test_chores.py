@@ -220,6 +220,19 @@ def test_mark_complete(client, child_user, daily_template):
     assert resp.json()["data"]["status"] == "pending_approval"
 
 
+def test_mark_complete_sets_submitted_by_user_id(client, auth_headers, child_user, daily_template):
+    """submitted_by_user_id is populated after mark_complete — verified via pending approvals identity."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    approvals = client.get("/api/v1/family/chore-approvals", headers=auth_headers).json()["data"]
+    assert len(approvals) == 1
+    # child identity resolved via submitted_by_user_id
+    assert approvals[0]["child_display_name"] == "小明"
+    assert approvals[0]["child_user_id"] == child_user["id"]
+
+
 def test_mark_complete_twice_fails(client, child_user, daily_template):
     instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
@@ -424,3 +437,10 @@ def test_cross_family_owner_cannot_reject_chore(client, auth_headers, child_user
 
     resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/reject", json={"return_to_redo": False}, headers=second_user_headers)
     assert resp.status_code == 404
+
+
+def test_member_cannot_list_approvals(client, auth_headers, child_user, daily_template):
+    """Member role gets 403 on list approvals — endpoint requires owner."""
+    member_headers = _register_member_in_family(client, auth_headers)
+    resp = client.get("/api/v1/family/chore-approvals", headers=member_headers)
+    assert resp.status_code == 403

@@ -111,8 +111,8 @@ class UserResponse(BaseModel):
 
     @field_validator("avatar_color", mode="before")
     @classmethod
-    def sanitize_avatar_color(cls, v: str) -> str:
-        if not _HEX_COLOR_RE.match(v):
+    def sanitize_avatar_color(cls, v: str | None) -> str:
+        if v is None or not _HEX_COLOR_RE.match(v):
             return "#4F46E5"
         return v
 

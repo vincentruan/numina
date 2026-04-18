@@ -11,13 +11,13 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = 'j1k2l3m4n5o6'
-down_revision: Union[str, None] = 'h8i9j0k1l2m3'
+down_revision: Union[str, None] = 'i9j0k1l2m3n4'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
+    bind = op.get_context().bind
     inspector = sa.inspect(bind)
     existing_cols = {c['name'] for c in inspector.get_columns('chore_instances')}
     if 'submitted_by_user_id' not in existing_cols:
@@ -34,4 +34,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column('chore_instances', 'submitted_by_user_id')
+    with op.batch_alter_table('chore_instances') as batch_op:
+        batch_op.drop_column('submitted_by_user_id')
