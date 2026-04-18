@@ -4,14 +4,25 @@ import { singleAsset } from '../lib/fixtures'
 test.describe('smoke: asset pages render without errors', () => {
   test('asset list page renders at least one asset', async ({ page }) => {
     const errors: string[] = []
+    const networkErrors: string[] = []
+    const errorBodies: string[] = []
     page.on('console', (msg) => {
       if (msg.type() === 'error') errors.push(msg.text())
+    })
+    page.on('response', async (resp) => {
+      if (resp.status() >= 400 && resp.url().includes('/api/')) {
+        networkErrors.push(`${resp.status()} ${resp.url()}`)
+        try {
+          const body = await resp.text()
+          errorBodies.push(body)
+        } catch {}
+      }
     })
 
     const creds = await singleAsset(page)
     const token = creds.accessToken!
 
-    // Verify assets exist via API
+    // Verify assets exist via API (using Bearer token)
     const assetsResp = await page.request.get('/api/v1/assets', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -25,6 +36,10 @@ test.describe('smoke: asset pages render without errors', () => {
 
     // Page should not redirect to login
     await expect(page).not.toHaveURL(/\/login/)
+
+    // Debug: log network errors and bodies before waiting for assets
+    console.log('Network errors:', JSON.stringify(networkErrors))
+    console.log('Error bodies:', JSON.stringify(errorBodies))
 
     // At least one asset item should be visible
     const assetItems = page.locator('.asset-card, .asset-list-item')

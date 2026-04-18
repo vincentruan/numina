@@ -130,10 +130,9 @@ jobs:
       - name: Seed test accounts
         run: bash tests/seed-accounts.sh
 
-      # E2E tests require proper data seeding - skip in CI for now
-      # - name: Run Playwright tests
-      #   working-directory: tests
-      #   run: npx playwright test
+      - name: Run Playwright tests
+        working-directory: tests
+        run: npx playwright test
 
       - name: Upload Playwright report
         if: always()
