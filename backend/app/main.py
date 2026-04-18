@@ -176,11 +176,19 @@ app.add_exception_handler(StorageError, storage_error_handler)
 
 # Catch-all exception handler for debugging
 async def catch_all_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    import traceback
+    tb = traceback.format_exc()
     logger.exception(f"Unhandled exception on {request.url.path}: {exc}")
     request_id = getattr(request.state, "request_id", "unknown")
     return JSONResponse(
         status_code=500,
-        content={"code": "INTERNAL_ERROR", "message": str(exc), "data": None, "request_id": request_id},
+        content={
+            "code": "INTERNAL_ERROR",
+            "message": str(exc),
+            "traceback": tb,
+            "data": None,
+            "request_id": request_id,
+        },
     )
 
 
