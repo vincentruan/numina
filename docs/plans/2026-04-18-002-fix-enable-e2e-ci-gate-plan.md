@@ -1,7 +1,7 @@
 ---
 title: "fix: Enable E2E CI Gate"
 type: fix
-status: active
+status: completed
 date: 2026-04-18
 ---
 
