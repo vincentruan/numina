@@ -34,10 +34,23 @@ export async function loginAs(page: Page, username: string, password: string): P
 
   // 2. Copy cookies from APIRequestContext to BrowserContext
   //    Playwright sometimes doesn't sync these automatically
-  const cookies = await context.request.storageState()
-  if (cookies.cookies && cookies.cookies.length > 0) {
-    await context.addCookies(cookies.cookies)
+  const storageState = await context.request.storageState()
+  console.log(`[loginAs] StorageState for ${username}:`, JSON.stringify(storageState, null, 2))
+
+  if (storageState.cookies && storageState.cookies.length > 0) {
+    // Ensure cookies have correct domain for browser context
+    // APIRequestContext may set cookies without explicit domain
+    const cookiesWithDomain = storageState.cookies.map(cookie => ({
+      ...cookie,
+      domain: cookie.domain || 'localhost',
+    }))
+    console.log(`[loginAs] Adding cookies to BrowserContext:`, JSON.stringify(cookiesWithDomain, null, 2))
+    await context.addCookies(cookiesWithDomain)
   }
+
+  // Verify cookies are now in BrowserContext
+  const browserCookies = await context.cookies()
+  console.log(`[loginAs] BrowserContext cookies after addCookies:`, JSON.stringify(browserCookies, null, 2))
 
   // 3. Fetch user object using Bearer token (avoids cookie-based rate limit issues)
   //    Retry once on 429 with a short backoff.
