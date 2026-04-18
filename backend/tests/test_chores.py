@@ -445,3 +445,20 @@ def test_member_cannot_list_approvals(client, auth_headers, child_user, daily_te
     member_headers = _register_member_in_family(client, auth_headers)
     resp = client.get("/api/v1/family/chore-approvals", headers=member_headers)
     assert resp.status_code == 403
+
+
+def test_pool_chore_mark_complete_sets_submitted_by_user_id(client, db, auth_headers, child_user, pool_template):
+    """Pool chore mark_complete works and sets submitted_by_user_id to the submitting child."""
+    from app.models.chore import ChoreInstance
+
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    pool_instance = next(i for i in instances if i["template_id"] == pool_template["id"])
+    instance_id = pool_instance["id"]
+
+    resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+    assert resp.status_code == 200
+    assert resp.json()["data"]["status"] == "pending_approval"
+
+    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    assert row is not None
+    assert row.submitted_by_user_id == child_user["id"]

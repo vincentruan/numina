@@ -465,10 +465,20 @@ def _validate_assignees(db: Session, family_id: str, assignee_ids: list[str]) ->
 
 
 def _get_child_instance(db: Session, child_user: User, instance_id: str) -> ChoreInstance:
+    """Fetch a chore instance accessible to this child.
+
+    Assigned chores use child_user_id = child.id.
+    Pool chores use child_user_id = family_id (shared instance).
+    Both are valid for a child to act on.
+    """
+    from sqlalchemy import or_
     instance = db.query(ChoreInstance).filter(
         ChoreInstance.id == instance_id,
-        ChoreInstance.child_user_id == child_user.id,
         ChoreInstance.family_id == child_user.family_id,
+        or_(
+            ChoreInstance.child_user_id == child_user.id,
+            ChoreInstance.child_user_id == child_user.family_id,
+        ),
     ).first()
     if not instance:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "家务实例不存在")
