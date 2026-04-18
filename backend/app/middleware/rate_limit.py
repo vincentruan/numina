@@ -201,7 +201,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]  # Remove "Bearer " prefix
-        elif request.cookies.get("access_token"):
+        elif hasattr(request, "cookies") and request.cookies.get("access_token"):
             token = request.cookies.get("access_token")
 
         if token:
