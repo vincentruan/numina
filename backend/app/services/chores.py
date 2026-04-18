@@ -210,6 +210,7 @@ def mark_complete(db: Session, child_user: User, instance_id: str) -> ChoreInsta
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "该家务实例当前不可标记完成")
     instance.status = "pending_approval"
     instance.submitted_at = datetime.utcnow()
+    instance.submitted_by_user_id = child_user.id
     db.commit()
     db.refresh(instance)
     return instance
@@ -327,14 +328,20 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
             result.append(instance)
 
     # Batch-fetch child users to avoid N+1
-    child_ids = {i.child_user_id for i in result if i.child_user_id}
+    # Use submitted_by_user_id (actual submitter) when available, fall back to child_user_id
+    submitter_ids = {
+        i.submitted_by_user_id or i.child_user_id
+        for i in result
+        if i.submitted_by_user_id or i.child_user_id
+    }
     child_map: dict[str, User] = {}
-    if child_ids:
-        children = db.query(User).filter(User.id.in_(child_ids)).all()
+    if submitter_ids:
+        children = db.query(User).filter(User.id.in_(submitter_ids)).all()
         child_map = {u.id: u for u in children}
 
     for instance in result:
-        child = child_map.get(instance.child_user_id) if instance.child_user_id else None
+        lookup_id = instance.submitted_by_user_id or instance.child_user_id
+        child = child_map.get(lookup_id) if lookup_id else None
         instance._child_display_name = child.display_name if child else None
         instance._child_avatar_color = child.avatar_color if child else None
 

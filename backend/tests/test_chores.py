@@ -414,3 +414,13 @@ def test_cross_family_owner_cannot_approve_chore(client, auth_headers, child_use
 
     resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=second_user_headers)
     assert resp.status_code == 404
+
+
+def test_cross_family_owner_cannot_reject_chore(client, auth_headers, child_user, daily_template, second_user_headers):
+    """Owner from a different family gets 404 on reject (instance not in their family)."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/reject", json={"return_to_redo": False}, headers=second_user_headers)
+    assert resp.status_code == 404

@@ -1,8 +1,11 @@
 """Pydantic schemas for chore templates and instances."""
 
+import re
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+_HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 
 ALLOWED_FREQUENCIES = {"daily", "weekly"}
@@ -113,6 +116,13 @@ class ChoreInstanceResponse(BaseModel):
     child_user_id: str | None = None
     child_display_name: str | None = None
     child_avatar_color: str | None = None
+
+    @field_validator("child_avatar_color", mode="before")
+    @classmethod
+    def sanitize_child_avatar_color(cls, v: str | None) -> str | None:
+        if v is not None and not _HEX_COLOR_RE.match(v):
+            return "#4F46E5"
+        return v
 
 
 class ApproveRequest(BaseModel):
