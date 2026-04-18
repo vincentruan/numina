@@ -248,7 +248,7 @@ if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
   CREATE_TPL_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/family/chore-templates" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN_RICH" \
-    -d '{"name":"测试家务","emoji":"🧹","coin_reward":10,"recurrence":"daily"}')
+    -d '{"name":"测试家务","emoji":"🧹","coin_reward":10,"frequency":"daily","assignment_type":"rotating"}')
   TPL_HTTP=$(echo "$CREATE_TPL_RESP" | tail -1)
   TPL_BODY=$(echo "$CREATE_TPL_RESP" | sed '$d')
   if [ "$TPL_HTTP" = "200" ] || [ "$TPL_HTTP" = "201" ]; then
