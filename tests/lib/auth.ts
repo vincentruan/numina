@@ -148,18 +148,18 @@ export async function loginAsChild(
     await context.addCookies(cookies.cookies)
   }
 
-  // 5. Fetch child user object
-  let meResp = await context.request.get('/api/v1/auth/me', {
+  // 5. Fetch child user object (using child-specific endpoint)
+  let meResp = await context.request.get('/api/v1/auth/child/me', {
     headers: { Authorization: `Bearer ${childToken}` },
   })
   if (meResp.status() === 429) {
     await page.waitForTimeout(2000)
-    meResp = await context.request.get('/api/v1/auth/me', {
+    meResp = await context.request.get('/api/v1/auth/child/me', {
       headers: { Authorization: `Bearer ${childToken}` },
     })
   }
   if (!meResp.ok()) {
-    throw new Error(`loginAsChild: GET /auth/me failed: HTTP ${meResp.status()}`)
+    throw new Error(`loginAsChild: GET /auth/child/me failed: HTTP ${meResp.status()}`)
   }
   const meBody = await meResp.json()
   const childUser = meBody.data ?? meBody

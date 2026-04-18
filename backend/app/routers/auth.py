@@ -215,6 +215,15 @@ def child_login(
     return tokens
 
 
+@router.get("/child/me", response_model=UserResponse)
+def get_child_me(child_user: User = Depends(get_current_child_user)):
+    """Get current child user profile.
+
+    Uses child-specific authentication dependency.
+    """
+    return child_user
+
+
 @router.post("/child/refresh", response_model=ChildRefreshResponse)
 def child_refresh(
     response: Response,
