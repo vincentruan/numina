@@ -1,15 +1,15 @@
-import type { Page } from '@playwright/test'
+import type { Page, BrowserContext } from '@playwright/test'
 
 /**
  * Log in as a user and establish a full browser session.
  *
  * The app uses httpOnly cookies (Phase 2 security model) — JS cannot read the
  * auth token. This helper:
- *   1. POSTs to /api/v1/auth/login via page.request so the browser context
- *      receives the httpOnly Set-Cookie from the server response.
- *   2. GETs /api/v1/auth/me to retrieve the user object.
- *   3. Navigates to / so localStorage is accessible.
- *   4. Injects localStorage['numina_user'] with the user object so the Vue
+ *   1. POSTs to /api/v1/auth/login via context.request so cookies are set
+ *   2. Copies cookies from APIRequestContext to BrowserContext (they may not sync automatically)
+ *   3. GETs /api/v1/auth/me to retrieve the user object.
+ *   4. Navigates to / so localStorage is accessible.
+ *   5. Injects localStorage['numina_user'] with the user object so the Vue
  *      router guard's getUser() check passes.
  *
  * Returns the access token for tests that need to make authenticated API calls
@@ -19,8 +19,10 @@ import type { Page } from '@playwright/test'
  * (withCredentials: true is set in the frontend API client).
  */
 export async function loginAs(page: Page, username: string, password: string): Promise<string> {
-  // 1. Login — browser context receives httpOnly auth cookie
-  const loginResp = await page.request.post('/api/v1/auth/login', {
+  const context = page.context()
+
+  // 1. Login via context.request — cookies stored in APIRequestContext
+  const loginResp = await context.request.post('/api/v1/auth/login', {
     data: { username, password },
   })
   if (!loginResp.ok()) {
@@ -30,14 +32,21 @@ export async function loginAs(page: Page, username: string, password: string): P
   const loginData = await loginResp.json()
   const accessToken: string = loginData.data?.access_token ?? loginData.access_token
 
-  // 2. Fetch user object using Bearer token (avoids cookie-based rate limit issues)
+  // 2. Copy cookies from APIRequestContext to BrowserContext
+  //    Playwright sometimes doesn't sync these automatically
+  const cookies = await context.request.storageState()
+  if (cookies.cookies && cookies.cookies.length > 0) {
+    await context.addCookies(cookies.cookies)
+  }
+
+  // 3. Fetch user object using Bearer token (avoids cookie-based rate limit issues)
   //    Retry once on 429 with a short backoff.
-  let meResp = await page.request.get('/api/v1/auth/me', {
+  let meResp = await context.request.get('/api/v1/auth/me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
   if (meResp.status() === 429) {
     await page.waitForTimeout(2000)
-    meResp = await page.request.get('/api/v1/auth/me', {
+    meResp = await context.request.get('/api/v1/auth/me', {
       headers: { Authorization: `Bearer ${accessToken}` },
     })
   }
@@ -47,10 +56,10 @@ export async function loginAs(page: Page, username: string, password: string): P
   const meBody = await meResp.json()
   const user = meBody.data ?? meBody
 
-  // 3. Navigate to root so localStorage is accessible in this origin
+  // 4. Navigate to root so localStorage is accessible in this origin
   await page.goto('/')
 
-  // 4. Inject numina_user — satisfies router guard isLoggedIn check
+  // 5. Inject numina_user — satisfies router guard isLoggedIn check
   await page.evaluate((u) => {
     localStorage.setItem('numina_user', JSON.stringify(u))
   }, user)
