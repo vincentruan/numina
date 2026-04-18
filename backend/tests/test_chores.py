@@ -220,17 +220,18 @@ def test_mark_complete(client, child_user, daily_template):
     assert resp.json()["data"]["status"] == "pending_approval"
 
 
-def test_mark_complete_sets_submitted_by_user_id(client, auth_headers, child_user, daily_template):
-    """submitted_by_user_id is populated after mark_complete — verified via pending approvals identity."""
+def test_mark_complete_sets_submitted_by_user_id(client, db, auth_headers, child_user, daily_template):
+    """submitted_by_user_id is written to the DB row when a child marks a chore complete."""
+    from app.models.chore import ChoreInstance
+
     instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
     client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
 
-    approvals = client.get("/api/v1/family/chore-approvals", headers=auth_headers).json()["data"]
-    assert len(approvals) == 1
-    # child identity resolved via submitted_by_user_id
-    assert approvals[0]["child_display_name"] == "小明"
-    assert approvals[0]["child_user_id"] == child_user["id"]
+    # Verify the column is set directly on the DB row — not just via the fallback path
+    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    assert row is not None
+    assert row.submitted_by_user_id == child_user["id"]
 
 
 def test_mark_complete_twice_fails(client, child_user, daily_template):
