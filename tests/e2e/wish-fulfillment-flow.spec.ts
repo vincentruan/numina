@@ -56,14 +56,18 @@ test.describe('wish fulfillment flow', () => {
       await expect(pageParent.locator(`text=${wishName}`).first()).toBeVisible({ timeout: 10_000 })
 
       // ── Step 6: Parent realizes wish via UI ───────────────────────────────
-      const realizeBtn = pageParent.locator(
-        `[class*="realize"], button:has-text("兑现"), button:has-text("实现")`
-      ).first()
-      await expect(realizeBtn).toBeVisible({ timeout: 5_000 })
+      // Clicking "兑现" opens a confirmation dialog
+      const realizeBtn = pageParent.locator('.btn-realize').first()
+      await expect(realizeBtn, '兑现 button should be visible').toBeVisible({ timeout: 5_000 })
       await realizeBtn.click()
 
-      // Wish card should disappear or show realized status
-      await pageParent.waitForTimeout(1000)
+      // Dialog appears - click confirm button
+      const confirmBtn = pageParent.locator('.btn-realize-confirm')
+      await expect(confirmBtn, '确认兑现 button in dialog should be visible').toBeVisible({ timeout: 3_000 })
+      await confirmBtn.click()
+
+      // Dialog should close after confirmation
+      await expect(pageParent.locator('.dialog-overlay')).not.toBeVisible({ timeout: 5_000 })
 
       // ── Step 7: Verify coins deducted ─────────────────────────────────────
       await pageChild.waitForTimeout(1000)

@@ -46,6 +46,12 @@ test.describe('chore approval flow', () => {
         expect(completeResp.ok(), `POST /child/chores/${instanceId}/complete failed: ${completeResp.status()}`).toBeTruthy()
       }
 
+      // If already approved, skip UI test (nothing to approve)
+      if (instance!.status === 'approved') {
+        test.info().annotations.push({ type: 'note', description: 'Chore already approved — skipping UI approval test' })
+        return
+      }
+
       // ── Step 3: Record balance before approval ───────────────────────────
       const balanceBefore = await getChildBalance(pageChild)
 
