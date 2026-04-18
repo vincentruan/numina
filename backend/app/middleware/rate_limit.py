@@ -174,6 +174,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     STATIC_PREFIXES = ("/uploads/", "/static/")
 
     async def dispatch(self, request: Request, call_next):
+        # Skip rate limiting entirely in development/CI
+        # Production environments still need protection
+        if settings.ENVIRONMENT != "production":
+            return await call_next(request)
+
         # Skip rate limiting for health check and auth endpoints
         if request.url.path in self.SKIP_PATHS:
             return await call_next(request)
