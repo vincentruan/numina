@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Numina - 隐私优先的家庭资产可视化管理系统。自托管、开源、免费的资产追踪工具。">
+  <title>Numina - 家庭资产一目了然</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/svg+xml" href="assets/favicon.svg">
+</head>
+<body>
+  <!-- Skip to main content for keyboard navigation -->
+  <a href="#features" class="skip-link">跳转到主要内容</a>
+
+  <!-- Hero Section -->
+  <section id="hero">
+    <div class="hero-content">
+      <h1>家庭资产一目了然，孩子心愿追踪更贴心</h1>
+      <div class="hero-layout">
+        <div class="hero-image-wrapper">
+          <img
+            src="assets/dashboard-final-top.webp"
+            alt="Dashboard overview showing family net worth, asset allocation pie chart, and trend line chart"
+            width="375"
+            height="812"
+            class="hero-image"
+            onerror="this.style.background='#f5f5f7'; this.alt='Dashboard screenshot unavailable'"
+          >
+        </div>
+        <div class="hero-callout">
+          <p class="callout-text">孩子心愿系统：用星星硬币激励孩子完成家务，培养财商意识</p>
+          <div class="hero-cta">
+            <a href="https://github.com/vincentruan/numina#快速开始" class="btn btn-primary">部署试用</a>
+            <a href="#features" class="btn btn-secondary">了解更多</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Deploy Section -->
+  <section id="deploy">
+    <div class="deploy-content">
+      <div class="terminal-block">
+        <code class="terminal-command">docker-compose up -d<span class="cursor"></span></code>
+      </div>
+      <p class="deploy-tagline">一键启动，30秒就绪</p>
+      <a href="https://github.com/vincentruan/numina#快速开始" class="deploy-link">查看详细部署指南 →</a>
+    </div>
+  </section>
+
+  <!-- Trust Badges Section -->
+  <section id="trust">
+    <div class="trust-badges">
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> 36+ Tests</summary>
+        <div class="badge-tooltip">
+          <p>自动化测试覆盖，每次提交验证</p>
+          <a href="https://github.com/vincentruan/numina/actions" target="_blank">查看 CI →</a>
+        </div>
+      </details>
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> Self-Hosted</summary>
+        <div class="badge-tooltip">
+          <p>数据存储在您的硬件上</p>
+          <a href="https://github.com/vincentruan/numina" target="_blank">了解架构 →</a>
+        </div>
+      </details>
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> Open Source</summary>
+        <div class="badge-tooltip">
+          <p>代码公开，可审计</p>
+          <a href="https://github.com/vincentruan/numina" target="_blank">查看源码 →</a>
+        </div>
+      </details>
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> MIT License</summary>
+        <div class="badge-tooltip">
+          <p>个人和商业免费使用</p>
+          <a href="https://github.com/vincentruan/numina/blob/main/LICENSE" target="_blank">查看许可 →</a>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Comparison Grid Section -->
+  <section id="comparison">
+    <table class="comparison-table">
+      <caption class="sr-only">Numina与传统预算应用和电子表格功能对比</caption>
+      <thead>
+        <tr>
+          <th>功能</th>
+          <th class="numina-column">Numina</th>
+          <th>传统预算应用</th>
+          <th>电子表格</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>隐私保护</td>
+          <td class="numina-column">自托管，数据完全本地</td>
+          <td>云端存储，数据上传</td>
+          <td>本地文件，但无加密</td>
+        </tr>
+        <tr>
+          <td>家庭结构</td>
+          <td class="numina-column">多用户角色，家庭共享</td>
+          <td>单用户，无协作</td>
+          <td>单文件，手动共享</td>
+        </tr>
+        <tr>
+          <td>负债追踪</td>
+          <td class="numina-column">房贷、车贷、信用卡全覆盖</td>
+          <td>部分支持</td>
+          <td>手动记录</td>
+        </tr>
+        <tr>
+          <td>孩子激励</td>
+          <td class="numina-column">星星硬币系统，家务激励</td>
+          <td>无</td>
+          <td>无</td>
+        </tr>
+        <tr>
+          <td>成本</td>
+          <td class="numina-column">免费开源</td>
+          <td>订阅付费</td>
+          <td>免费</td>
+        </tr>
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="4" class="table-footer">Last updated: 2026-04-18</td>
+        </tr>
+      </tfoot>
+    </table>
+  </section>
+
+  <!-- Feature Showcase Section -->
+  <section id="features">
+    <h2 class="features-title">核心功能</h2>
+    <div class="feature-grid">
+      <!-- Asset Tracking -->
+      <article class="feature-card" tabindex="0">
+        <div class="card-icon">
+          <img src="assets/icons/asset-tracking.svg" alt="" width="24" height="24">
+        </div>
+        <h3>资产追踪</h3>
+        <p class="card-description">追踪家庭所有实物与金融资产，实时掌握资产分布与价值变化</p>
+        <img
+          src="assets/dashboard-final-top.webp"
+          alt="Dashboard overview showing net worth, asset allocation pie chart"
+          width="375"
+          height="812"
+          class="card-thumbnail"
+          loading="lazy"
+          onerror="this.style.background='#f5f5f7'"
+        >
+      </article>
+
+      <!-- Liability Management -->
+      <article class="feature-card" tabindex="0">
+        <div class="card-icon">
+          <img src="assets/icons/liability-management.svg" alt="" width="24" height="24">
+        </div>
+        <h3>负债管理</h3>
+        <p class="card-description">管理房贷、车贷、信用卡负债，清晰了解家庭债务状况与还款进度</p>
+        <img
+          src="assets/dashboard-final-bottom.webp"
+          alt="Dashboard bottom section showing liability summary and recent transactions"
+          width="375"
+          height="812"
+          class="card-thumbnail"
+          loading="lazy"
+          onerror="this.style.background='#f5f5f7'"
+        >
+      </article>
+
+      <!-- Dashboard Visualization -->
+      <article class="feature-card" tabindex="0">
+        <div class="card-icon">
+          <img src="assets/icons/dashboard-visualization.svg" alt="" width="24" height="24">
+        </div>
+        <h3>数据可视化</h3>
+        <p class="card-description">可视化展示净资产趋势与资产分配，一目了然的家庭财务健康状态</p>
+        <img
+          src="assets/dashboard-final-cards.webp"
+          alt="Dashboard cards showing top assets with values and categories"
+          width="375"
+          height="812"
+          class="card-thumbnail"
+          loading="lazy"
+          onerror="this.style.background='#f5f5f7'"
+        >
+      </article>
+
+      <!-- Children Incentive System -->
+      <article class="feature-card" tabindex="0">
+        <div class="card-icon">
+          <img src="assets/icons/children-incentive.svg" alt="" width="24" height="24">
+        </div>
+        <h3>孩子激励系统</h3>
+        <p class="card-description">星星硬币激励系统，用游戏化方式培养孩子财商与家务责任感</p>
+        <img
+          src="assets/wishes-page.webp"
+          alt="Children wishes page showing star coin progress and chore completion tracking"
+          width="375"
+          height="812"
+          class="card-thumbnail"
+          loading="lazy"
+          onerror="this.style.background='#f5f5f7'"
+        >
+      </article>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <nav class="footer-nav">
+      <a href="https://github.com/vincentruan/numina" target="_blank">GitHub</a>
+      <a href="https://github.com/vincentruan/numina/tree/main/docs" target="_blank">文档</a>
+      <a href="https://github.com/vincentruan/numina/blob/main/LICENSE" target="_blank">LICENSE</a>
+    </nav>
+    <p class="footer-text">Made by Numina Team</p>
+  </footer>
+
+  <!-- Trust badge single-open behavior -->
+  <script>
+    document.querySelectorAll('details.trust-badge').forEach(d => {
+      d.addEventListener('toggle', e => {
+        if (e.target.open) {
+          document.querySelectorAll('details.trust-badge').forEach(other => {
+            if (other !== e.target) other.removeAttribute('open');
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
