@@ -18,8 +18,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('families', sa.Column('ai_model_id', sa.String(length=100), nullable=True))
-    op.add_column('families', sa.Column('ai_vision_model_id', sa.String(length=100), nullable=True))
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
+    cols = {c['name'] for c in inspector.get_columns('families')}
+    if 'ai_model_id' not in cols:
+        op.add_column('families', sa.Column('ai_model_id', sa.String(length=100), nullable=True))
+    if 'ai_vision_model_id' not in cols:
+        op.add_column('families', sa.Column('ai_vision_model_id', sa.String(length=100), nullable=True))
 
 
 def downgrade() -> None:

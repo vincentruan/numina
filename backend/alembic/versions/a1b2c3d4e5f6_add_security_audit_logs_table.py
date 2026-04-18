@@ -12,7 +12,7 @@ from typing import Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = 'a1b2c3d4e5f6'
+revision: str = 'audit_log_001'
 down_revision: Union[str, None] = 'fffd4c754ec1'
 branch_labels = None
 depends_on = None
@@ -30,8 +30,9 @@ def upgrade() -> None:
         sa.Column('outcome', sa.String(16), nullable=False),
         sa.Column('detail', sa.Text, nullable=True),
         sa.Column('created_at', sa.DateTime, server_default=sa.func.now(), nullable=False, index=True),
+        if_not_exists=True,
     )
 
 
 def downgrade() -> None:
-    op.drop_table('security_audit_logs')
+    op.drop_table('security_audit_logs', if_exists=True)

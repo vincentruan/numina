@@ -17,8 +17,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    bind = op.get_context().bind
-    inspector = sa.inspect(bind)
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
     existing_cols = {c['name'] for c in inspector.get_columns('chore_instances')}
     if 'submitted_by_user_id' not in existing_cols:
         with op.batch_alter_table('chore_instances') as batch_op:

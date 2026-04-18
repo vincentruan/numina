@@ -19,7 +19,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('assets', sa.Column('image_url', sa.String(length=500), nullable=True))
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
+    cols = {c['name'] for c in inspector.get_columns('assets')}
+    if 'image_url' not in cols:
+        op.add_column('assets', sa.Column('image_url', sa.String(length=500), nullable=True))
 
 
 def downgrade() -> None:

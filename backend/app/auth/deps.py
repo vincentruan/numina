@@ -139,6 +139,19 @@ def _verify_token(token: str, expected_type: str = "access") -> str | None:
         return None
 
 
+def _assert_not_child(user: User) -> None:
+    """Raise 403 if the user is a child account.
+
+    Called from get_current_user and get_current_user_from_cookie to block
+    child tokens on all adult endpoints at the authentication layer.
+    """
+    if user.role == "child":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="儿童账户无法访问此端点",
+        )
+
+
 def get_current_user(
     request: Request,
     token: str | None = Depends(oauth2_scheme),
@@ -185,6 +198,10 @@ def get_current_user(
     if user is None:
         raise credentials_exception
 
+    # SECURITY: child tokens must not be accepted on adult endpoints.
+    # Endpoints that need child access use get_current_child_user instead.
+    _assert_not_child(user)
+
     return user
 
 
@@ -212,6 +229,9 @@ def get_current_user_from_cookie(
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
     if user is None:
         raise credentials_exception
+
+    # SECURITY: child tokens must not be accepted on adult-only cookie endpoints.
+    _assert_not_child(user)
 
     return user
 
@@ -318,12 +338,24 @@ def get_child_refresh_token_from_cookie(
 def require_adult(user: User = Depends(get_current_user)) -> User:
     """Require the current user to be an adult (owner or member).
 
-    Raises HTTP 403 if the user has role='child'.
-    Apply per-function by replacing get_current_user with require_adult.
+    Child tokens are already rejected by get_current_user via _assert_not_child.
+    Use this dependency (instead of get_current_user directly) on endpoints that
+    are semantically adult-only, so the intent is explicit in the route signature
+    and the child-blocking invariant is preserved even if get_current_user changes.
     """
-    if user.role == "child":
+    return user
+
+
+def require_owner(user: User = Depends(get_current_user)) -> User:
+    """Require the current user to be the family owner.
+
+    Raises HTTP 403 if the user is not role='owner'.
+    Use for operations that only the family owner should perform,
+    such as approving chores or managing family settings.
+    """
+    if user.role != "owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="子账户无权访问此功能",
+            detail="仅家庭管理员可执行此操作",
         )
     return user

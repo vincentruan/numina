@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_adult
+from app.auth.deps import get_current_user, require_adult, require_owner
 from app.auth.deps import get_current_child_user
 from app.database import get_db
 from app.models.user import User
@@ -77,7 +77,7 @@ def delete_template(
 @router.get("/family/chore-approvals", response_model=list[ChoreInstanceResponse])
 def list_pending_approvals(
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     """Returns pending approvals. Triggers lazy auto-approve for timed-out instances."""
     instances = chore_service.list_pending_approvals(db, user)
@@ -94,7 +94,7 @@ def list_pending_approvals(
 async def approve_instance(
     instance_id: str,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     instance = await chore_service.approve_instance_async(db, user, instance_id)
     resp = ChoreInstanceResponse.model_validate(instance)
@@ -107,7 +107,7 @@ def reject_instance(
     instance_id: str,
     req: RejectRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
+    user: User = Depends(require_owner),
 ):
     return chore_service.reject_instance(db, user, instance_id, req.return_to_redo)
 

@@ -166,12 +166,19 @@ def test_bind_token_and_get_family_children(client):
     assert "token" in token_data
     assert token_data["bind_url"].startswith("/child/bind?token=")
 
-    # GET children — now requires adult auth
-    children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children", headers=headers)
+    # GET children — no auth required (returning child device flow)
+    children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children")
     assert children_resp.status_code == 200
     children = children_resp.json()["data"]
     assert len(children) == 1
     assert children[0]["display_name"] == "小明"
+
+
+def test_get_family_children_nonexistent_family_returns_empty_unauthenticated(client):
+    """Nonexistent family_id returns empty list with no auth required."""
+    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
 
 
 # ---------------------------------------------------------------------------

@@ -12,6 +12,7 @@ Create Date: 2026-04-16 12:00:00.000000
 """
 from typing import Sequence, Union
 
+import sqlalchemy as sa
 from alembic import op
 
 revision: str = 'e5f6a7b8c9d0'
@@ -21,8 +22,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('child_milestones') as batch_op:
-        batch_op.drop_constraint('uq_child_milestone_type', type_='unique')
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
+    constraints = {c['name'] for c in inspector.get_unique_constraints('child_milestones')}
+    if 'uq_child_milestone_type' in constraints:
+        with op.batch_alter_table('child_milestones') as batch_op:
+            batch_op.drop_constraint('uq_child_milestone_type', type_='unique')
 
 
 def downgrade() -> None:

@@ -17,9 +17,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
+    cols = {c['name'] for c in inspector.get_columns('families')}
     with op.batch_alter_table('families') as batch_op:
-        batch_op.add_column(sa.Column('coin_copper_to_silver', sa.Integer(), nullable=False, server_default='10'))
-        batch_op.add_column(sa.Column('coin_silver_to_gold', sa.Integer(), nullable=False, server_default='10'))
+        if 'coin_copper_to_silver' not in cols:
+            batch_op.add_column(sa.Column('coin_copper_to_silver', sa.Integer(), nullable=False, server_default='10'))
+        if 'coin_silver_to_gold' not in cols:
+            batch_op.add_column(sa.Column('coin_silver_to_gold', sa.Integer(), nullable=False, server_default='10'))
 
 
 def downgrade() -> None:

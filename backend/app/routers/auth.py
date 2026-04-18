@@ -291,9 +291,9 @@ def get_family_children(
 ):
     """Return active children for a family — no auth required.
 
-    Intentional design: independent child devices need to list selectable accounts
-    on re-visits without any token. Only non-sensitive fields are exposed:
-    id, display_name, avatar_color, is_active (via ChildResponse).
+    Intentional design: returning child devices need to list selectable accounts
+    on the account-picker screen without any token. Only non-sensitive display
+    fields are exposed: id, display_name, avatar_color (via ChildResponse).
     Fields NOT exposed: pin_hash, pin_fail_count, pin_locked_until, token_version.
     """
     from app.schemas.children import ChildResponse

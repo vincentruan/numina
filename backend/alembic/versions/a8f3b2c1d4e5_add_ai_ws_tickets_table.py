@@ -19,8 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Table may already exist if created by SQLAlchemy create_all() at startup
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
     if 'ai_ws_tickets' not in inspector.get_table_names():
         op.create_table(
             'ai_ws_tickets',

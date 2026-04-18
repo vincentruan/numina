@@ -17,8 +17,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
     existing_tables = set(inspector.get_table_names())
 
     if 'chore_templates' not in existing_tables:

@@ -17,8 +17,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    bind = op.get_bind()
-    inspector = sa.inspect(bind)
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
     existing_cols = {c['name'] for c in inspector.get_columns('coin_transactions')}
     if 'streak_bonus' not in existing_cols:
         op.add_column(
