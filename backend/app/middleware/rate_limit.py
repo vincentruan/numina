@@ -196,9 +196,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     def _get_client_id(self, request: Request) -> str:
         """Identify client by decoded user_id or real IP address."""
         # Try to get user_id from JWT token (if present)
+        # First check Authorization header, then check cookies
+        token = None
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]  # Remove "Bearer " prefix
+        elif request.cookies.get("access_token"):
+            token = request.cookies.get("access_token")
+
+        if token:
             user_id = _decode_jwt_user_id(token)
             if user_id:
                 return f"user:{user_id}"
