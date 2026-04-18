@@ -4,14 +4,20 @@ import { singleAsset } from '../lib/fixtures'
 test.describe('smoke: asset pages render without errors', () => {
   test('asset list page renders at least one asset', async ({ page }) => {
     const errors: string[] = []
+    const networkErrors: string[] = []
     page.on('console', (msg) => {
       if (msg.type() === 'error') errors.push(msg.text())
+    })
+    page.on('response', (resp) => {
+      if (resp.status() >= 400 && resp.url().includes('/api/')) {
+        networkErrors.push(`${resp.status()} ${resp.url()}`)
+      }
     })
 
     const creds = await singleAsset(page)
     const token = creds.accessToken!
 
-    // Verify assets exist via API
+    // Verify assets exist via API (using Bearer token)
     const assetsResp = await page.request.get('/api/v1/assets', {
       headers: { Authorization: `Bearer ${token}` },
     })
@@ -25,6 +31,9 @@ test.describe('smoke: asset pages render without errors', () => {
 
     // Page should not redirect to login
     await expect(page).not.toHaveURL(/\/login/)
+
+    // Debug: log network errors before waiting for assets
+    console.log('Network errors before asset wait:', JSON.stringify(networkErrors))
 
     // At least one asset item should be visible
     const assetItems = page.locator('.asset-card, .asset-list-item')
