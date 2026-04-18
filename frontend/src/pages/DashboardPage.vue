@@ -25,6 +25,9 @@
           :month-over-month-change="overview?.month_over_month_change"
         />
 
+        <!-- Stale data indicator -->
+        <p v-if="isShowingCachedData" class="stale-hint">数据可能不是最新</p>
+
         <!-- Pending Chore Approvals (owner only) -->
         <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
 
@@ -270,6 +273,9 @@ const selectedTags = ref<string[]>([])
 const currentSort = ref<string>('created_at_desc')
 
 const overview = computed(() => dashboardStore.overview)
+const isShowingCachedData = computed(
+  () => dashboardStore.lastFetchedAt !== null && !dashboardStore.loading,
+)
 const categories = computed(() => categoryStore.categories)
 
 // Alert cards visibility
@@ -684,7 +690,7 @@ function handleScroll() {
 }
 
 async function onRefresh() {
-  await dashboardStore.fetchAll()
+  await dashboardStore.fetchAll(true)
   if (authStore.user?.role === 'owner') {
     await choreStore.fetchPendingApprovals()
   }
@@ -720,6 +726,13 @@ onUnmounted(() => {
 .dashboard-page {
   background: var(--bg-secondary);
   min-height: 100vh;
+}
+
+.stale-hint {
+  color: var(--van-gray-6);
+  font-size: 12px;
+  text-align: center;
+  margin: 4px 0;
 }
 
 /* Toolbar Icons */
