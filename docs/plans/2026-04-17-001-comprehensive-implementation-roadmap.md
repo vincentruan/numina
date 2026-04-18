@@ -40,23 +40,25 @@ status: planning
 
 ### 实施计划
 
-#### Phase 1: 启用现有 E2E 测试（1-2天）
+#### Phase 1: 启用现有 E2E 测试 ✅ 已完成（2026-04-18）
 
 **目标：** 让 CI 中的 e2e job 真正运行起来
 
-**步骤：**
-1. 创建 `tests/seed-e2e-data.sh`，包含：
-   - 注册测试账号（复用 `seed-accounts.sh`）
-   - 创建 1 个资产（physical）
-   - 创建 1 个负债
-   - 创建 1 个心愿
-   - 创建 1 个儿童用户 + PIN
-   - 创建 1 个家务模板
+**实际实施：** `seed-accounts.sh` 已在 CI 中运行，覆盖所有 5 个 spec 文件所需的测试账号（`test_empty`、`test_rich`、`test_asset`）。无需额外的 `seed-e2e-data.sh`。直接取消注释 `npx playwright test` 步骤即可。
+
+**已完成：**
+- `.github/workflows/ci.yml` 中 `npx playwright test` 已启用
+- 5 个 spec 文件全部覆盖：`smoke`、`auth-guards`、`cross-family-isolation`、`empty-state`、`api-contract`
+- OpenAPI 快照（`tests/fixtures/openapi.snapshot.json`）已存在
+
+**原计划步骤（已过时，保留供参考）：**
+1. ~~创建 `tests/seed-e2e-data.sh`~~ — 不需要，`seed-accounts.sh` 已足够
 
 2. 修改 `.github/workflows/ci.yml`：
    ```yaml
-   - name: Seed E2E data
-     run: bash tests/seed-e2e-data.sh
+   - name: Run Playwright tests
+     working-directory: tests
+     run: npx playwright test
 
    - name: Run Playwright tests
      working-directory: tests
@@ -71,9 +73,11 @@ status: planning
 
 ---
 
-#### Phase 2: 扩展 E2E 覆盖率（3-5天）
+#### Phase 2: 扩展 E2E 覆盖率（下一步）
 
 **目标：** 覆盖核心用户流程和儿童系统
+
+**前置条件：** 需要新建 `childFamily()` fixture（`tests/lib/fixtures.ts`），处理儿童 PIN 认证流程（`/child/select` → `/child/pin` → child session），因为儿童路由使用独立的 child session，不能复用成人 `loginAs()` 辅助函数。
 
 **新增 spec 文件：**
 
