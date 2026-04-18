@@ -82,15 +82,16 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function fetchAll() {
     loading.value = true
     try {
-      await Promise.all([
-        fetchOverview(),
-        fetchStatesSummary(),
-        fetchHomeAssets(),
-        fetchAllocation(),
-        fetchTrend(),
-        fetchLowUsageAssets(),
-        fetchExpiringSoonAssets(),
-      ])
+      const res = await dashboardApi.getDashboardBundle()
+      const data = res.data
+      overview.value = data.overview
+      statesSummary.value = data.statesSummary
+      homeAssets.value = data.homeAssets
+      allocation.value = data.allocation.items
+      allocationTotal.value = data.allocation.total
+      trend.value = data.trend.points
+      lowUsageAssets.value = data.lowUsageAssets
+      expiringSoonAssets.value = data.expiringSoon
     } finally {
       loading.value = false
     }

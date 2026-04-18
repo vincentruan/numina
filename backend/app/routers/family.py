@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
 from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
@@ -11,11 +11,17 @@ from app.models.family import Family
 from app.models.liability import Liability
 from app.models.user import User
 from app.schemas.auth import UserResponse
-from app.schemas.family import FamilyResponse, FamilySettingsUpdate, FamilySettingsResponse, MemberSummary, UpdateFamilyTitleRequest
 from app.schemas.coin import ChildBalanceResponse
+from app.schemas.family import (
+    FamilyResponse,
+    FamilySettingsResponse,
+    FamilySettingsUpdate,
+    MemberSummary,
+    UpdateFamilyTitleRequest,
+)
+from app.services import coin_transactions as coin_service
 from app.services import family as family_service
 from app.services.snapshot import generate_snapshots
-from app.services import coin_transactions as coin_service
 
 router = APIRouter(prefix="/family", tags=["family"])
 
@@ -27,9 +33,11 @@ class UpdateRoleRequest(BaseModel):
 @router.get("/info", response_model=FamilyResponse)
 @router.get("/", response_model=FamilyResponse)
 def get_family(
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
+    response.headers["Cache-Control"] = "private, max-age=300"
     family = family_service.get_family_info(db, user)
     members = family_service.get_family_members(db, user)
     return FamilyResponse(
@@ -61,9 +69,11 @@ def update_family_title(
 
 @router.get("/members", response_model=list[UserResponse])
 def get_members(
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
+    response.headers["Cache-Control"] = "private, max-age=300"
     members = family_service.get_family_members(db, user)
     return [UserResponse.model_validate(m) for m in members]
 
@@ -246,6 +256,7 @@ def get_all_child_balances(
     for multiple children simultaneously.
     """
     from sqlalchemy import func as sa_func
+
     from app.models.coin_transaction import CoinTransaction as CT
 
     # Get all child IDs in this family
@@ -289,6 +300,7 @@ def get_children_chore_stats(
     'total_this_week' = all instances (any status) in the current ISO week.
     """
     from datetime import date, timedelta
+
     from app.models.chore import ChoreInstance
 
     # Current ISO week bucket: YYYY-Www
