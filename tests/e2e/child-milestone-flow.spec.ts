@@ -90,22 +90,11 @@ test.describe('child milestone flow', () => {
       // Navigate to child tasks page — milestone celebration should appear
       await pageChild.goto('/child/tasks')
 
-      // The MilestoneCelebration component checks milestones on mount
-      // and shows a modal for any unseen milestones
-      const celebrationModal = pageChild.locator(
-        '.milestone-modal, [class*="milestone"][class*="modal"], [class*="celebration"]'
-      ).first()
+      // The MilestoneCelebration component uses class "milestone-overlay"
+      // (Teleport to body, v-if="visible")
+      const celebrationModal = pageChild.locator('.milestone-overlay').first()
 
-      // Also try text-based selectors as fallback
-      const celebrationText = pageChild.locator('text=恭喜, text=里程碑, text=first_chore').first()
-
-      const modalVisible = await celebrationModal.isVisible({ timeout: 8_000 }).catch(() => false)
-      const textVisible = await celebrationText.isVisible({ timeout: 3_000 }).catch(() => false)
-
-      expect(
-        modalVisible || textVisible,
-        'Milestone celebration modal should be visible after clearing seen_milestones'
-      ).toBeTruthy()
+      await expect(celebrationModal, 'Milestone celebration modal should be visible after clearing seen_milestones').toBeVisible({ timeout: 8_000 })
     } finally {
       await ctxChild.close()
       await ctxParent.close()

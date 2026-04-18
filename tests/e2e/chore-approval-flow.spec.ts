@@ -50,7 +50,7 @@ test.describe('chore approval flow', () => {
       const balanceBefore = await getChildBalance(pageChild)
 
       // ── Step 4: Parent sees approval card in UI ──────────────────────────
-      await pageParent.goto('/family/chore-approvals')
+      await pageParent.goto('/chore-approvals')
       await expect(pageParent.locator('text=测试家务').first()).toBeVisible({ timeout: 10_000 })
       await expect(pageParent.locator(`text=test_child`).first()).toBeVisible({ timeout: 5_000 })
 

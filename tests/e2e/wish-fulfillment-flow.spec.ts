@@ -52,7 +52,7 @@ test.describe('wish fulfillment flow', () => {
       const balanceBefore = await getChildBalance(pageChild)
 
       // ── Step 5: Parent sees redemption request in UI ──────────────────────
-      await pageParent.goto('/family/wish-review')
+      await pageParent.goto('/wish-review')
       await expect(pageParent.locator(`text=${wishName}`).first()).toBeVisible({ timeout: 10_000 })
 
       // ── Step 6: Parent realizes wish via UI ───────────────────────────────
