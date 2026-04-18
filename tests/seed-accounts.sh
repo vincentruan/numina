@@ -62,7 +62,7 @@ get_category_id() {
 
   curl -sL "$BASE_URL/categories?asset_type=$asset_type" \
     -H "Authorization: Bearer $token" \
-    | jq -r ".[] | select(.name==\"$name\") | .id" | head -1
+    | jq -r ".data[] | select(.name==\"$name\") | .id" | head -1
 }
 
 # 检查资产数量（避免重复创建）
