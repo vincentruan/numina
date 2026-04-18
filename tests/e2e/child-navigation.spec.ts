@@ -35,13 +35,13 @@ test.describe('child navigation guards', () => {
     test('adult → /child redirects to /', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child')
-      await expect(page).toHaveURL(/^\/$|\/\?|\/dashboard/, { timeout: 8_000 })
+      await expect(page).toHaveURL(/localhost\/$|localhost\/\?|dashboard/, { timeout: 8_000 })
     })
 
     test('adult → /child/tasks redirects to /', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child/tasks')
-      await expect(page).toHaveURL(/^\/$|\/\?|\/dashboard/, { timeout: 8_000 })
+      await expect(page).toHaveURL(/localhost\/$|localhost\/\?|dashboard/, { timeout: 8_000 })
     })
   })
 
