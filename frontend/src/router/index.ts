@@ -5,6 +5,24 @@ const router = createRouter({
   history: createWebHistory('/'),
   routes: [
     {
+      path: '/welcome',
+      name: 'Welcome',
+      component: () => import('@/pages/WelcomeGatewayPage.vue'),
+      meta: { guest: true }
+    },
+    {
+      path: '/promo/family',
+      name: 'FamilyPromo',
+      component: () => import('@/pages/FamilyPromoPage.vue'),
+      meta: { guest: true }
+    },
+    {
+      path: '/promo/developer',
+      name: 'DeveloperPromo',
+      component: () => import('@/pages/DeveloperPromoPage.vue'),
+      meta: { guest: true }
+    },
+    {
       path: '/login',
       name: 'Login',
       component: () => import('@/pages/LoginPage.vue'),
