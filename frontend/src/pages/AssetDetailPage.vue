@@ -171,30 +171,30 @@
       <!-- Actions -->
       <div class="actions">
         <template v-if="asset.status === 'in_use' || asset.status === 'idle'">
-          <van-button block type="primary" @click="$router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
             编辑
           </van-button>
-          <van-button block type="warning" plain @click="$router.push(`/assets/${asset.id}/sell`)">
+          <van-button block type="warning" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/sell`)">
             出售资产
           </van-button>
-          <van-button block type="default" plain :loading="acting" @click="onRetire">
+          <van-button block type="default" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onRetire">
             报废/退役
           </van-button>
         </template>
         <template v-else-if="asset.status === 'retired'">
-          <van-button block type="success" plain :loading="acting" @click="onReactivate">
+          <van-button block type="success" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onReactivate">
             恢复服役
           </van-button>
-          <van-button block type="primary" plain @click="$router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
             编辑
           </van-button>
         </template>
         <template v-else-if="asset.status === 'sold'">
-          <van-button block type="primary" plain @click="$router.push(`/assets/${asset.id}/edit`)">
+          <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
             编辑
           </van-button>
         </template>
-        <van-button block type="danger" plain :loading="deleting" class="delete-btn" @click="onDelete">
+        <van-button block type="danger" plain :loading="deleting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" class="delete-btn" @click="syncing ? null : onDelete">
           删除
         </van-button>
       </div>
@@ -224,6 +224,9 @@ const valuations = ref<AssetValuation[]>([])
 const imageError = ref(false)
 
 const asset = computed(() => assetStore.currentAsset)
+
+// Check if this asset is currently syncing
+const syncing = computed(() => asset.value ? assetStore.isSyncing(asset.value.id) : false)
 
 const imageUrl = computed(() => {
   if (!asset.value?.image_url) return ''

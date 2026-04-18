@@ -1,18 +1,23 @@
 <template>
   <div
     class="asset-card"
-    :class="{ 'selection-mode': selectable, 'selected': selected }"
+    :class="{ 'selection-mode': selectable, 'selected': selected, 'syncing': syncing }"
+    :aria-disabled="syncing ? 'true' : undefined"
     role="listitem"
-    :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}`"
+    :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}${syncing ? ' (同步中)' : ''}`"
     tabindex="0"
-    @click="$emit('click')"
+    @click="handleClick"
     @touchstart="startLongPress"
     @touchend="cancelLongPress"
     @touchmove="cancelLongPress"
     @contextmenu.prevent="triggerLongPress"
-    @keydown.enter="$emit('click')"
+    @keydown.enter="handleClick"
     @keydown.space.prevent="toggleSelect"
   >
+    <!-- Syncing indicator badge -->
+    <div v-if="syncing" class="syncing-badge" aria-hidden="true">
+      <van-tag type="warning">同步中</van-tag>
+    </div>
     <div v-if="selectable" class="selection-overlay" aria-hidden="true">
       <van-checkbox
         :model-value="selected"
@@ -72,6 +77,7 @@
 import { ref, computed, onUnmounted } from 'vue'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
+import { useAssetStore } from '@/stores/asset'
 import { getIconId } from '@/utils/icon'
 
 const props = defineProps<{
@@ -86,8 +92,12 @@ const emit = defineEmits<{
   longpress: []
 }>()
 
+const assetStore = useAssetStore()
 const currency = useCurrency()
 const imageError = ref(false)
+
+// Check if this asset is currently syncing
+const syncing = computed(() => assetStore.isSyncing(props.asset.id))
 
 // Long press detection
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
@@ -113,6 +123,13 @@ function triggerLongPress() {
 function toggleSelect() {
   if (props.selectable) {
     emit('update:selected', !props.selected)
+  }
+}
+
+// Handle click - prevent action if syncing
+function handleClick() {
+  if (!syncing.value) {
+    emit('click')
   }
 }
 
@@ -189,6 +206,17 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
 .asset-card:focus-visible {
   outline: 2px solid var(--van-primary-color);
   outline-offset: 2px;
+}
+/* Syncing state styles */
+.asset-card.syncing {
+  opacity: 0.7;
+  pointer-events: none;
+}
+.syncing-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
 }
 .selection-overlay {
   position: absolute;
