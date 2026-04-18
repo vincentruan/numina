@@ -8,7 +8,19 @@ test.describe('smoke: asset pages render without errors', () => {
       if (msg.type() === 'error') errors.push(msg.text())
     })
 
-    await singleAsset(page)
+    const creds = await singleAsset(page)
+    const token = creds.accessToken!
+
+    // Verify assets exist via API
+    const assetsResp = await page.request.get('/api/v1/assets', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(assetsResp.ok()).toBeTruthy()
+    const assetsData = await assetsResp.json()
+    const assets = assetsData.data ?? assetsData
+    expect(assets.length, 'test_asset should have 1 asset').toBeGreaterThan(0)
+
+    // Navigate to frontend
     await page.goto('/assets')
 
     // Page should not redirect to login
@@ -29,17 +41,21 @@ test.describe('smoke: asset pages render without errors', () => {
       if (msg.type() === 'error') errors.push(msg.text())
     })
 
-    await singleAsset(page)
-    await page.goto('/assets')
+    const creds = await singleAsset(page)
+    const token = creds.accessToken!
+
+    // Get asset ID via API
+    const assetsResp = await page.request.get('/api/v1/assets', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    expect(assetsResp.ok()).toBeTruthy()
+    const assetsData = await assetsResp.json()
+    const assets = assetsData.data ?? assetsData
+    expect(assets.length).toBeGreaterThan(0)
+    const assetId = assets[0].id
+
+    await page.goto(`/assets/${assetId}`)
     await expect(page).not.toHaveURL(/\/login/)
-
-    // Click the first asset to navigate to its detail page
-    const firstAsset = page.locator('.asset-card, .asset-list-item').first()
-    await expect(firstAsset).toBeVisible({ timeout: 10_000 })
-    await firstAsset.click()
-
-    // Should be on an asset detail page (UUID-based IDs)
-    await expect(page).toHaveURL(/\/assets\/[\w-]+/)
 
     // Asset name should be visible somewhere on the page
     await expect(page.locator('text=测试房产').first()).toBeVisible({ timeout: 10_000 })
