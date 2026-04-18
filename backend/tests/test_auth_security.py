@@ -603,3 +603,16 @@ def test_password_change_rate_limit(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 429
+
+
+def test_update_profile_invalid_avatar_color(client, auth_headers):
+    """PUT /auth/me with non-hex avatar_color returns 422."""
+    resp = client.put("/api/v1/auth/me", json={"avatar_color": "red"}, headers=auth_headers)
+    assert resp.status_code == 422
+
+
+def test_update_profile_valid_avatar_color(client, auth_headers):
+    """PUT /auth/me with valid hex avatar_color returns 200 and persists the value."""
+    resp = client.put("/api/v1/auth/me", json={"avatar_color": "#FF5733"}, headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.json()["data"]["avatar_color"] == "#FF5733"

@@ -55,6 +55,8 @@ class ChoreInstance(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     streak_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     streak_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Tracks the actual child who submitted — needed for pool chores where child_user_id is family_id
+    submitted_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     template = relationship("ChoreTemplate", back_populates="instances")
@@ -62,6 +64,6 @@ class ChoreInstance(Base):
     __table_args__ = (
         UniqueConstraint(
             "template_id", "child_user_id", "date_bucket",
-            name="uq_chore_instance_template_child_bucket"
+            name="uq_chore_instance"
         ),
     )

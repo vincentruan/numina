@@ -4,6 +4,8 @@ from pydantic import BaseModel, field_validator
 
 from app.constants.pin import ALLOWED_EMOJIS
 
+_HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+
 
 def validate_password_strength(password: str) -> str:
     if len(password) < 8:
@@ -107,10 +109,24 @@ class UserResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("avatar_color", mode="before")
+    @classmethod
+    def sanitize_avatar_color(cls, v: str | None) -> str:
+        if v is None or not _HEX_COLOR_RE.match(v):
+            return "#4F46E5"
+        return v
+
 
 class UpdateProfileRequest(BaseModel):
     display_name: str | None = None
     avatar_color: str | None = None
+
+    @field_validator("avatar_color")
+    @classmethod
+    def check_avatar_color(cls, v: str | None) -> str | None:
+        if v is not None and not _HEX_COLOR_RE.match(v):
+            raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
+        return v
 
 
 class UpdateSettingsRequest(BaseModel):

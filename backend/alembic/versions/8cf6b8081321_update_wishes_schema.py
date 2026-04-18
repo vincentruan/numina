@@ -19,6 +19,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
+    wish_cols = {c['name'] for c in inspector.get_columns('wishes')}
+
+    # If 'status' already exists the schema migration has already been applied
+    # (either by a prior migration run or by create_all on a fresh DB).
+    if 'status' in wish_cols:
+        return
+
     # Use batch operations for SQLite compatibility
     with op.batch_alter_table('wishes', schema=None) as batch_op:
         # Add new columns

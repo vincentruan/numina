@@ -17,22 +17,27 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_table(
-        'child_milestones',
-        sa.Column('id', sa.String(length=36), nullable=False),
-        sa.Column('family_id', sa.String(length=36), nullable=False),
-        sa.Column('child_user_id', sa.String(length=36), nullable=False),
-        sa.Column('milestone_type', sa.String(length=50), nullable=False),
-        sa.Column('triggered_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
-        sa.Column('ref_id', sa.String(length=36), nullable=True),
-        sa.Column('ref_type', sa.String(length=20), nullable=True),
-        sa.ForeignKeyConstraint(['child_user_id'], ['users.id']),
-        sa.ForeignKeyConstraint(['family_id'], ['families.id']),
-        sa.PrimaryKeyConstraint('id'),
-    )
-    op.create_index('ix_child_milestones_child_user_id', 'child_milestones', ['child_user_id'])
-    op.create_index('ix_child_milestones_child_type', 'child_milestones', ['child_user_id', 'milestone_type'])
-    op.create_unique_constraint('uq_child_milestone_type', 'child_milestones', ['child_user_id', 'milestone_type'])
+    conn = op.get_context().connection
+    inspector = sa.inspect(conn)
+    existing_tables = set(inspector.get_table_names())
+
+    if 'child_milestones' not in existing_tables:
+        op.create_table(
+            'child_milestones',
+            sa.Column('id', sa.String(length=36), nullable=False),
+            sa.Column('family_id', sa.String(length=36), nullable=False),
+            sa.Column('child_user_id', sa.String(length=36), nullable=False),
+            sa.Column('milestone_type', sa.String(length=50), nullable=False),
+            sa.Column('triggered_at', sa.DateTime(), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+            sa.Column('ref_id', sa.String(length=36), nullable=True),
+            sa.Column('ref_type', sa.String(length=20), nullable=True),
+            sa.ForeignKeyConstraint(['child_user_id'], ['users.id']),
+            sa.ForeignKeyConstraint(['family_id'], ['families.id']),
+            sa.PrimaryKeyConstraint('id'),
+        )
+        op.create_index('ix_child_milestones_child_user_id', 'child_milestones', ['child_user_id'])
+        op.create_index('ix_child_milestones_child_type', 'child_milestones', ['child_user_id', 'milestone_type'])
+        op.create_unique_constraint('uq_child_milestone_type', 'child_milestones', ['child_user_id', 'milestone_type'])
 
 
 def downgrade() -> None:

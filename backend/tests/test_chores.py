@@ -220,6 +220,20 @@ def test_mark_complete(client, child_user, daily_template):
     assert resp.json()["data"]["status"] == "pending_approval"
 
 
+def test_mark_complete_sets_submitted_by_user_id(client, db, auth_headers, child_user, daily_template):
+    """submitted_by_user_id is written to the DB row when a child marks a chore complete."""
+    from app.models.chore import ChoreInstance
+
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    # Verify the column is set directly on the DB row — not just via the fallback path
+    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    assert row is not None
+    assert row.submitted_by_user_id == child_user["id"]
+
+
 def test_mark_complete_twice_fails(client, child_user, daily_template):
     instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
     instance_id = instances[0]["id"]
@@ -348,3 +362,103 @@ def test_ledger_relative_time(client, auth_headers, child_user, daily_template):
 
     ledger = client.get("/api/v1/child/coins/ledger", headers=child_user["headers"]).json()["data"]
     assert ledger[0]["relative_time"] in ("今天", "昨天") or "天前" in ledger[0]["relative_time"]
+
+
+def test_pending_approvals_include_child_fields(client, auth_headers, child_user, daily_template):
+    """GET /family/chore-approvals returns child identity fields on each item."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    resp = client.get("/api/v1/family/chore-approvals", headers=auth_headers)
+    assert resp.status_code == 200
+    items = resp.json()["data"]
+    assert len(items) == 1
+    item = items[0]
+    assert item["child_user_id"] == child_user["id"]
+    assert item["child_display_name"] == "小明"
+    assert item["child_avatar_color"] == "#FF5733"
+
+
+# ---------------------------------------------------------------------------
+# Access control: approval endpoints require owner role
+# ---------------------------------------------------------------------------
+
+def _register_member_in_family(client, owner_headers) -> dict:
+    """Join the owner's family as a member, return member auth headers."""
+    family_resp = client.get("/api/v1/family/info", headers=owner_headers)
+    invite_code = family_resp.json()["data"]["invite_code"]
+    resp = client.post("/api/v1/auth/family/join", json={
+        "username": "member_chore",
+        "display_name": "Member",
+        "password": "MemberPass1",
+        "invite_code": invite_code,
+    })
+    assert resp.status_code == 200
+    return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
+
+
+def test_member_cannot_approve_chore(client, auth_headers, child_user, daily_template):
+    """Member role gets 403 on approve — endpoint requires owner."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    member_headers = _register_member_in_family(client, auth_headers)
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=member_headers)
+    assert resp.status_code == 403
+
+
+def test_member_cannot_reject_chore(client, auth_headers, child_user, daily_template):
+    """Member role gets 403 on reject — endpoint requires owner."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    member_headers = _register_member_in_family(client, auth_headers)
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/reject", headers=member_headers)
+    assert resp.status_code == 403
+
+
+def test_cross_family_owner_cannot_approve_chore(client, auth_headers, child_user, daily_template, second_user_headers):
+    """Owner from a different family gets 404 on approve (instance not in their family)."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/approve", headers=second_user_headers)
+    assert resp.status_code == 404
+
+
+def test_cross_family_owner_cannot_reject_chore(client, auth_headers, child_user, daily_template, second_user_headers):
+    """Owner from a different family gets 404 on reject (instance not in their family)."""
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    instance_id = instances[0]["id"]
+    client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+
+    resp = client.post(f"/api/v1/family/chore-approvals/{instance_id}/reject", json={"return_to_redo": False}, headers=second_user_headers)
+    assert resp.status_code == 404
+
+
+def test_member_cannot_list_approvals(client, auth_headers, child_user, daily_template):
+    """Member role gets 403 on list approvals — endpoint requires owner."""
+    member_headers = _register_member_in_family(client, auth_headers)
+    resp = client.get("/api/v1/family/chore-approvals", headers=member_headers)
+    assert resp.status_code == 403
+
+
+def test_pool_chore_mark_complete_sets_submitted_by_user_id(client, db, auth_headers, child_user, pool_template):
+    """Pool chore mark_complete works and sets submitted_by_user_id to the submitting child."""
+    from app.models.chore import ChoreInstance
+
+    instances = client.get("/api/v1/child/chores?date=2026-04-15", headers=child_user["headers"]).json()["data"]
+    pool_instance = next(i for i in instances if i["template_id"] == pool_template["id"])
+    instance_id = pool_instance["id"]
+
+    resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_user["headers"])
+    assert resp.status_code == 200
+    assert resp.json()["data"]["status"] == "pending_approval"
+
+    row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
+    assert row is not None
+    assert row.submitted_by_user_id == child_user["id"]

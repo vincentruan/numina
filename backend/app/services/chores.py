@@ -210,6 +210,7 @@ def mark_complete(db: Session, child_user: User, instance_id: str) -> ChoreInsta
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "该家务实例当前不可标记完成")
     instance.status = "pending_approval"
     instance.submitted_at = datetime.utcnow()
+    instance.submitted_by_user_id = child_user.id
     db.commit()
     db.refresh(instance)
     return instance
@@ -297,8 +298,14 @@ def reject_instance(db: Session, parent_user: User, instance_id: str, return_to_
 
 
 def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance]:
-    """Return pending approvals, triggering auto-approve for timed-out instances."""
+    """Return pending approvals, triggering auto-approve for timed-out instances.
+
+    Attaches child identity fields (_child_display_name, _child_avatar_color) to
+    each instance so the response schema can expose them without a second query.
+    """
     family = db.query(Family).filter(Family.id == parent_user.family_id).first()
+    if family is None:
+        return []
     pending = (
         db.query(ChoreInstance)
         .filter(
@@ -319,6 +326,24 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
             _auto_approve(db, instance, family)
         else:
             result.append(instance)
+
+    # Batch-fetch child users to avoid N+1
+    # Use submitted_by_user_id (actual submitter) when available, fall back to child_user_id
+    submitter_ids = {
+        i.submitted_by_user_id or i.child_user_id
+        for i in result
+        if i.submitted_by_user_id or i.child_user_id
+    }
+    child_map: dict[str, User] = {}
+    if submitter_ids:
+        children = db.query(User).filter(User.id.in_(submitter_ids)).all()
+        child_map = {u.id: u for u in children}
+
+    for instance in result:
+        lookup_id = instance.submitted_by_user_id or instance.child_user_id
+        child = child_map.get(lookup_id) if lookup_id else None
+        instance._child_display_name = child.display_name if child else None
+        instance._child_avatar_color = child.avatar_color if child else None
 
     return result
 
@@ -440,10 +465,20 @@ def _validate_assignees(db: Session, family_id: str, assignee_ids: list[str]) ->
 
 
 def _get_child_instance(db: Session, child_user: User, instance_id: str) -> ChoreInstance:
+    """Fetch a chore instance accessible to this child.
+
+    Assigned chores use child_user_id = child.id.
+    Pool chores use child_user_id = family_id (shared instance).
+    Both are valid for a child to act on.
+    """
+    from sqlalchemy import or_
     instance = db.query(ChoreInstance).filter(
         ChoreInstance.id == instance_id,
-        ChoreInstance.child_user_id == child_user.id,
         ChoreInstance.family_id == child_user.family_id,
+        or_(
+            ChoreInstance.child_user_id == child_user.id,
+            ChoreInstance.child_user_id == child_user.family_id,
+        ),
     ).first()
     if not instance:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "家务实例不存在")

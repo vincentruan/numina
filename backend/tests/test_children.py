@@ -145,7 +145,7 @@ def test_owner_force_logout_child(client, db):
 # ---------------------------------------------------------------------------
 
 def test_get_family_children_nonexistent_family_returns_empty(client):
-    """Non-existent family_id returns empty list (not 404)."""
+    """Endpoint requires no auth — nonexistent family returns empty list."""
     resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
     assert resp.status_code == 200
     assert resp.json()["data"] == []
@@ -166,12 +166,19 @@ def test_bind_token_and_get_family_children(client):
     assert "token" in token_data
     assert token_data["bind_url"].startswith("/child/bind?token=")
 
-    # GET children without auth
+    # GET children — no auth required (returning child device flow)
     children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children")
     assert children_resp.status_code == 200
     children = children_resp.json()["data"]
     assert len(children) == 1
     assert children[0]["display_name"] == "小明"
+
+
+def test_get_family_children_nonexistent_family_returns_empty_unauthenticated(client):
+    """Nonexistent family_id returns empty list with no auth required."""
+    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == []
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +245,35 @@ def test_create_child_invalid_emoji(client):
         "pin": ["🍕", "🍕", "🍕", "🍕"],
     }, headers=headers)
     assert resp.status_code == 422
+
+
+def test_create_child_invalid_avatar_color(client):
+    headers = _register_owner(client)
+    resp = client.post("/api/v1/family/children", json={
+        "display_name": "小红",
+        "avatar_color": "red",
+        "pin": VALID_PIN,
+    }, headers=headers)
+    assert resp.status_code == 422
+
+
+def test_update_child_invalid_avatar_color(client):
+    headers = _register_owner(client)
+    child_id = _create_child(client, headers).json()["data"]["id"]
+    resp = client.patch(f"/api/v1/family/children/{child_id}", json={
+        "avatar_color": "not-a-color",
+    }, headers=headers)
+    assert resp.status_code == 422
+
+
+def test_update_child_avatar_color_none_allowed(client):
+    """PATCH with avatar_color omitted (None) should succeed — validator allows None."""
+    headers = _register_owner(client)
+    child_id = _create_child(client, headers).json()["data"]["id"]
+    resp = client.patch(f"/api/v1/family/children/{child_id}", json={
+        "display_name": "新名字",
+    }, headers=headers)
+    assert resp.status_code == 200
 
 
 # ---------------------------------------------------------------------------

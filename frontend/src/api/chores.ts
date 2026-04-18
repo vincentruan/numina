@@ -65,6 +65,10 @@ export interface ChoreInstance {
   streak_count: number
   streak_bonus: number
   milestone_triggered: string | null
+  // Child identity fields — populated on pending-approval responses
+  child_user_id: string | null
+  child_display_name: string | null
+  child_avatar_color: string | null
 }
 
 export async function getMyChores(date: string): Promise<ChoreInstance[]> {

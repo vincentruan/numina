@@ -23,6 +23,15 @@
       <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" is-link @click="showViewModePicker = true" />
     </van-cell-group>
 
+    <van-cell-group
+      v-if="authStore.user?.role === 'owner' || authStore.user?.role === 'member'"
+      inset
+      title="家庭管理"
+      class="section"
+    >
+      <van-cell title="家庭成员管理" icon="friends-o" is-link to="/family" />
+    </van-cell-group>
+
     <van-cell-group inset :title="t('settings.accountInfo')" class="section">
       <van-cell
         :title="t('family.familyName')"

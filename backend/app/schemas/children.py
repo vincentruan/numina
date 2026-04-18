@@ -1,6 +1,10 @@
+import re
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.constants.pin import ALLOWED_EMOJIS
+
+_HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 
 class CreateChildRequest(BaseModel):
@@ -18,6 +22,13 @@ class CreateChildRequest(BaseModel):
                 raise ValueError(f"无效的表情符号: {e}")
         return v
 
+    @field_validator("avatar_color")
+    @classmethod
+    def check_avatar_color(cls, v):
+        if not _HEX_COLOR_RE.match(v):
+            raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
+        return v
+
     @field_validator("display_name")
     @classmethod
     def check_display_name(cls, v):
@@ -32,6 +43,13 @@ class UpdateChildRequest(BaseModel):
     display_name: str | None = None
     avatar_color: str | None = None
     pin: list[str] | None = None  # if provided, reset PIN
+
+    @field_validator("avatar_color")
+    @classmethod
+    def check_avatar_color(cls, v):
+        if v is not None and not _HEX_COLOR_RE.match(v):
+            raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
+        return v
 
     @field_validator("pin")
     @classmethod
