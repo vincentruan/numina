@@ -273,9 +273,7 @@ const selectedTags = ref<string[]>([])
 const currentSort = ref<string>('created_at_desc')
 
 const overview = computed(() => dashboardStore.overview)
-const isShowingCachedData = computed(
-  () => dashboardStore.lastFetchedAt !== null && !dashboardStore.loading,
-)
+const isShowingCachedData = computed(() => dashboardStore.servedFromCache)
 const categories = computed(() => categoryStore.categories)
 
 // Alert cards visibility
