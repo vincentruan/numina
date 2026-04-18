@@ -1,10 +1,15 @@
 import type { Page } from '@playwright/test'
-import { loginAs } from './auth'
+import { loginAs, loginAsChild } from './auth'
 
 export interface Credentials {
   username: string
   password: string
   accessToken?: string
+}
+
+export interface ChildSession {
+  childId: string
+  parentToken: string
 }
 
 /**
@@ -39,4 +44,17 @@ export async function richFamily(page: Page): Promise<Credentials> {
 export async function singleAsset(page: Page): Promise<Credentials> {
   const accessToken = await loginAs(page, 'test_asset', 'TestAsset123!')
   return { username: 'test_asset', password: 'TestAsset123!', accessToken }
+}
+
+/**
+ * Child family fixture — logs in as test_child (a child user in test_rich's family).
+ * PIN: 🐱🐶🐸🦊
+ *
+ * Returns { childId, parentToken } for specs that need both child and parent contexts.
+ * The page is left in child session state (localStorage has numina_user with role: 'child').
+ *
+ * NOTE: test_child is seeded by seed-accounts.sh. Requires the seed script to have run.
+ */
+export async function childFamily(page: Page): Promise<ChildSession> {
+  return loginAsChild(page, 'test_rich', 'TestRich123!', 'test_child', ['🐱', '🐶', '🐸', '🦊'])
 }

@@ -81,6 +81,99 @@ export async function loginAs(page: Page, username: string, password: string): P
 }
 
 /**
+ * Log in as a child user via PIN auth and establish a child browser session.
+ *
+ * Child auth uses a different flow from adult auth:
+ *   1. POST /api/v1/auth/login as parent → get parentToken
+ *   2. GET /api/v1/family/children → find child by display_name, extract child_id
+ *   3. POST /api/v1/auth/child/login with { child_id, pin_sequence } → get child token
+ *   4. GET /api/v1/auth/me with child Bearer token → get child user object
+ *   5. Navigate to / and inject localStorage['numina_user'] with child user object
+ *
+ * Returns { childId, parentToken } for specs that need both contexts.
+ */
+export async function loginAsChild(
+  page: Page,
+  parentUsername: string,
+  parentPassword: string,
+  childDisplayName: string,
+  pin: string[]
+): Promise<{ childId: string; parentToken: string }> {
+  const context = page.context()
+
+  // 1. Parent login to get token for family/children lookup
+  const parentLoginResp = await context.request.post('/api/v1/auth/login', {
+    data: { username: parentUsername, password: parentPassword },
+  })
+  if (!parentLoginResp.ok()) {
+    const body = await parentLoginResp.text()
+    throw new Error(`loginAsChild: parent login failed for "${parentUsername}": HTTP ${parentLoginResp.status()} — ${body}`)
+  }
+  const parentLoginData = await parentLoginResp.json()
+  const parentToken: string = parentLoginData.data?.access_token ?? parentLoginData.access_token
+
+  // 2. Find child by display_name
+  const childrenResp = await context.request.get('/api/v1/family/children', {
+    headers: { Authorization: `Bearer ${parentToken}` },
+  })
+  if (!childrenResp.ok()) {
+    throw new Error(`loginAsChild: GET /family/children failed: HTTP ${childrenResp.status()}`)
+  }
+  const childrenData = await childrenResp.json()
+  const children: Array<{ id: string; display_name: string }> = Array.isArray(childrenData)
+    ? childrenData
+    : (childrenData.data ?? [])
+  const child = children.find((c) => c.display_name === childDisplayName)
+  if (!child) {
+    throw new Error(
+      `loginAsChild: child "${childDisplayName}" not found. Available: ${children.map((c) => c.display_name).join(', ')}`
+    )
+  }
+  const childId = child.id
+
+  // 3. Child PIN login via context.request
+  const childLoginResp = await context.request.post('/api/v1/auth/child/login', {
+    data: { child_id: childId, pin_sequence: pin },
+  })
+  if (!childLoginResp.ok()) {
+    const body = await childLoginResp.text()
+    throw new Error(`loginAsChild: child PIN login failed: HTTP ${childLoginResp.status()} — ${body}`)
+  }
+  const childLoginData = await childLoginResp.json()
+  const childToken: string = childLoginData.data?.access_token ?? childLoginData.access_token
+
+  // 4. Sync cookies from APIRequestContext to BrowserContext
+  const cookies = await context.request.storageState()
+  if (cookies.cookies && cookies.cookies.length > 0) {
+    await context.addCookies(cookies.cookies)
+  }
+
+  // 5. Fetch child user object (using child-specific endpoint)
+  let meResp = await context.request.get('/api/v1/auth/child/me', {
+    headers: { Authorization: `Bearer ${childToken}` },
+  })
+  if (meResp.status() === 429) {
+    await page.waitForTimeout(2000)
+    meResp = await context.request.get('/api/v1/auth/child/me', {
+      headers: { Authorization: `Bearer ${childToken}` },
+    })
+  }
+  if (!meResp.ok()) {
+    throw new Error(`loginAsChild: GET /auth/child/me failed: HTTP ${meResp.status()}`)
+  }
+  const meBody = await meResp.json()
+  const childUser = meBody.data ?? meBody
+
+  // 5. Navigate to root and inject child session into localStorage
+  await page.goto('/')
+  await page.evaluate((u) => {
+    localStorage.setItem('numina_user', JSON.stringify(u))
+  }, childUser)
+
+  return { childId, parentToken }
+}
+
+/**
  * Clear the browser session (localStorage only — the httpOnly cookie is
  * cleared server-side on logout, but for test teardown clearing localStorage
  * is sufficient to reset the router guard state).

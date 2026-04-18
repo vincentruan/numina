@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Liability } from '@/types'
 import * as liabilityApi from '@/api/liabilities'
+import { useDashboardStore } from '@/stores/dashboard'
 
 export const useLiabilityStore = defineStore('liability', () => {
   const liabilities = ref<Liability[]>([])
@@ -31,6 +32,7 @@ export const useLiabilityStore = defineStore('liability', () => {
   async function createLiability(data: Partial<Liability>) {
     const res = await liabilityApi.createLiability(data)
     liabilities.value.unshift(res.data)
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -39,6 +41,7 @@ export const useLiabilityStore = defineStore('liability', () => {
     const idx = liabilities.value.findIndex(l => l.id === id)
     if (idx !== -1) liabilities.value[idx] = res.data
     if (currentLiability.value?.id === id) currentLiability.value = res.data
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -46,6 +49,7 @@ export const useLiabilityStore = defineStore('liability', () => {
     await liabilityApi.deleteLiability(id)
     liabilities.value = liabilities.value.filter(l => l.id !== id)
     if (currentLiability.value?.id === id) currentLiability.value = null
+    useDashboardStore().invalidateDashboard()
   }
 
   async function recordPayment(id: string, amount: number) {
@@ -53,6 +57,7 @@ export const useLiabilityStore = defineStore('liability', () => {
     const idx = liabilities.value.findIndex(l => l.id === id)
     if (idx !== -1) liabilities.value[idx] = res.data
     if (currentLiability.value?.id === id) currentLiability.value = res.data
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 

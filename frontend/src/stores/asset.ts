@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse } from '@/types'
 import * as assetApi from '@/api/assets'
+import { useDashboardStore } from '@/stores/dashboard'
 
 export const useAssetStore = defineStore('asset', () => {
   const assets = ref<Asset[]>([])
@@ -31,6 +32,7 @@ export const useAssetStore = defineStore('asset', () => {
   async function createAsset(data: Partial<Asset>) {
     const res = await assetApi.createAsset(data)
     assets.value.unshift(res.data)
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -39,6 +41,7 @@ export const useAssetStore = defineStore('asset', () => {
     const idx = assets.value.findIndex(a => a.id === id)
     if (idx !== -1) assets.value[idx] = res.data
     if (currentAsset.value?.id === id) currentAsset.value = res.data
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -46,6 +49,7 @@ export const useAssetStore = defineStore('asset', () => {
     await assetApi.deleteAsset(id)
     assets.value = assets.value.filter(a => a.id !== id)
     if (currentAsset.value?.id === id) currentAsset.value = null
+    useDashboardStore().invalidateDashboard()
   }
 
   async function updateValue(id: string, value: number) {
@@ -53,12 +57,14 @@ export const useAssetStore = defineStore('asset', () => {
     const idx = assets.value.findIndex(a => a.id === id)
     if (idx !== -1) assets.value[idx] = res.data
     if (currentAsset.value?.id === id) currentAsset.value = res.data
+    useDashboardStore().invalidateDashboard()
   }
 
   async function sellAsset(id: string, data: AssetSellRequest): Promise<AssetSellResponse> {
     const res = await assetApi.sellAsset(id, data)
     assets.value = assets.value.filter(a => a.id !== id)
     if (currentAsset.value?.id === id) currentAsset.value = null
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -67,6 +73,7 @@ export const useAssetStore = defineStore('asset', () => {
     const idx = assets.value.findIndex(a => a.id === id)
     if (idx !== -1) assets.value[idx] = res.data
     if (currentAsset.value?.id === id) currentAsset.value = res.data
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -75,6 +82,7 @@ export const useAssetStore = defineStore('asset', () => {
     const idx = assets.value.findIndex(a => a.id === id)
     if (idx !== -1) assets.value[idx] = res.data
     if (currentAsset.value?.id === id) currentAsset.value = res.data
+    useDashboardStore().invalidateDashboard()
     return res.data
   }
 
@@ -84,4 +92,3 @@ export const useAssetStore = defineStore('asset', () => {
     sellAsset, retireAsset, reactivateAsset,
   }
 })
-

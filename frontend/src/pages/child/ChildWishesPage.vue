@@ -25,7 +25,15 @@
           <div class="jar">
             <div class="jar-fill" :class="jarClass(wish.progress)" :style="{ width: (wish.progress * 100) + '%' }"></div>
           </div>
-          <span class="jar-pct">{{ Math.round((wish.progress ?? 0) * 100) }}%</span>
+          <span v-if="(wish.progress ?? 0) >= 1" class="jar-pct full-msg">
+            积分已够！快让爸妈实现吧 🎉
+          </span>
+          <span v-else-if="daysToWish(wish.id) !== null" class="jar-pct days-hint">
+            再做约 {{ daysToWish(wish.id) }} 天家务就能实现 🎯
+          </span>
+          <span v-else class="jar-pct">
+            {{ Math.round((wish.progress ?? 0) * 100) }}%
+          </span>
         </div>
         <div v-else class="jar-pending">等待爸妈设定目标 ⏳</div>
         <button
@@ -127,9 +135,11 @@ import {
   listChildWishes, getChildWishStats, createChildWish, requestRedemption,
   type ChildWishList, type ChildWishStats
 } from '@/api/childWishes'
+import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 
 const wishList = ref<ChildWishList | null>(null)
 const stats = ref<ChildWishStats | null>(null)
+const ledger = ref<CoinTransaction[]>([])
 const loading = ref(true)
 const error = ref('')
 const actioningId = ref<string | null>(null)
@@ -155,6 +165,48 @@ const totalWishes = computed(() =>
   realizedWishes.value.length + rejectedWishes.value.length
 )
 
+// Pre-computed map of days-to-wish for each wish (performance optimization)
+const wishDaysMap = computed(() => {
+  const map = new Map<string, number | null>()
+  if (!stats.value?.priority_simulation) return map
+
+  const now = Date.now()
+  const cutoff7d = now - 7 * 24 * 60 * 60 * 1000
+
+  // Compute earn history from ledger (last 7 calendar days)
+  const earnEntries = ledger.value.filter(tx => tx.amount > 0 && new Date(tx.created_at).getTime() >= cutoff7d)
+  const earnDays = new Set<string>()
+  let earnSum = 0
+  for (const tx of earnEntries) {
+    earnDays.add(new Date(tx.created_at).toDateString())
+    earnSum += tx.amount
+  }
+
+  const distinctDays = earnDays.size
+  if (distinctDays < 3) return map // minimum activity gate
+
+  const dailyAvg = earnSum / distinctDays
+  if (dailyAvg <= 0) return map
+
+  for (const sim of stats.value.priority_simulation) {
+    if (sim.star_coin_cost == null) {
+      map.set(sim.wish_id, null)
+      continue
+    }
+    const remaining = sim.star_coin_cost - stats.value.balance
+    if (remaining <= 0) {
+      map.set(sim.wish_id, null) // already affordable
+      continue
+    }
+    map.set(sim.wish_id, Math.ceil(remaining / dailyAvg))
+  }
+  return map
+})
+
+function daysToWish(wishId: string): number | null {
+  return wishDaysMap.value.get(wishId) ?? null
+}
+
 function priorityLabel(p: string) {
   return p === 'high' ? '高优先级 🔥' : p === 'medium' ? '中优先级 ⭐' : '低优先级 💤'
 }
@@ -169,9 +221,10 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [list, s] = await Promise.all([listChildWishes(), getChildWishStats()])
+    const [list, s, l] = await Promise.all([listChildWishes(), getChildWishStats(), getCoinLedger()])
     wishList.value = list
     stats.value = s
+    ledger.value = l
   } catch {
     error.value = '加载失败，请刷新重试'
   } finally {
@@ -322,6 +375,8 @@ onMounted(load)
   50% { opacity: 0.7; }
 }
 .jar-pct { font-size: 12px; color: #666; white-space: nowrap; min-width: 32px; }
+.jar-pct.full-msg { color: #f5a623; font-weight: 600; }
+.jar-pct.days-hint { color: #2ecc71; font-weight: 500; }
 .jar-pending { font-size: 12px; color: #aaa; padding-left: 40px; width: 100%; }
 
 .btn-redeem {

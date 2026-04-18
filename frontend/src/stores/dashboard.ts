@@ -4,6 +4,10 @@ import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, Inve
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
+// Module-level dedup lock — plain variable, not a ref (Pinia warns on non-serializable state)
+let _fetchPromise: Promise<void> | null = null
+const DASHBOARD_TTL_MS = 2 * 60 * 1000
+
 export const useDashboardStore = defineStore('dashboard', () => {
   const overview = ref<DashboardOverview | null>(null)
   const allocation = ref<AllocationItem[]>([])
@@ -18,6 +22,9 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const statesSummary = ref<StatesSummaryResponse | null>(null)
   const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
+  const lastFetchedAt = ref<number | null>(null)
+  // True when the last fetchAll() call was served from the staleness cache (no network request)
+  const servedFromCache = ref(false)
 
   async function fetchOverview() {
     const res = await dashboardApi.getOverview()
@@ -79,29 +86,51 @@ export const useDashboardStore = defineStore('dashboard', () => {
     homeAssets.value = res.data
   }
 
-  async function fetchAll() {
-    loading.value = true
-    try {
-      const res = await dashboardApi.getDashboardBundle()
-      const data = res.data
-      overview.value = data.overview
-      statesSummary.value = data.statesSummary
-      homeAssets.value = data.homeAssets
-      allocation.value = data.allocation.items
-      allocationTotal.value = data.allocation.total
-      trend.value = data.trend.points
-      lowUsageAssets.value = data.lowUsageAssets
-      expiringSoonAssets.value = data.expiringSoon
-    } finally {
-      loading.value = false
+  async function fetchAll(force = false): Promise<void> {
+    // 1. Dedup: if a request is already in-flight, return the same Promise
+    if (_fetchPromise !== null) {
+      return _fetchPromise
     }
+    // 2. Staleness guard: skip if data is fresh and caller didn't force
+    if (!force && lastFetchedAt.value !== null && Date.now() - lastFetchedAt.value < DASHBOARD_TTL_MS) {
+      servedFromCache.value = true
+      return Promise.resolve()
+    }
+    // 3. Issue new request
+    servedFromCache.value = false
+    loading.value = true
+    _fetchPromise = (async () => {
+      try {
+        const res = await dashboardApi.getDashboardBundle()
+        const data = res.data
+        overview.value = data.overview
+        statesSummary.value = data.statesSummary
+        homeAssets.value = data.homeAssets
+        allocation.value = data.allocation.items
+        allocationTotal.value = data.allocation.total
+        trend.value = data.trend.points
+        lowUsageAssets.value = data.lowUsageAssets
+        expiringSoonAssets.value = data.expiringSoon
+        lastFetchedAt.value = Date.now()
+      } finally {
+        loading.value = false
+        _fetchPromise = null
+      }
+    })()
+    return _fetchPromise
+  }
+
+  function invalidateDashboard() {
+    lastFetchedAt.value = null
+    servedFromCache.value = false
   }
 
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
+    lastFetchedAt, servedFromCache, invalidateDashboard,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
-    fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll
+    fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll,
   }
 })
