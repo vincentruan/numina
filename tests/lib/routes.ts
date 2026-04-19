@@ -60,6 +60,10 @@ export const GUEST_ROUTES: RouteEntry[] = [
   { name: 'Login', path: '/login' },
   { name: 'Register', path: '/register' },
   { name: 'JoinFamily', path: '/join-family' },
+  // Public promotional pages (guest-only, authenticated users redirect to dashboard)
+  { name: 'Welcome', path: '/welcome' },
+  { name: 'FamilyPromo', path: '/promo/family' },
+  { name: 'DeveloperPromo', path: '/promo/developer' },
 ]
 
 /**
