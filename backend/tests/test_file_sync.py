@@ -188,6 +188,78 @@ class TestFileSyncJob:
         with patch("app.scheduler.SessionLocal", return_value=db):
             run(file_sync_job())  # Should not raise
 
+    def test_sync_job_github_backend_uses_longer_jitter(self, db, tmp_path):
+        """GitHub backend triggers write_delay_range of (1.0, 3.0) for jitter."""
+        from app.scheduler import file_sync_job
+
+        local_file = tmp_path / "test.jpg"
+        local_file.write_bytes(b"fake-image-data")
+
+        github_backend = StorageBackendModel(
+            id="github-test",
+            backend_type="github",
+            display_name="Test GitHub",
+            config='{"token": "ghp_test", "repo": "user/repo", "branch": "main"}',
+            is_default=True,
+            is_active=True,
+        )
+        db.add(github_backend)
+        db.commit()
+        db.refresh(github_backend)
+
+        cf = _make_cached_file(db, family_id="fam-gh", user_id="usr-gh", local_path=str(local_file))
+        loc = _make_location(db, cf.id, github_backend.id, sync_status="pending")
+        loc_id = loc.id
+
+        mock_backend = AsyncMock()
+        mock_backend.save = AsyncMock(return_value="20260410/test.jpg")
+        mock_backend.get_url = MagicMock(return_value="https://raw.githubusercontent.com/user/repo/main/20260410/test.jpg")
+        mock_backend.write_delay_range = (1.0, 3.0)
+
+        sleep_calls = []
+
+        async def capture_sleep(delay):
+            sleep_calls.append(delay)
+
+        with patch("app.scheduler.SessionLocal", return_value=db), \
+             patch("app.scheduler.get_backend_for_type", return_value=mock_backend), \
+             patch("app.scheduler.asyncio.sleep", side_effect=capture_sleep):
+            run(file_sync_job())
+
+        loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
+        assert loc_updated.sync_status == "synced"
+        assert len(sleep_calls) == 1
+        assert 1.0 <= sleep_calls[0] <= 3.0
+
+    def test_sync_job_save_timeout_increments_retry(self, db, tmp_path):
+        """backend.save() timeout increments retry_count and records error."""
+        from app.scheduler import file_sync_job
+
+        local_file = tmp_path / "test.jpg"
+        local_file.write_bytes(b"data")
+
+        backend = _make_backend(db)
+        cf = _make_cached_file(db, family_id="fam-timeout", user_id="usr-timeout", local_path=str(local_file))
+        loc = _make_location(db, cf.id, backend.id, sync_status="pending")
+        loc_id = loc.id
+
+        async def slow_save(*args, **kwargs):
+            raise asyncio.TimeoutError()
+
+        mock_backend = AsyncMock()
+        mock_backend.save = AsyncMock(side_effect=slow_save)
+        mock_backend.write_delay_range = (0.2, 1.0)
+
+        with patch("app.scheduler.SessionLocal", return_value=db), \
+             patch("app.scheduler.get_backend_for_type", return_value=mock_backend), \
+             patch("app.scheduler.asyncio.sleep", new_callable=AsyncMock):
+            run(file_sync_job())
+
+        loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
+        assert loc_updated.retry_count == 1
+        assert "超时" in (loc_updated.last_error or "")
+        assert loc_updated.sync_status == "pending"
+
 
 # ── File management API tests ─────────────────────────────────────────────────
 

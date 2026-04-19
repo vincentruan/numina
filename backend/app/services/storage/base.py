@@ -34,6 +34,15 @@ class StorageBackend(ABC):
     to match the same interface signature.
     """
 
+    @property
+    def write_delay_range(self) -> tuple[float, float]:
+        """Random jitter range (min, max) in seconds to sleep between writes.
+
+        Override in subclasses that have stricter rate-limit requirements.
+        Default is suitable for most backends (WebDAV, local, etc.).
+        """
+        return (0.2, 1.0)
+
     @abstractmethod
     async def save(self, content: bytes, filename: str, date_dir: str) -> str:
         """Persist file content and return the remote_path string.

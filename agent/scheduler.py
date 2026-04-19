@@ -28,6 +28,57 @@
 #   - Enumerate families one at a time (not batch) to limit blast radius
 #   - Skip and log a warning if FamilyContext fetch fails for a family
 #   - Scope each FamilyContext to exactly one family_id validated before dispatch
+#
+# Jitter contract (mandatory for all future job implementations):
+# ──────────────────────────────────────────────────────────────
+# Jobs that call external APIs or LLMs MUST add per-family random jitter
+# before each dispatch to avoid fixed-interval patterns that external
+# services may flag as bot traffic.
+#
+# Jitter must be applied INSIDE the per-family loop so each family gets
+# an independent random offset — not once before the loop.
+#
+# Recommended sleep budgets:
+#   - Cron jobs (hourly or less frequent): random.uniform(0, 300)   # up to 5 min
+#   - Interval jobs (< 30 min):            random.uniform(0, 60)    # up to 1 min
+#   - Per-family inter-request delay:      random.uniform(2, 8)     # 2–8 s
+#
+# Example skeleton:
+#   import random
+#   async def generate_monthly_reports() -> None:
+#       families = await get_all_families()
+#       for family in families:
+#           await asyncio.sleep(random.uniform(0, 300))  # ← jitter per family
+#           await _dispatch_for_family(family.id, "monthly_report")
+#
+# Human-in-the-loop (HITL) polling jitter contract:
+# ──────────────────────────────────────────────────
+# When a job suspends and polls for human approval (e.g. waiting for a user
+# to confirm a high-risk action before the agent proceeds), the polling loop
+# MUST use exponential backoff with jitter — never a fixed interval — to
+# avoid hammering the approval endpoint and to prevent detectable patterns.
+#
+# Recommended polling budgets:
+#   - Initial poll delay:   random.uniform(5, 15)          # 5–15 s
+#   - Subsequent backoff:   min(base * 2^attempt, cap) + random.uniform(0, base)
+#     where base=10 s, cap=300 s (5 min)
+#   - Max wait before abort: 3600 s (1 hour); raise TimeoutError after
+#
+# Example skeleton:
+#   import random, asyncio
+#   BASE, CAP, MAX_WAIT = 10, 300, 3600
+#   async def poll_for_approval(request_id: str) -> bool:
+#       elapsed = 0
+#       attempt = 0
+#       await asyncio.sleep(random.uniform(5, 15))          # initial jitter
+#       while elapsed < MAX_WAIT:
+#           if await approval_store.is_approved(request_id):
+#               return True
+#           delay = min(BASE * (2 ** attempt), CAP) + random.uniform(0, BASE)
+#           await asyncio.sleep(delay)
+#           elapsed += delay
+#           attempt += 1
+#       raise TimeoutError(f"approval timed out: {request_id}")
 """
 
 import logging

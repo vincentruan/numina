@@ -29,6 +29,11 @@ class GitHubStorageBackend(StorageBackend):
         )
         self._sha_cache: dict[str, str] = {}
 
+    @property
+    def write_delay_range(self) -> tuple[float, float]:
+        """GitHub Contents API has stricter secondary rate limits — use longer jitter."""
+        return (1.0, 3.0)
+
     def _check_rate_limit(self, response: httpx.Response) -> None:
         if response.headers.get("x-ratelimit-remaining") == "0":
             reset_at = int(response.headers.get("x-ratelimit-reset", 0))

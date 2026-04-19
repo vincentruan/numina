@@ -72,7 +72,10 @@ async def file_sync_job() -> None:
             try:
                 content = await asyncio.to_thread(_read_file, cached_file.local_path)
 
-                remote_path = await backend.save(content, _filename_from_path(cached_file.local_path), cached_file.date_dir)
+                remote_path = await asyncio.wait_for(
+                    backend.save(content, _filename_from_path(cached_file.local_path), cached_file.date_dir),
+                    timeout=30,
+                )
                 loc.sync_status = "synced"
                 loc.remote_path = remote_path
                 loc.remote_url = backend.get_url(remote_path)
@@ -80,10 +83,13 @@ async def file_sync_job() -> None:
                 db.commit()
                 logger.info(f"文件同步成功: {cached_file.id} -> {remote_path}")
 
-                # Throttle GitHub writes to avoid secondary rate limits
-                if default_backend_row.backend_type == "github":
-                    await asyncio.sleep(1)
-
+            except asyncio.TimeoutError:
+                loc.retry_count += 1
+                loc.last_error = "上传超时 (30s)"
+                if loc.retry_count >= 3:
+                    loc.sync_status = "failed"
+                db.commit()
+                logger.warning(f"文件同步超时: {cached_file.id}")
             except FileNotFoundError:
                 loc.retry_count += 1
                 loc.last_error = f"本地文件不存在: {cached_file.local_path}"
@@ -104,6 +110,13 @@ async def file_sync_job() -> None:
                     loc.sync_status = "failed"
                 db.commit()
                 logger.exception(f"文件同步异常: {cached_file.id}: {e}")
+
+            # Jitter between file uploads to avoid fixed-interval patterns
+            # that external services (GitHub, WebDAV) may flag as bot traffic.
+            # Applied after each file regardless of success/failure to prevent
+            # hammering the remote on transient errors.
+            lo, hi = backend.write_delay_range
+            await asyncio.sleep(random.uniform(lo, hi))
 
     except Exception as e:
         logger.exception(f"文件同步任务异常: {e}")
