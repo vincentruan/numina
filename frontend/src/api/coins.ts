@@ -44,7 +44,6 @@ export async function giftCoins(
   return res.data
 }
 
-// TODO: wire up to a parent UI for manual coin grants (no consumer yet)
 export async function grantCoins(childUserId: string, amount: number, reason: string): Promise<void> {
   await http.post('/family/coins/grant', { child_user_id: childUserId, amount, reason })
 }
