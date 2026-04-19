@@ -504,7 +504,7 @@ footer {
 /* Wide desktop breakpoint (1440px) */
 @media (min-width: 1440px) {
   #hero,
-  #deploy-content,
+  .deploy-content,
   #trust,
   #comparison,
   #features {
