@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - 'landing/**'
+      - 'site/**'
 
 permissions:
   contents: write
@@ -21,5 +21,5 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./landing
+          publish_dir: ./site
           cname: numina.app

@@ -1,6 +1,6 @@
 ---
 date: 2026-04-14
-status: active
+status: completed
 origin: docs/brainstorms/2026-04-14-layered-test-skeleton-requirements.md
 ---
 

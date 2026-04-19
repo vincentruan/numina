@@ -1,7 +1,7 @@
 ---
 title: feat: Replace emoji icons with SVG icon system
 type: feat
-status: active
+status: completed
 date: 2026-04-05
 origin: docs/brainstorms/2026-04-05-svg-icon-system-requirements.md
 ---

@@ -2,7 +2,7 @@
 date: 2026-04-18
 id: 2026-04-18-002
 title: Quick Wins — UX & Performance Polish (6 Tasks)
-status: active
+status: completed
 origin: docs/brainstorms/2026-04-18-quick-wins-ux-performance-requirements.md
 ---
 

@@ -1,7 +1,7 @@
 ---
 title: "feat: Upgrade agent/ to DeerFlow Harness Architecture — Part 2: Implementation Units"
 type: feat
-status: active
+status: completed
 date: 2026-04-11
 parent: 2026-04-11-001-feat-agent-deerflow-upgrade-plan.md
 ---

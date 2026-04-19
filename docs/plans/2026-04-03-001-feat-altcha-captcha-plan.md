@@ -1,7 +1,7 @@
 ---
 title: feat: ALTCHA captcha protection for auth endpoints
 type: feat
-status: active
+status: completed
 date: 2026-04-03
 origin: docs/brainstorms/2026-04-02-altcha-captcha-requirements.md
 ---

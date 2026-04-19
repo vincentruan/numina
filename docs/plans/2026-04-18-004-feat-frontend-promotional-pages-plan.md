@@ -2,7 +2,7 @@
 name: 2026-04-18-004-feat-frontend-promotional-pages
 description: Vue frontend promotional pages for family and developer audiences
 type: software
-status: active
+status: completed
 created: 2026-04-18
 deepened: null
 ---

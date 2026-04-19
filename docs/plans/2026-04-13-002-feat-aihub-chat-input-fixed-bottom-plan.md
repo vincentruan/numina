@@ -1,7 +1,7 @@
 ---
 title: "feat: AIHubPage 问答框固定底部 + 换行输入 + 高度调整 + 问题透传修复"
 type: feat
-status: active
+status: completed
 date: 2026-04-13
 ---
 

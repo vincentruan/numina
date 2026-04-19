@@ -1,7 +1,7 @@
 ---
 title: "fix: Guard against Redis cache startup crash"
 type: fix
-status: active
+status: completed
 date: 2026-04-19
 ---
 

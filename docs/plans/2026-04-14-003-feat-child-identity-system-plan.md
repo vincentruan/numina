@@ -1,7 +1,7 @@
 ---
 title: "feat: Child Identity System — Emoji PIN Auth + /child/* Route Isolation"
 type: feat
-status: active
+status: completed
 date: 2026-04-14
 origin: docs/brainstorms/2026-04-14-child-identity-system-requirements.md
 ---

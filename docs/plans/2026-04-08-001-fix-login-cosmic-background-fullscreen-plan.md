@@ -1,7 +1,7 @@
 ---
 title: fix: Login cosmic background fullscreen and PC widescreen adaptation
 type: fix
-status: active
+status: completed
 date: 2026-04-08
 ---
 
