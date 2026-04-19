@@ -1,7 +1,7 @@
 ---
 date: 2026-04-18
 topic: chore-approval-dashboard
-status: active
+status: completed
 origin: docs/brainstorms/2026-04-18-chore-approval-badge-requirements.md
 ---
 

@@ -2,7 +2,7 @@
 date: 2026-04-16
 id: 2026-04-16-001
 title: "feat: Validation Error Field Codes"
-status: active
+status: completed
 origin: docs/brainstorms/2026-04-15-validation-error-field-codes-requirements.md
 ---
 

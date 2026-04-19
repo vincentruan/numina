@@ -1,7 +1,7 @@
 ---
 title: "feat: File Storage Abstraction with Local, GitHub, and WebDAV Backends"
 type: feat
-status: active
+status: completed
 date: 2026-04-10
 ---
 

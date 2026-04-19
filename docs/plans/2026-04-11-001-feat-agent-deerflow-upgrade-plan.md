@@ -1,7 +1,7 @@
 ---
 title: "feat: Upgrade agent/ to DeerFlow Harness Architecture"
 type: feat
-status: active
+status: completed
 date: 2026-04-11
 ---
 

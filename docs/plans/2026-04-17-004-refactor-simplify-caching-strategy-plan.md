@@ -1,7 +1,7 @@
 ---
 title: "refactor: Simplify Caching Strategy — Remove TTL Cache, Keep Bundle Endpoint"
 type: refactor
-status: active
+status: completed
 date: 2026-04-17
 origin: docs/brainstorms/2026-04-17-performance-caching-requirements.md
 ---

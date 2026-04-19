@@ -2,7 +2,7 @@
 date: 2026-04-15
 id: 2026-04-15-001
 title: 核心赚取循环 (Core Earn Loop)
-status: active
+status: completed
 origin: docs/brainstorms/2026-04-15-core-earn-loop-requirements.md
 ---
 

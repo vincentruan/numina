@@ -1,6 +1,6 @@
 ---
 created: 2026-04-18
-status: active
+status: completed
 origin: docs/brainstorms/2026-04-18-landing-page-requirements.md
 depth: standard
 ---

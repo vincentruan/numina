@@ -1,7 +1,7 @@
 ---
 title: feat: Optimistic UI for Asset CRUD Operations
 type: feat
-status: active
+status: completed
 date: 2026-04-18
 origin: docs/brainstorms/2026-04-18-optimistic-ui-asset-requirements.md
 ---

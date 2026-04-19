@@ -1,7 +1,7 @@
 ---
 title: "fix: Resolve P0-P2 UI Accessibility and SEO Issues"
 type: fix
-status: active
+status: completed
 date: 2026-04-11
 ---
 

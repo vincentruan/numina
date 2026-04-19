@@ -2,7 +2,7 @@
 date: 2026-04-17
 id: 2026-04-17-002
 title: 儿童系统收尾：父母管理视角 + 家庭金币汇率配置
-status: active
+status: completed
 origin: docs/ideation/2026-04-14-children-starcoin-ideation.md
 ---
 

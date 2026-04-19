@@ -1,6 +1,6 @@
 ---
 date: 2026-04-15
-status: active
+status: completed
 topic: unified-error-code-i18n
 origin:
   - docs/brainstorms/2026-04-15-unified-error-code-requirements.md
