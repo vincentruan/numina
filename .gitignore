@@ -135,5 +135,9 @@ backend/data/uploads/
 /package-lock.json
 .env.production
 
-.superpowers/.worktrees
+.superpowers/
 .worktrees/
+
+# Playwright E2E Tests
+tests/playwright-report/
+tests/test-results/
