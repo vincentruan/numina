@@ -1,0 +1,18 @@
+# Numina - Family Asset Visualization Platform
+# https://numina.xiaoshutiao.space
+
+User-agent: *
+Allow: /$
+Allow: /site/
+Allow: /overview/
+Allow: /project/
+
+# Disallow all API endpoints
+Disallow: /api/
+Disallow: /uploads/
+
+# Crawl rate limit
+Crawl-delay: 10
+
+# Sitemap
+Sitemap: https://numina.xiaoshutiao.space/sitemap.xml
