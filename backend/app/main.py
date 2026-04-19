@@ -117,6 +117,14 @@ async def lifespan(app: FastAPI):
     )
     logger.info("统一日志配置已初始化")
 
+    # Validate cache backend configuration before serving any requests
+    if settings.CACHE_BACKEND == "redis":
+        raise ValueError(
+            "CACHE_BACKEND=redis is not yet implemented. "
+            "Set CACHE_BACKEND=memory or implement RedisCacheBackend "
+            "in backend/app/services/cache/redis.py."
+        )
+
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
