@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Numina 功能特性、技术架构与部署指南">
+  <title>Numina - 开发者文档</title>
+  <link rel="stylesheet" href="../style.css">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <style>
+    :root {
+      --nav-height: 60px;
+    }
+
+    /* Sticky nav */
+    .dev-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: white;
+      border-bottom: 1px solid #e5e5e7;
+      padding: 0 16px;
+    }
+
+    .dev-nav-inner {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: var(--nav-height);
+      flex-wrap: wrap;
+    }
+
+    .dev-nav-logo {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-text);
+      text-decoration: none;
+      margin-right: 8px;
+    }
+
+    .dev-nav-links {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+
+    .dev-nav-links a {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .dev-nav-links a:hover {
+      text-decoration: underline;
+    }
+
+    .dev-nav-cross {
+      color: var(--color-primary);
+      text-decoration: none;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    .dev-nav-cross:hover {
+      text-decoration: underline;
+    }
+
+    /* Anchor offset for sticky nav */
+    section[id] {
+      scroll-margin-top: var(--nav-height);
+    }
+
+    /* Content sections */
+    .dev-section {
+      padding: 48px 16px;
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+
+    .dev-section h2 {
+      font-size: 24px;
+      font-weight: 600;
+      margin: 0 0 24px;
+    }
+
+    .dev-section h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 16px 0 8px;
+    }
+
+    /* Feature list */
+    .feature-category {
+      margin-bottom: 24px;
+    }
+
+    .feature-category ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .feature-category li {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      margin-bottom: 4px;
+    }
+
+    /* Stack grid */
+    .stack-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+      margin-top: 16px;
+    }
+
+    @media (min-width: 768px) {
+      .stack-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+    }
+
+    .stack-column {
+      background: white;
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .stack-column h3 {
+      margin-top: 0;
+      color: var(--color-primary);
+    }
+
+    .stack-column ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+
+    .stack-column li {
+      font-size: 14px;
+      color: var(--color-text-secondary);
+      margin-bottom: 6px;
+    }
+
+    /* Deploy steps */
+    .deploy-steps {
+      list-style: none;
+      padding: 0;
+      margin: 24px 0;
+      counter-reset: step;
+    }
+
+    .deploy-steps li {
+      counter-increment: step;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 16px;
+      color: #f5f5f7;
+    }
+
+    .deploy-steps li::before {
+      content: counter(step);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      min-width: 28px;
+      background: var(--color-primary);
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .deploy-steps code {
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      background: rgba(255,255,255,0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Config table */
+    .config-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: white;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+
+    .config-table th,
+    .config-table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+      font-size: 14px;
+    }
+
+    .config-table th {
+      background: var(--color-bg);
+      font-weight: 600;
+    }
+
+    .config-table code {
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .config-warning {
+      color: #e74c3c;
+      font-weight: 600;
+    }
+
+    /* DB options */
+    .db-option {
+      background: white;
+      border-radius: 8px;
+      padding: 16px 24px;
+      margin-bottom: 12px;
+    }
+
+    .db-option h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .db-option code {
+      display: block;
+      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      background: var(--color-bg);
+      padding: 8px 12px;
+      border-radius: 4px;
+      color: var(--color-text-secondary);
+      word-break: break-all;
+    }
+
+    @media (min-width: 1024px) {
+      .dev-section {
+        padding: 48px 32px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Sticky Nav -->
+  <header class="dev-nav">
+    <div class="dev-nav-inner">
+      <a href="#" class="dev-nav-logo">Numina</a>
+      <span style="color: #e5e5e7; font-size: 14px;">开发者文档</span>
+      <nav class="dev-nav-links">
+        <a href="#features">功能特性</a>
+        <a href="#stack">技术架构</a>
+        <a href="#deploy">快速部署</a>
+        <a href="#config">配置参考</a>
+      </nav>
+      <a href="../product/" class="dev-nav-cross">产品介绍 →</a>
+    </div>
+  </header>
+
+  <!-- Section 1: Feature Overview -->
+  <section id="features" class="dev-section">
+    <h2>功能特性</h2>
+
+    <div class="feature-category">
+      <h3>资产管理</h3>
+      <ul>
+        <li>实物资产追踪（房产、车辆、数码、家电等 13 个分类）</li>
+        <li>金融资产追踪（存款、基金、股票、债券等 8 个分类）</li>
+        <li>自定义分类与标签</li>
+        <li>资产价值更新与历史记录</li>
+        <li>日常使用成本计算（日均成本）</li>
+      </ul>
+    </div>
+
+    <div class="feature-category">
+      <h3>负债管理</h3>
+      <ul>
+        <li>房贷、车贷、信用卡、个人贷款全覆盖</li>
+        <li>还款进度追踪</li>
+        <li>关联资产（如房贷关联房产）</li>
+      </ul>
+    </div>
+
+    <div class="feature-category">
+      <h3>数据可视化</h3>
+      <ul>
+        <li>净资产趋势折线图（ECharts）</li>
+        <li>资产分配饼图</li>
+        <li>家庭财务健康仪表盘</li>
+        <li>每日净资产快照</li>
+      </ul>
+    </div>
+
+    <div class="feature-category">
+      <h3>家庭协作</h3>
+      <ul>
+        <li>多用户角色：管理员（owner）/ 成员（member）/ 孩子（child）</li>
+        <li>6 位邀请码加入家庭</li>
+        <li>家庭级数据隔离</li>
+      </ul>
+    </div>
+
+    <div class="feature-category">
+      <h3>孩子系统</h3>
+      <ul>
+        <li>PIN 码认证，专属儿童界面</li>
+        <li>星星硬币激励系统</li>
+        <li>家务模板与审批队列</li>
+        <li>心愿兑换（积分换资产）</li>
+        <li>连续打卡与里程碑庆典</li>
+      </ul>
+    </div>
+
+    <!-- Trust Badges -->
+    <div class="trust-badges" style="margin-top: 32px;">
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> 36+ Tests</summary>
+        <div class="badge-tooltip">
+          <p>自动化测试覆盖，每次提交验证</p>
+          <a href="https://github.com/vincentruan/numina/actions" target="_blank">查看 CI →</a>
+        </div>
+      </details>
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> Self-Hosted</summary>
+        <div class="badge-tooltip">
+          <p>数据存储在您的硬件上</p>
+          <a href="https://github.com/vincentruan/numina" target="_blank">了解架构 →</a>
+        </div>
+      </details>
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> Open Source</summary>
+        <div class="badge-tooltip">
+          <p>代码公开，可审计</p>
+          <a href="https://github.com/vincentruan/numina" target="_blank">查看源码 →</a>
+        </div>
+      </details>
+      <details class="trust-badge">
+        <summary><span class="badge-icon">✓</span> MIT License</summary>
+        <div class="badge-tooltip">
+          <p>个人和商业免费使用</p>
+          <a href="https://github.com/vincentruan/numina/blob/main/LICENSE" target="_blank">查看许可 →</a>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Section 2: Tech Stack -->
+  <section id="stack" class="dev-section" style="background: var(--color-bg);">
+    <h2>技术架构</h2>
+    <div class="stack-grid">
+      <div class="stack-column">
+        <h3>后端</h3>
+        <ul>
+          <li>FastAPI (Python)</li>
+          <li>SQLAlchemy ORM</li>
+          <li>SQLite / MySQL / PostgreSQL</li>
+          <li>JWT 认证（bcrypt + access/refresh tokens）</li>
+          <li>Alembic 数据库迁移</li>
+        </ul>
+      </div>
+      <div class="stack-column">
+        <h3>前端</h3>
+        <ul>
+          <li>Vue 3 + TypeScript</li>
+          <li>Vite 构建工具</li>
+          <li>Vant 4（移动端 UI）</li>
+          <li>ECharts（图表）</li>
+          <li>Pinia 状态管理</li>
+        </ul>
+      </div>
+      <div class="stack-column">
+        <h3>基础设施</h3>
+        <ul>
+          <li>Docker Compose</li>
+          <li>Nginx 反向代理</li>
+          <li>GitHub Actions CI/CD</li>
+          <li>Playwright E2E 测试</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 3: Comparison Grid -->
+  <section class="dev-section">
+    <h2>功能对比</h2>
+    <div style="overflow-x: auto;">
+      <table class="comparison-table">
+        <caption class="sr-only">Numina 与传统预算应用和电子表格功能对比</caption>
+        <thead>
+          <tr>
+            <th>功能</th>
+            <th class="numina-column">Numina</th>
+            <th>传统预算应用</th>
+            <th>电子表格</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>隐私保护</td>
+            <td class="numina-column">自托管，数据完全本地</td>
+            <td>云端存储，数据上传</td>
+            <td>本地文件，但无加密</td>
+          </tr>
+          <tr>
+            <td>家庭结构</td>
+            <td class="numina-column">多用户角色，家庭共享</td>
+            <td>单用户，无协作</td>
+            <td>单文件，手动共享</td>
+          </tr>
+          <tr>
+            <td>负债追踪</td>
+            <td class="numina-column">房贷、车贷、信用卡全覆盖</td>
+            <td>部分支持</td>
+            <td>手动记录</td>
+          </tr>
+          <tr>
+            <td>孩子激励</td>
+            <td class="numina-column">星星硬币系统，家务激励</td>
+            <td>无</td>
+            <td>无</td>
+          </tr>
+          <tr>
+            <td>成本</td>
+            <td class="numina-column">免费开源</td>
+            <td>订阅付费</td>
+            <td>免费</td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" class="table-footer">Last updated: 2026-04-19</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </section>
+
+  <!-- Section 4: Quick Deploy -->
+  <section id="deploy">
+    <div class="deploy-content">
+      <div class="terminal-block">
+        <code class="terminal-command">docker-compose up -d<span class="cursor"></span></code>
+      </div>
+      <p class="deploy-tagline">一键启动</p>
+      <a href="https://github.com/vincentruan/numina#快速开始" class="deploy-link" target="_blank">查看完整部署指南 →</a>
+    </div>
+    <div style="max-width: 1440px; margin: 0 auto; padding: 32px 16px;">
+      <ol class="deploy-steps">
+        <li>
+          <div>
+            <strong>克隆仓库</strong><br>
+            <code>git clone https://github.com/vincentruan/numina.git && cd numina</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>配置环境变量</strong><br>
+            复制 <code>.env.example</code> 为 <code>.env</code>，设置 <code>SECRET_KEY</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>启动服务</strong><br>
+            <code>docker-compose up -d</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>访问应用</strong><br>
+            打开浏览器访问 <code>http://localhost:8080</code>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Section 5: Config Reference -->
+  <section id="config" class="dev-section">
+    <h2>配置参考</h2>
+    <table class="config-table">
+      <thead>
+        <tr>
+          <th>变量名</th>
+          <th>默认值</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>SECRET_KEY</code></td>
+          <td><span class="config-warning">⚠️ 必填</span></td>
+          <td>JWT 签名密钥，生产环境必须设置</td>
+        </tr>
+        <tr>
+          <td><code>DATABASE_URL</code></td>
+          <td><code>sqlite:///./data/numina.db</code></td>
+          <td>数据库连接字符串</td>
+        </tr>
+        <tr>
+          <td><code>CORS_ORIGINS</code></td>
+          <td><code>["*"]</code></td>
+          <td>允许的 CORS 来源</td>
+        </tr>
+        <tr>
+          <td><code>PORT</code></td>
+          <td><code>8080</code></td>
+          <td>Nginx 监听端口</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size: 13px; color: var(--color-text-secondary); margin-top: 12px;">
+      ⚠️ 生产环境必须设置 <code>SECRET_KEY</code>，否则重启后所有用户会话失效。
+    </p>
+  </section>
+
+  <!-- Section 6: Database Options -->
+  <section class="dev-section" style="background: var(--color-bg);">
+    <h2>数据库选项</h2>
+    <div class="db-option">
+      <h3>SQLite（默认，零配置）</h3>
+      <code>sqlite:///./data/numina.db</code>
+    </div>
+    <div class="db-option">
+      <h3>MySQL</h3>
+      <code>mysql+pymysql://user:password@host:3306/database</code>
+      <p style="font-size: 13px; color: var(--color-text-secondary); margin: 8px 0 0;">启动：<code>docker-compose --profile mysql up -d</code></p>
+    </div>
+    <div class="db-option">
+      <h3>PostgreSQL</h3>
+      <code>postgresql+psycopg2://user:password@host:5432/database</code>
+      <p style="font-size: 13px; color: var(--color-text-secondary); margin: 8px 0 0;">启动：<code>docker-compose --profile postgres up -d</code></p>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <nav class="footer-nav">
+      <a href="https://github.com/vincentruan/numina" target="_blank">GitHub</a>
+      <a href="https://github.com/vincentruan/numina/issues" target="_blank">Issues</a>
+      <a href="https://github.com/vincentruan/numina/blob/main/LICENSE" target="_blank">LICENSE</a>
+      <a href="https://github.com/vincentruan/numina/actions" target="_blank">CI</a>
+    </nav>
+    <p class="footer-text">Last updated: 2026-04-19</p>
+    <p class="footer-text" style="margin-top: 8px;">
+      <a href="../product/" style="color: var(--color-primary); text-decoration: none;">产品介绍 →</a>
+    </p>
+  </footer>
+
+  <!-- Trust badge single-open behavior -->
+  <script>
+    document.querySelectorAll('details.trust-badge').forEach(d => {
+      d.addEventListener('toggle', e => {
+        if (e.target.open) {
+          document.querySelectorAll('details.trust-badge').forEach(other => {
+            if (other !== e.target) other.removeAttribute('open');
+          });
+        }
+      });
+    });
+  </script>
+</body>
+</html>
