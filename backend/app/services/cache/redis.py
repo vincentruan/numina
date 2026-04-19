@@ -8,23 +8,21 @@ from app.services.cache.base import CacheBackend
 class RedisCacheBackend(CacheBackend):
     """Redis cache backend for distributed deployments.
 
-    TODO: Implement when Redis is needed. Requires redis-py dependency.
+    This class is a placeholder. Instantiation succeeds, but all cache
+    operations raise NotImplementedError until the backend is implemented.
+
+    To implement: add redis-py as a dependency and replace the method stubs
+    below with real Redis calls using self._redis_url.
     """
 
     def __init__(self, redis_url: str):
-        """Initialize Redis backend.
+        """Initialize Redis backend placeholder.
 
         Args:
             redis_url: Redis connection URL (e.g., redis://localhost:6379/0)
-
-        Raises:
-            NotImplementedError: Redis backend is not yet implemented.
-                The factory will propagate this error — configure CACHE_BACKEND=memory
-                for development, or implement this backend before using Redis in production.
         """
         # Placeholder: self._client = redis.from_url(redis_url)
         self._redis_url = redis_url
-        raise NotImplementedError("Redis backend not yet implemented")
 
     def get(self, key: str) -> Optional[Any]:
         raise NotImplementedError("Redis backend not yet implemented")
