@@ -23,10 +23,9 @@ import bcrypt
 from fastapi import Request
 from sqlalchemy.orm import Session
 
-from app.errors import AppError, ErrorCode
-
 from app.auth.deps import create_access_token, create_refresh_token
-from app.models.family import Family, generate_invite_code
+from app.errors import AppError, ErrorCode
+from app.models.family import Family
 from app.models.user import User
 from app.schemas.auth import (
     JoinFamilyRequest,
@@ -36,7 +35,7 @@ from app.schemas.auth import (
     UpdateProfileRequest,
 )
 from app.services.audit_log import write_audit_log
-from app.services.security_log import _log_security_event, SecurityEventType
+from app.services.security_log import SecurityEventType, _log_security_event
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
 _login_attempts: dict[str, tuple[int, float]] = {}
@@ -283,8 +282,8 @@ def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> T
     _log_security_event(SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
     )
 
 
@@ -312,20 +311,23 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
     write_audit_log("login_success", "success", user_id=user.id, family_id=user.family_id)
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
     )
 
 
 def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     from jose import JWTError, jwt
+
+    from app.auth.deps import ALGORITHM, _verify_token, revoke_jti
     from app.config import settings
-    from app.auth.deps import ALGORITHM, revoke_jti, _verify_token
 
     # Use _verify_token so JTI revocation check is applied
-    user_id = _verify_token(refresh_tok, "refresh")
-    if user_id is None:
+    payload = _verify_token(refresh_tok, "refresh")
+    if payload is None:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
+    user_id = payload["sub"]
 
     try:
         payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[ALGORITHM])
@@ -352,8 +354,8 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
     write_audit_log("token_refresh", "success", user_id=user.id, family_id=user.family_id)
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "token_version": user.token_version}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role, "token_version": user.token_version}),
     )
 
 
@@ -377,8 +379,8 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     db.refresh(user)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id}),
+        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
     )
 
 
@@ -453,8 +455,9 @@ _CHILD_PIN_LOCKOUT_MINUTES = 15
 
 def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> TokenResponse:
     """Verify child PIN and return tokens. Enforces lockout after 3 failures."""
-    from app.auth.deps import create_access_token, create_child_refresh_token
     import unicodedata
+
+    from app.auth.deps import create_access_token, create_child_refresh_token
 
     child = db.query(User).filter(
         User.id == child_id, User.is_active == True, User.role == "child"
@@ -485,8 +488,8 @@ def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> Toke
 
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, user_id=child.id)
     return TokenResponse(
-        access_token=create_access_token({"sub": child.id, "role": "child"}),
-        refresh_token=create_child_refresh_token({"sub": child.id, "role": "child", "token_version": child.token_version}),
+        access_token=create_access_token({"sub": child.id, "fid": child.family_id, "role": "child"}),
+        refresh_token=create_child_refresh_token({"sub": child.id, "fid": child.family_id, "role": "child", "token_version": child.token_version}),
     )
 
 
@@ -519,8 +522,9 @@ def _record_child_pin_failure(db: Session, child: User) -> None:
 def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     """Refresh child access token using child refresh token."""
     from jose import JWTError, jwt
-    from app.config import settings
+
     from app.auth.deps import ALGORITHM, create_access_token
+    from app.config import settings
 
     try:
         payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[ALGORITHM])
@@ -541,6 +545,6 @@ def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": child.id, "role": "child"}),
+        access_token=create_access_token({"sub": child.id, "fid": child.family_id, "role": "child"}),
         refresh_token=refresh_tok,  # keep same refresh token
     )

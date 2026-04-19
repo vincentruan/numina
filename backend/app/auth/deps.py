@@ -12,7 +12,6 @@ Cookie Configuration:
 
 import time
 from datetime import datetime, timedelta
-
 from uuid import uuid4
 
 from fastapi import Cookie, Depends, HTTPException, Request, status
@@ -120,8 +119,19 @@ def create_child_refresh_token(data: dict) -> str:
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
-def _verify_token(token: str, expected_type: str = "access") -> str | None:
-    """Verify JWT token and return user_id if valid."""
+def _verify_token(token: str, expected_type: str = "access") -> dict | None:
+    """Verify JWT token and return payload dict if valid.
+
+    Returns dict with keys:
+    - sub: user_id (always present)
+    - fid: family_id (None for child tokens, present for adult tokens)
+    - role: user role (defaults to "member" for backward compat with adult tokens)
+
+    SECURITY: All existing revocation checks preserved:
+    - JTI revocation check
+    - iat-based per-user revocation check
+    - token type validation
+    """
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
@@ -134,7 +144,10 @@ def _verify_token(token: str, expected_type: str = "access") -> str | None:
             return None
         if iat is not None and _is_token_revoked_for_user(user_id, float(iat)):
             return None
-        return user_id
+        # Extract fid and role with defaults for backward compat
+        fid: str | None = payload.get("fid")  # Present for all tokens after refactor
+        role: str = payload.get("role", "member")  # Default for backward compat with old tokens
+        return {"sub": user_id, "fid": fid, "role": role}
     except JWTError:
         return None
 
@@ -173,6 +186,8 @@ def get_current_user(
     - Browser has UserB's cookie (from prior login)
     - Without this fix: returns UserB (wrong identity, data leak)
     - With this fix: returns UserA (correct identity from Bearer)
+
+    Performance: Uses embedded fid/role from JWT payload, minimal DB check.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -180,29 +195,86 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    user_id = None
+    payload = None
 
     # SECURITY: Bearer token takes precedence over Cookie
     # This prevents session hijacking when API clients send explicit tokens
     if token:
-        user_id = _verify_token(token, "access")
+        payload = _verify_token(token, "access")
 
     # Fallback to Cookie only when no Bearer token provided
-    if user_id is None and access_token_cookie:
-        user_id = _verify_token(access_token_cookie, "access")
+    if payload is None and access_token_cookie:
+        payload = _verify_token(access_token_cookie, "access")
 
-    if user_id is None:
+    if payload is None:
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    if user is None:
+    user_id = payload["sub"]
+    payload_fid = payload["fid"]
+    payload_role = payload["role"]
+
+    # SECURITY: Minimal existence check + family_id verification
+    # Prevents cross-family data access after user removal from family
+    # Query returns columns needed by UserResponse schema, not full User object
+    result = db.query(
+        User.family_id,
+        User.username,
+        User.display_name,
+        User.avatar_color,
+        User.theme,
+        User.language,
+        User.default_currency,
+        User.view_mode,
+    ).filter(
+        User.id == user_id, User.is_active.is_(True)
+    ).first()
+
+    if result is None:
+        # User doesn't exist or is inactive
+        raise credentials_exception
+
+    (
+        db_family_id,
+        username,
+        display_name,
+        avatar_color,
+        theme,
+        language,
+        default_currency,
+        view_mode,
+    ) = result
+
+    # SECURITY: Verify payload fid matches current DB family_id
+    # This prevents stale tokens from accessing data after family removal
+    if payload_fid != db_family_id:
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult endpoints.
     # Endpoints that need child access use get_current_child_user instead.
-    _assert_not_child(user)
+    if payload_role == "child":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="儿童账户无法访问此端点",
+        )
 
-    return user
+    # Return User object with queried columns + payload fields
+    # Saves ~7 columns compared to full User query (no password_hash, pin fields, etc.)
+    user = User(
+        id=user_id,
+        family_id=payload_fid,
+        username=username,
+        display_name=display_name,
+        avatar_color=avatar_color,
+        role=payload_role,
+        is_active=True,
+        theme=theme,
+        language=language,
+        default_currency=default_currency,
+        view_mode=view_mode,
+    )
+    # Merge into session so services can use db.refresh() for write operations
+    merged_user = db.merge(user)
+    return merged_user
 
 
 def get_current_user_from_cookie(
@@ -213,6 +285,8 @@ def get_current_user_from_cookie(
 
     Use this for endpoints that should only accept Cookie-based auth,
     such as logout or password change operations.
+
+    Performance: Uses embedded fid/role from JWT payload, minimal DB check.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -222,18 +296,71 @@ def get_current_user_from_cookie(
     if not access_token_cookie:
         raise credentials_exception
 
-    user_id = _verify_token(access_token_cookie, "access")
-    if user_id is None:
+    payload = _verify_token(access_token_cookie, "access")
+    if payload is None:
         raise credentials_exception
 
-    user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
-    if user is None:
+    user_id = payload["sub"]
+    payload_fid = payload["fid"]
+    payload_role = payload["role"]
+
+    # SECURITY: Minimal existence check + family_id verification
+    # Query returns columns needed by UserResponse schema
+    result = db.query(
+        User.family_id,
+        User.username,
+        User.display_name,
+        User.avatar_color,
+        User.theme,
+        User.language,
+        User.default_currency,
+        User.view_mode,
+    ).filter(
+        User.id == user_id, User.is_active.is_(True)
+    ).first()
+
+    if result is None:
+        raise credentials_exception
+
+    (
+        db_family_id,
+        username,
+        display_name,
+        avatar_color,
+        theme,
+        language,
+        default_currency,
+        view_mode,
+    ) = result
+
+    # SECURITY: Verify payload fid matches current DB family_id
+    if payload_fid != db_family_id:
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult-only cookie endpoints.
-    _assert_not_child(user)
+    if payload_role == "child":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="儿童账户无法访问此端点",
+        )
 
-    return user
+    # Return User object with queried columns + payload fields
+    user = User(
+        id=user_id,
+        family_id=payload_fid,
+        username=username,
+        display_name=display_name,
+        avatar_color=avatar_color,
+        role=payload_role,
+        is_active=True,
+        theme=theme,
+        language=language,
+        default_currency=default_currency,
+        view_mode=view_mode,
+    )
+    # Merge into session so services can use db.refresh() for write operations
+    merged_user = db.merge(user)
+    return merged_user
 
 
 def get_refresh_token_from_cookie(
@@ -246,8 +373,8 @@ def get_refresh_token_from_cookie(
             detail="缺少刷新令牌",
         )
 
-    user_id = _verify_token(refresh_token_cookie, "refresh")
-    if user_id is None:
+    payload = _verify_token(refresh_token_cookie, "refresh")
+    if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的刷新令牌",
@@ -285,32 +412,79 @@ def get_current_child_user(
         detail="无法验证儿童凭据",
     )
 
-    user_id = None
+    payload = None
 
     # SECURITY: Bearer token takes precedence over Cookie
     if token:
-        user_id = _verify_token(token, "access")
+        payload = _verify_token(token, "access")
 
     # Fallback to Cookie only when no Bearer token provided
-    if user_id is None and child_access_token_cookie:
-        user_id = _verify_token(child_access_token_cookie, "access")
+    if payload is None and child_access_token_cookie:
+        payload = _verify_token(child_access_token_cookie, "access")
 
-    if user_id is None:
+    if payload is None:
         raise credentials_exception
 
-    user = (
-        db.query(User)
-        .filter(
-            User.id == user_id,
-            User.is_active == True,
-            User.role == "child",
-        )
-        .first()
+    user_id = payload["sub"]
+    payload_fid = payload["fid"]
+    payload_role = payload["role"]
+
+    # SECURITY: Verify payload role is child
+    if payload_role != "child":
+        raise credentials_exception
+
+    # SECURITY: Minimal existence check + role verification + family_id verification
+    # Query returns columns needed for child user operations
+    result = db.query(
+        User.family_id,
+        User.username,
+        User.display_name,
+        User.avatar_color,
+        User.theme,
+        User.language,
+        User.default_currency,
+        User.view_mode,
+    ).filter(
+        User.id == user_id,
+        User.is_active.is_(True),
+        User.role == "child",
+    ).first()
+
+    if result is None:
+        raise credentials_exception
+
+    (
+        db_family_id,
+        username,
+        display_name,
+        avatar_color,
+        theme,
+        language,
+        default_currency,
+        view_mode,
+    ) = result
+
+    # SECURITY: Verify payload fid matches current DB family_id
+    if payload_fid != db_family_id:
+        raise credentials_exception
+
+    # Return User object with queried columns + payload fields
+    user = User(
+        id=user_id,
+        family_id=payload_fid,
+        username=username,
+        display_name=display_name,
+        avatar_color=avatar_color,
+        role="child",
+        is_active=True,
+        theme=theme,
+        language=language,
+        default_currency=default_currency,
+        view_mode=view_mode,
     )
-    if user is None:
-        raise credentials_exception
-
-    return user
+    # Merge into session so services can use db.refresh() for write operations
+    merged_user = db.merge(user)
+    return merged_user
 
 
 def get_child_refresh_token_from_cookie(
@@ -325,8 +499,8 @@ def get_child_refresh_token_from_cookie(
             detail="缺少儿童刷新令牌",
         )
 
-    user_id = _verify_token(child_refresh_token_cookie, "refresh")
-    if user_id is None:
+    payload = _verify_token(child_refresh_token_cookie, "refresh")
+    if payload is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="无效的儿童刷新令牌",
