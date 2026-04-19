@@ -40,7 +40,8 @@ const http = axios.create({
 // Cookie is automatically sent by browser
 http.interceptors.request.use(
   (config) => {
-    // No Authorization header needed - httpOnly Cookie is sent automatically
+    // AI endpoints need a longer timeout for LLM response latency
+    config.timeout = config.url?.includes('/ai/') ? 120000 : 15000
     return config
   },
   (error) => Promise.reject(error)
