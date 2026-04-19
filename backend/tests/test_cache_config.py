@@ -1,9 +1,24 @@
 """Tests for cache backend configuration validation."""
 
+import asyncio
+
 import pytest
 
 from app.config import settings
 from app.services.cache.redis import RedisCacheBackend
+
+
+def _run_in_new_loop(coro):
+    """Run a coroutine in a fresh event loop without closing the global loop.
+
+    asyncio.run() closes the running loop, which breaks tests that use
+    asyncio.get_event_loop() afterwards (e.g. storage backend tests).
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 def test_redis_backend_constructor_does_not_raise():
@@ -35,25 +50,28 @@ def test_cache_backend_memory_is_default():
 
 
 def test_lifespan_raises_on_redis_backend(monkeypatch):
-    """App lifespan raises ValueError when CACHE_BACKEND=redis."""
+    """App lifespan raises RuntimeError when CACHE_BACKEND=redis."""
     monkeypatch.setattr(settings, "CACHE_BACKEND", "redis")
 
-    # Import here to avoid circular import issues at module level
-    import asyncio
     from app.main import lifespan, app
 
     async def run_lifespan():
         async with lifespan(app):
             pass  # pragma: no cover
 
-    with pytest.raises(ValueError, match="CACHE_BACKEND=redis is not yet implemented"):
-        asyncio.get_event_loop().run_until_complete(run_lifespan())
+    with pytest.raises(RuntimeError, match="Unsupported CACHE_BACKEND="):
+        _run_in_new_loop(run_lifespan())
 
 
-def test_lifespan_does_not_raise_on_memory_backend(monkeypatch, tmp_path):
-    """App lifespan does not raise when CACHE_BACKEND=memory (default)."""
-    monkeypatch.setattr(settings, "CACHE_BACKEND", "memory")
-    # The check itself should not raise — we only test the guard, not full startup
-    if settings.CACHE_BACKEND == "redis":
-        raise ValueError("CACHE_BACKEND=redis is not yet implemented.")
-    # Reaching here means no ValueError was raised
+def test_lifespan_raises_on_unknown_backend(monkeypatch):
+    """App lifespan raises RuntimeError for any unrecognized CACHE_BACKEND value."""
+    monkeypatch.setattr(settings, "CACHE_BACKEND", "memcached")
+
+    from app.main import lifespan, app
+
+    async def run_lifespan():
+        async with lifespan(app):
+            pass  # pragma: no cover
+
+    with pytest.raises(RuntimeError, match="Unsupported CACHE_BACKEND="):
+        _run_in_new_loop(run_lifespan())
