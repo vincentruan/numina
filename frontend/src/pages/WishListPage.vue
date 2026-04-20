@@ -78,7 +78,12 @@
             </div>
           </div>
         </template>
-        <van-empty v-else :description="emptyDescription" />
+        <van-empty v-else :description="emptyDescription">
+          <template #image>
+            <van-icon v-if="activeTab === 'realized'" name="star-o" size="48" color="#07c160" />
+            <van-icon v-else-if="activeTab === 'cancelled'" name="close" size="48" color="#999" />
+          </template>
+        </van-empty>
       </van-pull-refresh>
     </div>
 
