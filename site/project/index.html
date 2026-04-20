@@ -189,6 +189,10 @@
       min-width: 300px;
     }
 
+    .terminal-glow {
+      box-shadow: 0 0 15px rgba(0, 255, 65, 0.15);
+    }
+
     .terminal-header {
       background: var(--bg-tertiary);
       padding: 8px 16px;
@@ -277,6 +281,10 @@
     }
 
     @media (prefers-reduced-motion: reduce) {
+      * {
+        transition: none !important;
+      }
+
       .cursor {
         animation: none;
         opacity: 1;
