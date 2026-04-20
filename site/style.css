@@ -530,3 +530,40 @@ footer {
     padding-right: 48px;
   }
 }
+
+/* Terminal Dark 网格背景模式 */
+
+/* 密集网格（hero、deploy区块） */
+.terminal-grid-dense {
+  background-image:
+    linear-gradient(rgba(0, 255, 65, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 65, 0.03) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* 稀疏网格（stack、features区块） */
+.terminal-grid-sparse {
+  background-image:
+    linear-gradient(rgba(51, 51, 51, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(51, 51, 51, 0.5) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* 无网格（config、comparison表格） */
+.terminal-grid-none {
+  background: var(--bg-secondary);
+}
+
+/* 终端发光效果 */
+.terminal-glow {
+  box-shadow: 0 0 15px rgba(0, 255, 65, 0.15);
+}
+
+.terminal-glow-strong {
+  box-shadow: 0 0 20px rgba(0, 255, 65, 0.25);
+}
+
+/* 文字发光 */
+.text-glow {
+  text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+}
