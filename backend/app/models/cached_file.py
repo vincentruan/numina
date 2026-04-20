@@ -12,7 +12,7 @@ class CachedFile(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"), nullable=False)
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     local_path: Mapped[str] = mapped_column(String(500), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)

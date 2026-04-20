@@ -44,9 +44,13 @@ class Orchestrator:
         family_id: str,
         user_id: str | None = None,
         free_text: str | None = None,
+        thread_id: str | None = None,
     ) -> AgentResponse:
         """Run the full pipeline. Never raises — always returns AgentResponse."""
         audit_id = str(uuid.uuid4())
+        # Use caller-supplied thread_id for DeerFlow session continuity;
+        # fall back to audit_id for backward compatibility (e.g. non-chat capabilities)
+        effective_thread_id = thread_id if thread_id is not None else audit_id
         start_ms = int(time.monotonic() * 1000)
         fallback_used = False
         deerflow_attempted = False
@@ -109,7 +113,7 @@ class Orchestrator:
                     raw_output = await _deerflow_adapter.dispatch(
                         skill_name=capability,
                         context=redacted,
-                        thread_id=audit_id,
+                        thread_id=effective_thread_id,
                     )
                     response = output_mapper.from_deerflow(raw_output, capability, audit_id)
                     skill_triggered = capability

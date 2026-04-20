@@ -180,7 +180,7 @@ class TestChatEndpoint:
         """Verify the question is forwarded to orchestrator as free_text."""
         captured = {}
 
-        async def _capture_dispatch(capability, family_id, user_id=None, free_text=None):
+        async def _capture_dispatch(capability, family_id, user_id=None, free_text=None, thread_id=None):
             captured["free_text"] = free_text
             from schemas.response import AgentResponse as AR
             return AR(**_make_response("chat"))

@@ -16,6 +16,7 @@ dependencies = [
     "httpx>=0.28.0",
     "apscheduler>=3.11.2",
     "altcha>=1.0.0",
+    "filelock>=3.13.0",
     # 数据库驱动
     "aiomysql>=0.2.0",
     "psycopg2-binary>=2.9.9",

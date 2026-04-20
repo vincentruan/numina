@@ -2,9 +2,10 @@
 
 import logging
 from datetime import datetime
+from pathlib import Path
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -13,8 +14,11 @@ from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.models.ai_chat_message import AIChatMessage
+from app.models.ai_chat_session import AIChatSession
+from app.models.cached_file import CachedFile
+from app.models.file_remote_location import FileRemoteLocation
 from app.models.user import User
+from app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
 logger = logging.getLogger(__name__)
@@ -22,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ChatRequest(BaseModel):
     question: str
+    session_id: str | None = None
 
     @field_validator("question")
     @classmethod
@@ -34,6 +39,31 @@ class ChatRequest(BaseModel):
         return v
 
 
+def _get_session_for_family(
+    session_id: str | None,
+    family_id: str,
+    db: Session,
+) -> AIChatSession | None:
+    """Load a session by ID, enforcing family_id ownership (security invariant)."""
+    if session_id is None:
+        return None
+    return (
+        db.query(AIChatSession)
+        .filter_by(id=session_id, family_id=family_id)
+        .first()
+    )
+
+
+def _get_latest_session(family_id: str, db: Session) -> AIChatSession | None:
+    """Get the most recent session for a family."""
+    return (
+        db.query(AIChatSession)
+        .filter_by(family_id=family_id)
+        .order_by(AIChatSession.created_at.desc())
+        .first()
+    )
+
+
 @router.post("")
 async def chat(
     body: ChatRequest,
@@ -41,90 +71,155 @@ async def chat(
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
-    """发送问题，获取 AI 回答，并持久化对话历史。"""
-    if not body.question.strip():
-        raise AppError(ErrorCode.AI_QUESTION_EMPTY)
+    """发送问题，获取 AI 回答，并持久化对话历史到 JSONL 文件。"""
+    # Resolve session — always filter by family_id (security invariant)
+    if body.session_id is not None:
+        session = _get_session_for_family(body.session_id, current_user.family_id, db)
+        if session is None:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        session = _get_latest_session(current_user.family_id, db)
+        if session is None:
+            session = await ChatSessionService.create_session(
+                current_user.family_id, current_user.id, db
+            )
 
-    # Save user message
-    user_msg = AIChatMessage(
-        family_id=current_user.family_id,
-        role="user",
-        content=body.question.strip(),
-    )
-    db.add(user_msg)
-    db.commit()
+    # Append user message to JSONL
+    await ChatSessionService.append_message(session, "user", body.question, current_user, db)
+    # Refresh session object after executor commit to avoid stale ORM state on next call
+    db.refresh(session)
 
     # Call agent
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/chat/ask",
-                json={"question": body.question.strip()},
+                json={"question": body.question},
                 headers={
                     "X-Family-Id": current_user.family_id,
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "X-Thread-Id": session.id,
                 },
             )
             resp.raise_for_status()
             resp_data = resp.json()
-            # AgentResponse shape: summary carries the answer text
             answer = resp_data.get("summary") or resp_data.get("answer", "")
     except httpx.TimeoutException:
-        db.rollback()
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
-        logger.error(f"调用 agent chat 失败: {e}")
-        db.rollback()
+        logger.error("调用 agent chat 失败: %s", type(e).__name__)
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
-    # Save assistant message only on success
-    assistant_msg = AIChatMessage(
-        family_id=current_user.family_id,
-        role="assistant",
-        content=answer,
-    )
-    db.add(assistant_msg)
-    db.commit()
+    # Append assistant message to JSONL
+    await ChatSessionService.append_message(session, "assistant", answer, current_user, db)
 
     return {
-        "question": body.question.strip(),
+        "question": body.question,
         "answer": answer,
-        "message_id": assistant_msg.id,
+        "message_id": session.id,
+        "session_id": session.id,
     }
 
 
-@router.get("/history")
-def get_history(
-    limit: int = 20,
+@router.get("/sessions")
+def get_sessions(
+    limit: int = Query(default=50, ge=1, le=200),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    messages = (
-        db.query(AIChatMessage)
-        .filter(AIChatMessage.family_id == current_user.family_id)
-        .order_by(AIChatMessage.created_at.desc())
+    """列出当前家庭的所有对话会话。"""
+    sessions = (
+        db.query(AIChatSession)
+        .filter_by(family_id=current_user.family_id)
+        .order_by(AIChatSession.created_at.desc())
         .limit(limit)
         .all()
     )
     return [
         {
-            "id": m.id,
-            "role": m.role,
-            "content": m.content,
-            "created_at": m.created_at.isoformat(),
+            "session_id": s.id,
+            "created_at": s.created_at.isoformat(),
+            "message_count": s.message_count,
+            "last_preview": s.last_preview,
         }
-        for m in reversed(messages)
+        for s in sessions
+    ]
+
+
+@router.get("/history")
+async def get_history(
+    session_id: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=200),
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """获取对话历史。"""
+    if session_id is not None:
+        session = _get_session_for_family(session_id, current_user.family_id, db)
+        if session is None:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        session = _get_latest_session(current_user.family_id, db)
+        if session is None:
+            return []
+
+    messages = await ChatSessionService.read_messages(session)
+    # Return last N messages in ascending order (file is already ascending)
+    if limit and len(messages) > limit:
+        messages = messages[-limit:]
+    return [
+        {
+            "id": m.get("message_id", ""),
+            "role": m.get("role", ""),
+            "content": m.get("content", ""),
+            "created_at": m.get("timestamp", ""),
+        }
+        for m in messages
     ]
 
 
 @router.delete("/history")
 def clear_history(
+    session_id: str | None = Query(default=None),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    db.query(AIChatMessage).filter(
-        AIChatMessage.family_id == current_user.family_id
-    ).delete()
+    """删除对话历史。"""
+    if session_id is not None:
+        sessions = []
+        session = _get_session_for_family(session_id, current_user.family_id, db)
+        if session:
+            sessions = [session]
+    else:
+        sessions = (
+            db.query(AIChatSession)
+            .filter_by(family_id=current_user.family_id)
+            .all()
+        )
+
+    for s in sessions:
+        if s.cached_file_id:
+            cached_file = db.query(CachedFile).filter_by(id=s.cached_file_id).first()
+            if cached_file:
+                cached_file.deleted_at = datetime.utcnow()
+                # Mark pending sync locations as deleted to prevent syncing deleted files
+                db.query(FileRemoteLocation).filter_by(
+                    file_id=s.cached_file_id, sync_status="pending"
+                ).update({"sync_status": "deleted"})
+        # Delete JSONL file from disk to avoid orphaned files
+        try:
+            jsonl_abs = Path(settings.CHAT_DIR) / s.jsonl_path
+            jsonl_abs.resolve()  # validate path exists before unlink
+            if jsonl_abs.exists():
+                jsonl_abs.unlink()
+            # Remove lock file if present
+            lock_file = jsonl_abs.with_suffix(".lock")
+            if lock_file.exists():
+                lock_file.unlink()
+        except OSError as e:
+            logger.warning("删除 JSONL 文件失败 session=%s: %s", s.id, type(e).__name__)
+        db.delete(s)
+
     db.commit()
     return {"ok": True}
 

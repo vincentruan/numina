@@ -1,4 +1,5 @@
 import secrets
+from pathlib import Path
 
 from pydantic_settings import BaseSettings
 
@@ -50,6 +51,12 @@ class Settings(BaseSettings):
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # If unset, falls back to SECRET_KEY-derived key (not recommended for production).
     STORAGE_ENCRYPTION_KEY: str = ""
+
+    # Chat session storage configuration
+    # CHAT_DIR must NOT be under UPLOAD_DIR (UPLOAD_DIR is served as static files)
+    CHAT_DIR: str = "./data/chat"
+    # Remote sync for chat JSONL files is opt-in (off by default — conversation history is sensitive)
+    CHAT_ENABLE_REMOTE_SYNC: bool = False
 
     # AI Agent 配置
     AI_ENCRYPTION_KEY: str = (
@@ -108,3 +115,16 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
         "STORAGE_ENCRYPTION_KEY 未配置！生产环境必须设置独立的存储加密密钥，"
         "避免与 SECRET_KEY 共用导致密钥轮换风险。"
     )
+
+# CHAT_DIR validation - must not be under UPLOAD_DIR (UPLOAD_DIR is served as static files)
+try:
+    chat_dir_resolved = Path(settings.CHAT_DIR).resolve()
+    upload_dir_resolved = Path(settings.UPLOAD_DIR).resolve()
+    if chat_dir_resolved == upload_dir_resolved or chat_dir_resolved.is_relative_to(upload_dir_resolved):
+        raise RuntimeError(
+            f"CHAT_DIR ({settings.CHAT_DIR}) 不能位于 UPLOAD_DIR ({settings.UPLOAD_DIR}) 下！"
+            "对话历史不应通过静态文件 URL 暴露。"
+        )
+except ValueError:
+    # is_relative_to raises ValueError on Windows if paths are on different drives - that's fine
+    pass

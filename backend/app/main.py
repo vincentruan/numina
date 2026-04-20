@@ -28,6 +28,7 @@ from app.models.activity import Activity  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from app.models.ai_chat_message import AIChatMessage  # noqa: F401
+from app.models.ai_chat_session import AIChatSession  # noqa: F401
 from app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
 from app.models.ai_report import AIReport  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401

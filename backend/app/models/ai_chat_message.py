@@ -1,4 +1,8 @@
-"""AI 问答消息模型。"""
+"""AI 问答消息模型。
+
+DEPRECATED: Messages are now stored in JSONL files via AIChatSession.
+This table is kept for migration rollback only — no new writes should occur.
+"""
 
 import uuid
 from datetime import datetime
