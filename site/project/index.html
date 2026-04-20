@@ -96,7 +96,7 @@
       scroll-margin-top: var(--nav-height);
     }
 
-    /* Content sections */
+    /* Terminal Dark Content Sections */
     .dev-section {
       padding: 48px 16px;
       max-width: 1440px;
@@ -104,15 +104,19 @@
     }
 
     .dev-section h2 {
+      font-family: var(--font-mono);
       font-size: 24px;
       font-weight: 600;
       margin: 0 0 24px;
+      color: var(--neon-green);
     }
 
     .dev-section h3 {
+      font-family: var(--font-mono);
       font-size: 18px;
       font-weight: 600;
       margin: 16px 0 8px;
+      color: var(--text-primary);
     }
 
     /* Feature list */
@@ -146,14 +150,24 @@
     }
 
     .stack-card {
-      background: white;
+      background: var(--bg-secondary);
+      border: 1px solid var(--neon-green);
       border-radius: 12px;
       padding: 24px;
+      transition: box-shadow 150ms ease, background 150ms ease;
+    }
+
+    .stack-card:hover {
+      box-shadow: 0 0 20px rgba(0, 255, 65, 0.25);
+      background: var(--bg-tertiary);
     }
 
     .stack-title {
       margin-top: 0;
-      color: var(--color-primary);
+      color: var(--neon-green);
+      font-family: var(--font-mono);
+      font-size: 16px;
+      font-weight: 500;
     }
 
     .stack-list {
@@ -163,8 +177,21 @@
 
     .stack-list li {
       font-size: 14px;
-      color: var(--color-text-secondary);
+      color: var(--text-secondary);
       margin-bottom: 6px;
+      list-style-type: none;
+      position: relative;
+      padding-left: 16px;
+    }
+
+    .stack-list li::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 6px;
+      width: 6px;
+      height: 6px;
+      background: var(--neon-green);
     }
 
     /* Terminal Dark Deploy Section */
