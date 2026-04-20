@@ -546,6 +546,51 @@
         padding: 48px 32px;
       }
     }
+
+    /* Terminal Dark Footer */
+    .dev-footer {
+      padding: 24px 16px;
+      background: var(--bg-primary);
+      text-align: center;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .footer-links a {
+      font-family: var(--font-mono);
+      color: var(--neon-green);
+      font-size: 16px;
+      text-decoration: none;
+    }
+
+    .footer-links a:hover {
+      text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+    }
+
+    .footer-separator {
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+
+    .footer-meta {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-tertiary);
+      margin: 0;
+    }
+
+    @media (min-width: 768px) {
+      .footer-links {
+        flex-direction: row;
+        justify-content: center;
+        gap: 8px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -852,18 +897,18 @@
     </div>
   </section>
 
-  <!-- Footer -->
-  <footer>
-    <nav class="footer-nav">
+  <!-- Terminal Dark Footer -->
+  <footer class="dev-footer">
+    <nav class="footer-links">
       <a href="https://github.com/vincentruan/numina" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <span class="footer-separator">·</span>
       <a href="https://github.com/vincentruan/numina/issues" target="_blank" rel="noopener noreferrer">Issues</a>
+      <span class="footer-separator">·</span>
       <a href="https://github.com/vincentruan/numina/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">LICENSE</a>
+      <span class="footer-separator">·</span>
       <a href="https://github.com/vincentruan/numina/actions" target="_blank" rel="noopener noreferrer">CI</a>
     </nav>
-    <p class="footer-text">Last updated: 2026-04-19</p>
-    <p class="footer-text" style="margin-top: 8px;">
-      <a href="../overview/" style="color: var(--color-primary); text-decoration: none;">产品介绍 →</a>
-    </p>
+    <p class="footer-meta">Last updated: 2026-04-20</p>
   </footer>
 
   <!-- Trust badge single-open behavior -->
