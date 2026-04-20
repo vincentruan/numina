@@ -145,23 +145,23 @@
       }
     }
 
-    .stack-column {
+    .stack-card {
       background: white;
       border-radius: 12px;
       padding: 24px;
     }
 
-    .stack-column h3 {
+    .stack-title {
       margin-top: 0;
       color: var(--color-primary);
     }
 
-    .stack-column ul {
+    .stack-list {
       margin: 0;
       padding-left: 20px;
     }
 
-    .stack-column li {
+    .stack-list li {
       font-size: 14px;
       color: var(--color-text-secondary);
       margin-bottom: 6px;
@@ -290,8 +290,122 @@
     </div>
   </header>
 
-  <!-- Section 1: Feature Overview -->
-  <section id="features" class="dev-section">
+  <!-- Section 1: Tech Stack (技术优先) -->
+  <section id="stack" class="dev-section terminal-grid-sparse">
+    <h2>技术架构</h2>
+    <div class="stack-grid">
+      <div class="stack-card">
+        <h3 class="stack-title">后端</h3>
+        <ul class="stack-list">
+          <li>FastAPI (Python)</li>
+          <li>SQLAlchemy ORM</li>
+          <li>SQLite / MySQL / PostgreSQL</li>
+          <li>JWT 认证（bcrypt + access/refresh tokens）</li>
+          <li>Alembic 数据库迁移</li>
+        </ul>
+      </div>
+      <div class="stack-card">
+        <h3 class="stack-title">前端</h3>
+        <ul class="stack-list">
+          <li>Vue 3 + TypeScript</li>
+          <li>Vite 构建工具</li>
+          <li>Vant 4（移动端 UI）</li>
+          <li>ECharts（图表）</li>
+          <li>Pinia 状态管理</li>
+        </ul>
+      </div>
+      <div class="stack-card">
+        <h3 class="stack-title">基础设施</h3>
+        <ul class="stack-list">
+          <li>Docker Compose</li>
+          <li>Nginx 反向代理</li>
+          <li>GitHub Actions CI/CD</li>
+          <li>Playwright E2E 测试</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- Section 2: Quick Deploy (终端核心) -->
+  <section id="deploy" class="terminal-grid-dense">
+    <div class="deploy-content">
+      <div class="terminal-block">
+        <code class="terminal-command">docker-compose up -d<span class="cursor"></span></code>
+      </div>
+      <p class="deploy-tagline">一键启动</p>
+      <a href="https://github.com/vincentruan/numina#快速开始" class="deploy-link" target="_blank" rel="noopener noreferrer">查看完整部署指南 →</a>
+    </div>
+    <div style="max-width: 1440px; margin: 0 auto; padding: 32px 16px;">
+      <ol class="deploy-steps">
+        <li>
+          <div>
+            <strong>克隆仓库</strong><br>
+            <code>git clone https://github.com/vincentruan/numina.git && cd numina</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>配置环境变量</strong><br>
+            复制 <code>.env.example</code> 为 <code>.env</code>，设置 <code>SECRET_KEY</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>启动服务</strong><br>
+            <code>docker-compose up -d</code>
+          </div>
+        </li>
+        <li>
+          <div>
+            <strong>访问应用</strong><br>
+            打开浏览器访问 <code>http://localhost:8080</code>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- Section 3: Config Reference -->
+  <section id="config" class="dev-section terminal-grid-none">
+    <h2>配置参考</h2>
+    <table class="config-table">
+      <thead>
+        <tr>
+          <th>变量名</th>
+          <th>默认值</th>
+          <th>说明</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>SECRET_KEY</code></td>
+          <td><span class="config-warning">⚠️ 必填</span></td>
+          <td>JWT 签名密钥，生产环境必须设置</td>
+        </tr>
+        <tr>
+          <td><code>DATABASE_URL</code></td>
+          <td><code>sqlite:///./data/numina.db</code></td>
+          <td>数据库连接字符串</td>
+        </tr>
+        <tr>
+          <td><code>CORS_ORIGINS</code></td>
+          <td><code>["*"]</code></td>
+          <td>允许的 CORS 来源</td>
+        </tr>
+        <tr>
+          <td><code>PORT</code></td>
+          <td><code>8080</code></td>
+          <td>Nginx 监听端口</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="font-size: 13px; color: var(--color-text-secondary); margin-top: 12px;">
+      ⚠️ 生产环境必须设置 <code>SECRET_KEY</code>，否则重启后所有用户会话失效。
+    </p>
+  </section>
+
+  <!-- Section 4: Feature Overview -->
+  <section id="features" class="dev-section terminal-grid-sparse">
     <h2>功能特性</h2>
 
     <div class="feature-category">
@@ -377,44 +491,8 @@
     </div>
   </section>
 
-  <!-- Section 2: Tech Stack -->
-  <section id="stack" class="dev-section" style="background: var(--color-bg);">
-    <h2>技术架构</h2>
-    <div class="stack-grid">
-      <div class="stack-column">
-        <h3>后端</h3>
-        <ul>
-          <li>FastAPI (Python)</li>
-          <li>SQLAlchemy ORM</li>
-          <li>SQLite / MySQL / PostgreSQL</li>
-          <li>JWT 认证（bcrypt + access/refresh tokens）</li>
-          <li>Alembic 数据库迁移</li>
-        </ul>
-      </div>
-      <div class="stack-column">
-        <h3>前端</h3>
-        <ul>
-          <li>Vue 3 + TypeScript</li>
-          <li>Vite 构建工具</li>
-          <li>Vant 4（移动端 UI）</li>
-          <li>ECharts（图表）</li>
-          <li>Pinia 状态管理</li>
-        </ul>
-      </div>
-      <div class="stack-column">
-        <h3>基础设施</h3>
-        <ul>
-          <li>Docker Compose</li>
-          <li>Nginx 反向代理</li>
-          <li>GitHub Actions CI/CD</li>
-          <li>Playwright E2E 测试</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <!-- Section 3: Comparison Grid -->
-  <section class="dev-section">
+  <!-- Section 5: Comparison Grid -->
+  <section class="dev-section terminal-grid-none">
     <h2>功能对比</h2>
     <div style="overflow-x: auto;">
       <table class="comparison-table">
@@ -466,84 +544,6 @@
         </tfoot>
       </table>
     </div>
-  </section>
-
-  <!-- Section 4: Quick Deploy -->
-  <section id="deploy">
-    <div class="deploy-content">
-      <div class="terminal-block">
-        <code class="terminal-command">docker-compose up -d<span class="cursor"></span></code>
-      </div>
-      <p class="deploy-tagline">一键启动</p>
-      <a href="https://github.com/vincentruan/numina#快速开始" class="deploy-link" target="_blank" rel="noopener noreferrer">查看完整部署指南 →</a>
-    </div>
-    <div style="max-width: 1440px; margin: 0 auto; padding: 32px 16px;">
-      <ol class="deploy-steps">
-        <li>
-          <div>
-            <strong>克隆仓库</strong><br>
-            <code>git clone https://github.com/vincentruan/numina.git && cd numina</code>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>配置环境变量</strong><br>
-            复制 <code>.env.example</code> 为 <code>.env</code>，设置 <code>SECRET_KEY</code>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>启动服务</strong><br>
-            <code>docker-compose up -d</code>
-          </div>
-        </li>
-        <li>
-          <div>
-            <strong>访问应用</strong><br>
-            打开浏览器访问 <code>http://localhost:8080</code>
-          </div>
-        </li>
-      </ol>
-    </div>
-  </section>
-
-  <!-- Section 5: Config Reference -->
-  <section id="config" class="dev-section">
-    <h2>配置参考</h2>
-    <table class="config-table">
-      <thead>
-        <tr>
-          <th>变量名</th>
-          <th>默认值</th>
-          <th>说明</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><code>SECRET_KEY</code></td>
-          <td><span class="config-warning">⚠️ 必填</span></td>
-          <td>JWT 签名密钥，生产环境必须设置</td>
-        </tr>
-        <tr>
-          <td><code>DATABASE_URL</code></td>
-          <td><code>sqlite:///./data/numina.db</code></td>
-          <td>数据库连接字符串</td>
-        </tr>
-        <tr>
-          <td><code>CORS_ORIGINS</code></td>
-          <td><code>["*"]</code></td>
-          <td>允许的 CORS 来源</td>
-        </tr>
-        <tr>
-          <td><code>PORT</code></td>
-          <td><code>8080</code></td>
-          <td>Nginx 监听端口</td>
-        </tr>
-      </tbody>
-    </table>
-    <p style="font-size: 13px; color: var(--color-text-secondary); margin-top: 12px;">
-      ⚠️ 生产环境必须设置 <code>SECRET_KEY</code>，否则重启后所有用户会话失效。
-    </p>
   </section>
 
   <!-- Section 6: Database Options -->
