@@ -38,10 +38,29 @@
   --bp-tablet: 768px;
   --bp-desktop: 1024px;
   --bp-wide: 1440px;
-  --color-primary: #007aff;
-  --color-bg: #f5f5f7;
-  --color-text: #1d1d1f;
-  --color-text-secondary: #6e6e73;
+
+  /* Terminal Dark 颜色系统 */
+  --bg-primary: #0d0d0d;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2a2a2a;
+  --neon-green: #00ff41;
+  --neon-green-dim: #00cc33;
+  --neon-green-glow: rgba(0, 255, 65, 0.15);
+  --text-primary: #f0f0f0;
+  --text-secondary: #888888;
+  --text-tertiary: #666666;
+  --border-subtle: #333333;
+  --border-bright: #444444;
+
+  /* 保留原有变量名以便渐进迁移 */
+  --color-primary: #00ff41;
+  --color-bg: #1a1a1a;
+  --color-text: #f0f0f0;
+  --color-text-secondary: #888888;
+
+  /* Terminal Dark 字体系统 */
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+  --font-body: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', sans-serif;
 }
 
 /* Base styles */
@@ -52,12 +71,11 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font-size: 16px;
   line-height: 1.5;
 }
