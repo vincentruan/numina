@@ -24,6 +24,7 @@ from app.errors.exceptions import AppError
 from app.middleware.family_context import FamilyContextMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
+from app.services.db_migrate import run_schema_migration
 from app.models.activity import Activity  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
@@ -127,7 +128,25 @@ async def lifespan(app: FastAPI):
             "Redis is not yet implemented — see backend/app/services/cache/redis.py."
         )
 
-    Base.metadata.create_all(bind=engine)
+    # Run schema migration with distributed locking (handles all DB types)
+    logger.info("执行数据库结构对齐检查...")
+    migration_summary = run_schema_migration(engine)
+    if migration_summary.get("tables_created"):
+        logger.info(f"新建表: {migration_summary['tables_created']}")
+    if migration_summary.get("columns_added"):
+        logger.info(f"新增字段: {migration_summary['columns_added']}")
+    if migration_summary.get("indexes_added"):
+        logger.info(f"新增索引: {migration_summary['indexes_added']}")
+    if migration_summary.get("errors"):
+        logger.warning(f"迁移错误: {migration_summary['errors']}")
+    if not any([
+        migration_summary.get("tables_created"),
+        migration_summary.get("columns_added"),
+        migration_summary.get("indexes_added"),
+        migration_summary.get("errors"),
+    ]):
+        logger.info("数据库结构已完整，无需迁移")
+
     db = SessionLocal()
     try:
         seed_categories(db)

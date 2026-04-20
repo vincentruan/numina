@@ -297,7 +297,7 @@ TEMPLATES_RESP=$(curl -sL "$BASE_URL/family/chore-templates" \
 TEMPLATE_ID=$(echo "$TEMPLATES_RESP" | jq -r '.data[] | select(.name=="测试家务") | .id' 2>/dev/null | head -1)
 
 if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
-  log_info "Creating test chore template..."
+  log_info "创建「测试家务」模板..."
   CREATE_TPL_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/family/chore-templates" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN_RICH" \
@@ -306,36 +306,36 @@ if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
   TPL_BODY=$(echo "$CREATE_TPL_RESP" | sed '$d')
   if [ "$TPL_HTTP" = "200" ] || [ "$TPL_HTTP" = "201" ]; then
     TEMPLATE_ID=$(echo "$TPL_BODY" | jq -r '.id // .data.id')
-    log_ok "Test chore template created（id: $TEMPLATE_ID）"
+    log_ok "「测试家务」模板创建成功（id: $TEMPLATE_ID）"
   else
-    log_err "Creating test chore template... HTTP $TPL_HTTP — $TPL_BODY"
+    log_err "创建「测试家务」模板失败: HTTP $TPL_HTTP — $TPL_BODY"
     exit 1
   fi
 else
-  log_info "Test chore template already exists, skipping (id: $TEMPLATE_ID)"
+  log_info "「测试家务」模板已存在，跳过（id: $TEMPLATE_ID）"
 fi
-log_ok "Test chore template ready"
+log_ok "「测试家务」模板就绪"
 
-log_ok "========== Part 1: Fixed test accounts complete =========="
+log_ok "========== Part 1: 固定测试账号完成 =========="
 
 # ========================================
-# Part 2: Complete simulation data (for demo)
+# Part 2: 完整仿真数据（用于功能演示）
 # ========================================
 if [[ "$SKIP_DEMO" == true ]]; then
-  log_info "Skip Part 2: Complete simulation data (--skip-demo)"
+  log_info "跳过 Part 2: 完整仿真数据 (--skip-demo)"
 else
-  log_info "========== Part 2: Complete simulation data =========="
+  log_info "========== Part 2: 完整仿真数据 =========="
 
-  # ----------------------------------------------
-  # 2.1 demouser login
-  # ----------------------------------------------
-  log_info "Initializing demouser..."
+  # ──────────────────────────────────────────────
+  # 2.1 demouser 登录
+  # ──────────────────────────────────────────────
+  log_info "初始化 demouser..."
   TOKEN=$(register_or_login "demouser" "DemoPass123" "Demo User" "Demo Family")
   if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-    log_err "demouser initialization failed"
+    log_err "demouser 初始化失败"
     exit 1
   fi
-  log_ok "demouser login successful"
+  log_ok "demouser 登录成功"
 
   # ──────────────────────────────────────────────
   # 2.2 幂等检查

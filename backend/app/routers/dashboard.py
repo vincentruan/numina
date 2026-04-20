@@ -141,13 +141,13 @@ def get_bundle(
     expiring_soon = dashboard_service.get_expiring_soon_assets(db, user, days_threshold=90)
 
     bundle = {
-        "overview": overview.model_dump(),
+        "overview": overview.model_dump(mode='json'),
         "statesSummary": states_summary,
-        "homeAssets": home_assets,
-        "allocation": allocation.model_dump(),
-        "trend": trend.model_dump(),
-        "lowUsageAssets": [item.model_dump() for item in low_usage_assets],
-        "expiringSoon": [item.model_dump() for item in expiring_soon],
+        "homeAssets": {k: [item.model_dump(mode='json') for item in v] for k, v in home_assets.items()},
+        "allocation": allocation.model_dump(mode='json'),
+        "trend": trend.model_dump(mode='json'),
+        "lowUsageAssets": [item.model_dump(mode='json') for item in low_usage_assets],
+        "expiringSoon": [item.model_dump(mode='json') for item in expiring_soon],
     }
 
     cache.set(cache_key, bundle, ttl_seconds=random.randint(60, 90))

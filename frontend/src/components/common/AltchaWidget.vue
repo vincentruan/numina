@@ -182,7 +182,8 @@ onMounted(async () => {
   try {
     const res = await fetch('/api/v1/captcha/config')
     const data = await res.json()
-    captchaEnabled.value = data.captcha_enabled === true
+    // API returns {code, message, data: {captcha_enabled: bool}}
+    captchaEnabled.value = data?.data?.captcha_enabled === true
   } catch {
     captchaEnabled.value = true // fail-safe: assume enabled
   }
