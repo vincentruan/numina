@@ -1,5 +1,5 @@
 <template>
-  <van-cell class="member-card" :title="member.display_name" :label="'@' + member.username">
+  <van-cell class="member-card" :title="member.display_name" :label="member.username ? '@' + member.username : (member.role === 'child' ? '儿童账户' : '')">
     <template #icon>
       <div class="avatar" :style="{ background: member.avatar_color || '#1989fa' }">
         {{ member.display_name.charAt(0) }}

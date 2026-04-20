@@ -131,7 +131,7 @@ const sortedWishes = computed(() => {
 })
 
 const emptyDescription = computed(() => {
-  if (activeTab.value === 'realized') return '还没有实现的心愿'
+  if (activeTab.value === 'realized') return '还没有实现的心愿，继续加油！'
   if (activeTab.value === 'cancelled') return '没有已取消的心愿'
   return '添加你的第一个心愿吧'
 })

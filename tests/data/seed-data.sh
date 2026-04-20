@@ -1300,6 +1300,13 @@ show_summary() {
 create_children_data() {
     log_info "========== 创建儿童数据 =========="
 
+    # 幂等检查：如果已有儿童成员，跳过创建
+    local existing_children=$(curl -sL "$BASE_URL/family/" -H "Authorization: Bearer $TOKEN" | jq '[.data.members[] | select(.role == "child")] | length')
+    if [ "${existing_children:-0}" -ge 2 ] 2>/dev/null; then
+        log_info "已存在 $existing_children 个儿童成员，跳过儿童数据创建（幂等保护）"
+        return 0
+    fi
+
     # 创建幼儿（6岁）
     local child1_resp=$(curl -sL -X POST "$BASE_URL/family/children" \
         -H "Content-Type: application/json" \

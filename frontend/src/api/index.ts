@@ -68,9 +68,10 @@ function onRefreshFailed(error: unknown) {
 http.interceptors.response.use(
   (response) => {
     const url = response.config.url ?? ''
-    const isAuthEndpoint = url.includes('/auth/')
+    // Unwrap /auth/me but keep login/register/refresh wrapped
+    const isAuthEndpoint = url.includes('/auth/') && !url.includes('/auth/me')
 
-    // If response has envelope format, unwrap for non-auth endpoints
+    // If response has envelope format, unwrap for non-auth endpoints (and /auth/me)
     if (
       !isAuthEndpoint &&
       response.data &&
