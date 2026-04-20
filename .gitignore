@@ -95,6 +95,7 @@ lerna-debug.log*
 .agent/
 _agents/
 _agent/
+.context/
 
 # ===========================
 # Docker

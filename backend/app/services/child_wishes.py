@@ -1,7 +1,7 @@
 from datetime import date, datetime
 
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.models.asset import Asset
 from app.models.child_wish import ChildWish
@@ -15,11 +15,12 @@ from app.schemas.child_wish import (
     ChildWishStatsResponse,
     ChildWishStatsSimItem,
     ParentWishResponse,
-    RejectChildWishRequest,
     RealizeChildWishRequest,
+    RejectChildWishRequest,
     UpdateChildWishCostRequest,
 )
 from app.services.coin_transactions import get_balance
+from app.services.notification_bus import fire_notification
 
 _PRIORITY_ORDER = {"high": 0, "medium": 1, "low": 2}
 
@@ -99,6 +100,13 @@ def create_child_wish(db: Session, user: User, req: ChildWishCreate) -> ChildWis
     db.commit()
     db.refresh(wish)
     balance = get_balance(db, user.id)
+    fire_notification(user.family_id, {
+        "type": "child_wish_submitted",
+        "wish_id": wish.id,
+        "child_name": user.display_name,
+        "wish_name": wish.name,
+        "message": f"{user.display_name} 提交了新心愿：{wish.name}",
+    })
     return _to_child_response(wish, balance)
 
 
@@ -243,6 +251,13 @@ def approve_child_wish(
     wish.status = "active"
     db.commit()
     db.refresh(wish)
+    fire_notification(wish.family_id, {
+        "type": "child_wish_approved",
+        "wish_id": wish.id,
+        "wish_name": wish.name,
+        "message": f"你的心愿「{wish.name}」已被批准！",
+        "target_user_id": wish.child_user_id,
+    })
     return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
 
 
@@ -259,6 +274,13 @@ def reject_child_wish(
     wish.rejection_reason = req.rejection_reason
     db.commit()
     db.refresh(wish)
+    fire_notification(wish.family_id, {
+        "type": "child_wish_rejected",
+        "wish_id": wish.id,
+        "wish_name": wish.name,
+        "message": f"你的心愿「{wish.name}」未被批准。",
+        "target_user_id": wish.child_user_id,
+    })
     return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
 
 

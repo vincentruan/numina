@@ -17,6 +17,7 @@ const USER_KEY = 'numina_user'
 
 export interface StoredUser {
   id: string
+  username?: string
   display_name: string
   avatar_color: string
   role: string
@@ -39,6 +40,7 @@ export function setUser<T extends StoredUser = StoredUser>(user: T): void {
   // Store only non-sensitive fields
   const safeUser: StoredUser = {
     id: user.id,
+    username: user.username,
     display_name: user.display_name,
     avatar_color: user.avatar_color,
     role: user.role,

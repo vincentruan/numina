@@ -164,3 +164,58 @@ def test_bearer_priority_over_cookie(client, auth_headers, child_a, child_b):
 
     # Clean up cookie
     client.cookies.delete("child_access_token")
+
+
+# ---------------------------------------------------------------------------
+# Additional tests: balance query, over-balance gifting, concurrent gifting
+# ---------------------------------------------------------------------------
+
+def test_balance_endpoint(client, auth_headers, child_a):
+    """GET /child/coins/balance returns correct balance after grant."""
+    _grant(client, auth_headers, child_a["id"], 75)
+
+    resp = client.get("/api/v1/child/coins/balance", headers=child_a["headers"])
+    assert resp.status_code == 200
+    assert resp.json()["data"]["balance"] == 75
+
+
+def test_gift_exceeds_balance_returns_422(client, auth_headers, child_a, child_b):
+    """Gifting more than current balance returns 422."""
+    _grant(client, auth_headers, child_a["id"], 10)
+
+    resp = client.post("/api/v1/child/coins/gift", headers=child_a["headers"], json={
+        "to_child_id": child_b["id"],
+        "amount": 11,
+        "emoji_reason": "🎁",
+    })
+    assert resp.status_code == 422
+
+
+def test_concurrent_gift_balance_not_negative(client, auth_headers, child_a, child_b):
+    """Two concurrent gift requests cannot drive balance below zero."""
+    import threading
+
+    _grant(client, auth_headers, child_a["id"], 10)
+
+    results = []
+
+    def do_gift():
+        r = client.post("/api/v1/child/coins/gift", headers=child_a["headers"], json={
+            "to_child_id": child_b["id"],
+            "amount": 8,
+            "emoji_reason": "🎁",
+        })
+        results.append(r.status_code)
+
+    t1 = threading.Thread(target=do_gift)
+    t2 = threading.Thread(target=do_gift)
+    t1.start()
+    t2.start()
+    t1.join()
+    t2.join()
+
+    # At most one should succeed; balance must never go negative
+    final_balance = client.get("/api/v1/child/coins/balance", headers=child_a["headers"]).json()["data"]["balance"]
+    assert final_balance >= 0
+    # At least one request must have been rejected (422) or only one succeeded (201)
+    assert results.count(201) <= 1

@@ -28,6 +28,21 @@
         <span class="rate">{{ liability.interest_rate }}%</span>
       </div>
     </template>
+    <template #extra>
+      <div class="card-progress">
+        <van-progress
+          :percentage="repaidPercent"
+          color="linear-gradient(to right, #07c160, #34d058)"
+          track-color="#f0f0f0"
+          :show-pivot="false"
+          stroke-width="4"
+        />
+        <div class="progress-label">
+          <span>已还 {{ repaidPercent }}%</span>
+          <span>剩余 {{ remainingWan }}</span>
+        </div>
+      </div>
+    </template>
   </van-cell>
 </template>
 
@@ -58,6 +73,18 @@ const categoryMap: Record<string, { text: string; icon: string; color: string }>
 const categoryText = computed(() => categoryMap[props.liability.category]?.text || props.liability.category)
 const categoryIcon = computed(() => categoryMap[props.liability.category]?.icon || 'icon-other-liability')
 const categoryColor = computed(() => categoryMap[props.liability.category]?.color || '#969799')
+
+const repaidPercent = computed(() => {
+  const { original_amount, remaining_amount } = props.liability
+  if (!original_amount) return 0
+  return Math.round(((original_amount - remaining_amount) / original_amount) * 100)
+})
+
+const remainingWan = computed(() => {
+  const val = props.liability.remaining_amount
+  if (val >= 10000) return `¥${(val / 10000).toFixed(1)}万`
+  return `¥${val.toLocaleString()}`
+})
 </script>
 
 <style scoped>
@@ -105,5 +132,15 @@ const categoryColor = computed(() => categoryMap[props.liability.category]?.colo
   color: var(--text-tertiary);
   display: block;
   margin-top: 2px;
+}
+.card-progress {
+  padding: 8px 0 2px;
+}
+.progress-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 4px;
 }
 </style>

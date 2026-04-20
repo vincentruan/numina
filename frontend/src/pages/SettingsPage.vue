@@ -146,6 +146,7 @@ onMounted(() => {
   if (!familyStore.family) {
     familyStore.fetchFamily()
   }
+  authStore.fetchMe()
   // Initialize theme color from localStorage
   const savedColor = localStorage.getItem('theme-primary')
   if (savedColor) {

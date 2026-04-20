@@ -2,7 +2,7 @@ const puppeteer = require('puppeteer');
 const fs = require('fs');
 const path = require('path');
 
-const BASE_URL = 'http://localhost/numina/';
+const BASE_URL = 'http://localhost/';
 const SCREENSHOTS_DIR = path.join(__dirname, 'screenshots');
 const VIEWPORT = { width: 375, height: 812 };
 
@@ -11,7 +11,7 @@ const USERNAME = 'demouser';
 const PASSWORD = 'DemoPass123';
 
 // API base URL for getting token
-const API_BASE = 'http://localhost/numina/api/v1';
+const API_BASE = 'http://localhost/api/v1';
 
 async function getAuthToken() {
   const response = await fetch(`${API_BASE}/auth/login`, {
@@ -20,7 +20,9 @@ async function getAuthToken() {
     body: JSON.stringify({ username: USERNAME, password: PASSWORD })
   });
   const data = await response.json();
-  return data.access_token;
+  // API wraps responses in {code, message, data}
+  const payload = data.data || data;
+  return payload.access_token;
 }
 
 async function sleep(ms) {
@@ -49,6 +51,7 @@ async function main() {
 
   const browser = await puppeteer.launch({
     headless: true,
+    executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 

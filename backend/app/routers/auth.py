@@ -26,6 +26,8 @@ from app.auth.deps import (
     get_refresh_token_from_cookie,
 )
 from app.database import get_db
+from app.errors.codes import ErrorCode
+from app.errors.exceptions import AppError
 from app.middleware.rate_limit import _get_real_client_ip
 from app.models.user import User
 from app.schemas.auth import (
@@ -296,16 +298,36 @@ def get_child_bind_info(
 @router.get("/child/family/{family_id}/children")
 def get_family_children(
     family_id: str,
+    bind_token: str,
     db: Session = Depends(get_db),
 ):
-    """Return active children for a family — no auth required.
+    """Return active children for a family — requires a valid bind token.
 
-    Intentional design: returning child devices need to list selectable accounts
-    on the account-picker screen without any token. Only non-sensitive display
-    fields are exposed: id, display_name, avatar_color (via ChildResponse).
+    The bind_token must belong to the requested family_id and must not be
+    expired. It may be used or unused (account-picker is called after binding).
+    Only non-sensitive display fields are exposed via ChildResponse.
     Fields NOT exposed: pin_hash, pin_fail_count, pin_locked_until, token_version.
     """
+    from datetime import UTC, datetime
+
+    from fastapi import HTTPException, status
+
+    from app.models.child_bind_token import ChildBindToken
     from app.schemas.children import ChildResponse
+
+    token_record = (
+        db.query(ChildBindToken)
+        .filter(
+            ChildBindToken.token == bind_token,
+            ChildBindToken.family_id == family_id,
+        )
+        .first()
+    )
+    if not token_record:
+        raise AppError(ErrorCode.AUTH_INVITE_CODE_INVALID)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    if token_record.expires_at < now:
+        raise AppError(ErrorCode.AUTH_INVITE_CODE_INVALID)
 
     children = (
         db.query(User)

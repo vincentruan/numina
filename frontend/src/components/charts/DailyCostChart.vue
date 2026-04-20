@@ -4,7 +4,10 @@
       <span class="chart-title">日均成本趋势</span>
       <span class="chart-current">当前 ¥{{ currentDailyCost.toFixed(2) }}/天</span>
     </div>
-    <v-chart class="chart" :option="chartOption" autoresize />
+    <div v-if="hasData" class="chart-wrapper">
+      <v-chart class="chart" :option="chartOption" autoresize />
+    </div>
+    <div v-else class="chart-empty">暂无趋势数据</div>
   </div>
 </template>
 
@@ -23,6 +26,14 @@ const props = defineProps<{
   purchaseDate: string
   targetDailyCost?: number | null
 }>()
+
+const hasData = computed(() => {
+  if (!props.purchasePrice || !props.purchaseDate) return false
+  const purchase = new Date(props.purchaseDate)
+  const now = new Date()
+  const days = Math.floor((now.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
+  return days > 0
+})
 
 const currentDailyCost = computed(() => {
   if (!props.purchasePrice || !props.purchaseDate) return 0
@@ -173,6 +184,14 @@ const chartOption = computed(() => {
   font-size: 12px;
   color: #ff976a;
   font-weight: 500;
+}
+.chart-empty {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text-tertiary);
 }
 .chart {
   height: 200px;

@@ -13,7 +13,18 @@
 
     <van-cell-group inset>
       <van-swipe-cell v-for="cat in categoryStore.categories" :key="cat.id">
-        <van-cell :title="`${cat.icon} ${cat.name}`" :label="cat.is_system ? '系统分类' : '自定义'">
+        <van-cell :label="cat.is_system ? '系统分类' : '自定义'">
+          <template #title>
+            <div class="cat-title">
+              <div v-if="cat.icon.startsWith('icon-')" class="cat-icon-wrap" :style="{ background: cat.color }">
+                <svg class="cat-icon-svg" aria-hidden="true">
+                  <use :href="`#${cat.icon}`" />
+                </svg>
+              </div>
+              <span v-else class="cat-icon-emoji">{{ cat.icon }}</span>
+              <span>{{ cat.name }}</span>
+            </div>
+          </template>
           <template #value>
             <div class="color-dot" :style="{ background: cat.color }" />
           </template>
@@ -130,6 +141,30 @@ onMounted(() => {
   width: 16px;
   height: 16px;
   border-radius: 50%;
+}
+.cat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cat-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cat-icon-svg {
+  width: 16px;
+  height: 16px;
+  fill: white;
+  color: white;
+}
+.cat-icon-emoji {
+  font-size: 20px;
+  line-height: 1;
 }
 .swipe-btn {
   height: 100%;

@@ -9,11 +9,13 @@ import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
+import { useNotifications } from '@/composables/useNotifications'
 import { useI18n } from 'vue-i18n'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const { locale } = useI18n()
+const { connect: connectNotifications, disconnect: disconnectNotifications } = useNotifications()
 
 // System dark mode detection
 const systemIsDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -43,6 +45,18 @@ watch(() => authStore.user?.language, (lang) => {
   }
 }, { immediate: true })
 
+// Connect/disconnect notifications when auth state changes
+watch(
+  () => authStore.user,
+  (user, prevUser) => {
+    if (user && !prevUser) {
+      connectNotifications()
+    } else if (!user && prevUser) {
+      disconnectNotifications()
+    }
+  },
+)
+
 onMounted(() => {
   // Set initial theme
   document.documentElement.setAttribute('data-theme', resolvedTheme.value)
@@ -57,6 +71,11 @@ onMounted(() => {
   // Load coin config for adult users (children don't have access to /family/settings)
   if (authStore.user && authStore.user.role !== 'child') {
     familyStore.loadCoinConfig()
+  }
+
+  // Connect notifications if already logged in
+  if (authStore.user) {
+    connectNotifications()
   }
 })
 

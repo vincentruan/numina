@@ -95,6 +95,13 @@ if settings.ENVIRONMENT == "production" and settings.CORS_ORIGINS == ["*"]:
         "CORS_ORIGINS 设置为 ['*']！生产环境必须配置具体域名，不允许全开放。"
     )
 
+# AI encryption key validation
+if settings.ENVIRONMENT == "production" and not settings.AI_ENCRYPTION_KEY:
+    raise RuntimeError(
+        "AI_ENCRYPTION_KEY 未配置！生产环境必须设置 AI_ENCRYPTION_KEY 环境变量，"
+        "否则 AI API Key 将无法加密存储。"
+    )
+
 # Storage encryption key validation
 if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
     raise RuntimeError(
