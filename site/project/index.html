@@ -19,13 +19,13 @@
       }
     }
 
-    /* Sticky nav */
+    /* Terminal Dark Sticky Nav */
     .dev-nav {
       position: sticky;
       top: 0;
       z-index: 100;
-      background: white;
-      border-bottom: 1px solid #e5e5e7;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--neon-green);
       padding: 0 16px;
     }
 
@@ -40,11 +40,23 @@
     }
 
     .dev-nav-logo {
+      font-family: var(--font-mono);
       font-size: 18px;
       font-weight: 700;
-      color: var(--color-text);
+      color: var(--neon-green);
       text-decoration: none;
       margin-right: 8px;
+    }
+
+    .nav-separator {
+      color: var(--text-tertiary);
+      font-size: 14px;
+    }
+
+    .nav-label {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-family: var(--font-mono);
     }
 
     .dev-nav-links {
@@ -55,25 +67,28 @@
     }
 
     .dev-nav-links a {
-      color: var(--color-primary);
+      font-family: var(--font-mono);
+      color: var(--neon-green);
       text-decoration: none;
       font-size: 14px;
       white-space: nowrap;
+      transition: text-shadow 150ms ease;
     }
 
     .dev-nav-links a:hover {
-      text-decoration: underline;
+      text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
     }
 
-    .dev-nav-cross {
-      color: var(--color-primary);
+    .nav-cross-link {
+      font-family: var(--font-mono);
+      color: var(--neon-green);
       text-decoration: none;
       font-size: 14px;
       white-space: nowrap;
     }
 
-    .dev-nav-cross:hover {
-      text-decoration: underline;
+    .nav-cross-link:hover {
+      text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
     }
 
     /* Anchor offset for sticky nav */
@@ -259,18 +274,19 @@
   </style>
 </head>
 <body>
-  <!-- Sticky Nav -->
-  <header class="dev-nav">
+  <!-- Terminal Dark 粘性导航栏 -->
+  <header class="dev-nav terminal-grid-dense">
     <div class="dev-nav-inner">
       <a href="#" class="dev-nav-logo">Numina</a>
-      <span style="color: #e5e5e7; font-size: 14px;">开发者文档</span>
+      <span class="nav-separator">/</span>
+      <span class="nav-label">开发者文档</span>
       <nav class="dev-nav-links">
-        <a href="#features">功能特性</a>
         <a href="#stack">技术架构</a>
         <a href="#deploy">快速部署</a>
         <a href="#config">配置参考</a>
+        <a href="#features">功能特性</a>
       </nav>
-      <a href="../overview/" class="dev-nav-cross">产品介绍 →</a>
+      <a href="../overview/" class="nav-cross-link">产品介绍 →</a>
     </div>
   </header>
 
