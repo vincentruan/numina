@@ -167,7 +167,123 @@
       margin-bottom: 6px;
     }
 
-    /* Deploy steps */
+    /* Terminal Dark Deploy Section */
+    #deploy {
+      padding: 32px 16px;
+      background: var(--bg-primary);
+      text-align: center;
+    }
+
+    .deploy-content {
+      max-width: var(--bp-wide);
+      margin: 0 auto;
+    }
+
+    .deploy-terminal {
+      display: inline-block;
+      background: var(--bg-secondary);
+      border: 1px solid var(--neon-green);
+      border-radius: 8px;
+      padding: 0;
+      margin-bottom: 16px;
+      min-width: 300px;
+    }
+
+    .terminal-header {
+      background: var(--bg-tertiary);
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      background: var(--neon-green);
+      border-radius: 50%;
+    }
+
+    .terminal-title {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .terminal-body {
+      padding: 16px 24px;
+    }
+
+    .terminal-command {
+      font-family: var(--font-mono);
+      font-size: 16px;
+      color: var(--neon-green);
+      display: block;
+    }
+
+    .terminal-output {
+      margin-top: 12px;
+      display: block;
+    }
+
+    .output-line {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--text-secondary);
+      display: block;
+      margin-top: 4px;
+    }
+
+    .output-success {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      color: var(--neon-green);
+      display: block;
+      margin-top: 4px;
+    }
+
+    .deploy-tagline {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      color: var(--text-primary);
+      margin: 0 0 12px;
+    }
+
+    .deploy-link {
+      font-family: var(--font-mono);
+      color: var(--neon-green);
+      font-size: 14px;
+      text-decoration: none;
+    }
+
+    .deploy-link:hover {
+      text-shadow: 0 0 8px rgba(0, 255, 65, 0.4);
+    }
+
+    /* 光标闪烁动画 */
+    .cursor {
+      display: inline-block;
+      width: 8px;
+      height: 18px;
+      background: var(--neon-green);
+      margin-left: 4px;
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .cursor {
+        animation: none;
+        opacity: 1;
+      }
+    }
+
+    /* Deploy steps list */
     .deploy-steps {
       list-style: none;
       padding: 0;
@@ -181,29 +297,37 @@
       align-items: flex-start;
       gap: 16px;
       margin-bottom: 16px;
-      color: #f5f5f7;
+      color: var(--text-primary);
     }
 
     .deploy-steps li::before {
-      content: counter(step);
+      content: counter(step, decimal-leading-zero);
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 28px;
+      min-width: 40px;
       height: 28px;
-      min-width: 28px;
-      background: var(--color-primary);
-      border-radius: 50%;
+      background: transparent;
+      border: 1px solid var(--neon-green);
+      color: var(--neon-green);
+      font-family: var(--font-mono);
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 500;
+      border-radius: 4px;
     }
 
     .deploy-steps code {
-      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-family: var(--font-mono);
       font-size: 13px;
-      background: rgba(255,255,255,0.1);
+      background: var(--bg-tertiary);
+      color: var(--neon-green);
       padding: 2px 6px;
       border-radius: 4px;
+    }
+
+    .deploy-steps strong {
+      color: var(--text-primary);
+      font-family: var(--font-mono);
     }
 
     /* Config table */
@@ -329,8 +453,20 @@
   <!-- Section 2: Quick Deploy (终端核心) -->
   <section id="deploy" class="terminal-grid-dense">
     <div class="deploy-content">
-      <div class="terminal-block">
-        <code class="terminal-command">docker-compose up -d<span class="cursor"></span></code>
+      <div class="deploy-terminal terminal-glow">
+        <div class="terminal-header">
+          <span class="terminal-dot"></span>
+          <span class="terminal-title">terminal</span>
+        </div>
+        <div class="terminal-body">
+          <code class="terminal-command">$ docker-compose up -d<span class="cursor"></span></code>
+          <div class="terminal-output">
+            <span class="output-line">✓ Backend started on port 8000</span>
+            <span class="output-line">✓ Frontend built successfully</span>
+            <span class="output-line">✓ Nginx proxy configured</span>
+            <span class="output-success">→ Ready at http://localhost:8080</span>
+          </div>
+        </div>
       </div>
       <p class="deploy-tagline">一键启动</p>
       <a href="https://github.com/vincentruan/numina#快速开始" class="deploy-link" target="_blank" rel="noopener noreferrer">查看完整部署指南 →</a>
