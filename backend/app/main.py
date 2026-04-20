@@ -87,6 +87,7 @@ from app.routers import export as export_router
 from app.routers import files as files_router
 from app.routers import import_ as import_router
 from app.routers import milestones as milestones_router
+from app.routers import notifications as notifications_router
 from app.routers import treasures as treasures_router
 from app.scheduler import (
     scheduler,
@@ -335,6 +336,7 @@ app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")
 app.include_router(child_wishes_router.router, prefix="/api/v1")
 app.include_router(milestones_router.router, prefix="/api/v1")
+app.include_router(notifications_router.router, prefix="/api/v1")
 app.include_router(treasures_router.router, prefix="/api/v1")
 
 # Serve uploaded files

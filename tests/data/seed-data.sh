@@ -32,14 +32,14 @@ get_token() {
         -H "Content-Type: application/json" \
         -d '{"username":"demouser","password":"DemoPass123"}')
 
-    TOKEN=$(echo "$response" | jq -r '.access_token')
+    TOKEN=$(echo "$response" | jq -r '.data.access_token')
 
     if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
         log_info "用户不存在，正在注册..."
         response=$(curl -sL -X POST "$BASE_URL/auth/register" \
             -H "Content-Type: application/json" \
             -d '{"username":"demouser","display_name":"Demo User","password":"DemoPass123","family_name":"Demo Family"}')
-        TOKEN=$(echo "$response" | jq -r '.access_token')
+        TOKEN=$(echo "$response" | jq -r '.data.access_token')
     fi
 
     log_success "登录成功"
@@ -53,7 +53,7 @@ get_category_id() {
     local response=$(curl -sL -X GET "$BASE_URL/categories?asset_type=$asset_type" \
         -H "Authorization: Bearer $TOKEN")
 
-    echo "$response" | jq -r ".[] | select(.name==\"$name\") | .id"
+    echo "$response" | jq -r ".data[] | select(.name==\"$name\") | .id"
 }
 
 # 创建实物资产
@@ -1270,21 +1270,21 @@ show_summary() {
     echo "资产统计:"
     curl -sL -X GET "$BASE_URL/dashboard/overview" \
         -H "Authorization: Bearer $TOKEN" | jq -r '
-        "  总资产价值: ¥\(.total_assets | floor | . / 10000 | floor)万",
-        "  总负债: ¥\(.total_liabilities | floor | . / 10000 | floor)万",
-        "  净资产: ¥\(.net_worth | floor | . / 10000 | floor)万"
+        "  总资产价值: ¥\(.data.total_assets | floor | . / 10000 | floor)万",
+        "  总负债: ¥\(.data.total_liabilities | floor | . / 10000 | floor)万",
+        "  净资产: ¥\(.data.net_worth | floor | . / 10000 | floor)万"
         '
 
     echo ""
     echo "资产数量:"
     local physical_count=$(curl -sL -X GET "$BASE_URL/assets?asset_type=physical" \
-        -H "Authorization: Bearer $TOKEN" | jq 'length')
+        -H "Authorization: Bearer $TOKEN" | jq '.data | length')
     local financial_count=$(curl -sL -X GET "$BASE_URL/assets?asset_type=financial" \
-        -H "Authorization: Bearer $TOKEN" | jq 'length')
+        -H "Authorization: Bearer $TOKEN" | jq '.data | length')
     local liability_count=$(curl -sL -X GET "$BASE_URL/liabilities" \
-        -H "Authorization: Bearer $TOKEN" | jq 'length')
+        -H "Authorization: Bearer $TOKEN" | jq '.data | length')
     local wish_count=$(curl -sL -X GET "$BASE_URL/wishes" \
-        -H "Authorization: Bearer $TOKEN" | jq 'length')
+        -H "Authorization: Bearer $TOKEN" | jq '.data | length')
 
     echo "  实物资产: $physical_count 项"
     echo "  金融资产: $financial_count 项"
@@ -1293,18 +1293,145 @@ show_summary() {
     echo ""
 }
 
-# 主流程
+# 主流程（由下方含儿童数据的 main() 覆盖）
+# create_physical_assets, create_financial_assets 等在下方 main() 中调用
+
+# 创建儿童数据
+create_children_data() {
+    log_info "========== 创建儿童数据 =========="
+
+    # 创建幼儿（6岁）
+    local child1_resp=$(curl -sL -X POST "$BASE_URL/family/children" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d '{
+            "display_name": "小宝",
+            "avatar_color": "#FF6B6B",
+            "pin": ["🐱", "🌟", "🎈", "🐶"]
+        }')
+    local child1_id=$(echo "$child1_resp" | jq -r '.data.id // .id')
+    log_success "创建儿童: 小宝 (6岁幼儿) id=$child1_id"
+
+    # 创建青少年（14岁）
+    local child2_resp=$(curl -sL -X POST "$BASE_URL/family/children" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d '{
+            "display_name": "大宝",
+            "avatar_color": "#4ECDC4",
+            "pin": ["🌈", "🍎", "🐸", "🦁"]
+        }')
+    local child2_id=$(echo "$child2_resp" | jq -r '.data.id // .id')
+    log_success "创建儿童: 大宝 (14岁青少年) id=$child2_id"
+
+    # 为两个孩子登录获取 child token
+    local child1_token=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"child_id\":\"$child1_id\",\"pin_sequence\":[\"🐱\",\"🌟\",\"🎈\",\"🐶\"]}" \
+        | jq -r '.data.access_token // .access_token')
+
+    local child2_token=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"child_id\":\"$child2_id\",\"pin_sequence\":[\"🌈\",\"🍎\",\"🐸\",\"🦁\"]}" \
+        | jq -r '.data.access_token // .access_token')
+
+    # 给孩子充值星星币
+    curl -sL -X POST "$BASE_URL/family/coins/grant" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d "{\"child_user_id\":\"$child1_id\",\"amount\":50,\"reason\":\"初始零花钱\"}" > /dev/null
+    log_success "充值: 小宝 50 星星币"
+
+    curl -sL -X POST "$BASE_URL/family/coins/grant" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d "{\"child_user_id\":\"$child2_id\",\"amount\":120,\"reason\":\"初始零花钱\"}" > /dev/null
+    log_success "充值: 大宝 120 星星币"
+
+    # 创建 child_wishes（pending_review 状态 — 孩子提交后等待家长审批）
+    curl -sL -X POST "$BASE_URL/child/wishes" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $child1_token" \
+        -d '{"title":"积木玩具","coin_cost":30,"description":"乐高城市系列"}' > /dev/null
+    log_success "创建心愿: 小宝 - 积木玩具 (pending_review)"
+
+    # 创建 child_wishes（active 状态 — 家长已批准）
+    local wish2_resp=$(curl -sL -X POST "$BASE_URL/child/wishes" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $child2_token" \
+        -d '{"title":"新耳机","coin_cost":80,"description":"无线蓝牙耳机"}')
+    local wish2_id=$(echo "$wish2_resp" | jq -r '.data.id // .id')
+    log_success "创建心愿: 大宝 - 新耳机 (提交审批)"
+
+    # 家长批准心愿（变为 active）
+    curl -sL -X POST "$BASE_URL/family/child-wishes/$wish2_id/approve" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d '{"coin_cost":80}' > /dev/null
+    log_success "批准心愿: 大宝 - 新耳机 (active)"
+
+    # 创建家务模板
+    local tmpl1_resp=$(curl -sL -X POST "$BASE_URL/family/chore-templates" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d '{
+            "title": "整理房间",
+            "description": "整理床铺和书桌",
+            "coin_reward": 5,
+            "recurrence": "daily",
+            "assigned_child_ids": []
+        }')
+    local tmpl1_id=$(echo "$tmpl1_resp" | jq -r '.data.id // .id')
+    log_success "创建家务模板: 整理房间 (每日)"
+
+    local tmpl2_resp=$(curl -sL -X POST "$BASE_URL/family/chore-templates" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d '{
+            "title": "洗碗",
+            "description": "饭后洗碗",
+            "coin_reward": 8,
+            "recurrence": "daily",
+            "assigned_child_ids": []
+        }')
+    local tmpl2_id=$(echo "$tmpl2_resp" | jq -r '.data.id // .id')
+    log_success "创建家务模板: 洗碗 (每日)"
+
+    # 孩子获取今日家务实例并完成一个（待审批状态）
+    local today=$(date +%Y-%m-%d)
+    local chores2=$(curl -sL -X GET "$BASE_URL/child/chores?date=$today" \
+        -H "Authorization: Bearer $child2_token")
+    local instance_id=$(echo "$chores2" | jq -r '.data[0].id // empty')
+
+    if [ -n "$instance_id" ] && [ "$instance_id" != "null" ]; then
+        curl -sL -X POST "$BASE_URL/child/chores/$instance_id/complete" \
+            -H "Authorization: Bearer $child2_token" > /dev/null
+        log_success "大宝完成家务: 待审批"
+    else
+        log_success "家务实例暂无（模板未分配给特定孩子）"
+    fi
+}
+
 main() {
     log_info "=========================================="
-    log_info "  完整测试数据生成"
+    log_info "  完整测试数据生成（含儿童数据）"
     log_info "=========================================="
 
     get_token
-    create_physical_assets
-    create_financial_assets
-    create_liabilities
-    create_wishes
-    generate_snapshots
+
+    # 幂等检查：如果资产数量已达到预期，跳过创建
+    local existing_count=$(curl -sL "$BASE_URL/assets" -H "Authorization: Bearer $TOKEN" | jq '.data | length')
+    if [ "$existing_count" -ge 30 ] 2>/dev/null; then
+        log_info "已存在 $existing_count 件资产，跳过资产/负债/心愿创建（幂等保护）"
+    else
+        create_physical_assets
+        create_financial_assets
+        create_liabilities
+        create_wishes
+        generate_snapshots
+    fi
+
+    create_children_data
     show_summary
 
     log_success "=========================================="

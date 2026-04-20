@@ -63,6 +63,7 @@
         <div v-if="!selectionMode" class="asset-section">
           <div class="section-header">
             <span class="section-title">{{ sectionTitle }}</span>
+            <router-link to="/assets" class="view-all">查看全部 &gt;</router-link>
             <div class="section-actions">
               <span class="view-toggle" :aria-label="viewMode === 'card' ? '切换列表视图' : '切换卡片视图'" @click="toggleViewMode">
                 <svg v-if="viewMode === 'card'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -784,6 +785,13 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.view-all {
+  font-size: 13px;
+  color: var(--color-action-primary);
+  text-decoration: none;
+  margin-left: auto;
+  margin-right: 8px;
 }
 .section-actions {
   display: flex;

@@ -63,6 +63,18 @@
                 <span>{{ wish.category.name }}</span>
               </div>
               <div v-if="wish.description" class="wish-notes">{{ wish.description }}</div>
+              <div
+                v-if="wish.expected_price && dashboardStore.overview"
+                class="wish-afford"
+                :class="wish.expected_price <= dashboardStore.overview.net_worth ? 'afford-yes' : 'afford-no'"
+              >
+                <template v-if="wish.expected_price <= dashboardStore.overview.net_worth">
+                  ✓ 当前净资产可负担
+                </template>
+                <template v-else>
+                  还差 ¥{{ ((wish.expected_price - dashboardStore.overview.net_worth) / 10000).toFixed(1) }}万
+                </template>
+              </div>
             </div>
           </div>
         </template>
@@ -82,6 +94,9 @@ import { ref, computed, onMounted } from 'vue'
 import { getWishes } from '@/api/wishes'
 import type { Wish } from '@/types'
 import { getIconId } from '@/utils/icon'
+import { useDashboardStore } from '@/stores/dashboard'
+
+const dashboardStore = useDashboardStore()
 
 const wishes = ref<Wish[]>([])
 const activeTab = ref<'pending' | 'realized' | 'cancelled'>('pending')
@@ -138,6 +153,9 @@ function priorityText(priority: string): string {
 async function loadWishes() {
   const res = await getWishes()
   wishes.value = res.data
+  if (!dashboardStore.overview) {
+    dashboardStore.fetchOverview().catch(() => {})
+  }
 }
 
 async function onRefresh() {
@@ -288,9 +306,19 @@ onMounted(loadWishes)
   justify-content: center;
   flex-shrink: 0;
 }
-.icon-svg {
-  width: 12px;
-  height: 12px;
-  color: #fff;
+.wish-afford {
+  font-size: 11px;
+  margin-top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+}
+.afford-yes {
+  background: rgba(7, 193, 96, 0.12);
+  color: #07c160;
+}
+.afford-no {
+  background: rgba(255, 125, 0, 0.12);
+  color: #ff7d00;
 }
 </style>

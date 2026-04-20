@@ -145,10 +145,9 @@ def test_owner_force_logout_child(client, db):
 # ---------------------------------------------------------------------------
 
 def test_get_family_children_nonexistent_family_returns_empty(client):
-    """Endpoint requires no auth — nonexistent family returns empty list."""
-    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
-    assert resp.status_code == 200
-    assert resp.json()["data"] == []
+    """Endpoint requires bind_token — invalid token returns error."""
+    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children?bind_token=invalid")
+    assert resp.status_code in (403, 404, 422)
 
 
 def test_bind_token_and_get_family_children(client):
@@ -165,9 +164,10 @@ def test_bind_token_and_get_family_children(client):
     token_data = token_resp.json()["data"]
     assert "token" in token_data
     assert token_data["bind_url"].startswith("/child/bind?token=")
+    bind_token = token_data["token"]
 
-    # GET children — no auth required (returning child device flow)
-    children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children")
+    # GET children — requires valid bind_token
+    children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children?bind_token={bind_token}")
     assert children_resp.status_code == 200
     children = children_resp.json()["data"]
     assert len(children) == 1
@@ -175,10 +175,9 @@ def test_bind_token_and_get_family_children(client):
 
 
 def test_get_family_children_nonexistent_family_returns_empty_unauthenticated(client):
-    """Nonexistent family_id returns empty list with no auth required."""
-    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children")
-    assert resp.status_code == 200
-    assert resp.json()["data"] == []
+    """Nonexistent family_id with invalid bind_token returns error."""
+    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children?bind_token=invalid")
+    assert resp.status_code in (403, 404, 422)
 
 
 # ---------------------------------------------------------------------------

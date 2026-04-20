@@ -1,0 +1,9 @@
+{
+  "name": "numina-screenshot",
+  "version": "1.0.0",
+  "description": "UI screenshot capture for Numina",
+  "main": "capture.js",
+  "dependencies": {
+    "puppeteer": "^22.0.0"
+  }
+}
