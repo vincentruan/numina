@@ -6,15 +6,15 @@
     <div class="summary-section">
       <div class="summary-card">
         <div class="summary-label">总资产</div>
-        <div class="summary-value primary">¥{{ formatMoney(overview?.total_assets) }}</div>
+        <div class="summary-value primary">{{ formatMoney(overview?.total_assets) }}</div>
       </div>
       <div class="summary-card">
         <div class="summary-label">总负债</div>
-        <div class="summary-value danger">¥{{ formatMoney(overview?.total_liabilities) }}</div>
+        <div class="summary-value danger">{{ formatMoney(overview?.total_liabilities) }}</div>
       </div>
       <div class="summary-card">
         <div class="summary-label">净资产</div>
-        <div class="summary-value success">¥{{ formatMoney(overview?.net_worth) }}</div>
+        <div class="summary-value success">{{ formatMoney(overview?.net_worth) }}</div>
       </div>
     </div>
 
@@ -37,7 +37,7 @@
     <van-cell-group inset title="快速统计">
       <van-cell title="资产数量" :value="`${overview?.asset_count ?? 0} 项`" />
       <van-cell title="本月新增资产" :value="`${recentAssetsCount} 项`" />
-      <van-cell title="日均成本总计" :value="`¥${formatMoney(overview?.total_daily_cost)}/天`" />
+      <van-cell title="日均成本总计" :value="`${formatMoney(overview?.total_daily_cost)}/天`" />
     </van-cell-group>
   </div>
 </template>
@@ -48,6 +48,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { formatCurrency } from '@/utils/format'
 
 const dashboardStore = useDashboardStore()
 
@@ -58,10 +59,10 @@ const allocation = computed(() => dashboardStore.allocation)
 const recentAssetsCount = ref(0)
 
 function formatMoney(value: number | string | undefined | null): string {
-  if (value === undefined || value === null) return '0'
+  if (value === undefined || value === null) return '¥0'
   const num = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(num)) return '0'
-  return num.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  if (isNaN(num)) return '¥0'
+  return formatCurrency(num)
 }
 
 onMounted(async () => {

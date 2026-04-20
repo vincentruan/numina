@@ -9,6 +9,20 @@
       <van-tab :title="t('asset.financial')" name="financial" />
     </van-tabs>
 
+    <!-- Category Filter Chips -->
+    <div v-if="categoryChips.length > 1" class="category-chips">
+      <van-tag
+        v-for="chip in categoryChips"
+        :key="chip.id"
+        :type="selectedCategoryId === chip.id ? 'primary' : 'default'"
+        size="medium"
+        class="category-chip"
+        @click="onCategoryChipClick(chip.id)"
+      >
+        {{ chip.icon }} {{ chip.name }}
+      </van-tag>
+    </div>
+
     <!-- Search & Sort -->
     <div class="search-bar">
       <van-search
@@ -146,6 +160,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
+import { useCategoryStore } from '@/stores/category'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -159,11 +174,27 @@ const { t } = useI18n()
 const router = useRouter()
 const assetStore = useAssetStore()
 const authStore = useAuthStore()
+const categoryStore = useCategoryStore()
 const route = useRoute()
 const refreshing = ref(false)
 const activeTab = ref('all')
 const searchText = ref('')
 const sortBy = ref('current_value')
+const selectedCategoryId = ref('')
+
+// Category chips: "全部" + categories filtered by active tab
+const categoryChips = computed(() => {
+  const type = activeTab.value === 'all' ? undefined : activeTab.value
+  const filtered = type
+    ? categoryStore.categories.filter(c => c.asset_type === type)
+    : categoryStore.categories
+  return [{ id: '' as string, icon: '', name: '全部' }, ...filtered]
+})
+
+function onCategoryChipClick(id: string) {
+  selectedCategoryId.value = id
+  assetStore.fetchAssets(buildFilters())
+}
 
 // Selection mode state
 const selectionMode = ref(false)
@@ -181,12 +212,14 @@ const sortOptions = computed(() => [
 function buildFilters() {
   return {
     asset_type: activeTab.value === 'all' ? undefined : activeTab.value as 'physical' | 'financial',
+    category_id: selectedCategoryId.value || undefined,
     search: searchText.value || undefined,
     sort_by: sortBy.value
   }
 }
 
 function onTabChange() {
+  selectedCategoryId.value = ''
   assetStore.fetchAssets(buildFilters())
 }
 
@@ -275,6 +308,7 @@ function handleKeyDown(event: KeyboardEvent) {
 
 onMounted(() => {
   const statusParam = route.query.status as string | undefined
+  categoryStore.fetchCategories()
   assetStore.fetchAssets({ ...buildFilters(), status: statusParam })
   document.addEventListener('keydown', handleKeyDown)
 })
@@ -289,6 +323,23 @@ onUnmounted(() => {
   background: var(--bg-secondary);
   min-height: 100vh;
 }
+/* Category Filter Chips */
+.category-chips {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  background: var(--card-bg);
+  scrollbar-width: none;
+}
+.category-chips::-webkit-scrollbar {
+  display: none;
+}
+.category-chip {
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
 .search-bar {
   display: flex;
   align-items: center;

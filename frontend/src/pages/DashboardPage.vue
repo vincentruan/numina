@@ -23,6 +23,7 @@
           :total-daily-cost="overview?.total_daily_cost || 0"
           :asset-count="overview?.asset_count || 0"
           :month-over-month-change="overview?.month_over_month_change"
+          :trend-points="dashboardStore.trend"
         />
 
         <!-- Stale data indicator -->
