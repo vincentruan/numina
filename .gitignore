@@ -89,7 +89,18 @@ lerna-debug.log*
 # ===========================
 # Claude Code / Antigravity
 # ===========================
-.claude/
+# Ignore Claude local config and history, but track skills and commands
+.claude/settings.local.json
+.claude/history/
+.claude/memory/
+.claude/projects/
+.claude/stats/
+.claude/tasks/
+.claude/teams/
+.claude/*.log
+.claude/*.json
+!.claude/skills/
+!.claude/commands/
 .gemini/
 .agents/
 .agent/
