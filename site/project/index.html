@@ -517,9 +517,10 @@
       font-family: var(--font-mono);
     }
 
-    /* DB options */
+    /* Terminal Dark DB Options */
     .db-option {
-      background: white;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
       border-radius: 8px;
       padding: 16px 24px;
       margin-bottom: 12px;
@@ -528,17 +529,25 @@
     .db-option h3 {
       margin: 0 0 8px;
       font-size: 16px;
+      font-family: var(--font-mono);
+      color: var(--neon-green);
     }
 
     .db-option code {
       display: block;
-      font-family: 'SF Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-family: var(--font-mono);
       font-size: 12px;
-      background: var(--color-bg);
+      background: var(--bg-tertiary);
+      color: var(--text-secondary);
       padding: 8px 12px;
       border-radius: 4px;
-      color: var(--color-text-secondary);
       word-break: break-all;
+    }
+
+    .db-option p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin: 8px 0 0;
     }
 
     @media (min-width: 1024px) {
