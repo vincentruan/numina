@@ -122,7 +122,8 @@ http.interceptors.response.use(
 
       try {
         // Refresh token - Cookie is sent automatically, no body needed
-        await axios.post('/api/v1/auth/refresh', {}, {
+        // IMPORTANT: Send null (not {}) to avoid 422 from Pydantic validation
+        await axios.post('/api/v1/auth/refresh', null, {
           withCredentials: true,
         })
         // Cookie is automatically updated by server response

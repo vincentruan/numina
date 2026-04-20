@@ -19,7 +19,11 @@
         class="category-chip"
         @click="onCategoryChipClick(chip.id)"
       >
-        {{ chip.icon }} {{ chip.name }}
+        <svg v-if="chip.icon && chip.icon.startsWith('icon-')" class="chip-icon" aria-hidden="true">
+          <use :href="`#${getIconId(chip.icon)}`" />
+        </svg>
+        <span v-else-if="chip.icon" class="chip-emoji">{{ chip.icon }}</span>
+        <span class="chip-name">{{ chip.name }}</span>
       </van-tag>
     </div>
 
@@ -161,6 +165,7 @@ import { showToast } from 'vant'
 import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/category'
+import { getIconId } from '@/utils/icon'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -338,6 +343,22 @@ onUnmounted(() => {
 .category-chip {
   flex-shrink: 0;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.chip-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+.chip-emoji {
+  font-size: 12px;
+  line-height: 1;
+}
+.chip-name {
+  font-size: 12px;
+  line-height: 1;
 }
 
 .search-bar {
