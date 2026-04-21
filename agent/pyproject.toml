@@ -40,7 +40,7 @@ members = [
 ]
 
 [tool.uv.sources]
-deerflow-harness = { workspace = true, editable = true }
+deerflow-harness = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"
