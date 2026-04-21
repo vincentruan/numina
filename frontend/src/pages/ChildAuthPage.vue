@@ -116,8 +116,7 @@ async function attemptWebAuthn() {
   loading.value = true
   try {
     const optionsResponse = await getAuthenticationOptions(childId)
-    const options = optionsResponse.options as Record<string, unknown>
-    const challenge = optionsResponse.challenge as string
+    const { options, challenge } = optionsResponse
 
     const credential = await authenticatePasskey(options)
     await authenticateWithPasskey(childId, credential, challenge)
@@ -132,8 +131,8 @@ async function attemptWebAuthn() {
     showToast('登录成功')
     router.push('/child/')
   } catch (err: unknown) {
-    const error = err as { message?: string; response?: { status?: number } }
-    if (error.message?.includes('cancelled') || error.message?.includes('abort')) {
+    const error = err as { name?: string; message?: string; response?: { status?: number } }
+    if (error.name === 'NotAllowedError') {
       // User cancelled — don't show error
     } else if (error.response?.status === 400) {
       showToast('未注册 passkey，请使用图形密码')

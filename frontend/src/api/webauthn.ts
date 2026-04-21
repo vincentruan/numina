@@ -1,7 +1,12 @@
 import http from './index'
 
-export async function getRegistrationOptions(childId: string): Promise<Record<string, unknown>> {
-  const { data } = await http.post<Record<string, unknown>>('/auth/child/webauthn/register-options', {
+export interface WebAuthnOptionsResponse {
+  options: Record<string, unknown>
+  challenge: string
+}
+
+export async function getRegistrationOptions(childId: string): Promise<WebAuthnOptionsResponse> {
+  const { data } = await http.post<WebAuthnOptionsResponse>('/auth/child/webauthn/register-options', {
     child_id: childId,
   })
   return data
@@ -20,8 +25,8 @@ export async function submitRegistration(
   return data
 }
 
-export async function getAuthenticationOptions(childId: string): Promise<Record<string, unknown>> {
-  const { data } = await http.post<Record<string, unknown>>('/auth/child/webauthn/login-options', {
+export async function getAuthenticationOptions(childId: string): Promise<WebAuthnOptionsResponse> {
+  const { data } = await http.post<WebAuthnOptionsResponse>('/auth/child/webauthn/login-options', {
     child_id: childId,
   })
   return data
