@@ -493,6 +493,40 @@ def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> Toke
     )
 
 
+def admin_switch_to_child(db: Session, owner: User, child_id: str) -> TokenResponse:
+    """Admin switches to child view without PIN verification.
+
+    Args:
+        db: Database session
+        owner: Current owner user (must have role='owner')
+        child_id: Target child ID to switch to
+
+    Returns:
+        TokenResponse with child access and refresh tokens
+
+    Raises:
+        AppError: If child not found or not in same family
+    """
+    from app.auth.deps import create_access_token, create_child_refresh_token
+
+    # Verify child exists and belongs to owner's family
+    child = db.query(User).filter(
+        User.id == child_id,
+        User.family_id == owner.family_id,
+        User.role == "child",
+        User.is_active == True,
+    ).first()
+
+    if not child:
+        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, message="孩子不存在")
+
+    # Generate child tokens (same as child_pin_login)
+    return TokenResponse(
+        access_token=create_access_token({"sub": child.id, "fid": child.family_id, "role": "child"}),
+        refresh_token=create_child_refresh_token({"sub": child.id, "fid": child.family_id, "role": "child", "token_version": child.token_version}),
+    )
+
+
 # Child PIN failure tracking: {child_id: (fail_count, first_fail_time)}
 _child_pin_attempts: dict[str, tuple[int, float]] = {}
 
