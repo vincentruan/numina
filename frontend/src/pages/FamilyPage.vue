@@ -68,31 +68,6 @@
           </van-cell>
         </van-cell-group>
 
-        <!-- Coin tier settings (owner only) -->
-        <van-cell-group v-if="isOwner" inset title="⭐ 星星币兑换比例" class="section">
-          <van-field
-            v-model="copperToSilverStr"
-            label="铜→银"
-            type="digit"
-            placeholder="默认 10"
-            :rules="[{ validator: validateRate, message: '请输入 1-100 的整数' }]"
-          />
-          <van-field
-            v-model="silverToGoldStr"
-            label="银→金"
-            type="digit"
-            placeholder="默认 10"
-            :rules="[{ validator: validateRate, message: '请输入 1-100 的整数' }]"
-          />
-          <van-cell>
-            <template #title>
-              <van-button size="small" type="primary" @click="saveCoinRates" :loading="savingRates">
-                保存
-              </van-button>
-            </template>
-          </van-cell>
-        </van-cell-group>
-
         <!-- Children management dashboard (owner only) -->
         <div v-if="isOwner && childMembers.length > 0" class="section">
           <p class="section-heading">👧 孩子管理</p>
@@ -198,10 +173,6 @@ const router = useRouter()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const refreshing = ref(false)
-const savingRates = ref(false)
-
-const copperToSilverStr = ref(String(familyStore.coinCopperToSilver))
-const silverToGoldStr = ref(String(familyStore.coinSilverToGold))
 
 // Child dashboard data
 const childBalances = ref<Record<string, number>>({})
@@ -226,11 +197,6 @@ const adultMembers = computed(() =>
 const currentUserId = computed(() => authStore.user?.id)
 const regenerating = ref(false)
 
-function validateRate(val: string) {
-  const n = parseInt(val)
-  return !isNaN(n) && n >= 1 && n <= 100
-}
-
 function copyInviteCode() {
   const code = familyStore.family?.invite_code
   if (code) {
@@ -239,26 +205,6 @@ function copyInviteCode() {
     }).catch(() => {
       showToast(`${t('family.inviteCode')}: ${code}`)
     })
-  }
-}
-
-async function saveCoinRates() {
-  const c2s = parseInt(copperToSilverStr.value)
-  const s2g = parseInt(silverToGoldStr.value)
-  if (!validateRate(copperToSilverStr.value) || !validateRate(silverToGoldStr.value)) {
-    showToast('请输入 1-100 的整数')
-    return
-  }
-  savingRates.value = true
-  try {
-    await updateFamilySettings({ coinCopperToSilver: c2s, coinSilverToGold: s2g })
-    familyStore.coinCopperToSilver = c2s
-    familyStore.coinSilverToGold = s2g
-    showToast('已保存')
-  } catch {
-    showToast('保存失败')
-  } finally {
-    savingRates.value = false
   }
 }
 
@@ -396,10 +342,6 @@ async function onRefresh() {
 onMounted(async () => {
   await familyStore.fetchFamily()
   if (isOwner.value) {
-    // Coin config already loaded by App.vue on mount for adult users.
-    // Sync string refs from store (which has the loaded values).
-    copperToSilverStr.value = String(familyStore.coinCopperToSilver)
-    silverToGoldStr.value = String(familyStore.coinSilverToGold)
     await loadChildDashboard()
   }
 })
