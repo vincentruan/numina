@@ -53,6 +53,8 @@
         <router-link to="/register">创建家庭</router-link>
         <span class="divider">|</span>
         <router-link to="/join-family">加入家庭</router-link>
+        <span class="divider">|</span>
+        <router-link to="/child/select">儿童登录</router-link>
       </div>
     </div>
   </div>
@@ -97,11 +99,14 @@ async function onSubmit() {
     const status = axiosError.response?.status
 
     if (status === 503) {
-      showToast('验证服务暂时不可用，请稍后重试')
+      showToast({ type: 'fail', message: '验证服务暂时不可用，请稍后重试' })
     } else if (detail.includes('验证码')) {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()
-      showToast(detail)
+      showToast({ type: 'fail', message: detail })
+    } else {
+      // Generic error fallback
+      showToast({ type: 'fail', message: detail || '登录失败，请检查用户名和密码' })
     }
   } finally {
     loading.value = false
