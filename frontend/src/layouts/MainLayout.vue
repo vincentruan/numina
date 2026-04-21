@@ -2,9 +2,6 @@
   <div class="main-layout">
     <div class="top-bar">
       <NotificationBell class="notification-bell-btn" />
-      <div class="switch-child-btn" @click="router.push('/child/select')">
-        <van-icon name="friends-o" /> 切换到孩子视角
-      </div>
     </div>
     <router-view />
     <AppTabBar />
@@ -51,18 +48,5 @@ onMounted(() => {
   border-radius: 20px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   color: #666;
-}
-
-.switch-child-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  font-size: 13px;
-  color: #666;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 </style>
