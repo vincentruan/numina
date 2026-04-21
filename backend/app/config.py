@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     SECRET_KEY: str = _DEFAULT_SECRET
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # WebAuthn settings
+    WEBAUTHN_RP_ID: str = "localhost"  # Domain (no protocol, no port)
+    WEBAUTHN_RP_NAME: str = "Numina"
+    WEBAUTHN_ORIGIN: str = "http://localhost:8080"  # Full origin with protocol
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     ENVIRONMENT: str = "development"  # development / production
 
