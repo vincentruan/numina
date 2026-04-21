@@ -40,3 +40,7 @@ interface UpdateSettingsRequest {
 export function updateSettings(data: UpdateSettingsRequest) {
   return http.put<User>('/auth/me/settings', data)
 }
+
+export function adminSwitchToChild(childId: string) {
+  return http.post<AuthResponse>('/auth/admin/switch-child/' + childId)
+}
