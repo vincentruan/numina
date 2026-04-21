@@ -47,6 +47,7 @@ from app.models.family import Family  # noqa: F401
 from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.revoked_token import RevokedToken  # noqa: F401
 from app.models.security_audit_log import SecurityAuditLog  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.storage_backend import StorageBackend  # noqa: F401
