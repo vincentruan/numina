@@ -8,6 +8,9 @@ Cookie is set automatically on login/register, Bearer token still returned
 in response body for backward compatibility.
 """
 
+import base64
+import json
+
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
@@ -57,6 +60,15 @@ from app.schemas.webauthn import (
 from app.services import auth as auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _decode_webauthn_challenge(challenge: str) -> bytes:
+    """Decode base64url challenge with proper padding."""
+    # Add padding if needed (base64 requires length % 4 == 0)
+    padding = 4 - (len(challenge) % 4)
+    if padding != 4:
+        challenge += '=' * padding
+    return base64.urlsafe_b64decode(challenge)
 
 
 @router.post("/register", response_model=TokenResponse)
@@ -297,8 +309,6 @@ def child_webauthn_register_options(
     Returns challenge and options for navigator.credentials.create().
     Challenge must be stored and passed back in registration request.
     """
-    import json
-
     child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
@@ -324,15 +334,12 @@ def child_webauthn_register(
     Client sends credential from navigator.credentials.create().
     Credential is verified and stored in user.webauthn_credentials.
     """
-    import base64
-    import json
-
     child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     try:
-        expected_challenge = base64.urlsafe_b64decode(req.challenge + "==")
+        expected_challenge = _decode_webauthn_challenge(req.challenge)
         verified_cred = webauthn_helper.verify_registration(
             credential=req.credential,
             expected_challenge=expected_challenge,
@@ -343,7 +350,12 @@ def child_webauthn_register(
     existing_creds = json.loads(child.webauthn_credentials or "[]")
     existing_creds.append(verified_cred)
     child.webauthn_credentials = json.dumps(existing_creds)
-    db.commit()
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise AppError(ErrorCode.INTERNAL_ERROR, detail="Failed to store credential")
 
     return {"message": "passkey registered"}
 
@@ -360,8 +372,6 @@ def child_webauthn_login_options(
 
     Returns challenge and allowed credentials for navigator.credentials.get().
     """
-    import json
-
     child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
@@ -388,9 +398,6 @@ def child_webauthn_login(
     Client sends credential from navigator.credentials.get().
     On success, returns tokens and sets child auth cookies.
     """
-    import base64
-    import json
-
     child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
@@ -406,7 +413,7 @@ def child_webauthn_login(
         raise AppError(ErrorCode.AUTH_CREDENTIAL_NOT_FOUND)
 
     try:
-        expected_challenge = base64.urlsafe_b64decode(req.challenge + "==")
+        expected_challenge = _decode_webauthn_challenge(req.challenge)
         verification = webauthn_helper.verify_authentication(
             credential=req.credential,
             expected_challenge=expected_challenge,
@@ -418,7 +425,12 @@ def child_webauthn_login(
 
     stored_cred["sign_count"] = verification["new_sign_count"]
     child.webauthn_credentials = json.dumps(credentials)
-    db.commit()
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise AppError(ErrorCode.INTERNAL_ERROR, detail="Failed to update credential")
 
     from app.auth.deps import create_access_token, create_refresh_token
 
