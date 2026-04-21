@@ -303,31 +303,37 @@ async function loadChildDashboard() {
 async function onSetOwner(userId: string) {
   try {
     await showConfirmDialog({ title: '确认', message: '确定要将该成员设为管理员吗？' })
+  } catch { return }
+  try {
     await familyStore.updateMemberRole(userId, 'owner')
     showToast('已设为管理员')
   } catch {
-    // cancelled
+    showToast('操作失败，请重试')
   }
 }
 
 async function onRemoveMember(member: { id: string; display_name: string }) {
   try {
     await showConfirmDialog({ title: '确认移除', message: `确定要移除「${member.display_name}」吗？` })
+  } catch { return }
+  try {
     await familyStore.removeMember(member.id)
     showToast('已移除')
   } catch {
-    // cancelled
+    showToast('操作失败，请重试')
   }
 }
 
 async function onRegenerate() {
   try {
     await showConfirmDialog({ title: '确认', message: '重新生成邀请码后，旧邀请码将失效' })
-    regenerating.value = true
+  } catch { return }
+  regenerating.value = true
+  try {
     const code = await familyStore.regenerateInviteCode()
     showToast(`新邀请码: ${code}`)
   } catch {
-    // cancelled
+    showToast('操作失败，请重试')
   } finally {
     regenerating.value = false
   }
@@ -406,10 +412,6 @@ onMounted(async () => {
 }
 .section {
   margin-top: 12px;
-}
-.member-count {
-  font-size: 12px;
-  color: var(--text-tertiary);
 }
 .page-loading {
   display: flex;
