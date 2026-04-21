@@ -24,22 +24,26 @@ export function checkWebAuthnSupport(): WebAuthnSupport {
 }
 
 /**
- * Convert a base64url string to Uint8Array.
- * Returns a Uint8Array backed by a plain ArrayBuffer to satisfy BufferSource type constraint.
+ * Convert a base64url string to ArrayBuffer.
+ * Returns a plain ArrayBuffer to satisfy BufferSource type constraint.
  */
-export function base64urlToUint8Array(base64url: string): Uint8Array {
-  // Replace base64url chars with standard base64
+export function base64urlToArrayBuffer(base64url: string): ArrayBuffer {
   const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/')
-  // Add padding if needed
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
   const binary = atob(padded)
-  // Use explicit ArrayBuffer to satisfy BufferSource type constraint
   const buffer = new ArrayBuffer(binary.length)
   const bytes = new Uint8Array(buffer)
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
   }
-  return bytes
+  return buffer
+}
+
+/**
+ * Convert a base64url string to Uint8Array.
+ */
+export function base64urlToUint8Array(base64url: string): Uint8Array {
+  return new Uint8Array(base64urlToArrayBuffer(base64url))
 }
 
 /**
@@ -61,12 +65,12 @@ export function uint8ArrayToBase64url(buffer: ArrayBuffer | Uint8Array): string 
 function prepareRegistrationOptions(
   options: Record<string, unknown>,
 ): PublicKeyCredentialCreationOptions {
-  const challenge = base64urlToUint8Array(options.challenge as string)
-  const userId = base64urlToUint8Array((options.user as Record<string, string>).id)
+  const challenge = base64urlToArrayBuffer(options.challenge as string)
+  const userId = base64urlToArrayBuffer((options.user as Record<string, string>).id)
 
   const excludeCredentials = ((options.excludeCredentials as Array<Record<string, string>>) ?? []).map(
     (cred) => ({
-      id: base64urlToUint8Array(cred.id),
+      id: base64urlToArrayBuffer(cred.id),
       type: 'public-key' as const,
     }),
   )
@@ -89,11 +93,11 @@ function prepareRegistrationOptions(
 function prepareAuthenticationOptions(
   options: Record<string, unknown>,
 ): PublicKeyCredentialRequestOptions {
-  const challenge = base64urlToUint8Array(options.challenge as string)
+  const challenge = base64urlToArrayBuffer(options.challenge as string)
 
   const allowCredentials = ((options.allowCredentials as Array<Record<string, string>>) ?? []).map(
     (cred) => ({
-      id: base64urlToUint8Array(cred.id),
+      id: base64urlToArrayBuffer(cred.id),
       type: 'public-key' as const,
     }),
   )
