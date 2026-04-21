@@ -32,6 +32,29 @@
       <van-cell title="家庭成员管理" icon="friends-o" is-link to="/family" />
     </van-cell-group>
 
+    <!-- Coin rate settings (owner only) -->
+    <van-cell-group v-if="authStore.user?.role === 'owner'" inset title="⭐ 星星币兑换比例" class="section">
+      <van-field
+        v-model="copperToSilverStr"
+        label="铜→银"
+        type="digit"
+        placeholder="默认 10"
+      />
+      <van-field
+        v-model="silverToGoldStr"
+        label="银→金"
+        type="digit"
+        placeholder="默认 10"
+      />
+      <van-cell>
+        <template #title>
+          <van-button size="small" type="primary" :loading="savingRates" @click="saveCoinRates">
+            保存
+          </van-button>
+        </template>
+      </van-cell>
+    </van-cell-group>
+
     <van-cell-group inset :title="t('settings.accountInfo')" class="section">
       <van-cell
         :title="t('family.familyName')"
@@ -134,6 +157,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { updateSettings } from '@/api/auth'
+import { updateFamilySettings } from '@/api/family'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
 
@@ -147,6 +171,8 @@ onMounted(() => {
     familyStore.fetchFamily()
   }
   authStore.fetchMe()
+  copperToSilverStr.value = String(familyStore.coinCopperToSilver)
+  silverToGoldStr.value = String(familyStore.coinSilverToGold)
   // Initialize theme color from localStorage
   const savedColor = localStorage.getItem('theme-primary')
   if (savedColor) {
@@ -162,6 +188,9 @@ const showViewModePicker = ref(false)
 const showThemeColorPicker = ref(false)
 const showTitleDialog = ref(false)
 const editTitleValue = ref('')
+const copperToSilverStr = ref(String(familyStore.coinCopperToSilver))
+const silverToGoldStr = ref(String(familyStore.coinSilverToGold))
+const savingRates = ref(false)
 const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 
 const themeColorOptions = [
@@ -247,6 +276,26 @@ function onEditFamilyTitle() {
   }
   editTitleValue.value = familyStore.family?.custom_title || familyStore.family?.name || ''
   showTitleDialog.value = true
+}
+
+async function saveCoinRates() {
+  const c2s = parseInt(copperToSilverStr.value)
+  const s2g = parseInt(silverToGoldStr.value)
+  if (isNaN(c2s) || c2s < 1 || c2s > 100 || isNaN(s2g) || s2g < 1 || s2g > 100) {
+    showToast('请输入 1-100 的整数')
+    return
+  }
+  savingRates.value = true
+  try {
+    await updateFamilySettings({ coinCopperToSilver: c2s, coinSilverToGold: s2g })
+    familyStore.coinCopperToSilver = c2s
+    familyStore.coinSilverToGold = s2g
+    showToast('已保存')
+  } catch {
+    showToast('保存失败')
+  } finally {
+    savingRates.value = false
+  }
 }
 
 async function onTitleConfirm() {
