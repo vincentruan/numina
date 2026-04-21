@@ -81,8 +81,8 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 useStarField(canvasRef)
 
 const form = ref({
-  username: '',
-  password: '',
+  username: 'demouser',
+  password: 'DemoPass123',
   altcha: undefined as string | undefined
 })
 
