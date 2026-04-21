@@ -9,10 +9,10 @@
     <van-dialog
       v-model:show="showReturnModal"
       title="返回大人模式"
-      show-cancel-button
+      :show-cancel-button="!hasAdminChildView"
       @confirm="handleReturnToAdult"
     >
-      <div style="padding: 16px">
+      <div v-if="!hasAdminChildView" style="padding: 16px">
         <van-field
           v-model="parentPassword"
           type="password"
@@ -20,12 +20,15 @@
           :error-message="returnError"
         />
       </div>
+      <div v-else style="padding: 16px; text-align: center">
+        确定返回大人模式？
+      </div>
     </van-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import ChildTabBar from '@/components/child/ChildTabBar.vue'
 import { useChildAuthStore } from '@/stores/childAuth'
 import { clearAuth } from '@/utils/storage'
@@ -35,8 +38,21 @@ const childAuthStore = useChildAuthStore()
 const showReturnModal = ref(false)
 const parentPassword = ref('')
 const returnError = ref('')
+const hasAdminChildView = computed(() => localStorage.getItem('admin_child_view') !== null)
 
 async function handleReturnToAdult() {
+  const adminChildView = localStorage.getItem('admin_child_view')
+
+  if (adminChildView) {
+    // 管理员视角切换 - 直接返回，无需密码验证
+    showReturnModal.value = false
+    localStorage.removeItem('admin_child_view')
+    clearAuth()
+    window.location.href = '/'
+    return
+  }
+
+  // 真实孩子登录 - 需要密码验证（现有流程保持不变）
   returnError.value = ''
   try {
     await childAuthStore.returnToAdult(parentPassword.value)
