@@ -77,3 +77,58 @@ def test_admin_switch_child_success(client, auth_headers):
 
     # Verify child cookies are set (optional - backend sets cookies)
     # The endpoint should set child_auth cookies
+
+
+def test_admin_switch_child_cross_family_isolation(client, auth_headers):
+    """Owner cannot switch to child from another family."""
+    # Owner 1 creates their child
+    child_resp = client.post(
+        "/api/v1/family/children",
+        headers=auth_headers,
+        json={
+            "display_name": "Owner1Child",
+            "pin": ["🐱", "🐶", "🐸", "🦊"],
+        },
+    )
+    assert child_resp.status_code == 201
+    owner1_child_id = child_resp.json()["data"]["id"]
+
+    # Get owner 1's invite code
+    family_resp = client.get("/api/v1/family", headers=auth_headers)
+    invite_code_1 = family_resp.json()["data"]["invite_code"]
+
+    # Create a second family (owner2)
+    register_resp = client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "owner2_user",
+            "display_name": "Owner 2",
+            "password": "Owner2Pass123",
+            "family_name": "Second Family",
+        },
+    )
+    assert register_resp.status_code == 200
+    owner2_token = register_resp.json()["data"]["access_token"]
+    owner2_headers = {"Authorization": f"Bearer {owner2_token}"}
+
+    # Owner 2 creates their child
+    child2_resp = client.post(
+        "/api/v1/family/children",
+        headers=owner2_headers,
+        json={
+            "display_name": "Owner2Child",
+            "pin": ["🦁", "🐯", "🌟", "🌈"],
+        },
+    )
+    assert child2_resp.status_code == 201
+    owner2_child_id = child2_resp.json()["data"]["id"]
+
+    # Owner 1 tries to switch to Owner 2's child - should fail with 404
+    response = client.post(
+        f"/api/v1/auth/admin/switch-child/{owner2_child_id}",
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 404
+    detail = response.json().get("detail", response.json().get("message", ""))
+    assert "孩子不存在" in detail or "资源不存在" in detail or "not found" in detail.lower()
