@@ -26,6 +26,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // True when the last fetchAll() call was served from the staleness cache (no network request)
   const servedFromCache = ref(false)
 
+  // Pagination state for asset list
+  const displayedAssets = ref<Asset[]>([])
+  const assetPage = ref(1)
+  const assetPageSize = 20
+  const assetListFinished = ref(false)
+
   async function fetchOverview() {
     const res = await dashboardApi.getOverview()
     overview.value = res.data
@@ -125,10 +131,32 @@ export const useDashboardStore = defineStore('dashboard', () => {
     servedFromCache.value = false
   }
 
+  function loadMoreAssets(allAssets: Asset[]) {
+    const start = (assetPage.value - 1) * assetPageSize
+    const end = start + assetPageSize
+    const nextBatch = allAssets.slice(start, end)
+
+    if (nextBatch.length === 0) {
+      assetListFinished.value = true
+      return
+    }
+
+    displayedAssets.value.push(...nextBatch)
+    assetPage.value += 1
+    assetListFinished.value = end >= allAssets.length
+  }
+
+  function resetPagination() {
+    displayedAssets.value = []
+    assetPage.value = 1
+    assetListFinished.value = false
+  }
+
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
     lastFetchedAt, servedFromCache, invalidateDashboard,
+    displayedAssets, assetPage, assetListFinished, loadMoreAssets, resetPagination,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll,
