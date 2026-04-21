@@ -69,7 +69,7 @@ The admin-switches-to-child-view feature has a session bug (cookie not restored 
 **Data:** No new API calls. `dashboardStore.trend` and `dashboardStore.allocation` are already fetched by `fetchAll()`.
 
 **Quick stats (资产数量 / 本月新增 / 日均成本):**
-- Merged into `NetWorthCard` as a secondary row, or displayed as a compact `van-cell-group` immediately below it
+- Displayed as a compact `van-cell-group` immediately below `NetWorthCard` (no changes to NetWorthCard internals)
 - Data source: `dashboardStore.overview` (already available)
 
 ---
