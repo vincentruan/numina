@@ -8,6 +8,8 @@
   "AUTH_INVITE_CODE_INVALID": "Invalid invite code",
   "AUTH_USERNAME_EXISTS": "Username already exists",
   "AUTH_PASSWORD_INCORRECT": "Current password is incorrect",
+  "AUTH_CHILD_NOT_FOUND": "Child not found",
+  "AUTH_OWNER_ONLY": "Only family owner can perform this action",
   "CAPTCHA_MISSING": "Please complete the captcha verification",
   "CAPTCHA_INVALID": "Captcha verification failed, please try again",
   "CAPTCHA_REPLAY": "Captcha verification failed, please try again",
