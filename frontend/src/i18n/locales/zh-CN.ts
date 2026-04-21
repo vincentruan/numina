@@ -19,6 +19,7 @@ export default {
     wishes: '心愿',
     liabilities: '负债',
     stats: '统计',
+    baby: '宝贝',
     family: '家庭',
     settings: '设置'
   },

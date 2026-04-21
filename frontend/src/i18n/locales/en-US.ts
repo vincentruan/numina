@@ -19,6 +19,7 @@ export default {
     wishes: 'Wishes',
     liabilities: 'Liabilities',
     stats: 'Stats',
+    baby: 'Kids',
     family: 'Family',
     settings: 'Settings'
   },
