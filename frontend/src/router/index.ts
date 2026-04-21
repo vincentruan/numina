@@ -206,7 +206,7 @@ const router = createRouter({
         { path: 'ledger', name: 'ChildLedger', component: () => import('@/pages/child/ChildLedgerPage.vue') },
         { path: 'treasures', name: 'ChildTreasures', component: () => import('@/pages/child/ChildTreasuresPage.vue') },
         { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue'), meta: { guest: true } },
-        { path: 'pin', name: 'ChildPinLogin', component: () => import('@/pages/ChildPinLoginPage.vue'), meta: { guest: true } },
+        { path: 'auth', name: 'ChildAuth', component: () => import('@/pages/ChildAuthPage.vue'), meta: { guest: true } },
         { path: 'bind', name: 'ChildBind', component: () => import('@/pages/ChildBindPage.vue'), meta: { guest: true } },
       ]
     }
