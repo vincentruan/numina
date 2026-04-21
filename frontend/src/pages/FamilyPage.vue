@@ -18,17 +18,54 @@
           </van-cell>
         </van-cell-group>
 
-        <!-- Members -->
-        <van-cell-group inset :title="t('family.members')" class="section">
-          <template #extra>
-            <span class="member-count">{{ familyStore.members.length }} {{ t('family.memberCount') }}</span>
-          </template>
-          <MemberCard
-            v-for="member in familyStore.members"
-            :key="member.id"
-            :member="member"
-          />
-          <van-cell v-if="isOwner" :title="t('family.memberManagement')" is-link to="/family/members" />
+        <!-- Adult Members -->
+        <van-cell-group inset title="家庭成员" class="section">
+          <van-swipe-cell v-for="member in adultMembers" :key="member.id">
+            <van-cell :title="member.display_name" :label="'@' + member.username">
+              <template #icon>
+                <div class="avatar" :style="{ background: member.avatar_color || '#1989fa' }">
+                  {{ member.display_name.charAt(0) }}
+                </div>
+              </template>
+              <template #value>
+                <van-tag :type="member.role === 'owner' ? 'primary' : 'default'" size="medium">
+                  {{ member.role === 'owner' ? '管理员' : '成员' }}
+                </van-tag>
+              </template>
+            </van-cell>
+            <template v-if="isOwner" #right>
+              <van-button
+                v-if="member.id !== currentUserId && member.role !== 'owner'"
+                square
+                type="primary"
+                text="设为管理员"
+                class="swipe-btn"
+                @click="onSetOwner(member.id)"
+              />
+              <van-button
+                v-if="member.id !== currentUserId"
+                square
+                type="danger"
+                text="移除"
+                class="swipe-btn"
+                @click="onRemoveMember(member)"
+              />
+            </template>
+          </van-swipe-cell>
+          <van-cell v-if="isOwner">
+            <template #title>
+              <van-button
+                block
+                plain
+                type="primary"
+                size="small"
+                :loading="regenerating"
+                @click="onRegenerate"
+              >
+                重新生成邀请码
+              </van-button>
+            </template>
+          </van-cell>
         </van-cell-group>
 
         <!-- Coin tier settings (owner only) -->
@@ -143,11 +180,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
-import MemberCard from '@/components/family/MemberCard.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { updateFamilySettings, getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'
 import { grantCoins } from '@/api/coins'
@@ -184,6 +220,11 @@ const isOwner = computed(() => authStore.user?.role === 'owner')
 const childMembers = computed(() =>
   familyStore.members.filter(m => m.role === 'child'),
 )
+const adultMembers = computed(() =>
+  familyStore.members.filter(m => m.role !== 'child'),
+)
+const currentUserId = computed(() => authStore.user?.id)
+const regenerating = ref(false)
 
 function validateRate(val: string) {
   const n = parseInt(val)
@@ -257,6 +298,39 @@ async function loadChildDashboard() {
     }
     childWishCounts.value = counts
   } catch { /* non-critical */ }
+}
+
+async function onSetOwner(userId: string) {
+  try {
+    await showConfirmDialog({ title: '确认', message: '确定要将该成员设为管理员吗？' })
+    await familyStore.updateMemberRole(userId, 'owner')
+    showToast('已设为管理员')
+  } catch {
+    // cancelled
+  }
+}
+
+async function onRemoveMember(member: { id: string; display_name: string }) {
+  try {
+    await showConfirmDialog({ title: '确认移除', message: `确定要移除「${member.display_name}」吗？` })
+    await familyStore.removeMember(member.id)
+    showToast('已移除')
+  } catch {
+    // cancelled
+  }
+}
+
+async function onRegenerate() {
+  try {
+    await showConfirmDialog({ title: '确认', message: '重新生成邀请码后，旧邀请码将失效' })
+    regenerating.value = true
+    const code = await familyStore.regenerateInviteCode()
+    showToast(`新邀请码: ${code}`)
+  } catch {
+    // cancelled
+  } finally {
+    regenerating.value = false
+  }
 }
 
 function openGrantSheet(child: { id: string; display_name: string }) {
@@ -431,5 +505,21 @@ onMounted(async () => {
   color: #333;
   margin: 0 0 12px;
   text-align: center;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  margin-right: 10px;
+}
+.swipe-btn {
+  height: 100%;
 }
 </style>
