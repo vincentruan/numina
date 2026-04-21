@@ -38,6 +38,10 @@ class User(Base):
     token_version: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )  # for force-logout
+    # WebAuthn credentials (JSON array of registered passkeys)
+    webauthn_credentials: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # JSON array: [{"id": "...", "public_key": "...", "sign_count": 0}]
     # User settings
     theme: Mapped[str] = mapped_column(String(20), default="light")  # 'light' or 'dark'
     language: Mapped[str] = mapped_column(
