@@ -26,19 +26,30 @@ from app.config import settings
 
 
 def generate_registration_challenge(
-    user_id: str, display_name: str
+    user_id: str, display_name: str, existing_credentials: list[dict[str, Any]] | None = None
 ) -> dict[str, Any]:
     """Generate WebAuthn registration options for a new passkey.
+
+    Args:
+        user_id: Child user UUID
+        display_name: Child's display name
+        existing_credentials: Already-registered credentials to exclude
+            (prevents re-registering the same authenticator)
 
     Returns:
         Registration options dict (to be sent to client as JSON)
     """
+    exclude_credentials = [
+        PublicKeyCredentialDescriptor(id=bytes.fromhex(cred["id"]))
+        for cred in (existing_credentials or [])
+    ]
     options = generate_registration_options(
         rp_id=settings.WEBAUTHN_RP_ID,
         rp_name=settings.WEBAUTHN_RP_NAME,
         user_id=user_id.encode("utf-8"),
         user_name=display_name,
         user_display_name=display_name,
+        exclude_credentials=exclude_credentials,
         authenticator_selection=AuthenticatorSelectionCriteria(
             user_verification=UserVerificationRequirement.REQUIRED,
             resident_key=ResidentKeyRequirement.PREFERRED,
