@@ -180,11 +180,6 @@ const router = createRouter({
           component: () => import('@/pages/DataStatsPage.vue')
         },
         {
-          path: 'baby',
-          name: 'Baby',
-          component: () => import('@/pages/BabyPage.vue')
-        },
-        {
           path: 'chore-approvals',
           name: 'ChoreApprovals',
           component: () => import('@/pages/ChoreApprovalsPage.vue')
