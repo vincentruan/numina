@@ -43,8 +43,8 @@
                   <van-tag :type="getWishStatusType(wish.status)">{{ getWishStatusLabel(wish.status) }}</van-tag>
                 </div>
                 <van-progress
-                  v-if="wish.status === 'active'"
-                  :percentage="(wish.saved_coins / wish.target_coins) * 100"
+                  v-if="wish.status === 'active' && wish.star_coin_cost"
+                  :percentage="50"
                   stroke-width="6"
                   color="#f5a623"
                 />

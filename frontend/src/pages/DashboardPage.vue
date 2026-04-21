@@ -288,9 +288,9 @@ const activeStatus = ref<string | null>(null)
 const viewMode = ref<'card' | 'list'>('card')
 const overviewCardRef = ref()
 
-// Chart collapse state
-const trendExpanded = ref(localStorage.getItem('dashboard_trend_expanded') !== 'false')
-const allocationExpanded = ref(localStorage.getItem('dashboard_allocation_expanded') === 'true')
+// Chart collapse state (van-collapse v-model expects array of active names)
+const trendExpanded = ref<string[]>(localStorage.getItem('dashboard_trend_expanded') === 'false' ? [] : ['trend'])
+const allocationExpanded = ref<string[]>(localStorage.getItem('dashboard_allocation_expanded') === 'true' ? ['allocation'] : [])
 
 // Pagination state
 const loadingMore = ref(false)
@@ -728,13 +728,13 @@ function handleScroll() {
 }
 
 function toggleTrend() {
-  trendExpanded.value = !trendExpanded.value
-  localStorage.setItem('dashboard_trend_expanded', String(trendExpanded.value))
+  trendExpanded.value = trendExpanded.value.includes('trend') ? [] : ['trend']
+  localStorage.setItem('dashboard_trend_expanded', trendExpanded.value.length > 0 ? 'true' : 'false')
 }
 
 function toggleAllocation() {
-  allocationExpanded.value = !allocationExpanded.value
-  localStorage.setItem('dashboard_allocation_expanded', String(allocationExpanded.value))
+  allocationExpanded.value = allocationExpanded.value.includes('allocation') ? [] : ['allocation']
+  localStorage.setItem('dashboard_allocation_expanded', allocationExpanded.value.length > 0 ? 'true' : 'false')
 }
 
 async function onLoadMore() {
