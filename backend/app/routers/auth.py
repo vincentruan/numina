@@ -45,6 +45,15 @@ from app.schemas.auth import (
     UserResponse,
     VerifyParentPasswordRequest,
 )
+from app.auth import webauthn as webauthn_helper
+from app.schemas.webauthn import (
+    WebAuthnAuthenticationOptionsRequest,
+    WebAuthnAuthenticationOptionsResponse,
+    WebAuthnAuthenticationRequest,
+    WebAuthnRegistrationOptionsRequest,
+    WebAuthnRegistrationOptionsResponse,
+    WebAuthnRegistrationRequest,
+)
 from app.services import auth as auth_service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -273,6 +282,152 @@ def child_logout(
     """Logout from child mode and clear child auth cookies."""
     clear_child_auth_cookies(response)
     return {"message": "已退出儿童模式"}
+
+
+@router.post(
+    "/child/webauthn/register-options",
+    response_model=WebAuthnRegistrationOptionsResponse,
+)
+def child_webauthn_register_options(
+    req: WebAuthnRegistrationOptionsRequest,
+    db: Session = Depends(get_db),
+):
+    """Generate WebAuthn registration options for a child account.
+
+    Returns challenge and options for navigator.credentials.create().
+    Challenge must be stored and passed back in registration request.
+    """
+    import json
+
+    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    existing_creds = json.loads(child.webauthn_credentials or "[]")
+    options = webauthn_helper.generate_registration_challenge(
+        user_id=child.id,
+        display_name=child.display_name,
+        existing_credentials=existing_creds,
+    )
+    return WebAuthnRegistrationOptionsResponse(
+        options=options, challenge=options["challenge"]
+    )
+
+
+@router.post("/child/webauthn/register", response_model=dict)
+def child_webauthn_register(
+    req: WebAuthnRegistrationRequest,
+    db: Session = Depends(get_db),
+):
+    """Verify and store WebAuthn credential for a child account.
+
+    Client sends credential from navigator.credentials.create().
+    Credential is verified and stored in user.webauthn_credentials.
+    """
+    import base64
+    import json
+
+    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    try:
+        expected_challenge = base64.urlsafe_b64decode(req.challenge + "==")
+        verified_cred = webauthn_helper.verify_registration(
+            credential=req.credential,
+            expected_challenge=expected_challenge,
+        )
+    except Exception as e:
+        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, detail=str(e))
+
+    existing_creds = json.loads(child.webauthn_credentials or "[]")
+    existing_creds.append(verified_cred)
+    child.webauthn_credentials = json.dumps(existing_creds)
+    db.commit()
+
+    return {"message": "passkey registered"}
+
+
+@router.post(
+    "/child/webauthn/login-options",
+    response_model=WebAuthnAuthenticationOptionsResponse,
+)
+def child_webauthn_login_options(
+    req: WebAuthnAuthenticationOptionsRequest,
+    db: Session = Depends(get_db),
+):
+    """Generate WebAuthn authentication options for a child account.
+
+    Returns challenge and allowed credentials for navigator.credentials.get().
+    """
+    import json
+
+    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    if not child.webauthn_credentials:
+        raise AppError(ErrorCode.AUTH_NO_PASSKEY_REGISTERED)
+
+    credentials = json.loads(child.webauthn_credentials)
+    options = webauthn_helper.generate_authentication_challenge(credentials)
+
+    return WebAuthnAuthenticationOptionsResponse(
+        options=options, challenge=options["challenge"]
+    )
+
+
+@router.post("/child/webauthn/login", response_model=TokenResponse)
+def child_webauthn_login(
+    response: Response,
+    req: WebAuthnAuthenticationRequest,
+    db: Session = Depends(get_db),
+):
+    """Verify WebAuthn credential and issue child JWT tokens.
+
+    Client sends credential from navigator.credentials.get().
+    On success, returns tokens and sets child auth cookies.
+    """
+    import base64
+    import json
+
+    child = db.query(User).filter(User.id == req.child_id, User.role == "child").first()
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    if not child.webauthn_credentials:
+        raise AppError(ErrorCode.AUTH_NO_PASSKEY_REGISTERED)
+
+    credentials = json.loads(child.webauthn_credentials)
+    credential_id = req.credential["id"]
+
+    stored_cred = next((c for c in credentials if c["id"] == credential_id), None)
+    if not stored_cred:
+        raise AppError(ErrorCode.AUTH_CREDENTIAL_NOT_FOUND)
+
+    try:
+        expected_challenge = base64.urlsafe_b64decode(req.challenge + "==")
+        verification = webauthn_helper.verify_authentication(
+            credential=req.credential,
+            expected_challenge=expected_challenge,
+            credential_public_key=bytes.fromhex(stored_cred["public_key"]),
+            credential_current_sign_count=stored_cred["sign_count"],
+        )
+    except Exception as e:
+        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, detail=str(e))
+
+    stored_cred["sign_count"] = verification["new_sign_count"]
+    child.webauthn_credentials = json.dumps(credentials)
+    db.commit()
+
+    from app.auth.deps import create_access_token, create_refresh_token
+
+    tokens = TokenResponse(
+        access_token=create_access_token({"sub": child.id, "role": "child"}),
+        refresh_token=create_refresh_token({"sub": child.id, "role": "child"}),
+    )
+    set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return tokens
 
 
 @router.post("/admin/switch-child/{child_id}", response_model=TokenResponse)
