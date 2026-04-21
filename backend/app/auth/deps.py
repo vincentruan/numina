@@ -523,13 +523,12 @@ def require_adult(user: User = Depends(get_current_user)) -> User:
 def require_owner(user: User = Depends(get_current_user)) -> User:
     """Require the current user to be the family owner.
 
-    Raises HTTP 403 if the user is not role='owner'.
+    Raises AppError AUTH_OWNER_ONLY if the user is not role='owner'.
     Use for operations that only the family owner should perform,
     such as approving chores or managing family settings.
     """
+    from app.errors import AppError, ErrorCode
+
     if user.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="仅家庭管理员可执行此操作",
-        )
+        raise AppError(ErrorCode.AUTH_OWNER_ONLY)
     return user

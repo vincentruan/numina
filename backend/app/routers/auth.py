@@ -24,6 +24,7 @@ from app.auth.deps import (
     get_current_user,
     get_current_user_from_cookie,
     get_refresh_token_from_cookie,
+    require_owner,
 )
 from app.database import get_db
 from app.errors.codes import ErrorCode
@@ -272,6 +273,29 @@ def child_logout(
     """Logout from child mode and clear child auth cookies."""
     clear_child_auth_cookies(response)
     return {"message": "已退出儿童模式"}
+
+
+@router.post("/admin/switch-child/{child_id}", response_model=TokenResponse)
+def admin_switch_child(
+    response: Response,
+    child_id: str,
+    db: Session = Depends(get_db),
+    owner: User = Depends(require_owner),
+):
+    """Admin switches to child view without PIN verification.
+
+    Only family owner can use this endpoint. Returns child JWT tokens
+    and sets child authentication cookies.
+
+    Args:
+        child_id: Target child ID to switch to
+
+    Returns:
+        TokenResponse with child access and refresh tokens
+    """
+    tokens = auth_service.admin_switch_to_child(db, owner, child_id)
+    set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
+    return tokens
 
 
 @router.get("/child/bind")

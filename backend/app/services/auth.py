@@ -518,7 +518,7 @@ def admin_switch_to_child(db: Session, owner: User, child_id: str) -> TokenRespo
     ).first()
 
     if not child:
-        raise AppError(ErrorCode.RESOURCE_NOT_FOUND, message="孩子不存在")
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     # Generate child tokens (same as child_pin_login)
     return TokenResponse(
