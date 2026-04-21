@@ -102,6 +102,7 @@
                 <van-button size="mini" plain type="primary" to="/family/chore-approvals">审批家务</van-button>
                 <van-button size="mini" plain type="primary" to="/family/wish-review">审批心愿</van-button>
                 <van-button size="mini" plain type="success" @click="openGrantSheet(child)">赠送星星</van-button>
+                <van-button size="mini" plain type="warning" @click="switchToChildView(child)">切换视角</van-button>
               </div>
             </div>
           </div>
@@ -141,6 +142,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
@@ -151,8 +153,12 @@ import { updateFamilySettings, getAllChildBalances, getChildrenChoreStats, type 
 import { grantCoins } from '@/api/coins'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
+import { adminSwitchToChild } from '@/api/auth'
+import { setUser } from '@/utils/storage'
+import type { ChildUser } from '@/types'
 
 const { t } = useI18n()
+const router = useRouter()
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const refreshing = ref(false)
@@ -275,6 +281,29 @@ async function doGrant() {
     showToast('赠送失败，请重试')
   } finally {
     grantingCoins.value = false
+  }
+}
+
+async function switchToChildView(child: ChildUser) {
+  try {
+    // 调用管理员专用API获取孩子JWT
+    await adminSwitchToChild(child.id)
+
+    // 标识这是管理员视角切换（用于退出逻辑）
+    localStorage.setItem('admin_child_view', child.id)
+
+    // 更新用户状态为孩子
+    setUser({
+      id: child.id,
+      display_name: child.display_name,
+      avatar_color: child.avatar_color,
+      role: 'child',
+    })
+
+    // 导航到孩子首页
+    router.push('/child/home')
+  } catch {
+    showToast('切换失败，请重试')
   }
 }
 
