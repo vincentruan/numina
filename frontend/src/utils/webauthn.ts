@@ -25,6 +25,7 @@ export function checkWebAuthnSupport(): WebAuthnSupport {
 
 /**
  * Convert a base64url string to Uint8Array.
+ * Returns a Uint8Array backed by a plain ArrayBuffer to satisfy BufferSource type constraint.
  */
 export function base64urlToUint8Array(base64url: string): Uint8Array {
   // Replace base64url chars with standard base64
@@ -32,7 +33,9 @@ export function base64urlToUint8Array(base64url: string): Uint8Array {
   // Add padding if needed
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=')
   const binary = atob(padded)
-  const bytes = new Uint8Array(binary.length)
+  // Use explicit ArrayBuffer to satisfy BufferSource type constraint
+  const buffer = new ArrayBuffer(binary.length)
+  const bytes = new Uint8Array(buffer)
   for (let i = 0; i < binary.length; i++) {
     bytes[i] = binary.charCodeAt(i)
   }
