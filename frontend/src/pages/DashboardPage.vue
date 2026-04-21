@@ -29,8 +29,31 @@
         <!-- Stale data indicator -->
         <p v-if="isShowingCachedData" class="stale-hint">数据可能不是最新</p>
 
-        <!-- Pending Chore Approvals (owner only) -->
-        <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
+        <!-- Quick Stats -->
+        <van-cell-group inset class="quick-stats-section">
+          <van-cell title="资产数量" :value="`${overview?.asset_count ?? 0} 项`" />
+          <van-cell title="日均成本总计" :value="`¥${(overview?.total_daily_cost ?? 0).toFixed(2)}/天`" />
+        </van-cell-group>
+
+        <!-- Trend Chart -->
+        <van-cell-group inset class="chart-section">
+          <van-collapse v-model="trendExpanded" @change="toggleTrend">
+            <van-collapse-item title="资产趋势" name="trend">
+              <TrendLineChart v-if="dashboardStore.trend.length" :data="dashboardStore.trend" />
+              <van-empty v-else description="暂无数据" image-size="60" />
+            </van-collapse-item>
+          </van-collapse>
+        </van-cell-group>
+
+        <!-- Allocation Chart -->
+        <van-cell-group inset class="chart-section">
+          <van-collapse v-model="allocationExpanded" @change="toggleAllocation">
+            <van-collapse-item title="资产分布" name="allocation">
+              <AllocationPieChart v-if="dashboardStore.allocation.length" :data="dashboardStore.allocation" />
+              <van-empty v-else description="暂无数据" image-size="60" />
+            </van-collapse-item>
+          </van-collapse>
+        </van-cell-group>
 
         <!-- Status Summary Grid + Toolbar -->
         <StatusSummaryGrid
@@ -105,22 +128,29 @@
 
           <!-- Normal List View -->
           <template v-else-if="sortedAndFilteredAssets.length">
-            <div v-if="viewMode === 'card'" class="asset-list">
-              <AssetCard
-                v-for="asset in sortedAndFilteredAssets"
-                :key="asset.id"
-                :asset="asset"
-                @click="$router.push(`/assets/${asset.id}`)"
-              />
-            </div>
-            <div v-else class="asset-list-compact">
-              <AssetListItem
-                v-for="asset in sortedAndFilteredAssets"
-                :key="asset.id"
-                :asset="asset"
-                @click="$router.push(`/assets/${asset.id}`)"
-              />
-            </div>
+            <van-list
+              v-model:loading="loadingMore"
+              :finished="dashboardStore.assetListFinished"
+              finished-text="没有更多了"
+              @load="onLoadMore"
+            >
+              <div v-if="viewMode === 'card'" class="asset-list">
+                <AssetCard
+                  v-for="asset in dashboardStore.displayedAssets"
+                  :key="asset.id"
+                  :asset="asset"
+                  @click="$router.push(`/assets/${asset.id}`)"
+                />
+              </div>
+              <div v-else class="asset-list-compact">
+                <AssetListItem
+                  v-for="asset in dashboardStore.displayedAssets"
+                  :key="asset.id"
+                  :asset="asset"
+                  @click="$router.push(`/assets/${asset.id}`)"
+                />
+              </div>
+            </van-list>
           </template>
 
           <van-empty v-else description="暂无资产" image-size="60" />
@@ -240,10 +270,11 @@ import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/s
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AlertCards from '@/components/dashboard/AlertCards.vue'
-import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
+import TrendLineChart from '@/components/charts/TrendLineChart.vue'
+import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 
 const { t } = useI18n()
 
@@ -256,6 +287,13 @@ const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 const viewMode = ref<'card' | 'list'>('card')
 const overviewCardRef = ref()
+
+// Chart collapse state
+const trendExpanded = ref(localStorage.getItem('dashboard_trend_expanded') !== 'false')
+const allocationExpanded = ref(localStorage.getItem('dashboard_allocation_expanded') === 'true')
+
+// Pagination state
+const loadingMore = ref(false)
 
 // Category view
 const showCategoryNav = ref(false)
@@ -689,7 +727,28 @@ function handleScroll() {
   }
 }
 
+function toggleTrend() {
+  trendExpanded.value = !trendExpanded.value
+  localStorage.setItem('dashboard_trend_expanded', String(trendExpanded.value))
+}
+
+function toggleAllocation() {
+  allocationExpanded.value = !allocationExpanded.value
+  localStorage.setItem('dashboard_allocation_expanded', String(allocationExpanded.value))
+}
+
+async function onLoadMore() {
+  if (dashboardStore.assetListFinished) return
+  loadingMore.value = true
+  try {
+    dashboardStore.loadMoreAssets(sortedAndFilteredAssets.value)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
 async function onRefresh() {
+  dashboardStore.resetPagination()
   await dashboardStore.fetchAll(true)
   if (authStore.user?.role === 'owner') {
     await choreStore.fetchPendingApprovals()
@@ -702,7 +761,10 @@ onMounted(() => {
   if (authStore.user?.view_mode === 'list') {
     viewMode.value = 'list'
   }
-  dashboardStore.fetchAll()
+  dashboardStore.fetchAll().then(() => {
+    dashboardStore.resetPagination()
+    dashboardStore.loadMoreAssets(sortedAndFilteredAssets.value)
+  })
   categoryStore.fetchCategories()
   if (authStore.user?.role === 'owner') {
     choreStore.fetchPendingApprovals()
@@ -947,5 +1009,17 @@ onUnmounted(() => {
 .sort-options {
   display: flex;
   gap: 8px;
+}
+
+.quick-stats-section {
+  margin-top: 12px;
+}
+
+.chart-section {
+  margin-top: 12px;
+}
+
+.chart-section :deep(.van-collapse-item__content) {
+  padding: 12px;
 }
 </style>
