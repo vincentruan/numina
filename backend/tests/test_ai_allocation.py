@@ -205,17 +205,17 @@ def test_check_drift_calls_agent_with_target(client, auth_headers, db):
     db.add(target)
     db.commit()
 
-    # Note: ai_allocation.py has a bug - missing httpx import
-    # This test documents the expected behavior once the bug is fixed
-    with patch("httpx.AsyncClient", return_value=_mock_agent_drift_response()):
+    # Patch httpx where it's imported in the router module
+    with patch("app.routers.ai_allocation.httpx.AsyncClient", return_value=_mock_agent_drift_response()):
         resp = client.get("/api/v1/ai/allocation-target/check", headers=auth_headers)
 
-    # Currently returns 503 due to missing httpx import bug in router
-    # Expected behavior once bug fixed: 200 with drift data
-    assert resp.status_code in [200, 503]
-    if resp.status_code == 200:
-        data = resp.json()
-        assert data["has_drift"] is True
+    assert resp.status_code == 200
+    data = resp.json()
+    # Response should be {"data": {"has_drift": True, ...}} wrapped by response interceptor
+    assert data.get("data", {}).get("has_drift") is True or data.get("has_drift") is True
+    if "data" in data:
+        assert len(data["data"]["drift_items"]) == 1
+    else:
         assert len(data["drift_items"]) == 1
 
 
@@ -253,11 +253,10 @@ def test_check_drift_handles_agent_failure(client, auth_headers, db):
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
+    with patch("app.routers.ai_allocation.httpx.AsyncClient", return_value=mock_client):
         resp = client.get("/api/v1/ai/allocation-target/check", headers=auth_headers)
 
     # Returns 503 (AI_SERVICE_UNAVAILABLE) on agent failure
-    # Note: Currently also fails with 503 due to missing httpx import in router
     assert resp.status_code == 503
 
 
