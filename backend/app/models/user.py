@@ -1,20 +1,18 @@
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid4())
-    )
-    family_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("families.id"), nullable=False
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    family_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("families.id"), nullable=False
     )
     username: Mapped[str | None] = mapped_column(
         String(50), nullable=True

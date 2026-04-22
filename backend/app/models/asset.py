@@ -1,7 +1,7 @@
 from datetime import date, datetime
-from uuid import uuid4
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     Date,
@@ -17,22 +17,23 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 asset_tags = Table(
     "asset_tags",
     Base.metadata,
-    Column("asset_id", String(36), ForeignKey("assets.id"), primary_key=True),
-    Column("tag_id", String(36), ForeignKey("tags.id"), primary_key=True),
+    Column("asset_id", BigInteger, ForeignKey("assets.id"), primary_key=True),
+    Column("tag_id", BigInteger, ForeignKey("tags.id"), primary_key=True),
 )
 
 
 class Asset(Base):
     __tablename__ = "assets"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
-    family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"), nullable=False)
-    category_id: Mapped[str] = mapped_column(String(36), ForeignKey("categories.id"), nullable=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    category_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("categories.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     asset_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'physical' or 'financial'
     purchase_price: Mapped[float | None] = mapped_column(Float, nullable=True)
