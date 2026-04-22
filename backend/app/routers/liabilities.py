@@ -40,7 +40,7 @@ def create_liability(
 
 @router.get("/{liability_id}", response_model=LiabilityResponse)
 def get_liability(
-    liability_id: str,
+    liability_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -49,7 +49,7 @@ def get_liability(
 
 @router.put("/{liability_id}", response_model=LiabilityResponse)
 def update_liability(
-    liability_id: str,
+    liability_id: int,
     req: LiabilityUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -61,7 +61,7 @@ def update_liability(
 
 @router.delete("/{liability_id}")
 def delete_liability(
-    liability_id: str,
+    liability_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -72,7 +72,7 @@ def delete_liability(
 
 @router.put("/{liability_id}/payment", response_model=LiabilityResponse)
 def record_payment(
-    liability_id: str,
+    liability_id: int,
     req: PaymentRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -85,7 +85,7 @@ def record_payment(
 
 @router.get("/{liability_id}/payments")
 def get_payments(
-    liability_id: str,
+    liability_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

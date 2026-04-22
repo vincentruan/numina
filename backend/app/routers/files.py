@@ -36,7 +36,7 @@ def _safe_relative_path(local_path: str, upload_dir: str) -> str:
     return str(resolved.relative_to(base))
 
 
-def _get_owned_file(file_id: str, user: User, db: Session) -> CachedFile:
+def _get_owned_file(file_id: int, user: User, db: Session) -> CachedFile:
     """Fetch a CachedFile owned by the user's family, or raise 404."""
     cached_file = (
         db.query(CachedFile)
@@ -50,7 +50,7 @@ def _get_owned_file(file_id: str, user: User, db: Session) -> CachedFile:
 
 @router.delete("/{file_id}", status_code=204)
 async def delete_file(
-    file_id: str,
+    file_id: int,
     user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
@@ -99,7 +99,7 @@ async def delete_file(
 
 @router.get("/{file_id}/url")
 def get_file_url(
-    file_id: str,
+    file_id: int,
     user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):

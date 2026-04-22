@@ -104,7 +104,7 @@ async def refresh_disposal_suggestions(
 
 @router.post("/{suggestion_id}/dismiss")
 def dismiss_suggestion(
-    suggestion_id: str,
+    suggestion_id: int,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):

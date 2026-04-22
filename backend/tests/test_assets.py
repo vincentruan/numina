@@ -102,20 +102,23 @@ def test_create_financial_asset(client, auth_headers, financial_category_id):
 
 
 def test_list_assets(client, auth_headers, sample_asset, sample_financial_asset):
-    """Test listing assets"""
+    """Test listing assets (now paginated)"""
     response = client.get("/api/v1/assets", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()["data"]
-    assert len(data) == 2
+    assert "items" in data  # Paginated response
+    assert "total" in data
+    assert len(data["items"]) == 2
 
 
 def test_list_assets_filter_by_type(client, auth_headers, sample_asset, sample_financial_asset):
-    """Test filtering assets by type"""
+    """Test filtering assets by type (now paginated)"""
     response = client.get("/api/v1/assets?asset_type=physical", headers=auth_headers)
     assert response.status_code == 200
     data = response.json()["data"]
-    assert len(data) == 1
-    assert data[0]["asset_type"] == "physical"
+    assert "items" in data  # Paginated response
+    assert len(data["items"]) == 1
+    assert data["items"][0]["asset_type"] == "physical"
 
 
 def test_get_asset_detail(client, auth_headers, sample_asset):
@@ -159,7 +162,7 @@ def test_delete_asset(client, auth_headers, sample_asset):
 
     # Verify it's archived (not in default list)
     list_response = client.get("/api/v1/assets", headers=auth_headers)
-    ids = [a["id"] for a in list_response.json()["data"]]
+    ids = [a["id"] for a in list_response.json()["data"]["items"]]  # Paginated response
     assert asset_id not in ids
 
 
@@ -216,7 +219,7 @@ def test_batch_archive_assets(client, auth_headers, category_id):
 
     # Verify they are archived
     list_response = client.get("/api/v1/assets", headers=auth_headers)
-    active_ids = [a["id"] for a in list_response.json()["data"]]
+    active_ids = [a["id"] for a in list_response.json()["data"]["items"]]  # Paginated response
     for aid in asset_ids:
         assert aid not in active_ids
 

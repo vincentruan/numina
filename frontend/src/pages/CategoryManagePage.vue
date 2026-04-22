@@ -92,7 +92,7 @@ function showEditDialog(cat: Category) {
 
 async function onDialogConfirm() {
   if (!formData.value.name) {
-    showToast('请输入名称')
+    showToast('⚠️ 请输入名称')
     return
   }
   try {
@@ -102,7 +102,7 @@ async function onDialogConfirm() {
         icon: formData.value.icon,
         color: formData.value.color
       })
-      showToast('修改成功')
+      showToast('✅ 修改成功')
     } else {
       await categoryStore.createCategory({
         name: formData.value.name,
@@ -110,7 +110,7 @@ async function onDialogConfirm() {
         color: formData.value.color,
         asset_type: activeTab.value as 'physical' | 'financial'
       })
-      showToast('添加成功')
+      showToast('✅ 添加成功')
     }
   } catch {
     // Error handled by interceptor
@@ -121,7 +121,7 @@ async function onDelete(cat: Category) {
   try {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${cat.name}」吗？` })
     await categoryStore.deleteCategory(cat.id)
-    showToast('已删除')
+    showToast('🗑️ 已删除')
   } catch {
     // cancelled
   }

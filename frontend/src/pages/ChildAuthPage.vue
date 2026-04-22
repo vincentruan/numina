@@ -87,6 +87,7 @@ const router = useRouter()
 const childAuthStore = useChildAuthStore()
 
 const childId = route.query.childId as string
+const username = route.query.username as string  // 新增：username 方式
 const displayName = route.query.displayName as string
 const avatarColor = route.query.avatarColor as string
 
@@ -128,17 +129,17 @@ async function attemptWebAuthn() {
       role: 'child',
     })
 
-    showToast('登录成功')
+    showToast('🔐 登录成功')
     router.push('/child/')
   } catch (err: unknown) {
     const error = err as { name?: string; message?: string; response?: { status?: number } }
     if (error.name === 'NotAllowedError') {
       // User cancelled — don't show error
     } else if (error.response?.status === 400) {
-      showToast('未注册 passkey，请使用图形密码')
+      showToast('⚠️ 未注册 passkey，请使用图形密码')
       authMode.value = 'pin'
     } else {
-      showToast('验证失败，请重试')
+      showToast('❌ 验证失败，请重试')
     }
   } finally {
     loading.value = false
@@ -174,6 +175,7 @@ watch(
     if (len === 4) {
       const selectedChild: ChildUser = {
         id: childId,
+        username: username,  // 新增：传递 username
         display_name: displayName,
         avatar_color: avatarColor,
         is_active: true,

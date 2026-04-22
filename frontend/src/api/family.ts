@@ -9,7 +9,7 @@ export interface FamilySettings {
 }
 
 export function getFamily() {
-  return http.get<Family>('/family')
+  return http.get<Family>('/family/info')
 }
 
 export function getMembers() {

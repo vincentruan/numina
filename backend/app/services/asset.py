@@ -25,7 +25,9 @@ def list_assets(
     tag_id: str | None = None,
     search: str | None = None,
     sort: str | None = None,
-) -> list[Asset]:
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[Asset], int]:
     query = (
         db.query(Asset)
         .options(joinedload(Asset.category), joinedload(Asset.tags))
@@ -51,7 +53,14 @@ def list_assets(
     else:
         query = query.order_by(Asset.created_at.desc())
 
-    return query.all()
+    # Calculate total before pagination
+    total = query.count()
+
+    # Apply pagination
+    offset = (page - 1) * page_size
+    assets = query.offset(offset).limit(page_size).all()
+
+    return assets, total
 
 
 def get_asset(db: Session, user: User, asset_id: str) -> Asset:

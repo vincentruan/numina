@@ -6,6 +6,7 @@ import pytest
 @pytest.fixture
 def child_a(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "username": "xiaoming",
         "display_name": "小明",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
@@ -25,6 +26,7 @@ def child_a(client, auth_headers):
 @pytest.fixture
 def child_b(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "username": "xiaohong",
         "display_name": "小红",
         "avatar_color": "#33AAFF",
         "pin": ["🌈", "🍎", "🐸", "🦁"],
@@ -129,6 +131,7 @@ def test_gift_cross_family_fails(client, auth_headers, second_user_headers, chil
     """Child cannot gift to a child in a different family."""
     # Create a child in the second family
     resp = client.post("/api/v1/family/children", headers=second_user_headers, json={
+        "username": "otherchild",
         "display_name": "外家孩子",
         "avatar_color": "#AABBCC",
         "pin": ["🐸", "🦊", "🐼", "🐨"],

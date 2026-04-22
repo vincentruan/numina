@@ -30,10 +30,17 @@ def _hash_pin(pin_sequence: list[str]) -> str:
 
 
 def create_child(db: Session, family_id: str, req: CreateChildRequest) -> User:
+    # 检查 username 全局唯一
+    existing = db.query(User).filter(User.username == req.username.lower()).first()
+    if existing:
+        from app.errors import AppError, ErrorCode
+
+        raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
+
     user = User(
         id=str(uuid4()),
         family_id=family_id,
-        username=None,
+        username=req.username.lower(),  # 新增：必填
         display_name=req.display_name,
         avatar_color=req.avatar_color,
         password_hash=None,
@@ -49,9 +56,7 @@ def create_child(db: Session, family_id: str, req: CreateChildRequest) -> User:
 def list_children(db: Session, family_id: str) -> list[User]:
     return (
         db.query(User)
-        .filter(
-            User.family_id == family_id, User.role == "child", User.is_active
-        )
+        .filter(User.family_id == family_id, User.role == "child", User.is_active)
         .all()
     )
 
@@ -68,6 +73,18 @@ def update_child(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="子账号不存在"
         )
+    if req.username is not None:
+        # 检查 username 全局唯一（排除自己）
+        existing = (
+            db.query(User)
+            .filter(User.username == req.username.lower(), User.id != child_id)
+            .first()
+        )
+        if existing:
+            from app.errors import AppError, ErrorCode
+
+            raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
+        child.username = req.username.lower()
     if req.display_name is not None:
         child.display_name = req.display_name
     if req.avatar_color is not None:

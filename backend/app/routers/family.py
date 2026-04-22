@@ -109,7 +109,7 @@ def get_aggregate(
 
 @router.get("/members/{member_id}/summary", response_model=MemberSummary)
 def get_member_summary(
-    member_id: str,
+    member_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -147,7 +147,7 @@ def get_member_summary(
 
 @router.patch("/members/{member_id}/role", response_model=UserResponse)
 def update_member_role(
-    member_id: str,
+    member_id: int,
     body: UpdateRoleRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -158,7 +158,7 @@ def update_member_role(
 
 @router.delete("/members/{member_id}")
 def remove_member(
-    member_id: str,
+    member_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -229,7 +229,7 @@ def get_family_settings(
 
 @router.get("/children/{child_id}/balance", response_model=ChildBalanceResponse)
 def get_child_balance(
-    child_id: str,
+    child_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

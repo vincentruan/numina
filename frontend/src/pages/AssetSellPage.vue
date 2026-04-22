@@ -145,7 +145,7 @@ const daysHeld = computed(() => {
 
 async function onSubmit() {
   if (sellPrice.value <= 0) {
-    showToast('请输入出售价格')
+    showToast('⚠️ 请输入出售价格')
     return
   }
   submitting.value = true
@@ -160,7 +160,7 @@ async function onSubmit() {
     showResult.value = true
     dashboardStore.fetchAll()
   } catch {
-    showToast('出售失败，请重试')
+    showToast('❌ 出售失败，请重试')
   } finally {
     submitting.value = false
   }

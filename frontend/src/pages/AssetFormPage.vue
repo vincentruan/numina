@@ -35,10 +35,10 @@ async function onSubmit(data: Partial<Asset>) {
   try {
     if (isEdit.value) {
       await assetStore.updateAsset(route.params.id as string, data)
-      showToast('修改成功')
+      showToast('✅ 修改成功')
     } else {
       await assetStore.createAsset(data)
-      showToast('添加成功')
+      showToast('✅ 添加成功')
     }
     // Dashboard refreshes naturally via staleness guard (2 min TTL)
     // invalidateDashboard() already called by asset store methods

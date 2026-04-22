@@ -102,7 +102,7 @@ async def refresh_alerts(
 
 @router.post("/{alert_id}/dismiss")
 def dismiss_alert(
-    alert_id: str,
+    alert_id: int,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):

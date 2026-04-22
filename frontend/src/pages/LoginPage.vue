@@ -90,7 +90,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.login(form.value)
-    showToast('登录成功')
+    showToast('🔐 登录成功')
     router.push('/')
   } catch (error: unknown) {
     // Handle captcha-related errors

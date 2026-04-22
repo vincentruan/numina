@@ -17,6 +17,7 @@ from app.schemas.asset import (
     BatchUpdateCategoryRequest,
     BatchUpdateStatusRequest,
     BatchUpdateTagsRequest,
+    PaginatedAssetResponse,
     ValuationResponse,
 )
 from app.services import asset as asset_service
@@ -33,19 +34,31 @@ def _to_response(asset) -> AssetResponse:
     return resp
 
 
-@router.get("/", response_model=list[AssetResponse])
+@router.get("/", response_model=PaginatedAssetResponse)
 def list_assets(
-    category_id: str | None = Query(None),
+    category_id: int | None = Query(None),
     asset_type: str | None = Query(None),
     status: str | None = Query(None),
-    tag_id: str | None = Query(None),
+    tag_id: int | None = Query(None),
     search: str | None = Query(None),
     sort: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    assets = asset_service.list_assets(db, user, category_id, asset_type, status, tag_id, search, sort)
-    return [_to_response(a) for a in assets]
+    import math
+    assets, total = asset_service.list_assets(db, user, category_id, asset_type, status, tag_id, search, sort, page, page_size)
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
+    return PaginatedAssetResponse(
+        items=[_to_response(a) for a in assets],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        has_next=page < total_pages,
+        has_prev=page > 1,
+    )
 
 
 @router.post("/", response_model=AssetResponse, status_code=201)
@@ -62,7 +75,7 @@ def create_asset(
 
 @router.get("/{asset_id}", response_model=AssetResponse)
 def get_asset(
-    asset_id: str,
+    asset_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -72,7 +85,7 @@ def get_asset(
 
 @router.put("/{asset_id}", response_model=AssetResponse)
 def update_asset(
-    asset_id: str,
+    asset_id: int,
     req: AssetUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -84,7 +97,7 @@ def update_asset(
 
 @router.delete("/{asset_id}")
 def delete_asset(
-    asset_id: str,
+    asset_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -95,7 +108,7 @@ def delete_asset(
 
 @router.put("/{asset_id}/value", response_model=AssetResponse)
 def update_value(
-    asset_id: str,
+    asset_id: int,
     req: AssetValueUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -107,7 +120,7 @@ def update_value(
 
 @router.post("/{asset_id}/sell", response_model=AssetSellResponse)
 def sell_asset(
-    asset_id: str,
+    asset_id: int,
     req: AssetSellRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -120,7 +133,7 @@ def sell_asset(
 
 @router.post("/{asset_id}/retire", response_model=AssetResponse)
 def retire_asset(
-    asset_id: str,
+    asset_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -132,7 +145,7 @@ def retire_asset(
 
 @router.post("/{asset_id}/reactivate", response_model=AssetResponse)
 def reactivate_asset(
-    asset_id: str,
+    asset_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -144,7 +157,7 @@ def reactivate_asset(
 
 @router.get("/{asset_id}/valuations", response_model=list[ValuationResponse])
 def get_valuations(
-    asset_id: str,
+    asset_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

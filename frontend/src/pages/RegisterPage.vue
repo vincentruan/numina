@@ -147,7 +147,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.register(form.value)
-    showToast('注册成功')
+    showToast('🎉 注册成功')
     router.push('/')
   } catch (error: any) {
     // Handle field-level validation errors (422)
@@ -166,11 +166,11 @@ async function onSubmit() {
       altchaRef.value?.reset()
       showToast(message)
     } else if (code === 'FAMILY_INVITATION_CODE_NOT_FOUND') {
-      showToast('邀请码不存在')
+      showToast('⚠️ 邀请码不存在')
     } else if (code === 'FAMILY_INVITATION_CODE_ALREADY_USED') {
-      showToast('邀请码已被使用')
+      showToast('⚠️ 邀请码已被使用')
     } else if (code === 'FAMILY_INVITATION_CODE_REVOKED') {
-      showToast('邀请码已被撤销')
+      showToast('⚠️ 邀请码已被撤销')
     }
   } finally {
     loading.value = false

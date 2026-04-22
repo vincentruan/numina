@@ -238,7 +238,7 @@ async function onRealize() {
       category_id: realizeForm.value.category_id || undefined
     }
     const res = await realizeWish(wish.value.id, payload)
-    showToast('已转化为资产')
+    showToast('✅ 已转化为资产')
     showRealizeDialog.value = false
     router.push(`/assets/${res.data.id}`)
   } finally {
@@ -251,7 +251,7 @@ async function onCancel() {
     await showConfirmDialog({ title: '确认取消', message: '确定要取消这个心愿吗？' })
     acting.value = true
     await wishStore.updateWish(wish.value!.id, { status: 'cancelled' })
-    showToast('已取消')
+    showToast('✅ 已取消')
   } catch {
     // cancelled
   } finally {
@@ -263,7 +263,7 @@ async function onReactivate() {
   acting.value = true
   try {
     await wishStore.updateWish(wish.value!.id, { status: 'pending' })
-    showToast('已重新激活')
+    showToast('✅ 已重新激活')
   } finally {
     acting.value = false
   }
@@ -274,7 +274,7 @@ async function onDelete() {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${wish.value?.name}」吗？` })
     deleting.value = true
     await wishStore.deleteWish(wish.value!.id)
-    showToast('已删除')
+    showToast('🗑️ 已删除')
     router.back()
   } catch {
     // cancelled

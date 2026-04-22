@@ -3,6 +3,7 @@ import re
 from pydantic import BaseModel, field_validator, model_validator
 
 from app.constants.pin import ALLOWED_EMOJIS
+from app.schemas.base import SnowflakeBase
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -101,9 +102,9 @@ class JoinFamilyRequest(BaseModel):
         return validate_password_strength(v)
 
 
-class UserResponse(BaseModel):
-    id: str
-    family_id: str
+class UserResponse(SnowflakeBase):
+    id: int
+    family_id: int
     username: str | None  # NULL for child accounts
     display_name: str
     avatar_color: str
@@ -113,8 +114,6 @@ class UserResponse(BaseModel):
     language: str = "zh-CN"
     default_currency: str = "CNY"
     view_mode: str = "card"
-
-    model_config = {"from_attributes": True}
 
     @field_validator("avatar_color", mode="before")
     @classmethod
@@ -159,7 +158,7 @@ class ChangePasswordRequest(BaseModel):
 
 
 class ChildPinLoginRequest(BaseModel):
-    child_id: str | None = None  # 可选：UUID 方式
+    child_id: int | None = None  # 可选：UUID 方式
     username: str | None = None  # 新增：username 方式
     pin_sequence: list[str]  # 4 emojis from ALLOWED_EMOJIS
 

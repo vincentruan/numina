@@ -62,6 +62,7 @@
   "VALIDATION_TOO_SHORT": "Minimum length is {min_length}",
   "VALIDATION_TOO_LONG": "Maximum length is {max_length}",
   "VALIDATION_ERROR": "Input validation failed",
+  "DASHBOARD_INVALID_STATUS": "Invalid status parameter",
   "NOT_FOUND": "Resource not found",
   "FORBIDDEN": "You do not have permission to perform this action",
   "INTERNAL_ERROR": "Internal server error"

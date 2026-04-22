@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.user import User
 from app.schemas.dashboard import (
     AllocationResponse,
@@ -97,6 +98,24 @@ def get_home_assets(
 ):
     """Get assets grouped by status for home page display."""
     return dashboard_service.get_home_assets(db, user, limit)
+
+
+@router.get("/home-assets/{status}")
+def get_home_assets_paginated(
+    status: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """分页获取指定状态的资产列表"""
+    valid_statuses = ["in_use", "idle", "sold", "retired"]
+    if status not in valid_statuses:
+        raise AppError(
+            ErrorCode.DASHBOARD_INVALID_STATUS,
+            detail=f"Invalid status: {status}. Must be one of {valid_statuses}",
+        )
+    return dashboard_service.get_home_assets_page(db, user, status, page, page_size)
 
 
 @router.get("/expiring-soon", response_model=list[ExpiringSoonItem])

@@ -97,7 +97,7 @@ async function createTag() {
     emit('tag-created', res.data)
     emit('update:modelValue', [...props.modelValue, res.data.id])
     newTagName.value = ''
-    showToast('标签已创建')
+    showToast('✅ 标签已创建')
   } catch {
     // error handled by interceptor
   }

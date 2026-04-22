@@ -406,6 +406,55 @@ def get_home_assets(db: Session, user: User, limit: int = 5) -> dict:
     return result
 
 
+def get_home_assets_page(
+    db: Session,
+    user: User,
+    status: str,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """分页获取指定状态的资产列表"""
+    from app.services.asset import compute_daily_cost, compute_return_rate
+    from app.schemas.asset import AssetResponse
+    import math
+
+    family_id = user.family_id
+
+    query = (
+        db.query(Asset)
+        .options(joinedload(Asset.category), joinedload(Asset.tags))
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.status == status,
+        )
+        .order_by(Asset.updated_at.desc())
+    )
+
+    total = query.count()
+    offset = (page - 1) * page_size
+    assets = query.offset(offset).limit(page_size).all()
+
+    items = []
+    for a in assets:
+        resp = AssetResponse.model_validate(a)
+        resp.daily_cost = compute_daily_cost(a)
+        resp.return_rate = compute_return_rate(a)
+        items.append(resp)
+
+    total_pages = math.ceil(total / page_size) if total > 0 else 1
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
+    }
+
+
 def get_expiring_soon_assets(db: Session, user: User, days_threshold: int = 90) -> list[ExpiringSoonItem]:
     """
     Get assets approaching end of expected lifespan.

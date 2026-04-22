@@ -129,10 +129,10 @@ async function onSubmit() {
     }
     if (isEdit.value) {
       await updateWish(wishId.value!, payload)
-      showToast('已保存')
+      showToast('✅ 已保存')
     } else {
       await createWish(payload)
-      showToast('已添加')
+      showToast('✅ 已添加')
     }
     router.back()
   } finally {
@@ -144,7 +144,7 @@ async function onDelete() {
   if (!isEdit.value) return
   await showConfirmDialog({ title: '确认删除', message: '删除后无法恢复' })
   await deleteWish(wishId.value!)
-  showToast('已删除')
+  showToast('🗑️ 已删除')
   router.back()
 }
 

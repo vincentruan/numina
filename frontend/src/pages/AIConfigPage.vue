@@ -192,10 +192,10 @@ async function onToggleAI(val: boolean) {
   saving.value = true
   try {
     await aiStore.updateConfig({ ai_enabled: val })
-    showToast(val ? 'AI 助手已启用' : 'AI 助手已关闭')
+    showToast(val ? '🤖 AI 助手已启用' : '🤖 AI 助手已关闭')
   } catch {
     aiEnabled.value = !val
-    showToast('操作失败，请重试')
+    showToast('❌ 操作失败，请重试')
   } finally {
     saving.value = false
   }
@@ -217,7 +217,7 @@ async function onSave() {
     payload.ai_vision_model_id = visionModelIdInput.value.trim() || null
     await aiStore.updateConfig(payload)
     apiKeyInput.value = ''
-    showToast('配置已保存')
+    showToast('✅ 配置已保存')
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : '保存失败，请重试'
     showToast(msg.includes('API Key') ? msg : '保存失败，请重试')
@@ -236,7 +236,7 @@ async function onTest() {
       showToast(`连接失败：${result.data.message}`)
     }
   } catch {
-    showToast('测试失败，请检查配置')
+    showToast('❌ 测试失败，请检查配置')
   } finally {
     testing.value = false
   }

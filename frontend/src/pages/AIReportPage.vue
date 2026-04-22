@@ -176,7 +176,7 @@ async function loadExistingReport() {
 
 async function onGenerate() {
   if (!aiStore.config?.ai_enabled) {
-    showToast('请先在设置中启用 AI 功能')
+    showToast('⚠️ 请先在设置中启用 AI 功能')
     return
   }
   generating.value = true

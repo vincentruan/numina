@@ -44,7 +44,7 @@ def list_children(
 
 @router.patch("/children/{child_id}", response_model=ChildResponse)
 def update_child(
-    child_id: str,
+    child_id: int,
     req: UpdateChildRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -56,7 +56,7 @@ def update_child(
 
 @router.delete("/children/{child_id}", status_code=204)
 def deactivate_child(
-    child_id: str,
+    child_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -67,7 +67,7 @@ def deactivate_child(
 
 @router.post("/children/{child_id}/unlock")
 def unlock_child_pin(
-    child_id: str,
+    child_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -78,7 +78,7 @@ def unlock_child_pin(
 
 @router.post("/children/{child_id}/force-logout")
 def force_logout_child(
-    child_id: str,
+    child_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

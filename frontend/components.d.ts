@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AIBrainIcon: typeof import('./src/components/common/AIBrainIcon.vue')['default']
+    AIChatInput: typeof import('./src/components/common/AIChatInput.vue')['default']
     AlertCards: typeof import('./src/components/dashboard/AlertCards.vue')['default']
     AllocationPieChart: typeof import('./src/components/charts/AllocationPieChart.vue')['default']
     AltchaWidget: typeof import('./src/components/common/AltchaWidget.vue')['default']

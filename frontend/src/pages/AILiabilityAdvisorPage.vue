@@ -120,7 +120,7 @@ async function onAnalyze() {
       if (idx >= 0) activeTab.value = idx
     }
   } catch {
-    showToast('分析失败，请检查 AI 配置')
+    showToast('❌ 分析失败，请检查 AI 配置')
   } finally {
     analyzing.value = false
   }

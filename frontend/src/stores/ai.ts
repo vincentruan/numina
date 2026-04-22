@@ -6,6 +6,7 @@ import type { AIConfig } from '@/api/ai'
 export const useAIStore = defineStore('ai', () => {
   const config = ref<AIConfig | null>(null)
   const loading = ref(false)
+  const draftQuery = ref('')
 
   const aiEnabled = computed(() => config.value?.ai_enabled ?? false)
   const aiProvider = computed(() => config.value?.ai_provider ?? null)
@@ -33,6 +34,7 @@ export const useAIStore = defineStore('ai', () => {
   return {
     config,
     loading,
+    draftQuery,
     aiEnabled,
     aiProvider,
     fetchConfig,

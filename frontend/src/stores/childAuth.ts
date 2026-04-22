@@ -16,7 +16,8 @@ export const useChildAuthStore = defineStore('childAuth', () => {
     isLocked.value = false
     lockMessage.value = null
     try {
-      await childPinLogin(selectedChild.id, pin)
+      // 支持 username 方式登录（主推），child_id 方式作为备选
+      await childPinLogin(pin, { childId: selectedChild.id, username: selectedChild.username })
       childUser.value = selectedChild
       // Store child user in localStorage for route guard role check
       setUser({

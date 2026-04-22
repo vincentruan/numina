@@ -83,6 +83,9 @@ class ErrorCode(str, Enum):
     # Currency
     EXCHANGE_RATE_NOT_FOUND = "EXCHANGE_RATE_NOT_FOUND"
 
+    # Dashboard
+    DASHBOARD_INVALID_STATUS = "DASHBOARD_INVALID_STATUS"
+
     # Rate limit
     RATE_LIMITED = "RATE_LIMITED"
 
@@ -149,6 +152,7 @@ ERROR_META: dict[ErrorCode, int] = {
     ErrorCode.AI_DATA_WRITE_FAILED: 500,
     ErrorCode.AI_QUESTION_EMPTY: 422,
     ErrorCode.EXCHANGE_RATE_NOT_FOUND: 404,
+    ErrorCode.DASHBOARD_INVALID_STATUS: 400,
     ErrorCode.RATE_LIMITED: 429,
     ErrorCode.VALIDATION_ERROR: 422,
     ErrorCode.NOT_FOUND: 404,

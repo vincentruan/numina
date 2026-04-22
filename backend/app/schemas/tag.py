@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.base import SnowflakeBase
+
 
 class TagCreate(BaseModel):
     name: str
@@ -11,10 +13,8 @@ class TagUpdate(BaseModel):
     color: str | None = None
 
 
-class TagResponse(BaseModel):
-    id: str
-    family_id: str
+class TagResponse(SnowflakeBase):
+    id: int
+    family_id: int
     name: str
     color: str
-
-    model_config = {"from_attributes": True}

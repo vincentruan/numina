@@ -1,12 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { showToast } from 'vant'
 import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
 // Module-level dedup lock — plain variable, not a ref (Pinia warns on non-serializable state)
 let _fetchPromise: Promise<void> | null = null
-const DASHBOARD_TTL_MS = 2 * 60 * 1000
+
+// Constants for pagination cache management
+const KEEP_PAGES_BEFORE = 1  // 前一页
+const KEEP_PAGES_AFTER = 2   // 后两页
+const DEFAULT_PAGE_SIZE = 20
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const overview = ref<DashboardOverview | null>(null)
@@ -22,15 +27,20 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const statesSummary = ref<StatesSummaryResponse | null>(null)
   const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
-  const lastFetchedAt = ref<number | null>(null)
-  // True when the last fetchAll() call was served from the staleness cache (no network request)
-  const servedFromCache = ref(false)
 
   // Pagination state for asset list
   const displayedAssets = ref<Asset[]>([])
   const assetPage = ref(1)
-  const assetPageSize = 20
+  const assetPageSize = DEFAULT_PAGE_SIZE
   const assetListFinished = ref(false)
+  const assetListLoading = ref(false)
+
+  // Pagination cache: status -> page -> assets
+  const assetPagesCache = ref<Map<string, Map<number, Asset[]>>>(new Map())
+  // Pagination info: status -> { total, has_next, current }
+  const assetPageInfo = ref<Map<string, { total: number; total_pages: number; has_next: boolean; current: number }>>(new Map())
+  // Current active status filter
+  const activeAssetStatus = ref<string>('in_use')
 
   async function fetchOverview() {
     const res = await dashboardApi.getOverview()
@@ -92,18 +102,12 @@ export const useDashboardStore = defineStore('dashboard', () => {
     homeAssets.value = res.data
   }
 
-  async function fetchAll(force = false): Promise<void> {
+  async function fetchAll(): Promise<void> {
     // 1. Dedup: if a request is already in-flight, return the same Promise
     if (_fetchPromise !== null) {
       return _fetchPromise
     }
-    // 2. Staleness guard: skip if data is fresh and caller didn't force
-    if (!force && lastFetchedAt.value !== null && Date.now() - lastFetchedAt.value < DASHBOARD_TTL_MS) {
-      servedFromCache.value = true
-      return Promise.resolve()
-    }
-    // 3. Issue new request
-    servedFromCache.value = false
+    // 2. Issue new request (no cache)
     loading.value = true
     _fetchPromise = (async () => {
       try {
@@ -117,7 +121,6 @@ export const useDashboardStore = defineStore('dashboard', () => {
         trend.value = data.trend.points
         lowUsageAssets.value = data.lowUsageAssets
         expiringSoonAssets.value = data.expiringSoon
-        lastFetchedAt.value = Date.now()
       } finally {
         loading.value = false
         _fetchPromise = null
@@ -126,39 +129,177 @@ export const useDashboardStore = defineStore('dashboard', () => {
     return _fetchPromise
   }
 
-  function invalidateDashboard() {
-    lastFetchedAt.value = null
-    servedFromCache.value = false
+  /**
+   * Fetch a specific page of assets for a given status
+   * Implements server-side pagination with client-side cache management
+   */
+  async function fetchAssetsPage(status: string, page: number = 1, pageSize: number = DEFAULT_PAGE_SIZE): Promise<void> {
+    if (assetListLoading.value) return
+
+    assetListLoading.value = true
+    activeAssetStatus.value = status
+
+    try {
+      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize)
+      const data = res.data
+
+      // Store page data in cache
+      if (!assetPagesCache.value.has(status)) {
+        assetPagesCache.value.set(status, new Map())
+      }
+      assetPagesCache.value.get(status)!.set(page, data.items)
+
+      // Store pagination info
+      assetPageInfo.value.set(status, {
+        total: data.total,
+        total_pages: data.total_pages,
+        has_next: data.has_next,
+        current: page,
+      })
+
+      // Prune cache to keep only MAX_CACHED_PAGES
+      prunePageCache(status, page)
+
+      // Merge all cached pages into displayedAssets
+      mergeDisplayedAssets(status)
+
+      // Update pagination state
+      assetPage.value = page
+      assetListFinished.value = !data.has_next
+    } catch (error) {
+      console.error('[fetchAssetsPage] Failed to load assets:', error)
+      showToast('❌ 加载资产失败，请下拉刷新重试')
+      // Prevent infinite retry on error
+      assetListFinished.value = true
+    } finally {
+      assetListLoading.value = false
+    }
   }
 
-  function loadMoreAssets(allAssets: Asset[]) {
-    const start = (assetPage.value - 1) * assetPageSize
-    const end = start + assetPageSize
-    const nextBatch = allAssets.slice(start, end)
+  /**
+   * Prune page cache to keep only: currentPage-1, currentPage, currentPage+1, currentPage+2
+   * This implements the "最多缓存4页" requirement (KEEP_PAGES_BEFORE + KEEP_PAGES_AFTER + current)
+   * Uses explicit Map replacement to ensure Vue reactivity triggers correctly
+   */
+  function prunePageCache(status: string, currentPage: number) {
+    const statusPages = assetPagesCache.value.get(status)
+    if (!statusPages) return
 
-    if (nextBatch.length === 0) {
-      assetListFinished.value = true
+    // Keep pages: currentPage-1, currentPage, currentPage+1, currentPage+2
+    const keepPages = [
+      currentPage - KEEP_PAGES_BEFORE,
+      currentPage,
+      currentPage + KEEP_PAGES_AFTER,
+      currentPage + KEEP_PAGES_AFTER + 1,
+    ].filter(p => p >= 1)
+
+    // Create a new Map to ensure Vue reactivity updates
+    // Note: If none of the keepPages have data, newPages will be empty - this is expected
+    // when cache was cleared (e.g., on status switch or refresh), not an error condition
+    const newPages = new Map<number, Asset[]>()
+    for (const page of keepPages) {
+      const data = statusPages.get(page)
+      if (data) {
+        newPages.set(page, data)
+      }
+    }
+
+    // Replace the entire Map to trigger Vue reactivity
+    assetPagesCache.value.set(status, newPages)
+  }
+
+  /**
+   * Merge all cached pages into displayedAssets in order
+   */
+  function mergeDisplayedAssets(status: string) {
+    const statusPages = assetPagesCache.value.get(status)
+    if (!statusPages) {
+      displayedAssets.value = []
       return
     }
 
-    displayedAssets.value.push(...nextBatch)
-    assetPage.value += 1
-    assetListFinished.value = end >= allAssets.length
+    // Sort pages and merge assets
+    const allAssets: Asset[] = []
+    const sortedPages = Array.from(statusPages.keys()).sort((a, b) => a - b)
+    for (const page of sortedPages) {
+      const pageAssets = statusPages.get(page)
+      if (pageAssets) {
+        allAssets.push(...pageAssets)
+      }
+    }
+
+    displayedAssets.value = allAssets
   }
 
-  function resetPagination() {
-    displayedAssets.value = []
-    assetPage.value = 1
-    assetListFinished.value = false
+  /**
+   * Load next page of assets (triggered by van-list @load event)
+   */
+  async function loadNextAssetsPage(): Promise<void> {
+    const status = activeAssetStatus.value
+    const info = assetPageInfo.value.get(status)
+
+    if (!info || !info.has_next || assetListLoading.value) return
+
+    const nextPage = info.current + 1
+    await fetchAssetsPage(status, nextPage, assetPageSize)
+  }
+
+  /**
+   * Reset pagination for a specific status (or all statuses)
+   */
+  function resetAssetPagination(status?: string) {
+    if (status) {
+      assetPagesCache.value.delete(status)
+      assetPageInfo.value.delete(status)
+      if (activeAssetStatus.value === status) {
+        displayedAssets.value = []
+        assetPage.value = 1
+        assetListFinished.value = false
+      }
+    } else {
+      assetPagesCache.value.clear()
+      assetPageInfo.value.clear()
+      displayedAssets.value = []
+      assetPage.value = 1
+      assetListFinished.value = false
+      activeAssetStatus.value = 'in_use'
+    }
+  }
+
+  /**
+   * Legacy function - kept for backward compatibility
+   * Now uses server-side pagination
+   */
+  function loadMoreAssets(_allAssets: Asset[]) {
+    // This function is deprecated - use loadNextAssetsPage instead
+    loadNextAssetsPage()
+  }
+
+  function invalidateDashboard() {
+    overview.value = null
+    allocation.value = []
+    allocationTotal.value = 0
+    trend.value = []
+    topAssets.value = []
+    dailyCostRanking.value = []
+    lowUsageAssets.value = []
+    expiringSoonAssets.value = []
+    investmentReturns.value = []
+    recentActivities.value = []
+    statesSummary.value = null
+    homeAssets.value = {}
+    resetAssetPagination()
   }
 
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
-    lastFetchedAt, servedFromCache, invalidateDashboard,
-    displayedAssets, assetPage, assetListFinished, loadMoreAssets, resetPagination,
+    displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
+    assetPagesCache, assetPageInfo, activeAssetStatus,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll,
+    fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets,
+    invalidateDashboard,
   }
 })

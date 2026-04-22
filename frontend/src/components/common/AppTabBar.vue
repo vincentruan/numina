@@ -38,6 +38,7 @@ const routeToTab: Record<string, string> = {
 
 const activeTab = computed(() => {
   const path = route.path
+  if (path.startsWith('/ai')) return 'ai'
   return routeToTab[path] ?? 'dashboard'
 })
 

@@ -17,7 +17,7 @@ const USER_KEY = 'numina_user'
 
 export interface StoredUser {
   id: string
-  username?: string
+  username?: string | null
   display_name: string
   avatar_color: string
   role: string

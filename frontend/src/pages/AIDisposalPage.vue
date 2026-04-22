@@ -76,7 +76,7 @@ async function loadSuggestions() {
     const res = await getDisposalSuggestions()
     suggestions.value = res.data
   } catch {
-    showToast('加载失败')
+    showToast('❌ 加载失败')
   } finally {
     loading.value = false
   }
@@ -87,9 +87,9 @@ async function onRefresh() {
   try {
     await refreshDisposalSuggestions()
     await loadSuggestions()
-    showToast('扫描完成')
+    showToast('✅ 扫描完成')
   } catch {
-    showToast('扫描失败，请检查 AI 配置')
+    showToast('❌ 扫描失败，请检查 AI 配置')
   } finally {
     refreshing.value = false
   }
@@ -100,7 +100,7 @@ async function onDismiss(id: string) {
     await dismissDisposalSuggestion(id)
     suggestions.value = suggestions.value.filter(s => s.id !== id)
   } catch {
-    showToast('操作失败')
+    showToast('❌ 操作失败')
   }
 }
 

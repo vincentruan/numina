@@ -104,7 +104,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.joinFamily(form.value)
-    showToast('加入成功')
+    showToast('🎉 加入成功')
     router.push('/')
   } catch (error: any) {
     // Handle captcha-related errors
@@ -112,7 +112,7 @@ async function onSubmit() {
     const status = error.response?.status
 
     if (status === 503) {
-      showToast('验证服务暂时不可用，请稍后重试')
+      showToast('⚠️ 验证服务暂时不可用，请稍后重试')
     } else if (detail.includes('验证码')) {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()

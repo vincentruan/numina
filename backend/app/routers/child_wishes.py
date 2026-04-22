@@ -51,7 +51,7 @@ def list_wishes(
 
 @router.get("/child/wishes/{wish_id}", response_model=ChildWishResponse)
 def get_wish(
-    wish_id: str,
+    wish_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_child_user),
 ):
@@ -60,7 +60,7 @@ def get_wish(
 
 @router.post("/child/wishes/{wish_id}/request-redemption", response_model=ChildWishResponse)
 def request_redemption(
-    wish_id: str,
+    wish_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_child_user),
 ):
@@ -81,7 +81,7 @@ def list_parent_queue(
 
 @router.post("/family/child-wishes/{wish_id}/approve", response_model=ParentWishResponse)
 def approve_wish(
-    wish_id: str,
+    wish_id: int,
     req: ApproveChildWishRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -91,7 +91,7 @@ def approve_wish(
 
 @router.post("/family/child-wishes/{wish_id}/reject", response_model=ParentWishResponse)
 def reject_wish(
-    wish_id: str,
+    wish_id: int,
     req: RejectChildWishRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -101,7 +101,7 @@ def reject_wish(
 
 @router.patch("/family/child-wishes/{wish_id}/cost", response_model=ParentWishResponse)
 def update_cost(
-    wish_id: str,
+    wish_id: int,
     req: UpdateChildWishCostRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -111,7 +111,7 @@ def update_cost(
 
 @router.post("/family/child-wishes/{wish_id}/realize", response_model=ParentWishResponse)
 def realize_wish(
-    wish_id: str,
+    wish_id: int,
     req: RealizeChildWishRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -121,7 +121,7 @@ def realize_wish(
 
 @router.post("/family/child-wishes/{wish_id}/defer", response_model=ParentWishResponse)
 def defer_wish(
-    wish_id: str,
+    wish_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

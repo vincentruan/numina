@@ -174,7 +174,7 @@ numina/
 │   │   ├── services/          # 业务逻辑层
 │   │   ├── auth/              # JWT 认证
 │   │   └── seed/              # 数据库种子数据
-│   ├── tests/                 # pytest 测试（389 个测试全部通过）
+│   ├── tests/                 # pytest 测试（473 个测试通过）
 │   ├── alembic/               # 数据库迁移
 │   └── Dockerfile
 ├── agent/                    # AI 分析微服务
@@ -265,7 +265,7 @@ Agent 微服务为内部服务，需 `X-Agent-Token` 认证：
 
 ## 🧪 测试
 
-后端包含 389 个自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
+后端包含 473 个自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
 
 ```bash
 cd backend
@@ -275,7 +275,7 @@ uv run pytest tests/ -v
 uv run pytest tests/ --cov=app --cov-report=html
 ```
 
-**测试结果**：✅ 389 passed, 0 failed
+**测试结果**：✅ 473 passed
 
 Agent 包含单元测试和集成测试：
 
@@ -346,7 +346,7 @@ docker-compose restart backend
 - [x] 日耗计算与智能分析
 - [x] Token 自动刷新
 - [x] 负债还款记录
-- [x] 389 个自动化测试
+- [x] 473 个自动化测试
 
 ### ✅ 儿童星星币系统（已完成）
 

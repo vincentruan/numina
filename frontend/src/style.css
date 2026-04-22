@@ -47,6 +47,45 @@
   --van-primary-color: #0a84ff;
 }
 
+/* Vant Toast/Notify 主题适配 - 确保在任何主题下文字清晰可见 */
+:root {
+  /* Toast 默认深色背景 + 白色文字 - 保持原样即可 */
+  --van-toast-background: rgba(0, 0, 0, 0.7);
+  --van-toast-text-color: #ffffff;
+
+  /* Notify 各类型背景色保持原样，文字为白色 */
+  --van-notify-text-color: #ffffff;
+  --van-notify-primary-background: #1989fa;
+  --van-notify-success-background: #07c160;
+  --van-notify-danger-background: #ee0a24;
+  --van-notify-warning-background: #ff976a;
+}
+
+/* 强制确保 Toast 和 Notify 文字清晰可见 */
+.van-toast,
+.van-toast--text,
+.van-toast--loading,
+.van-toast--html {
+  color: #ffffff !important;
+  background: rgba(0, 0, 0, 0.7) !important;
+}
+
+.van-notify {
+  color: #ffffff !important;
+}
+
+/* Fail Toast 特殊处理 - 红色背景 + 白色文字 */
+.van-toast--fail {
+  background: #ee0a24 !important;
+  color: #ffffff !important;
+}
+
+/* Success Toast 特殊处理 - 绿色背景 + 白色文字 */
+.van-toast--success {
+  background: #07c160 !important;
+  color: #ffffff !important;
+}
+
 body {
   margin: 0;
   padding: 0;

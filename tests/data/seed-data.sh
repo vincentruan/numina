@@ -272,7 +272,7 @@ if [ -z "$CHILD_ID" ] || [ "$CHILD_ID" = "null" ]; then
   CREATE_CHILD_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/family/children" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN_RICH" \
-    -d '{"display_name":"test_child","avatar_color":"#FF6B6B","pin":["🐱","🐶","🐸","🦊"]}')
+    -d '{"username":"testchild","display_name":"test_child","avatar_color":"#FF6B6B","pin":["🐱","🐶","🐸","🦊"]}')
   CHILD_HTTP=$(echo "$CREATE_CHILD_RESP" | tail -1)
   CHILD_BODY=$(echo "$CREATE_CHILD_RESP" | sed '$d')
   if [ "$CHILD_HTTP" = "200" ] || [ "$CHILD_HTTP" = "201" ]; then
@@ -1232,34 +1232,38 @@ EOF
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
       -d '{
+        "username": "xiaobao",
         "display_name": "小宝",
         "avatar_color": "#FF6B6B",
         "pin": ["🐱", "🌟", "🎈", "🐶"]
       }')
     CHILD1_ID=$(echo "$CHILD1_RESP" | jq -r '.data.id // .id')
-    log_ok "创建儿童: 小宝 (6岁幼儿) id=$CHILD1_ID"
+    CHILD1_USERNAME=$(echo "$CHILD1_RESP" | jq -r '.data.username // .username')
+    log_ok "创建儿童: 小宝 (6岁幼儿) id=$CHILD1_ID username=$CHILD1_USERNAME"
 
     # 创建青少年（14岁）
     CHILD2_RESP=$(curl -sL -X POST "$BASE_URL/family/children" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
       -d '{
+        "username": "dabao",
         "display_name": "大宝",
         "avatar_color": "#4ECDC4",
         "pin": ["🌈", "🍎", "🐸", "🦁"]
       }')
     CHILD2_ID=$(echo "$CHILD2_RESP" | jq -r '.data.id // .id')
-    log_ok "创建儿童: 大宝 (14岁青少年) id=$CHILD2_ID"
+    CHILD2_USERNAME=$(echo "$CHILD2_RESP" | jq -r '.data.username // .username')
+    log_ok "创建儿童: 大宝 (14岁青少年) id=$CHILD2_ID username=$CHILD2_USERNAME"
 
-    # 为两个孩子登录获取 child token
+    # 为两个孩子登录获取 child token（使用 username 方式）
     CHILD1_TOKEN=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
       -H "Content-Type: application/json" \
-      -d "{\"child_id\":\"$CHILD1_ID\",\"pin_sequence\":[\"🐱\",\"🌟\",\"🎈\",\"🐶\"]}" \
+      -d "{\"username\":\"xiaobao\",\"pin_sequence\":[\"🐱\",\"🌟\",\"🎈\",\"🐶\"]}" \
       | jq -r '.data.access_token // .access_token')
 
     CHILD2_TOKEN=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
       -H "Content-Type: application/json" \
-      -d "{\"child_id\":\"$CHILD2_ID\",\"pin_sequence\":[\"🌈\",\"🍎\",\"🐸\",\"🦁\"]}" \
+      -d "{\"username\":\"dabao\",\"pin_sequence\":[\"🌈\",\"🍎\",\"🐸\",\"🦁\"]}" \
       | jq -r '.data.access_token // .access_token')
 
     # 给孩子充值星星币

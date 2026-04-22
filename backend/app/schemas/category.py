@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.base import SnowflakeBase
+
 
 class CategoryCreate(BaseModel):
     name: str
@@ -16,14 +18,12 @@ class CategoryUpdate(BaseModel):
     sort_order: int | None = None
 
 
-class CategoryResponse(BaseModel):
-    id: str
-    family_id: str | None = None
+class CategoryResponse(SnowflakeBase):
+    id: int
+    family_id: int | None = None
     name: str
     icon: str
     color: str
     asset_type: str
     sort_order: int
     is_system: bool
-
-    model_config = {"from_attributes": True}

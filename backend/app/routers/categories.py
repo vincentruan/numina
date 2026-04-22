@@ -31,7 +31,7 @@ def create_category(
 
 @router.put("/{category_id}", response_model=CategoryResponse)
 def update_category(
-    category_id: str,
+    category_id: int,
     req: CategoryUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -41,7 +41,7 @@ def update_category(
 
 @router.delete("/{category_id}")
 def delete_category(
-    category_id: str,
+    category_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

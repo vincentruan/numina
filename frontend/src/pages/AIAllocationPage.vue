@@ -102,7 +102,7 @@ async function onSaveTarget() {
     })
     hasTarget.value = true
     editingTarget.value = false
-    showToast('目标已保存')
+    showToast('✅ 目标已保存')
   } catch (e: any) {
     showToast(e.response?.data?.detail || '保存失败')
   }
@@ -114,7 +114,7 @@ async function onCheck() {
     const res = await checkAllocationDrift()
     driftResult.value = res.data
   } catch {
-    showToast('检测失败，请检查 AI 配置')
+    showToast('❌ 检测失败，请检查 AI 配置')
   } finally {
     checking.value = false
   }

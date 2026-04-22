@@ -26,24 +26,24 @@ def create_wish(req: WishCreate, db: Session = Depends(get_db), user: User = Dep
 
 
 @router.get("/{wish_id}", response_model=WishResponse)
-def get_wish(wish_id: str, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def get_wish(wish_id: int, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     return wish_service.get_wish(db, user, wish_id)
 
 
 @router.put("/{wish_id}", response_model=WishResponse)
-def update_wish(wish_id: str, req: WishUpdate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def update_wish(wish_id: int, req: WishUpdate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     return wish_service.update_wish(db, user, wish_id, req)
 
 
 @router.delete("/{wish_id}")
-def delete_wish(wish_id: str, db: Session = Depends(get_db), user: User = Depends(require_adult)):
+def delete_wish(wish_id: int, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     wish_service.delete_wish(db, user, wish_id)
     return {"detail": "已删除"}
 
 
 @router.post("/{wish_id}/realize", response_model=AssetResponse, status_code=201)
 def realize_wish(
-    wish_id: str,
+    wish_id: int,
     req: WishRealizeRequest,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),

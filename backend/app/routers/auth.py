@@ -67,7 +67,7 @@ def _decode_webauthn_challenge(challenge: str) -> bytes:
     # Add padding if needed (base64 requires length % 4 == 0)
     padding = 4 - (len(challenge) % 4)
     if padding != 4:
-        challenge += '=' * padding
+        challenge += "=" * padding
     return base64.urlsafe_b64decode(challenge)
 
 
@@ -232,9 +232,15 @@ def child_login(
 ):
     """Child PIN login — no captcha required.
 
+    支持双模式登录：
+    - username + PIN（主要方式）
+    - child_id + PIN（备选方式，向后兼容）
+
     Sets child-specific httpOnly cookies and returns tokens in body.
     """
-    tokens = auth_service.child_pin_login(db, req.child_id, req.pin_sequence)
+    tokens = auth_service.child_pin_login(
+        db, req.child_id, req.username, req.pin_sequence
+    )
     set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
     return tokens
 
@@ -522,9 +528,7 @@ def get_family_children(
 
     children = (
         db.query(User)
-        .filter(
-            User.family_id == family_id, User.role == "child", User.is_active
-        )
+        .filter(User.family_id == family_id, User.role == "child", User.is_active)
         .all()
     )
     return [ChildResponse.model_validate(c) for c in children]

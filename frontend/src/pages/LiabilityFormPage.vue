@@ -32,10 +32,10 @@ async function onSubmit(data: Partial<Liability>) {
   try {
     if (isEdit.value) {
       await liabilityStore.updateLiability(route.params.id as string, data)
-      showToast('修改成功')
+      showToast('✅ 修改成功')
     } else {
       await liabilityStore.createLiability(data)
-      showToast('添加成功')
+      showToast('✅ 添加成功')
     }
     router.back()
   } catch {

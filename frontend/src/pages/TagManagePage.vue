@@ -90,16 +90,16 @@ function showEditDialog(tag: Tag) {
 
 async function onDialogConfirm() {
   if (!formData.value.name) {
-    showToast('请输入名称')
+    showToast('⚠️ 请输入名称')
     return
   }
   try {
     if (editingId.value) {
       await tagApi.updateTag(editingId.value, formData.value)
-      showToast('修改成功')
+      showToast('✅ 修改成功')
     } else {
       await tagApi.createTag(formData.value)
-      showToast('添加成功')
+      showToast('✅ 添加成功')
     }
     await fetchTags()
   } catch {
@@ -111,7 +111,7 @@ async function onDelete(tag: Tag) {
   try {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${tag.name}」吗？` })
     await tagApi.deleteTag(tag.id)
-    showToast('已删除')
+    showToast('🗑️ 已删除')
     await fetchTags()
   } catch {
     // cancelled

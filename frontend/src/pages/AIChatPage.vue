@@ -43,20 +43,13 @@
 
     <!-- Input bar -->
     <div class="input-bar">
-      <van-field
+      <AIChatInput
         v-model="inputText"
-        aria-label="向 AI 提问"
-        placeholder="问我关于你家资产的问题..."
         :disabled="asking"
-        clearable
-        @keyup.enter="onSend"
-      />
-      <van-button
-        type="primary"
         :loading="asking"
-        :disabled="!inputText.trim()"
-        @click="onSend"
-      >发送</van-button>
+        placeholder="问我关于你家资产的问题..."
+        @submit="onSend"
+      />
     </div>
 
     <!-- Clear history -->
@@ -71,7 +64,9 @@ import { ref, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
+import { useAIStore } from '@/stores/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+import AIChatInput from '@/components/common/AIChatInput.vue'
 
 interface Message {
   id: string
@@ -81,6 +76,7 @@ interface Message {
 }
 
 const route = useRoute()
+const aiStore = useAIStore()
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
@@ -165,9 +161,10 @@ onMounted(async () => {
   } catch {
     // no history
   }
-  const q = route.query.q
+  const q = aiStore.draftQuery || route.query.q
   if (typeof q === 'string' && q.trim()) {
     inputText.value = q.trim()
+    aiStore.draftQuery = '' // Clear it once picked up
     await onSend()
   }
 })
@@ -276,14 +273,10 @@ onMounted(async () => {
   30% { transform: translateY(-6px); }
 }
 .input-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  padding: 8px 16px 12px;
   background: var(--bg-primary);
   border-top: 1px solid var(--border-color, #f0f0f0);
 }
-.input-bar .van-field { flex: 1; }
 .clear-row {
   display: flex;
   justify-content: center;

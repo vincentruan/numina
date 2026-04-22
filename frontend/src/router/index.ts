@@ -120,6 +120,11 @@ const router = createRouter({
           component: () => import('@/pages/FamilyPage.vue')
         },
         {
+          path: 'baby',
+          name: 'Baby',
+          component: () => import('@/pages/BabyPage.vue')
+        },
+        {
           path: 'settings',
           name: 'Settings',
           component: () => import('@/pages/SettingsPage.vue')

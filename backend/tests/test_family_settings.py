@@ -71,6 +71,7 @@ def test_patch_coin_rate_over_100_rejected(client, auth_headers):
 def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "username": "xiaoming7",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -99,6 +100,7 @@ def test_get_child_balance_cross_family_fails(client, auth_headers, second_user_
     """Parent cannot query balance of a child in another family."""
     resp = client.post("/api/v1/family/children", headers=second_user_headers, json={
         "display_name": "外家孩子",
+        "username": "otherchild2",
         "avatar_color": "#AABBCC",
         "pin": ["🐸", "🦊", "🐼", "🐨"],
     })
@@ -120,10 +122,12 @@ def test_get_all_child_balances_multiple_children(client, auth_headers):
     """Batch endpoint returns correct balances for all children in one request."""
     # Create two children
     child_a = client.post("/api/v1/family/children", headers=auth_headers, json={
-        "display_name": "小明", "avatar_color": "#FF5733", "pin": ["🐱", "🌟", "🎈", "🐶"],
+        "display_name": "小明",
+        "username": "xiaoming6", "avatar_color": "#FF5733", "pin": ["🐱", "🌟", "🎈", "🐶"],
     }).json()["data"]
     child_b = client.post("/api/v1/family/children", headers=auth_headers, json={
-        "display_name": "小红", "avatar_color": "#33AAFF", "pin": ["🌈", "🍎", "🐸", "🦁"],
+        "display_name": "小红",
+        "username": "xiaohong5", "avatar_color": "#33AAFF", "pin": ["🌈", "🍎", "🐸", "🦁"],
     }).json()["data"]
 
     # Grant different amounts
@@ -145,7 +149,8 @@ def test_get_all_child_balances_cross_family_isolation(client, auth_headers, sec
     """Batch endpoint only returns children from the requesting parent's family."""
     # Create child in second family
     client.post("/api/v1/family/children", headers=second_user_headers, json={
-        "display_name": "外家孩子", "avatar_color": "#AABBCC", "pin": ["🐸", "🦊", "🐼", "🐨"],
+        "display_name": "外家孩子",
+        "username": "otherchild", "avatar_color": "#AABBCC", "pin": ["🐸", "🦊", "🐼", "🐨"],
     })
 
     resp = client.get("/api/v1/family/children/balances", headers=auth_headers)

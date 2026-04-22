@@ -16,6 +16,20 @@ import type { AxiosRequestConfig } from 'axios'
 import { showToast } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
+import i18n from '@/i18n'
+
+// Helper: resolve error code to local i18n message, fallback to backend message
+function resolveErrorMsg(code: string | undefined, fallback: string): string {
+  if (code) {
+    const key = `errors.${code}`
+    if (i18n.global.te(key)) return i18n.global.t(key)
+  }
+  return fallback
+}
+
+function t(key: string, params?: Record<string, unknown>): string {
+  return i18n.global.t(key, params ?? {})
+}
 
 interface ApiEnvelope<T = unknown> {
   code: string
@@ -91,7 +105,7 @@ http.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/login') ||
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/family/join')) {
-        showToast(error.response.data?.message || error.response.data?.detail || '用户名或密码错误')
+        showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
         return Promise.reject(error)
       }
 
@@ -99,7 +113,7 @@ http.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/refresh')) {
         clearAuth()
         router.push('/login')
-        showToast(error.response.data?.message || error.response.data?.detail || '登录已过期，请重新登录')
+        showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_TOKEN_EXPIRED')))
         return Promise.reject(error)
       }
 
@@ -133,8 +147,8 @@ http.interceptors.response.use(
         onRefreshFailed(refreshError)
         clearAuth()
         router.push('/login')
-        const re = refreshError as { response?: { data?: { message?: string; detail?: string } } }
-        showToast(re.response?.data?.message || re.response?.data?.detail || '登录已过期，请重新登录')
+        const re = refreshError as { response?: { data?: { code?: string; message?: string; detail?: string } } }
+        showToast(resolveErrorMsg(re.response?.data?.code, re.response?.data?.message || re.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -145,12 +159,12 @@ http.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       if (status === 403) {
-        showToast(data?.message || data?.detail || '没有权限执行此操作')
+        showToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('errors.FORBIDDEN')))
       } else if (status === 422) {
         if (data?.details && Array.isArray(data.details)) {
           // New envelope format: details array with field-level errors
           const msg = data.details.map((e: { msg: string }) => e.msg).join('; ')
-          showToast(msg || data.message || '输入校验失败')
+          showToast(msg || data.message || t('errors.VALIDATION_ERROR'))
         } else if (data?.detail) {
           // Old format fallback
           const msg = Array.isArray(data.detail)
@@ -158,13 +172,22 @@ http.interceptors.response.use(
             : data.detail
           showToast(msg)
         } else {
-          showToast(data?.message || '输入校验失败')
+          showToast(data?.message || t('errors.VALIDATION_ERROR'))
         }
       } else if (status !== 401) {
-        showToast(data?.message || data?.detail || '请求失败，请稍后重试')
+        showToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('toast.requestFailed')))
       }
+    } else if (error.code === 'ECONNABORTED') {
+      // Request timeout
+      showToast(t('toast.networkTimeout'))
+    } else if (error.message?.includes('Network Error')) {
+      // True network error (no connection to server)
+      showToast(t('toast.networkError'))
     } else {
-      showToast('网络连接失败')
+      // Other errors (CORS, cancelled request, etc.)
+      const errMessage = error.message || '未知错误'
+      console.error('[API Error]', errMessage, error)
+      showToast(errMessage.includes('CORS') ? t('toast.corsError') : t('toast.requestFailed'))
     }
     return Promise.reject(error)
   }

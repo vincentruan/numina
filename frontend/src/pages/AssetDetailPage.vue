@@ -297,7 +297,7 @@ async function onRetire() {
     await showConfirmDialog({ title: '确认退役', message: `确定要将「${asset.value?.name}」标记为退役吗？` })
     acting.value = true
     await assetStore.retireAsset(asset.value!.id)
-    showToast('已退役')
+    showToast('✅ 已退役')
   } catch {
     // cancelled
   } finally {
@@ -309,7 +309,7 @@ async function onReactivate() {
   acting.value = true
   try {
     await assetStore.reactivateAsset(asset.value!.id)
-    showToast('已恢复服役')
+    showToast('✅ 已恢复服役')
   } finally {
     acting.value = false
   }
@@ -320,7 +320,7 @@ async function onDelete() {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${asset.value?.name}」吗？` })
     deleting.value = true
     await assetStore.deleteAsset(asset.value!.id)
-    showToast('已删除')
+    showToast('🗑️ 已删除')
     router.back()
   } catch {
     // cancelled

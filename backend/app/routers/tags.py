@@ -34,7 +34,7 @@ def create_tag(
 
 @router.put("/{tag_id}", response_model=TagResponse)
 def update_tag(
-    tag_id: str,
+    tag_id: int,
     req: TagUpdate,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -53,7 +53,7 @@ def update_tag(
 
 @router.delete("/{tag_id}")
 def delete_tag(
-    tag_id: str,
+    tag_id: int,
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

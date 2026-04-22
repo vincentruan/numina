@@ -2,6 +2,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.schemas.base import SnowflakeBase
+
 
 class LiabilityCreate(BaseModel):
     category: str
@@ -13,7 +15,7 @@ class LiabilityCreate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     institution: str | None = None
-    linked_asset_id: str | None = None
+    linked_asset_id: int | None = None
     notes: str | None = None
     currency: str = "CNY"
 
@@ -28,7 +30,7 @@ class LiabilityUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     institution: str | None = None
-    linked_asset_id: str | None = None
+    linked_asset_id: int | None = None
     notes: str | None = None
     currency: str | None = None
 
@@ -37,10 +39,10 @@ class PaymentRequest(BaseModel):
     amount: float
 
 
-class LiabilityResponse(BaseModel):
-    id: str
-    user_id: str
-    family_id: str
+class LiabilityResponse(SnowflakeBase):
+    id: int
+    user_id: int
+    family_id: int
     category: str
     name: str
     original_amount: float
@@ -50,11 +52,9 @@ class LiabilityResponse(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     institution: str | None = None
-    linked_asset_id: str | None = None
+    linked_asset_id: int | None = None
     notes: str | None = None
     is_active: bool
     currency: str = "CNY"
     created_at: datetime | None = None
     updated_at: datetime | None = None
-
-    model_config = {"from_attributes": True}

@@ -68,7 +68,7 @@ async function loadAlerts() {
     const res = await getAssetAlerts()
     alerts.value = res.data
   } catch {
-    showToast('加载失败')
+    showToast('❌ 加载失败')
   } finally {
     loading.value = false
   }
@@ -79,9 +79,9 @@ async function onRefresh() {
   try {
     await refreshAssetAlerts()
     await loadAlerts()
-    showToast('扫描完成')
+    showToast('✅ 扫描完成')
   } catch {
-    showToast('扫描失败，请检查 AI 配置')
+    showToast('❌ 扫描失败，请检查 AI 配置')
   } finally {
     refreshing.value = false
   }
@@ -92,7 +92,7 @@ async function onDismiss(id: string) {
     await dismissAssetAlert(id)
     alerts.value = alerts.value.filter(a => a.id !== id)
   } catch {
-    showToast('操作失败')
+    showToast('❌ 操作失败')
   }
 }
 

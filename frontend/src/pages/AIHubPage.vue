@@ -109,37 +109,11 @@
 
     <!-- Chat input -->
     <div class="chat-entry">
-      <div class="chat-input-wrap">
-        <button class="chat-expand-btn" :aria-label="expanded ? '收起输入框' : '展开输入框'" @click="toggleExpand">
-          <svg v-if="!expanded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
-          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/></svg>
-        </button>
-        <div class="chat-sparkle" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 17l-6.2 4.3 2.4-7.4L2 9.4h7.6z"/>
-          </svg>
-        </div>
-        <textarea
-          v-model="chatInput"
-          class="chat-input"
-          placeholder="问我任何关于家庭资产的问题…"
-          aria-label="向 AI 提问"
-          rows="1"
-          :style="{ height: expanded ? '140px' : '52px' }"
-          @keydown.enter.exact.prevent="startChat"
-        ></textarea>
-        <button
-          class="chat-send"
-          :class="{ active: chatInput.trim() }"
-          :disabled="!chatInput.trim()"
-          aria-label="发送"
-          @click="startChat"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
-      </div>
+      <AIChatInput
+        v-model="chatInput"
+        placeholder="问我任何关于家庭资产的问题…"
+        @submit="startChat"
+      />
     </div>
   </div>
 </template>
@@ -152,6 +126,7 @@ import { getAIReport } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import { showToast } from 'vant'
 import { useAIReportWS } from '@/composables/useAIReportWS'
+import AIChatInput from '@/components/common/AIChatInput.vue'
 
 const router = useRouter()
 const aiStore = useAIStore()
@@ -161,7 +136,6 @@ const currentReport = ref<Record<string, any> | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const chatInput = ref('')
-const expanded = ref(false)
 
 const userName = computed(() => getUser()?.display_name || '用户')
 
@@ -229,7 +203,7 @@ async function loadReport() {
 
 async function generateReport() {
   if (!aiStore.aiEnabled) {
-    showToast('请先在设置中启用 AI 功能')
+    showToast('⚠️ 请先在设置中启用 AI 功能')
     router.push('/settings/ai')
     return
   }
@@ -260,20 +234,16 @@ async function refreshReport(silent?: boolean) {
       reportGeneratedAt.value = ws.generatedAt.value
     }
   } catch {
-    if (!silent) showToast('刷新失败，请重试')
+    if (!silent) showToast('❌ 刷新失败，请重试')
   } finally {
     if (!silent) reportLoading.value = false
   }
 }
 
-function startChat() {
-  const q = chatInput.value.trim()
+function startChat(q: string) {
   if (!q) return
-  router.push({ path: '/ai/chat', query: { q } })
-}
-
-function toggleExpand() {
-  expanded.value = !expanded.value
+  aiStore.draftQuery = q
+  router.push({ path: '/ai/chat' })
 }
 
 const features = [
@@ -325,7 +295,7 @@ onMounted(async () => {
 .ai-hub-page {
   background: var(--bg-secondary);
   min-height: 100vh;
-  padding-bottom: 120px;
+  padding-bottom: 140px;
 }
 
 /* ── Header ── */
@@ -653,98 +623,13 @@ onMounted(async () => {
 /* ── Chat entry ── */
 .chat-entry {
   position: fixed;
-  bottom: 0;
+  bottom: calc(50px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   z-index: 10;
   padding: 8px 16px 12px;
   background: var(--bg-primary, #fff);
   border-top: 1px solid var(--border-color, #eee);
-}
-
-.chat-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-  background: var(--card-bg);
-  border-radius: 24px;
-  padding: 10px 12px 10px 14px;
-  gap: 8px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  border: 1px solid var(--separator);
-  transition: border-color 0.15s;
-}
-
-.chat-input-wrap:focus-within {
-  border-color: #6366f1;
-  box-shadow: 0 0 0 3px rgba(99,102,241,0.12);
-}
-
-.chat-sparkle {
-  color: #6366f1;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-
-.chat-input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--text-primary);
-  outline: none;
-  min-width: 0;
-  resize: none;
-  overflow-y: auto;
-  line-height: 1.5;
-  padding-top: 8px;
-  padding-bottom: 8px;
-  transition: height 0.15s ease;
-}
-
-.chat-expand-btn {
-  position: absolute;
-  top: -26px;
-  right: 0;
-  background: var(--bg-primary, #fff);
-  border: 1px solid var(--border-color, #eee);
-  border-radius: 6px 6px 0 0;
-  border-bottom: none;
-  padding: 3px 6px;
-  cursor: pointer;
-  color: var(--text-secondary, #999);
-  display: flex;
-  align-items: center;
-}
-
-.chat-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.chat-send {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(99,102,241,0.15);
-  color: #6366f1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
-}
-
-.chat-send.active {
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
-  color: #fff;
-}
-
-.chat-send:disabled {
-  cursor: default;
-  opacity: 0.5;
 }
 
 /* Dark mode */

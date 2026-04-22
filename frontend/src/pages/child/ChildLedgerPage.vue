@@ -101,7 +101,7 @@ async function doGift() {
     giftAmountStr.value = ''
     await load()
   } catch {
-    showToast('赠送失败，请检查余额')
+    showToast('❌ 赠送失败，请检查余额')
   }
 }
 

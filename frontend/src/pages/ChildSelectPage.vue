@@ -22,7 +22,10 @@
         <div class="child-avatar" :style="{ backgroundColor: child.avatar_color }">
           {{ child.display_name.charAt(0) }}
         </div>
-        <span class="child-name">{{ child.display_name }}</span>
+        <div class="child-info">
+          <span class="child-name">{{ child.display_name }}</span>
+          <span class="child-username">@{{ child.username }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -59,6 +62,7 @@ function selectChild(child: ChildUser) {
     name: 'ChildAuth',
     query: {
       childId: child.id,
+      username: child.username,  // 新增：传递 username
       displayName: child.display_name,
       avatarColor: child.avatar_color,
     },
@@ -134,9 +138,20 @@ function selectChild(child: ChildUser) {
   flex-shrink: 0;
 }
 
+.child-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .child-name {
   font-size: 18px;
   font-weight: 600;
   color: #333;
+}
+
+.child-username {
+  font-size: 14px;
+  color: #666;
 }
 </style>

@@ -1,17 +1,16 @@
 from pydantic import BaseModel, field_validator
 
 from app.schemas.auth import UserResponse
+from app.schemas.base import SnowflakeBase
 
 
-class FamilyResponse(BaseModel):
-    id: str
+class FamilyResponse(SnowflakeBase):
+    id: int
     name: str
     custom_title: str | None = None
     invite_code: str
-    created_by: str
+    created_by: int
     members: list[UserResponse] = []
-
-    model_config = {"from_attributes": True}
 
 class UpdateFamilyTitleRequest(BaseModel):
     custom_title: str | None

@@ -63,7 +63,7 @@
         @click="onEditFamilyTitle"
       />
       <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name" />
-      <van-cell :title="t('settings.username')" :value="authStore.user?.username" />
+      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" />
       <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" />
     </van-cell-group>
 
@@ -271,7 +271,7 @@ function onViewModeConfirm({ selectedOptions }: { selectedOptions: Array<{ text:
 
 function onEditFamilyTitle() {
   if (authStore.user?.role !== 'owner') {
-    showToast('只有家庭创建者可以修改名称')
+    showToast('⚠️ 只有家庭创建者可以修改名称')
     return
   }
   editTitleValue.value = familyStore.family?.custom_title || familyStore.family?.name || ''
@@ -282,7 +282,7 @@ async function saveCoinRates() {
   const c2s = parseInt(copperToSilverStr.value)
   const s2g = parseInt(silverToGoldStr.value)
   if (isNaN(c2s) || c2s < 1 || c2s > 100 || isNaN(s2g) || s2g < 1 || s2g > 100) {
-    showToast('请输入 1-100 的整数')
+    showToast('⚠️ 请输入 1-100 的整数')
     return
   }
   savingRates.value = true
@@ -290,9 +290,9 @@ async function saveCoinRates() {
     await updateFamilySettings({ coinCopperToSilver: c2s, coinSilverToGold: s2g })
     familyStore.coinCopperToSilver = c2s
     familyStore.coinSilverToGold = s2g
-    showToast('已保存')
+    showToast('✅ 已保存')
   } catch {
-    showToast('保存失败')
+    showToast('❌ 保存失败')
   } finally {
     savingRates.value = false
   }
@@ -302,7 +302,7 @@ async function onTitleConfirm() {
   try {
     const newTitle = editTitleValue.value.trim()
     await familyStore.updateFamilyTitle(newTitle || null)
-    showToast('家庭名称已修改')
+    showToast('✅ 家庭名称已修改')
   } catch (err: any) {
     showToast(err.response?.data?.detail || '修改失败')
   }
@@ -315,7 +315,7 @@ function selectThemeColor(color: string) {
   document.documentElement.style.setProperty('--theme-primary', color)
   document.documentElement.style.setProperty('--van-primary-color', color)
   showThemeColorPicker.value = false
-  showToast('主题色已更改')
+  showToast('🎨 主题色已更改')
 }
 
 async function onLogout() {

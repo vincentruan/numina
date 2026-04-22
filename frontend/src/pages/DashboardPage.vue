@@ -23,11 +23,7 @@
           :total-daily-cost="overview?.total_daily_cost || 0"
           :asset-count="overview?.asset_count || 0"
           :month-over-month-change="overview?.month_over_month_change"
-          :trend-points="dashboardStore.trend"
         />
-
-        <!-- Stale data indicator -->
-        <p v-if="isShowingCachedData" class="stale-hint">数据可能不是最新</p>
 
         <!-- Quick Stats -->
         <van-cell-group inset class="quick-stats-section">
@@ -313,7 +309,6 @@ const selectedTags = ref<string[]>([])
 const currentSort = ref<string>('created_at_desc')
 
 const overview = computed(() => dashboardStore.overview)
-const isShowingCachedData = computed(() => dashboardStore.servedFromCache)
 const categories = computed(() => categoryStore.categories)
 
 // Alert cards visibility
@@ -510,9 +505,9 @@ function toggleViewMode() {
 function toggleCategoryView() {
   showCategoryGroups.value = !showCategoryGroups.value
   if (showCategoryGroups.value) {
-    showToast('已切换到分类视图')
+    showToast('✅ 已切换到分类视图')
   } else {
-    showToast('已切换到列表视图')
+    showToast('✅ 已切换到列表视图')
   }
 }
 
@@ -527,6 +522,10 @@ function onCategoryChange(index: number) {
 
 function onStatusSelect(status: string | null) {
   activeStatus.value = status
+  // Reset pagination and load first page for the new status
+  const targetStatus = status || 'in_use'
+  dashboardStore.resetAssetPagination(targetStatus)
+  dashboardStore.fetchAssetsPage(targetStatus, 1, 20)
 }
 
 function selectSort(value: string) {
@@ -546,7 +545,7 @@ function toggleTag(tag: string) {
 function applyFilter() {
   showFilterPopup.value = false
   if (selectedTags.value.length > 0) {
-    showToast(`已筛选 ${selectedTags.value.length} 个标签`)
+    showToast(`✅ 已筛选 ${selectedTags.value.length} 个标签`)
   }
 }
 
@@ -583,7 +582,7 @@ function toggleSelection(id: string) {
 
 async function handleBatchShare() {
   if (selectedIds.value.length === 0) {
-    showToast('请先选择资产')
+    showToast('⚠️ 请先选择资产')
     return
   }
 
@@ -613,18 +612,18 @@ async function handleBatchShare() {
 
     // Download the image
     downloadImage(blob, `${title}.png`)
-    showToast('图片已保存')
+    showToast('🖼️ 图片已保存')
     exitSelectionMode()
   } catch (error) {
     closeToast()
     console.error('Share failed:', error)
-    showToast('分享失败，请重试')
+    showToast('❌ 分享失败，请重试')
   }
 }
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) {
-    showToast('请先选择资产')
+    showToast('⚠️ 请先选择资产')
     return
   }
 
@@ -637,14 +636,14 @@ async function handleBatchDelete() {
     try {
       const res = await batchArchiveAssets(selectedIds.value)
       closeToast()
-      showToast(`成功删除 ${res.data.success_count} 项资产`)
+      showToast(`🗑️ 成功删除 ${res.data.success_count} 项资产`)
       selectionMode.value = false
       selectedIds.value = []
       selectAll.value = false
       await dashboardStore.fetchAll()
     } catch {
       closeToast()
-      showToast('删除失败，请重试')
+      showToast('❌ 删除失败，请重试')
     }
   } catch {
     // User cancelled
@@ -653,24 +652,24 @@ async function handleBatchDelete() {
 
 async function handleBatchCategory() {
   if (selectedIds.value.length === 0) {
-    showToast('请先选择资产')
+    showToast('⚠️ 请先选择资产')
     return
   }
   // Show category picker - simplified version
-  showToast('请使用单个资产编辑功能修改分类')
+  showToast('⚠️ 请使用单个资产编辑功能修改分类')
 }
 
 async function handleBatchTag() {
   if (selectedIds.value.length === 0) {
-    showToast('请先选择资产')
+    showToast('⚠️ 请先选择资产')
     return
   }
-  showToast('请使用单个资产编辑功能修改标签')
+  showToast('⚠️ 请使用单个资产编辑功能修改标签')
 }
 
 async function onMoreActionSelect(action: any) {
   if (selectedIds.value.length === 0) {
-    showToast('请先选择资产')
+    showToast('⚠️ 请先选择资产')
     return
   }
 
@@ -680,13 +679,13 @@ async function onMoreActionSelect(action: any) {
       case 'retire': {
         const res = await batchUpdateStatus(selectedIds.value, 'archived')
         closeToast()
-        showToast(`成功退役 ${res.data.success_count} 项资产`)
+        showToast(`✅ 成功退役 ${res.data.success_count} 项资产`)
         break
       }
       case 'activate': {
         const res = await batchUpdateStatus(selectedIds.value, 'active')
         closeToast()
-        showToast(`成功激活 ${res.data.success_count} 项资产`)
+        showToast(`✅ 成功激活 ${res.data.success_count} 项资产`)
         break
       }
       case 'export': {
@@ -701,7 +700,7 @@ async function onMoreActionSelect(action: any) {
         a.download = `assets-export-${new Date().toISOString().slice(0, 10)}.json`
         a.click()
         URL.revokeObjectURL(url)
-        showToast(`成功导出 ${res.data.count} 项资产`)
+        showToast(`✅ 成功导出 ${res.data.count} 项资产`)
         break
       }
     }
@@ -711,7 +710,7 @@ async function onMoreActionSelect(action: any) {
     await dashboardStore.fetchAll()
   } catch {
     closeToast()
-    showToast('操作失败，请重试')
+    showToast('❌ 操作失败，请重试')
   }
 }
 
@@ -738,18 +737,21 @@ function toggleAllocation() {
 }
 
 async function onLoadMore() {
-  if (dashboardStore.assetListFinished) return
+  if (dashboardStore.assetListFinished || dashboardStore.assetListLoading) return
   loadingMore.value = true
   try {
-    dashboardStore.loadMoreAssets(sortedAndFilteredAssets.value)
+    await dashboardStore.loadNextAssetsPage()
   } finally {
     loadingMore.value = false
   }
 }
 
 async function onRefresh() {
-  dashboardStore.resetPagination()
-  await dashboardStore.fetchAll(true)
+  dashboardStore.resetAssetPagination()
+  await dashboardStore.fetchAll()
+  // Reload first page after refresh
+  const currentStatus = activeStatus.value || 'in_use'
+  await dashboardStore.fetchAssetsPage(currentStatus, 1, 20)
   if (authStore.user?.role === 'owner') {
     await choreStore.fetchPendingApprovals()
   }
@@ -761,9 +763,10 @@ onMounted(() => {
   if (authStore.user?.view_mode === 'list') {
     viewMode.value = 'list'
   }
+  // Fetch dashboard bundle first, then load first page of assets
   dashboardStore.fetchAll().then(() => {
-    dashboardStore.resetPagination()
-    dashboardStore.loadMoreAssets(sortedAndFilteredAssets.value)
+    const initialStatus = activeStatus.value || 'in_use'
+    dashboardStore.fetchAssetsPage(initialStatus, 1, 20)
   })
   categoryStore.fetchCategories()
   if (authStore.user?.role === 'owner') {

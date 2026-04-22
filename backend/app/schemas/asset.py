@@ -2,9 +2,11 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.schemas.base import SnowflakeBase
+
 
 class AssetCreate(BaseModel):
-    category_id: str
+    category_id: int
     name: str
     asset_type: str
     purchase_price: float | None = None
@@ -23,11 +25,11 @@ class AssetCreate(BaseModel):
     notes: str | None = None
     target_daily_cost: float | None = None
     image_url: str | None = None
-    tag_ids: list[str] = []
+    tag_ids: list[int] = []
 
 
 class AssetUpdate(BaseModel):
-    category_id: str | None = None
+    category_id: int | None = None
     name: str | None = None
     asset_type: str | None = None
     purchase_price: float | None = None
@@ -46,7 +48,7 @@ class AssetUpdate(BaseModel):
     notes: str | None = None
     target_daily_cost: float | None = None
     image_url: str | None = None
-    tag_ids: list[str] | None = None
+    tag_ids: list[int] | None = None
 
 
 class AssetSellRequest(BaseModel):
@@ -56,8 +58,8 @@ class AssetSellRequest(BaseModel):
     notes: str | None = None
 
 
-class AssetSellResponse(BaseModel):
-    asset_id: str
+class AssetSellResponse(SnowflakeBase):
+    asset_id: int
     name: str
     net_recovery: float
     total_profit_loss: float
@@ -72,37 +74,32 @@ class AssetValueUpdate(BaseModel):
     current_value: float
 
 
-class ValuationResponse(BaseModel):
-    id: str
-    asset_id: str
+class ValuationResponse(SnowflakeBase):
+    id: int
+    asset_id: int
     value: float
     valued_at: datetime
     notes: str | None = None
-    model_config = {"from_attributes": True}
 
 
-class TagBrief(BaseModel):
-    id: str
+class TagBrief(SnowflakeBase):
+    id: int
     name: str
     color: str
 
-    model_config = {"from_attributes": True}
 
-
-class CategoryBrief(BaseModel):
-    id: str
+class CategoryBrief(SnowflakeBase):
+    id: int
     name: str
     icon: str
     color: str
 
-    model_config = {"from_attributes": True}
 
-
-class AssetResponse(BaseModel):
-    id: str
-    user_id: str
-    family_id: str
-    category_id: str
+class AssetResponse(SnowflakeBase):
+    id: int
+    user_id: int
+    family_id: int
+    category_id: int
     category: CategoryBrief | None = None
     name: str
     asset_type: str
@@ -134,26 +131,24 @@ class AssetResponse(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    model_config = {"from_attributes": True}
-
 
 # Batch operation schemas
 class BatchAssetRequest(BaseModel):
-    asset_ids: list[str]
+    asset_ids: list[int]
 
 
 class BatchUpdateCategoryRequest(BaseModel):
-    asset_ids: list[str]
-    category_id: str
+    asset_ids: list[int]
+    category_id: int
 
 
 class BatchUpdateTagsRequest(BaseModel):
-    asset_ids: list[str]
-    tag_ids: list[str]
+    asset_ids: list[int]
+    tag_ids: list[int]
 
 
 class BatchUpdateStatusRequest(BaseModel):
-    asset_ids: list[str]
+    asset_ids: list[int]
     status: str  # 'active' or 'archived'
 
 
@@ -174,3 +169,14 @@ class BatchExportResponse(BaseModel):
     format: str
     data: list[dict]
     count: int
+
+
+class PaginatedAssetResponse(BaseModel):
+    """分页资产列表响应"""
+    items: list[AssetResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool

@@ -150,16 +150,16 @@ async function onPaymentConfirm(action: string) {
   if (action === 'confirm') {
     const amount = parseFloat(paymentAmount.value)
     if (isNaN(amount) || amount <= 0) {
-      showToast('请输入有效金额')
+      showToast('⚠️ 请输入有效金额')
       return false
     }
     if (amount > (liability.value?.remaining_amount || 0)) {
-      showToast('还款金额不能超过剩余本金')
+      showToast('⚠️ 还款金额不能超过剩余本金')
       return false
     }
     try {
       await liabilityStore.recordPayment(liability.value!.id, amount)
-      showToast('还款成功')
+      showToast('💰 还款成功')
       paymentAmount.value = ''
       return true
     } catch {
@@ -175,7 +175,7 @@ async function onDelete() {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${liability.value?.name}」吗？` })
     deleting.value = true
     await liabilityStore.deleteLiability(liability.value!.id)
-    showToast('已删除')
+    showToast('🗑️ 已删除')
     router.back()
   } catch {
     // cancelled
