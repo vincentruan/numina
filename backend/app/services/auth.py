@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import create_access_token, create_refresh_token
 from app.errors import AppError, ErrorCode
 from app.models.family import Family
+from app.models.family_invitation_code import FamilyInvitationCode
 from app.models.user import User
 from app.schemas.auth import (
     JoinFamilyRequest,
@@ -55,11 +56,16 @@ def _check_refresh_rate_limit(user_id: str) -> None:
     """Limit token refresh to 10 per minute per user."""
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"refresh_attempts:{user_id}"
         count = cache.get(key)
         if count is not None and int(count) >= _REFRESH_RATE_LIMIT_PER_MINUTE:
-            _log_security_event(SecurityEventType.TOKEN_REFRESH_FAILED, user_id=user_id, reason="rate_limited")
+            _log_security_event(
+                SecurityEventType.TOKEN_REFRESH_FAILED,
+                user_id=user_id,
+                reason="rate_limited",
+            )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED)
         new_count = cache.increment(key)
         if new_count == 1:
@@ -74,11 +80,16 @@ def _check_password_change_rate_limit(user_id: str) -> None:
     """Limit password changes to 3 per hour per user."""
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"password_change_attempts:{user_id}"
         count = cache.get(key)
         if count is not None and int(count) >= _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR:
-            _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user_id, reason="rate_limited")
+            _log_security_event(
+                SecurityEventType.PASSWORD_CHANGE_FAILED,
+                user_id=user_id,
+                reason="rate_limited",
+            )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED)
         new_count = cache.increment(key)
         if new_count == 1:
@@ -93,7 +104,11 @@ def _get_rate_limit_settings():
     """Get rate limit settings from config."""
     try:
         from app.config import settings
-        return settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS, settings.LOGIN_RATE_LIMIT_LOCKOUT_SECONDS
+
+        return (
+            settings.LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+            settings.LOGIN_RATE_LIMIT_LOCKOUT_SECONDS,
+        )
     except (ImportError, AttributeError):
         return _MAX_ATTEMPTS, _LOCKOUT_SECONDS
 
@@ -102,6 +117,7 @@ def _get_register_rate_limit_settings():
     """Get registration rate limit settings from config."""
     try:
         from app.config import settings
+
         return settings.REGISTER_RATE_LIMIT_PER_HOUR
     except (ImportError, AttributeError):
         return 5  # Default: 5 per hour
@@ -114,16 +130,20 @@ def _get_dummy_hash() -> str:
         # Use configured rounds from settings
         try:
             from app.config import settings
+
             rounds = settings.BCRYPT_ROUNDS
         except (ImportError, AttributeError):
             rounds = 12  # Default fallback
-        _dummy_hash_cache = bcrypt.hashpw(b"dummy_password", bcrypt.gensalt(rounds=rounds)).decode("utf-8")
+        _dummy_hash_cache = bcrypt.hashpw(
+            b"dummy_password", bcrypt.gensalt(rounds=rounds)
+        ).decode("utf-8")
     return _dummy_hash_cache
 
 
 def _get_client_ip(request: Request) -> str:
     """Get real client IP from request with trusted proxy validation."""
     from app.middleware.rate_limit import _get_real_client_ip
+
     return _get_real_client_ip(request)
 
 
@@ -136,13 +156,16 @@ def _check_register_rate_limit(client_ip: str) -> None:
 
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"register_attempts:{client_ip}"
         count = cache.get(key)
         if count is not None and int(count) >= max_per_hour:
             ttl = cache.get_ttl(key) or 0
             remaining_minutes = max(1, ttl // 60)
-            _log_security_event(SecurityEventType.REGISTER_RATE_LIMITED, client_ip=client_ip)
+            _log_security_event(
+                SecurityEventType.REGISTER_RATE_LIMITED, client_ip=client_ip
+            )
             raise AppError(ErrorCode.AUTH_RATE_LIMITED)
     except AppError:
         raise
@@ -155,6 +178,7 @@ def _record_register_attempt(client_ip: str) -> None:
     """Record a registration attempt for rate limiting."""
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"register_attempts:{client_ip}"
         count = cache.increment(key)
@@ -172,6 +196,7 @@ def _check_rate_limit(username: str) -> None:
 
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"login_attempts:{username}"
         count = cache.get(key)
@@ -189,7 +214,9 @@ def _check_rate_limit(username: str) -> None:
             elapsed = time.time() - first_time
             if elapsed < lockout_seconds:
                 remaining = int((lockout_seconds - elapsed) / 60) + 1
-                _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
+                _log_security_event(
+                    SecurityEventType.LOGIN_RATE_LIMITED, username=username
+                )
                 raise AppError(ErrorCode.AUTH_RATE_LIMITED)
             del _login_attempts[username]
 
@@ -198,6 +225,7 @@ def _record_failed_login(username: str) -> None:
     """Record a failed login attempt."""
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"login_attempts:{username}"
         cache.increment(key)
@@ -218,6 +246,7 @@ def _clear_failed_login(username: str) -> None:
     """Clear failed login attempts for a user."""
     try:
         from app.services.cache.factory import get_rate_limit_cache
+
         cache = get_rate_limit_cache()
         key = f"login_attempts:{username}"
         cache.delete(key)
@@ -229,17 +258,22 @@ def hash_password(password: str) -> str:
     """Hash password with bcrypt. Uses configured rounds from settings."""
     try:
         from app.config import settings
+
         rounds = settings.BCRYPT_ROUNDS
     except (ImportError, AttributeError):
         rounds = 12  # Default fallback
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8")
+    return bcrypt.hashpw(
+        password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
+    ).decode("utf-8")
 
 
 def verify_password(password: str, hashed: str) -> bool:
     return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
 
 
-def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> TokenResponse:
+def register(
+    db: Session, req: RegisterRequest, client_ip: str = "unknown"
+) -> TokenResponse:
     """Register a new user with rate limiting.
 
     Args:
@@ -252,6 +286,19 @@ def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> T
     """
     # Check registration rate limit
     _check_register_rate_limit(client_ip)
+
+    # Validate family invitation code
+    invitation_code = (
+        db.query(FamilyInvitationCode)
+        .filter(FamilyInvitationCode.code == req.family_invitation_code)
+        .first()
+    )
+    if not invitation_code:
+        raise AppError(ErrorCode.FAMILY_INVITATION_CODE_NOT_FOUND)
+    if invitation_code.is_used:
+        raise AppError(ErrorCode.FAMILY_INVITATION_CODE_ALREADY_USED)
+    if invitation_code.revoked_at is not None:
+        raise AppError(ErrorCode.FAMILY_INVITATION_CODE_REVOKED)
 
     if db.query(User).filter(User.username == req.username).first():
         raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
@@ -277,42 +324,79 @@ def register(db: Session, req: RegisterRequest, client_ip: str = "unknown") -> T
     db.add(user)
     db.commit()
 
+    # Mark invitation code as used after successful registration
+    invitation_code.is_used = True
+    invitation_code.used_at = datetime.utcnow()
+    invitation_code.used_by_family_id = family_id
+    invitation_code.used_by_username = req.username
+    db.commit()
+
     # Record successful registration for rate limiting
     _record_register_attempt(client_ip)
-    _log_security_event(SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id)
+    _log_security_event(
+        SecurityEventType.REGISTER_SUCCESS, username=req.username, user_id=user_id
+    )
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        access_token=create_access_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
+        refresh_token=create_refresh_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
     )
 
 
 def login(db: Session, req: LoginRequest) -> TokenResponse:
     _check_rate_limit(req.username)
 
-    user = db.query(User).filter(User.username == req.username, User.is_active == True).first()
+    user = (
+        db.query(User)
+        .filter(User.username == req.username, User.is_active == True)
+        .first()
+    )
     # Timing attack protection: always execute bcrypt to ensure consistent response time
     if user is None:
         # User not found - verify against dummy hash to consume similar time
         dummy_hash = _get_dummy_hash()
         bcrypt.checkpw(req.password.encode("utf-8"), dummy_hash.encode("utf-8"))
         _record_failed_login(req.username)
-        _log_security_event(SecurityEventType.LOGIN_FAILED_USER_NOT_FOUND, username=req.username)
+        _log_security_event(
+            SecurityEventType.LOGIN_FAILED_USER_NOT_FOUND, username=req.username
+        )
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # User found - normal verification
     if not verify_password(req.password, user.password_hash):
         _record_failed_login(req.username)
-        _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, username=req.username, user_id=user.id)
-        write_audit_log("login_failed", "failure", user_id=user.id, family_id=user.family_id, detail="wrong_password")
+        _log_security_event(
+            SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD,
+            username=req.username,
+            user_id=user.id,
+        )
+        write_audit_log(
+            "login_failed",
+            "failure",
+            user_id=user.id,
+            family_id=user.family_id,
+            detail="wrong_password",
+        )
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     _clear_failed_login(req.username)
-    _log_security_event(SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id)
-    write_audit_log("login_success", "success", user_id=user.id, family_id=user.family_id)
+    _log_security_event(
+        SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id
+    )
+    write_audit_log(
+        "login_success", "success", user_id=user.id, family_id=user.family_id
+    )
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        access_token=create_access_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
+        refresh_token=create_refresh_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
     )
 
 
@@ -339,7 +423,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     if not user:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
-# Validate token_version to support force-logout
+    # Validate token_version to support force-logout
     claim_version = payload.get("token_version", 0)
     if claim_version != user.token_version:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
@@ -352,10 +436,21 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
 
     _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
-    write_audit_log("token_refresh", "success", user_id=user.id, family_id=user.family_id)
+    write_audit_log(
+        "token_refresh", "success", user_id=user.id, family_id=user.family_id
+    )
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role, "token_version": user.token_version}),
+        access_token=create_access_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
+        refresh_token=create_refresh_token(
+            {
+                "sub": user.id,
+                "fid": user.family_id,
+                "role": user.role,
+                "token_version": user.token_version,
+            }
+        ),
     )
 
 
@@ -379,12 +474,18 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
     db.refresh(user)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
-        refresh_token=create_refresh_token({"sub": user.id, "fid": user.family_id, "role": user.role}),
+        access_token=create_access_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
+        refresh_token=create_refresh_token(
+            {"sub": user.id, "fid": user.family_id, "role": user.role}
+        ),
     )
 
 
-def change_password(db: Session, user: User, old_password: str, new_password: str) -> None:
+def change_password(
+    db: Session, user: User, old_password: str, new_password: str
+) -> None:
     """Change user password and revoke all existing tokens."""
     from app.auth.deps import revoke_all_user_tokens
 
@@ -400,7 +501,9 @@ def change_password(db: Session, user: User, old_password: str, new_password: st
     # Revoke all tokens issued before now
     revoke_all_user_tokens(user.id)
     _log_security_event(SecurityEventType.PASSWORD_CHANGE_SUCCESS, user_id=user.id)
-    write_audit_log("password_change", "success", user_id=user.id, family_id=user.family_id)
+    write_audit_log(
+        "password_change", "success", user_id=user.id, family_id=user.family_id
+    )
 
 
 def update_profile(db: Session, user: User, req: UpdateProfileRequest) -> User:
@@ -453,15 +556,36 @@ _CHILD_PIN_MAX_ATTEMPTS = 3
 _CHILD_PIN_LOCKOUT_MINUTES = 15
 
 
-def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> TokenResponse:
-    """Verify child PIN and return tokens. Enforces lockout after 3 failures."""
+def child_pin_login(
+    db: Session, child_id: str | None, username: str | None, pin_sequence: list[str]
+) -> TokenResponse:
+    """Verify child PIN and return tokens. Enforces lockout after 3 failures.
+
+    支持双模式登录：
+    - username + PIN（主要方式）
+    - child_id + PIN（备选方式，向后兼容）
+    """
     import unicodedata
 
     from app.auth.deps import create_access_token, create_child_refresh_token
 
-    child = db.query(User).filter(
-        User.id == child_id, User.is_active == True, User.role == "child"
-    ).first()
+    # 根据 identifier 类型查找儿童
+    if username:
+        child = (
+            db.query(User)
+            .filter(
+                User.username == username.lower(),
+                User.is_active == True,
+                User.role == "child",
+            )
+            .first()
+        )
+    else:
+        child = (
+            db.query(User)
+            .filter(User.id == child_id, User.is_active == True, User.role == "child")
+            .first()
+        )
 
     # Timing attack protection: always run bcrypt even if child not found
     if not child or child.pin_hash is None:
@@ -469,15 +593,23 @@ def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> Toke
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # Check lockout (after dummy bcrypt to avoid timing leak on locked state)
-    if child.pin_locked_until is not None and child.pin_locked_until > datetime.utcnow():
+    if (
+        child.pin_locked_until is not None
+        and child.pin_locked_until > datetime.utcnow()
+    ):
         bcrypt.checkpw(b"dummy", _get_dummy_hash().encode("utf-8"))
-        raise AppError(ErrorCode.AUTH_PIN_LOCKED, details={"locked_until": child.pin_locked_until.isoformat()})
+        raise AppError(
+            ErrorCode.AUTH_PIN_LOCKED,
+            details={"locked_until": child.pin_locked_until.isoformat()},
+        )
 
     # Verify PIN using bcrypt.checkpw
     normalized = unicodedata.normalize("NFC", "".join(pin_sequence))
     if not bcrypt.checkpw(normalized.encode("utf-8"), child.pin_hash.encode("utf-8")):
         _record_child_pin_failure(db, child)
-        _log_security_event(SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, user_id=child.id)
+        _log_security_event(
+            SecurityEventType.LOGIN_FAILED_WRONG_PASSWORD, user_id=child.id
+        )
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # Success — clear lockout state and reset fail counter
@@ -488,8 +620,17 @@ def child_pin_login(db: Session, child_id: str, pin_sequence: list[str]) -> Toke
 
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, user_id=child.id)
     return TokenResponse(
-        access_token=create_access_token({"sub": child.id, "fid": child.family_id, "role": "child"}),
-        refresh_token=create_child_refresh_token({"sub": child.id, "fid": child.family_id, "role": "child", "token_version": child.token_version}),
+        access_token=create_access_token(
+            {"sub": child.id, "fid": child.family_id, "role": "child"}
+        ),
+        refresh_token=create_child_refresh_token(
+            {
+                "sub": child.id,
+                "fid": child.family_id,
+                "role": "child",
+                "token_version": child.token_version,
+            }
+        ),
     )
 
 
@@ -510,20 +651,33 @@ def admin_switch_to_child(db: Session, owner: User, child_id: str) -> TokenRespo
     from app.auth.deps import create_access_token, create_child_refresh_token
 
     # Verify child exists and belongs to owner's family
-    child = db.query(User).filter(
-        User.id == child_id,
-        User.family_id == owner.family_id,
-        User.role == "child",
-        User.is_active == True,
-    ).first()
+    child = (
+        db.query(User)
+        .filter(
+            User.id == child_id,
+            User.family_id == owner.family_id,
+            User.role == "child",
+            User.is_active == True,
+        )
+        .first()
+    )
 
     if not child:
         raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
 
     # Generate child tokens (same as child_pin_login)
     return TokenResponse(
-        access_token=create_access_token({"sub": child.id, "fid": child.family_id, "role": "child"}),
-        refresh_token=create_child_refresh_token({"sub": child.id, "fid": child.family_id, "role": "child", "token_version": child.token_version}),
+        access_token=create_access_token(
+            {"sub": child.id, "fid": child.family_id, "role": "child"}
+        ),
+        refresh_token=create_child_refresh_token(
+            {
+                "sub": child.id,
+                "fid": child.family_id,
+                "role": "child",
+                "token_version": child.token_version,
+            }
+        ),
     )
 
 
@@ -548,7 +702,9 @@ def _record_child_pin_failure(db: Session, child: User) -> None:
     db.commit()
 
     if count >= _CHILD_PIN_MAX_ATTEMPTS:
-        child.pin_locked_until = datetime.utcnow() + timedelta(minutes=_CHILD_PIN_LOCKOUT_MINUTES)
+        child.pin_locked_until = datetime.utcnow() + timedelta(
+            minutes=_CHILD_PIN_LOCKOUT_MINUTES
+        )
         db.commit()
         del _child_pin_attempts[child_id]
 
@@ -579,6 +735,8 @@ def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     return TokenResponse(
-        access_token=create_access_token({"sub": child.id, "fid": child.family_id, "role": "child"}),
+        access_token=create_access_token(
+            {"sub": child.id, "fid": child.family_id, "role": "child"}
+        ),
         refresh_token=refresh_tok,  # keep same refresh token
     )

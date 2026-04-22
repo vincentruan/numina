@@ -16,6 +16,7 @@ from app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cac
 from app.models.user import User  # noqa: F401
 from app.models.family import Family  # noqa: F401
 from app.models.child_bind_token import ChildBindToken  # noqa: F401
+from app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -26,6 +27,29 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def _seed_test_invitation_codes(session):
+    """Seed test invitation codes for auth fixtures and tests."""
+    codes = [
+        FamilyInvitationCode(code="AUTO-TEST"),          # conftest.py - auth_headers fixture
+        FamilyInvitationCode(code="AUTO-TEST-2"),        # conftest.py - second_user_headers fixture
+        FamilyInvitationCode(code="AUTO-ADMIN"),         # test_admin_child_switch.py
+        FamilyInvitationCode(code="AUTO-CREATE"),        # test_auth.py - test_register_success
+        FamilyInvitationCode(code="AUTO-DUP"),           # test_auth.py - test_register_duplicate_username
+        FamilyInvitationCode(code="AUTO-PARENT"),        # test_auth_security.py
+        FamilyInvitationCode(code="AUTO-TIMING"),        # test_auth_security.py
+        FamilyInvitationCode(code="AUTO-OWNER"),         # test_children.py
+        FamilyInvitationCode(code="AUTO-MEMBER"),        # test_children.py
+        FamilyInvitationCode(code="AUTO-MILESTONE-OTHER"),  # test_milestones.py
+        FamilyInvitationCode(code="AUTO-SYNC"),          # test_file_sync.py
+        FamilyInvitationCode(code="AUTO-OTHER"),         # test_chores_extended.py
+        FamilyInvitationCode(code="AUTO-STORAGE"),       # test_file_storage_models.py
+        FamilyInvitationCode(code="AUTO-STORAGE-2"),     # test_file_storage_models.py
+    ]
+    for code in codes:
+        session.add(code)
+    session.commit()
 
 
 @pytest.fixture(scope="function")
@@ -45,6 +69,8 @@ def db():
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
     seed_categories(session)
+    # Seed test invitation codes for fixtures
+    _seed_test_invitation_codes(session)
     try:
         yield session
     finally:
