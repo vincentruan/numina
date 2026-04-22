@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from config import settings
+from app.config import settings
 from core.logging import setup_logging
 
 setup_logging()
@@ -13,7 +13,7 @@ setup_logging()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings.validate_required()
-    from scheduler import setup_schedules, scheduler
+    from app.scheduler import setup_schedules, scheduler
     setup_schedules()
     scheduler.start()
     yield
