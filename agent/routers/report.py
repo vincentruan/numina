@@ -7,7 +7,7 @@ import logging
 
 from fastapi import APIRouter, Header, HTTPException
 
-from config import settings
+from app.config import settings
 from services.orchestrator import orchestrator
 
 router = APIRouter(prefix="/report", tags=["report"])

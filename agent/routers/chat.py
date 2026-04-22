@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from config import settings
+from app.config import settings
 from services.orchestrator import orchestrator
 
 router = APIRouter(prefix="/chat", tags=["chat"])
