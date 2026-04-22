@@ -3,7 +3,8 @@
 import time
 from unittest.mock import patch
 
-from app.auth import deps as auth_deps
+from app.auth import revoke_jti as revoke_module
+from app.auth.deps import revoke_jti, revoke_all_user_tokens, _is_jti_revoked, _is_token_revoked_for_user, cleanup_expired_revoked_tokens
 from app.models.revoked_token import RevokedToken
 
 
@@ -17,8 +18,8 @@ def test_revoke_jti_stores_in_database(db):
     db.commit()
 
     # Mock SessionLocal to return test fixture's db (same in-memory DB)
-    with patch.object(auth_deps, 'SessionLocal', return_value=db):
-        auth_deps.revoke_jti(jti, ttl)
+    with patch.object(revoke_module, 'SessionLocal', return_value=db):
+        revoke_jti(jti, ttl)
 
     # Verify it's in the database
     record = db.query(RevokedToken).filter_by(jti=jti).first()
@@ -37,14 +38,14 @@ def test_is_jti_revoked_queries_database(db):
     db.commit()
 
     # Should not be revoked initially
-    with patch.object(auth_deps, 'SessionLocal', return_value=db):
-        assert not auth_deps._is_jti_revoked(jti)
+    with patch.object(revoke_module, 'SessionLocal', return_value=db):
+        assert not _is_jti_revoked(jti)
 
         # Revoke via actual function
-        auth_deps.revoke_jti(jti, ttl)
+        revoke_jti(jti, ttl)
 
         # Should be revoked now (database lookup)
-        assert auth_deps._is_jti_revoked(jti)
+        assert _is_jti_revoked(jti)
 
 
 def test_revoke_all_user_tokens_stores_in_database(db):
@@ -56,8 +57,8 @@ def test_revoke_all_user_tokens_stores_in_database(db):
     db.commit()
 
     # Mock SessionLocal to return test fixture's db
-    with patch.object(auth_deps, 'SessionLocal', return_value=db):
-        auth_deps.revoke_all_user_tokens(user_id)
+    with patch.object(revoke_module, 'SessionLocal', return_value=db):
+        revoke_all_user_tokens(user_id)
 
     # Verify database record
     record = db.query(RevokedToken).filter_by(user_id=user_id).first()
@@ -76,19 +77,19 @@ def test_is_token_revoked_for_user_queries_database(db):
     db.query(RevokedToken).filter_by(user_id=user_id).delete()
     db.commit()
 
-    with patch.object(auth_deps, 'SessionLocal', return_value=db):
+    with patch.object(revoke_module, 'SessionLocal', return_value=db):
         # No revocation - neither token should be revoked
-        assert not auth_deps._is_token_revoked_for_user(user_id, token_iat_old)
-        assert not auth_deps._is_token_revoked_for_user(user_id, token_iat_new)
+        assert not _is_token_revoked_for_user(user_id, token_iat_old)
+        assert not _is_token_revoked_for_user(user_id, token_iat_new)
 
         # Revoke all tokens for user
-        auth_deps.revoke_all_user_tokens(user_id)
+        revoke_all_user_tokens(user_id)
 
         # Old token (iat before revocation) should be revoked
-        assert auth_deps._is_token_revoked_for_user(user_id, token_iat_old)
+        assert _is_token_revoked_for_user(user_id, token_iat_old)
 
         # New token (iat after revocation) should not be revoked
-        assert not auth_deps._is_token_revoked_for_user(user_id, token_iat_new)
+        assert not _is_token_revoked_for_user(user_id, token_iat_new)
 
 
 def test_cleanup_expired_revoked_tokens(db):
@@ -103,7 +104,7 @@ def test_cleanup_expired_revoked_tokens(db):
     db.commit()
 
     # Run cleanup using actual function (takes db as parameter)
-    deleted = auth_deps.cleanup_expired_revoked_tokens(db)
+    deleted = cleanup_expired_revoked_tokens(db)
 
     # Should be removed
     assert deleted == 1
