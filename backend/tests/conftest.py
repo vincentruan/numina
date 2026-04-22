@@ -17,10 +17,13 @@ from app.models.user import User  # noqa: F401
 from app.models.family import Family  # noqa: F401
 from app.models.child_bind_token import ChildBindToken  # noqa: F401
 from app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
+from app.models.revoked_token import RevokedToken  # noqa: F401
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
+# Create engine and session factory for tests
+# StaticPool ensures all connections share the same in-memory database
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
@@ -59,10 +62,6 @@ def db():
     if hasattr(RateLimitMiddleware, "_rate_store"):
         RateLimitMiddleware._rate_store.clear()
 
-    # Reset JTI revocation stores
-    auth_deps._revoked_jtis.clear()
-    auth_deps._user_revocation_times.clear()
-
     # Reset cache (including registration rate limits)
     reset_rate_limit_cache()
 
@@ -79,7 +78,7 @@ def db():
         # Reset rate limit store after each test
         if hasattr(RateLimitMiddleware, "_rate_store"):
             RateLimitMiddleware._rate_store.clear()
-# Reset captcha payload cache and rate limit cache
+        # Reset captcha payload cache and rate limit cache
         reset_captcha_payload_cache()
         reset_rate_limit_cache()
 

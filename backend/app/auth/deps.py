@@ -20,7 +20,8 @@ from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
+from app.models.revoked_token import RevokedToken
 from app.models.user import User
 
 # Cookie names
@@ -34,45 +35,83 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=F
 
 ALGORITHM = "HS256"
 
-# JTI revocation store: {jti: expiry_unix_timestamp}
-# Entries expire automatically; cleaned up lazily on each revoke call.
-_revoked_jtis: dict[str, float] = {}
-
-# Per-user revocation timestamps: {user_id: revoked_before_unix_timestamp}
-# Any token with iat <= this value is considered revoked.
-_user_revocation_times: dict[str, float] = {}
-
 
 def revoke_jti(jti: str, ttl_seconds: float) -> None:
-    """Mark a single JTI as revoked for ttl_seconds."""
-    _revoked_jtis[jti] = time.time() + ttl_seconds
-    # Lazy cleanup of already-expired entries
-    now = time.time()
-    expired = [k for k, exp in list(_revoked_jtis.items()) if exp < now]
-    for k in expired:
-        del _revoked_jtis[k]
+    """Mark a single JTI as revoked, persisted to database."""
+    db = SessionLocal()
+    try:
+        now = time.time()
+        expires_at = now + ttl_seconds
+        record = RevokedToken(
+            jti=jti,
+            user_id=None,
+            revoked_at=now,
+            expires_at=expires_at,
+        )
+        db.add(record)
+        db.commit()
+    finally:
+        db.close()
 
 
 def revoke_all_user_tokens(user_id: str | int) -> None:
-    """Revoke all tokens for a user issued up to this moment."""
-    _user_revocation_times[str(user_id)] = time.time()
+    """Revoke all tokens for a user, persisted to database."""
+    db = SessionLocal()
+    try:
+        now = time.time()
+        # Tokens expire after max refresh token lifetime (7 days by default)
+        # Use 8 days to cover edge cases
+        expires_at = now + (settings.REFRESH_TOKEN_EXPIRE_DAYS + 1) * 24 * 3600
+        record = RevokedToken(
+            jti=None,
+            user_id=str(user_id),
+            revoked_at=now,
+            expires_at=expires_at,
+        )
+        db.add(record)
+        db.commit()
+    finally:
+        db.close()
 
 
 def _is_jti_revoked(jti: str) -> bool:
-    exp = _revoked_jtis.get(jti)
-    if exp is None:
-        return False
-    if time.time() > exp:
-        del _revoked_jtis[jti]
-        return False
-    return True
+    """Check if JTI is revoked, querying database."""
+    db = SessionLocal()
+    try:
+        now = time.time()
+        record = db.query(RevokedToken).filter(
+            RevokedToken.jti == jti,
+            RevokedToken.expires_at > now,
+        ).first()
+        return record is not None
+    finally:
+        db.close()
 
 
 def _is_token_revoked_for_user(user_id: str | int, iat: float) -> bool:
-    revoked_before = _user_revocation_times.get(str(user_id))
-    if revoked_before is None:
-        return False
-    return iat <= revoked_before
+    """Check if user has revoked all tokens before iat."""
+    db = SessionLocal()
+    try:
+        now = time.time()
+        # Find user-level revocation record
+        record = db.query(RevokedToken).filter(
+            RevokedToken.user_id == str(user_id),
+            RevokedToken.expires_at > now,
+        ).first()
+        if record is None:
+            return False
+        # Token issued before revocation time is revoked
+        return iat <= record.revoked_at
+    finally:
+        db.close()
+
+
+def cleanup_expired_revoked_tokens(db: Session) -> int:
+    """Remove expired revocation records. Called by scheduled job."""
+    now = time.time()
+    deleted = db.query(RevokedToken).filter(RevokedToken.expires_at < now).delete()
+    db.commit()
+    return deleted
 
 
 def create_access_token(data: dict) -> str:
