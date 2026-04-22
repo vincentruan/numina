@@ -316,6 +316,18 @@ frontend/src/
 - **Liability payment**: `PUT /liabilities/{id}/payment` reduces `remaining_amount`; auto-sets `is_active=False` when fully paid
 - **Dashboard aggregation**: All dashboard endpoints aggregate data at the family level using the current user's `family_id`
 
+### Family Invitation Code (Launch Control)
+
+- **Purpose**: Control family creation during initial launch
+- **Table**: `family_invitation_codes` (single-use 6-char codes)
+- **Admin script**: `backend/scripts/family_invitation_codes.py`
+  - `generate --count N` — batch create codes
+  - `list [--format csv]` — view/export codes
+  - `revoke --codes A,B,C` — revoke unused codes
+  - `link-existing` — retroactive linking for existing families
+- **Registration**: Requires valid unused code
+- **Error codes**: `FAMILY_INVITATION_CODE_NOT_FOUND`, `ALREADY_USED`, `REVOKED`
+
 ### Data Model Key Relationships
 
 ```
