@@ -107,7 +107,7 @@ def test_join_family_success(client, auth_headers):
     # Verify the new user is in the same family
     new_user_headers = {"Authorization": f"Bearer {data['access_token']}"}
     me_response = client.get("/api/v1/auth/me", headers=new_user_headers)
-    assert me_response.json()["data"]["family_id"] == family_response.json()["data"]["id"]
+    assert me_response.json()["data"]["family_id"] == str(family_response.json()["data"]["id"])
 
 
 def test_join_family_invalid_code(client):

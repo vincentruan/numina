@@ -94,7 +94,7 @@ def test_list_wishes_grouped_by_status(client, child_user, sample_wish):
     assert resp.status_code == 200
     data = _data(resp)
     assert len(data["pending_review"]) == 1
-    assert data["pending_review"][0]["id"] == sample_wish["id"]
+    assert data["pending_review"][0]["id"] == str(sample_wish["id"])
     assert data["active"] == []
     assert data["realized"] == []
 
@@ -102,7 +102,7 @@ def test_list_wishes_grouped_by_status(client, child_user, sample_wish):
 def test_get_wish_detail(client, child_user, sample_wish):
     resp = client.get(f"/api/v1/child/wishes/{sample_wish['id']}", headers=child_user["headers"])
     assert resp.status_code == 200
-    assert _data(resp)["id"] == sample_wish["id"]
+    assert _data(resp)["id"] == str(sample_wish["id"])
 
 
 def test_get_wish_not_found(client, child_user):

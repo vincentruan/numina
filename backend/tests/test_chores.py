@@ -232,7 +232,7 @@ def test_mark_complete_sets_submitted_by_user_id(client, db, auth_headers, child
     # Verify the column is set directly on the DB row — not just via the fallback path
     row = db.query(ChoreInstance).filter(ChoreInstance.id == instance_id).first()
     assert row is not None
-    assert row.submitted_by_user_id == child_user["id"]
+    assert str(row.submitted_by_user_id) == child_user["id"]
 
 
 def test_mark_complete_twice_fails(client, child_user, daily_template):
@@ -377,7 +377,7 @@ def test_pending_approvals_include_child_fields(client, auth_headers, child_user
     items = resp.json()["data"]
     assert len(items) == 1
     item = items[0]
-    assert item["child_user_id"] == child_user["id"]
+    assert item["child_user_id"] == str(child_user["id"])
     assert item["child_display_name"] == "小明"
     assert item["child_avatar_color"] == "#FF5733"
 
@@ -464,7 +464,7 @@ def test_pool_chore_approve_credits_submitter(client, db, auth_headers, child_us
     # CoinTransaction must be credited to the actual child, not the family_id
     tx = db.query(CoinTransaction).filter(CoinTransaction.ref_id == instance_id).first()
     assert tx is not None
-    assert tx.child_user_id == child_user["id"]
+    assert str(tx.child_user_id) == child_user["id"]
 
     # Child's balance should reflect the reward
     balance = client.get("/api/v1/child/coins/balance", headers=child_user["headers"]).json()["data"]
@@ -501,7 +501,7 @@ def test_auto_approve_timeout(client, db, auth_headers, child_user, daily_templa
     # Verify coin transaction was created for the correct child
     tx = db.query(CoinTransaction).filter(CoinTransaction.ref_id == instance_id).first()
     assert tx is not None
-    assert tx.child_user_id == child_user["id"]
+    assert str(tx.child_user_id) == child_user["id"]
     assert tx.amount == daily_template["coin_reward"]
 
 

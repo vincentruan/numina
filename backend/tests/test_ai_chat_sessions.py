@@ -84,7 +84,7 @@ def test_chat_reuses_existing_session(client, auth_headers, db, tmp_path):
         )
 
     assert resp2.status_code == 200
-    assert resp2.json()["data"]["session_id"] == session_id
+    assert resp2.json()["data"]["session_id"] == str(session_id)
 
     session = db.query(AIChatSession).filter_by(id=session_id).first()
     assert session.message_count == 4  # 2 user + 2 assistant

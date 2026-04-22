@@ -141,8 +141,8 @@ def test_get_all_child_balances_multiple_children(client, auth_headers):
     resp = client.get("/api/v1/family/children/balances", headers=auth_headers)
     assert resp.status_code == 200
     balances = resp.json()["data"]
-    assert balances[child_a["id"]] == 30
-    assert balances[child_b["id"]] == 50
+    assert balances[str(child_a["id"])] == 30
+    assert balances[str(child_b["id"])] == 50
 
 
 def test_get_all_child_balances_cross_family_isolation(client, auth_headers, second_user_headers):

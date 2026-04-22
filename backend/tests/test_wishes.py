@@ -102,7 +102,7 @@ def test_realize_wish(client, auth_headers, sample_wish, category_id):
     wish_response = client.get(f"/api/v1/wishes/{wish_id}", headers=auth_headers)
     wish = wish_response.json()["data"]
     assert wish["status"] == "realized"
-    assert wish["realized_asset_id"] == asset["id"]
+    assert wish["realized_asset_id"] == str(asset["id"])
 
 
 def test_cross_family_isolation(client, auth_headers, second_user_headers, sample_wish):

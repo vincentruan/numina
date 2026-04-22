@@ -40,7 +40,7 @@ def test_list_tags(client, auth_headers, sample_tag):
     assert response.status_code == 200
     tags = response.json()["data"]
     assert len(tags) == 1
-    assert tags[0]["id"] == sample_tag["id"]
+    assert tags[0]["id"] == str(sample_tag["id"])
     assert tags[0]["name"] == sample_tag["name"]
 
 

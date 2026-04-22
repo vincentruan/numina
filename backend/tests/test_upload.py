@@ -153,6 +153,6 @@ def test_upload_concurrent_race_returns_winner(client, auth_headers, db, tmp_pat
         resp_second = _upload(client, auth_headers, JPEG_CONTENT)
 
     assert resp_second.status_code == 200
-    assert resp_second.json()["data"]["file_id"] == winner_file_id
+    assert resp_second.json()["data"]["file_id"] == str(winner_file_id)
     # Still only one DB row
     assert db.query(CachedFile).filter_by(sha256=sha256).count() == 1

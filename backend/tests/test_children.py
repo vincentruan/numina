@@ -95,7 +95,7 @@ def test_owner_resets_child_pin(client):
         "pin": VALID_PIN_2,
     }, headers=headers)
     assert resp.status_code == 200
-    assert resp.json()["data"]["id"] == child_id
+    assert resp.json()["data"]["id"] == str(child_id)
 
 
 # ---------------------------------------------------------------------------
