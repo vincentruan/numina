@@ -53,9 +53,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import * as tagApi from '@/api/tags'
 import type { Tag } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const tags = ref<Tag[]>([])
 const dialogVisible = ref(false)
@@ -90,16 +93,16 @@ function showEditDialog(tag: Tag) {
 
 async function onDialogConfirm() {
   if (!formData.value.name) {
-    showToast('⚠️ 请输入名称')
+    showToast(t('toast.nameRequired'))
     return
   }
   try {
     if (editingId.value) {
       await tagApi.updateTag(editingId.value, formData.value)
-      showToast('✅ 修改成功')
+      showToast(t('toast.updateSuccess'))
     } else {
       await tagApi.createTag(formData.value)
-      showToast('✅ 添加成功')
+      showToast(t('toast.addSuccess'))
     }
     await fetchTags()
   } catch {
@@ -111,7 +114,7 @@ async function onDelete(tag: Tag) {
   try {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${tag.name}」吗？` })
     await tagApi.deleteTag(tag.id)
-    showToast('🗑️ 已删除')
+    showToast(t('toast.deleteSuccess'))
     await fetchTags()
   } catch {
     // cancelled

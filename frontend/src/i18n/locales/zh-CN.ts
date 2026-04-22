@@ -292,6 +292,7 @@ export default {
     aiAnalyzeFailed: '❌ 分析失败，请检查 AI 配置',
     aiDetectFailed: '❌ 检测失败，请检查 AI 配置',
     aiTargetSaved: '✅ 目标已保存',
+    aiGenerateFailed: '❌ 生成失败，请重试',
     // Network
     networkTimeout: '📡 请求超时，请检查网络后重试',
     networkError: '📡 无法连接服务器，请检查网络',

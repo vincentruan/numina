@@ -57,8 +57,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { getDisposalSuggestions, refreshDisposalSuggestions, dismissDisposalSuggestion } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const refreshing = ref(false)
@@ -76,7 +79,7 @@ async function loadSuggestions() {
     const res = await getDisposalSuggestions()
     suggestions.value = res.data
   } catch {
-    showToast('❌ 加载失败')
+    showToast(t('toast.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -87,9 +90,9 @@ async function onRefresh() {
   try {
     await refreshDisposalSuggestions()
     await loadSuggestions()
-    showToast('✅ 扫描完成')
+    showToast(t('toast.aiScanComplete'))
   } catch {
-    showToast('❌ 扫描失败，请检查 AI 配置')
+    showToast(t('toast.aiScanFailed'))
   } finally {
     refreshing.value = false
   }
@@ -100,7 +103,7 @@ async function onDismiss(id: string) {
     await dismissDisposalSuggestion(id)
     suggestions.value = suggestions.value.filter(s => s.id !== id)
   } catch {
-    showToast('❌ 操作失败')
+    showToast(t('toast.operationFailed'))
   }
 }
 

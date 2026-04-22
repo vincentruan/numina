@@ -3,7 +3,9 @@
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, field_validator
+
+from app.schemas.base import SnowflakeBase
 
 _HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -18,7 +20,7 @@ class ChoreTemplateCreate(BaseModel):
     coin_reward: int
     frequency: str
     assignment_type: str
-    assignee_ids: list[str] = []  # required when assignment_type='assigned'
+    assignee_ids: list[int] = []  # required when assignment_type='assigned'
 
     @field_validator("name")
     @classmethod
@@ -58,7 +60,7 @@ class ChoreTemplateUpdate(BaseModel):
     name: str | None = None
     emoji: str | None = None
     coin_reward: int | None = None
-    assignee_ids: list[str] | None = None
+    assignee_ids: list[int] | None = None
 
     @field_validator("name")
     @classmethod
@@ -80,16 +82,14 @@ class ChoreTemplateUpdate(BaseModel):
         return v
 
 
-class AssigneeResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
+class AssigneeResponse(SnowflakeBase):
+    id: int
     display_name: str
 
 
-class ChoreTemplateResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    family_id: str
+class ChoreTemplateResponse(SnowflakeBase):
+    id: int
+    family_id: int
     name: str
     emoji: str | None
     coin_reward: int
@@ -99,10 +99,9 @@ class ChoreTemplateResponse(BaseModel):
     assignees: list[AssigneeResponse] = []
 
 
-class ChoreInstanceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
-    template_id: str
+class ChoreInstanceResponse(SnowflakeBase):
+    id: int
+    template_id: int
     chore_name: str
     chore_emoji: str | None
     coin_reward: int
@@ -113,7 +112,7 @@ class ChoreInstanceResponse(BaseModel):
     streak_count: int
     streak_bonus: int = 0
     milestone_triggered: str | None = None
-    child_user_id: str | None = None
+    child_user_id: int | None = None
     child_display_name: str | None = None
     child_avatar_color: str | None = None
 
@@ -134,7 +133,7 @@ class RejectRequest(BaseModel):
 
 
 class GrantRequest(BaseModel):
-    child_user_id: str
+    child_user_id: int
     amount: int
     reason: str
 

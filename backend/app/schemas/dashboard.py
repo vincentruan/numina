@@ -11,7 +11,7 @@ class OverviewResponse(BaseModel):
 
 
 class AllocationItem(BaseModel):
-    category_id: str
+    category_id: int
     category_name: str
     icon: str
     color: str
@@ -36,7 +36,7 @@ class TrendResponse(BaseModel):
 
 
 class TopAssetItem(BaseModel):
-    id: str
+    id: int
     name: str
     category_name: str
     icon: str
@@ -46,7 +46,7 @@ class TopAssetItem(BaseModel):
 
 
 class DailyCostItem(BaseModel):
-    id: str
+    id: int
     name: str
     category_name: str
     icon: str
@@ -58,7 +58,7 @@ class DailyCostItem(BaseModel):
 
 
 class LowUsageItem(BaseModel):
-    id: str
+    id: int
     name: str
     category_name: str
     icon: str
@@ -70,7 +70,7 @@ class LowUsageItem(BaseModel):
 
 
 class InvestmentReturnItem(BaseModel):
-    id: str
+    id: int
     name: str
     category_name: str
     icon: str
@@ -85,7 +85,7 @@ class InvestmentReturnItem(BaseModel):
 
 class ExpiringSoonItem(BaseModel):
     """Asset approaching end of expected lifespan."""
-    id: str
+    id: int
     name: str
     category_name: str
     icon: str

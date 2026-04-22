@@ -295,7 +295,7 @@ async function executeBatchDelete() {
     exitSelectionMode()
     await assetStore.fetchAssets(buildFilters())
   } catch (error) {
-    showToast('🗑️ 删除失败')
+    showToast(t('toast.deleteFailed'))
   }
 }
 

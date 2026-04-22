@@ -17,7 +17,6 @@ See design.md for detailed trade-off analysis.
 
 import time
 from datetime import datetime, timedelta
-from uuid import uuid4
 
 import bcrypt
 from fastapi import Request
@@ -303,8 +302,10 @@ def register(
     if db.query(User).filter(User.username == req.username).first():
         raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
 
-    family_id = str(uuid4())
-    user_id = str(uuid4())
+    # Generate snowflake IDs explicitly so we can cross-reference family/user
+    from app.utils.snowflake import next_id as _next_id
+    family_id = _next_id()
+    user_id = _next_id()
 
     family = Family(
         id=family_id,

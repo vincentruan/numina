@@ -74,11 +74,14 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useChildAuthStore } from '@/stores/childAuth'
 import type { ChildUser } from '@/types'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import { getAuthenticationOptions, authenticateWithPasskey } from '@/api/webauthn'
 import { setUser } from '@/utils/storage'
+
+const { t } = useI18n()
 
 const EMOJIS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🦁', '🐯', '🌟', '🌈', '🍎', '🎈']
 
@@ -129,17 +132,17 @@ async function attemptWebAuthn() {
       role: 'child',
     })
 
-    showToast('🔐 登录成功')
+    showToast(t('toast.loginSuccess'))
     router.push('/child/')
   } catch (err: unknown) {
     const error = err as { name?: string; message?: string; response?: { status?: number } }
     if (error.name === 'NotAllowedError') {
       // User cancelled — don't show error
     } else if (error.response?.status === 400) {
-      showToast('⚠️ 未注册 passkey，请使用图形密码')
+      showToast(t('toast.noPasskey'))
       authMode.value = 'pin'
     } else {
-      showToast('❌ 验证失败，请重试')
+      showToast(t('toast.verifyFailed'))
     }
   } finally {
     loading.value = false

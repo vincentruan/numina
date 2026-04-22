@@ -208,12 +208,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import * as assetApi from '@/api/assets'
 import type { AssetValuation } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import DailyCostChart from '@/components/charts/DailyCostChart.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -297,7 +300,7 @@ async function onRetire() {
     await showConfirmDialog({ title: '确认退役', message: `确定要将「${asset.value?.name}」标记为退役吗？` })
     acting.value = true
     await assetStore.retireAsset(asset.value!.id)
-    showToast('✅ 已退役')
+    showToast(t('toast.assetRetired'))
   } catch {
     // cancelled
   } finally {
@@ -309,7 +312,7 @@ async function onReactivate() {
   acting.value = true
   try {
     await assetStore.reactivateAsset(asset.value!.id)
-    showToast('✅ 已恢复服役')
+    showToast(t('toast.assetReactivated'))
   } finally {
     acting.value = false
   }
@@ -320,7 +323,7 @@ async function onDelete() {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${asset.value?.name}」吗？` })
     deleting.value = true
     await assetStore.deleteAsset(asset.value!.id)
-    showToast('🗑️ 已删除')
+    showToast(t('toast.deleteSuccess'))
     router.back()
   } catch {
     // cancelled

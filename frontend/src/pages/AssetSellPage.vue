@@ -108,10 +108,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
 import type { AssetSellResponse } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -145,7 +148,7 @@ const daysHeld = computed(() => {
 
 async function onSubmit() {
   if (sellPrice.value <= 0) {
-    showToast('⚠️ 请输入出售价格')
+    showToast(t('toast.assetSellPriceRequired'))
     return
   }
   submitting.value = true
@@ -160,7 +163,7 @@ async function onSubmit() {
     showResult.value = true
     dashboardStore.fetchAll()
   } catch {
-    showToast('❌ 出售失败，请重试')
+    showToast(t('toast.assetSellFailed'))
   } finally {
     submitting.value = false
   }

@@ -1,17 +1,17 @@
 """AI 配置相关 Pydantic schemas。"""
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class AIConfigResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     ai_enabled: bool
     ai_provider: str | None
     ai_api_key_masked: str | None  # 脱敏展示，如 sk-****xxxx
     ai_base_url: str | None  # 自定义 API Base URL，None 表示使用默认端点
     ai_model_id: str | None  # 主模型 ID，None 使用 provider 默认
     ai_vision_model_id: str | None  # 图像模型 ID，None 使用主模型
-
-    model_config = {"from_attributes": True}
 
 
 class AIConfigUpdate(BaseModel):

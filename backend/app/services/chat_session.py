@@ -113,7 +113,6 @@ def _sync_append_message(
         if session.cached_file_id is None:
             # First append — create CachedFile
             cached_file = CachedFile(
-                id=str(uuid.uuid4()),
                 family_id=session.family_id,
                 user_id=user.id,
                 sha256=sha256,
@@ -136,7 +135,6 @@ def _sync_append_message(
                 )
                 if default_backend:
                     remote_loc = FileRemoteLocation(
-                        id=str(uuid.uuid4()),
                         file_id=cached_file.id,
                         backend_id=default_backend.id,
                         remote_path=f"chat/{session.family_id}/{session.id}.jsonl",

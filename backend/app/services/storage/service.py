@@ -79,7 +79,6 @@ class StorageService:
         mime_type = _MIME_MAP.get(ext.lower(), "application/octet-stream")
 
         cached_file = CachedFile(
-            id=str(uuid4()),
             family_id=user.family_id,
             user_id=user.id,
             sha256=sha256,

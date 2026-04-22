@@ -252,9 +252,9 @@ async function onSetOwner(userId: string) {
   } catch { return }
   try {
     await familyStore.updateMemberRole(userId, 'owner')
-    showToast('✅ 已设为管理员')
+    showToast(t('toast.memberPromoted'))
   } catch {
-    showToast('❌ 操作失败，请重试')
+    showToast(t('toast.operationFailed2'))
   }
 }
 
@@ -264,9 +264,9 @@ async function onRemoveMember(member: { id: string; display_name: string }) {
   } catch { return }
   try {
     await familyStore.removeMember(member.id)
-    showToast('✅ 已移除')
+    showToast(t('toast.memberRemoved'))
   } catch {
-    showToast('❌ 操作失败，请重试')
+    showToast(t('toast.operationFailed2'))
   }
 }
 
@@ -279,7 +279,7 @@ async function onRegenerate() {
     const code = await familyStore.regenerateInviteCode()
     showToast(`新邀请码: ${code}`)
   } catch {
-    showToast('❌ 操作失败，请重试')
+    showToast(t('toast.operationFailed2'))
   } finally {
     regenerating.value = false
   }
@@ -304,7 +304,7 @@ async function doGrant() {
     const res = await getAllChildBalances()
     childBalances.value = res.data
   } catch {
-    showToast('❌ 赠送失败，请重试')
+    showToast(t('toast.grantFailed'))
   } finally {
     grantingCoins.value = false
   }
@@ -329,7 +329,7 @@ async function switchToChildView(child: ChildUser) {
     // 导航到孩子首页
     router.push('/child/home')
   } catch {
-    showToast('❌ 切换失败，请重试')
+    showToast(t('toast.switchFailed'))
   }
 }
 

@@ -57,8 +57,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { createTag as apiCreateTag } from '@/api/tags'
 import type { Tag } from '@/types'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: string[]
@@ -97,7 +100,7 @@ async function createTag() {
     emit('tag-created', res.data)
     emit('update:modelValue', [...props.modelValue, res.data.id])
     newTagName.value = ''
-    showToast('✅ 标签已创建')
+    showToast(t('toast.tagCreated'))
   } catch {
     // error handled by interceptor
   }

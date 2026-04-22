@@ -125,8 +125,11 @@ import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const aiStore = useAIStore()
@@ -203,7 +206,7 @@ async function loadReport() {
 
 async function generateReport() {
   if (!aiStore.aiEnabled) {
-    showToast('⚠️ 请先在设置中启用 AI 功能')
+    showToast(t('toast.aiNotEnabled'))
     router.push('/settings/ai')
     return
   }
@@ -216,7 +219,7 @@ async function generateReport() {
       reportGeneratedAt.value = ws.generatedAt.value
     }
   } catch {
-    showToast(ws.errorMessage.value || '生成失败，请重试')
+    showToast(ws.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
     reportLoading.value = false
   }

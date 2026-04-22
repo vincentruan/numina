@@ -76,8 +76,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { getAllocationTarget, setAllocationTarget, checkAllocationDrift } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const hasTarget = ref(false)
 const editingTarget = ref(false)
@@ -102,7 +105,7 @@ async function onSaveTarget() {
     })
     hasTarget.value = true
     editingTarget.value = false
-    showToast('✅ 目标已保存')
+    showToast(t('toast.aiTargetSaved'))
   } catch (e: any) {
     showToast(e.response?.data?.detail || '保存失败')
   }
@@ -114,7 +117,7 @@ async function onCheck() {
     const res = await checkAllocationDrift()
     driftResult.value = res.data
   } catch {
-    showToast('❌ 检测失败，请检查 AI 配置')
+    showToast(t('toast.aiDetectFailed'))
   } finally {
     checking.value = false
   }

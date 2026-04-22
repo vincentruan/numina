@@ -15,11 +15,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useCategoryStore } from '@/stores/category'
 import type { Asset } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AssetForm from '@/components/asset/AssetForm.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -35,10 +38,10 @@ async function onSubmit(data: Partial<Asset>) {
   try {
     if (isEdit.value) {
       await assetStore.updateAsset(route.params.id as string, data)
-      showToast('✅ 修改成功')
+      showToast(t('toast.updateSuccess'))
     } else {
       await assetStore.createAsset(data)
-      showToast('✅ 添加成功')
+      showToast(t('toast.addSuccess'))
     }
     // Dashboard refreshes naturally via staleness guard (2 min TTL)
     // invalidateDashboard() already called by asset store methods

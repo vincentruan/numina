@@ -79,11 +79,14 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { getWish, createWish, updateWish, deleteWish } from '@/api/wishes'
 import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -129,10 +132,10 @@ async function onSubmit() {
     }
     if (isEdit.value) {
       await updateWish(wishId.value!, payload)
-      showToast('✅ 已保存')
+      showToast(t('toast.wishSaved'))
     } else {
       await createWish(payload)
-      showToast('✅ 已添加')
+      showToast(t('toast.wishAdded'))
     }
     router.back()
   } finally {
@@ -144,7 +147,7 @@ async function onDelete() {
   if (!isEdit.value) return
   await showConfirmDialog({ title: '确认删除', message: '删除后无法恢复' })
   await deleteWish(wishId.value!)
-  showToast('🗑️ 已删除')
+  showToast(t('toast.deleteSuccess'))
   router.back()
 }
 

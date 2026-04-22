@@ -64,9 +64,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
 import { useStarField } from '@/composables/useStarField'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -90,7 +93,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.login(form.value)
-    showToast('🔐 登录成功')
+    showToast(t('toast.loginSuccess'))
     router.push('/')
   } catch (error: unknown) {
     // Handle captcha-related errors

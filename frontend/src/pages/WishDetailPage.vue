@@ -160,12 +160,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useWishStore } from '@/stores/wish'
 import { useAssetStore } from '@/stores/asset'
 import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
 import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -238,7 +241,7 @@ async function onRealize() {
       category_id: realizeForm.value.category_id || undefined
     }
     const res = await realizeWish(wish.value.id, payload)
-    showToast('✅ 已转化为资产')
+    showToast(t('toast.assetConverted'))
     showRealizeDialog.value = false
     router.push(`/assets/${res.data.id}`)
   } finally {
@@ -251,7 +254,7 @@ async function onCancel() {
     await showConfirmDialog({ title: '确认取消', message: '确定要取消这个心愿吗？' })
     acting.value = true
     await wishStore.updateWish(wish.value!.id, { status: 'cancelled' })
-    showToast('✅ 已取消')
+    showToast(t('toast.wishCancelled'))
   } catch {
     // cancelled
   } finally {
@@ -263,7 +266,7 @@ async function onReactivate() {
   acting.value = true
   try {
     await wishStore.updateWish(wish.value!.id, { status: 'pending' })
-    showToast('✅ 已重新激活')
+    showToast(t('toast.wishReactivated'))
   } finally {
     acting.value = false
   }
@@ -274,7 +277,7 @@ async function onDelete() {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${wish.value?.name}」吗？` })
     deleting.value = true
     await wishStore.deleteWish(wish.value!.id)
-    showToast('🗑️ 已删除')
+    showToast(t('toast.deleteSuccess'))
     router.back()
   } catch {
     // cancelled

@@ -45,8 +45,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { getAssetAlerts, refreshAssetAlerts, dismissAssetAlert } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const refreshing = ref(false)
@@ -68,7 +71,7 @@ async function loadAlerts() {
     const res = await getAssetAlerts()
     alerts.value = res.data
   } catch {
-    showToast('❌ 加载失败')
+    showToast(t('toast.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -79,9 +82,9 @@ async function onRefresh() {
   try {
     await refreshAssetAlerts()
     await loadAlerts()
-    showToast('✅ 扫描完成')
+    showToast(t('toast.aiScanComplete'))
   } catch {
-    showToast('❌ 扫描失败，请检查 AI 配置')
+    showToast(t('toast.aiScanFailed'))
   } finally {
     refreshing.value = false
   }
@@ -92,7 +95,7 @@ async function onDismiss(id: string) {
     await dismissAssetAlert(id)
     alerts.value = alerts.value.filter(a => a.id !== id)
   } catch {
-    showToast('❌ 操作失败')
+    showToast(t('toast.operationFailed'))
   }
 }
 

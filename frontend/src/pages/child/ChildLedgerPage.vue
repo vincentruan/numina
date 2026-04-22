@@ -63,9 +63,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { getCoinBalance, getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import { useFamilyStore } from '@/stores/family'
+
+const { t } = useI18n()
 
 const familyStore = useFamilyStore()
 const balance = ref(0)
@@ -101,7 +104,7 @@ async function doGift() {
     giftAmountStr.value = ''
     await load()
   } catch {
-    showToast('❌ 赠送失败，请检查余额')
+    showToast(t('toast.grantBalanceFailed'))
   }
 }
 

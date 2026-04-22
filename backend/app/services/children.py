@@ -3,7 +3,6 @@
 import secrets
 import unicodedata
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
 
 import bcrypt
 from fastapi import HTTPException, status
@@ -38,7 +37,6 @@ def create_child(db: Session, family_id: str, req: CreateChildRequest) -> User:
         raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
 
     user = User(
-        id=str(uuid4()),
         family_id=family_id,
         username=req.username.lower(),  # 新增：必填
         display_name=req.display_name,
@@ -143,7 +141,6 @@ def force_logout_child(db: Session, child_id: str, family_id: str) -> None:
 
 def create_bind_token(db: Session, family_id: str) -> ChildBindToken:
     token = ChildBindToken(
-        id=str(uuid4()),
         family_id=family_id,
         token=secrets.token_urlsafe(32),
         expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24),

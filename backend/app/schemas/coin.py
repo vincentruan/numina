@@ -1,15 +1,16 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, field_validator
+
+from app.schemas.base import SnowflakeBase
 
 
-class SiblingResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
+class SiblingResponse(SnowflakeBase):
+    id: int
     display_name: str
     avatar_color: str | None
 
 
 class GiftRequest(BaseModel):
-    to_child_id: str
+    to_child_id: int
     amount: int
     emoji_reason: str | None = None
 

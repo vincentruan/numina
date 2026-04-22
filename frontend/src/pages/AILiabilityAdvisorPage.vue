@@ -86,8 +86,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { getLiabilityAdvice } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const loading = ref(false)
 const analyzing = ref(false)
@@ -120,7 +123,7 @@ async function onAnalyze() {
       if (idx >= 0) activeTab.value = idx
     }
   } catch {
-    showToast('❌ 分析失败，请检查 AI 配置')
+    showToast(t('toast.aiAnalyzeFailed'))
   } finally {
     analyzing.value = false
   }

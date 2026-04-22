@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, field_validator
+
+from app.schemas.base import SnowflakeBase
 
 
 class ChildWishCreate(BaseModel):
@@ -49,12 +51,10 @@ class ChildWishCreate(BaseModel):
         return v
 
 
-class ChildWishResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    family_id: str
-    child_user_id: str
+class ChildWishResponse(SnowflakeBase):
+    id: int
+    family_id: int
+    child_user_id: int
     name: str
     description: str | None
     emoji: str | None
@@ -63,7 +63,7 @@ class ChildWishResponse(BaseModel):
     has_cost_set: bool
     progress: float | None  # balance / star_coin_cost, computed by backend
     rejection_reason: str | None
-    realized_asset_id: str | None
+    realized_asset_id: int | None
     created_at: datetime
     updated_at: datetime
 
@@ -103,15 +103,13 @@ class UpdateChildWishCostRequest(BaseModel):
 
 
 class RealizeChildWishRequest(BaseModel):
-    category_id: str | None = None
+    category_id: int | None = None
 
 
-class ParentWishResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
-    family_id: str
-    child_user_id: str
+class ParentWishResponse(SnowflakeBase):
+    id: int
+    family_id: int
+    child_user_id: int
     child_display_name: str
     name: str
     description: str | None
@@ -121,14 +119,14 @@ class ParentWishResponse(BaseModel):
     star_coin_cost: int | None
     star_coin_cost_history: list | None
     rejection_reason: str | None
-    realized_asset_id: str | None
+    realized_asset_id: int | None
     created_at: datetime
     updated_at: datetime
     milestone_triggered: str | None = None
 
 
 class ChildWishStatsSimItem(BaseModel):
-    wish_id: str
+    wish_id: int
     name: str
     priority: str
     star_coin_cost: int

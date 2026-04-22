@@ -97,10 +97,13 @@
 import { ref, provide } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
 import PasswordStrengthIndicator from '@/components/common/PasswordStrengthIndicator.vue'
 import { useValidationErrors, validationErrorsKey } from '@/composables/useValidationErrors'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -147,7 +150,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.register(form.value)
-    showToast('🎉 注册成功')
+    showToast(t('toast.registerSuccess'))
     router.push('/')
   } catch (error: any) {
     // Handle field-level validation errors (422)
@@ -166,11 +169,11 @@ async function onSubmit() {
       altchaRef.value?.reset()
       showToast(message)
     } else if (code === 'FAMILY_INVITATION_CODE_NOT_FOUND') {
-      showToast('⚠️ 邀请码不存在')
+      showToast(t('errors.FAMILY_INVITATION_CODE_NOT_FOUND'))
     } else if (code === 'FAMILY_INVITATION_CODE_ALREADY_USED') {
-      showToast('⚠️ 邀请码已被使用')
+      showToast(t('errors.FAMILY_INVITATION_CODE_ALREADY_USED'))
     } else if (code === 'FAMILY_INVITATION_CODE_REVOKED') {
-      showToast('⚠️ 邀请码已被撤销')
+      showToast(t('errors.FAMILY_INVITATION_CODE_REVOKED'))
     }
   } finally {
     loading.value = false

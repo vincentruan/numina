@@ -292,6 +292,7 @@ export default {
     aiAnalyzeFailed: '❌ Analysis failed, please check AI configuration',
     aiDetectFailed: '❌ Detection failed, please check AI configuration',
     aiTargetSaved: '✅ Target saved',
+    aiGenerateFailed: '❌ Generation failed, please try again',
     // Network
     networkTimeout: '📡 Request timed out, please check your connection',
     networkError: '📡 Cannot connect to server, please check your network',

@@ -59,9 +59,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useCategoryStore } from '@/stores/category'
 import type { Category } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const categoryStore = useCategoryStore()
 const activeTab = ref('physical')
@@ -92,7 +95,7 @@ function showEditDialog(cat: Category) {
 
 async function onDialogConfirm() {
   if (!formData.value.name) {
-    showToast('⚠️ 请输入名称')
+    showToast(t('toast.nameRequired'))
     return
   }
   try {
@@ -102,7 +105,7 @@ async function onDialogConfirm() {
         icon: formData.value.icon,
         color: formData.value.color
       })
-      showToast('✅ 修改成功')
+      showToast(t('toast.updateSuccess'))
     } else {
       await categoryStore.createCategory({
         name: formData.value.name,
@@ -110,7 +113,7 @@ async function onDialogConfirm() {
         color: formData.value.color,
         asset_type: activeTab.value as 'physical' | 'financial'
       })
-      showToast('✅ 添加成功')
+      showToast(t('toast.addSuccess'))
     }
   } catch {
     // Error handled by interceptor
@@ -121,7 +124,7 @@ async function onDelete(cat: Category) {
   try {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${cat.name}」吗？` })
     await categoryStore.deleteCategory(cat.id)
-    showToast('🗑️ 已删除')
+    showToast(t('toast.deleteSuccess'))
   } catch {
     // cancelled
   }

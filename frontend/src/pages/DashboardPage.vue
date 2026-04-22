@@ -505,9 +505,9 @@ function toggleViewMode() {
 function toggleCategoryView() {
   showCategoryGroups.value = !showCategoryGroups.value
   if (showCategoryGroups.value) {
-    showToast('✅ 已切换到分类视图')
+    showToast(t('toast.switchedToCategoryView'))
   } else {
-    showToast('✅ 已切换到列表视图')
+    showToast(t('toast.switchedToListView'))
   }
 }
 
@@ -582,7 +582,7 @@ function toggleSelection(id: string) {
 
 async function handleBatchShare() {
   if (selectedIds.value.length === 0) {
-    showToast('⚠️ 请先选择资产')
+    showToast(t('toast.assetSelectFirst'))
     return
   }
 
@@ -612,18 +612,18 @@ async function handleBatchShare() {
 
     // Download the image
     downloadImage(blob, `${title}.png`)
-    showToast('🖼️ 图片已保存')
+    showToast(t('toast.imageSaved'))
     exitSelectionMode()
   } catch (error) {
     closeToast()
     console.error('Share failed:', error)
-    showToast('❌ 分享失败，请重试')
+    showToast(t('toast.shareFailed'))
   }
 }
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) {
-    showToast('⚠️ 请先选择资产')
+    showToast(t('toast.assetSelectFirst'))
     return
   }
 
@@ -636,7 +636,7 @@ async function handleBatchDelete() {
     try {
       const res = await batchArchiveAssets(selectedIds.value)
       closeToast()
-      showToast(`🗑️ 成功删除 ${res.data.success_count} 项资产`)
+      showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
       selectionMode.value = false
       selectedIds.value = []
       selectAll.value = false
@@ -652,24 +652,24 @@ async function handleBatchDelete() {
 
 async function handleBatchCategory() {
   if (selectedIds.value.length === 0) {
-    showToast('⚠️ 请先选择资产')
+    showToast(t('toast.assetSelectFirst'))
     return
   }
   // Show category picker - simplified version
-  showToast('⚠️ 请使用单个资产编辑功能修改分类')
+  showToast(t('toast.assetEditCategoryHint'))
 }
 
 async function handleBatchTag() {
   if (selectedIds.value.length === 0) {
-    showToast('⚠️ 请先选择资产')
+    showToast(t('toast.assetSelectFirst'))
     return
   }
-  showToast('⚠️ 请使用单个资产编辑功能修改标签')
+  showToast(t('toast.assetEditTagHint'))
 }
 
 async function onMoreActionSelect(action: any) {
   if (selectedIds.value.length === 0) {
-    showToast('⚠️ 请先选择资产')
+    showToast(t('toast.assetSelectFirst'))
     return
   }
 
@@ -679,13 +679,13 @@ async function onMoreActionSelect(action: any) {
       case 'retire': {
         const res = await batchUpdateStatus(selectedIds.value, 'archived')
         closeToast()
-        showToast(`✅ 成功退役 ${res.data.success_count} 项资产`)
+        showToast(t('toast.assetRetireBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'activate': {
         const res = await batchUpdateStatus(selectedIds.value, 'active')
         closeToast()
-        showToast(`✅ 成功激活 ${res.data.success_count} 项资产`)
+        showToast(t('toast.assetActivateBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'export': {
@@ -700,7 +700,7 @@ async function onMoreActionSelect(action: any) {
         a.download = `assets-export-${new Date().toISOString().slice(0, 10)}.json`
         a.click()
         URL.revokeObjectURL(url)
-        showToast(`✅ 成功导出 ${res.data.count} 项资产`)
+        showToast(t('toast.assetExportBatchSuccess', { count: res.data.count }))
         break
       }
     }

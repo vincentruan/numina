@@ -1,8 +1,9 @@
 import re
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, field_validator
 
 from app.constants.pin import ALLOWED_EMOJIS
+from app.schemas.base import SnowflakeBase
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
@@ -90,9 +91,8 @@ class UpdateChildRequest(BaseModel):
         return v
 
 
-class ChildResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
+class ChildResponse(SnowflakeBase):
+    id: int
     username: str  # 新增：必填
     display_name: str
     avatar_color: str

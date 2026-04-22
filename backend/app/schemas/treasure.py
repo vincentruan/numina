@@ -1,12 +1,10 @@
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict
+from app.schemas.base import SnowflakeBase
 
 
-class TreasureItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
+class TreasureItem(SnowflakeBase):
+    id: int
     name: str
     image_url: str | None
     purchase_date: date | None

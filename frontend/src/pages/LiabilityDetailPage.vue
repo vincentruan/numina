@@ -106,9 +106,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+
+const { t } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
@@ -150,16 +153,16 @@ async function onPaymentConfirm(action: string) {
   if (action === 'confirm') {
     const amount = parseFloat(paymentAmount.value)
     if (isNaN(amount) || amount <= 0) {
-      showToast('⚠️ 请输入有效金额')
+      showToast(t('toast.paymentAmountRequired'))
       return false
     }
     if (amount > (liability.value?.remaining_amount || 0)) {
-      showToast('⚠️ 还款金额不能超过剩余本金')
+      showToast(t('toast.paymentExceedsBalance'))
       return false
     }
     try {
       await liabilityStore.recordPayment(liability.value!.id, amount)
-      showToast('💰 还款成功')
+      showToast(t('toast.paymentSuccess'))
       paymentAmount.value = ''
       return true
     } catch {
@@ -175,7 +178,7 @@ async function onDelete() {
     await showConfirmDialog({ title: '确认删除', message: `确定要删除「${liability.value?.name}」吗？` })
     deleting.value = true
     await liabilityStore.deleteLiability(liability.value!.id)
-    showToast('🗑️ 已删除')
+    showToast(t('toast.deleteSuccess'))
     router.back()
   } catch {
     // cancelled

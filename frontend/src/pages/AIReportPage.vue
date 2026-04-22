@@ -131,11 +131,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAIStore } from '@/stores/ai'
 import { getAIReport } from '@/api/ai'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
+
+const { t } = useI18n()
 
 const aiStore = useAIStore()
 const ws = useAIReportWS()
@@ -176,7 +179,7 @@ async function loadExistingReport() {
 
 async function onGenerate() {
   if (!aiStore.config?.ai_enabled) {
-    showToast('⚠️ 请先在设置中启用 AI 功能')
+    showToast(t('toast.aiNotEnabled'))
     return
   }
   generating.value = true

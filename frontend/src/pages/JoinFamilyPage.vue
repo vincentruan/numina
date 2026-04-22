@@ -81,8 +81,11 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
+
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -104,7 +107,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.joinFamily(form.value)
-    showToast('🎉 加入成功')
+    showToast(t('toast.joinSuccess'))
     router.push('/')
   } catch (error: any) {
     // Handle captcha-related errors
@@ -112,7 +115,7 @@ async function onSubmit() {
     const status = error.response?.status
 
     if (status === 503) {
-      showToast('⚠️ 验证服务暂时不可用，请稍后重试')
+      showToast(t('errors.CAPTCHA_SERVICE_UNAVAILABLE'))
     } else if (detail.includes('验证码')) {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()
