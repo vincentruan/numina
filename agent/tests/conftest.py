@@ -62,5 +62,5 @@ def mock_deerflow_client():
 @pytest.fixture
 def test_app():
     """FastAPI test application instance."""
-    from main import app
+    from app.main import app
     return app

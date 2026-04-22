@@ -67,11 +67,11 @@ def client():
     import os
     os.environ["AGENT_INTERNAL_TOKEN"] = _TOKEN
 
-    from main import app
+    from app.main import app
     # Patch validate_required at the class level (avoids pydantic v2 setattr restriction)
     # and patch the module-level settings token used by routers
     with (
-        patch("config.AgentSettings.validate_required", return_value=None),
+        patch("app.config.AgentSettings.validate_required", return_value=None),
         patch("services.orchestrator.settings.AGENT_INTERNAL_TOKEN", _TOKEN, create=True),
     ):
         with TestClient(app, raise_server_exceptions=True) as c:

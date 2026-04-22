@@ -140,9 +140,9 @@ class TestAuditLogger:
 class TestUseDeerflowFlag:
     def test_use_deerflow_defaults_false(self):
         import importlib
-        import config
-        importlib.reload(config)
-        assert config.settings.USE_DEERFLOW is False
+        import app.config
+        importlib.reload(app.config)
+        assert app.config.settings.USE_DEERFLOW is False
 
     def test_deerflow_attempted_defaults_false(self):
         entry = AuditEntry(family_id="f1", capability="report", success=True)
