@@ -10,7 +10,7 @@ from app.core.logging_config import get_logger
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.services.cache import get_captcha_payload_cache
-from app.services.security_log import SecurityEventType
+from app.services.security_log import SecurityEventType, _log_security_event
 
 logger = get_logger("captcha")
 
