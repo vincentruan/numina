@@ -426,3 +426,40 @@ export interface ChildPinLoginRequest {
   username?: string  // 新增：username 方式
   pin_sequence: string[]
 }
+
+// ── Type guards for dynamic field access ──────────────────────────────────────
+
+/**
+ * Check if asset data represents a physical asset.
+ * Use before accessing physical-only fields (location, expected_lifespan_days, etc.)
+ */
+export function isPhysicalAsset(data: Partial<Asset>): boolean {
+  return data.asset_type === 'physical'
+}
+
+/**
+ * Check if asset data represents a financial asset.
+ * Use before accessing financial-only fields (institution, interest_rate, etc.)
+ */
+export function isFinancialAsset(data: Partial<Asset>): boolean {
+  return data.asset_type === 'financial'
+}
+
+/**
+ * Safely access a field from partial asset data.
+ * Returns undefined if field doesn't exist or data is null.
+ */
+export function getAssetField<T>(data: Partial<Asset> | null | undefined, field: keyof Asset): T | undefined {
+  if (!data) return undefined
+  const value = data[field]
+  return value !== undefined ? (value as T) : undefined
+}
+
+/**
+ * Safely access a liability field from partial data.
+ */
+export function getLiabilityField<T>(data: Partial<Liability> | null | undefined, field: keyof Liability): T | undefined {
+  if (!data) return undefined
+  const value = data[field]
+  return value !== undefined ? (value as T) : undefined
+}
