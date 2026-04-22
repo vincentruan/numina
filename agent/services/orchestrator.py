@@ -15,7 +15,7 @@ import logging
 import time
 import uuid
 
-from config import settings
+from app.config import settings
 from core.backend_client import BackendClient
 from core.llm import LLMClient
 from schemas.context import FamilyContext
