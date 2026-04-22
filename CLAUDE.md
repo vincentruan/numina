@@ -91,6 +91,24 @@ uv add <package>
 uv add --group dev <package>
 ```
 
+### Agent Development
+
+```bash
+cd agent
+
+# Install dependencies
+uv sync
+
+# Run development server
+uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
+
+# Run tests
+uv run pytest tests/ -v
+
+# Type check
+uv run mypy . --exclude vendor
+```
+
 ### Frontend Development
 
 ```bash
@@ -217,6 +235,34 @@ backend/app/
 ├── database.py     # SQLAlchemy engine, session factory, Base class
 └── main.py         # FastAPI app initialization, CORS, lifespan, router registration
 ```
+
+### Agent Structure
+
+```
+agent/app/
+├── main.py         # FastAPI 入口、lifespan、router 注册
+├── config.py       # AgentSettings (Pydantic BaseSettings)
+├── scheduler.py    # APScheduler 定时任务配置
+├── routers/        # FastAPI route handlers
+│   ├── report.py       # 家庭资产体检报告
+│   ├── alerts.py       # 固定资产老化预警
+│   ├── liability.py    # 负债结构分析
+│   ├── disposal.py     # 闲置资产处置建议
+│   ├── allocation.py   # 资产配置漂移检测
+│   ├── chat.py         # 问答助手
+│   └── suggest.py      # 资产录入智能建议
+├── services/       # 业务逻辑 (orchestrator, fallback_engine, deerflow_adapter)
+├── schemas/        # Pydantic request/response schemas
+├── core/           # 核心组件 (backend_client, llm, logging, pii_redactor)
+└── tests/          # pytest 测试
+```
+
+**Agent Key Patterns:**
+- **DeerFlow Toggle**: `USE_DEERFLOW=false` → fallback_engine (direct LLM); `USE_DEERFLOW=true` → deerflow_adapter
+- **PII Redaction**: All user data passes through `pii_redactor` before LLM calls
+- **Policy Guard**: All agent requests checked by `policy_guard` before execution
+- **Audit Logging**: Every agent decision logged to `logs/agent-audit.log`
+- **Internal Auth**: Backend calls agent with `X-Agent-Token` + `X-Family-Id` headers
 
 ### Frontend Structure
 
