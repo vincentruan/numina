@@ -108,6 +108,10 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize Snowflake ID generator before any DB operations
+    from app.utils.snowflake import init_snowflake
+    init_snowflake()
+
     # Initialize unified logging configuration
     setup_logging(
         log_level=settings.LOG_LEVEL,

@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     WEBAUTHN_RP_ID: str = "localhost"  # Domain (no protocol, no port)
     WEBAUTHN_RP_NAME: str = "Numina"
     WEBAUTHN_ORIGIN: str = "http://localhost:8080"  # Full origin with protocol
-    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
     ENVIRONMENT: str = "development"  # development / production
 
     # Cache configuration
@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     )
     AGENT_INTERNAL_TOKEN: str = ""  # agent ↔ backend service-to-service token
     AGENT_BASE_URL: str = "http://agent:8001"  # agent 服务内部地址
+
+    # Snowflake ID generator
+    SNOWFLAKE_MACHINE_ID: int | None = None  # 0-1023; None = auto-derive from container IP
 
     # Logging configuration
     LOG_LEVEL: str = "INFO"
