@@ -14,6 +14,7 @@ def test_admin_switch_child_requires_owner(client, auth_headers):
         "/api/v1/family/children",
         headers=auth_headers,
         json={
+            "username": "testchild1",
             "display_name": "TestChild",
             "pin": ["🐱", "🐶", "🐸", "🦊"],  # Required 4-emoji PIN
         },
@@ -57,6 +58,7 @@ def test_admin_switch_child_success(client, auth_headers):
         "/api/v1/family/children",
         headers=auth_headers,
         json={
+            "username": "testchild1",
             "display_name": "TestChild",
             "pin": ["🐱", "🐶", "🐸", "🦊"],  # Required 4-emoji PIN
         },
@@ -86,6 +88,7 @@ def test_admin_switch_child_cross_family_isolation(client, auth_headers):
         "/api/v1/family/children",
         headers=auth_headers,
         json={
+            "username": "owner1child",
             "display_name": "Owner1Child",
             "pin": ["🐱", "🐶", "🐸", "🦊"],
         },
@@ -105,6 +108,7 @@ def test_admin_switch_child_cross_family_isolation(client, auth_headers):
             "display_name": "Owner 2",
             "password": "Owner2Pass123",
             "family_name": "Second Family",
+            "family_invitation_code": "AUTO-ADMIN",
         },
     )
     assert register_resp.status_code == 200
@@ -116,6 +120,7 @@ def test_admin_switch_child_cross_family_isolation(client, auth_headers):
         "/api/v1/family/children",
         headers=owner2_headers,
         json={
+            "username": "owner2child",
             "display_name": "Owner2Child",
             "pin": ["🦁", "🐯", "🌟", "🌈"],
         },

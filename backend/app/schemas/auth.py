@@ -1,10 +1,10 @@
 import re
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from app.constants.pin import ALLOWED_EMOJIS
 
-_HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
+_HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 def validate_password_strength(password: str) -> str:
@@ -42,6 +42,7 @@ class RegisterRequest(BaseModel):
     password: str
     display_name: str
     family_name: str
+    family_invitation_code: str
     altcha: str | None = None  # Captcha payload (required in production)
 
     @field_validator("username")
@@ -53,6 +54,12 @@ class RegisterRequest(BaseModel):
     @classmethod
     def check_password(cls, v: str) -> str:
         return validate_password_strength(v)
+
+    @field_validator("family_invitation_code")
+    @classmethod
+    def normalize_invitation_code(cls, v: str) -> str:
+        """Normalize to uppercase for consistent matching."""
+        return v.upper().strip()
 
 
 class LoginRequest(BaseModel):
@@ -152,7 +159,8 @@ class ChangePasswordRequest(BaseModel):
 
 
 class ChildPinLoginRequest(BaseModel):
-    child_id: str  # User UUID
+    child_id: str | None = None  # 可选：UUID 方式
+    username: str | None = None  # 新增：username 方式
     pin_sequence: list[str]  # 4 emojis from ALLOWED_EMOJIS
 
     @field_validator("pin_sequence")
@@ -164,6 +172,12 @@ class ChildPinLoginRequest(BaseModel):
             if emoji not in ALLOWED_EMOJIS:
                 raise ValueError(f"无效的表情: {emoji}")
         return v
+
+    @model_validator(mode="after")
+    def check_identifier_present(self):
+        if not self.child_id and not self.username:
+            raise ValueError("必须提供 child_id 或 username")
+        return self
 
 
 class VerifyParentRequest(BaseModel):

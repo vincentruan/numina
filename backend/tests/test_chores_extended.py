@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "username": "xiaoming4",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -30,6 +31,7 @@ def child_user(client, auth_headers):
 def child_user2(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小红",
+        "username": "xiaohong4",
         "avatar_color": "#33FF57",
         "pin": ["🐶", "🌟", "🎈", "🐱"],
     })
@@ -240,6 +242,7 @@ def test_parent_grant_cross_family_rejected(client, auth_headers):
         "display_name": "Other Parent",
         "password": "TestPass123",
         "family_name": "Other Family",
+        "family_invitation_code": "AUTO-OTHER"
     })
     other_token = r.json()["data"]["access_token"]
     other_headers = {"Authorization": f"Bearer {other_token}"}
@@ -249,6 +252,7 @@ def test_parent_grant_cross_family_rejected(client, auth_headers):
     # Create child in other family
     child_resp = client.post("/api/v1/family/children", headers=other_headers, json={
         "display_name": "外来孩子",
+        "username": "visitorchild",
         "avatar_color": "#AABBCC",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })

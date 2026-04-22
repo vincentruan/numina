@@ -213,6 +213,7 @@ def _get_family_id(client) -> str:
         "display_name": "Parent",
         "password": "ParentPass123",
         "family_name": "Test Family",
+        "family_invitation_code": "AUTO-PARENT"
     })
     assert resp.status_code == 200
     me = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {resp.json()['data']['access_token']}"})
@@ -457,7 +458,8 @@ class TestTimingAttackProtection:
             "username": "timing_test_user",
             "display_name": "Timing Test",
             "password": "CorrectPassword123",
-            "family_name": "Test Family"
+            "family_name": "Test Family",
+            "family_invitation_code": "AUTO-TIMING"
         })
 
         # Measure login times for existing user with wrong password

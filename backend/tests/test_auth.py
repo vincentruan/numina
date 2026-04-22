@@ -4,7 +4,8 @@ def test_register_success(client):
         "username": "newuser",
         "display_name": "New User",
         "password": "Password123",
-        "family_name": "New Family"
+        "family_name": "New Family",
+        "family_invitation_code": "AUTO-CREATE"
     })
     assert response.status_code == 200
     data = response.json()["data"]
@@ -19,7 +20,8 @@ def test_register_duplicate_username(client, auth_headers):
         "username": "testuser",  # Already exists from auth_headers fixture
         "display_name": "Another User",
         "password": "Password123",
-        "family_name": "Another Family"
+        "family_name": "Another Family",
+        "family_invitation_code": "AUTO-DUP"
     })
     assert response.status_code == 400
     assert response.json()["code"] == "AUTH_USERNAME_EXISTS"

@@ -80,7 +80,8 @@ def auth_headers(client):
         "username": "testuser",
         "display_name": "Test User",
         "password": "TestPass123",
-        "family_name": "Test Family"
+        "family_name": "Test Family",
+        "family_invitation_code": "AUTO-TEST"
     })
     assert response.status_code == 200
     data = response.json().get("data", response.json())
@@ -97,7 +98,8 @@ def second_user_headers(client):
         "username": "testuser2",
         "display_name": "Test User 2",
         "password": "TestPass456",
-        "family_name": "Test Family 2"
+        "family_name": "Test Family 2",
+        "family_invitation_code": "AUTO-TEST-2"
     })
     assert response.status_code == 200
     data = response.json().get("data", response.json())

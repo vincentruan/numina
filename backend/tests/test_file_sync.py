@@ -22,6 +22,7 @@ def _register_and_get_ids(client):
         "display_name": "Sync User",
         "password": "TestPass123",
         "family_name": "Sync Family",
+        "family_invitation_code": "AUTO-SYNC"
     })
     assert resp.status_code == 200
     token = resp.json()["data"]["access_token"]

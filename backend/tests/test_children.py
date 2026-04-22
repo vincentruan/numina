@@ -17,6 +17,7 @@ def _register_owner(client):
         "display_name": "Owner",
         "password": "OwnerPass1",
         "family_name": "Test Family",
+        "family_invitation_code": "AUTO-OWNER",
     })
     assert resp.status_code == 200
     return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
@@ -29,6 +30,7 @@ def _register_member(client):
         "display_name": "Owner",
         "password": "OwnerPass1",
         "family_name": "Member Family",
+        "family_invitation_code": "AUTO-MEMBER",
     })
     assert owner_resp.status_code == 200
     owner_headers = {"Authorization": f"Bearer {owner_resp.json()['data']['access_token']}"}
@@ -51,6 +53,7 @@ def _create_child(client, headers, pin=None):
     pin = pin or VALID_PIN
     resp = client.post("/api/v1/family/children", json={
         "display_name": "小明",
+        "username": "xiaoming2",
         "pin": pin,
     }, headers=headers)
     return resp
@@ -241,6 +244,7 @@ def test_create_child_invalid_emoji(client):
     headers = _register_owner(client)
     resp = client.post("/api/v1/family/children", json={
         "display_name": "小红",
+        "username": "xiaohong2",
         "pin": ["🍕", "🍕", "🍕", "🍕"],
     }, headers=headers)
     assert resp.status_code == 422
@@ -250,6 +254,7 @@ def test_create_child_invalid_avatar_color(client):
     headers = _register_owner(client)
     resp = client.post("/api/v1/family/children", json={
         "display_name": "小红",
+        "username": "xiaohong",
         "avatar_color": "red",
         "pin": VALID_PIN,
     }, headers=headers)
@@ -271,6 +276,7 @@ def test_update_child_avatar_color_none_allowed(client):
     child_id = _create_child(client, headers).json()["data"]["id"]
     resp = client.patch(f"/api/v1/family/children/{child_id}", json={
         "display_name": "新名字",
+        "username": "newname",
     }, headers=headers)
     assert resp.status_code == 200
 
@@ -284,6 +290,7 @@ def test_three_children_all_returned(client):
 
     for i in range(3):
         resp = client.post("/api/v1/family/children", json={
+            "username": f"child{i}",
             "display_name": f"孩子{i}",
             "pin": VALID_PIN,
         }, headers=headers)

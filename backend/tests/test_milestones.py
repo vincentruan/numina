@@ -16,6 +16,7 @@ def _data(resp):
 def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "username": "xiaoming5",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -312,6 +313,7 @@ def test_parent_cross_family_blocked(client, auth_headers, child_user):
         "password": "Password123",
         "display_name": "Other Parent",
         "family_name": "Other Family",
+        "family_invitation_code": "AUTO-MILESTONE-OTHER"
     })
     assert r.status_code == 200
     other_token = _data(r)["access_token"]
