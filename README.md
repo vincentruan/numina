@@ -36,6 +36,7 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 |------|------|
 | 前端 | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
 | 后端 | Python 3.11+ + FastAPI + SQLAlchemy + Alembic |
+| Agent | Python 3.11+ + FastAPI + DeerFlow/LangChain |
 | 数据库 | SQLite |
 | 认证 | JWT (access token + refresh token) |
 | 部署 | Docker + docker-compose + Nginx |
@@ -176,6 +177,16 @@ numina/
 │   ├── tests/                 # pytest 测试（389 个测试全部通过）
 │   ├── alembic/               # 数据库迁移
 │   └── Dockerfile
+├── agent/                    # AI 分析微服务
+│   ├── app/                  # 入口文件包
+│   │   ├── main.py           # FastAPI 入口
+│   │   ├── config.py         # 配置
+│   │   └── scheduler.py      # 定时任务
+│   ├── routers/              # API 路由
+│   ├── services/             # 业务逻辑
+│   ├── schemas/              # 数据模型
+│   ├── core/                 # 核心组件
+│   └── tests/                # pytest 测试
 ├── frontend/                   # Vue 3 前端
 │   ├── src/
 │   │   ├── api/               # Axios API 客户端
@@ -237,6 +248,21 @@ GET    /api/v1/family/aggregate       # 家庭汇总
 POST   /api/v1/family/invite-code     # 生成邀请码
 ```
 
+### Agent API 端点
+
+Agent 微服务为内部服务，需 `X-Agent-Token` 认证：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/report/generate` | 家庭资产体检报告 |
+| POST | `/alerts/aging` | 固定资产老化预警 |
+| POST | `/liability/analyze` | 负债结构分析 |
+| POST | `/disposal/scan` | 闲置资产处置建议 |
+| POST | `/allocation/drift` | 资产配置漂移检测 |
+| POST | `/chat/ask` | 问答助手 |
+| POST | `/suggest/asset` | 资产录入智能建议 |
+```
+
 ## 🧪 测试
 
 后端包含 389 个自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
@@ -250,6 +276,13 @@ uv run pytest tests/ --cov=app --cov-report=html
 ```
 
 **测试结果**：✅ 389 passed, 0 failed
+
+Agent 包含单元测试和集成测试：
+
+```bash
+cd agent
+uv run pytest tests/ -v
+```
 
 ## 🚢 部署指南
 
