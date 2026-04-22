@@ -1,7 +1,7 @@
 export interface User {
   id: string
   family_id: string
-  username: string
+  username: string | null  // 修复：允许 null（儿童账号可能为 null，迁移后必填）
   display_name: string
   avatar_color: string
   role: 'owner' | 'member' | 'child'
@@ -217,6 +217,7 @@ export interface RegisterRequest {
   username: string
   display_name: string
   password: string
+  family_invitation_code: string
   altcha?: string
 }
 
@@ -249,6 +250,19 @@ export interface PaginatedResponse<T> {
   total: number
   page: number
   page_size: number
+  total_pages: number
+  has_next: boolean
+  has_prev: boolean
+}
+
+export interface HomeAssetsPageResponse {
+  items: Asset[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+  has_next: boolean
+  has_prev: boolean
 }
 
 export interface Wish {
@@ -395,6 +409,7 @@ export interface ChatMessage {
 
 export interface ChildUser {
   id: string
+  username: string | null  // 儿童用户名（迁移后必填，迁移前可能为 null）
   display_name: string
   avatar_color: string
   is_active: boolean
@@ -404,4 +419,10 @@ export interface ChildBindInfo {
   family_id: string
   family_name: string
   children: ChildUser[]
+}
+
+export interface ChildPinLoginRequest {
+  child_id?: string  // 可选：UUID 方式
+  username?: string  // 新增：username 方式
+  pin_sequence: string[]
 }
