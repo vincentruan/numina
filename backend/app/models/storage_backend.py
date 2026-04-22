@@ -1,16 +1,16 @@
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class StorageBackend(Base):
     __tablename__ = "storage_backends"
 
-    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     backend_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'local' | 'github' | 'webdav'
     display_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     config: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON-encoded encrypted credentials

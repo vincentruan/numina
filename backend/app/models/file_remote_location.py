@@ -1,18 +1,18 @@
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class FileRemoteLocation(Base):
     __tablename__ = "file_remote_locations"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    file_id: Mapped[str] = mapped_column(String(36), ForeignKey("cached_files.id"), nullable=False)
-    backend_id: Mapped[str] = mapped_column(String(100), ForeignKey("storage_backends.id"), nullable=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cached_files.id"), nullable=False)
+    backend_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("storage_backends.id"), nullable=False)
     remote_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     remote_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     remote_sha: Mapped[str | None] = mapped_column(String(100), nullable=True)  # GitHub blob SHA

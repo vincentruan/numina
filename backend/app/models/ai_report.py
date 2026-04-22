@@ -1,17 +1,17 @@
-import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import BigInteger, JSON, DateTime, Float, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class AIReport(Base):
     __tablename__ = "ai_reports"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"), nullable=False, index=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
     report_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     overall_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
     data_completeness_score: Mapped[float | None] = mapped_column(Float, nullable=True)

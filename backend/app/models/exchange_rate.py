@@ -1,16 +1,16 @@
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import DateTime, Float, String, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, Float, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class ExchangeRate(Base):
     __tablename__ = "exchange_rates"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     base_currency: Mapped[str] = mapped_column(String(10), default="CNY")
     target_currency: Mapped[str] = mapped_column(String(10), nullable=False)
     rate: Mapped[float] = mapped_column(Float, nullable=False)

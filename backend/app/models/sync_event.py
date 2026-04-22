@@ -1,18 +1,18 @@
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class SyncEvent(Base):
     __tablename__ = "sync_events"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    file_id: Mapped[str] = mapped_column(String(36), ForeignKey("cached_files.id"), nullable=False)
-    backend_id: Mapped[str | None] = mapped_column(String(100), ForeignKey("storage_backends.id"), nullable=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    file_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("cached_files.id"), nullable=False)
+    backend_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("storage_backends.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)  # upload_started|upload_succeeded|upload_failed|deleted|default_changed
     detail: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON string
     occurred_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

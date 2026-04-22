@@ -5,21 +5,21 @@ Use SecurityAuditLogService to write entries.
 """
 
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import BigInteger, DateTime, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class SecurityAuditLog(Base):
     __tablename__ = "security_audit_logs"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
-    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
-    family_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
+    family_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, index=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)  # 'success' | 'failure'
