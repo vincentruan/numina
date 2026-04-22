@@ -97,6 +97,7 @@ from app.scheduler import (
     setup_audit_log_purge_schedule,
     setup_exchange_rate_schedule,
     setup_file_sync_schedule,
+    setup_revoked_token_cleanup_schedule,
 )
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
@@ -180,6 +181,7 @@ async def lifespan(app: FastAPI):
         setup_exchange_rate_schedule()
         setup_file_sync_schedule()
         setup_audit_log_purge_schedule()
+        setup_revoked_token_cleanup_schedule()
         scheduler.start()
         logger.info("APScheduler 已启动")
     except Exception as e:

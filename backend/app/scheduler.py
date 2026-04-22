@@ -175,6 +175,21 @@ def audit_log_purge_job() -> None:
     purge_old_audit_logs(retention_days=90)
 
 
+def revoked_token_cleanup_job() -> None:
+    """APScheduler job: purge expired revoked token records."""
+    from app.auth.deps import cleanup_expired_revoked_tokens
+
+    db = SessionLocal()
+    try:
+        deleted = cleanup_expired_revoked_tokens(db)
+        if deleted > 0:
+            logger.info(f"清理过期撤销记录: {deleted} 条")
+    except Exception as e:
+        logger.exception(f"撤销记录清理失败: {e}")
+    finally:
+        db.close()
+
+
 def setup_audit_log_purge_schedule() -> None:
     """Schedule daily audit log purge at 03:00."""
     scheduler.add_job(
@@ -188,3 +203,17 @@ def setup_audit_log_purge_schedule() -> None:
         coalesce=True,
     )
     logger.info("审计日志清理任务已配置（每日 03:00）")
+
+
+def setup_revoked_token_cleanup_schedule() -> None:
+    """Schedule hourly cleanup of expired revoked tokens."""
+    scheduler.add_job(
+        revoked_token_cleanup_job,
+        trigger="cron",
+        minute=0,  # Every hour at :00
+        id="revoked_token_cleanup",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("撤销记录清理任务已配置（每小时）")
