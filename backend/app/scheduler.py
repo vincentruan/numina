@@ -7,7 +7,7 @@ from app.config import settings
 from app.core.logging_config import get_logger
 from app.database import SessionLocal
 from app.services.exchange_rate import ExchangeRateService
-from app.services.storage.config_crypto import decrypt_config, encrypt_config
+from app.services.storage.config_crypto import decrypt_config
 from app.services.storage.factory import get_backend_for_type
 
 logger = get_logger(__name__)
@@ -177,7 +177,7 @@ def audit_log_purge_job() -> None:
 
 def revoked_token_cleanup_job() -> None:
     """APScheduler job: purge expired revoked token records."""
-    from app.auth.deps import cleanup_expired_revoked_tokens
+    from app.auth.revoke_jti import cleanup_expired_revoked_tokens
 
     db = SessionLocal()
     try:
