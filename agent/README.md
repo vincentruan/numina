@@ -10,6 +10,10 @@ Backend (FastAPI)
     ▼
 Agent Service (FastAPI)
     │
+    ├── app/                # 入口文件包（新增）
+    │   ├── main.py         # FastAPI 入口
+    │   ├── config.py       # AgentSettings 配置
+    │   └── scheduler.py    # APScheduler 定时任务
     ├── PolicyGuard        — 检查 AI 开关、能力白名单、管理员限制
     ├── BackendClient      — 拉取家庭资产/负债/仪表盘数据
     ├── PIIRedactor        — 脱敏结构化数据 + 自由文本
@@ -18,6 +22,8 @@ Agent Service (FastAPI)
     ├── OutputMapper       — 将任意输出映射为稳定 AgentResponse
     └── AuditLogger        — 写入结构化审计日志
 ```
+
+**注意**: 入口文件位于 `app/` 包下，与 backend 结构保持一致。
 
 ## 快速启动
 
