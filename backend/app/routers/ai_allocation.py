@@ -2,6 +2,7 @@
 
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
