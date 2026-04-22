@@ -3,25 +3,25 @@
 from logging.config import fileConfig
 
 from alembic import context
-
-from app.db import get_engine
-from app.database import Base
 from app.config import settings
+from app.database import Base
+from app.db import get_engine
+from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
+from app.models.asset import Asset  # noqa: F401
+from app.models.category import Category  # noqa: F401
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
+from app.models.child_wish import ChildWish  # noqa: F401
+from app.models.family import Family  # noqa: F401
+from app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
+from app.models.liability import Liability  # noqa: F401
+from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.snapshot import AssetSnapshot  # noqa: F401
+from app.models.tag import Tag  # noqa: F401
 
 # Import all models
 from app.models.user import User  # noqa: F401
-from app.models.family import Family  # noqa: F401
-from app.models.category import Category  # noqa: F401
-from app.models.asset import Asset  # noqa: F401
-from app.models.liability import Liability  # noqa: F401
-from app.models.snapshot import AssetSnapshot  # noqa: F401
-from app.models.tag import Tag  # noqa: F401
-from app.models.wish import Wish  # noqa: F401
-from app.models.payment_record import PaymentRecord  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
-from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
-from app.models.child_wish import ChildWish  # noqa: F401
-from app.models.child_bind_token import ChildBindToken  # noqa: F401
+from app.models.wish import Wish  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
