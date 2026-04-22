@@ -230,6 +230,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { Asset, Category, Tag } from '@/types'
+import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
 import { getTags, createTag as apiCreateTag } from '@/api/tags'
 import { suggestAssetFields } from '@/api/ai'
@@ -408,21 +409,46 @@ async function onNameBlur() {
 // Populate form from initialData (edit mode)
 watch(() => props.initialData, (data) => {
   if (data) {
-    Object.keys(form.value).forEach(key => {
-      if ((data as any)[key] !== undefined) {
-        form.value[key] = String((data as any)[key] ?? '')
+    // Copy common fields
+    const commonKeys: (keyof Asset)[] = [
+      'name', 'asset_type', 'category_id', 'purchase_price', 'current_value',
+      'currency', 'purchase_date', 'status', 'notes', 'image_url'
+    ]
+    for (const key of commonKeys) {
+      const value = getAssetField<string | number>(data, key)
+      if (value !== undefined) {
+        form.value[key] = String(value ?? '')
       }
-    })
+    }
+    // Copy physical fields
+    const physicalKeys: (keyof Asset)[] = ['location', 'annual_maintenance_cost', 'usage_frequency']
+    for (const key of physicalKeys) {
+      const value = getAssetField<string | number>(data, key)
+      if (value !== undefined) {
+        form.value[key] = String(value ?? '')
+      }
+    }
+    // Copy financial fields
+    const financialKeys: (keyof Asset)[] = ['institution', 'interest_rate', 'maturity_date']
+    for (const key of financialKeys) {
+      const value = getAssetField<string | number>(data, key)
+      if (value !== undefined) {
+        form.value[key] = String(value ?? '')
+      }
+    }
     // P0: reverse-convert lifespan days → years
-    expectedLifeYears.value = (data as any).expected_lifespan_days
-      ? String(Math.round(Number((data as any).expected_lifespan_days) / 365))
+    const lifespanDays = getAssetField<number>(data, 'expected_lifespan_days')
+    expectedLifeYears.value = lifespanDays
+      ? String(Math.round(lifespanDays / 365))
       : ''
     // Tags
-    selectedTagIds.value = (data as any).tags?.map((t: Tag) => t.id) ?? []
+    const tags = getAssetField<Tag[]>(data, 'tags')
+    selectedTagIds.value = tags?.map((t: Tag) => t.id) ?? []
     // Image preview
-    if (data.image_url) {
-      const imageUrl = data.image_url.startsWith('/') ? `/api/v1${data.image_url}` : data.image_url
-      fileList.value = [{ url: imageUrl }]
+    const imageUrl = getAssetField<string>(data, 'image_url')
+    if (imageUrl) {
+      const fullUrl = imageUrl.startsWith('/') ? `/api/v1${imageUrl}` : imageUrl
+      fileList.value = [{ url: fullUrl }]
     }
   }
 }, { immediate: true })
@@ -488,7 +514,8 @@ function onDelete() {
 }
 
 function onSubmit() {
-  const data: Partial<Asset> = {
+  // Build base payload with common fields
+  const data: Partial<Asset> & { tag_ids?: string[] } = {
     name: form.value.name,
     asset_type: form.value.asset_type,
     category_id: form.value.category_id || undefined,
@@ -500,17 +527,18 @@ function onSubmit() {
     notes: form.value.notes || undefined,
     image_url: form.value.image_url || undefined,
     tag_ids: selectedTagIds.value.length ? selectedTagIds.value : undefined,
-  } as any
+  }
 
+  // Add type-specific fields based on asset_type
   if (form.value.asset_type === 'physical') {
-    ;(data as any).location = form.value.location || undefined
-    ;(data as any).expected_lifespan_days = form.value.expected_lifespan_days ?? undefined
-    ;(data as any).annual_maintenance_cost = form.value.annual_maintenance_cost ? Number(form.value.annual_maintenance_cost) : undefined
-    ;(data as any).usage_frequency = form.value.usage_frequency || undefined
+    data.location = form.value.location || undefined
+    data.expected_lifespan_days = form.value.expected_lifespan_days ?? undefined
+    data.annual_maintenance_cost = form.value.annual_maintenance_cost ? Number(form.value.annual_maintenance_cost) : undefined
+    data.usage_frequency = form.value.usage_frequency || undefined
   } else {
-    ;(data as any).institution = form.value.institution || undefined
-    ;(data as any).interest_rate = form.value.interest_rate ? Number(form.value.interest_rate) : undefined
-    ;(data as any).maturity_date = form.value.maturity_date || undefined
+    data.institution = form.value.institution || undefined
+    data.interest_rate = form.value.interest_rate ? Number(form.value.interest_rate) : undefined
+    data.maturity_date = form.value.maturity_date || undefined
   }
 
   emit('submit', data)

@@ -117,6 +117,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import type { Liability } from '@/types'
+import { getLiabilityField } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 
 const props = withDefaults(defineProps<{
@@ -160,11 +161,16 @@ const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || f
 
 watch(() => props.initialData, (data) => {
   if (data) {
-    Object.keys(form.value).forEach(key => {
-      if ((data as any)[key] !== undefined) {
-        form.value[key] = String((data as any)[key] ?? '')
+    const keys: (keyof Liability)[] = [
+      'name', 'category', 'original_amount', 'remaining_amount', 'currency',
+      'monthly_payment', 'interest_rate', 'start_date', 'end_date', 'institution', 'notes'
+    ]
+    for (const key of keys) {
+      const value = getLiabilityField<string | number>(data, key)
+      if (value !== undefined) {
+        form.value[key] = String(value ?? '')
       }
-    })
+    }
   }
 }, { immediate: true })
 
