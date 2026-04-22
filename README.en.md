@@ -34,6 +34,7 @@ Numina is a fully self-hosted family asset visualization and management system. 
 |-------|-----------|
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
 | Backend | Python 3.11+ + FastAPI + SQLAlchemy + Alembic |
+| Agent | Python 3.11+ + FastAPI + DeerFlow/LangChain |
 | Database | SQLite |
 | Auth | JWT (access token + refresh token) |
 | Deploy | Docker + docker-compose + Nginx |
@@ -149,6 +150,17 @@ numina/
 │   ├── tests/                 # pytest tests (36 tests, all passing)
 │   ├── alembic/               # Database migrations
 │   └── Dockerfile
+├── agent/                    # AI analysis microservice
+│   ├── app/                  # Entry point package
+│   │   ├── main.py           # FastAPI entry
+│   │   ├── config.py         # Configuration
+│   │   └── scheduler.py      # Scheduled tasks
+│   ├── routers/              # API routes
+│   ├── services/             # Business logic
+│   ├── schemas/              # Data models
+│   ├── core/                 # Core components
+│   └── tests/                # pytest tests
+│   └── Dockerfile
 ├── frontend/                   # Vue 3 frontend
 │   ├── src/
 │   │   ├── api/               # Axios API client
@@ -205,6 +217,20 @@ GET    /api/v1/family                     # Family info
 GET    /api/v1/family/aggregate           # Family aggregate
 ```
 
+### Agent API Endpoints
+
+Agent microservice is internal, requires `X-Agent-Token` authentication:
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/report/generate` | Family asset health report |
+| POST | `/alerts/aging` | Fixed asset aging alert |
+| POST | `/liability/analyze` | Liability structure analysis |
+| POST | `/disposal/scan` | Idle asset disposal suggestion |
+| POST | `/allocation/drift` | Asset allocation drift detection |
+| POST | `/chat/ask` | Q&A assistant |
+| POST | `/suggest/asset` | Asset entry smart suggestion |
+
 ## Testing
 
 The backend includes 36 automated tests covering authentication, assets, liabilities, and dashboard features.
@@ -215,6 +241,13 @@ uv run pytest tests/ -v
 ```
 
 **Test Results**: ✅ 36 passed, 0 failed
+
+Agent includes unit and integration tests:
+
+```bash
+cd agent
+uv run pytest tests/ -v
+```
 
 ## Deployment
 
