@@ -70,6 +70,7 @@ docker-compose up -d
 PORT=8080                                    # Nginx 端口
 SECRET_KEY=your-secret-key-here              # JWT 签名密钥（生产环境必须设置）
 DATABASE_URL=sqlite:////app/data/numina.db   # 数据库路径
+SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-1023，多实例部署时设置）
 ```
 
 ### 本地开发
