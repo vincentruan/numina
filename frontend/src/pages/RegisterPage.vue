@@ -8,6 +8,15 @@
     <van-form class="register-form" @submit="onSubmit">
       <van-cell-group inset>
         <van-field
+          v-model="form.family_invitation_code"
+          label="家庭邀请码"
+          placeholder="请输入6位邀请码"
+          maxlength="6"
+          :formatter="formatInvitationCode"
+          format-trigger="onBlur"
+          :rules="[{ required: true, message: '请输入邀请码' }]"
+        />
+        <van-field
           v-model="form.family_name"
           label="家庭名称"
           placeholder="请输入家庭名称"
@@ -106,12 +115,18 @@ const { setErrors, clearErrors, getError } = validationErrorsComposable
 provide(validationErrorsKey, validationErrorsComposable)
 
 const form = ref({
+  family_invitation_code: '',
   family_name: '',
   username: '',
   display_name: '',
   password: '',
   altcha: undefined as string | undefined
 })
+
+// Formatter for invitation code (auto-uppercase)
+function formatInvitationCode(value: string): string {
+  return value.toUpperCase()
+}
 
 // Real-time validation functions
 function validatePassword(value: string): boolean {
@@ -150,6 +165,12 @@ async function onSubmit() {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()
       showToast(message)
+    } else if (code === 'FAMILY_INVITATION_CODE_NOT_FOUND') {
+      showToast('邀请码不存在')
+    } else if (code === 'FAMILY_INVITATION_CODE_ALREADY_USED') {
+      showToast('邀请码已被使用')
+    } else if (code === 'FAMILY_INVITATION_CODE_REVOKED') {
+      showToast('邀请码已被撤销')
     }
   } finally {
     loading.value = false
