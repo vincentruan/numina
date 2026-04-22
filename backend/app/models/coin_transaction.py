@@ -1,26 +1,26 @@
 """Append-only coin transaction ledger for the child star coin economy."""
 
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class CoinTransaction(Base):
     __tablename__ = "coin_transactions"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"), nullable=False)
-    child_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    child_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     # Positive = credit (earn), negative = debit (spend). Integer copper coins.
     amount: Mapped[int] = mapped_column(Integer, nullable=False)
     # 'chore_earn' | 'wish_spend' | 'parent_grant' | 'gift_sent' | 'gift_received'
     transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
     # No FK — application-layer validation only
-    ref_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    ref_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     # chore_earn: AI-generated; parent_grant: parent-written
     narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
     narrative_emoji: Mapped[str | None] = mapped_column(String(20), nullable=True)

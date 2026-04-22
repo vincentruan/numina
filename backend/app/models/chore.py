@@ -1,28 +1,28 @@
 """Chore template and instance models for the Core Earn Loop."""
 
 from datetime import datetime
-from uuid import uuid4
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Table, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 # Association table: template ↔ assigned children
 chore_template_assignees = Table(
     "chore_template_assignees",
     Base.metadata,
-    Column("template_id", String(36), ForeignKey("chore_templates.id"), primary_key=True),
-    Column("child_user_id", String(36), ForeignKey("users.id"), primary_key=True),
+    Column("template_id", BigInteger, ForeignKey("chore_templates.id"), primary_key=True),
+    Column("child_user_id", BigInteger, ForeignKey("users.id"), primary_key=True),
 )
 
 
 class ChoreTemplate(Base):
     __tablename__ = "chore_templates"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"), nullable=False)
-    created_by: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    created_by: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     emoji: Mapped[str | None] = mapped_column(String(10), nullable=True)
     coin_reward: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -39,10 +39,10 @@ class ChoreTemplate(Base):
 class ChoreInstance(Base):
     __tablename__ = "chore_instances"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
-    template_id: Mapped[str] = mapped_column(String(36), ForeignKey("chore_templates.id"), nullable=False)
-    family_id: Mapped[str] = mapped_column(String(36), ForeignKey("families.id"), nullable=False)
-    child_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    template_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("chore_templates.id"), nullable=False)
+    family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
+    child_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     # Snapshot fields — preserved even if template is deleted/renamed
     chore_name: Mapped[str] = mapped_column(String(100), nullable=False)
     chore_emoji: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -56,7 +56,7 @@ class ChoreInstance(Base):
     streak_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     streak_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Tracks the actual child who submitted — needed for pool chores where child_user_id is family_id
-    submitted_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"), nullable=True)
+    submitted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     template = relationship("ChoreTemplate", back_populates="instances")
