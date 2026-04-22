@@ -28,7 +28,12 @@ def resolve_machine_id() -> int:
     """Resolve machine_id with priority: env var > IP-derived > fallback 1."""
     env_val = os.environ.get("SNOWFLAKE_MACHINE_ID")
     if env_val is not None:
-        return int(env_val) & _MAX_MACHINE_ID
+        try:
+            return int(env_val) & _MAX_MACHINE_ID
+        except ValueError:
+            raise ValueError(
+                f"SNOWFLAKE_MACHINE_ID must be an integer, got: {env_val!r}"
+            ) from None
 
     try:
         hostname = socket.gethostname()
@@ -53,6 +58,11 @@ class _SnowflakeGenerator:
     def next_id(self) -> int:
         with self._lock:
             now = int(time.time() * 1000)
+
+            if now < self._last_ms:
+                # Clock moved backward — wait until we catch up
+                while now < self._last_ms:
+                    now = int(time.time() * 1000)
 
             if now == self._last_ms:
                 self._sequence = (self._sequence + 1) & _MAX_SEQUENCE
@@ -86,7 +96,7 @@ def init_snowflake() -> None:
 
 def next_id() -> int:
     """Generate the next Snowflake ID. Thread-safe; auto-initializes if needed."""
-    global _generator
     if _generator is None:
         init_snowflake()
-    return _generator.next_id()  # type: ignore[union-attr]
+    assert _generator is not None
+    return _generator.next_id()
