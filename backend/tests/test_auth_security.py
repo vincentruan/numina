@@ -9,6 +9,7 @@ import pytest
 
 from app.services.auth import hash_password
 from app.auth import deps as auth_deps
+from app.auth.revoke_jti import revoke_jti, revoke_all_user_tokens, _is_jti_revoked
 
 
 # ---------------------------------------------------------------------------
@@ -28,7 +29,7 @@ def test_revoke_jti_blocks_token_use(client, auth_headers):
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     jti = payload["jti"]
 
-    auth_deps.revoke_jti(jti, ttl_seconds=300)
+    revoke_jti(jti, ttl_seconds=300)
 
     resp = client.get("/api/v1/auth/me", headers=auth_headers)
     assert resp.status_code == 401
@@ -46,7 +47,7 @@ def test_revoke_all_user_tokens_blocks_access(client, auth_headers):
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     user_id = payload["sub"]
 
-    auth_deps.revoke_all_user_tokens(user_id)
+    revoke_all_user_tokens(user_id)
 
     resp = client.get("/api/v1/auth/me", headers=auth_headers)
     assert resp.status_code == 401
@@ -65,7 +66,7 @@ def test_refresh_rotates_jti(client, auth_headers):
     assert resp.status_code == 200
 
     # Old JTI must now be in the revocation store
-    assert auth_deps._is_jti_revoked(old_jti)
+    assert _is_jti_revoked(old_jti)
 
 
 def test_new_tokens_after_refresh_work(client, auth_headers):

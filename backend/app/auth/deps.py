@@ -21,9 +21,6 @@ from sqlalchemy.orm import Session
 from app.auth.revoke_jti import (
     _is_jti_revoked,
     _is_token_revoked_for_user,
-    cleanup_expired_revoked_tokens,
-    revoke_all_user_tokens,
-    revoke_jti,
 )
 from app.config import settings
 from app.database import get_db

@@ -1,7 +1,6 @@
 """Captcha verification dependency for ALTCHA."""
 
 import hashlib
-import logging
 
 from fastapi import Depends, Request
 from sqlalchemy.orm import Session
@@ -11,7 +10,7 @@ from app.core.logging_config import get_logger
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.services.cache import get_captcha_payload_cache
-from app.services.security_log import _log_security_event, SecurityEventType
+from app.services.security_log import SecurityEventType
 
 logger = get_logger("captcha")
 

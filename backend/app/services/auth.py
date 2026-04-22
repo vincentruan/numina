@@ -405,7 +405,8 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
 def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     from jose import JWTError, jwt
 
-    from app.auth.deps import ALGORITHM, _verify_token, revoke_jti
+    from app.auth.deps import ALGORITHM, _verify_token
+    from app.auth.revoke_jti import revoke_jti
     from app.config import settings
 
     # Use _verify_token so JTI revocation check is applied
@@ -480,7 +481,7 @@ def change_password(
     db: Session, user: User, old_password: str, new_password: str
 ) -> None:
     """Change user password and revoke all existing tokens."""
-    from app.auth.deps import revoke_all_user_tokens
+    from app.auth.revoke_jti import revoke_all_user_tokens
 
     _check_password_change_rate_limit(user.id)
 
