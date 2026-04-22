@@ -351,7 +351,7 @@ def child_webauthn_register(
             expected_challenge=expected_challenge,
         )
     except Exception as e:
-        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, detail=str(e))
+        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e))
 
     existing_creds = json.loads(child.webauthn_credentials or "[]")
     existing_creds.append(verified_cred)
@@ -361,7 +361,7 @@ def child_webauthn_register(
         db.commit()
     except Exception:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR, detail="Failed to store credential")
+        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to store credential")
 
     return {"message": "passkey registered"}
 
@@ -427,7 +427,7 @@ def child_webauthn_login(
             credential_current_sign_count=stored_cred["sign_count"],
         )
     except Exception as e:
-        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, detail=str(e))
+        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e))
 
     stored_cred["sign_count"] = verification["new_sign_count"]
     child.webauthn_credentials = json.dumps(credentials)
@@ -436,7 +436,7 @@ def child_webauthn_login(
         db.commit()
     except Exception:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR, detail="Failed to update credential")
+        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to update credential")
 
     from app.auth.deps import create_access_token, create_refresh_token
     from app.auth.jwt_utils import user_claims
