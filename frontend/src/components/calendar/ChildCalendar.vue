@@ -13,7 +13,7 @@
     </div>
 
     <!-- Day grid -->
-    <div class="cal-grid">
+    <div class="cal-grid" :class="{ loading }">
       <!-- Leading empty cells -->
       <div v-for="n in leadingBlanks" :key="`b-${n}`" class="cal-cell empty" />
 
@@ -28,15 +28,25 @@
           future: day.date > todayStr,
           'variant-parent': props.variant === 'parent',
           'dot-dark': isDark(day),
+          streak: streakDates.has(day.date),
         }"
         :style="{ background: heatColor(day) }"
         @click="onDayClick(day)"
       >
         <span class="day-num">{{ dayNum(day.date) }}</span>
         <div class="day-dots">
-          <span v-if="day.chore_count > 0" class="dot dot-chore" :title="`${day.chore_count}个打卡`" />
-          <span v-if="day.wish_count > 0" class="dot dot-wish" :title="`${day.wish_count}个心愿`" />
-          <span v-if="day.milestone_count > 0" class="dot dot-milestone" :title="`${day.milestone_count}个成就`" />
+          <span v-if="day.chore_count > 0" class="dot-wrap">
+            <span class="dot dot-chore" />
+            <span v-if="day.chore_count > 1" class="dot-count dot-count-chore">{{ dotLabel(day.chore_count) }}</span>
+          </span>
+          <span v-if="day.wish_count > 0" class="dot-wrap">
+            <span class="dot dot-wish" />
+            <span v-if="day.wish_count > 1" class="dot-count dot-count-wish">{{ dotLabel(day.wish_count) }}</span>
+          </span>
+          <span v-if="day.milestone_count > 0" class="dot-wrap">
+            <span class="dot dot-milestone" />
+            <span v-if="day.milestone_count > 1" class="dot-count dot-count-milestone">{{ dotLabel(day.milestone_count) }}</span>
+          </span>
         </div>
       </div>
     </div>
@@ -46,6 +56,19 @@
       <span class="legend-item"><span class="dot dot-chore" />打卡</span>
       <span class="legend-item"><span class="dot dot-wish" />心愿</span>
       <span class="legend-item"><span class="dot dot-milestone" />成就</span>
+    </div>
+
+    <!-- Stats bar -->
+    <div class="cal-stats">
+      <span>打卡 {{ monthStats.totalChores }}次</span>
+      <span class="stats-sep">·</span>
+      <span>心愿 {{ monthStats.totalWishes }}个</span>
+      <span class="stats-sep">·</span>
+      <span>成就 {{ monthStats.totalMilestones }}个</span>
+      <template v-if="showCompletionRate">
+        <span class="stats-sep">·</span>
+        <span class="stats-rate">完成率 {{ monthStats.completionRate }}%</span>
+      </template>
     </div>
   </div>
 </template>
@@ -64,7 +87,15 @@ const props = defineProps<{
   extraQuery?: Record<string, string>
   /** 'child' = 圆角10px活泼风; 'parent' = 圆角8px规整风 */
   variant?: 'child' | 'parent'
+  /** 父母视角传 true，显示完成率 */
+  showCompletionRate?: boolean
 }>()
+
+function dotLabel(count: number): string {
+  if (count <= 1) return ''
+  if (count >= 10) return '9+'
+  return String(count)
+}
 
 function dayTotal(day: CalendarDaySummary): number {
   return day.chore_count + day.wish_count + day.milestone_count
@@ -98,6 +129,28 @@ const weekdays = ['日', '一', '二', '三', '四', '五', '六']
 const leadingBlanks = computed(() => {
   const first = new Date(year.value, month.value - 1, 1)
   return first.getDay() // 0=Sun
+})
+
+const monthStats = computed(() => {
+  const totalChores = days.value.reduce((s, d) => s + d.chore_count, 0)
+  const totalWishes = days.value.reduce((s, d) => s + d.wish_count, 0)
+  const totalMilestones = days.value.reduce((s, d) => s + d.milestone_count, 0)
+  const activeDays = days.value.filter(d => d.chore_count > 0).length
+  const pastDays = days.value.filter(d => d.date <= todayStr).length
+  const completionRate = pastDays > 0 ? Math.round((activeDays / pastDays) * 100) : 0
+  return { totalChores, totalWishes, totalMilestones, completionRate }
+})
+
+const streakDates = computed<Set<string>>(() => {
+  const set = new Set<string>()
+  for (let i = 1; i < days.value.length; i++) {
+    const prev = days.value[i - 1]
+    const curr = days.value[i]
+    if (prev.chore_count > 0 && curr.chore_count > 0) {
+      set.add(curr.date)
+    }
+  }
+  return set
 })
 
 function dayNum(dateStr: string): number {
@@ -198,6 +251,11 @@ onMounted(loadMonth)
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 0;
+  transition: opacity 0.2s;
+}
+.cal-grid.loading {
+  opacity: 0.4;
+  pointer-events: none;
 }
 
 .cal-cell {
@@ -271,6 +329,32 @@ onMounted(loadMonth)
   box-shadow: 0 0 0 1px #fff;
 }
 
+.dot-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dot-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  border-radius: 4px;
+  padding: 0 1px;
+}
+
+.dot-count-chore    { color: #2e7d32; }
+.dot-count-wish     { color: #e65100; }
+.dot-count-milestone { color: #6a1b9a; }
+
+.dot-dark .dot-count {
+  color: #fff;
+}
+
 /* 父母视角圆角 */
 .cal-cell.variant-parent {
   border-radius: 8px;
@@ -291,5 +375,33 @@ onMounted(loadMonth)
   gap: 4px;
   font-size: 11px;
   color: #888;
+}
+
+/* Stats bar */
+.cal-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #aaa;
+}
+.stats-sep { color: #ddd; }
+.stats-rate { color: #f5a623; font-weight: 600; }
+
+/* Streak connector */
+.cal-cell.streak::before {
+  content: '';
+  position: absolute;
+  left: -50%;
+  top: 50%;
+  width: 50%;
+  height: 2px;
+  background: #f5a623;
+  opacity: 0.5;
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 </style>
