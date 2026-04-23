@@ -57,11 +57,12 @@ register_or_login() {
   local password="$2"
   local display_name="$3"
   local family_name="$4"
+  local invite_code="${5:-${FAMILY_INVITATION_CODE:-}}"
 
   local resp
   resp=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
     -H "Content-Type: application/json" \
-    -d "{\"username\":\"$username\",\"display_name\":\"$display_name\",\"password\":\"$password\",\"family_name\":\"$family_name\"}")
+    -d "{\"username\":\"$username\",\"display_name\":\"$display_name\",\"password\":\"$password\",\"family_name\":\"$family_name\",\"family_invitation_code\":\"$invite_code\"}")
 
   local http_code body
   http_code=$(echo "$resp" | tail -1)
