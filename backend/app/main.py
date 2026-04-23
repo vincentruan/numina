@@ -29,6 +29,7 @@ from app.models.activity import Activity  # noqa: F401
 from app.models.blind_box_config import BlindBoxConfig  # noqa: F401
 from app.models.blind_box_draw import BlindBoxDraw  # noqa: F401
 from app.models.blind_box_gift import BlindBoxGift  # noqa: F401
+from app.models.bonus_draw import BonusDraw  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from app.models.ai_chat_message import AIChatMessage  # noqa: F401
