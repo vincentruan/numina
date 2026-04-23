@@ -47,3 +47,11 @@ def test_create_blind_box_config(db):
     assert config.base_draw_prob == 0.30
     assert config.weight_scale == 2.0
     assert config.surprise_threshold_coins == 200
+
+
+def test_user_birthday_fields(db):
+    from app.models.user import User
+    from sqlalchemy import inspect as sa_inspect
+    cols = {c.key for c in sa_inspect(User).mapper.column_attrs}
+    assert "birthday" in cols
+    assert "birthday_is_lunar" in cols
