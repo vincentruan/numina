@@ -26,6 +26,7 @@ from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
 from app.services.db_migrate import run_schema_migration
 from app.models.activity import Activity  # noqa: F401
+from app.models.blind_box_draw import BlindBoxDraw  # noqa: F401
 from app.models.blind_box_gift import BlindBoxGift  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
