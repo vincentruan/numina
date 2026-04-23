@@ -112,3 +112,34 @@ def test_is_special_day_birthday():
 
     result = is_special_day(FakeUser(), date(2026, 4, 23))
     assert result is True
+
+
+def test_parent_create_gift(client, auth_headers):
+    resp = client.post(
+        "/api/v1/blind-box/gifts",
+        json={"name": "乐高积木", "value_score": 7, "emoji": "🧱"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["name"] == "乐高积木"
+    assert data["value_score"] == 7
+
+
+def test_parent_list_gifts(client, auth_headers):
+    client.post(
+        "/api/v1/blind-box/gifts",
+        json={"name": "玩具车", "value_score": 4},
+        headers=auth_headers,
+    )
+    resp = client.get("/api/v1/blind-box/gifts", headers=auth_headers)
+    assert resp.status_code == 200
+    assert len(resp.json()) >= 1
+
+
+def test_parent_get_config(client, auth_headers):
+    resp = client.get("/api/v1/blind-box/config", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "enabled" in data
+    assert "base_draw_prob" in data

@@ -93,6 +93,7 @@ from app.routers import export as export_router
 from app.routers import files as files_router
 from app.routers import import_ as import_router
 from app.routers import calendar as calendar_router
+from app.routers import blind_box as blind_box_router
 from app.routers import milestones as milestones_router
 from app.routers import notifications as notifications_router
 from app.routers import treasures as treasures_router
@@ -370,6 +371,7 @@ app.include_router(milestones_router.router, prefix="/api/v1")
 app.include_router(notifications_router.router, prefix="/api/v1")
 app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
+app.include_router(blind_box_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
