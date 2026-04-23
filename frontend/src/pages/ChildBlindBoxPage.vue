@@ -75,18 +75,20 @@ onMounted(async () => {
 
 async function onDraw() {
   if (animating.value || revealed.value) return
+
+  // Tap-to-draw only works when there are bonus draws available.
+  // Chore-based draws are triggered from the task completion flow (not here).
+  if (bonusDraws.value.length === 0) {
+    showToast('⚠️ 暂无免费抽奖机会，完成任务后可获得')
+    return
+  }
+
   animating.value = true
   revealed.value = false
   store.clearLastDraw()
 
   try {
-    // Use first available bonus draw if any, otherwise require chore instances
-    if (bonusDraws.value.length > 0) {
-      await store.useBonusDraw(bonusDraws.value[0].id)
-    } else {
-      showToast('⚠️ 请先完成任务获得金币，再来抽奖')
-      return
-    }
+    await store.useBonusDraw(bonusDraws.value[0].id)
     revealed.value = true
   } catch {
     showToast('❌ 抽奖失败，请稍后再试')

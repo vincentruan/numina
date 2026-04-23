@@ -128,9 +128,14 @@ watch(config, (val) => {
   if (val) Object.assign(form, val)
 })
 
-async function onSave() {
-  await store.updateConfig({ ...form })
-  showToast('✅ 已保存')
+let _saveTimer: ReturnType<typeof setTimeout> | null = null
+
+function onSave() {
+  if (_saveTimer) clearTimeout(_saveTimer)
+  _saveTimer = setTimeout(async () => {
+    await store.updateConfig({ ...form })
+    showToast('✅ 已保存')
+  }, 600)
 }
 </script>
 

@@ -201,12 +201,16 @@ def create_gift_from_wish(
 
     # ChildWish has no estimated_price; use star_coin_cost as proxy (1 coin ≈ 1 yuan)
     price_proxy = getattr(wish, "star_coin_cost", None) or 50
+    # Map star_coin_cost to value_score 1-10:
+    # ≤50 → 1, ≤100 → 2, ≤200 → 3, ≤400 → 5, ≤800 → 7, >800 → 9
+    thresholds = [(50, 1), (100, 2), (200, 3), (400, 5), (800, 7)]
+    value_score = next((s for t, s in thresholds if price_proxy <= t), 9)
     gift = BlindBoxGift(
         family_id=current_user.family_id,
         name=wish.name,
         description=wish.description,
         emoji=wish.emoji,
-        value_score=min(max(round(price_proxy / 100), 1), 10),
+        value_score=value_score,
         source_wish_id=wish.id,
         created_by=current_user.id,
     )
