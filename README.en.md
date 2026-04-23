@@ -119,19 +119,19 @@ numina/
 │   │   ├── services/          # Business logic layer
 │   │   ├── auth/              # JWT authentication
 │   │   └── seed/              # Database seed data
-│   ├── tests/                 # pytest tests (36 tests, all passing)
+│   ├── tests/                 # pytest tests (532 tests, all passing)
 │   ├── alembic/               # Database migrations
 │   └── Dockerfile
 ├── agent/                    # AI analysis microservice
 │   ├── app/                  # Entry point package
 │   │   ├── main.py           # FastAPI entry
 │   │   ├── config.py         # Configuration
-│   │   └── scheduler.py      # Scheduled tasks
-│   ├── routers/              # API routes
-│   ├── services/             # Business logic
-│   ├── schemas/              # Data models
-│   ├── core/                 # Core components
-│   └── tests/                # pytest tests
+│   │   ├── scheduler.py      # Scheduled tasks
+│   │   ├── routers/          # API routes
+│   │   ├── services/         # Business logic
+│   │   ├── schemas/          # Data models
+│   │   └── core/             # Core components
+│   ├── tests/                # pytest tests
 │   └── Dockerfile
 ├── frontend/                   # Vue 3 frontend
 │   ├── src/
@@ -177,9 +177,9 @@ For the full endpoint list, see [backend/README.md](./backend/README.md) and [ag
 
 ## Testing
 
-The backend includes 36 automated tests covering authentication, assets, liabilities, and dashboard features.
+The backend includes 532 automated tests covering authentication, assets, liabilities, and dashboard features.
 
-**Test Results**: ✅ 36 passed, 0 failed
+**Test Results**: ✅ 532 passed, 0 failed
 
 Agent includes unit and integration tests.
 
@@ -230,7 +230,7 @@ cp ./data/numina.db ./backups/numina-$(date +%Y%m%d).db
 - [x] Daily cost calculation & smart analytics
 - [x] Token auto-refresh
 - [x] Liability payment tracking
-- [x] 36 automated tests
+- [x] 532 automated tests
 
 ### 🔜 Phase 2: Smart Analysis
 
