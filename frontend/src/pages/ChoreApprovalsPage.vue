@@ -35,8 +35,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getPendingApprovals, approveChore, rejectChore, type PendingApprovalInstance } from '@/api/chores'
 
+const { t } = useI18n()
 const pending = ref<PendingApprovalInstance[]>([])
 const loading = ref(true)
 const error = ref('')

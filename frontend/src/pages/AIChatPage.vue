@@ -61,6 +61,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
@@ -75,6 +76,7 @@ interface Message {
   created_at: string
 }
 
+const { t } = useI18n()
 const route = useRoute()
 const aiStore = useAIStore()
 const messages = ref<Message[]>([])
