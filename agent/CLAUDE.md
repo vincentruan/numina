@@ -1,16 +1,16 @@
 # agent/CLAUDE.md
 
 Module-specific guidance for the Python FastAPI AI agent microservice.
-See root `CLAUDE.md` for shared architecture context.
+See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
 
 ## Quality Commands
 
 ```bash
-uv run ruff check .          # lint
-uv run ruff check . --fix    # lint + auto-fix
-uv run ruff format .         # format
+uv run ruff check .              # lint
+uv run ruff check . --fix        # lint + auto-fix
+uv run ruff format .             # format (only files you touch)
 uv run mypy . --exclude vendor   # type check
-uv run pytest tests/ -v      # run all tests
+uv run pytest tests/ -v          # run all tests
 ```
 
 ## Tooling
@@ -19,7 +19,7 @@ uv run pytest tests/ -v      # run all tests
 - **mypy:** type checker. `ignore_missing_imports = true` is intentional — LangChain and DeerFlow stubs are incomplete. Use `# type: ignore[<code>]` with an inline comment explaining why when suppressing.
 - **pytest + pytest-asyncio:** async test runner. `asyncio_mode = "auto"` is set in `pyproject.toml`.
 
-## Risk Control Invariants (Non-Negotiable)
+## Key Invariants (Risk Control)
 
 These must hold in every code path — never bypass them:
 
@@ -27,7 +27,9 @@ These must hold in every code path — never bypass them:
 2. **Policy guard:** All agent requests must pass through `policy_guard`. Never skip or short-circuit it.
 3. **Audit logging:** Every agent decision must emit an audit event via `audit_logger`. This includes both success and error paths.
 
-## DeerFlow Toggle
+## Patterns
+
+### DeerFlow Toggle
 
 Controlled by `USE_DEERFLOW` env var (default: `false`). Set in `config.py` as `settings.USE_DEERFLOW`.
 
@@ -38,9 +40,7 @@ Controlled by `USE_DEERFLOW` env var (default: `false`). Set in `config.py` as `
 
 Both paths must produce equivalent `AgentResponse` output. When changing orchestration logic, test both paths.
 
-## Pydantic v2 Patterns
-
-Same as backend — always use v2 style:
+### Pydantic v2
 
 ```python
 # ✅ ConfigDict
@@ -60,6 +60,7 @@ class MyModel(BaseModel):
         return v.strip()
 ```
 
-## Incremental Formatting
+## Links
 
-Format only files you touch. Do not reformat the entire module in a single commit.
+- Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Module [`README.md`](./README.md) — quick start, architecture, API endpoints
