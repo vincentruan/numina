@@ -22,6 +22,7 @@ declare module 'vue' {
     AssetForm: typeof import('./src/components/asset/AssetForm.vue')['default']
     AssetListItem: typeof import('./src/components/asset/AssetListItem.vue')['default']
     CategoryGrid: typeof import('./src/components/asset/CategoryGrid.vue')['default']
+    ChildCalendar: typeof import('./src/components/calendar/ChildCalendar.vue')['default']
     ChildTabBar: typeof import('./src/components/child/ChildTabBar.vue')['default']
     CoinDisplay: typeof import('./src/components/coins/CoinDisplay.vue')['default']
     CopperCoin: typeof import('./src/components/coins/CopperCoin.vue')['default']
