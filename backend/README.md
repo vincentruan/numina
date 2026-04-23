@@ -88,6 +88,7 @@ POST   /api/v1/auth/login             # Login
 POST   /api/v1/auth/refresh           # Refresh token
 POST   /api/v1/auth/family/join       # Join family via invite code
 GET    /api/v1/auth/me                # Get current user
+PUT    /api/v1/auth/me                # Update current user profile
 
 # Assets
 GET    /api/v1/assets                 # List assets (filterable)
@@ -142,72 +143,8 @@ uv run pytest tests/ -v -k "daily_cost"          # keyword filter
 uv run pytest tests/ --cov=app --cov-report=html # coverage
 ```
 
-Test files:
-- `tests/test_auth.py` — 10 tests: register, login, refresh, join-family, me, isolation
-- `tests/test_assets.py` — 11 tests: CRUD, daily cost, return rate, cross-family isolation
-- `tests/test_liabilities.py` — 8 tests: CRUD, payment, full payoff, cross-family isolation
-- `tests/test_dashboard.py` — 7 tests: overview, allocation, trend, top-assets, daily-cost, low-usage, returns
-
-## Database
-
-### Supported Backends
-
-```
-# SQLite (default)
-sqlite:///./data/numina.db            # local dev
-sqlite:////app/data/numina.db         # Docker
-
-# MySQL
-mysql+pymysql://user:password@host:3306/database
-
-# PostgreSQL
-postgresql+psycopg2://user:password@host:5432/database
-```
-
-### Migrations
-
-```bash
-# Create a new migration after model changes
-uv run alembic revision --autogenerate -m "description"
-
-# Apply all pending migrations
-uv run alembic upgrade head
-```
-
-> **Important:** Always run `alembic upgrade head` before starting the app on an existing database.
-> The app's `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations.
-> Skipping this causes `OperationalError: no such column` on endpoints that read newly added columns.
-
-## Code Style
-
-See root [`CLAUDE.md`](../CLAUDE.md) for full conventions. Key points:
-- Imports: stdlib → third-party → local (`app.*`), blank line between groups
-- Type annotations: `str | None`, `list[str]` (Python 3.10+ syntax)
-- Error messages in Chinese: `raise HTTPException(status_code=404, detail="资产不存在")`
-- Pydantic v2 style: `ConfigDict`, `model_validate`, `field_validator`
-- Format only files you touch — do not reformat the entire module
-Common pitfalls:**
-- Auth endpoints return `200`, not `201`
-- Asset/Liability POST returns `201`
-- `TokenResponse` does not include `user` — call `/auth/me` after login
-
-## Testing
-
-473 tests, all passing. Each test gets a fresh in-memory SQLite database.
-
-```bash
-uv run pytest tests/ -v                          # all tests
-uv run pytest tests/test_assets.py -v            # single file
-uv run pytest tests/test_assets.py::test_create_physical_asset -v  # single test
-uv run pytest tests/ -v -k "daily_cost"          # keyword filter
-uv run pytest tests/ --cov=app --cov-report=html # coverage
-```
-
-Test files:
-- `tests/test_auth.py` — 10 tests: register, login, refresh, join-family, me, isolation
-- `tests/test_assets.py` — 11 tests: CRUD, daily cost, return rate, cross-family isolation
-- `tests/test_liabilities.py` — 8 tests: CRUD, payment, full payoff, cross-family isolation
-- `tests/test_dashboard.py` — 7 tests: overview, allocation, trend, top-assets, daily-cost, low-usage, returns
+Test files (44 files, 473 tests total):
+`test_activities`, `test_admin_child_switch`, `test_ai_allocation`, `test_ai_chat_sessions`, `test_ai_report`, `test_assets`, `test_auth`, `test_auth_security`, `test_cache`, `test_cache_config`, `test_captcha`, `test_child_identity`, `test_child_wishes`, `test_children`, `test_chores`, `test_chores_extended`, `test_coin_gifting`, `test_currencies`, `test_dashboard`, `test_error_codes`, `test_exchange_rate`, `test_export`, `test_family`, `test_family_invitation_code`, `test_family_settings`, `test_file_storage_models`, `test_file_sync`, `test_file_validation`, `test_jti_revocation`, `test_liabilities`, `test_logging_config`, `test_milestones`, `test_rate_limit`, `test_security_log`, `test_snowflake`, `test_storage_github`, `test_storage_local`, `test_storage_webdav`, `test_tags`, `test_treasures`, `test_upload`, `test_validation_errors`, `test_webauthn`, `test_wishes`
 
 ## Database
 
