@@ -28,6 +28,12 @@
       </div>
     </div>
 
+    <!-- Calendar -->
+    <div class="section">
+      <p class="section-title">📅 我的日历</p>
+      <ChildCalendar :fetch-month="fetchChildMonth" day-route="/child/calendar/day" variant="child" />
+    </div>
+
     <!-- Quick links -->
     <div class="quick-links">
       <router-link to="/child/wishes" class="quick-card wishes">
@@ -54,7 +60,9 @@
 import { ref, onMounted } from 'vue'
 import { getCoinBalance } from '@/api/coins'
 import { getMyChores, type ChoreInstance } from '@/api/chores'
+import { getChildCalendar } from '@/api/calendar'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { useFamilyStore } from '@/stores/family'
 
 const familyStore = useFamilyStore()
@@ -74,6 +82,10 @@ function statusLabel(status: ChoreInstance['status']): string {
 
 function todayDate(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function fetchChildMonth(year: number, month: number) {
+  return getChildCalendar(year, month)
 }
 
 onMounted(async () => {

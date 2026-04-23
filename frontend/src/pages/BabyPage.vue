@@ -76,6 +76,16 @@
               <van-cell title="本周完成率" :value="`${weeklyCompletionRate}%`" />
               <van-cell title="本月完成率" :value="`${monthlyCompletionRate}%`" />
             </van-cell-group>
+            <div class="calendar-wrap">
+              <ChildCalendar
+                v-if="calendarChildId"
+                :key="calendarChildId"
+                :fetch-month="fetchCalendarMonth"
+                day-route="/baby/calendar/day"
+                :extra-query="calendarChildId ? { child_id: calendarChildId } : undefined"
+                variant="parent"
+              />
+            </div>
           </van-tab>
         </van-tabs>
       </template>
@@ -90,8 +100,10 @@ import { useFamilyStore } from '@/stores/family'
 import { useChoreStore } from '@/stores/chore'
 import PageHeader from '@/components/common/PageHeader.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
+import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'
 import { listParentChildWishes, type ParentWish } from '@/api/childWishes'
+import { getFamilyChildCalendar } from '@/api/calendar'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
@@ -164,6 +176,18 @@ const weeklyCompletionRate = computed(() => {
 })
 
 const monthlyCompletionRate = computed(() => weeklyCompletionRate.value)
+
+const calendarChildId = computed<string | null>(() => {
+  if (selectedChildId.value) return String(selectedChildId.value)
+  // 全部视图时取第一个孩子
+  const first = childMembers.value[0]
+  return first ? String(first.id) : null
+})
+
+function fetchCalendarMonth(year: number, month: number) {
+  if (!calendarChildId.value) return Promise.reject(new Error('no child'))
+  return getFamilyChildCalendar(calendarChildId.value, year, month)
+}
 
 function getWishStatusType(status: string): 'primary' | 'success' | 'warning' | 'danger' | 'default' {
   const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'default'> = {
@@ -259,5 +283,9 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+}
+
+.calendar-wrap {
+  margin: 12px 16px 0;
 }
 </style>
