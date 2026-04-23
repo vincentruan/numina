@@ -115,6 +115,26 @@ const router = createRouter({
           component: () => import('@/pages/WishDetailPage.vue')
         },
         {
+          path: 'blind-box/gifts',
+          name: 'BlindBoxGiftList',
+          component: () => import('@/pages/BlindBoxGiftListPage.vue')
+        },
+        {
+          path: 'blind-box/gifts/new',
+          name: 'BlindBoxGiftCreate',
+          component: () => import('@/pages/BlindBoxGiftFormPage.vue')
+        },
+        {
+          path: 'blind-box/gifts/:id/edit',
+          name: 'BlindBoxGiftEdit',
+          component: () => import('@/pages/BlindBoxGiftFormPage.vue')
+        },
+        {
+          path: 'blind-box/config',
+          name: 'BlindBoxConfig',
+          component: () => import('@/pages/BlindBoxConfigPage.vue')
+        },
+        {
           path: 'family',
           name: 'Family',
           component: () => import('@/pages/FamilyPage.vue')
@@ -210,6 +230,7 @@ const router = createRouter({
         { path: 'tasks', name: 'ChildTasks', component: () => import('@/pages/child/ChildTasksPage.vue') },
         { path: 'ledger', name: 'ChildLedger', component: () => import('@/pages/child/ChildLedgerPage.vue') },
         { path: 'treasures', name: 'ChildTreasures', component: () => import('@/pages/child/ChildTreasuresPage.vue') },
+        { path: 'blind-box', name: 'ChildBlindBox', component: () => import('@/pages/ChildBlindBoxPage.vue') },
         { path: 'calendar/day', name: 'ChildDayDetail', component: () => import('@/pages/child/ChildDayDetailPage.vue') },
         { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue'), meta: { guest: true } },
         { path: 'auth', name: 'ChildAuth', component: () => import('@/pages/ChildAuthPage.vue'), meta: { guest: true } },
