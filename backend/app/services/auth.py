@@ -23,6 +23,7 @@ from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.auth.deps import create_access_token, create_refresh_token
+from app.auth.jwt_utils import user_claims
 from app.errors import AppError, ErrorCode
 from app.models.family import Family
 from app.models.family_invitation_code import FamilyInvitationCode
@@ -340,10 +341,10 @@ def register(
 
     return TokenResponse(
         access_token=create_access_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
+            user_claims(user)
         ),
         refresh_token=create_refresh_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
+            user_claims(user)
         ),
     )
 
@@ -393,10 +394,10 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
     )
     return TokenResponse(
         access_token=create_access_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
+            user_claims(user)
         ),
         refresh_token=create_refresh_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
+            user_claims(user)
         ),
     )
 
@@ -441,17 +442,8 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         "token_refresh", "success", user_id=user.id, family_id=user.family_id
     )
     return TokenResponse(
-        access_token=create_access_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
-        ),
-        refresh_token=create_refresh_token(
-            {
-                "sub": user.id,
-                "fid": user.family_id,
-                "role": user.role,
-                "token_version": user.token_version,
-            }
-        ),
+        access_token=create_access_token(user_claims(user)),
+        refresh_token=create_refresh_token(user_claims(user, token_version=user.token_version)),
     )
 
 
@@ -476,10 +468,10 @@ def join_family(db: Session, req: JoinFamilyRequest) -> TokenResponse:
 
     return TokenResponse(
         access_token=create_access_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
+            user_claims(user)
         ),
         refresh_token=create_refresh_token(
-            {"sub": user.id, "fid": user.family_id, "role": user.role}
+            user_claims(user)
         ),
     )
 
@@ -621,17 +613,8 @@ def child_pin_login(
 
     _log_security_event(SecurityEventType.LOGIN_SUCCESS, user_id=child.id)
     return TokenResponse(
-        access_token=create_access_token(
-            {"sub": child.id, "fid": child.family_id, "role": "child"}
-        ),
-        refresh_token=create_child_refresh_token(
-            {
-                "sub": child.id,
-                "fid": child.family_id,
-                "role": "child",
-                "token_version": child.token_version,
-            }
-        ),
+        access_token=create_access_token(user_claims(child)),
+        refresh_token=create_child_refresh_token(user_claims(child, token_version=child.token_version)),
     )
 
 
@@ -668,17 +651,8 @@ def admin_switch_to_child(db: Session, owner: User, child_id: str) -> TokenRespo
 
     # Generate child tokens (same as child_pin_login)
     return TokenResponse(
-        access_token=create_access_token(
-            {"sub": child.id, "fid": child.family_id, "role": "child"}
-        ),
-        refresh_token=create_child_refresh_token(
-            {
-                "sub": child.id,
-                "fid": child.family_id,
-                "role": "child",
-                "token_version": child.token_version,
-            }
-        ),
+        access_token=create_access_token(user_claims(child)),
+        refresh_token=create_child_refresh_token(user_claims(child, token_version=child.token_version)),
     )
 
 
@@ -737,7 +711,7 @@ def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
 
     return TokenResponse(
         access_token=create_access_token(
-            {"sub": child.id, "fid": child.family_id, "role": "child"}
+            user_claims(child)
         ),
         refresh_token=refresh_tok,  # keep same refresh token
     )

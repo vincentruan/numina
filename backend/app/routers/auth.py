@@ -439,10 +439,11 @@ def child_webauthn_login(
         raise AppError(ErrorCode.INTERNAL_ERROR, detail="Failed to update credential")
 
     from app.auth.deps import create_access_token, create_refresh_token
+    from app.auth.jwt_utils import user_claims
 
     tokens = TokenResponse(
-        access_token=create_access_token({"sub": child.id, "role": "child"}),
-        refresh_token=create_refresh_token({"sub": child.id, "role": "child"}),
+        access_token=create_access_token(user_claims(child)),
+        refresh_token=create_refresh_token(user_claims(child)),
     )
     set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
     return tokens

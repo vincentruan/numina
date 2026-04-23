@@ -4,6 +4,7 @@ from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
+from app.auth.jwt_utils import id_keyed_dict
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
@@ -280,7 +281,7 @@ def get_all_child_balances(
     # Ensure children with no transactions appear with balance 0
     for cid in child_ids:
         balance_map.setdefault(cid, 0)
-    return balance_map
+    return id_keyed_dict(balance_map)
 
 
 class ChoreStats(BaseModel):
@@ -335,7 +336,7 @@ def get_children_chore_stats(
         .all()
     )
 
-    stats: dict[str, ChoreStats] = {
+    stats = {
         row.child_user_id: ChoreStats(
             completed_this_week=row.completed or 0,
             total_this_week=row.total or 0,
@@ -345,4 +346,4 @@ def get_children_chore_stats(
     # Ensure all children appear even with no chores this week
     for cid in child_ids:
         stats.setdefault(cid, ChoreStats(completed_this_week=0, total_this_week=0))
-    return stats
+    return id_keyed_dict(stats)
