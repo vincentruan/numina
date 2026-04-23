@@ -110,6 +110,7 @@ PUT    /api/v1/liabilities/{id}/payment  # Record payment
 GET    /api/v1/dashboard/overview              # Total assets, liabilities, net worth
 GET    /api/v1/dashboard/allocation            # Asset allocation by category
 GET    /api/v1/dashboard/trend                 # Net worth trend over time
+GET    /api/v1/dashboard/top-assets            # Top assets by value
 GET    /api/v1/dashboard/daily-cost-ranking    # Daily cost ranking
 GET    /api/v1/dashboard/low-usage-assets      # Low-usage asset detection
 GET    /api/v1/dashboard/investment-returns    # Investment return ranking
