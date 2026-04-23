@@ -27,6 +27,7 @@ npm run test:run      # vitest run — run tests once (no watch)
 - **Vant components are auto-imported** via `unplugin-vue-components`. Do not manually import them.
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly.
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`.
+- **Incremental formatting** — run `npm run format` only on files you touch. Do not reformat the entire `src/` in one commit.
 
 ## Patterns
 
