@@ -53,27 +53,18 @@ uv run pytest tests/ --cov=app --cov-report=html  # coverage report
 ```
 backend/app/
 ├── auth/           # JWT token generation, validation, get_current_user dependency
-├── models/         # SQLAlchemy ORM models
-│   ├── user.py         # User (family_id, username, display_name, role, avatar_color)
-│   ├── family.py       # Family (name, invite_code, created_by)
-│   ├── asset.py        # Asset (physical + financial, daily cost fields)
-│   ├── liability.py    # Liability (mortgage, car_loan, credit_card, personal_loan)
-│   ├── category.py     # Category (system + custom, physical/financial types)
-│   ├── tag.py          # Tag (many-to-many with assets via asset_tags)
-│   └── snapshot.py     # AssetSnapshot (daily net worth snapshots)
-├── routers/        # FastAPI route handlers
-│   ├── auth.py         # register, login, refresh, join-family, me, update-me
-│   ├── assets.py       # CRUD + value update + archive
-│   ├── liabilities.py  # CRUD + payment recording
-│   ├── categories.py   # CRUD (system categories are read-only)
-│   ├── tags.py         # CRUD
-│   ├── dashboard.py    # overview, allocation, trend, top-assets, daily-cost, low-usage, returns
-│   └── family.py       # info, members, aggregate, invite-code, snapshots
+├── constants/      # Shared constants and enumerations
+├── core/           # Core utilities and shared infrastructure
+├── db/             # Database backend factory (SQLite, MySQL, PostgreSQL)
+├── middleware/     # Custom ASGI middleware
+├── models/         # SQLAlchemy ORM models (30+ modules — assets, liabilities, users, families, AI, children, chores, coins, files, and more)
+├── routers/        # API route handlers (35+ modules — auth, assets, liabilities, dashboard, family, AI, children, chores, wishes, files, and more)
 ├── schemas/        # Pydantic request/response schemas (one file per domain)
-├── services/       # Business logic (auth, asset calculations, dashboard aggregation)
+├── services/       # Business logic layer — one service module per domain
 ├── seed/           # Database seeding (21 system categories)
 ├── config.py       # Settings management (Pydantic BaseSettings, reads .env)
 ├── database.py     # SQLAlchemy engine, session factory, Base class
+├── scheduler.py    # APScheduler background tasks
 └── main.py         # FastAPI app initialization, CORS, lifespan, router registration
 ```
 
@@ -134,7 +125,7 @@ GET/POST/PUT/DELETE  /api/v1/tags
 
 ## Testing
 
-473 tests, all passing. Each test gets a fresh in-memory SQLite database.
+532 tests, all passing. Each test gets a fresh in-memory SQLite database.
 
 ```bash
 uv run pytest tests/ -v                          # all tests
@@ -144,8 +135,7 @@ uv run pytest tests/ -v -k "daily_cost"          # keyword filter
 uv run pytest tests/ --cov=app --cov-report=html # coverage
 ```
 
-Test files (44 files, 473 tests total):
-`test_activities`, `test_admin_child_switch`, `test_ai_allocation`, `test_ai_chat_sessions`, `test_ai_report`, `test_assets`, `test_auth`, `test_auth_security`, `test_cache`, `test_cache_config`, `test_captcha`, `test_child_identity`, `test_child_wishes`, `test_children`, `test_chores`, `test_chores_extended`, `test_coin_gifting`, `test_currencies`, `test_dashboard`, `test_error_codes`, `test_exchange_rate`, `test_export`, `test_family`, `test_family_invitation_code`, `test_family_settings`, `test_file_storage_models`, `test_file_sync`, `test_file_validation`, `test_jti_revocation`, `test_liabilities`, `test_logging_config`, `test_milestones`, `test_rate_limit`, `test_security_log`, `test_snowflake`, `test_storage_github`, `test_storage_local`, `test_storage_webdav`, `test_tags`, `test_treasures`, `test_upload`, `test_validation_errors`, `test_webauthn`, `test_wishes`
+Run `ls tests/test_*.py | sort` to see all test files.
 
 ## Database
 
