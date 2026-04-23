@@ -143,3 +143,25 @@ def test_parent_get_config(client, auth_headers):
     data = resp.json()
     assert "enabled" in data
     assert "base_draw_prob" in data
+
+
+def test_child_draw(client, auth_headers, second_user_headers):
+    # 父母先添加礼物
+    client.post(
+        "/api/v1/blind-box/gifts",
+        json={"name": "故事书", "value_score": 3, "emoji": "📚"},
+        headers=auth_headers,
+    )
+    # 孩子抽奖（使用 auth_headers 用户自己抽，因为需要 ChoreInstance）
+    resp = client.post(
+        "/api/v1/child/blind-box/draw",
+        json={"chore_instance_ids": []},  # 空列表应返回 400
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+
+
+def test_child_list_draws(client, auth_headers):
+    resp = client.get("/api/v1/child/blind-box/draws", headers=auth_headers)
+    assert resp.status_code == 200
+    assert isinstance(resp.json(), list)
