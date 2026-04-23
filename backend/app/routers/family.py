@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
-from sqlalchemy import func as sqlfunc
+from sqlalchemy import case, func as sqlfunc
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
@@ -324,7 +324,7 @@ def get_children_chore_stats(
             ChoreInstance.child_user_id,
             sqlfunc.count(ChoreInstance.id).label("total"),
             sqlfunc.sum(
-                sqlfunc.case((ChoreInstance.status == "approved", 1), else_=0)
+                case((ChoreInstance.status == "approved", 1), else_=0)
             ).label("completed"),
         )
         .filter(
