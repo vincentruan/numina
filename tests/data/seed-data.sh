@@ -39,13 +39,30 @@ log_err()  { echo -e "${RED}✗ $1${NC}" >&2; }
 # 参数解析
 # ========================================
 SKIP_DEMO=false
+INVITE_CODES=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --skip-demo) SKIP_DEMO=true; shift ;;
+    --invite-codes) IFS=',' read -ra INVITE_CODES <<< "$2"; shift 2 ;;
     *) log_err "未知参数: $1"; exit 1 ;;
   esac
 done
+
+# If FAMILY_INVITATION_CODES env var is set (comma-separated), use it
+if [[ ${#INVITE_CODES[@]} -eq 0 ]] && [[ -n "${FAMILY_INVITATION_CODES:-}" ]]; then
+  IFS=',' read -ra INVITE_CODES <<< "$FAMILY_INVITATION_CODES"
+fi
+
+_INVITE_INDEX=0
+next_invite_code() {
+  if [[ ${#INVITE_CODES[@]} -gt 0 ]]; then
+    echo "${INVITE_CODES[$_INVITE_INDEX]:-}"
+    _INVITE_INDEX=$(( _INVITE_INDEX + 1 ))
+  else
+    echo "${FAMILY_INVITATION_CODE:-}"
+  fi
+}
 
 # ========================================
 # 通用函数
@@ -57,7 +74,7 @@ register_or_login() {
   local password="$2"
   local display_name="$3"
   local family_name="$4"
-  local invite_code="${5:-${FAMILY_INVITATION_CODE:-}}"
+  local invite_code="${5:-$(next_invite_code)}"
 
   local resp
   resp=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
