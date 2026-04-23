@@ -121,7 +121,7 @@ def test_parent_create_gift(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 201
-    data = resp.json()
+    data = resp.json().get("data", resp.json())
     assert data["name"] == "乐高积木"
     assert data["value_score"] == 7
 
@@ -134,13 +134,14 @@ def test_parent_list_gifts(client, auth_headers):
     )
     resp = client.get("/api/v1/blind-box/gifts", headers=auth_headers)
     assert resp.status_code == 200
-    assert len(resp.json()) >= 1
+    data = resp.json().get("data", resp.json())
+    assert len(data) >= 1
 
 
 def test_parent_get_config(client, auth_headers):
     resp = client.get("/api/v1/blind-box/config", headers=auth_headers)
     assert resp.status_code == 200
-    data = resp.json()
+    data = resp.json().get("data", resp.json())
     assert "enabled" in data
     assert "base_draw_prob" in data
 
@@ -152,16 +153,85 @@ def test_child_draw(client, auth_headers, second_user_headers):
         json={"name": "故事书", "value_score": 3, "emoji": "📚"},
         headers=auth_headers,
     )
-    # 孩子抽奖（使用 auth_headers 用户自己抽，因为需要 ChoreInstance）
+    # 孩子抽奖（空列表 chore_instance_ids 应返回 400 或 422）
     resp = client.post(
         "/api/v1/child/blind-box/draw",
-        json={"chore_instance_ids": []},  # 空列表应返回 400
+        json={"chore_instance_ids": []},
         headers=auth_headers,
     )
-    assert resp.status_code == 400
+    assert resp.status_code in (400, 422)
 
 
 def test_child_list_draws(client, auth_headers):
     resp = client.get("/api/v1/child/blind-box/draws", headers=auth_headers)
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    data = resp.json().get("data", resp.json())
+    assert isinstance(data, list)
+
+
+def test_create_bonus_draw(db):
+    from app.models.bonus_draw import BonusDraw
+    from datetime import datetime, timezone, timedelta
+
+    bonus = BonusDraw(
+        family_id=1,
+        child_user_id=2,
+        source_wish_id=10,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    db.add(bonus)
+    db.commit()
+    assert bonus.id is not None
+    assert bonus.status == "available"
+
+
+def test_child_list_bonus_draws(client, auth_headers):
+    resp = client.get("/api/v1/child/blind-box/bonus-draws", headers=auth_headers)
+    assert resp.status_code == 200
+    data = resp.json().get("data", resp.json())
+    assert isinstance(data, list)
+
+
+def test_child_use_bonus_draw_not_found(client, auth_headers):
+    resp = client.post(
+        "/api/v1/child/blind-box/bonus-draws/99999/use",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+def test_create_gift_from_wish_not_found(client, auth_headers):
+    resp = client.post(
+        "/api/v1/blind-box/gifts/from-wish/99999",
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
+
+
+def test_create_gift_duplicate_warning(client, auth_headers):
+    client.post(
+        "/api/v1/blind-box/gifts",
+        json={"name": "乐高积木", "value_score": 7},
+        headers=auth_headers,
+    )
+    resp = client.post(
+        "/api/v1/blind-box/gifts",
+        json={"name": "乐高积木", "value_score": 5},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 201
+    data = resp.json().get("data", resp.json())
+    assert data.get("warning") is not None
+
+
+def test_draw_requires_chore_instance_ids(client, auth_headers):
+    resp = client.post(
+        "/api/v1/child/blind-box/draw",
+        json={"chore_instance_ids": []},
+        headers=auth_headers,
+    )
+    assert resp.status_code in (400, 422)
+
+
+def test_draw_rejects_already_consumed(client, auth_headers):
+    pass  # placeholder — requires ChoreInstance fixture

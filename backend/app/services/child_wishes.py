@@ -373,6 +373,26 @@ def realize_child_wish(
         db.commit()
         db.refresh(wish)
 
+        # Trigger bonus draw opportunity on wish realization (probabilistic)
+        try:
+            import random
+            from datetime import datetime, timedelta, timezone
+            from app.models.blind_box_config import BlindBoxConfig
+            from app.models.bonus_draw import BonusDraw
+            config = db.query(BlindBoxConfig).filter_by(family_id=user.family_id).first()
+            bonus_prob = config.base_draw_prob if config else 0.30
+            if random.random() < bonus_prob:
+                bonus = BonusDraw(
+                    family_id=wish.family_id,
+                    child_user_id=wish.child_user_id,
+                    source_wish_id=wish.id,
+                    expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+                )
+                db.add(bonus)
+                db.commit()
+        except Exception:
+            pass  # bonus draw failure never blocks wish realization
+
         # Check milestones after primary transaction — failure never blocks realize
         from app.services.milestones import check_and_record_milestones
         milestone = check_and_record_milestones(
