@@ -33,3 +33,17 @@ def test_create_blind_box_draw(db):
     db.commit()
     assert draw.id is not None
     assert draw.draw_at is not None
+
+
+def test_create_blind_box_config(db):
+    from app.models.blind_box_config import BlindBoxConfig
+
+    config = BlindBoxConfig(family_id=1)
+    db.add(config)
+    db.commit()
+
+    assert config.id is not None
+    assert config.enabled is True
+    assert config.base_draw_prob == 0.30
+    assert config.weight_scale == 2.0
+    assert config.surprise_threshold_coins == 200
