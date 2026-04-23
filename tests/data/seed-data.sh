@@ -74,8 +74,22 @@ register_or_login() {
   local password="$2"
   local display_name="$3"
   local family_name="$4"
-  local invite_code="${5:-$(next_invite_code)}"
 
+  # Try login first — only consume an invite code if we need to register
+  local login_resp
+  login_resp=$(curl -sL -X POST "$BASE_URL/auth/login" \
+    -H "Content-Type: application/json" \
+    -d "{\"username\":\"$username\",\"password\":\"$password\"}")
+  local login_token
+  login_token=$(echo "$login_resp" | jq -r '.access_token // .data.access_token')
+  if [ -n "$login_token" ] && [ "$login_token" != "null" ]; then
+    log_info "账号 $username 已存在，直接登录"
+    echo "$login_token"
+    return 0
+  fi
+
+  # User doesn't exist — register with a fresh invite code
+  local invite_code="${5:-$(next_invite_code)}"
   local resp
   resp=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
     -H "Content-Type: application/json" \
@@ -87,14 +101,6 @@ register_or_login() {
 
   if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
     echo "$body" | jq -r '.access_token // .data.access_token'
-    return 0
-  elif [ "$http_code" = "409" ] || [ "$http_code" = "400" ]; then
-    log_info "账号 $username 已存在 ($http_code)，直接登录"
-    local login_resp
-    login_resp=$(curl -sL -X POST "$BASE_URL/auth/login" \
-      -H "Content-Type: application/json" \
-      -d "{\"username\":\"$username\",\"password\":\"$password\"}")
-    echo "$login_resp" | jq -r '.access_token // .data.access_token'
     return 0
   else
     log_err "注册 $username 失败: HTTP $http_code — $body"
