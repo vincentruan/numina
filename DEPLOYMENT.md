@@ -103,10 +103,18 @@ cd ~/data/numina
 # 生成安全密钥
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 
+# 生成所有必要密钥
+SECRET_KEY=$(openssl rand -hex 32)
+ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
+AI_ENCRYPTION_KEY=$(openssl rand -hex 32)
+AGENT_INTERNAL_TOKEN=$(openssl rand -hex 32)
+# Fernet key (base64url of 32 random bytes)
+STORAGE_ENCRYPTION_KEY=$(python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+
 # 创建环境配置
-cat > .env.production << 'EOF'
+cat > .env.production << EOF
 # Numina Production Environment Configuration
-SECRET_KEY=YOUR_GENERATED_SECRET_KEY_HERE
+SECRET_KEY=${SECRET_KEY}
 ENVIRONMENT=production
 
 # CORS - 配置你的域名
@@ -118,6 +126,14 @@ DATABASE_URL=sqlite:////app/data/numina.db
 # Token expiration
 ACCESS_TOKEN_EXPIRE_MINUTES=15
 REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# CAPTCHA (必须配置，否则生产环境无法启动)
+ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
+
+# Agent / AI 加密 (必须配置)
+AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}
+AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN}
+STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY}
 EOF
 ```
 
@@ -133,7 +149,49 @@ mkdir -p data/uploads
 docker compose -f docker-compose.production.yml up -d --build
 ```
 
-### 4. 验证部署
+### 4. 生成家庭邀请码（首次部署）
+
+生产环境需要家庭邀请码才能注册新用户：
+
+```bash
+# 生成 20 个邀请码
+docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py generate --count 20
+
+# 查看已生成的邀请码
+docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py list
+```
+
+### 5. 初始化测试数据（可选）
+
+如需初始化演示数据（demouser 账号 + 完整资产数据）：
+
+```bash
+# 临时切换到 development 模式（跳过 CAPTCHA 验证）
+sed -i.bak 's/^ENVIRONMENT=production/ENVIRONMENT=development/' .env.production
+docker compose -f docker-compose.production.yml up -d backend
+
+# 等待服务启动
+sleep 10
+
+# 生成足够的邀请码（需要约 10 个）
+docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py generate --count 15
+
+# 运行种子数据脚本
+FAMILY_INVITATION_CODES=$(docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py list --format csv | head -15 | tr '\n' ',')
+BASE_URL=http://localhost/api/v1 bash tests/data/seed-data.sh
+
+# 恢复生产模式
+sed -i 's/^ENVIRONMENT=development/ENVIRONMENT=production/' .env.production
+docker compose -f docker-compose.production.yml up -d backend
+```
+
+**测试账号：**
+- `demouser` / `DemoPass123` — 完整演示数据（19 实物资产 + 11 金融资产 + 负债 + 心愿 + 儿童）
+- `test_empty` / `TestEmpty123!` — 空家庭
+- `test_asset` / `TestAsset123!` — 5 个资产（多状态测试）
+- `test_rich` / `TestRich123!` — 完整数据（31 资产 + 28 负债 + 29 心愿）
+
+### 6. 验证部署
 
 ```bash
 # 检查容器状态
@@ -257,6 +315,59 @@ docker compose -f docker-compose.production.yml up -d --build
 1. 确认 `./data` 目录存在
 2. 检查 docker-compose.production.yml 中的 volumes 配置
 3. 定期备份数据目录
+
+### Q: Backend 启动失败 — ALTCHA_HMAC_KEY 未配置
+
+**原因**: 生产环境缺少必要的环境变量
+
+**解决**:
+```bash
+# 生成缺失的密钥
+ALTCHA_HMAC_KEY=$(openssl rand -hex 32)
+AI_ENCRYPTION_KEY=$(openssl rand -hex 32)
+AGENT_INTERNAL_TOKEN=$(openssl rand -hex 32)
+STORAGE_ENCRYPTION_KEY=$(python3 -c "import base64, os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())")
+
+# 添加到 .env.production
+cat >> .env.production << EOF
+ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
+AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}
+AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN}
+STORAGE_ENCRYPTION_KEY=${STORAGE_ENCRYPTION_KEY}
+EOF
+
+# 重新创建容器（restart 不会重新加载 env 文件）
+docker compose -f docker-compose.production.yml up -d backend
+```
+
+### Q: 数据库 schema 错误 — no such column
+
+**原因**: 数据库是旧版本创建的，缺少新增的列
+
+**解决**:
+```bash
+# 方案一：删除旧数据库，重新创建（仅适用于测试环境）
+docker compose -f docker-compose.production.yml stop backend
+rm -f data/numina.db
+docker compose -f docker-compose.production.yml up -d backend
+
+# 方案二：运行 Alembic 迁移（生产环境推荐）
+# 注意：当前项目 Alembic 迁移尚未完整覆盖所有 schema 变更
+# 建议在生产环境首次部署时使用全新数据库
+```
+
+### Q: 注册失败 — FAMILY_INVITATION_CODE_NOT_FOUND
+
+**原因**: 生产环境需要家庭邀请码才能注册
+
+**解决**:
+```bash
+# 生成邀请码
+docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py generate --count 10
+
+# 查看可用邀请码
+docker exec numina-backend uv run --no-dev python scripts/family_invitation_codes.py list
+```
 
 ### Q: 上传文件无法访问
 
