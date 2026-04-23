@@ -72,35 +72,7 @@ DATABASE_URL=sqlite:////app/data/numina.db   # Database path
 
 ### Local Development
 
-#### Backend
-
-```bash
-cd backend
-
-# Install dependencies (requires uv: https://docs.astral.sh/uv/)
-uv sync
-
-# Run development server
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# Run tests
-uv run pytest tests/ -v
-```
-
-#### Frontend
-
-```bash
-cd frontend
-
-# Install dependencies
-npm ci
-
-# Run development server (proxies /api to localhost:8000)
-npm run dev
-
-# Build for production
-npm run build
-```
+For module-specific development setup, see the module READMEs: [Backend](./backend/README.md) · [Frontend](./frontend/README.md) · [Agent](./agent/README.md)
 
 ## Features
 
@@ -175,6 +147,17 @@ numina/
 └── docs/                       # Project documentation
 ```
 
+## Module Documentation
+
+Developer docs for each module (quick start, environment variables, architecture, testing):
+
+| Module | README | Description |
+|--------|--------|-------------|
+| Backend | [backend/README.md](./backend/README.md) | FastAPI API development, database, testing |
+| Agent | [agent/README.md](./agent/README.md) | AI microservice, DeerFlow integration, skills |
+| Frontend | [frontend/README.md](./frontend/README.md) | Vue 3 UI development, components, testing |
+| Tests | [tests/README.md](./tests/README.md) | E2E tests, data seeding, screenshots |
+
 ## Security
 
 - **Password Encryption**: bcrypt hashing
@@ -190,64 +173,17 @@ After starting the backend, visit:
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-### Key API Endpoints
-
-```
-POST   /api/v1/auth/register              # Register (create family)
-POST   /api/v1/auth/login                 # Login
-POST   /api/v1/auth/refresh               # Refresh token
-POST   /api/v1/auth/family/join           # Join family
-
-GET    /api/v1/assets                     # List assets (with filters)
-POST   /api/v1/assets                     # Create asset
-PUT    /api/v1/assets/{id}/value          # Quick value update
-
-GET    /api/v1/liabilities                # List liabilities
-POST   /api/v1/liabilities                # Create liability
-PUT    /api/v1/liabilities/{id}/payment   # Record payment
-
-GET    /api/v1/dashboard/overview         # Dashboard overview
-GET    /api/v1/dashboard/allocation       # Asset allocation
-GET    /api/v1/dashboard/trend            # Net worth trend
-GET    /api/v1/dashboard/daily-cost-ranking       # Daily cost ranking
-GET    /api/v1/dashboard/low-usage-assets         # Low-usage assets
-GET    /api/v1/dashboard/investment-returns       # Investment returns
-
-GET    /api/v1/family                     # Family info
-GET    /api/v1/family/aggregate           # Family aggregate
-```
-
-### Agent API Endpoints
-
-Agent microservice is internal, requires `X-Agent-Token` authentication:
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/report/generate` | Family asset health report |
-| POST | `/alerts/aging` | Fixed asset aging alert |
-| POST | `/liability/analyze` | Liability structure analysis |
-| POST | `/disposal/scan` | Idle asset disposal suggestion |
-| POST | `/allocation/drift` | Asset allocation drift detection |
-| POST | `/chat/ask` | Q&A assistant |
-| POST | `/suggest/asset` | Asset entry smart suggestion |
+For the full endpoint list, see [backend/README.md](./backend/README.md) and [agent/README.md](./agent/README.md).
 
 ## Testing
 
 The backend includes 36 automated tests covering authentication, assets, liabilities, and dashboard features.
 
-```bash
-cd backend
-uv run pytest tests/ -v
-```
-
 **Test Results**: ✅ 36 passed, 0 failed
 
-Agent includes unit and integration tests:
+Agent includes unit and integration tests.
 
-```bash
-cd agent
-uv run pytest tests/ -v
-```
+See module READMEs for details: [Backend Tests](./backend/README.md#testing) · [Agent Tests](./agent/README.md#testing) · [E2E Tests](./tests/README.md)
 
 ## Deployment
 
