@@ -69,10 +69,10 @@ async function approve(instanceId: string) {
     pending.value = pending.value.filter(i => i.id !== instanceId)
     if (result.streak_bonus > 0) {
       const multiplier = result.streak_count >= 14 ? '2x' : result.streak_count >= 7 ? '1.5x' : `${(result.streak_bonus / result.coin_reward + 1).toFixed(1)}x`
-      showToast(`🔥 连续打卡 ${result.streak_count} 天！获得 ${multiplier} 奖励 +${result.streak_bonus} ⭐`)
+      showToast(t('toast.streakReward', { days: result.streak_count, bonus: result.streak_bonus }))
     }
   } catch {
-    error.value = '操作失败，请重试'
+    error.value = t('toast.operationFailed2')
   } finally {
     actioningId.value = null
   }
@@ -84,7 +84,7 @@ async function reject(instanceId: string, returnToRedo: boolean) {
     await rejectChore(instanceId, returnToRedo)
     pending.value = pending.value.filter(i => i.id !== instanceId)
   } catch {
-    error.value = '操作失败，请重试'
+    error.value = t('toast.operationFailed2')
   } finally {
     actioningId.value = null
   }

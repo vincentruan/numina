@@ -98,7 +98,7 @@ async function doGift() {
   if (!selectedSiblingId.value || !amount || amount <= 0) return
   try {
     const res = await giftCoins(selectedSiblingId.value, amount, '🎁')
-    showToast(`已送出 ${res.sent_amount} 颗星给 ${res.to_display_name}！`)
+    showToast(t('toast.childGrantedStars', { amount: res.sent_amount, name: res.to_display_name }))
     showGiftSheet.value = false
     selectedSiblingId.value = ''
     giftAmountStr.value = ''

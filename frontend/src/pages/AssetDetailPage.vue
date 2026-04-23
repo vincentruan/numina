@@ -297,7 +297,7 @@ function getIconId(icon: string | undefined): string {
 
 async function onRetire() {
   try {
-    await showConfirmDialog({ title: '确认退役', message: `确定要将「${asset.value?.name}」标记为退役吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmRetireAsset', { name: asset.value?.name }) })
     acting.value = true
     await assetStore.retireAsset(asset.value!.id)
     showToast(t('toast.assetRetired'))
@@ -320,7 +320,7 @@ async function onReactivate() {
 
 async function onDelete() {
   try {
-    await showConfirmDialog({ title: '确认删除', message: `确定要删除「${asset.value?.name}」吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: asset.value?.name }) })
     deleting.value = true
     await assetStore.deleteAsset(asset.value!.id)
     showToast(t('toast.deleteSuccess'))

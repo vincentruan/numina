@@ -163,7 +163,7 @@ async function onSubmit() {
 
     const isCaptchaError = code.startsWith('CAPTCHA_')
     if (status === 503 || code === 'CAPTCHA_SERVICE_UNAVAILABLE') {
-      showToast(message || '验证服务暂时不可用，请稍后重试')
+      showToast(message || t('toast.captchaServiceUnavailable'))
     } else if (isCaptchaError) {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()

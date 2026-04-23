@@ -476,6 +476,11 @@ cd tests && node take-screenshots.js
 
 - **Documented solutions**: `docs/solutions/` contains documented solutions to past problems (bugs, best practices, workflow patterns), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`). Relevant when implementing or debugging in documented areas.
 - UI text and error messages are in Chinese (简体中文). Currency defaults to CNY.
+- **Emoji Convention for User-Facing Messages**: All user-facing toast messages, confirmation dialogs, and error messages displayed in the frontend UI must include an emoji prefix. This ensures unified visual style across the app.
+  - **Frontend responsibility**: Emoji prefixes are defined in i18n locale files (`frontend/src/i18n/locales/*.ts`), not in backend responses.
+  - **Backend responsibility**: Return structured error responses with `code` field (e.g., `{"code": "ASSET_NOT_FOUND", "detail": "资产不存在"}`). Frontend matches `code` to emoji-prefixed i18n translations.
+  - **Log messages**: Internal logs and debugging output do NOT need emoji or internationalization — only user-facing UI messages.
+  - See `frontend/CLAUDE.md` for detailed emoji usage guidelines and implementation examples.
 - **Linting/formatting:** Each module has its own tooling — see module-level `CLAUDE.md` for commands.
   - Frontend: ESLint (`npm run lint`) + Prettier (`npm run format`) + vue-tsc (`npm run typecheck`)
   - Backend: ruff (`uv run ruff check .` / `uv run ruff format .`) + mypy (`uv run mypy app/`)

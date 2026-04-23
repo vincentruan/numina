@@ -545,7 +545,7 @@ function toggleTag(tag: string) {
 function applyFilter() {
   showFilterPopup.value = false
   if (selectedTags.value.length > 0) {
-    showToast(`✅ 已筛选 ${selectedTags.value.length} 个标签`)
+    showToast(t('toast.tagsFiltered', { count: selectedTags.value.length }))
   }
 }
 
@@ -643,7 +643,7 @@ async function handleBatchDelete() {
       await dashboardStore.fetchAll()
     } catch {
       closeToast()
-      showToast('❌ 删除失败，请重试')
+      showToast(t('toast.deleteFailed'))
     }
   } catch {
     // User cancelled
@@ -710,7 +710,7 @@ async function onMoreActionSelect(action: any) {
     await dashboardStore.fetchAll()
   } catch {
     closeToast()
-    showToast('❌ 操作失败，请重试')
+    showToast(t('toast.operationFailed'))
   }
 }
 

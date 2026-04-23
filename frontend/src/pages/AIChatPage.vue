@@ -144,7 +144,7 @@ async function onSend() {
 
 async function onClear() {
   try {
-    await showConfirmDialog({ title: '确认', message: '清空所有对话记录？' })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmClearChat') })
     await clearChatHistory()
     messages.value = []
   } catch {

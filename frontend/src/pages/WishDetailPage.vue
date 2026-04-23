@@ -251,7 +251,7 @@ async function onRealize() {
 
 async function onCancel() {
   try {
-    await showConfirmDialog({ title: '确认取消', message: '确定要取消这个心愿吗？' })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmCancel') })
     acting.value = true
     await wishStore.updateWish(wish.value!.id, { status: 'cancelled' })
     showToast(t('toast.wishCancelled'))
@@ -274,7 +274,7 @@ async function onReactivate() {
 
 async function onDelete() {
   try {
-    await showConfirmDialog({ title: '确认删除', message: `确定要删除「${wish.value?.name}」吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: wish.value?.name }) })
     deleting.value = true
     await wishStore.deleteWish(wish.value!.id)
     showToast(t('toast.deleteSuccess'))

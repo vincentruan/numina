@@ -304,7 +304,7 @@ async function onTitleConfirm() {
     await familyStore.updateFamilyTitle(newTitle || null)
     showToast(t('toast.familyTitleUpdated'))
   } catch (err: any) {
-    showToast(err.response?.data?.detail || '修改失败')
+    showToast(err.response?.data?.detail || t('toast.modifyFailed'))
   }
 }
 
@@ -320,7 +320,7 @@ function selectThemeColor(color: string) {
 
 async function onLogout() {
   try {
-    await showConfirmDialog({ title: '确认', message: t('settings.logoutConfirm') })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('settings.logoutConfirm') })
     authStore.logout()
   } catch {
     // cancelled

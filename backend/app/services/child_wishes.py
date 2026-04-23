@@ -78,7 +78,7 @@ def _get_wish_for_family(db: Session, wish_id: str, family_id: str) -> ChildWish
         ChildWish.family_id == family_id,
     ).first()
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="心愿不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"})
     return wish
 
 
@@ -142,7 +142,7 @@ def get_child_wish(db: Session, user: User, wish_id: str) -> ChildWishResponse:
         ChildWish.child_user_id == user.id,
     ).first()
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="心愿不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"})
     balance = get_balance(db, user.id)
     return _to_child_response(wish, balance)
 
@@ -154,22 +154,22 @@ def request_redemption(db: Session, user: User, wish_id: str) -> ChildWishRespon
         ChildWish.child_user_id == user.id,
     ).first()
     if not wish:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="心愿不存在")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail={"code": "WISH_NOT_FOUND", "message": "心愿不存在"})
     if wish.status != "active":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="只有进行中的心愿才能发起兑现申请",
+            detail={"code": "WISH_STATUS_INVALID", "message": "只有进行中的心愿才能发起兑现申请"},
         )
     if wish.star_coin_cost is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="心愿尚未设定积分门槛",
+            detail={"code": "WISH_NO_COST", "message": "心愿尚未设定积分门槛"},
         )
     balance = get_balance(db, user.id)
     if balance < wish.star_coin_cost:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"积分不足，当前余额 {balance}，需要 {wish.star_coin_cost}",
+            detail={"code": "WISH_INSUFFICIENT_COINS", "message": f"积分不足，当前余额 {balance}，需要 {wish.star_coin_cost}"},
         )
     wish.status = "redemption_requested"
     db.commit()
@@ -245,7 +245,7 @@ def approve_child_wish(
     if wish.status != "pending_review":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="只有待审核的心愿才能批准",
+            detail={"code": "WISH_PENDING_ONLY", "message": "只有待审核的心愿才能批准"},
         )
     wish.star_coin_cost = req.star_coin_cost
     wish.status = "active"
@@ -268,7 +268,7 @@ def reject_child_wish(
     if wish.status != "pending_review":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="只有待审核的心愿才能拒绝",
+            detail={"code": "WISH_REJECT_PENDING_ONLY", "message": "只有待审核的心愿才能拒绝"},
         )
     wish.status = "rejected"
     wish.rejection_reason = req.rejection_reason
@@ -291,12 +291,12 @@ def update_child_wish_cost(
     if wish.status != "active":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="只有进行中的心愿才能修改积分",
+            detail={"code": "WISH_ACTIVE_ONLY", "message": "只有进行中的心愿才能修改积分"},
         )
     if wish.star_coin_cost is not None and req.star_coin_cost >= wish.star_coin_cost:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="积分门槛只能降低，不能提高",
+            detail={"code": "WISH_COST_DECREASE_ONLY", "message": "积分门槛只能降低，不能提高"},
         )
     history = list(wish.star_coin_cost_history or [])
     history.append({
@@ -318,14 +318,14 @@ def realize_child_wish(
     if wish.status != "redemption_requested":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="只有申请兑现的心愿才能兑现",
+            detail={"code": "WISH_REDEMPTION_ONLY", "message": "只有申请兑现的心愿才能兑现"},
         )
 
     balance = get_balance(db, wish.child_user_id)
     if balance < wish.star_coin_cost:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"积分不足，无法兑现（余额 {balance}，需要 {wish.star_coin_cost}）",
+            detail={"code": "WISH_INSUFFICIENT_COINS", "message": f"积分不足，无法兑现（余额 {balance}，需要 {wish.star_coin_cost}）"},
         )
 
     category_id = req.category_id
@@ -388,8 +388,8 @@ def realize_child_wish(
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"兑现失败: {str(e)}",
-        )
+            detail={"code": "WISH_REALIZE_FAILED", "message": f"兑现失败: {str(e)}"},
+        ) from e
 
 
 def defer_redemption(db: Session, user: User, wish_id: str) -> ParentWishResponse:
@@ -397,7 +397,7 @@ def defer_redemption(db: Session, user: User, wish_id: str) -> ParentWishRespons
     if wish.status != "redemption_requested":
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="只有申请兑现的心愿才能暂不兑现",
+            detail={"code": "WISH_HOLD_PENDING_ONLY", "message": "只有申请兑现的心愿才能暂不兑现"},
         )
     wish.status = "active"
     db.commit()

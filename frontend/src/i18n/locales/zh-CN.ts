@@ -118,7 +118,7 @@ export default {
     username: '用户名',
     role: '角色',
     logout: '退出登录',
-    logoutConfirm: '确定要退出登录吗？',
+    logoutConfirm: '⚠️ 确定要退出登录吗？',
     settingsSaved: '设置已保存',
     saveFailed: '保存失败'
   },
@@ -208,6 +208,23 @@ export default {
     // Wish
     WISH_NOT_FOUND: '❌ 心愿不存在',
     WISH_FORBIDDEN: '⛔ 无权操作此心愿',
+    WISH_STATUS_INVALID: '⚠️ 只有进行中的心愿才能发起兑现申请',
+    WISH_NO_COST: '⚠️ 心愿尚未设定积分门槛',
+    WISH_INSUFFICIENT_COINS: '⚠️ 积分不足，无法兑现',
+    WISH_PENDING_ONLY: '⚠️ 只有待审核的心愿才能批准',
+    WISH_REJECT_PENDING_ONLY: '⚠️ 只有待审核的心愿才能拒绝',
+    WISH_ACTIVE_ONLY: '⚠️ 只有进行中的心愿才能修改积分',
+    WISH_COST_DECREASE_ONLY: '⚠️ 积分门槛只能降低，不能提高',
+    WISH_REDEMPTION_ONLY: '⚠️ 只有申请兑现的心愿才能兑现',
+    WISH_HOLD_PENDING_ONLY: '⚠️ 只有申请兑现的心愿才能暂不兑现',
+    WISH_REALIZE_FAILED: '❌ 兑现失败',
+    // Calendar
+    CALENDAR_DATE_INVALID: '⚠️ 日期格式无效，请使用 YYYY-MM-DD',
+    CHILD_NOT_FOUND: '❌ 孩子不存在',
+    CHILD_ACCOUNT_NOT_FOUND: '❌ 子账号不存在',
+    BINDING_TOKEN_INVALID: '⚠️ 无效的绑定令牌',
+    BINDING_TOKEN_EXPIRED: '⚠️ 绑定令牌已过期',
+    BINDING_TOKEN_USED: '⚠️ 绑定令牌已使用',
     // Coin
     COIN_INSUFFICIENT: '⚠️ 余额不足',
     COIN_INVALID_AMOUNT: '⚠️ 无效的金额',
@@ -236,6 +253,15 @@ export default {
     loadFailed: '❌ 加载失败',
     operationFailed: '❌ 操作失败',
     operationFailed2: '❌ 操作失败，请重试',
+    // Confirm dialogs
+    confirmDelete: '⚠️ 确定要删除「{name}」吗？',
+    confirmDeleteIrrevocable: '⚠️ 删除后无法恢复',
+    confirmCancel: '⚠️ 确定要取消这个心愿吗？',
+    confirmRemoveMember: '⚠️ 确定要移除「{name}」吗？',
+    confirmPromoteMember: '⚠️ 确定要将该成员设为管理员吗？',
+    confirmRegenerateCode: '⚠️ 重新生成邀请码后，旧邀请码将失效',
+    confirmRetireAsset: '⚠️ 确定要将「{name}」标记为退役吗？',
+    confirmClearChat: '⚠️ 清空所有对话记录？',
     // Asset
     assetLoadFailed: '❌ 加载资产失败，请下拉刷新重试',
     assetRetired: '✅ 已退役',
@@ -270,6 +296,18 @@ export default {
     coinRateInvalid: '⚠️ 请输入 1-100 的整数',
     // Settings
     themeChanged: '🎨 主题色已更改',
+    // Dynamic messages
+    newInviteCode: '🔑 新邀请码: {code}',
+    assetDeletedCount: '🗑️ 已删除 {count} 项资产',
+    childGrantedStars: '✅ 已赠送 {amount} ⭐ 给 {name}',
+    streakReward: '🔥 连续打卡 {days} 天！获得 {bonus} ⭐',
+    connectionSuccess: '✅ 连接成功（{latency}ms）',
+    connectionFailed: '❌ 连接失败：{message}',
+    tagsFiltered: '✅ 已筛选 {count} 个标签',
+    captchaServiceUnavailable: '⚠️ 验证服务暂时不可用，请稍后重试',
+    loginFailedGeneric: '❌ 登录失败，请检查用户名和密码',
+    saveFailedGeneric: '❌ 保存失败，请重试',
+    modifyFailed: '❌ 修改失败',
     // Tag / Category
     tagCreated: '✅ 标签已创建',
     nameRequired: '⚠️ 请输入名称',

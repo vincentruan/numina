@@ -222,8 +222,8 @@ async function onSave() {
     apiKeyInput.value = ''
     showToast(t('toast.aiConfigSaved'))
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : '保存失败，请重试'
-    showToast(msg.includes('API Key') ? msg : '保存失败，请重试')
+    const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
+    showToast(msg.includes('API Key') ? msg : t('toast.saveFailedGeneric'))
   } finally {
     saving.value = false
   }
@@ -234,9 +234,9 @@ async function onTest() {
   try {
     const result = await aiStore.testConnection()
     if (result.data.success) {
-      showToast(`连接成功（${result.data.latency_ms ?? '-'}ms）`)
+      showToast(t('toast.connectionSuccess', { latency: result.data.latency_ms ?? '-' }))
     } else {
-      showToast(`连接失败：${result.data.message}`)
+      showToast(t('toast.connectionFailed', { message: result.data.message }))
     }
   } catch {
     showToast(t('toast.aiTestFailed'))

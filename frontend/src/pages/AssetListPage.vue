@@ -291,7 +291,7 @@ async function executeBatchDelete() {
     for (const assetId of selectedAssets.value) {
       await assetStore.deleteAsset(assetId)
     }
-    showToast(`已删除 ${selectedAssets.value.length} 项资产`)
+    showToast(t('toast.assetDeletedCount', { count: selectedAssets.value.length }))
     exitSelectionMode()
     await assetStore.fetchAssets(buildFilters())
   } catch (error) {

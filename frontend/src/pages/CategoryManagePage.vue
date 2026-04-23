@@ -122,7 +122,7 @@ async function onDialogConfirm() {
 
 async function onDelete(cat: Category) {
   try {
-    await showConfirmDialog({ title: '确认删除', message: `确定要删除「${cat.name}」吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: cat.name }) })
     await categoryStore.deleteCategory(cat.id)
     showToast(t('toast.deleteSuccess'))
   } catch {

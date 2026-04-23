@@ -102,14 +102,14 @@ async function onSubmit() {
     const status = axiosError.response?.status
 
     if (status === 503) {
-      showToast({ type: 'fail', message: '验证服务暂时不可用，请稍后重试' })
+      showToast({ type: 'fail', message: t('toast.captchaServiceUnavailable') })
     } else if (detail.includes('验证码')) {
       // Captcha error - reset widget but preserve form data
       altchaRef.value?.reset()
       showToast({ type: 'fail', message: detail })
     } else {
       // Generic error fallback
-      showToast({ type: 'fail', message: detail || '登录失败，请检查用户名和密码' })
+      showToast({ type: 'fail', message: detail || t('toast.loginFailedGeneric') })
     }
   } finally {
     loading.value = false

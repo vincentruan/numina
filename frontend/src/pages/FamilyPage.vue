@@ -203,7 +203,7 @@ function copyInviteCode() {
     navigator.clipboard.writeText(code).then(() => {
       showToast(t('family.inviteCodeCopied'))
     }).catch(() => {
-      showToast(`${t('family.inviteCode')}: ${code}`)
+      showToast(t('toast.newInviteCode', { code }))
     })
   }
 }
@@ -248,7 +248,7 @@ async function loadChildDashboard() {
 
 async function onSetOwner(userId: string) {
   try {
-    await showConfirmDialog({ title: '确认', message: '确定要将该成员设为管理员吗？' })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmPromoteMember') })
   } catch { return }
   try {
     await familyStore.updateMemberRole(userId, 'owner')
@@ -260,7 +260,7 @@ async function onSetOwner(userId: string) {
 
 async function onRemoveMember(member: { id: string; display_name: string }) {
   try {
-    await showConfirmDialog({ title: '确认移除', message: `确定要移除「${member.display_name}」吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmRemoveMember', { name: member.display_name }) })
   } catch { return }
   try {
     await familyStore.removeMember(member.id)
@@ -272,12 +272,12 @@ async function onRemoveMember(member: { id: string; display_name: string }) {
 
 async function onRegenerate() {
   try {
-    await showConfirmDialog({ title: '确认', message: '重新生成邀请码后，旧邀请码将失效' })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmRegenerateCode') })
   } catch { return }
   regenerating.value = true
   try {
     const code = await familyStore.regenerateInviteCode()
-    showToast(`新邀请码: ${code}`)
+    showToast(t('toast.newInviteCode', { code }))
   } catch {
     showToast(t('toast.operationFailed2'))
   } finally {
@@ -298,7 +298,7 @@ async function doGrant() {
   grantingCoins.value = true
   try {
     await grantCoins(grantTargetChild.value.id, amount, grantReason.value || '父母奖励')
-    showToast(`已赠送 ${amount} ⭐ 给 ${grantTargetChild.value.display_name}`)
+    showToast(t('toast.childGrantedStars', { amount, name: grantTargetChild.value.display_name }))
     showGrantSheet.value = false
     // Refresh balances
     const res = await getAllChildBalances()

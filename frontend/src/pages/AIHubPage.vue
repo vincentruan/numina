@@ -237,7 +237,7 @@ async function refreshReport(silent?: boolean) {
       reportGeneratedAt.value = ws.generatedAt.value
     }
   } catch {
-    if (!silent) showToast('❌ 刷新失败，请重试')
+    if (!silent) showToast(t('toast.refreshFailed'))
   } finally {
     if (!silent) reportLoading.value = false
   }

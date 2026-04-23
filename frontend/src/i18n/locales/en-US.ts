@@ -118,7 +118,7 @@ export default {
     username: 'Username',
     role: 'Role',
     logout: 'Logout',
-    logoutConfirm: 'Are you sure you want to logout?',
+    logoutConfirm: '⚠️ Are you sure you want to logout?',
     settingsSaved: 'Settings saved',
     saveFailed: 'Save failed'
   },
@@ -208,6 +208,23 @@ export default {
     // Wish
     WISH_NOT_FOUND: '❌ Wish not found',
     WISH_FORBIDDEN: '⛔ You do not have permission to modify this wish',
+    WISH_STATUS_INVALID: '⚠️ Only active wishes can request redemption',
+    WISH_NO_COST: '⚠️ Wish has no coin cost set',
+    WISH_INSUFFICIENT_COINS: '⚠️ Insufficient coins to redeem',
+    WISH_PENDING_ONLY: '⚠️ Only pending wishes can be approved',
+    WISH_REJECT_PENDING_ONLY: '⚠️ Only pending wishes can be rejected',
+    WISH_ACTIVE_ONLY: '⚠️ Only active wishes can modify cost',
+    WISH_COST_DECREASE_ONLY: '⚠️ Cost can only be decreased, not increased',
+    WISH_REDEMPTION_ONLY: '⚠️ Only redemption-requested wishes can be realized',
+    WISH_HOLD_PENDING_ONLY: '⚠️ Only redemption-requested wishes can be held',
+    WISH_REALIZE_FAILED: '❌ Realization failed',
+    // Calendar
+    CALENDAR_DATE_INVALID: '⚠️ Invalid date format, use YYYY-MM-DD',
+    CHILD_NOT_FOUND: '❌ Child not found',
+    CHILD_ACCOUNT_NOT_FOUND: '❌ Child account not found',
+    BINDING_TOKEN_INVALID: '⚠️ Invalid binding token',
+    BINDING_TOKEN_EXPIRED: '⚠️ Binding token expired',
+    BINDING_TOKEN_USED: '⚠️ Binding token already used',
     // Coin
     COIN_INSUFFICIENT: '⚠️ Insufficient balance',
     COIN_INVALID_AMOUNT: '⚠️ Invalid amount',
@@ -236,6 +253,15 @@ export default {
     loadFailed: '❌ Load failed',
     operationFailed: '❌ Operation failed',
     operationFailed2: '❌ Operation failed, please try again',
+    // Confirm dialogs
+    confirmDelete: '⚠️ Are you sure you want to delete "{name}"?',
+    confirmDeleteIrrevocable: '⚠️ This cannot be undone',
+    confirmCancel: '⚠️ Are you sure you want to cancel this wish?',
+    confirmRemoveMember: '⚠️ Are you sure you want to remove "{name}"?',
+    confirmPromoteMember: '⚠️ Are you sure you want to promote this member to admin?',
+    confirmRegenerateCode: '⚠️ The old invite code will become invalid',
+    confirmRetireAsset: '⚠️ Are you sure you want to retire "{name}"?',
+    confirmClearChat: '⚠️ Clear all chat history?',
     // Asset
     assetLoadFailed: '❌ Failed to load assets, please pull to refresh',
     assetRetired: '✅ Retired',
@@ -270,6 +296,18 @@ export default {
     coinRateInvalid: '⚠️ Please enter an integer between 1 and 100',
     // Settings
     themeChanged: '🎨 Theme color updated',
+    // Dynamic messages
+    newInviteCode: '🔑 New invite code: {code}',
+    assetDeletedCount: '🗑️ Deleted {count} assets',
+    childGrantedStars: '✅ Sent {amount} ⭐ to {name}',
+    streakReward: '🔥 {days} day streak! Bonus +{bonus} ⭐',
+    connectionSuccess: '✅ Connected ({latency}ms)',
+    connectionFailed: '❌ Connection failed: {message}',
+    tagsFiltered: '✅ Filtered by {count} tags',
+    captchaServiceUnavailable: '⚠️ Verification service temporarily unavailable',
+    loginFailedGeneric: '❌ Login failed, please check your credentials',
+    saveFailedGeneric: '❌ Save failed, please try again',
+    modifyFailed: '❌ Modification failed',
     // Tag / Category
     tagCreated: '✅ Tag created',
     nameRequired: '⚠️ Please enter a name',

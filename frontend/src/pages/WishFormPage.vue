@@ -145,7 +145,7 @@ async function onSubmit() {
 
 async function onDelete() {
   if (!isEdit.value) return
-  await showConfirmDialog({ title: '确认删除', message: '删除后无法恢复' })
+  await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDeleteIrrevocable') })
   await deleteWish(wishId.value!)
   showToast(t('toast.deleteSuccess'))
   router.back()

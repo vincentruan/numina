@@ -175,7 +175,7 @@ async function onPaymentConfirm(action: string) {
 
 async function onDelete() {
   try {
-    await showConfirmDialog({ title: '确认删除', message: `确定要删除「${liability.value?.name}」吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: liability.value?.name }) })
     deleting.value = true
     await liabilityStore.deleteLiability(liability.value!.id)
     showToast(t('toast.deleteSuccess'))

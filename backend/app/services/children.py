@@ -69,7 +69,7 @@ def update_child(
     )
     if not child:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="子账号不存在"
+            status_code=status.HTTP_404_NOT_FOUND, detail={"code": "CHILD_ACCOUNT_NOT_FOUND", "message": "子账号不存在"}
         )
     if req.username is not None:
         # 检查 username 全局唯一（排除自己）
@@ -104,7 +104,7 @@ def deactivate_child(db: Session, child_id: str, family_id: str) -> None:
     )
     if not child:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="子账号不存在"
+            status_code=status.HTTP_404_NOT_FOUND, detail={"code": "CHILD_ACCOUNT_NOT_FOUND", "message": "子账号不存在"}
         )
     child.is_active = False
     db.commit()
@@ -118,7 +118,7 @@ def unlock_child_pin(db: Session, child_id: str, family_id: str) -> None:
     )
     if not child:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="子账号不存在"
+            status_code=status.HTTP_404_NOT_FOUND, detail={"code": "CHILD_ACCOUNT_NOT_FOUND", "message": "子账号不存在"}
         )
     child.pin_locked_until = None
     child.pin_fail_count = 0
@@ -133,7 +133,7 @@ def force_logout_child(db: Session, child_id: str, family_id: str) -> None:
     )
     if not child:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="子账号不存在"
+            status_code=status.HTTP_404_NOT_FOUND, detail={"code": "CHILD_ACCOUNT_NOT_FOUND", "message": "子账号不存在"}
         )
     child.token_version = (child.token_version or 0) + 1
     db.commit()
@@ -158,16 +158,16 @@ def get_bind_info(db: Session, token_str: str) -> tuple[Family, list[User]]:
     )
     if not bind_token:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="无效的绑定令牌"
+            status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "BINDING_TOKEN_INVALID", "message": "无效的绑定令牌"}
         )
     now = datetime.now(UTC).replace(tzinfo=None)
     if bind_token.expires_at < now:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="绑定令牌已过期"
+            status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "BINDING_TOKEN_EXPIRED", "message": "绑定令牌已过期"}
         )
     if bind_token.used:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="绑定令牌已使用"
+            status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "BINDING_TOKEN_USED", "message": "绑定令牌已使用"}
         )
     bind_token.used = True
     db.commit()

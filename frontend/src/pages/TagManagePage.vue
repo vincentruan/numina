@@ -112,7 +112,7 @@ async function onDialogConfirm() {
 
 async function onDelete(tag: Tag) {
   try {
-    await showConfirmDialog({ title: '确认删除', message: `确定要删除「${tag.name}」吗？` })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: tag.name }) })
     await tagApi.deleteTag(tag.id)
     showToast(t('toast.deleteSuccess'))
     await fetchTags()
