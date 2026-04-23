@@ -84,6 +84,7 @@
                 day-route="/baby/calendar/day"
                 :extra-query="calendarChildId ? { child_id: calendarChildId } : undefined"
                 variant="parent"
+                :show-completion-rate="true"
               />
             </div>
           </van-tab>
