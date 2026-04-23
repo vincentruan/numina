@@ -123,7 +123,7 @@ SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-102
 - **宝贝收藏**：已兑现的心愿自动转为孩子名下的资产，在宝贝页面展示
 - **父母管理仪表盘**：家庭页面展示每个孩子的余额、待审家务数、待审心愿数，快速跳转审批页面
 
-## 📚 项目文档
+## 📖 技术文档
 
 | 文档 | 说明 |
 |------|------|
@@ -154,11 +154,11 @@ numina/
 │   ├── app/                  # 入口文件包
 │   │   ├── main.py           # FastAPI 入口
 │   │   ├── config.py         # 配置
-│   │   └── scheduler.py      # 定时任务
-│   ├── routers/              # API 路由
-│   ├── services/             # 业务逻辑
-│   ├── schemas/              # 数据模型
-│   ├── core/                 # 核心组件
+│   │   ├── scheduler.py      # 定时任务
+│   │   ├── routers/          # API 路由
+│   │   ├── services/         # 业务逻辑
+│   │   ├── schemas/          # 数据模型
+│   │   └── core/             # 核心组件
 │   └── tests/                # pytest 测试
 ├── frontend/                   # Vue 3 前端
 │   ├── src/
