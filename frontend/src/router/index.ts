@@ -185,6 +185,11 @@ const router = createRouter({
           component: () => import('@/pages/DataStatsPage.vue')
         },
         {
+          path: 'baby/calendar/day',
+          name: 'BabyDayDetail',
+          component: () => import('@/pages/child/ChildDayDetailPage.vue')
+        },
+        {
           path: 'chore-approvals',
           name: 'ChoreApprovals',
           component: () => import('@/pages/ChoreApprovalsPage.vue')
@@ -205,6 +210,7 @@ const router = createRouter({
         { path: 'tasks', name: 'ChildTasks', component: () => import('@/pages/child/ChildTasksPage.vue') },
         { path: 'ledger', name: 'ChildLedger', component: () => import('@/pages/child/ChildLedgerPage.vue') },
         { path: 'treasures', name: 'ChildTreasures', component: () => import('@/pages/child/ChildTreasuresPage.vue') },
+        { path: 'calendar/day', name: 'ChildDayDetail', component: () => import('@/pages/child/ChildDayDetailPage.vue') },
         { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue'), meta: { guest: true } },
         { path: 'auth', name: 'ChildAuth', component: () => import('@/pages/ChildAuthPage.vue'), meta: { guest: true } },
         { path: 'bind', name: 'ChildBind', component: () => import('@/pages/ChildBindPage.vue'), meta: { guest: true } },
