@@ -300,7 +300,7 @@ class TestDeleteFileEndpoint:
         user_id, family_id, token = _register_and_get_ids(client)
         headers = {"Authorization": f"Bearer {token}"}
 
-        resp = client.delete("/api/v1/files/nonexistent-id", headers=headers)
+        resp = client.delete("/api/v1/files/999999999999999999", headers=headers)
         assert resp.status_code == 404
 
     def test_delete_file_requires_auth(self, client, db):
@@ -372,7 +372,7 @@ class TestGetFileUrlEndpoint:
         user_id, family_id, token = _register_and_get_ids(client)
         headers = {"Authorization": f"Bearer {token}"}
 
-        resp = client.get("/api/v1/files/nonexistent/url", headers=headers)
+        resp = client.get("/api/v1/files/999999999999999999/url", headers=headers)
         assert resp.status_code == 404
 
     def test_get_url_requires_auth(self, client, db):

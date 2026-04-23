@@ -89,6 +89,7 @@ class StorageService:
             date_dir=date_dir,
         )
         db.add(cached_file)
+        db.flush()  # Generate Snowflake ID before using cached_file.id below
 
         # Optionally queue sync to default remote backend
         default_backend = (

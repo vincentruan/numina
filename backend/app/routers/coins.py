@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import get_current_child_user, require_adult
 from app.database import get_db
 from app.models.user import User
+from app.schemas.base import SnowflakeBase
 from app.schemas.chore import GrantRequest
 from app.schemas.coin import GiftRequest, GiftResponse, SiblingResponse
 from app.services import coin_transactions as coin_service
@@ -16,9 +17,8 @@ from app.services import coin_transactions as coin_service
 router = APIRouter(tags=["coins"])
 
 
-class CoinTransactionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    id: str
+class CoinTransactionResponse(SnowflakeBase):
+    id: int
     amount: int
     transaction_type: str
     narrative: str | None
@@ -45,8 +45,8 @@ class BalanceResponse(BaseModel):
     balance: int
 
 
-class GrantResponse(BaseModel):
-    id: str
+class GrantResponse(SnowflakeBase):
+    id: int
     amount: int
     narrative: str | None
 

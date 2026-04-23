@@ -106,7 +106,7 @@ def test_get_wish_detail(client, child_user, sample_wish):
 
 
 def test_get_wish_not_found(client, child_user):
-    resp = client.get("/api/v1/child/wishes/nonexistent-id", headers=child_user["headers"])
+    resp = client.get("/api/v1/child/wishes/999999999999999999", headers=child_user["headers"])
     assert resp.status_code == 404
 
 

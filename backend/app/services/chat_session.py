@@ -23,22 +23,27 @@ from app.models.user import User
 UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE
 )
+# Snowflake ID pattern (numeric string, 15-19 digits)
+SNOWFLAKE_PATTERN = re.compile(r"^\d{15,19}$")
 
 
-def _validate_uuid(value: str, name: str) -> None:
-    """Validate that a string is a valid UUID format (path traversal protection)."""
-    if not UUID_PATTERN.match(value):
-        raise ValueError(f"{name} must be a valid UUID, got: {value}")
+def _validate_id(value: str | int, name: str) -> str:
+    """Validate that a value is a valid UUID or Snowflake ID format (path traversal protection).
+    Returns the string representation."""
+    value = str(value)
+    if not (UUID_PATTERN.match(value) or SNOWFLAKE_PATTERN.match(value)):
+        raise ValueError(f"{name} must be a valid UUID or Snowflake ID, got: {value}")
+    return value
 
 
-def _resolve_and_validate_path(family_id: str, session_id: str) -> Path:
+def _resolve_and_validate_path(family_id: str | int, session_id: str | int) -> Path:
     """Construct and validate JSONL file path (path traversal protection).
 
     Returns the absolute resolved path if valid.
     Raises ValueError if path is invalid or outside CHAT_DIR.
     """
-    _validate_uuid(family_id, "family_id")
-    _validate_uuid(session_id, "session_id")
+    family_id = _validate_id(family_id, "family_id")
+    session_id = _validate_id(session_id, "session_id")
 
     chat_dir_resolved = Path(settings.CHAT_DIR).resolve()
     target_path = chat_dir_resolved / family_id / f"{session_id}.jsonl"
@@ -174,7 +179,7 @@ class ChatSessionService:
         Raises:
             ValueError: If family_id is not a valid UUID or path is invalid
         """
-        _validate_uuid(family_id, "family_id")
+        family_id = _validate_id(family_id, "family_id")
 
         session_id = str(uuid.uuid4())
         jsonl_path_relative = f"{family_id}/{session_id}.jsonl"

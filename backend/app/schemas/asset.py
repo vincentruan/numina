@@ -152,8 +152,8 @@ class BatchUpdateStatusRequest(BaseModel):
     status: str  # 'active' or 'archived'
 
 
-class BatchItemError(BaseModel):
-    id: str
+class BatchItemError(SnowflakeBase):
+    id: int
     error_code: str
     message: str
 

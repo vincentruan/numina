@@ -404,7 +404,7 @@ def test_cached_file_created_on_first_message(client, auth_headers, db, tmp_path
     cached_file = db.query(CachedFile).filter_by(id=session.cached_file_id).first()
     assert cached_file is not None
     assert cached_file.mime_type == "application/x-ndjson"
-    assert cached_file.family_id == family_id
+    assert cached_file.family_id == int(family_id)
     assert cached_file.sha256 is not None
     assert len(cached_file.sha256) == 64
 

@@ -184,15 +184,13 @@ def _make_child_pin_hash(emojis: list[str]) -> str:
 
 def _create_child_user(db, family_id: str, display_name: str = "小明", pin: list[str] | None = None):
     """Create a child user directly in the DB."""
-    from uuid import uuid4
     from app.models.user import User
 
     if pin is None:
         pin = ["🐱", "🐶", "🐸", "🦊"]
 
     child = User(
-        id=str(uuid4()),
-        family_id=family_id,
+        family_id=int(family_id),
         username=None,
         display_name=display_name,
         password_hash=None,
@@ -322,7 +320,7 @@ class TestChildPinAuth:
     def test_nonexistent_child_id_returns_401(self, client, db):
         """Non-existent child_id returns 401 (same as wrong PIN)."""
         resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": "00000000-0000-0000-0000-000000000000",
+            "child_id": 999999999999999999,
             "pin_sequence": VALID_PIN,
         })
         assert resp.status_code == 401

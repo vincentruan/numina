@@ -58,7 +58,7 @@ def test_update_tag(client, auth_headers, sample_tag):
 
 def test_update_tag_not_found(client, auth_headers):
     """PUT /tags/{id} with unknown id returns 404."""
-    response = client.put("/api/v1/tags/nonexistent-id", headers=auth_headers, json={
+    response = client.put("/api/v1/tags/999999999999999999", headers=auth_headers, json={
         "name": "不存在",
     })
     assert response.status_code == 404
@@ -76,7 +76,7 @@ def test_delete_tag(client, auth_headers, sample_tag):
 
 def test_delete_tag_not_found(client, auth_headers):
     """DELETE /tags/{id} with unknown id returns 404."""
-    response = client.delete("/api/v1/tags/nonexistent-id", headers=auth_headers)
+    response = client.delete("/api/v1/tags/999999999999999999", headers=auth_headers)
     assert response.status_code == 404
 
 

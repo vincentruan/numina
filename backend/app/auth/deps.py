@@ -53,9 +53,9 @@ def revoke_jti(jti: str, ttl_seconds: float) -> None:
         del _revoked_jtis[k]
 
 
-def revoke_all_user_tokens(user_id: str) -> None:
+def revoke_all_user_tokens(user_id: str | int) -> None:
     """Revoke all tokens for a user issued up to this moment."""
-    _user_revocation_times[user_id] = time.time()
+    _user_revocation_times[str(user_id)] = time.time()
 
 
 def _is_jti_revoked(jti: str) -> bool:
@@ -68,8 +68,8 @@ def _is_jti_revoked(jti: str) -> bool:
     return True
 
 
-def _is_token_revoked_for_user(user_id: str, iat: float) -> bool:
-    revoked_before = _user_revocation_times.get(user_id)
+def _is_token_revoked_for_user(user_id: str | int, iat: float) -> bool:
+    revoked_before = _user_revocation_times.get(str(user_id))
     if revoked_before is None:
         return False
     return iat <= revoked_before
@@ -226,7 +226,7 @@ def get_current_user(
         User.default_currency,
         User.view_mode,
     ).filter(
-        User.id == user_id, User.is_active.is_(True)
+        User.id == int(user_id), User.is_active.is_(True)
     ).first()
 
     if result is None:
@@ -246,7 +246,7 @@ def get_current_user(
 
     # SECURITY: Verify payload fid matches current DB family_id
     # This prevents stale tokens from accessing data after family removal
-    if payload_fid != db_family_id:
+    if int(payload_fid) != db_family_id:
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult endpoints.
@@ -260,8 +260,8 @@ def get_current_user(
     # Return User object with queried columns + payload fields
     # Saves ~7 columns compared to full User query (no password_hash, pin fields, etc.)
     user = User(
-        id=user_id,
-        family_id=payload_fid,
+        id=int(user_id),
+        family_id=int(payload_fid),
         username=username,
         display_name=display_name,
         avatar_color=avatar_color,
@@ -316,7 +316,7 @@ def get_current_user_from_cookie(
         User.default_currency,
         User.view_mode,
     ).filter(
-        User.id == user_id, User.is_active.is_(True)
+        User.id == int(user_id), User.is_active.is_(True)
     ).first()
 
     if result is None:
@@ -334,7 +334,7 @@ def get_current_user_from_cookie(
     ) = result
 
     # SECURITY: Verify payload fid matches current DB family_id
-    if payload_fid != db_family_id:
+    if int(payload_fid) != db_family_id:
         raise credentials_exception
 
     # SECURITY: child tokens must not be accepted on adult-only cookie endpoints.
@@ -346,8 +346,8 @@ def get_current_user_from_cookie(
 
     # Return User object with queried columns + payload fields
     user = User(
-        id=user_id,
-        family_id=payload_fid,
+        id=int(user_id),
+        family_id=int(payload_fid),
         username=username,
         display_name=display_name,
         avatar_color=avatar_color,
@@ -445,7 +445,7 @@ def get_current_child_user(
         User.default_currency,
         User.view_mode,
     ).filter(
-        User.id == user_id,
+        User.id == int(user_id),
         User.is_active.is_(True),
         User.role == "child",
     ).first()
@@ -465,13 +465,13 @@ def get_current_child_user(
     ) = result
 
     # SECURITY: Verify payload fid matches current DB family_id
-    if payload_fid != db_family_id:
+    if int(payload_fid) != db_family_id:
         raise credentials_exception
 
     # Return User object with queried columns + payload fields
     user = User(
-        id=user_id,
-        family_id=payload_fid,
+        id=int(user_id),
+        family_id=int(payload_fid),
         username=username,
         display_name=display_name,
         avatar_color=avatar_color,
