@@ -163,12 +163,12 @@ onMounted(loadMonth)
   color: #1a1a1a;
 }
 .nav-btn {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: none;
   background: #f5f5f5;
-  border-radius: 8px;
-  font-size: 18px;
+  border-radius: 10px;
+  font-size: 20px;
   color: #555;
   cursor: pointer;
   display: flex;
@@ -197,7 +197,7 @@ onMounted(loadMonth)
 .cal-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 0;
 }
 
 .cal-cell {
@@ -208,7 +208,7 @@ onMounted(loadMonth)
   justify-content: center;
   border-radius: 10px;
   cursor: default;
-  padding: 4px 2px;
+  padding: 4px 1px;
   position: relative;
   -webkit-tap-highlight-color: transparent;
 }
@@ -217,9 +217,10 @@ onMounted(loadMonth)
 }
 .cal-cell.active {
   cursor: pointer;
+  transition: transform 0.1s;
 }
 .cal-cell.active:active {
-  background: #f0f0f0;
+  transform: scale(0.92);
 }
 .cal-cell.today .day-num {
   background: #f5a623;
