@@ -166,7 +166,7 @@ fi
 log_ok "test_empty 就绪（无资产）"
 
 # ──────────────────────────────────────────────
-# 1.2 test_asset — 单个实物资产
+# 1.2 test_asset — 单个实物资产 + 多状态资产
 # ──────────────────────────────────────────────
 log_info "初始化 test_asset..."
 TOKEN_ASSET=$(register_or_login "test_asset" "TestAsset123!" "Asset Test User" "Asset Test Family")
@@ -178,11 +178,15 @@ fi
 ASSET_COUNT=$(get_asset_count "$TOKEN_ASSET")
 if [ "$ASSET_COUNT" = "0" ]; then
   CAT_HOUSE=$(get_category_id "$TOKEN_ASSET" "房产" "physical")
+  CAT_CAR=$(get_category_id "$TOKEN_ASSET" "车辆" "physical")
+  CAT_DIGITAL=$(get_category_id "$TOKEN_ASSET" "数码" "physical")
+  CAT_CLOTHING=$(get_category_id "$TOKEN_ASSET" "服饰" "physical")
   if [ -z "$CAT_HOUSE" ] || [ "$CAT_HOUSE" = "null" ]; then
     log_err "找不到「房产」分类，请确认后端已初始化默认分类"
     exit 1
   fi
 
+  # 1. 主资产 - in_use 状态
   create_physical_asset "$TOKEN_ASSET" "$(cat <<EOF
 {
   "name":"测试房产",
@@ -197,18 +201,88 @@ if [ "$ASSET_COUNT" = "0" ]; then
   "usage_frequency":"daily",
   "expected_lifespan_days":36500,
   "annual_maintenance_cost":10000,
-  "notes":"E2E 测试用资产"
+  "notes":"E2E 测试用资产",
+  "properties":"{\"rooms\":3,\"area\":120}"
 }
 EOF
 )"
-  log_ok "test_asset 就绪（1 个实物资产）"
+
+  # 2. idle 状态资产（闲置）
+  create_physical_asset "$TOKEN_ASSET" "$(cat <<EOF
+{
+  "name":"闲置车辆",
+  "asset_type":"physical",
+  "category_id":"$CAT_CAR",
+  "purchase_price":200000,
+  "current_value":150000,
+  "currency":"CNY",
+  "purchase_date":"2023-01-01",
+  "status":"idle",
+  "location":"车库",
+  "usage_frequency":"rarely",
+  "expected_lifespan_days":3650,
+  "notes":"闲置状态测试资产"
+}
+EOF
+)"
+
+  # 3. 已归档资产
+  create_physical_asset "$TOKEN_ASSET" "$(cat <<EOF
+{
+  "name":"旧电脑",
+  "asset_type":"physical",
+  "category_id":"$CAT_DIGITAL",
+  "purchase_price":5000,
+  "current_value":0,
+  "currency":"CNY",
+  "purchase_date":"2020-01-01",
+  "status":"retired",
+  "location":"储藏室",
+  "usage_frequency":"idle",
+  "expected_lifespan_days":1825,
+  "notes":"已归档资产测试"
+}
+EOF
+)"
+
+  # 4. 多货币资产（USD）
+  create_physical_asset "$TOKEN_ASSET" "$(cat <<EOF
+{
+  "name":"海外房产",
+  "asset_type":"physical",
+  "category_id":"$CAT_HOUSE",
+  "purchase_price":500000,
+  "current_value":550000,
+  "currency":"USD",
+  "purchase_date":"2022-06-01",
+  "status":"in_use",
+  "location":"美国加州",
+  "notes":"多货币测试资产"
+}
+EOF
+)"
+
+  # 5. 已售出资产（通过 API 更新状态）
+  SOLD_ASSET_RESP=$(curl -sL -X POST "$BASE_URL/assets" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_ASSET" \
+    -d "{\"name\":\"已售西装\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_CLOTHING\",\"purchase_price\":3000,\"current_value\":0,\"currency\":\"CNY\",\"purchase_date\":\"2023-01-01\",\"status\":\"in_use\",\"notes\":\"待售出\"}")
+  SOLD_ASSET_ID=$(echo "$SOLD_ASSET_RESP" | jq -r '.id // .data.id')
+
+  # 标记为已售出
+  curl -sL -X PUT "$BASE_URL/assets/$SOLD_ASSET_ID/sell" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_ASSET" \
+    -d '{"sell_price":2000,"sell_fee":50,"sell_channel":"二手平台","notes":"已售出测试"}' > /dev/null
+
+  log_ok "test_asset 就绪（5 个资产：in_use/idle/retired/USD/已售出）"
 else
   log_info "test_asset 已有 $ASSET_COUNT 个资产，跳过创建"
   log_ok "test_asset 就绪"
 fi
 
 # ──────────────────────────────────────────────
-# 1.3 test_rich — 完整数据（资产+负债+心愿）
+# 1.3 test_rich — 完整数据（资产+负债+心愿+多状态）
 # ──────────────────────────────────────────────
 log_info "初始化 test_rich..."
 TOKEN_RICH=$(register_or_login "test_rich" "TestRich123!" "Rich Test User" "Rich Test Family")
@@ -236,9 +310,16 @@ else
   CAT_FUND_R=$(get_category_id "$TOKEN_RICH" "基金" "financial")
   CAT_DEPOSIT_R=$(get_category_id "$TOKEN_RICH" "存款" "financial")
 
-  # 实物资产（3 个）
-  create_physical_asset "$TOKEN_RICH" "{\"name\":\"测试房产\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_HOUSE_R\",\"purchase_price\":5000000,\"current_value\":5500000,\"currency\":\"CNY\",\"purchase_date\":\"2020-01-01\",\"status\":\"in_use\",\"location\":\"测试城市\",\"usage_frequency\":\"daily\",\"expected_lifespan_days\":36500,\"annual_maintenance_cost\":30000}"
-  create_physical_asset "$TOKEN_RICH" "{\"name\":\"测试车辆\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_CAR_R\",\"purchase_price\":300000,\"current_value\":250000,\"currency\":\"CNY\",\"purchase_date\":\"2022-06-01\",\"status\":\"in_use\",\"location\":\"测试城市\",\"usage_frequency\":\"daily\",\"expected_lifespan_days\":3650,\"annual_maintenance_cost\":15000}"
+  # 实物资产（3 个，含 properties 字段）
+  create_physical_asset "$TOKEN_RICH" "{\"name\":\"测试房产\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_HOUSE_R\",\"purchase_price\":5000000,\"current_value\":5500000,\"currency\":\"CNY\",\"purchase_date\":\"2020-01-01\",\"status\":\"in_use\",\"location\":\"测试城市\",\"usage_frequency\":\"daily\",\"expected_lifespan_days\":36500,\"annual_maintenance_cost\":30000,\"properties\":\"{\\\"area\\\":120,\\\"rooms\\\":4}\"}"
+
+  # 创建车辆资产并获取 ID（用于负债关联）
+  CAR_RESP=$(curl -sL -X POST "$BASE_URL/assets" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"name\":\"测试车辆\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_CAR_R\",\"purchase_price\":300000,\"current_value\":250000,\"currency\":\"CNY\",\"purchase_date\":\"2022-06-01\",\"status\":\"in_use\",\"location\":\"测试城市\",\"usage_frequency\":\"daily\",\"expected_lifespan_days\":3650,\"annual_maintenance_cost\":15000}")
+  CAR_ID=$(echo "$CAR_RESP" | jq -r '.id // .data.id')
+
   create_physical_asset "$TOKEN_RICH" "{\"name\":\"测试电脑\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_ELEC_R\",\"purchase_price\":15000,\"current_value\":10000,\"currency\":\"CNY\",\"purchase_date\":\"2023-01-01\",\"status\":\"in_use\",\"location\":\"家\",\"usage_frequency\":\"daily\",\"expected_lifespan_days\":1825,\"annual_maintenance_cost\":500}"
 
   # 金融资产（3 个）
@@ -246,15 +327,107 @@ else
   create_financial_asset "$TOKEN_RICH" "{\"name\":\"测试基金\",\"asset_type\":\"financial\",\"category_id\":\"$CAT_FUND_R\",\"purchase_price\":50000,\"current_value\":55000,\"currency\":\"CNY\",\"purchase_date\":\"2023-06-01\",\"institution\":\"测试基金公司\"}"
   create_financial_asset "$TOKEN_RICH" "{\"name\":\"测试存款\",\"asset_type\":\"financial\",\"category_id\":\"$CAT_DEPOSIT_R\",\"purchase_price\":200000,\"current_value\":200000,\"currency\":\"CNY\",\"purchase_date\":\"2024-01-01\",\"institution\":\"测试银行\"}"
 
-  # 负债（2 个）
+  # 负债（2 个基础 + 1 个关联资产的负债）
   create_liability "$TOKEN_RICH" "{\"name\":\"测试房贷\",\"category\":\"mortgage\",\"original_amount\":3000000,\"remaining_amount\":2800000,\"currency\":\"CNY\",\"interest_rate\":4.2,\"monthly_payment\":15000,\"start_date\":\"2020-01-01\",\"end_date\":\"2050-01-01\",\"institution\":\"测试银行\"}"
-  create_liability "$TOKEN_RICH" "{\"name\":\"测试车贷\",\"category\":\"car_loan\",\"original_amount\":200000,\"remaining_amount\":100000,\"currency\":\"CNY\",\"interest_rate\":5.0,\"monthly_payment\":4000,\"start_date\":\"2022-06-01\",\"end_date\":\"2026-06-01\",\"institution\":\"测试银行\"}"
 
-  # 心愿（2 个）
-  create_wish "$TOKEN_RICH" "{\"name\":\"测试心愿1\",\"target_amount\":50000,\"currency\":\"CNY\",\"priority\":\"high\",\"description\":\"E2E 测试心愿\"}"
-  create_wish "$TOKEN_RICH" "{\"name\":\"测试心愿2\",\"target_amount\":10000,\"currency\":\"CNY\",\"priority\":\"medium\",\"description\":\"E2E 测试心愿2\"}"
+  # 关联车贷到车辆资产
+  create_liability "$TOKEN_RICH" "{\"name\":\"测试车贷\",\"category\":\"car_loan\",\"original_amount\":200000,\"remaining_amount\":100000,\"currency\":\"CNY\",\"interest_rate\":5.0,\"monthly_payment\":4000,\"start_date\":\"2022-06-01\",\"end_date\":\"2026-06-01\",\"institution\":\"测试银行\",\"linked_asset_id\":\"$CAR_ID\",\"notes\":\"关联到测试车辆\"}"
 
-  log_ok "test_rich 就绪（6 资产 + 2 负债 + 2 心愿）"
+  # 已还清的负债
+  PAID_LIABILITY_RESP=$(curl -sL -X POST "$BASE_URL/liabilities" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"name\":\"已还清贷款\",\"category\":\"personal_loan\",\"original_amount\":50000,\"remaining_amount\":50000,\"currency\":\"CNY\",\"interest_rate\":6.0,\"start_date\":\"2023-01-01\",\"end_date\":\"2024-01-01\",\"institution\":\"测试银行\"}")
+  PAID_LIABILITY_ID=$(echo "$PAID_LIABILITY_RESP" | jq -r '.id // .data.id')
+  # 记录还款使其变为 is_active=false
+  curl -sL -X PUT "$BASE_URL/liabilities/$PAID_LIABILITY_ID/payment" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"amount":50000}' > /dev/null
+
+  # 心愿（2 个基础 + 多状态）
+  create_wish "$TOKEN_RICH" "{\"name\":\"测试心愿1\",\"expected_price\":50000,\"currency\":\"CNY\",\"priority\":\"high\",\"description\":\"E2E 测试心愿\"}"
+  create_wish "$TOKEN_RICH" "{\"name\":\"测试心愿2\",\"expected_price\":10000,\"currency\":\"CNY\",\"priority\":\"medium\",\"description\":\"E2E 测试心愿2\"}"
+
+  # 已实现的心愿
+  REALIZED_WISH_RESP=$(curl -sL -X POST "$BASE_URL/wishes" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"name\":\"已实现心愿\",\"expected_price\":8000,\"currency\":\"CNY\",\"priority\":\"low\",\"description\":\"已购买\"}")
+  REALIZED_WISH_ID=$(echo "$REALIZED_WISH_RESP" | jq -r '.id // .data.id')
+  # 创建关联资产并标记心愿为已实现
+  REALIZED_ASSET_RESP=$(curl -sL -X POST "$BASE_URL/assets" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"name\":\"实现心愿的资产\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_ELEC_R\",\"purchase_price\":8000,\"current_value\":8000,\"currency\":\"CNY\",\"purchase_date\":\"2024-01-15\",\"status\":\"in_use\"}")
+  REALIZED_ASSET_ID=$(echo "$REALIZED_ASSET_RESP" | jq -r '.id // .data.id')
+  curl -sL -X POST "$BASE_URL/wishes/$REALIZED_WISH_ID/realize" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"purchase_price\":8000,\"purchase_date\":\"2024-01-15\",\"category_id\":\"$CAT_ELEC_R\"}" > /dev/null
+
+  # 已取消的心愿
+  CANCELLED_WISH_RESP=$(curl -sL -X POST "$BASE_URL/wishes" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"name\":\"已取消心愿\",\"expected_price\":20000,\"currency\":\"CNY\",\"priority\":\"medium\",\"description\":\"不再需要\"}")
+  CANCELLED_WISH_ID=$(echo "$CANCELLED_WISH_RESP" | jq -r '.id // .data.id')
+  curl -sL -X PUT "$BASE_URL/wishes/$CANCELLED_WISH_ID" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"status":"cancelled"}' > /dev/null
+
+  # 构造分页测试数据（各 25 个）
+  log_info "为 test_rich 创建分页测试数据..."
+  for i in {1..25}; do
+    create_physical_asset "$TOKEN_RICH" "{\"name\":\"分页测试资产-$i\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_HOUSE_R\",\"purchase_price\":1000,\"current_value\":1000,\"currency\":\"CNY\",\"purchase_date\":\"2023-01-01\",\"status\":\"in_use\"}"
+    create_liability "$TOKEN_RICH" "{\"name\":\"分页测试负债-$i\",\"category\":\"other\",\"original_amount\":10000,\"remaining_amount\":5000,\"currency\":\"CNY\",\"institution\":\"测试银行\"}"
+    create_wish "$TOKEN_RICH" "{\"name\":\"分页测试心愿-$i\",\"expected_price\":1000,\"currency\":\"CNY\",\"priority\":\"low\",\"description\":\"分页测试\"}"
+  done
+
+  log_ok "test_rich 就绪（31 资产 + 28 负债 + 29 心愿 + 多状态覆盖）"
+
+  # ──────────────────────────────────────────────
+  # 1.3.1 test_rich_member — test_rich 家庭的普通成员（测试角色权限）
+  # ──────────────────────────────────────────────
+  log_info "初始化 test_rich_member（test_rich 家庭的 member 角色）..."
+
+  # 获取 test_rich 的家庭邀请码
+  FAMILY_INFO=$(curl -sL "$BASE_URL/family/" -H "Authorization: Bearer $TOKEN_RICH")
+  INVITE_CODE=$(echo "$FAMILY_INFO" | jq -r '.data.invite_code')
+
+  if [ -n "$INVITE_CODE" ] && [ "$INVITE_CODE" != "null" ]; then
+    # 注册新用户并加入家庭（角色为 member）
+    MEMBER_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
+      -H "Content-Type: application/json" \
+      -d "{\"username\":\"test_rich_member\",\"display_name\":\"测试成员\",\"password\":\"TestMember123!\"," \
+      -d "\"family_invite_code\":\"$INVITE_CODE\"}")
+    MEMBER_HTTP=$(echo "$MEMBER_RESP" | tail -1)
+    MEMBER_BODY=$(echo "$MEMBER_RESP" | sed '$d')
+
+    if [ "$MEMBER_HTTP" = "200" ] || [ "$MEMBER_HTTP" = "201" ]; then
+      MEMBER_TOKEN=$(echo "$MEMBER_BODY" | jq -r '.access_token // .data.access_token')
+      log_ok "test_rich_member 创建成功（member 角色）"
+
+      # 为 member 创建少量资产（测试数据隔离）
+      CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "电子设备" "physical")
+      if [ -n "$CAT_DIGITAL_M" ] && [ "$CAT_DIGITAL_M" != "null" ]; then
+        create_physical_asset "$MEMBER_TOKEN" "{\"name\":\"成员手机\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_DIGITAL_M\",\"purchase_price\":5000,\"current_value\":4000,\"currency\":\"CNY\",\"purchase_date\":\"2023-06-01\",\"status\":\"in_use\"}"
+        log_ok "test_rich_member 创建 1 个资产（member 数据隔离测试）"
+      fi
+    elif [ "$MEMBER_HTTP" = "409" ] || [ "$MEMBER_HTTP" = "400" ]; then
+      log_info "test_rich_member 已存在，直接登录"
+      MEMBER_LOGIN=$(curl -sL -X POST "$BASE_URL/auth/login" \
+        -H "Content-Type: application/json" \
+        -d '{"username":"test_rich_member","password":"TestMember123!"}')
+      MEMBER_TOKEN=$(echo "$MEMBER_LOGIN" | jq -r '.access_token // .data.access_token')
+      log_ok "test_rich_member 就绪（member 角色）"
+    else
+      log_warn "test_rich_member 创建失败: HTTP $MEMBER_HTTP — 跳过"
+    fi
+  else
+    log_warn "无法获取 test_rich 家庭邀请码 — 跳过 member 创建"
+  fi
 fi
 
 # ──────────────────────────────────────────────
@@ -315,6 +488,50 @@ else
   log_info "Test chore template already exists, skipping (id: $TEMPLATE_ID)"
 fi
 log_ok "Test chore template ready"
+
+# ----------------------------------------------
+# 1.6 test_child cross-day chores
+# ----------------------------------------------
+log_info "Initializing test_child cross-day chores..."
+CHILD_TOKEN_RICH=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"testchild\",\"pin_sequence\":[\"🐱\",\"🐶\",\"🐸\",\"🦊\"]}" \
+  | jq -r '.data.access_token // .access_token')
+
+if [ -n "$CHILD_TOKEN_RICH" ] && [ "$CHILD_TOKEN_RICH" != "null" ]; then
+  if date -v-1d >/dev/null 2>&1; then
+    YESTERDAY=$(date -v-1d +%Y-%m-%d)
+    TOMORROW=$(date -v+1d +%Y-%m-%d)
+  else
+    YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+    TOMORROW=$(date -d "tomorrow" +%Y-%m-%d)
+  fi
+  TODAY=$(date +%Y-%m-%d)
+
+  # 昨日任务（已完成且已审批）
+  CHORES_YEST=$(curl -sL -X GET "$BASE_URL/child/chores?date=$YESTERDAY" -H "Authorization: Bearer $CHILD_TOKEN_RICH")
+  INST_YEST=$(echo "$CHORES_YEST" | jq -r '.data[0].id // empty')
+  STATUS_YEST=$(echo "$CHORES_YEST" | jq -r '.data[0].status // empty')
+
+  if [ -n "$INST_YEST" ] && [ "$STATUS_YEST" = "available" ]; then
+    curl -sL -X POST "$BASE_URL/child/chores/$INST_YEST/complete" -H "Authorization: Bearer $CHILD_TOKEN_RICH" > /dev/null
+    curl -sL -X POST "$BASE_URL/family/chore-approvals/$INST_YEST/approve" -H "Authorization: Bearer $TOKEN_RICH" > /dev/null
+    log_ok "test_child: 完成并审批昨日家务"
+  fi
+
+  # 今日任务（仅完成待审批）
+  CHORES_TODAY=$(curl -sL -X GET "$BASE_URL/child/chores?date=$TODAY" -H "Authorization: Bearer $CHILD_TOKEN_RICH")
+  INST_TODAY=$(echo "$CHORES_TODAY" | jq -r '.data[0].id // empty')
+  STATUS_TODAY=$(echo "$CHORES_TODAY" | jq -r '.data[0].status // empty')
+
+  if [ -n "$INST_TODAY" ] && [ "$STATUS_TODAY" = "available" ]; then
+    curl -sL -X POST "$BASE_URL/child/chores/$INST_TODAY/complete" -H "Authorization: Bearer $CHILD_TOKEN_RICH" > /dev/null
+    log_ok "test_child: 完成今日家务（待审批）"
+  fi
+
+  # 明日任务（仅生成获取）
+  curl -sL -X GET "$BASE_URL/child/chores?date=$TOMORROW" -H "Authorization: Bearer $CHILD_TOKEN_RICH" > /dev/null
+fi
 
 log_ok "========== Part 1: Fixed test accounts complete =========="
 
@@ -1266,42 +1483,108 @@ EOF
       -d "{\"username\":\"dabao\",\"pin_sequence\":[\"🌈\",\"🍎\",\"🐸\",\"🦁\"]}" \
       | jq -r '.data.access_token // .access_token')
 
-    # 给孩子充值星星币
+    # 给孩子充值星星币（多次充值，创建交易历史）
     curl -sL -X POST "$BASE_URL/family/coins/grant" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
-      -d "{\"child_user_id\":\"$CHILD1_ID\",\"amount\":50,\"reason\":\"初始零花钱\"}" > /dev/null
-    log_ok "充值: 小宝 50 星星币"
+      -d "{\"child_user_id\":\"$CHILD1_ID\",\"amount\":20,\"reason\":\"初始零花钱\"}" > /dev/null
+    curl -sL -X POST "$BASE_URL/family/coins/grant" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"child_user_id\":\"$CHILD1_ID\",\"amount\":30,\"reason\":\"奖励\"}" > /dev/null
+    log_ok "充值: 小宝 50 星星币（2笔交易）"
 
     curl -sL -X POST "$BASE_URL/family/coins/grant" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
-      -d "{\"child_user_id\":\"$CHILD2_ID\",\"amount\":120,\"reason\":\"初始零花钱\"}" > /dev/null
-    log_ok "充值: 大宝 120 星星币"
+      -d "{\"child_user_id\":\"$CHILD2_ID\",\"amount\":50,\"reason\":\"初始零花钱\"}" > /dev/null
+    curl -sL -X POST "$BASE_URL/family/coins/grant" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"child_user_id\":\"$CHILD2_ID\",\"amount\":40,\"reason\":\"家务奖励\"}" > /dev/null
+    curl -sL -X POST "$BASE_URL/family/coins/grant" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"child_user_id\":\"$CHILD2_ID\",\"amount\":30,\"reason\":\"生日礼物\"}" > /dev/null
+    log_ok "充值: 大宝 120 星星币（3笔交易）"
 
-    # 创建 child_wishes（pending_review 状态）
+    # ═══════════════════════════════════════════
+    # 儿童心愿完整状态流转测试（5种状态全覆盖）
+    # ═══════════════════════════════════════════
+
+    # 1. pending_review 状态（待审批）
     curl -sL -X POST "$BASE_URL/child/wishes" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $CHILD1_TOKEN" \
-      -d '{"name":"积木玩具","description":"乐高城市系列","priority":"high"}' > /dev/null
+      -d '{"name":"积木玩具","description":"乐高城市系列","emoji":"🧱","priority":"high"}' > /dev/null
     log_ok "创建心愿: 小宝 - 积木玩具 (pending_review)"
 
-    # 创建 child_wishes（提交审批）
-    WISH2_RESP=$(curl -sL -X POST "$BASE_URL/child/wishes" \
+    # 2. rejected 状态（被拒绝）
+    REJECTED_WISH_RESP=$(curl -sL -X POST "$BASE_URL/child/wishes" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $CHILD1_TOKEN" \
+      -d '{"name":"昂贵玩具","description":"太贵了","emoji":"🎮","priority":"high"}')
+    REJECTED_WISH_ID=$(echo "$REJECTED_WISH_RESP" | jq -r '.data.id // .id')
+    curl -sL -X POST "$BASE_URL/family/child-wishes/$REJECTED_WISH_ID/reject" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"rejection_reason":"太贵了，等攒更多星星币再说"}' > /dev/null
+    log_ok "拒绝心愿: 小宝 - 昂贵玩具 (rejected)"
+
+    # 3. active 状态（已批准）
+    ACTIVE_WISH_RESP=$(curl -sL -X POST "$BASE_URL/child/wishes" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $CHILD2_TOKEN" \
-      -d '{"name":"新耳机","description":"无线蓝牙耳机","priority":"medium"}')
-    WISH2_ID=$(echo "$WISH2_RESP" | jq -r '.data.id // .id')
-    log_ok "创建心愿: 大宝 - 新耳机 (提交审批)"
-
-    # 家长批准心愿并设置星星币成本（变为 active）
-    curl -sL -X POST "$BASE_URL/family/child-wishes/$WISH2_ID/approve" \
+      -d '{"name":"新耳机","description":"无线蓝牙耳机","emoji":"🎧","priority":"medium"}')
+    ACTIVE_WISH_ID=$(echo "$ACTIVE_WISH_RESP" | jq -r '.data.id // .id')
+    curl -sL -X POST "$BASE_URL/family/child-wishes/$ACTIVE_WISH_ID/approve" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
       -d '{"star_coin_cost":80}' > /dev/null
     log_ok "批准心愿: 大宝 - 新耳机 (active, cost=80)"
 
-    # 创建家务模板
+    # 4. redemption_requested 状态（兑换请求）
+    REDEMPT_WISH_RESP=$(curl -sL -X POST "$BASE_URL/child/wishes" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $CHILD2_TOKEN" \
+      -d '{"name":"漫画书","description":"一套漫画","emoji":"📚","priority":"low"}')
+    REDEMPT_WISH_ID=$(echo "$REDEMPT_WISH_RESP" | jq -r '.data.id // .id')
+    curl -sL -X POST "$BASE_URL/family/child-wishes/$REDEMPT_WISH_ID/approve" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"star_coin_cost":30}' > /dev/null
+    # 请求兑换
+    curl -sL -X POST "$BASE_URL/child/wishes/$REDEMPT_WISH_ID/request-redemption" \
+      -H "Authorization: Bearer $CHILD2_TOKEN" > /dev/null
+    log_ok "兑换请求: 大宝 - 漫画书 (redemption_requested, cost=30)"
+
+    # 5. realized 状态（已实现）
+    REALIZED_CHILD_WISH_RESP=$(curl -sL -X POST "$BASE_URL/child/wishes" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $CHILD1_TOKEN" \
+      -d '{"name":"小背包","description":"上学用","emoji":"🎒","priority":"medium"}')
+    REALIZED_CHILD_WISH_ID=$(echo "$REALIZED_CHILD_WISH_RESP" | jq -r '.data.id // .id')
+    curl -sL -X POST "$BASE_URL/family/child-wishes/$REALIZED_CHILD_WISH_ID/approve" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"star_coin_cost":40}' > /dev/null
+    curl -sL -X POST "$BASE_URL/child/wishes/$REALIZED_CHILD_WISH_ID/request-redemption" \
+      -H "Authorization: Bearer $CHILD1_TOKEN" > /dev/null
+    # 家长确认实现
+    curl -sL -X POST "$BASE_URL/family/child-wishes/$REALIZED_CHILD_WISH_ID/realize" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{}' > /dev/null
+    log_ok "已实现心愿: 小宝 - 小背包 (realized, cost=40)"
+
+    # 兄弟间赠送星星币
+    curl -sL -X POST "$BASE_URL/family/coins/gift" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"to_child_id\":\"$CHILD1_ID\",\"amount\":10,\"emoji_reason\":\"🎁\"}" > /dev/null
+    log_ok "赠送: 大宝 -> 小宝 10 星星币"
+
+    # 创建家务模板（每日 + 每周）
     TPL1_RESP=$(curl -sL -X POST "$BASE_URL/family/chore-templates" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
@@ -1328,19 +1611,56 @@ EOF
     TPL2_ID=$(echo "$TPL2_RESP" | jq -r '.data.id // .id')
     log_ok "创建家务模板: 洗碗 (每日)"
 
-    # 孩子获取今日家务实例并完成一个（待审批状态）
+    # 每周家务模板
+    TPL3_RESP=$(curl -sL -X POST "$BASE_URL/family/chore-templates" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{
+        "name": "打扫卫生间",
+        "emoji": "🚿",
+        "coin_reward": 15,
+        "frequency": "weekly",
+        "assignment_type": "pool"
+      }')
+    TPL3_ID=$(echo "$TPL3_RESP" | jq -r '.data.id // .id')
+    log_ok "创建家务模板: 打扫卫生间 (每周)"
+
+    # 任务跨天场景：获取昨日、今日、明日家务实例
+    if date -v-1d >/dev/null 2>&1; then
+      YESTERDAY=$(date -v-1d +%Y-%m-%d)
+      TOMORROW=$(date -v+1d +%Y-%m-%d)
+    else
+      YESTERDAY=$(date -d "yesterday" +%Y-%m-%d)
+      TOMORROW=$(date -d "tomorrow" +%Y-%m-%d)
+    fi
     TODAY=$(date +%Y-%m-%d)
+
+    # 昨日任务 (完成并审批)
+    CHORES_YEST=$(curl -sL -X GET "$BASE_URL/child/chores?date=$YESTERDAY" -H "Authorization: Bearer $CHILD2_TOKEN")
+    INST_YEST=$(echo "$CHORES_YEST" | jq -r '.data[0].id // empty')
+    STATUS_YEST=$(echo "$CHORES_YEST" | jq -r '.data[0].status // empty')
+    if [ -n "$INST_YEST" ] && [ "$STATUS_YEST" = "available" ]; then
+      curl -sL -X POST "$BASE_URL/child/chores/$INST_YEST/complete" -H "Authorization: Bearer $CHILD2_TOKEN" > /dev/null
+      curl -sL -X POST "$BASE_URL/family/chore-approvals/$INST_YEST/approve" -H "Authorization: Bearer $TOKEN" > /dev/null
+      log_ok "大宝完成昨日家务: 已审批"
+    fi
+
+    # 今日任务 (仅完成待审批)
     CHORES2=$(curl -sL -X GET "$BASE_URL/child/chores?date=$TODAY" \
       -H "Authorization: Bearer $CHILD2_TOKEN")
     INSTANCE_ID=$(echo "$CHORES2" | jq -r '.data[0].id // empty')
+    STATUS_TODAY=$(echo "$CHORES2" | jq -r '.data[0].status // empty')
 
-    if [ -n "$INSTANCE_ID" ] && [ "$INSTANCE_ID" != "null" ]; then
+    if [ -n "$INSTANCE_ID" ] && [ "$STATUS_TODAY" = "available" ]; then
       curl -sL -X POST "$BASE_URL/child/chores/$INSTANCE_ID/complete" \
         -H "Authorization: Bearer $CHILD2_TOKEN" > /dev/null
-      log_ok "大宝完成家务: 待审批"
+      log_ok "大宝完成今日家务: 待审批"
     else
-      log_ok "家务实例暂无（模板未分配给特定孩子）"
+      log_ok "家务实例暂无（今日已处理或未分配）"
     fi
+
+    # 触发生成明日任务
+    curl -sL -X GET "$BASE_URL/child/chores?date=$TOMORROW" -H "Authorization: Bearer $CHILD2_TOKEN" > /dev/null
   fi
 
   log_ok "========== Part 2: 完整仿真数据完成 =========="
@@ -1357,10 +1677,11 @@ echo "=========================================="
 # 固定测试账号统计
 echo ""
 echo "固定测试账号:"
-echo "  - test_empty  (空家庭)"
-echo "  - test_asset  (1 实物资产)"
-echo "  - test_rich   (6 资产 + 2 负债 + 2 心愿 + 1 儿童账号 + 1 家务模板)"
-echo "  - test_child  (test_rich 家庭的儿童)"
+echo "  - test_empty        (空家庭)"
+echo "  - test_asset        (5 资产: in_use/idle/retired/USD/已售出)"
+echo "  - test_rich         (31 资产 + 28 负债 + 29 心愿 + 负债关联 + 心愿多状态)"
+echo "  - test_rich_member  (test_rich 家庭的 member 角色 + 数据隔离测试)"
+echo "  - test_child        (test_rich 家庭的儿童 + 跨天家务)"
 
 if [[ "$SKIP_DEMO" == false ]]; then
   echo ""
