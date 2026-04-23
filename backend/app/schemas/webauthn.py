@@ -1,6 +1,5 @@
 """WebAuthn request/response schemas."""
 
-import uuid
 from typing import Any
 
 from pydantic import BaseModel, field_validator
@@ -14,10 +13,9 @@ class WebAuthnRegistrationOptionsRequest(BaseModel):
     @field_validator("child_id")
     @classmethod
     def validate_child_id(cls, v: str) -> str:
-        try:
-            uuid.UUID(v)
-        except ValueError:
-            raise ValueError("child_id 必须是有效的 UUID")
+        # Accept Snowflake ID (numeric string)
+        if not v.isdigit():
+            raise ValueError("child_id 必须是有效的 Snowflake ID")
         return v
 
 
@@ -38,10 +36,8 @@ class WebAuthnRegistrationRequest(BaseModel):
     @field_validator("child_id")
     @classmethod
     def validate_child_id(cls, v: str) -> str:
-        try:
-            uuid.UUID(v)
-        except ValueError:
-            raise ValueError("child_id 必须是有效的 UUID")
+        if not v.isdigit():
+            raise ValueError("child_id 必须是有效的 Snowflake ID")
         return v
 
 
@@ -53,10 +49,8 @@ class WebAuthnAuthenticationOptionsRequest(BaseModel):
     @field_validator("child_id")
     @classmethod
     def validate_child_id(cls, v: str) -> str:
-        try:
-            uuid.UUID(v)
-        except ValueError:
-            raise ValueError("child_id 必须是有效的 UUID")
+        if not v.isdigit():
+            raise ValueError("child_id 必须是有效的 Snowflake ID")
         return v
 
 
@@ -77,8 +71,6 @@ class WebAuthnAuthenticationRequest(BaseModel):
     @field_validator("child_id")
     @classmethod
     def validate_child_id(cls, v: str) -> str:
-        try:
-            uuid.UUID(v)
-        except ValueError:
-            raise ValueError("child_id 必须是有效的 UUID")
+        if not v.isdigit():
+            raise ValueError("child_id 必须是有效的 Snowflake ID")
         return v

@@ -52,6 +52,7 @@ def _seed_test_invitation_codes(session):
         FamilyInvitationCode(code="AUTO-OTHER"),         # test_chores_extended.py
         FamilyInvitationCode(code="AUTO-STORAGE"),       # test_file_storage_models.py
         FamilyInvitationCode(code="AUTO-STORAGE-2"),     # test_file_storage_models.py
+        FamilyInvitationCode(code="AUTO-WEBAUTHN"),      # test_webauthn.py
     ]
     for code in codes:
         session.add(code)

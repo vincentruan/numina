@@ -27,17 +27,19 @@ def _register_owner(client):
             "display_name": "Owner",
             "password": "OwnerPass1",
             "family_name": "Test Family",
+            "family_invitation_code": "AUTO-WEBAUTHN",
         },
     )
     assert resp.status_code == 200
     return {"Authorization": f"Bearer {resp.json()['data']['access_token']}"}
 
 
-def _create_child(client, headers, display_name="WebAuthn Child"):
+def _create_child(client, headers, display_name="WebAuthn Child", username="webautnchild"):
     """Create a child user and return response."""
     resp = client.post(
         "/api/v1/family/children",
         json={
+            "username": username,
             "display_name": display_name,
             "pin": ["🐱", "🐶", "🐸", "🦊"],
         },
@@ -92,7 +94,7 @@ def test_webauthn_register_options_returns_challenge(client, db):
 
 def test_webauthn_register_options_nonexistent_child(client):
     """Register-options returns error for nonexistent child."""
-    fake_child_id = "00000000-0000-0000-0000-000000000000"
+    fake_child_id = "999999999999999999"  # Valid Snowflake ID format, but nonexistent
     response = client.post(
         "/api/v1/auth/child/webauthn/register-options",
         json={"child_id": fake_child_id},
@@ -215,7 +217,7 @@ def test_webauthn_register_verification_fails(client, db):
 
 def test_webauthn_register_nonexistent_child(client):
     """Register returns 404 for nonexistent child."""
-    fake_child_id = "00000000-0000-0000-0000-000000000000"
+    fake_child_id = "999999999999999999"  # Valid Snowflake ID format, but nonexistent
     response = client.post(
         "/api/v1/auth/child/webauthn/register",
         json={
@@ -322,7 +324,7 @@ def test_webauthn_login_options_no_credentials(client, db):
 
 def test_webauthn_login_options_nonexistent_child(client):
     """Login-options returns 404 for nonexistent child."""
-    fake_child_id = "00000000-0000-0000-0000-000000000000"
+    fake_child_id = "999999999999999999"  # Valid Snowflake ID format, but nonexistent
     response = client.post(
         "/api/v1/auth/child/webauthn/login-options",
         json={"child_id": fake_child_id},
