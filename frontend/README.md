@@ -28,19 +28,16 @@ npm run test:run      # vitest run — run tests once (no watch mode)
 
 ```
 frontend/src/
-├── api/            # Axios HTTP client with JWT auto-refresh interceptor
-│   ├── index.ts        # Axios instance, request/response interceptors, token refresh with lock
-│   ├── auth.ts         # login, register, joinFamily, getMe, refreshToken
-│   ├── assets.ts       # CRUD + updateAssetValue
-│   ├── liabilities.ts  # CRUD + recordPayment
-│   ├── dashboard.ts    # overview, allocation, trend, topAssets, dailyCost, lowUsage, returns
-│   └── family.ts       # getFamily, getMembers, regenerateInviteCode, updateRole, removeMember
-├── stores/         # Pinia state management (one store per domain)
-├── pages/          # Route-level page components (*Page.vue)
+├── api/            # Axios HTTP client with JWT auto-refresh interceptor (21 modules — auth, assets, liabilities, dashboard, family, AI, children, chores, coins, wishes, and more)
+├── assets/         # Static assets (images, icons, fonts)
 ├── components/     # Reusable components (charts/, common/, asset/, liability/, family/)
-├── composables/    # Vue composables (useAuth, useCurrency)
+├── composables/    # Vue composables (one per domain)
+├── constants/      # Shared constants and enums
+├── i18n/           # Internationalization (zh-CN, en-US locale files)
 ├── layouts/        # MainLayout (bottom tab bar)
+├── pages/          # Route-level page components (*Page.vue)
 ├── router/         # Vue Router with auth guards (requireAuth, requireGuest)
+├── stores/         # Pinia state management (one store per domain)
 ├── types/          # TypeScript interfaces matching backend schemas
 └── utils/          # storage (tokens + user), format (currency, date)
 ```
