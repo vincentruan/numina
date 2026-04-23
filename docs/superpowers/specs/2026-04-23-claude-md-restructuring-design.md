@@ -86,6 +86,14 @@ See root `CLAUDE.md` for behavioral guidelines and cross-cutting conventions.
 
 [Non-negotiable rules that must always hold]
 
+## Don't Do
+
+[Explicit anti-patterns — things AI agents should NEVER do in this module]
+
+## Watch Out
+
+[Gotchas, pitfalls, and edge cases that commonly cause problems]
+
 ## Patterns
 
 [Language/framework-specific patterns]
