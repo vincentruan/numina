@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -30,6 +30,25 @@ def _get_or_create_config(family_id: int, db: Session) -> BlindBoxConfig:
         db.commit()
         db.refresh(config)
     return config
+
+
+def _draw_to_response(draw: BlindBoxDraw) -> BlindBoxDrawResponse:
+    """Convert a BlindBoxDraw ORM object (with .gift loaded) to a response schema."""
+    gift = draw.gift
+    return BlindBoxDrawResponse(
+        id=draw.id,
+        family_id=draw.family_id,
+        child_user_id=draw.child_user_id,
+        coins_spent=draw.coins_spent,
+        gift_id=draw.gift_id,
+        is_surprise=draw.is_surprise,
+        is_bonus=draw.is_bonus,
+        status=draw.status,
+        draw_at=draw.draw_at,
+        fulfilled_at=draw.fulfilled_at,
+        gift_name=gift.name if gift else "",
+        gift_emoji=gift.emoji if gift else None,
+    )
 
 
 @router.get("/gifts", response_model=list[BlindBoxGiftResponse])
@@ -113,20 +132,7 @@ def list_draws(
         .order_by(BlindBoxDraw.draw_at.desc())
         .all()
     )
-    result = []
-    for d in draws:
-        gift = db.query(BlindBoxGift).filter_by(id=d.gift_id).first()
-        result.append(
-            BlindBoxDrawResponse(
-                **{c: getattr(d, c) for c in [
-                    "id", "family_id", "child_user_id", "coins_spent",
-                    "gift_id", "is_surprise", "is_bonus", "status", "draw_at", "fulfilled_at"
-                ]},
-                gift_name=gift.name if gift else "",
-                gift_emoji=gift.emoji if gift else None,
-            )
-        )
-    return result
+    return [_draw_to_response(d) for d in draws]
 
 
 @router.put("/draws/{draw_id}/fulfill", response_model=BlindBoxDrawResponse)
@@ -139,18 +145,10 @@ def fulfill_draw(
     if not draw:
         raise HTTPException(status_code=404, detail="抽奖记录不存在")
     draw.status = "fulfilled"
-    draw.fulfilled_at = datetime.now(timezone.utc)
+    draw.fulfilled_at = datetime.now(UTC)
     db.commit()
     db.refresh(draw)
-    gift = db.query(BlindBoxGift).filter_by(id=draw.gift_id).first()
-    return BlindBoxDrawResponse(
-        **{c: getattr(draw, c) for c in [
-            "id", "family_id", "child_user_id", "coins_spent",
-            "gift_id", "is_surprise", "is_bonus", "status", "draw_at", "fulfilled_at"
-        ]},
-        gift_name=gift.name if gift else "",
-        gift_emoji=gift.emoji if gift else None,
-    )
+    return _draw_to_response(draw)
 
 
 @router.get("/config", response_model=BlindBoxConfigResponse)
