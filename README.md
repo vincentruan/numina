@@ -75,35 +75,7 @@ SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-102
 
 ### 本地开发
 
-#### 后端开发
-
-```bash
-cd backend
-
-# 安装依赖（需要 uv: https://docs.astral.sh/uv/）
-uv sync
-
-# 运行开发服务器
-uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-
-# 运行测试
-uv run pytest tests/ -v
-```
-
-#### 前端开发
-
-```bash
-cd frontend
-
-# 安装依赖
-npm ci
-
-# 运行开发服务器（自动代理 /api 到 localhost:8000）
-npm run dev
-
-# 构建生产版本
-npm run build
-```
+各模块的本地开发说明见对应模块的 README：[后端](./backend/README.md) · [前端](./frontend/README.md) · [Agent](./agent/README.md)
 
 ## 📊 功能概览
 
@@ -202,6 +174,17 @@ numina/
 └── docs/                       # 项目文档
 ```
 
+## 📚 模块文档
+
+各模块的开发文档（快速启动、环境变量、架构、测试）：
+
+| 模块 | README | 说明 |
+|------|--------|------|
+| 后端 | [backend/README.md](./backend/README.md) | FastAPI API 开发、数据库、测试 |
+| Agent | [agent/README.md](./agent/README.md) | AI 微服务、DeerFlow 集成、技能 |
+| 前端 | [frontend/README.md](./frontend/README.md) | Vue 3 UI 开发、组件、测试 |
+| 测试 | [tests/README.md](./tests/README.md) | E2E 测试、数据生成、截图 |
+
 ## 🔐 安全特性
 
 - **密码加密**：使用 bcrypt 哈希存储密码
@@ -217,73 +200,15 @@ numina/
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-### 主要 API 端点
-
-```
-POST   /api/v1/auth/register          # 注册（创建家庭）
-POST   /api/v1/auth/login             # 登录
-POST   /api/v1/auth/refresh           # 刷新 token
-POST   /api/v1/auth/family/join       # 加入家庭
-GET    /api/v1/auth/me                # 获取当前用户信息
-
-GET    /api/v1/assets                 # 资产列表（支持筛选）
-POST   /api/v1/assets                 # 创建资产
-GET    /api/v1/assets/{id}            # 资产详情
-PUT    /api/v1/assets/{id}            # 更新资产
-DELETE /api/v1/assets/{id}            # 归档资产
-PUT    /api/v1/assets/{id}/value      # 快速更新价值
-
-GET    /api/v1/liabilities            # 负债列表
-POST   /api/v1/liabilities            # 创建负债
-PUT    /api/v1/liabilities/{id}/payment  # 记录还款
-
-GET    /api/v1/dashboard/overview     # 仪表盘总览
-GET    /api/v1/dashboard/allocation   # 资产配置
-GET    /api/v1/dashboard/trend        # 净资产趋势
-GET    /api/v1/dashboard/daily-cost-ranking      # 日耗排行
-GET    /api/v1/dashboard/low-usage-assets        # 低使用率资产
-GET    /api/v1/dashboard/investment-returns      # 投资收益排行
-
-GET    /api/v1/family                 # 家庭信息
-GET    /api/v1/family/aggregate       # 家庭汇总
-POST   /api/v1/family/invite-code     # 生成邀请码
-```
-
-### Agent API 端点
-
-Agent 微服务为内部服务，需 `X-Agent-Token` 认证：
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/report/generate` | 家庭资产体检报告 |
-| POST | `/alerts/aging` | 固定资产老化预警 |
-| POST | `/liability/analyze` | 负债结构分析 |
-| POST | `/disposal/scan` | 闲置资产处置建议 |
-| POST | `/allocation/drift` | 资产配置漂移检测 |
-| POST | `/chat/ask` | 问答助手 |
-| POST | `/suggest/asset` | 资产录入智能建议 |
-```
+完整端点列表见 [backend/README.md](./backend/README.md) 和 [agent/README.md](./agent/README.md)。
 
 ## 🧪 测试
 
 后端包含 473 个自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
 
-```bash
-cd backend
-uv run pytest tests/ -v
-
-# 测试覆盖率
-uv run pytest tests/ --cov=app --cov-report=html
-```
+详见各模块 README：[后端测试](./backend/README.md#测试) · [Agent 测试](./agent/README.md#测试) · [E2E 测试](./tests/README.md)
 
 **测试结果**：✅ 473 passed
-
-Agent 包含单元测试和集成测试：
-
-```bash
-cd agent
-uv run pytest tests/ -v
-```
 
 ## 🚢 部署指南
 
