@@ -8,18 +8,27 @@
     </van-tabs>
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <!-- Summary -->
-      <div v-if="liabilityStore.liabilities.length" class="summary-bar">
-        <div class="summary-row">
-          <span>共 {{ liabilityStore.liabilities.length }} 笔</span>
-          <span>剩余 ¥{{ totalAmount.toLocaleString() }}</span>
-        </div>
-        <div v-if="activeTab === 'active'" class="repay-progress">
-          <div class="repay-progress-bar">
-            <div class="repay-progress-fill" :style="{ width: repaidPercent + '%' }" />
+      <!-- Summary Banner -->
+      <div v-if="liabilityStore.liabilities.length" class="summary-banner">
+        <div class="summary-top">
+          <div class="summary-main">
+            <div class="summary-label">{{ activeTab === 'active' ? '待还总额' : '已结清总额' }}</div>
+            <div class="summary-amount">¥{{ formatAmount(totalAmount) }}</div>
           </div>
-          <span class="repay-percent">已还 {{ repaidPercent }}%</span>
+          <div class="summary-count">
+            <span class="count-num">{{ liabilityStore.liabilities.length }}</span>
+            <span class="count-unit">笔</span>
+          </div>
         </div>
+        <template v-if="activeTab === 'active' && totalOriginal > 0">
+          <div class="summary-progress-bar">
+            <div class="summary-progress-fill" :style="{ width: repaidPercent + '%' }" />
+          </div>
+          <div class="summary-progress-text">
+            <span>总还款进度</span>
+            <span class="summary-percent">{{ repaidPercent }}%</span>
+          </div>
+        </template>
       </div>
 
       <div v-if="liabilityStore.liabilities.length" class="liability-list">
@@ -39,7 +48,7 @@
 
     <!-- FAB -->
     <div class="fab" @click="$router.push('/liabilities/new')">
-      <van-icon name="plus" size="24" />
+      <van-icon name="plus" size="22" />
     </div>
   </div>
 </template>
@@ -69,6 +78,12 @@ const repaidPercent = computed(() => {
   return Math.round((repaid / totalOriginal.value) * 100)
 })
 
+function formatAmount(amount: number): string {
+  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + '亿'
+  if (amount >= 10000) return (amount / 10000).toFixed(1) + '万'
+  return amount.toLocaleString('zh-CN')
+}
+
 function onTabChange() {
   liabilityStore.fetchLiabilities({ is_active: activeTab.value === 'active' })
 }
@@ -84,68 +99,118 @@ onMounted(() => {
 </script>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Crimson+Pro:wght@600&display=swap');
+
 .liability-list-page {
   background: var(--bg-secondary);
   min-height: 100vh;
+  padding-bottom: 80px;
 }
-.summary-bar {
-  padding: 8px 16px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  background: var(--card-bg);
-  margin-bottom: 8px;
+
+/* Summary Banner */
+.summary-banner {
+  margin: 12px 12px 4px;
+  background: linear-gradient(135deg, #991b1b 0%, #dc2626 60%, #ea580c 100%);
+  border-radius: 16px;
+  padding: 20px;
+  color: #fff;
 }
-.summary-row {
+
+.summary-top {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
 }
-.repay-progress {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+
+.summary-label {
+  font-size: 13px;
+  opacity: 0.8;
+  margin-bottom: 6px;
+  letter-spacing: 0.3px;
 }
-.repay-progress-bar {
-  flex: 1;
+
+.summary-amount {
+  font-family: 'Crimson Pro', Georgia, serif;
+  font-size: 36px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+
+.summary-count {
+  text-align: right;
+  padding-top: 4px;
+}
+
+.count-num {
+  font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.count-unit {
+  font-size: 14px;
+  opacity: 0.8;
+  margin-left: 2px;
+}
+
+.summary-progress-bar {
   height: 6px;
-  background: rgba(25, 137, 250, 0.1);
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 3px;
   overflow: hidden;
+  margin-bottom: 8px;
 }
-[data-theme='dark'] .repay-progress-bar {
-  background: rgba(25, 137, 250, 0.15);
-}
-.repay-progress-fill {
+
+.summary-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #1989fa, #07c160);
+  background: rgba(255, 255, 255, 0.9);
   border-radius: 3px;
-  transition: width 0.3s ease;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.repay-percent {
-  font-size: 11px;
-  color: #07c160;
-  font-weight: 500;
-  white-space: nowrap;
+
+.summary-progress-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.85;
 }
+
+.summary-percent {
+  font-weight: 600;
+}
+
+/* List */
 .liability-list {
-  padding: 0 12px;
+  padding: 8px 12px 0;
 }
+
+/* FAB */
 .fab {
   position: fixed;
   right: 16px;
-  bottom: 70px;
-  width: 48px;
-  height: 48px;
+  bottom: 72px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
-  background: #1989fa;
+  background: #dc2626;
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.4);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.45);
   z-index: 10;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+
+.fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+}
+
 [data-theme='dark'] .fab {
-  box-shadow: 0 4px 12px rgba(25, 137, 250, 0.6);
+  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.6);
 }
 </style>

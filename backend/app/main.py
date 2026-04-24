@@ -277,13 +277,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             # Note: Vue SPA requires 'unsafe-inline' for styles/scripts
             # This is a trade-off: CSP strictness vs SPA functionality
             # Future: use nonce-based CSP for stricter protection
+            # In development, allow cross-origin API calls (e.g. Vite dev server → backend)
+            connect_src = "'self' http://localhost:8000 http://127.0.0.1:8000" if settings.ENVIRONMENT == "development" else "'self'"
             csp_policy = (
                 "default-src 'self'; "
                 "script-src 'self' 'unsafe-inline'; "  # Vue SPA needs inline scripts
                 "style-src 'self' 'unsafe-inline'; "  # shareImage.ts needs inline styles
                 "img-src 'self' data: https:; "  # Allow base64 and HTTPS images
                 "font-src 'self'; "
-                "connect-src 'self'; "  # API calls only to same origin
+                f"connect-src {connect_src}; "
                 "frame-ancestors 'none'; "  # Equivalent to X-Frame-Options: DENY
                 "base-uri 'self'; "
                 "form-action 'self'; "
