@@ -128,7 +128,7 @@ jobs:
           done
 
       - name: Seed test accounts
-        run: bash tests/seed-accounts.sh
+        run: bash tests/data/seed-data.sh --skip-demo
 
       - name: Run Playwright tests
         working-directory: tests
