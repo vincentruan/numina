@@ -2,7 +2,7 @@
   <div class="draw-animation" :class="{ animating }" role="status" :aria-live="animating ? 'polite' : 'off'">
     <div class="box-container" @click="!animating && $emit('draw')">
       <div class="box" :class="{ shake: animating, open: revealed }">
-        <span class="box-emoji" aria-hidden="true">{{ revealed ? (gift?.emoji ?? '🎁') : '📦' }}</span>
+        <span class="box-emoji" aria-hidden="true">{{ revealed ? (gift?.gift_emoji ?? '🎁') : '📦' }}</span>
       </div>
       <div v-if="!animating && !revealed" class="tap-hint">点击抽奖</div>
       <div v-if="animating" class="loading-hint">抽奖中...</div>
