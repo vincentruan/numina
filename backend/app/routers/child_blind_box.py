@@ -7,6 +7,7 @@ from app.auth.deps import get_current_user
 from app.database import get_db
 from app.models.blind_box_draw import BlindBoxDraw
 from app.models.blind_box_gift import BlindBoxGift
+from app.models.bonus_draw import BonusDraw
 from app.models.chore import ChoreInstance
 from app.models.user import User
 from app.routers.blind_box import _draw_to_response, _get_or_create_config
@@ -105,8 +106,6 @@ def child_list_bonus_draws(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from app.models.bonus_draw import BonusDraw
-
     return (
         db.query(BonusDraw)
         .filter_by(family_id=current_user.family_id, child_user_id=current_user.id)
@@ -120,8 +119,6 @@ def child_use_bonus_draw(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from app.models.bonus_draw import BonusDraw
-
     bonus = db.query(BonusDraw).filter_by(
         id=bonus_id,
         child_user_id=current_user.id,

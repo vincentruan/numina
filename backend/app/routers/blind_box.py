@@ -8,6 +8,8 @@ from app.database import get_db
 from app.models.blind_box_config import BlindBoxConfig
 from app.models.blind_box_draw import BlindBoxDraw
 from app.models.blind_box_gift import BlindBoxGift
+from app.models.bonus_draw import BonusDraw
+from app.models.child_wish import ChildWish
 from app.models.user import User
 from app.schemas.blind_box import (
     BlindBoxConfigResponse,
@@ -178,7 +180,6 @@ def list_bonus_draws(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from app.models.bonus_draw import BonusDraw
     return db.query(BonusDraw).filter_by(family_id=current_user.family_id).all()
 
 
@@ -188,7 +189,6 @@ def create_gift_from_wish(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    from app.models.child_wish import ChildWish
     wish = db.query(ChildWish).filter_by(id=wish_id, family_id=current_user.family_id).first()
     if not wish:
         raise HTTPException(status_code=404, detail="心愿不存在")

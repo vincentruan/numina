@@ -93,13 +93,23 @@ export const useBlindBoxStore = defineStore('blindBox', () => {
   }
 
   async function fetchChildDraws() {
-    const res = await childBlindBoxApi.listDraws()
-    draws.value = res.data
+    loading.value = true
+    try {
+      const res = await childBlindBoxApi.listDraws()
+      draws.value = res.data
+    } finally {
+      loading.value = false
+    }
   }
 
   async function fetchBonusDraws() {
-    const res = await childBlindBoxApi.listBonusDraws()
-    bonusDraws.value = res.data
+    loading.value = true
+    try {
+      const res = await childBlindBoxApi.listBonusDraws()
+      bonusDraws.value = res.data
+    } finally {
+      loading.value = false
+    }
   }
 
   async function useBonusDraw(bonusId: number) {
