@@ -30,6 +30,10 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'WishCreate', path: '/wishes/new' },
   { name: 'WishEdit', path: '/wishes/1/edit' },
   { name: 'WishDetail', path: '/wishes/1' },
+  { name: 'BlindBoxGiftList', path: '/blind-box/gifts' },
+  { name: 'BlindBoxGiftCreate', path: '/blind-box/gifts/new' },
+  { name: 'BlindBoxGiftEdit', path: '/blind-box/gifts/1/edit' },
+  { name: 'BlindBoxConfig', path: '/blind-box/config' },
   { name: 'Family', path: '/family' },
   { name: 'MemberManage', path: '/family/members' },
   { name: 'Settings', path: '/settings' },
@@ -45,14 +49,18 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'AIHub', path: '/ai' },
   { name: 'DataStats', path: '/stats' },
   // Family — chore & wish management
-  { name: 'ChoreApprovals', path: '/family/chore-approvals' },
-  { name: 'WishReview', path: '/family/wish-review' },
+  { name: 'ChoreApprovals', path: '/chore-approvals' },
+  { name: 'WishReview', path: '/wish-review' },
   // Child routes (authenticated via child session)
   { name: 'ChildHome', path: '/child' },
   { name: 'ChildWishes', path: '/child/wishes' },
   { name: 'ChildTasks', path: '/child/tasks' },
   { name: 'ChildLedger', path: '/child/ledger' },
   { name: 'ChildTreasures', path: '/child/treasures' },
+  { name: 'ChildBlindBox', path: '/child/blind-box' },
+  { name: 'ChildDayDetail', path: '/child/calendar/day' },
+  { name: 'Baby', path: '/baby' },
+  { name: 'BabyDayDetail', path: '/baby/calendar/day' },
 ]
 
 /** Routes accessible only to guests. Authenticated access → redirect to / */
