@@ -9,7 +9,7 @@
       <div class="card-header-text">
         <div class="card-title">
           <span class="name">{{ liability.name }}</span>
-          <van-tag :type="liability.is_active ? 'danger' : 'success'" size="small" class="status-tag">
+          <van-tag :type="liability.is_active ? 'danger' : 'success'" class="status-tag">
             {{ liability.is_active ? '还款中' : '已结清' }}
           </van-tag>
         </div>
