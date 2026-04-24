@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth.deps import get_current_user
 from app.database import get_db
@@ -143,7 +143,12 @@ def fulfill_draw(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    draw = db.query(BlindBoxDraw).filter_by(id=draw_id, family_id=current_user.family_id).first()
+    draw = (
+        db.query(BlindBoxDraw)
+        .options(joinedload(BlindBoxDraw.gift))
+        .filter_by(id=draw_id, family_id=current_user.family_id)
+        .first()
+    )
     if not draw:
         raise HTTPException(status_code=404, detail="抽奖记录不存在")
     draw.status = "fulfilled"

@@ -30,6 +30,7 @@
               size="small"
               type="primary"
               :loading="loading"
+              :disabled="loading"
               :aria-label="`使用免费抽奖机会，${formatExpiry(bonus.expires_at)}到期`"
               @click="onUseBonusDraw(bonus.id)"
             >
