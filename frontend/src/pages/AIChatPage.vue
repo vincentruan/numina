@@ -27,7 +27,7 @@
         :class="msg.role"
       >
         <div class="bubble" :class="msg.role">
-          <span v-if="msg.role === 'assistant'" class="ai-label">AI</span>
+          <AIBrainIcon v-if="msg.role === 'assistant'" class="ai-label-icon" />
           <span class="bubble-text">{{ msg.content }}</span>
         </div>
         <div class="msg-time">{{ formatTime(msg.created_at) }}</div>
@@ -68,6 +68,7 @@ import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from 
 import { useAIStore } from '@/stores/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 
 interface Message {
   id: string
@@ -244,12 +245,11 @@ onMounted(async () => {
   gap: 6px;
   align-items: flex-start;
 }
-.ai-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--van-primary-color);
+.ai-label-icon {
   flex-shrink: 0;
-  margin-top: 2px;
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
 }
 .bubble-text { flex: 1; }
 .msg-time {
