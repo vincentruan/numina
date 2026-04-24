@@ -557,6 +557,76 @@ if [ -n "$CHILD_TOKEN_RICH" ] && [ "$CHILD_TOKEN_RICH" != "null" ]; then
   curl -sL -X GET "$BASE_URL/child/chores?date=$TOMORROW" -H "Authorization: Bearer $CHILD_TOKEN_RICH" > /dev/null
 fi
 
+# ----------------------------------------------
+# 1.7 test_rich 家庭盲盒数据
+# ----------------------------------------------
+log_info "初始化 test_rich 盲盒数据..."
+
+# 幂等检查：礼物池是否已有数据
+GIFTS_RESP=$(curl -sL "$BASE_URL/blind-box/gifts" -H "Authorization: Bearer $TOKEN_RICH")
+GIFT_COUNT=$(echo "$GIFTS_RESP" | jq -r 'if type == "array" then length else 0 end' 2>/dev/null || echo "0")
+
+if [ "$GIFT_COUNT" = "0" ]; then
+  # 启用盲盒功能
+  curl -sL -X PUT "$BASE_URL/blind-box/config" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"enabled":true,"base_draw_prob":0.5,"special_day_prob":0.9}' > /dev/null
+  log_ok "test_rich: 盲盒配置已启用"
+
+  # 创建礼物池（覆盖不同 value_score 档位）
+  GIFT1_RESP=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"name":"贴纸包","emoji":"🎨","value_score":2,"description":"一套可爱贴纸"}')
+  GIFT1_ID=$(echo "$GIFT1_RESP" | jq -r '.id // .data.id')
+  log_ok "test_rich: 创建礼物 贴纸包 (value_score=2)"
+
+  GIFT2_RESP=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"name":"小玩具","emoji":"🧸","value_score":4,"description":"随机小玩具一个"}')
+  GIFT2_ID=$(echo "$GIFT2_RESP" | jq -r '.id // .data.id')
+  log_ok "test_rich: 创建礼物 小玩具 (value_score=4)"
+
+  GIFT3_RESP=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"name":"乐高小套装","emoji":"🧱","value_score":7,"description":"乐高经典系列小套装"}')
+  GIFT3_ID=$(echo "$GIFT3_RESP" | jq -r '.id // .data.id')
+  log_ok "test_rich: 创建礼物 乐高小套装 (value_score=7, 惊喜档)"
+
+  GIFT4_RESP=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d '{"name":"游乐园门票","emoji":"🎡","value_score":9,"description":"亲子游乐园一日票"}')
+  GIFT4_ID=$(echo "$GIFT4_RESP" | jq -r '.id // .data.id')
+  log_ok "test_rich: 创建礼物 游乐园门票 (value_score=9, 惊喜档)"
+
+  # 从心愿转入礼物池（需要先有已批准的儿童心愿）
+  # 获取 test_child 的已批准心愿 ID（active 状态）
+  CHILD_WISHES_RESP=$(curl -sL "$BASE_URL/family/child-wishes" \
+    -H "Authorization: Bearer $TOKEN_RICH" 2>/dev/null || echo "{}")
+  WISH_FOR_GIFT=$(echo "$CHILD_WISHES_RESP" | jq -r '[.data[] // .[] | select(.status=="active")] | .[0].id // empty' 2>/dev/null | head -1)
+  if [ -n "$WISH_FOR_GIFT" ] && [ "$WISH_FOR_GIFT" != "null" ]; then
+    curl -sL -X POST "$BASE_URL/blind-box/gifts/from-wish/$WISH_FOR_GIFT" \
+      -H "Authorization: Bearer $TOKEN_RICH" > /dev/null
+    log_ok "test_rich: 从心愿转入礼物池 (wish_id=$WISH_FOR_GIFT)"
+  fi
+
+  # 为 test_child 创建 bonus_draw（available 状态）
+  NEXT_MONTH=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+  curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"child_user_id\":\"$CHILD_ID\",\"expires_at\":\"$NEXT_MONTH\"}" > /dev/null 2>&1 || true
+  log_ok "test_rich: 为 test_child 创建 bonus_draw（available）"
+
+  log_ok "test_rich: 盲盒礼物池就绪（4 个礼物）"
+else
+  log_info "test_rich 盲盒礼物池已有 $GIFT_COUNT 个礼物，跳过"
+fi
+
 log_ok "========== Part 1: Fixed test accounts complete =========="
 
 # ========================================
@@ -1687,6 +1757,115 @@ EOF
     curl -sL -X GET "$BASE_URL/child/chores?date=$TOMORROW" -H "Authorization: Bearer $CHILD2_TOKEN" > /dev/null
   fi
 
+  # ═══════════════════════════════════════════
+  # 2.9 盲盒数据（demouser）
+  # ═══════════════════════════════════════════
+  log_info "创建盲盒数据..."
+
+  DEMO_GIFTS_RESP=$(curl -sL "$BASE_URL/blind-box/gifts" -H "Authorization: Bearer $TOKEN")
+  DEMO_GIFT_COUNT=$(echo "$DEMO_GIFTS_RESP" | jq -r 'if type == "array" then length else 0 end' 2>/dev/null || echo "0")
+
+  if [ "$DEMO_GIFT_COUNT" = "0" ]; then
+    # 启用盲盒，调整概率
+    curl -sL -X PUT "$BASE_URL/blind-box/config" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d '{"enabled":true,"base_draw_prob":0.4,"special_day_prob":0.85,"surprise_prob_normal":0.1,"surprise_prob_parent_bday":0.7,"weight_scale":2.0,"surprise_threshold_coins":100}' > /dev/null
+    log_ok "demouser: 盲盒配置已启用"
+
+    # 礼物池（8 个，覆盖全部 value_score 档位）
+    DG1=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"糖果一包","emoji":"🍬","value_score":1,"description":"各种口味糖果"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 糖果一包 (score=1)"
+
+    DG2=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"贴纸套装","emoji":"🎨","value_score":2,"description":"卡通贴纸 50 张"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 贴纸套装 (score=2)"
+
+    DG3=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"绘本一册","emoji":"📖","value_score":3,"description":"精选儿童绘本"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 绘本一册 (score=3)"
+
+    DG4=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"小玩具","emoji":"🧸","value_score":4,"description":"随机小玩具"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 小玩具 (score=4)"
+
+    DG5=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"冰淇淋券","emoji":"🍦","value_score":5,"description":"哈根达斯双人券"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 冰淇淋券 (score=5)"
+
+    DG6=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"乐高小套装","emoji":"🧱","value_score":7,"description":"乐高经典系列 60 片"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 乐高小套装 (score=7, 惊喜档)"
+
+    DG7=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"游乐园门票","emoji":"🎡","value_score":9,"description":"亲子游乐园一日票"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: 游乐园门票 (score=9, 惊喜档)"
+
+    DG8=$(curl -sL -X POST "$BASE_URL/blind-box/gifts" \
+      -H "Content-Type: application/json" -H "Authorization: Bearer $TOKEN" \
+      -d '{"name":"Switch 游戏卡","emoji":"🎮","value_score":10,"description":"任天堂 Switch 游戏一张"}' | jq -r '.id // .data.id')
+    log_ok "创建礼物: Switch 游戏卡 (score=10, 惊喜档)"
+
+    # 从儿童心愿转入礼物池
+    DEMO_CHILD_WISHES=$(curl -sL "$BASE_URL/family/child-wishes" -H "Authorization: Bearer $TOKEN" 2>/dev/null || echo "{}")
+    DEMO_WISH_FOR_GIFT=$(echo "$DEMO_CHILD_WISHES" | jq -r '[.data[] // .[] | select(.status=="active")] | .[0].id // empty' 2>/dev/null | head -1)
+    if [ -n "$DEMO_WISH_FOR_GIFT" ] && [ "$DEMO_WISH_FOR_GIFT" != "null" ]; then
+      curl -sL -X POST "$BASE_URL/blind-box/gifts/from-wish/$DEMO_WISH_FOR_GIFT" \
+        -H "Authorization: Bearer $TOKEN" > /dev/null
+      log_ok "demouser: 从心愿转入礼物池 (wish_id=$DEMO_WISH_FOR_GIFT)"
+    fi
+
+    # 为小宝创建 bonus_draw（available — 可直接使用）
+    NEXT_MONTH_DEMO=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+    curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"child_user_id\":\"$CHILD1_ID\",\"expires_at\":\"$NEXT_MONTH_DEMO\"}" > /dev/null 2>&1 || true
+    curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"child_user_id\":\"$CHILD1_ID\",\"expires_at\":\"$NEXT_MONTH_DEMO\"}" > /dev/null 2>&1 || true
+    log_ok "demouser: 为小宝创建 2 个 bonus_draw（available）"
+
+    # 为大宝创建 bonus_draw（available）
+    curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer $TOKEN" \
+      -d "{\"child_user_id\":\"$CHILD2_ID\",\"expires_at\":\"$NEXT_MONTH_DEMO\"}" > /dev/null 2>&1 || true
+    log_ok "demouser: 为大宝创建 1 个 bonus_draw（available）"
+
+    # 大宝使用一次 bonus_draw（产生 draw 历史记录）
+    if [ -n "$CHILD2_TOKEN" ] && [ "$CHILD2_TOKEN" != "null" ]; then
+      BONUS_LIST=$(curl -sL "$BASE_URL/child/blind-box/bonus-draws" -H "Authorization: Bearer $CHILD2_TOKEN")
+      BONUS_ID=$(echo "$BONUS_LIST" | jq -r '[.[] | select(.status=="available")] | .[0].id // empty' 2>/dev/null | head -1)
+      if [ -n "$BONUS_ID" ] && [ "$BONUS_ID" != "null" ]; then
+        DRAW_RESP=$(curl -sL -X POST "$BASE_URL/child/blind-box/bonus-draws/$BONUS_ID/use" \
+          -H "Authorization: Bearer $CHILD2_TOKEN")
+        DRAW_ID=$(echo "$DRAW_RESP" | jq -r '.id // .data.id')
+        log_ok "demouser: 大宝使用 bonus_draw，获得抽奖记录 (draw_id=$DRAW_ID)"
+
+        # 父母 fulfill 这条 draw（pending_fulfillment → fulfilled）
+        if [ -n "$DRAW_ID" ] && [ "$DRAW_ID" != "null" ]; then
+          curl -sL -X PUT "$BASE_URL/blind-box/draws/$DRAW_ID/fulfill" \
+            -H "Authorization: Bearer $TOKEN" > /dev/null
+          log_ok "demouser: 父母已兑现抽奖 (draw_id=$DRAW_ID, status=fulfilled)"
+        fi
+      fi
+    fi
+
+    log_ok "demouser: 盲盒礼物池就绪（8 个礼物 + draw 历史）"
+  else
+    log_info "demouser 盲盒礼物池已有 $DEMO_GIFT_COUNT 个礼物，跳过"
+  fi
+
   log_ok "========== Part 2: 完整仿真数据完成 =========="
 fi
 
@@ -1705,7 +1884,7 @@ echo "  - test_empty        (空家庭)"
 echo "  - test_asset        (5 资产: in_use/idle/retired/USD/已售出)"
 echo "  - test_rich         (31 资产 + 28 负债 + 29 心愿 + 负债关联 + 心愿多状态)"
 echo "  - test_rich_member  (test_rich 家庭的 member 角色 + 数据隔离测试)"
-echo "  - test_child        (test_rich 家庭的儿童 + 跨天家务)"
+echo "  - test_child        (test_rich 家庭的儿童 + 跨天家务 + 盲盒礼物池 + bonus_draw)"
 
 if [[ "$SKIP_DEMO" == false ]]; then
   echo ""
