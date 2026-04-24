@@ -135,19 +135,31 @@ async def test_ai_config(
     if not api_key:
         return AIConfigTestResult(success=False, message="API Key 解密失败，请重新配置")
 
+    # 去除 API Key 首尾空格
+    api_key = api_key.strip()
+
     start = time.monotonic()
     try:
         if family.ai_provider == "anthropic":
+            # 使用用户配置的 base_url，如果未配置则使用官方端点
+            base_url = family.ai_base_url or "https://api.anthropic.com"
+            # 确保 base_url 不以 / 结尾
+            base_url = base_url.rstrip("/")
+            endpoint = f"{base_url}/v1/messages"
+
+            # 使用用户配置的模型，如果未配置则使用默认模型
+            model = family.ai_model_id or "claude-3-5-haiku-20241022"
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
-                    "https://api.anthropic.com/v1/messages",
+                    endpoint,
                     headers={
                         "x-api-key": api_key,
                         "anthropic-version": "2023-06-01",
                         "content-type": "application/json",
                     },
                     json={
-                        "model": "claude-3-5-haiku-20241022",
+                        "model": model,
                         "max_tokens": 1,
                         "messages": [{"role": "user", "content": "hi"}],
                     },
@@ -159,9 +171,14 @@ async def test_ai_config(
                     return AIConfigTestResult(success=False, message=f"API 返回错误: {resp.status_code}")
 
         elif family.ai_provider == "openai":
+            # 使用用户配置的 base_url，如果未配置则使用官方端点
+            base_url = family.ai_base_url or "https://api.openai.com"
+            base_url = base_url.rstrip("/")
+            endpoint = f"{base_url}/v1/models"
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.get(
-                    "https://api.openai.com/v1/models",
+                    endpoint,
                     headers={"Authorization": f"Bearer {api_key}"},
                 )
                 if resp.status_code == 200:
