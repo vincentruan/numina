@@ -111,24 +111,26 @@
                 </div>
               </div>
               <div class="child-mgmt-actions">
-                <van-button size="mini" plain type="primary" to="/family/chore-approvals">审批家务</van-button>
-                <van-button size="mini" plain type="primary" to="/family/wish-review">审批心愿</van-button>
-                <van-button size="mini" plain @click="openMoreSheet(child)">
-                  <van-icon name="ellipsis" />
-                </van-button>
+                <button class="action-btn" @click="$router.push('/family/chore-approvals')">
+                  <van-icon name="todo-list-o" size="18" />
+                  <span>审批家务</span>
+                </button>
+                <button class="action-btn" @click="$router.push('/family/wish-review')">
+                  <van-icon name="gift-o" size="18" />
+                  <span>审批心愿</span>
+                </button>
+                <button class="action-btn action-btn--star" @click="openGrantSheet(child)">
+                  <van-icon name="star-o" size="18" />
+                  <span>赠送星星</span>
+                </button>
+                <button class="action-btn action-btn--switch" @click="switchToChildView(child)">
+                  <van-icon name="exchange" size="18" />
+                  <span>切换视角</span>
+                </button>
               </div>
             </div>
           </div>
         </div>
-
-        <!-- More actions sheet -->
-        <van-action-sheet
-          v-model:show="showMoreSheet"
-          :title="moreSheetChild?.display_name"
-          :actions="moreActions"
-          cancel-text="取消"
-          @select="onMoreAction"
-        />
 
         <!-- Manual coin grant bottom sheet -->
         <van-popup v-model:show="showGrantSheet" position="bottom" round style="padding: 24px 16px 40px">
@@ -295,26 +297,6 @@ async function onRegenerate() {
   }
 }
 
-// More actions sheet
-const showMoreSheet = ref(false)
-const moreSheetChild = ref<ChildUser | null>(null)
-const moreActions = [
-  { name: '赠送星星', subname: '手动奖励星星币', color: '#f5a623' },
-  { name: '切换视角', subname: '以孩子身份查看', color: '#1989fa' },
-]
-
-function openMoreSheet(child: ChildUser) {
-  moreSheetChild.value = child
-  showMoreSheet.value = true
-}
-
-function onMoreAction(action: { name: string }) {
-  showMoreSheet.value = false
-  if (!moreSheetChild.value) return
-  if (action.name === '赠送星星') openGrantSheet(moreSheetChild.value)
-  else if (action.name === '切换视角') switchToChildView(moreSheetChild.value)
-}
-
 function openGrantSheet(child: { id: string; display_name: string }) {
   grantTargetChild.value = child
   grantAmountStr.value = ''
@@ -468,9 +450,57 @@ onMounted(async () => {
 
 .child-mgmt-actions {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin: 12px -16px -16px;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+
+[data-theme='dark'] .child-mgmt-actions {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.action-btn + .action-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .action-btn + .action-btn::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.action-btn--star {
+  color: #f5a623;
+}
+
+.action-btn--switch {
+  color: #1989fa;
 }
 
 .sheet-title {
