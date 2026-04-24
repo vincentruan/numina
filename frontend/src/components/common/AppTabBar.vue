@@ -1,5 +1,5 @@
 <template>
-  <van-tabbar :model-value="activeTab" @change="onTabChange">
+  <van-tabbar :model-value="activeTab" class="app-tabbar" @change="onTabChange">
     <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
     <van-tabbar-item name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
     <van-tabbar-item name="ai" aria-label="AI 智能助手">
@@ -59,3 +59,21 @@ function onTabChange(name: string | number) {
   }
 }
 </script>
+
+<style scoped>
+/* Force all tab items to share width equally regardless of count */
+.app-tabbar :deep(.van-tabbar) {
+  display: flex;
+}
+.app-tabbar :deep(.van-tabbar-item) {
+  flex: 1;
+  min-width: 0;
+  padding: 0 2px;
+}
+.app-tabbar :deep(.van-tabbar-item__text) {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
