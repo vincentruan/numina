@@ -1,64 +1,102 @@
 <template>
-  <div class="liability-card" @click="$emit('click')">
-    <div class="card-header">
-      <div class="card-icon" :style="{ background: categoryColor }">
-        <svg class="icon-svg" aria-hidden="true">
-          <use :href="`#${categoryIcon}`" />
-        </svg>
+  <van-swipe-cell :disabled="selectMode" class="liability-swipe-cell">
+    <div
+      class="liability-card"
+      :class="{ 'is-selected': selected, 'select-mode': selectMode }"
+      @click="handleClick"
+      @touchstart="onTouchStart"
+      @touchend="onTouchEnd"
+      @touchmove="onTouchMove"
+    >
+      <!-- Selection checkbox overlay -->
+      <div v-if="selectMode" class="select-overlay">
+        <van-checkbox :model-value="selected" @click.stop />
       </div>
-      <div class="card-header-text">
-        <div class="card-title">
-          <span class="name">{{ liability.name }}</span>
-          <van-tag :type="liability.is_active ? 'danger' : 'success'" class="status-tag">
-            {{ liability.is_active ? '还款中' : '已结清' }}
-          </van-tag>
+
+      <div class="card-header">
+        <div class="card-icon" :style="{ background: categoryColor }">
+          <svg class="icon-svg" aria-hidden="true">
+            <use :href="`#${categoryIcon}`" />
+          </svg>
         </div>
-        <div class="card-meta">
-          <span class="meta-item">{{ categoryText }}</span>
-          <span v-if="liability.institution" class="meta-item meta-divider">{{ liability.institution }}</span>
+        <div class="card-header-text">
+          <div class="card-title">
+            <span class="name">{{ liability.name }}</span>
+            <van-tag :type="liability.is_active ? 'danger' : 'success'" class="status-tag">
+              {{ liability.is_active ? '还款中' : '已结清' }}
+            </van-tag>
+          </div>
+          <div class="card-meta">
+            <span class="meta-item">{{ categoryText }}</span>
+            <span v-if="liability.institution" class="meta-item meta-divider">{{ liability.institution }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card-body">
+        <div class="amount-section">
+          <div class="amount-label">剩余本金</div>
+          <div class="amount-value">{{ formatAmountDisplay(liability.remaining_amount) }}</div>
+        </div>
+        <div class="details-grid">
+          <div class="detail-item">
+            <span class="detail-label">月供</span>
+            <span class="detail-value">{{ formatAmountDisplay(liability.monthly_payment) }}</span>
+          </div>
+          <div class="detail-item">
+            <span class="detail-label">年利率</span>
+            <span class="detail-value">{{ liability.interest_rate }}%</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="liability.is_active" class="card-footer">
+        <div class="progress-bar">
+          <div class="progress-fill" :style="{ width: repaidPercent + '%' }" />
+        </div>
+        <div class="progress-text">
+          <span class="progress-label">已还 {{ repaidPercent }}%</span>
+          <span class="progress-remaining">剩余 {{ formatAmountDisplay(liability.remaining_amount) }}</span>
         </div>
       </div>
     </div>
 
-    <div class="card-body">
-      <div class="amount-section">
-        <div class="amount-label">剩余本金</div>
-        <div class="amount-value">¥{{ formatAmount(liability.remaining_amount) }}</div>
+    <!-- Swipe right slot: actions -->
+    <template #right>
+      <div class="swipe-actions">
+        <button v-if="liability.is_active" class="swipe-btn swipe-btn--pay" @click.stop="$emit('pay', liability)">
+          <van-icon name="gold-coin-o" size="20" />
+          <span>还款</span>
+        </button>
+        <button class="swipe-btn swipe-btn--edit" @click.stop="$emit('edit', liability)">
+          <van-icon name="edit" size="20" />
+          <span>编辑</span>
+        </button>
+        <button class="swipe-btn swipe-btn--delete" @click.stop="$emit('delete', liability)">
+          <van-icon name="delete-o" size="20" />
+          <span>删除</span>
+        </button>
       </div>
-      <div class="details-grid">
-        <div class="detail-item">
-          <span class="detail-label">月供</span>
-          <span class="detail-value">¥{{ formatAmount(liability.monthly_payment) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="detail-label">年利率</span>
-          <span class="detail-value">{{ liability.interest_rate }}%</span>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="liability.is_active" class="card-footer">
-      <div class="progress-bar">
-        <div class="progress-fill" :style="{ width: repaidPercent + '%' }" />
-      </div>
-      <div class="progress-text">
-        <span class="progress-label">已还 {{ repaidPercent }}%</span>
-        <span class="progress-remaining">剩余 ¥{{ formatAmount(liability.remaining_amount) }}</span>
-      </div>
-    </div>
-  </div>
+    </template>
+  </van-swipe-cell>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import type { Liability } from '@/types'
 
 const props = defineProps<{
   liability: Liability
+  selectMode?: boolean
+  selected?: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
+  pay: [liability: Liability]
+  edit: [liability: Liability]
+  delete: [liability: Liability]
+  longpress: [liability: Liability]
 }>()
 
 const categoryMap: Record<string, { text: string; icon: string; color: string }> = {
@@ -66,7 +104,7 @@ const categoryMap: Record<string, { text: string; icon: string; color: string }>
   car_loan: { text: '车贷', icon: 'icon-car-loan', color: '#0891b2' },
   credit_card: { text: '信用卡', icon: 'icon-credit-card', color: '#dc2626' },
   personal_loan: { text: '个人贷款', icon: 'icon-personal-loan', color: '#ea580c' },
-  other: { text: '其他', icon: 'icon-other-liability', color: '#64748b' }
+  other: { text: '其他', icon: 'icon-other-liability', color: '#64748b' },
 }
 
 const categoryText = computed(() => categoryMap[props.liability.category]?.text || props.liability.category)
@@ -79,25 +117,67 @@ const repaidPercent = computed(() => {
   return Math.round(((original_amount - remaining_amount) / original_amount) * 100)
 })
 
-function formatAmount(amount: number): string {
-  if (amount >= 10000) {
-    return (amount / 10000).toFixed(1) + '万'
-  }
+function formatAmountDisplay(amount: number): string {
+  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + '亿'
+  if (amount >= 10000) return (amount / 10000).toFixed(1) + '万'
+  if (amount >= 1000) return (amount / 1000).toFixed(1) + 'k'
   return amount.toLocaleString('zh-CN')
+}
+
+// Long-press detection
+const longPressTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const touchMoved = ref(false)
+
+function onTouchStart() {
+  touchMoved.value = false
+  longPressTimer.value = setTimeout(() => {
+    if (!touchMoved.value) {
+      emit('longpress', props.liability)
+    }
+  }, 500)
+}
+
+function onTouchMove() {
+  touchMoved.value = true
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+}
+
+function onTouchEnd() {
+  if (longPressTimer.value) {
+    clearTimeout(longPressTimer.value)
+    longPressTimer.value = null
+  }
+}
+
+function handleClick() {
+  if (props.selectMode) {
+    // toggle selection via parent
+    emit('click')
+  } else {
+    emit('click')
+  }
 }
 </script>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Crimson+Pro:wght@600&display=swap');
 
+.liability-swipe-cell {
+  margin-bottom: 12px;
+}
+
 .liability-card {
   background: var(--card-bg);
   border-radius: 16px;
   padding: 16px;
-  margin-bottom: 12px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid rgba(0, 0, 0, 0.06);
+  position: relative;
+  overflow: hidden;
 }
 
 [data-theme='dark'] .liability-card {
@@ -108,6 +188,63 @@ function formatAmount(amount: number): string {
   transform: scale(0.98);
 }
 
+.liability-card.is-selected {
+  border-color: #dc2626;
+  background: rgba(220, 38, 38, 0.04);
+}
+
+[data-theme='dark'] .liability-card.is-selected {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.liability-card.select-mode {
+  padding-left: 48px;
+}
+
+/* Selection overlay */
+.select-overlay {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+}
+
+/* Swipe action buttons */
+.swipe-actions {
+  display: flex;
+  height: 100%;
+}
+
+.swipe-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 64px;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: #fff;
+  padding: 0;
+}
+
+.swipe-btn--pay {
+  background: #059669;
+}
+
+.swipe-btn--edit {
+  background: #0891b2;
+}
+
+.swipe-btn--delete {
+  background: #dc2626;
+  border-radius: 0 16px 16px 0;
+}
+
+/* Card internals (unchanged) */
 .card-header {
   display: flex;
   align-items: flex-start;

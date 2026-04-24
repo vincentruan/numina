@@ -280,6 +280,13 @@ export default {
     paymentSuccess: '💰 Payment recorded',
     paymentAmountRequired: '⚠️ Please enter a valid amount',
     paymentExceedsBalance: '⚠️ Amount exceeds remaining balance',
+    liabilitySettled: '✅ Marked as settled',
+    liabilitySettledBatch: '✅ Settled {count} liabilities',
+    liabilityDeleteBatch: '🗑️ Deleted {count} liabilities',
+    liabilitySelectFirst: '⚠️ Please select liabilities first',
+    confirmSettleLiability: '⚠️ Mark "{name}" as settled?',
+    confirmSettleBatch: '⚠️ Mark {count} selected liabilities as settled?',
+    confirmDeleteBatch: '⚠️ Delete {count} selected liabilities?',
     // Wish
     wishSaved: '✅ Saved',
     wishAdded: '✅ Added',

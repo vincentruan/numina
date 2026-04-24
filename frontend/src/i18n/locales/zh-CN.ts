@@ -280,6 +280,13 @@ export default {
     paymentSuccess: '💰 还款成功',
     paymentAmountRequired: '⚠️ 请输入有效金额',
     paymentExceedsBalance: '⚠️ 还款金额不能超过剩余本金',
+    liabilitySettled: '✅ 已标记结清',
+    liabilitySettledBatch: '✅ 已结清 {count} 笔负债',
+    liabilityDeleteBatch: '🗑️ 已删除 {count} 笔负债',
+    liabilitySelectFirst: '⚠️ 请先选择负债',
+    confirmSettleLiability: '⚠️ 确定要将「{name}」标记为已结清吗？',
+    confirmSettleBatch: '⚠️ 确定要将选中的 {count} 笔负债标记为已结清吗？',
+    confirmDeleteBatch: '⚠️ 确定要删除选中的 {count} 笔负债吗？',
     // Wish
     wishSaved: '✅ 已保存',
     wishAdded: '✅ 已添加',
