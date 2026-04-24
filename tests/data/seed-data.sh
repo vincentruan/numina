@@ -54,11 +54,16 @@ if [[ ${#INVITE_CODES[@]} -eq 0 ]] && [[ -n "${FAMILY_INVITATION_CODES:-}" ]]; t
   IFS=',' read -ra INVITE_CODES <<< "$FAMILY_INVITATION_CODES"
 fi
 
-_INVITE_INDEX=0
+_INVITE_INDEX_FILE=$(mktemp)
+echo 0 > "$_INVITE_INDEX_FILE"
+trap 'rm -f "$_INVITE_INDEX_FILE"' EXIT
+
 next_invite_code() {
+  local idx
+  idx=$(cat "$_INVITE_INDEX_FILE")
   if [[ ${#INVITE_CODES[@]} -gt 0 ]]; then
-    echo "${INVITE_CODES[$_INVITE_INDEX]:-}"
-    _INVITE_INDEX=$(( _INVITE_INDEX + 1 ))
+    echo "${INVITE_CODES[$idx]:-}"
+    echo $(( idx + 1 )) > "$_INVITE_INDEX_FILE"
   else
     echo "${FAMILY_INVITATION_CODE:-}"
   fi
@@ -424,8 +429,7 @@ else
     # 注册新用户并加入家庭（角色为 member）
     MEMBER_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
       -H "Content-Type: application/json" \
-      -d "{\"username\":\"test_rich_member\",\"display_name\":\"测试成员\",\"password\":\"TestMember123!\"," \
-      -d "\"family_invite_code\":\"$INVITE_CODE\"}")
+      -d "{\"username\":\"test_rich_member\",\"display_name\":\"测试成员\",\"password\":\"TestMember123!\",\"family_invitation_code\":\"$INVITE_CODE\"}")
     MEMBER_HTTP=$(echo "$MEMBER_RESP" | tail -1)
     MEMBER_BODY=$(echo "$MEMBER_RESP" | sed '$d')
 
@@ -491,7 +495,7 @@ log_info "Initializing test chore template..."
 
 TEMPLATES_RESP=$(curl -sL "$BASE_URL/family/chore-templates" \
   -H "Authorization: Bearer $TOKEN_RICH")
-TEMPLATE_ID=$(echo "$TEMPLATES_RESP" | jq -r '.data[] | select(.name=="测试家务") | .id' 2>/dev/null | head -1)
+TEMPLATE_ID=$(echo "$TEMPLATES_RESP" | jq -r '.data[] | select(.name=="测试家务") | .id' 2>/dev/null | head -1 || echo "")
 
 if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
   log_info "Creating test chore template..."
