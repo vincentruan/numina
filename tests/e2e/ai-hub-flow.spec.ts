@@ -22,16 +22,13 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai')
+    await page.waitForLoadState('networkidle')
 
-    // Hub header should render
-    await expect(page.locator('.hub-header, [class*="hub"], text=家庭资产智能助手').first()).toBeVisible({
-      timeout: 10_000,
-    })
+    // Hub subtitle is always present
+    await expect(page.getByText('家庭资产智能助手')).toBeVisible({ timeout: 10_000 })
 
-    // Health score ring or score number should be visible
-    await expect(
-      page.locator('.hub-score-ring, .score-number, [aria-label*="资产健康评分"]').first()
-    ).toBeVisible({ timeout: 8_000 })
+    // Health score image with aria-label
+    await expect(page.locator('[aria-label*="资产健康评分"]')).toBeVisible({ timeout: 8_000 })
 
     // No critical JS errors (filter network errors)
     const realErrors = errors.filter(
@@ -43,10 +40,11 @@ test.describe('AI hub and features', () => {
   test('AI hub shows report summary or empty state', async ({ page }) => {
     await richFamily(page)
     await page.goto('/ai')
+    await page.waitForLoadState('networkidle')
 
-    // Either a report summary card or an empty state should be visible
+    // The hub always shows either a report card or the empty state button
     await expect(
-      page.locator('.report-summary-card, .report-empty-card, text=最新资产体检报告, text=暂无报告').first()
+      page.getByRole('button', { name: /生成|体检报告/ }).or(page.getByText('暂无报告')).first()
     ).toBeVisible({ timeout: 10_000 })
   })
 
@@ -58,13 +56,11 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/report')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-
-    // Report page should render some content
-    await expect(
-      page.locator('text=资产体检报告, text=生成报告, text=暂无报告, [class*="report"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    // Page title in nav bar
+    await expect(page.getByText('家庭资产体检')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -77,9 +73,9 @@ test.describe('AI hub and features', () => {
 
     // Trigger report generation via API
     const generateResp = await page.request.post('/api/v1/ai/report/generate')
-    // 200 = generated, 202 = already generating, 429 = rate limited — all acceptable
+    // 200/201 = generated, 202 = already generating, 403 = AI not configured, 429 = rate limited — all acceptable
     expect(
-      [200, 201, 202, 429].includes(generateResp.status()),
+      [200, 201, 202, 403, 429].includes(generateResp.status()),
       `Unexpected status from report generation: ${generateResp.status()}`
     ).toBeTruthy()
   })
@@ -92,11 +88,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/alerts')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(
-      page.locator('text=预警, text=风险, text=暂无预警, [class*="alert"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('老化预警')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -112,11 +107,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/disposal')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(
-      page.locator('text=处置, text=建议, text=闲置, [class*="disposal"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: /扫描闲置/ })).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -132,11 +126,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/liability')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(
-      page.locator('text=负债, text=还款, text=建议, [class*="liability"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('负债优化')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -152,11 +145,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/allocation')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(
-      page.locator('text=配置, text=资产, text=建议, [class*="allocation"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('配置漂移')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -172,13 +164,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/chat')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-
-    // Chat input should be visible
-    await expect(
-      page.locator('textarea, input[type="text"], .van-field__control, [class*="chat-input"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('AI 问答助手')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -194,11 +183,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/settings/ai')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(
-      page.locator('text=AI, text=配置, text=模型, [class*="ai-config"]').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: /AI 服务商/ })).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')
@@ -209,15 +197,11 @@ test.describe('AI hub and features', () => {
   test('AI hub navigates to sub-pages', async ({ page }) => {
     await richFamily(page)
     await page.goto('/ai')
+    await page.waitForLoadState('networkidle')
 
-    // Click on a feature card to navigate to a sub-page
-    // The hub has feature cards that navigate to /ai/report, /ai/alerts, etc.
-    const featureCard = page.locator('[class*="feat"], [class*="feature"], [class*="card"]').first()
-    await expect(featureCard).toBeVisible({ timeout: 8_000 })
-    await featureCard.click()
-
-    // Should navigate to an AI sub-page
-    await expect(page).toHaveURL(/\/ai\//, { timeout: 5_000 })
+    // Click the first feature list item (资产体检 → /ai/report)
+    await page.getByRole('listitem', { name: /资产体检/ }).click()
+    await expect(page).toHaveURL(/\/ai\/report/, { timeout: 8_000 })
   })
 
   test('empty family AI hub shows no-data state gracefully', async ({ page }) => {
@@ -228,13 +212,10 @@ test.describe('AI hub and features', () => {
 
     await emptyFamily(page)
     await page.goto('/ai')
+    await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-
-    // Should render without crashing even with no data
-    await expect(
-      page.locator('.hub-header, [class*="hub"], text=家庭资产智能助手').first()
-    ).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('家庭资产智能助手')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')

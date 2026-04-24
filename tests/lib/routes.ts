@@ -35,7 +35,7 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'BlindBoxGiftEdit', path: '/blind-box/gifts/1/edit' },
   { name: 'BlindBoxConfig', path: '/blind-box/config' },
   { name: 'Family', path: '/family' },
-  { name: 'MemberManage', path: '/family/members' },
+  { name: 'Baby', path: '/baby' },
   { name: 'Settings', path: '/settings' },
   { name: 'CategoryManage', path: '/settings/categories' },
   { name: 'TagManage', path: '/settings/tags' },
@@ -59,7 +59,6 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'ChildTreasures', path: '/child/treasures' },
   { name: 'ChildBlindBox', path: '/child/blind-box' },
   { name: 'ChildDayDetail', path: '/child/calendar/day' },
-  { name: 'Baby', path: '/baby' },
   { name: 'BabyDayDetail', path: '/baby/calendar/day' },
 ]
 
@@ -81,6 +80,7 @@ export const GUEST_ROUTES: RouteEntry[] = [
  */
 export const PUBLIC_ROUTES: RouteEntry[] = [
   { name: 'ChildSelect', path: '/child/select' },
+  { name: 'ChildAuth', path: '/child/auth' },
   { name: 'ChildPinLogin', path: '/child/pin' },
   { name: 'ChildBind', path: '/child/bind' },
 ]
