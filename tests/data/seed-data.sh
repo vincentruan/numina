@@ -564,7 +564,7 @@ log_info "初始化 test_rich 盲盒数据..."
 
 # 幂等检查：礼物池是否已有数据
 GIFTS_RESP=$(curl -sL "$BASE_URL/blind-box/gifts" -H "Authorization: Bearer $TOKEN_RICH")
-GIFT_COUNT=$(echo "$GIFTS_RESP" | jq -r 'if type == "array" then length else 0 end' 2>/dev/null || echo "0")
+GIFT_COUNT=$(echo "$GIFTS_RESP" | jq -r 'if type == "array" then length elif (.data | type) == "array" then .data | length else 0 end' 2>/dev/null || echo "0")
 
 if [ "$GIFT_COUNT" = "0" ]; then
   # 启用盲盒功能
@@ -1763,7 +1763,7 @@ EOF
   log_info "创建盲盒数据..."
 
   DEMO_GIFTS_RESP=$(curl -sL "$BASE_URL/blind-box/gifts" -H "Authorization: Bearer $TOKEN")
-  DEMO_GIFT_COUNT=$(echo "$DEMO_GIFTS_RESP" | jq -r 'if type == "array" then length else 0 end' 2>/dev/null || echo "0")
+  DEMO_GIFT_COUNT=$(echo "$DEMO_GIFTS_RESP" | jq -r 'if type == "array" then length elif (.data | type) == "array" then .data | length else 0 end' 2>/dev/null || echo "0")
 
   if [ "$DEMO_GIFT_COUNT" = "0" ]; then
     # 启用盲盒，调整概率
@@ -1845,7 +1845,7 @@ EOF
     # 大宝使用一次 bonus_draw（产生 draw 历史记录）
     if [ -n "$CHILD2_TOKEN" ] && [ "$CHILD2_TOKEN" != "null" ]; then
       BONUS_LIST=$(curl -sL "$BASE_URL/child/blind-box/bonus-draws" -H "Authorization: Bearer $CHILD2_TOKEN")
-      BONUS_ID=$(echo "$BONUS_LIST" | jq -r '[.[] | select(.status=="available")] | .[0].id // empty' 2>/dev/null | head -1)
+      BONUS_ID=$(echo "$BONUS_LIST" | jq -r '[(.data // .) | if type=="array" then .[] else empty end | select(.status=="available")] | .[0].id // empty' 2>/dev/null | head -1)
       if [ -n "$BONUS_ID" ] && [ "$BONUS_ID" != "null" ]; then
         DRAW_RESP=$(curl -sL -X POST "$BASE_URL/child/blind-box/bonus-draws/$BONUS_ID/use" \
           -H "Authorization: Bearer $CHILD2_TOKEN")
