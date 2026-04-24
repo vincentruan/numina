@@ -1,131 +1,192 @@
 <template>
   <div class="wishes-page">
-    <!-- Stats bar -->
-    <div v-if="stats" class="stats-bar">
-      <span class="balance">⭐ {{ stats.balance }}</span>
-      <span class="wish-count">{{ stats.active_wish_count }} 个心愿进行中</span>
-    </div>
+    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+      <!-- Hero stats banner -->
+      <div v-if="stats" class="hero-banner">
+        <div class="hero-balance">
+          <span class="hero-balance-num">{{ stats.balance }}</span>
+          <span class="hero-balance-unit">⭐ 星星币</span>
+        </div>
+        <div class="hero-divider" />
+        <div class="hero-stat">
+          <span class="hero-stat-num">{{ stats.active_wish_count }}</span>
+          <span class="hero-stat-label">进行中</span>
+        </div>
+        <div class="hero-divider" />
+        <div class="hero-stat">
+          <span class="hero-stat-num">{{ totalWishes }}</span>
+          <span class="hero-stat-label">全部心愿</span>
+        </div>
+      </div>
 
-    <div v-if="loading" class="loading">加载中...</div>
-    <div v-if="error" class="error-msg">{{ error }}</div>
+      <div v-if="loading && !refreshing" class="loading">加载中...</div>
 
-    <!-- Active wishes with savings jar -->
-    <div v-if="!loading && activeWishes.length > 0" class="section">
-      <h3 class="section-title">进行中</h3>
-      <div v-for="wish in activeWishes" :key="wish.id" class="wish-card">
-        <div class="wish-top">
+      <!-- Active wishes -->
+      <div v-if="!loading && activeWishes.length > 0" class="section">
+        <p class="section-title">✨ 进行中</p>
+        <div v-for="wish in activeWishes" :key="wish.id" class="wish-card wish-card--active">
+          <!-- Top row: emoji + name + priority -->
+          <div class="wish-header">
+            <div class="wish-emoji-wrap">
+              <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+            </div>
+            <div class="wish-meta">
+              <p class="wish-name">{{ wish.name }}</p>
+              <span class="priority-badge" :class="wish.priority">{{ priorityLabel(wish.priority) }}</span>
+            </div>
+          </div>
+
+          <!-- Progress section -->
+          <div v-if="wish.has_cost_set && wish.progress !== null" class="progress-section">
+            <div class="progress-track">
+              <div
+                class="progress-fill"
+                :class="jarClass(wish.progress)"
+                :style="{ width: Math.min((wish.progress ?? 0) * 100, 100) + '%' }"
+              />
+              <!-- Star milestone markers -->
+              <span class="progress-star" :style="{ left: '25%' }">⭐</span>
+              <span class="progress-star" :style="{ left: '50%' }">⭐</span>
+              <span class="progress-star" :style="{ left: '75%' }">⭐</span>
+            </div>
+            <div class="progress-footer">
+              <span class="progress-pct" :class="{ 'pct-full': (wish.progress ?? 0) >= 1 }">
+                {{ Math.min(Math.round((wish.progress ?? 0) * 100), 100) }}%
+              </span>
+              <span v-if="(wish.progress ?? 0) >= 1" class="progress-hint hint-full">
+                积分已够！快让爸妈实现吧 🎉
+              </span>
+              <span v-else-if="daysToWish(wish.id) !== null" class="progress-hint hint-days">
+                再做约 {{ daysToWish(wish.id) }} 天家务 🎯
+              </span>
+            </div>
+          </div>
+          <div v-else class="progress-pending">⏳ 等待爸妈设定目标</div>
+
+          <!-- Redeem button -->
+          <button
+            v-if="wish.status === 'active' && wish.progress !== null && wish.progress >= 1"
+            class="btn-redeem"
+            :disabled="actioningId === wish.id"
+            @click="redeem(wish.id)"
+          >
+            🎉 让爸妈实现！
+          </button>
+        </div>
+      </div>
+
+      <!-- Redemption requested -->
+      <div v-if="!loading && redemptionWishes.length > 0" class="section">
+        <p class="section-title">🎁 兑现申请中</p>
+        <div v-for="wish in redemptionWishes" :key="wish.id" class="wish-card wish-card--redemption">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-          <div class="wish-info">
+          <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
-            <span class="priority-badge" :class="wish.priority">{{ priorityLabel(wish.priority) }}</span>
+            <span class="status-badge status-redemption">等待爸妈兑现 🎁</span>
           </div>
         </div>
-        <!-- Savings jar progress -->
-        <div v-if="wish.has_cost_set && wish.progress !== null" class="jar-wrap">
-          <div class="jar">
-            <div class="jar-fill" :class="jarClass(wish.progress)" :style="{ width: (wish.progress * 100) + '%' }"></div>
+      </div>
+
+      <!-- Pending review -->
+      <div v-if="!loading && pendingWishes.length > 0" class="section">
+        <p class="section-title">⏳ 审核中</p>
+        <div v-for="wish in pendingWishes" :key="wish.id" class="wish-card wish-card--pending">
+          <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+          <div class="wish-meta">
+            <p class="wish-name">{{ wish.name }}</p>
+            <span class="status-badge status-pending">等待爸妈审核 ⏳</span>
           </div>
-          <span v-if="(wish.progress ?? 0) >= 1" class="jar-pct full-msg">
-            积分已够！快让爸妈实现吧 🎉
-          </span>
-          <span v-else-if="daysToWish(wish.id) !== null" class="jar-pct days-hint">
-            再做约 {{ daysToWish(wish.id) }} 天家务就能实现 🎯
-          </span>
-          <span v-else class="jar-pct">
-            {{ Math.round((wish.progress ?? 0) * 100) }}%
-          </span>
-        </div>
-        <div v-else class="jar-pending">等待爸妈设定目标 ⏳</div>
-        <button
-          v-if="wish.status === 'active' && wish.progress !== null && wish.progress >= 1"
-          class="btn-redeem"
-          :disabled="actioningId === wish.id"
-          @click="redeem(wish.id)"
-        >让爸妈实现 🎉</button>
-      </div>
-    </div>
-
-    <!-- Redemption requested -->
-    <div v-if="!loading && redemptionWishes.length > 0" class="section">
-      <h3 class="section-title">兑现申请中</h3>
-      <div v-for="wish in redemptionWishes" :key="wish.id" class="wish-card">
-        <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-        <div class="wish-info">
-          <p class="wish-name">{{ wish.name }}</p>
-          <span class="status-badge redemption">等待爸妈兑现 🎁</span>
         </div>
       </div>
-    </div>
 
-    <!-- Pending review -->
-    <div v-if="!loading && pendingWishes.length > 0" class="section">
-      <h3 class="section-title">审核中</h3>
-      <div v-for="wish in pendingWishes" :key="wish.id" class="wish-card">
-        <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-        <div class="wish-info">
-          <p class="wish-name">{{ wish.name }}</p>
-          <span class="status-badge pending">等待爸妈审核 ⏳</span>
+      <!-- Realized -->
+      <div v-if="!loading && realizedWishes.length > 0" class="section">
+        <p class="section-title">🎊 已实现</p>
+        <div v-for="wish in realizedWishes" :key="wish.id" class="wish-card wish-card--realized">
+          <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+          <div class="wish-meta">
+            <p class="wish-name">{{ wish.name }}</p>
+            <span class="status-badge status-realized">已实现 ✅</span>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Realized -->
-    <div v-if="!loading && realizedWishes.length > 0" class="section">
-      <h3 class="section-title">已实现 🎊</h3>
-      <div v-for="wish in realizedWishes" :key="wish.id" class="wish-card realized">
-        <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-        <div class="wish-info">
-          <p class="wish-name">{{ wish.name }}</p>
-          <span class="status-badge realized">已实现 ✅</span>
+      <!-- Rejected -->
+      <div v-if="!loading && rejectedWishes.length > 0" class="section">
+        <p class="section-title">❌ 未通过</p>
+        <div v-for="wish in rejectedWishes" :key="wish.id" class="wish-card wish-card--rejected">
+          <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+          <div class="wish-meta">
+            <p class="wish-name">{{ wish.name }}</p>
+            <span class="status-badge status-rejected">未通过 ❌</span>
+            <p v-if="wish.rejection_reason" class="rejection-reason">{{ wish.rejection_reason }}</p>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Rejected -->
-    <div v-if="!loading && rejectedWishes.length > 0" class="section">
-      <h3 class="section-title">未通过</h3>
-      <div v-for="wish in rejectedWishes" :key="wish.id" class="wish-card rejected">
-        <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-        <div class="wish-info">
-          <p class="wish-name">{{ wish.name }}</p>
-          <span class="status-badge rejected">未通过 ❌</span>
-          <p v-if="wish.rejection_reason" class="rejection-reason">{{ wish.rejection_reason }}</p>
-        </div>
+      <!-- Empty state -->
+      <div v-if="!loading && totalWishes === 0" class="empty-state">
+        <p class="empty-icon">🌠</p>
+        <p class="empty-text">还没有心愿，快许个愿吧！</p>
+        <button class="btn-create-inline" @click="showCreate = true">+ 许个愿</button>
       </div>
-    </div>
+    </van-pull-refresh>
 
-    <!-- Empty state -->
-    <div v-if="!loading && totalWishes === 0" class="empty">
-      <p>还没有心愿，快许个愿吧 🌠</p>
-    </div>
+    <!-- FAB -->
+    <button v-if="totalWishes > 0" class="fab" @click="showCreate = true">
+      <van-icon name="plus" size="22" color="#fff" />
+    </button>
 
-    <!-- Create wish button -->
-    <button class="btn-create" @click="showCreate = true">+ 许个愿</button>
-
-    <!-- Create wish dialog -->
-    <div v-if="showCreate" class="dialog-overlay" @click.self="showCreate = false">
-      <div class="dialog">
-        <h3>许个愿 🌟</h3>
-        <input v-model="form.name" class="input" placeholder="心愿名称（最多50字）" maxlength="50" />
-        <input v-model="form.emoji" class="input" placeholder="表情符号（可选）" maxlength="4" />
-        <textarea v-model="form.description" class="input textarea" placeholder="描述（可选，最多200字）" maxlength="200"></textarea>
-        <div class="priority-select">
-          <span>优先级：</span>
+    <!-- Create wish bottom sheet -->
+    <van-popup v-model:show="showCreate" position="bottom" round style="padding: 24px 16px 40px">
+      <p class="sheet-title">🌟 许个愿</p>
+      <van-field
+        v-model="form.name"
+        label="心愿名称"
+        placeholder="最多50字"
+        maxlength="50"
+        show-word-limit
+        style="margin-bottom: 8px; border-radius: 8px; background: #f9f9f9"
+      />
+      <van-field
+        v-model="form.emoji"
+        label="表情"
+        placeholder="可选，如 🎮 🚲"
+        maxlength="4"
+        style="margin-bottom: 8px; border-radius: 8px; background: #f9f9f9"
+      />
+      <van-field
+        v-model="form.description"
+        label="描述"
+        type="textarea"
+        placeholder="可选，最多200字"
+        maxlength="200"
+        show-word-limit
+        rows="2"
+        autosize
+        style="margin-bottom: 12px; border-radius: 8px; background: #f9f9f9"
+      />
+      <div class="priority-row">
+        <span class="priority-label">优先级</span>
+        <div class="priority-chips">
           <button
             v-for="p in priorities"
             :key="p.value"
-            class="priority-btn"
+            class="priority-chip"
             :class="{ active: form.priority === p.value }"
             @click="form.priority = p.value"
           >{{ p.label }}</button>
         </div>
-        <div v-if="createError" class="error-msg">{{ createError }}</div>
-        <div class="dialog-actions">
-          <button class="btn-cancel" @click="showCreate = false">取消</button>
-          <button class="btn-submit" :disabled="creating || !form.name.trim()" @click="createWish">提交</button>
-        </div>
       </div>
-    </div>
+      <van-button
+        block
+        type="primary"
+        :loading="creating"
+        :disabled="!form.name.trim()"
+        style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
+        @click="createWish"
+      >提交心愿</van-button>
+    </van-popup>
   </div>
 </template>
 
@@ -141,12 +202,11 @@ const wishList = ref<ChildWishList | null>(null)
 const stats = ref<ChildWishStats | null>(null)
 const ledger = ref<CoinTransaction[]>([])
 const loading = ref(true)
-const error = ref('')
+const refreshing = ref(false)
 const actioningId = ref<string | null>(null)
 
 const showCreate = ref(false)
 const creating = ref(false)
-const createError = ref('')
 const form = ref({ name: '', emoji: '', description: '', priority: 'medium' as 'high' | 'medium' | 'low' })
 
 const priorities = [
@@ -219,17 +279,19 @@ function jarClass(progress: number) {
 
 async function load() {
   loading.value = true
-  error.value = ''
   try {
     const [list, s, l] = await Promise.all([listChildWishes(), getChildWishStats(), getCoinLedger()])
     wishList.value = list
     stats.value = s
     ledger.value = l
-  } catch {
-    error.value = '加载失败，请刷新重试'
   } finally {
     loading.value = false
   }
+}
+
+async function onRefresh() {
+  await load()
+  refreshing.value = false
 }
 
 async function redeem(wishId: string) {
@@ -237,8 +299,6 @@ async function redeem(wishId: string) {
   try {
     await requestRedemption(wishId)
     await load()
-  } catch {
-    error.value = '申请失败，请重试'
   } finally {
     actioningId.value = null
   }
@@ -247,7 +307,6 @@ async function redeem(wishId: string) {
 async function createWish() {
   if (!form.value.name.trim()) return
   creating.value = true
-  createError.value = ''
   try {
     await createChildWish({
       name: form.value.name.trim(),
@@ -258,8 +317,6 @@ async function createWish() {
     showCreate.value = false
     form.value = { name: '', emoji: '', description: '', priority: 'medium' }
     await load()
-  } catch {
-    createError.value = '提交失败，请重试'
   } finally {
     creating.value = false
   }
@@ -270,207 +327,372 @@ onMounted(load)
 
 <style scoped>
 .wishes-page {
-  padding: 16px;
-  background: #FFF9E6;
+  background: #fff9e6;
   min-height: 100vh;
-  padding-bottom: 80px;
+  padding: 16px 16px 100px;
 }
-.stats-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.balance { font-size: 18px; font-weight: 700; color: #f5a623; }
-.wish-count { font-size: 13px; color: #999; }
-.loading, .empty {
-  text-align: center;
-  margin-top: 60px;
-  color: #999;
-  font-size: 16px;
-}
-.section { margin-bottom: 20px; }
-.section-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #666;
-  margin: 0 0 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.wish-card {
+
+/* Hero banner */
+.hero-banner {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  gap: 12px;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
+  justify-content: space-around;
+  background: linear-gradient(135deg, #f5a623, #f7c948);
+  border-radius: 20px;
+  padding: 20px 16px;
+  margin-bottom: 20px;
+  color: #fff;
 }
-.wish-card.realized { opacity: 0.7; }
-.wish-card.rejected { opacity: 0.6; }
-.wish-top { display: flex; align-items: center; gap: 12px; width: 100%; }
-.wish-emoji { font-size: 28px; flex-shrink: 0; }
-.wish-info { flex: 1; }
-.wish-name { font-size: 16px; font-weight: 600; color: #333; margin: 0 0 4px; }
-.priority-badge {
+
+.hero-balance {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hero-balance-num {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.hero-balance-unit {
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.hero-divider {
+  width: 1px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.hero-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hero-stat-num {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.hero-stat-label {
   font-size: 12px;
+  opacity: 0.85;
+}
+
+/* Sections */
+.section {
+  margin-bottom: 20px;
+}
+
+.section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #555;
+  margin: 0 0 10px;
+}
+
+/* Wish cards */
+.wish-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  margin-bottom: 12px;
+}
+
+.wish-card--active {
+  border-left: 4px solid #f5a623;
+}
+
+.wish-card--redemption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 4px solid #10b981;
+}
+
+.wish-card--pending {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-left: 4px solid #f59e0b;
+  opacity: 0.85;
+}
+
+.wish-card--realized {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.65;
+}
+
+.wish-card--rejected {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.55;
+}
+
+.wish-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.wish-emoji-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #fff3cd, #fde68a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.wish-emoji {
+  font-size: 26px;
+}
+
+.wish-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.wish-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.priority-badge {
+  font-size: 11px;
   padding: 2px 8px;
   border-radius: 10px;
   display: inline-block;
+  font-weight: 500;
 }
+
 .priority-badge.high { background: #ffe0e0; color: #c0392b; }
 .priority-badge.medium { background: #fff3cd; color: #856404; }
 .priority-badge.low { background: #e8f4fd; color: #1a6fa8; }
-.status-badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 10px;
-  display: inline-block;
-}
-.status-badge.pending { background: #fff3cd; color: #856404; }
-.status-badge.redemption { background: #d4edda; color: #155724; }
-.status-badge.realized { background: #d4edda; color: #155724; }
-.status-badge.rejected { background: #f8d7da; color: #721c24; }
-.rejection-reason { font-size: 12px; color: #999; margin: 4px 0 0; }
 
-/* Savings jar */
-.jar-wrap {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  width: 100%;
-  padding-left: 40px;
+/* Progress track */
+.progress-section {
+  margin-bottom: 12px;
 }
-.jar {
-  width: 100%;
-  height: 12px;
-  background: #f0f0f0;
-  border-radius: 6px;
-  overflow: hidden;
+
+.progress-track {
   position: relative;
+  height: 14px;
+  background: #f0f0f0;
+  border-radius: 7px;
+  overflow: visible;
+  margin-bottom: 8px;
 }
-.jar-fill {
+
+.progress-fill {
   position: absolute;
   top: 0;
   left: 0;
   height: 100%;
-  border-radius: 6px;
-  transition: width 0.6s ease;
+  border-radius: 7px;
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 100%;
 }
-.jar-fill.low { background: #74b9ff; }
-.jar-fill.half { background: #fdcb6e; }
-.jar-fill.full {
+
+.progress-fill.low { background: linear-gradient(90deg, #74b9ff, #0984e3); }
+.progress-fill.half { background: linear-gradient(90deg, #fdcb6e, #e17055); }
+.progress-fill.full {
   background: linear-gradient(90deg, #f9ca24, #f0932b);
   animation: goldShimmer 1.5s ease-in-out infinite;
 }
+
 @keyframes goldShimmer {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  50% { opacity: 0.75; }
 }
-.jar-pct { font-size: 12px; color: #666; white-space: nowrap; min-width: 32px; }
-.jar-pct.full-msg { color: #f5a623; font-weight: 600; }
-.jar-pct.days-hint { color: #2ecc71; font-weight: 500; }
-.jar-pending { font-size: 12px; color: #aaa; padding-left: 40px; width: 100%; }
 
+.progress-star {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+.progress-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-pct {
+  font-size: 13px;
+  font-weight: 700;
+  color: #999;
+  min-width: 36px;
+}
+
+.progress-pct.pct-full {
+  color: #f5a623;
+}
+
+.progress-hint {
+  font-size: 12px;
+}
+
+.hint-full { color: #f5a623; font-weight: 600; }
+.hint-days { color: #2ecc71; font-weight: 500; }
+
+.progress-pending {
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 4px;
+}
+
+/* Redeem button */
 .btn-redeem {
   width: 100%;
   background: linear-gradient(135deg, #f9ca24, #f0932b);
   color: #fff;
   border: none;
   border-radius: 20px;
-  padding: 10px;
+  padding: 11px;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
-  margin-top: 4px;
   animation: goldShimmer 1.5s ease-in-out infinite;
 }
-.btn-redeem:disabled { opacity: 0.5; cursor: not-allowed; animation: none; }
 
-.btn-create {
-  position: fixed;
-  bottom: 80px;
-  right: 20px;
+.btn-redeem:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  animation: none;
+}
+
+/* Status badges */
+.status-badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  display: inline-block;
+  font-weight: 500;
+}
+
+.status-pending { background: #fff3cd; color: #856404; }
+.status-redemption { background: #d4edda; color: #155724; }
+.status-realized { background: #d4edda; color: #155724; }
+.status-rejected { background: #f8d7da; color: #721c24; }
+
+.rejection-reason {
+  font-size: 12px;
+  color: #999;
+  margin: 4px 0 0;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon { font-size: 56px; margin: 0 0 12px; }
+.empty-text { font-size: 16px; color: #999; margin: 0 0 20px; }
+
+.btn-create-inline {
   background: #f5a623;
   color: #fff;
   border: none;
   border-radius: 24px;
-  padding: 12px 20px;
-  font-size: 15px;
+  padding: 12px 28px;
+  font-size: 16px;
   font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(245,166,35,0.4);
-  z-index: 10;
 }
 
-/* Dialog */
-.dialog-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  display: flex;
-  align-items: flex-end;
-  z-index: 100;
-}
-.dialog {
-  background: #fff;
-  border-radius: 20px 20px 0 0;
-  padding: 24px 20px 32px;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.dialog h3 { font-size: 18px; font-weight: 700; color: #333; margin: 0; }
-.input {
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  padding: 10px 14px;
+.loading {
+  text-align: center;
+  padding: 40px 0;
+  color: #999;
   font-size: 15px;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
 }
-.textarea { min-height: 72px; resize: none; }
-.priority-select { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.priority-select span { font-size: 14px; color: #666; }
-.priority-btn {
+
+/* FAB */
+.fab {
+  position: fixed;
+  bottom: 80px;
+  right: 20px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #f5a623;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 14px rgba(245, 166, 35, 0.5);
+  cursor: pointer;
+  z-index: 10;
+  transition: transform 0.15s;
+}
+
+.fab:active { transform: scale(0.92); }
+
+/* Create sheet */
+.sheet-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333;
+  text-align: center;
+  margin: 0 0 16px;
+}
+
+.priority-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+}
+
+.priority-label {
+  font-size: 14px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.priority-chips {
+  display: flex;
+  gap: 8px;
+}
+
+.priority-chip {
   padding: 6px 14px;
   border: 1px solid #e0e0e0;
   border-radius: 16px;
   background: #f8f8f8;
   font-size: 13px;
   cursor: pointer;
+  transition: all 0.15s;
 }
-.priority-btn.active { background: #f5a623; color: #fff; border-color: #f5a623; }
-.dialog-actions { display: flex; gap: 10px; }
-.btn-cancel {
-  flex: 1;
-  padding: 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  background: #f8f8f8;
-  font-size: 15px;
-  cursor: pointer;
-}
-.btn-submit {
-  flex: 2;
-  padding: 12px;
-  border: none;
-  border-radius: 10px;
+
+.priority-chip.active {
   background: #f5a623;
   color: #fff;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
+  border-color: #f5a623;
 }
-.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-.error-msg { background: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px 14px; font-size: 14px; }
 </style>

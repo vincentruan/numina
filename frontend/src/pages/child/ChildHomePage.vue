@@ -28,6 +28,26 @@
       </div>
     </div>
 
+    <!-- Top active wish progress -->
+    <router-link v-if="topWish" to="/child/wishes" class="wish-preview">
+      <div class="wish-preview-header">
+        <span class="wish-preview-icon">{{ topWish.emoji || '🌟' }}</span>
+        <div class="wish-preview-info">
+          <p class="wish-preview-name">{{ topWish.name }}</p>
+          <p class="wish-preview-sub">我的心愿</p>
+        </div>
+        <van-icon name="arrow" color="#ccc" size="16" />
+      </div>
+      <div v-if="topWish.has_cost_set && topWish.progress !== null" class="wish-preview-bar">
+        <div class="wish-preview-fill" :style="{ width: Math.min((topWish.progress ?? 0) * 100, 100) + '%' }" />
+      </div>
+      <p v-if="topWish.has_cost_set && topWish.progress !== null" class="wish-preview-pct">
+        {{ Math.min(Math.round((topWish.progress ?? 0) * 100), 100) }}% 完成
+        <span v-if="(topWish.progress ?? 0) >= 1" class="wish-ready"> · 可以兑现啦 🎉</span>
+      </p>
+      <p v-else class="wish-preview-pct">等待爸妈设定目标 ⏳</p>
+    </router-link>
+
     <!-- Calendar -->
     <div class="section">
       <p class="section-title">📅 我的日历</p>
@@ -61,6 +81,7 @@ import { ref, onMounted } from 'vue'
 import { getCoinBalance } from '@/api/coins'
 import { getMyChores, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
+import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { useFamilyStore } from '@/stores/family'
@@ -69,6 +90,7 @@ const familyStore = useFamilyStore()
 const balance = ref(0)
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
+const topWish = ref<ChildWish | null>(null)
 
 function statusLabel(status: ChoreInstance['status']): string {
   switch (status) {
@@ -89,13 +111,17 @@ function fetchChildMonth(year: number, month: number) {
 }
 
 onMounted(async () => {
-  const [bal, chores] = await Promise.all([
+  const [bal, chores, wishData] = await Promise.all([
     getCoinBalance().catch(() => 0),
     getMyChores(todayDate()).catch(() => [] as ChoreInstance[]),
+    listChildWishes().catch(() => null),
   ])
   balance.value = bal
   todayChores.value = chores
   loadingChores.value = false
+  // Pick the highest-priority active wish as the preview
+  const active = wishData?.active ?? []
+  topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
 })
 </script>
 
@@ -137,6 +163,79 @@ onMounted(async () => {
 .chore-name { font-size: 14px; font-weight: 600; color: #333; margin: 0; }
 .chore-reward { font-size: 12px; color: #f5a623; margin: 2px 0 0; }
 .chore-status-badge { font-size: 12px; color: #999; white-space: nowrap; }
+
+/* Wish preview widget */
+.wish-preview {
+  display: block;
+  background: linear-gradient(135deg, #fff9e6, #fef3c7);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 20px;
+  text-decoration: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  border: 2px solid #fde68a;
+}
+
+.wish-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.wish-preview-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.wish-preview-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.wish-preview-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #333;
+  margin: 0 0 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wish-preview-sub {
+  font-size: 12px;
+  color: #999;
+  margin: 0;
+}
+
+.wish-preview-bar {
+  height: 8px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.wish-preview-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #f9ca24, #f0932b);
+  border-radius: 4px;
+  transition: width 0.6s ease;
+  max-width: 100%;
+}
+
+.wish-preview-pct {
+  font-size: 12px;
+  color: #666;
+  margin: 0;
+  font-weight: 500;
+}
+
+.wish-ready {
+  color: #f5a623;
+  font-weight: 700;
+}
 
 .quick-links {
   display: grid;
