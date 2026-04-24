@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 # Provider 默认模型（当 model_id 未配置时使用）
 _DEFAULT_MODEL: dict[str, str] = {
-    "anthropic": "claude-haiku-4-5",
+    "anthropic": "claude-3-5-haiku-20241022",
     "openai": "gpt-4o-mini",
 }
 
