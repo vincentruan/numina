@@ -179,3 +179,32 @@ def test_revoke_all_devices_endpoint(client, auth_headers):
         headers={"Authorization": auth_headers["Authorization"]},
     )
     assert list_resp.json()["data"] == []
+
+
+def test_refresh_rotates_device_session_jti(client, auth_headers, db):
+    """Token refresh updates DeviceSession.refresh_jti in-place."""
+    # Trust device first
+    trust_resp = client.post(
+        "/api/v1/auth/device/trust",
+        headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": auth_headers["_refresh_token"]},
+    )
+    assert trust_resp.status_code == 200
+    device_id = trust_resp.json()["data"]["device_id"]
+
+    # Refresh token
+    refresh_resp = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": auth_headers["_refresh_token"]},
+    )
+    assert refresh_resp.status_code == 200
+
+    # Device session should still exist (not revoked) after refresh
+    new_access_token = refresh_resp.json()["data"]["access_token"]
+    list_resp = client.get(
+        "/api/v1/auth/devices",
+        headers={"Authorization": f"Bearer {new_access_token}"},
+    )
+    assert list_resp.status_code == 200
+    device_ids = [d["id"] for d in list_resp.json()["data"]]
+    assert device_id in device_ids

@@ -36,6 +36,7 @@ from app.schemas.auth import (
     UpdateProfileRequest,
 )
 from app.services.audit_log import write_audit_log
+from app.services.device import rotate_device_session_jti
 from app.services.security_log import SecurityEventType, _log_security_event
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
@@ -435,8 +436,13 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     _check_refresh_rate_limit(user_id)
 
     # Revoke the old refresh token JTI so it can't be reused
+    new_refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
     if old_jti:
         revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+        new_payload = jwt.decode(new_refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        new_jti = new_payload.get("jti")
+        if new_jti:
+            rotate_device_session_jti(db, old_jti=old_jti, new_jti=new_jti)
 
     _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
     write_audit_log(
@@ -444,7 +450,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     )
     return TokenResponse(
         access_token=create_access_token(user_claims(user)),
-        refresh_token=create_refresh_token(user_claims(user, token_version=user.token_version)),
+        refresh_token=new_refresh_token,
     )
 
 
