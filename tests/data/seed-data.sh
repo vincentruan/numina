@@ -56,7 +56,6 @@ fi
 
 _INVITE_INDEX_FILE=$(mktemp)
 echo 0 > "$_INVITE_INDEX_FILE"
-trap 'rm -f "$_INVITE_INDEX_FILE"' EXIT
 
 next_invite_code() {
   local idx
@@ -73,16 +72,26 @@ next_invite_code() {
 # 通用函数
 # ========================================
 
+# Cookie jar 目录（每个账号一个临时文件，脚本退出时清理）
+_COOKIE_DIR=$(mktemp -d)
+trap 'rm -rf "$_COOKIE_DIR" "$_INVITE_INDEX_FILE"' EXIT
+
+# 返回指定账号的 cookie jar 路径
+cookie_jar() { echo "$_COOKIE_DIR/$1.jar"; }
+
 # 注册账号，返回 access_token（已存在则登录）
+# 副作用：将 set-cookie 写入 cookie jar，供后续 device/trust 使用
 register_or_login() {
   local username="$1"
   local password="$2"
   local display_name="$3"
   local family_name="$4"
+  local jar
+  jar=$(cookie_jar "$username")
 
   # Try login first — only consume an invite code if we need to register
   local login_resp
-  login_resp=$(curl -sL -X POST "$BASE_URL/auth/login" \
+  login_resp=$(curl -sL -c "$jar" -X POST "$BASE_URL/auth/login" \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$username\",\"password\":\"$password\"}")
   local login_token
@@ -96,7 +105,7 @@ register_or_login() {
   # User doesn't exist — register with a fresh invite code
   local invite_code="${5:-$(next_invite_code)}"
   local resp
-  resp=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
+  resp=$(curl -sL -c "$jar" -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$username\",\"display_name\":\"$display_name\",\"password\":\"$password\",\"family_name\":\"$family_name\",\"family_invitation_code\":\"$invite_code\"}")
 
@@ -110,6 +119,32 @@ register_or_login() {
   else
     log_err "注册 $username 失败: HTTP $http_code — $body"
     return 1
+  fi
+}
+
+# 为账号信任当前设备（需要 cookie jar 中有 refresh token）
+# 用法: trust_device <username> <access_token> [device_name_ua]
+trust_device_for_user() {
+  local username="$1"
+  local token="$2"
+  local ua="${3:-Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36}"
+  local jar
+  jar=$(cookie_jar "$username")
+
+  local resp
+  resp=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/device/trust" \
+    -b "$jar" -c "$jar" \
+    -H "Authorization: Bearer $token" \
+    -H "User-Agent: $ua")
+  local http_code body
+  http_code=$(echo "$resp" | tail -1)
+  body=$(echo "$resp" | sed '$d')
+  if [ "$http_code" = "200" ] || [ "$http_code" = "201" ]; then
+    local device_name
+    device_name=$(echo "$body" | jq -r '.device_name // "未知设备"')
+    log_ok "$username: 设备已信任 — $device_name"
+  else
+    log_warn "$username: 信任设备失败 HTTP $http_code（可能无 refresh cookie，跳过）"
   fi
 }
 
@@ -193,6 +228,7 @@ if [ -z "$TOKEN_EMPTY" ] || [ "$TOKEN_EMPTY" = "null" ]; then
   exit 1
 fi
 log_ok "test_empty 就绪（无资产）"
+trust_device_for_user "test_empty" "$TOKEN_EMPTY"
 
 # ──────────────────────────────────────────────
 # 1.2 test_asset — 单个实物资产 + 多状态资产
@@ -309,6 +345,7 @@ else
   log_info "test_asset 已有 $ASSET_COUNT 个资产，跳过创建"
   log_ok "test_asset 就绪"
 fi
+trust_device_for_user "test_asset" "$TOKEN_ASSET"
 
 # ──────────────────────────────────────────────
 # 1.3 test_rich — 完整数据（资产+负债+心愿+多状态）
@@ -457,6 +494,7 @@ else
     log_warn "无法获取 test_rich 家庭邀请码 — 跳过 member 创建"
   fi
 fi
+trust_device_for_user "test_rich" "$TOKEN_RICH" "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
 # ──────────────────────────────────────────────
 # 1.4 test_child — test_rich 家庭的儿童账号
@@ -651,6 +689,7 @@ else
     exit 1
   fi
   log_ok "demouser login successful"
+  trust_device_for_user "demouser" "$TOKEN"
 
   # ──────────────────────────────────────────────
   # 2.2 幂等检查
@@ -1870,6 +1909,9 @@ EOF
     log_info "demouser 盲盒礼物池已有 $DEMO_GIFT_COUNT 个礼物，跳过"
   fi
 
+  # 为 demouser 再信任一台移动设备（演示多设备列表）
+  trust_device_for_user "demouser" "$TOKEN" "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
+
   log_ok "========== Part 2: 完整仿真数据完成 =========="
 fi
 
@@ -1884,9 +1926,9 @@ echo "=========================================="
 # 固定测试账号统计
 echo ""
 echo "固定测试账号:"
-echo "  - test_empty        (空家庭)"
-echo "  - test_asset        (5 资产: in_use/idle/retired/USD/已售出)"
-echo "  - test_rich         (31 资产 + 28 负债 + 29 心愿 + 负债关联 + 心愿多状态)"
+echo "  - test_empty        (空家庭 + 1 受信任设备)"
+echo "  - test_asset        (5 资产: in_use/idle/retired/USD/已售出 + 1 受信任设备)"
+echo "  - test_rich         (31 资产 + 28 负债 + 29 心愿 + 负债关联 + 心愿多状态 + 1 受信任设备)"
 echo "  - test_rich_member  (test_rich 家庭的 member 角色 + 数据隔离测试)"
 echo "  - test_child        (test_rich 家庭的儿童 + 跨天家务 + 盲盒礼物池 + bonus_draw)"
 
