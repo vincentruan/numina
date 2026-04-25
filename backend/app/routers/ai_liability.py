@@ -22,7 +22,7 @@ async def get_liability_advice(
 ):
     """获取负债优化建议（实时调用 agent）。"""
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/liability/analyze",
                 headers={

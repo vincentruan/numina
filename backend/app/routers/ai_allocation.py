@@ -88,7 +88,7 @@ async def check_drift(
         return {"has_target": False, "message": "尚未设置配置目标"}
 
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/allocation/drift",
                 json={

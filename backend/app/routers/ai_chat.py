@@ -91,7 +91,7 @@ async def chat(
 
     # Call agent
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/chat/ask",
                 json={"question": body.question},
