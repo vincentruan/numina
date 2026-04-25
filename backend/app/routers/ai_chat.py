@@ -98,7 +98,7 @@ async def chat(
                 headers={
                     "X-Family-Id": current_user.family_id,
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Thread-Id": session.id,
+                    "X-Thread-Id": str(session.id),
                 },
             )
             resp.raise_for_status()

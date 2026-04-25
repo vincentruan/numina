@@ -5,7 +5,7 @@ import logging
 import httpx
 from fastapi import APIRouter, Depends
 
-from app.auth.ai_deps import require_ai_enabled, create_agent_token
+from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import require_adult
 from app.config import settings
 from app.errors import AppError, ErrorCode
@@ -27,7 +27,7 @@ async def get_liability_advice(
                 f"{settings.AGENT_BASE_URL}/liability/analyze",
                 headers={
                     "X-Family-Id": current_user.family_id,
-                    "X-Agent-Token": create_agent_token(current_user.family_id),
+                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                 },
             )
             resp.raise_for_status()
