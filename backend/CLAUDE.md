@@ -26,7 +26,6 @@ uv run alembic upgrade head                                # apply migrations
 
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
 - **Pydantic v2 only** — use `ConfigDict`, `model_validate`, `field_validator`. Never v1 style (`class Config`, `parse_obj`, `validator`).
-- **Error messages in Chinese** — `raise HTTPException(status_code=404, detail="资产不存在")`
 
 ## Patterns
 
@@ -84,9 +83,7 @@ Financial assets carry return fields:
 
 ### Predefined Categories
 
-21 system categories seeded on startup (read-only, `is_system=True`):
-- **Physical (13):** 房产, 车辆, 数码产品, 家电, 家具, 珠宝首饰, 服饰, 美妆, 运动器材, 玩具, 宠物, 乐器, 箱包
-- **Financial (8):** 存款, 基金, 股票, 债券, 保险, 理财产品, 数字货币, 其他金融
+21 system categories seeded on startup (read-only, `is_system=True`). See `app/seed/categories.py` and `app/constants/categories.py` for the full list.
 
 ### Common Pitfalls
 

@@ -21,13 +21,29 @@ npm run test:run      # vitest run — run tests once (no watch)
 - **vue-tsc:** canonical type gate. Run `npm run typecheck` before pushing. Strict mode is on (`tsconfig.app.json`).
 - **vitest:** test runner. Tests live in `src/**/*.test.ts` or `src/**/*.spec.ts`.
 
+## Directory Structure
+
+```
+src/
+├── api/           # HTTP request modules
+├── components/    # Reusable Vue components (ai/, asset/, charts/, common/, etc.)
+├── composables/   # Vue composition functions
+├── constants/     # Static constants
+├── i18n/          # Localization (zh-CN.ts, en-US.ts)
+├── layouts/       # Layout wrappers
+├── pages/         # Route-level views (DashboardPage, AssetListPage, etc.)
+├── router/        # Vue Router config
+├── stores/        # Pinia state stores
+├── types/         # TypeScript type definitions
+└── utils/         # Helper functions
+```
+
 ## Key Invariants
 
 - **Emoji convention** — All user-facing toast messages, confirmation dialogs, and error messages MUST include an emoji prefix via i18n keys. Never hard-code strings directly in Vue files. See Patterns section.
 - **Vant components are auto-imported** via `unplugin-vue-components`. Do not manually import them.
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly.
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`.
-- **Incremental formatting** — run `npm run format` only on files you touch. Do not reformat the entire `src/` in one commit.
 
 ## Patterns
 
