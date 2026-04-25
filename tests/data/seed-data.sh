@@ -504,7 +504,7 @@ log_info "初始化 test_child（test_rich 家庭的儿童账号）..."
 # 检查是否已有名为 test_child 的儿童
 CHILDREN_RESP=$(curl -sL "$BASE_URL/family/children" \
   -H "Authorization: Bearer $TOKEN_RICH")
-CHILD_ID=$(echo "$CHILDREN_RESP" | jq -r '.data[] | select(.display_name=="test_child") | .id' 2>/dev/null | head -1)
+CHILD_ID=$(echo "$CHILDREN_RESP" | jq -r '.data[] | select(.display_name=="test_child") | .id' 2>/dev/null | head -1) || CHILD_ID=""
 
 if [ -z "$CHILD_ID" ] || [ "$CHILD_ID" = "null" ]; then
   log_info "创建 test_child..."
@@ -649,7 +649,7 @@ if [ "$GIFT_COUNT" = "0" ]; then
   # 获取 test_child 的已批准心愿 ID（active 状态）
   CHILD_WISHES_RESP=$(curl -sL "$BASE_URL/family/child-wishes" \
     -H "Authorization: Bearer $TOKEN_RICH" 2>/dev/null || echo "{}")
-  WISH_FOR_GIFT=$(echo "$CHILD_WISHES_RESP" | jq -r '[.data[] // .[] | select(.status=="active")] | .[0].id // empty' 2>/dev/null | head -1)
+  WISH_FOR_GIFT=$(echo "$CHILD_WISHES_RESP" | jq -r '[.data[] // .[] | select(.status=="active")] | .[0].id // empty' 2>/dev/null | head -1) || WISH_FOR_GIFT=""
   if [ -n "$WISH_FOR_GIFT" ] && [ "$WISH_FOR_GIFT" != "null" ]; then
     curl -sL -X POST "$BASE_URL/blind-box/gifts/from-wish/$WISH_FOR_GIFT" \
       -H "Authorization: Bearer $TOKEN_RICH" > /dev/null
@@ -1863,7 +1863,7 @@ EOF
 
     # 从儿童心愿转入礼物池
     DEMO_CHILD_WISHES=$(curl -sL "$BASE_URL/family/child-wishes" -H "Authorization: Bearer $TOKEN" 2>/dev/null || echo "{}")
-    DEMO_WISH_FOR_GIFT=$(echo "$DEMO_CHILD_WISHES" | jq -r '[.data[] // .[] | select(.status=="active")] | .[0].id // empty' 2>/dev/null | head -1)
+    DEMO_WISH_FOR_GIFT=$(echo "$DEMO_CHILD_WISHES" | jq -r '[.data[] // .[] | select(.status=="active")] | .[0].id // empty' 2>/dev/null | head -1) || DEMO_WISH_FOR_GIFT=""
     if [ -n "$DEMO_WISH_FOR_GIFT" ] && [ "$DEMO_WISH_FOR_GIFT" != "null" ]; then
       curl -sL -X POST "$BASE_URL/blind-box/gifts/from-wish/$DEMO_WISH_FOR_GIFT" \
         -H "Authorization: Bearer $TOKEN" > /dev/null
@@ -1896,7 +1896,7 @@ EOF
     # 大宝使用一次 bonus_draw（产生 draw 历史记录）
     if [ -n "$CHILD2_TOKEN" ] && [ "$CHILD2_TOKEN" != "null" ]; then
       BONUS_LIST=$(curl -sL "$BASE_URL/child/blind-box/bonus-draws" -H "Authorization: Bearer $CHILD2_TOKEN")
-      BONUS_ID=$(echo "$BONUS_LIST" | jq -r '[(.data // .) | if type=="array" then .[] else empty end | select(.status=="available")] | .[0].id // empty' 2>/dev/null | head -1)
+      BONUS_ID=$(echo "$BONUS_LIST" | jq -r '[(.data // .) | if type=="array" then .[] else empty end | select(.status=="available")] | .[0].id // empty' 2>/dev/null | head -1) || BONUS_ID=""
       if [ -n "$BONUS_ID" ] && [ "$BONUS_ID" != "null" ]; then
         DRAW_RESP=$(curl -sL -X POST "$BASE_URL/child/blind-box/bonus-draws/$BONUS_ID/use" \
           -H "Authorization: Bearer $CHILD2_TOKEN")
