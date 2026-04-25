@@ -40,6 +40,12 @@ Controlled by `USE_DEERFLOW` env var (default: `false`). Set in `config.py` as `
 
 Both paths must produce equivalent `AgentResponse` output. When changing orchestration logic, test both paths.
 
+### Implementation Priority
+
+Agent功能实现上优先复用 DeerFlow Harness 已有能力，仅在明确确认能力突破了 DeerFlow 边界后才考虑新增方案。
+
+这是为了避免重复造轮子，确保架构一致性。
+
 ### Pydantic v2
 
 ```python
