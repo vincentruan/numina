@@ -34,6 +34,7 @@ test.describe('smoke: asset pages render without errors', () => {
 
     // Navigate to frontend
     await page.goto('/assets')
+    await page.waitForLoadState('networkidle')
 
     // Page should not redirect to login
     await expect(page).not.toHaveURL(/\/login/)
