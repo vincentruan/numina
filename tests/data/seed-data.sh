@@ -240,7 +240,7 @@ if [ -z "$TOKEN_ASSET" ] || [ "$TOKEN_ASSET" = "null" ]; then
   exit 1
 fi
 
-ASSET_COUNT=$(get_asset_count "$TOKEN_ASSET")
+ASSET_COUNT=$(get_asset_count "$TOKEN_ASSET") || ASSET_COUNT="0"
 if [ "$ASSET_COUNT" = "0" ]; then
   CAT_HOUSE=$(get_category_id "$TOKEN_ASSET" "房产" "physical")
   CAT_CAR=$(get_category_id "$TOKEN_ASSET" "车辆" "physical")
@@ -357,7 +357,7 @@ if [ -z "$TOKEN_RICH" ] || [ "$TOKEN_RICH" = "null" ]; then
   exit 1
 fi
 
-RICH_ASSET_COUNT=$(get_asset_count "$TOKEN_RICH")
+RICH_ASSET_COUNT=$(get_asset_count "$TOKEN_RICH") || RICH_ASSET_COUNT="0"
 RICH_LIABILITY_COUNT=$(curl -sL "$BASE_URL/liabilities" \
   -H "Authorization: Bearer $TOKEN_RICH" \
   | jq -r 'if type == "array" then length elif (.data | type) == "array" then .data | length elif (.data.total | type) == "number" then .data.total elif (.data.items | type) == "array" then .data.items | length else 0 end' 2>/dev/null || echo "0")
@@ -698,7 +698,7 @@ else
   # ──────────────────────────────────────────────
   # 2.2 幂等检查
   # ──────────────────────────────────────────────
-  DEMO_ASSET_COUNT=$(get_asset_count "$TOKEN")
+  DEMO_ASSET_COUNT=$(get_asset_count "$TOKEN") || DEMO_ASSET_COUNT="0"
   if [ "$DEMO_ASSET_COUNT" -ge 30 ] 2>/dev/null; then
     log_info "demouser 已有 $DEMO_ASSET_COUNT 件资产，跳过资产/负债/心愿创建（幂等保护）"
   else

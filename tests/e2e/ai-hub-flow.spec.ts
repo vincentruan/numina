@@ -167,7 +167,7 @@ test.describe('AI hub and features', () => {
     await page.waitForLoadState('networkidle')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(page.getByText('AI 问答助手')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('新对话')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')

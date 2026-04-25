@@ -37,6 +37,7 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'Family', path: '/family' },
   { name: 'Baby', path: '/baby' },
   { name: 'Settings', path: '/settings' },
+  { name: 'Devices', path: '/settings/devices' },
   { name: 'CategoryManage', path: '/settings/categories' },
   { name: 'TagManage', path: '/settings/tags' },
   { name: 'AIConfig', path: '/settings/ai' },
