@@ -70,7 +70,7 @@
                 v-html="msg.renderedContent ?? ''"
               />
               <div v-else class="bubble-text">{{ msg.content }}</div>
-              <span class="msg-time">{{ formatTime(msg.created_at) }}</span>
+              <span class="msg-time">{{ msg.displayTime }}</span>
               <!-- Assistant message actions -->
               <div v-if="msg.role === 'assistant'" class="msg-actions">
                 <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
@@ -139,6 +139,8 @@
     <div class="input-bar">
       <AIChatInput
         v-model="inputText"
+        v-model:deep-think="deepThink"
+        v-model:web-search="webSearch"
         :disabled="asking"
         :loading="asking"
         :show-clear="messages.length > 0"
@@ -170,32 +172,8 @@ function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(marked.parse(text) as string)
 }
 
-interface Message {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  renderedContent?: string
-  created_at: string
-  feedback?: 1 | -1 | 0
-}
-
-const { t } = useI18n()
-const route = useRoute()
-const aiStore = useAIStore()
-const messages = ref<Message[]>([])
-const inputText = ref('')
-const asking = ref(false)
-const scrollRef = ref<HTMLElement | null>(null)
-let abortController: AbortController | null = null
-
-const sessionTitle = computed(() => {
-  const firstUser = messages.value.find((m) => m.role === 'user')
-  if (!firstUser) return '新对话'
-  const text = firstUser.content.trim()
-  return text.length > 20 ? text.slice(0, 20) + '…' : text
-})
-
-const suggestions = [
+// Static data — module-level to avoid re-allocation on each mount
+const SUGGESTIONS = [
   {
     text: '我们家净资产是多少？',
     icon: {
@@ -233,6 +211,40 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
+interface Message {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  renderedContent?: string
+  created_at: string
+  displayTime: string
+  feedback?: 1 | -1 | 0
+}
+
+const { t } = useI18n()
+const route = useRoute()
+const aiStore = useAIStore()
+const messages = ref<Message[]>([])
+const inputText = ref('')
+const asking = ref(false)
+const deepThink = ref(false)
+const webSearch = ref(false)
+const scrollRef = ref<HTMLElement | null>(null)
+let abortController: AbortController | null = null
+
+const sessionTitle = computed(() => {
+  const firstUser = messages.value.find((m) => m.role === 'user')
+  if (!firstUser) return '新对话'
+  const text = firstUser.content.trim()
+  return text.length > 20 ? text.slice(0, 20) + '…' : text
+})
+
+const suggestions = SUGGESTIONS
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+
 async function scrollToBottom() {
   await nextTick()
   if (scrollRef.value) {
@@ -254,6 +266,7 @@ async function onSend() {
     role: 'user',
     content: q,
     created_at: new Date().toISOString(),
+    displayTime: formatTime(new Date().toISOString()),
   })
   inputText.value = ''
   asking.value = true
@@ -270,6 +283,7 @@ async function onSend() {
       content: '',
       renderedContent: '',
       created_at: new Date().toISOString(),
+      displayTime: formatTime(new Date().toISOString()),
     }
     messages.value.push(msg)
     const idx = messages.value.length - 1
@@ -310,6 +324,7 @@ async function onSend() {
       content: '抱歉，AI 服务暂时不可用，请稍后再试。',
       renderedContent: '<p>抱歉，AI 服务暂时不可用，请稍后再试。</p>',
       created_at: new Date().toISOString(),
+      displayTime: formatTime(new Date().toISOString()),
     })
   } finally {
     // Only reset if typewriter didn't take over
@@ -371,6 +386,7 @@ onMounted(async () => {
     const res = await getChatHistory()
     messages.value = res.data.map((m) => ({
       ...m,
+      displayTime: formatTime(m.created_at),
       renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,
     }))
     await markChatRead()
