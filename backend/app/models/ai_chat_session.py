@@ -6,13 +6,12 @@ from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, 
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
-from app.utils.snowflake import next_id
 
 
 class AIChatSession(Base):
     __tablename__ = "ai_chat_sessions"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
     family_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("families.id"), nullable=False, index=True
     )

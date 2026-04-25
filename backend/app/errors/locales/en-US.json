@@ -66,5 +66,15 @@
   "DASHBOARD_INVALID_STATUS": "Invalid status parameter",
   "NOT_FOUND": "Resource not found",
   "FORBIDDEN": "You do not have permission to perform this action",
-  "INTERNAL_ERROR": "Internal server error"
+  "INTERNAL_ERROR": "Internal server error",
+  "BLIND_BOX_DISABLED": "Blind box feature is not enabled",
+  "BLIND_BOX_INVALID_CHORE": "Some chore records are invalid, unapproved, or already used",
+  "BLIND_BOX_INSUFFICIENT_COINS": "Insufficient coins to draw",
+  "BLIND_BOX_GIFT_POOL_EMPTY": "Gift pool is empty, please add gifts first",
+  "BLIND_BOX_DRAW_NOT_FOUND": "Bonus draw not found or already used",
+  "BLIND_BOX_BONUS_EXPIRED": "Bonus draw has expired",
+  "BLIND_BOX_GIFT_NOT_FOUND": "Gift not found",
+  "BLIND_BOX_WISH_CONFLICT": "This wish has already been added to the gift pool",
+  "CALENDAR_DATE_INVALID": "Invalid date format, please use YYYY-MM-DD",
+  "CHILD_NOT_FOUND": "Child not found"
 }

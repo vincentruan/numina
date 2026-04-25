@@ -66,5 +66,15 @@
   "DASHBOARD_INVALID_STATUS": "无效的状态参数",
   "NOT_FOUND": "资源不存在",
   "FORBIDDEN": "无权执行此操作",
-  "INTERNAL_ERROR": "服务器内部错误"
+  "INTERNAL_ERROR": "服务器内部错误",
+  "BLIND_BOX_DISABLED": "盲盒功能未开启",
+  "BLIND_BOX_INVALID_CHORE": "部分任务记录无效、未批准或已使用",
+  "BLIND_BOX_INSUFFICIENT_COINS": "金币不足，无法抽奖",
+  "BLIND_BOX_GIFT_POOL_EMPTY": "礼物池为空，请先添加礼物",
+  "BLIND_BOX_DRAW_NOT_FOUND": "免费抽奖机会不存在或已使用",
+  "BLIND_BOX_BONUS_EXPIRED": "免费抽奖机会已过期",
+  "BLIND_BOX_GIFT_NOT_FOUND": "礼物不存在",
+  "BLIND_BOX_WISH_CONFLICT": "该心愿已转入礼物池",
+  "CALENDAR_DATE_INVALID": "日期格式无效，请使用 YYYY-MM-DD",
+  "CHILD_NOT_FOUND": "孩子不存在"
 }

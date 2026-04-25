@@ -3,11 +3,12 @@
 import calendar
 from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_child_user, require_adult
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.child_milestone import ChildMilestone
 from app.models.child_wish import ChildWish
 from app.models.chore import ChoreInstance
@@ -32,7 +33,7 @@ def _parse_date(date_str: str) -> date:
     try:
         return date.fromisoformat(date_str)
     except ValueError:
-        raise HTTPException(status_code=422, detail={"code": "CALENDAR_DATE_INVALID", "message": "日期格式无效，请使用 YYYY-MM-DD"}) from None
+        raise AppError(ErrorCode.CALENDAR_DATE_INVALID) from None
 
 
 def _month_days(year: int, month: int) -> list[str]:
@@ -230,7 +231,7 @@ def get_family_child_calendar(
 ):
     child = db.query(User).filter(User.id == child_id, User.family_id == user.family_id).first()
     if not child:
-        raise HTTPException(status_code=404, detail={"code": "CHILD_NOT_FOUND", "message": "孩子不存在"})
+        raise AppError(ErrorCode.CHILD_NOT_FOUND)
     return _build_month_response(child.id, year, month, db)
 
 
@@ -243,5 +244,5 @@ def get_family_child_day_detail(
 ):
     child = db.query(User).filter(User.id == child_id, User.family_id == user.family_id).first()
     if not child:
-        raise HTTPException(status_code=404, detail={"code": "CHILD_NOT_FOUND", "message": "孩子不存在"})
+        raise AppError(ErrorCode.CHILD_NOT_FOUND)
     return _build_day_detail(child.id, _parse_date(date), db)

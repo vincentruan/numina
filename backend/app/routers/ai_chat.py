@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ChatRequest(BaseModel):
     question: str
-    session_id: int | None = None
+    session_id: str | None = None
 
     @field_validator("question")
     @classmethod
@@ -40,7 +40,7 @@ class ChatRequest(BaseModel):
 
 
 def _get_session_for_family(
-    session_id: int | None,
+    session_id: str | None,
     family_id: str,
     db: Session,
 ) -> AIChatSession | None:
@@ -148,7 +148,7 @@ def get_sessions(
 
 @router.get("/history")
 async def get_history(
-    session_id: int | None = Query(default=None),
+    session_id: str | None = Query(default=None),
     limit: int = Query(default=20, ge=1, le=200),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
@@ -180,7 +180,7 @@ async def get_history(
 
 @router.delete("/history")
 def clear_history(
-    session_id: int | None = Query(default=None),
+    session_id: str | None = Query(default=None),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):

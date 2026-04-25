@@ -1,10 +1,11 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.blind_box_draw import BlindBoxDraw
 from app.models.blind_box_gift import BlindBoxGift
 from app.models.bonus_draw import BonusDraw
@@ -25,7 +26,7 @@ def child_draw(
 ):
     config = _get_or_create_config(current_user.family_id, db)
     if not config.enabled:
-        raise HTTPException(status_code=403, detail="盲盒功能未开启")
+        raise AppError(ErrorCode.BLIND_BOX_DISABLED)
 
     # Step 1: 校验 ChoreInstance（已批准、属于当前孩子、未消耗）
     instances = (
@@ -39,12 +40,12 @@ def child_draw(
         .all()
     )
     if len(instances) != len(body.chore_instance_ids):
-        raise HTTPException(status_code=400, detail="部分任务记录无效、未批准或已使用")
+        raise AppError(ErrorCode.BLIND_BOX_INVALID_CHORE)
 
     # Step 2: 计算金币总额
     coins_total = sum(inst.coin_reward for inst in instances)
     if coins_total <= 0:
-        raise HTTPException(status_code=400, detail="金币不足，无法抽奖")
+        raise AppError(ErrorCode.BLIND_BOX_INSUFFICIENT_COINS)
 
     try:
         # Step 3: 标记 consumed_at
@@ -55,7 +56,7 @@ def child_draw(
         # Step 4: 执行加权抽奖
         gifts = db.query(BlindBoxGift).filter_by(family_id=current_user.family_id, is_active=True).all()
         if not gifts:
-            raise HTTPException(status_code=404, detail="礼物池为空，请让父母先添加礼物")
+            raise AppError(ErrorCode.BLIND_BOX_GIFT_POOL_EMPTY)
 
         context = {"is_parent_bday": False, "is_sibling_bday": False}
         is_surprise = should_upgrade_surprise(config, context)
@@ -77,12 +78,12 @@ def child_draw(
         # Step 6: 原子提交
         db.commit()
         db.refresh(draw)
-    except HTTPException:
+    except AppError:
         db.rollback()
         raise
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=500, detail="抽奖失败，请稍后再试") from exc
+        raise AppError(ErrorCode.INTERNAL_ERROR) from exc
 
     return _draw_to_response(draw)
 
@@ -126,16 +127,16 @@ def child_use_bonus_draw(
         status="available",
     ).first()
     if not bonus:
-        raise HTTPException(status_code=404, detail="免费抽奖机会不存在或已使用")
+        raise AppError(ErrorCode.BLIND_BOX_DRAW_NOT_FOUND)
     if bonus.expires_at < datetime.now(UTC):
         bonus.status = "expired"
         db.commit()
-        raise HTTPException(status_code=410, detail="免费抽奖机会已过期")
+        raise AppError(ErrorCode.BLIND_BOX_BONUS_EXPIRED)
 
     config = _get_or_create_config(current_user.family_id, db)
     gifts = db.query(BlindBoxGift).filter_by(family_id=current_user.family_id, is_active=True).all()
     if not gifts:
-        raise HTTPException(status_code=404, detail="礼物池为空")
+        raise AppError(ErrorCode.BLIND_BOX_GIFT_POOL_EMPTY)
 
     try:
         context = {"is_parent_bday": False, "is_sibling_bday": False}
@@ -159,11 +160,11 @@ def child_use_bonus_draw(
         bonus.used_draw_id = draw.id
         db.commit()
         db.refresh(draw)
-    except HTTPException:
+    except AppError:
         db.rollback()
         raise
     except Exception as exc:
         db.rollback()
-        raise HTTPException(status_code=500, detail="抽奖失败，请稍后再试") from exc
+        raise AppError(ErrorCode.INTERNAL_ERROR) from exc
 
     return _draw_to_response(draw)

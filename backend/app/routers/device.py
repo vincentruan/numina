@@ -1,6 +1,6 @@
 """Device trust management endpoints."""
 
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, Request, Response
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ from app.auth.deps import (
 from app.auth.revoke_jti import revoke_jti
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.schemas.device import DeviceSessionResponse, DeviceTrustResponse
 from app.services import device as device_service
 
@@ -80,7 +81,7 @@ def _get_user_payload(
             token = auth_header[7:]
             payload = _verify_token(token, "access")
     if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证凭据")
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
     return payload
 
 
@@ -110,7 +111,7 @@ def trust_device(
 
     new_jti = _get_jti_from_token(new_refresh)
     if new_jti is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="令牌生成失败")
+        raise AppError(ErrorCode.INTERNAL_ERROR)
 
     if old_jti:
         revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)

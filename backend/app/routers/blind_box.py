@@ -1,10 +1,11 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth.deps import get_current_user
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.blind_box_config import BlindBoxConfig
 from app.models.blind_box_draw import BlindBoxDraw
 from app.models.blind_box_gift import BlindBoxGift
@@ -102,7 +103,7 @@ def update_gift(
 ):
     gift = db.query(BlindBoxGift).filter_by(id=gift_id, family_id=current_user.family_id).first()
     if not gift:
-        raise HTTPException(status_code=404, detail="礼物不存在")
+        raise AppError(ErrorCode.BLIND_BOX_GIFT_NOT_FOUND)
     for k, v in body.model_dump(exclude_none=True).items():
         setattr(gift, k, v)
     db.commit()
@@ -118,7 +119,7 @@ def delete_gift(
 ):
     gift = db.query(BlindBoxGift).filter_by(id=gift_id, family_id=current_user.family_id).first()
     if not gift:
-        raise HTTPException(status_code=404, detail="礼物不存在")
+        raise AppError(ErrorCode.BLIND_BOX_GIFT_NOT_FOUND)
     gift.is_active = False
     db.commit()
 
@@ -150,7 +151,7 @@ def fulfill_draw(
         .first()
     )
     if not draw:
-        raise HTTPException(status_code=404, detail="抽奖记录不存在")
+        raise AppError(ErrorCode.BLIND_BOX_DRAW_NOT_FOUND)
     draw.status = "fulfilled"
     draw.fulfilled_at = datetime.now(UTC)
     db.commit()
@@ -196,13 +197,13 @@ def create_gift_from_wish(
 ):
     wish = db.query(ChildWish).filter_by(id=wish_id, family_id=current_user.family_id).first()
     if not wish:
-        raise HTTPException(status_code=404, detail="心愿不存在")
+        raise AppError(ErrorCode.NOT_FOUND)
 
     existing = db.query(BlindBoxGift).filter_by(
         source_wish_id=wish_id, family_id=current_user.family_id
     ).first()
     if existing:
-        raise HTTPException(status_code=409, detail="该心愿已转入礼物池")
+        raise AppError(ErrorCode.BLIND_BOX_WISH_CONFLICT)
 
     # ChildWish has no estimated_price; use star_coin_cost as proxy (1 coin ≈ 1 yuan)
     price_proxy = getattr(wish, "star_coin_cost", None) or 50

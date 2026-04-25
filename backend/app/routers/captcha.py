@@ -1,8 +1,7 @@
 """ALTCHA captcha challenge endpoint."""
 
+from altcha import ChallengeOptions, create_challenge
 from fastapi import APIRouter
-from fastapi.responses import JSONResponse
-from altcha import create_challenge, ChallengeOptions
 
 from app.config import settings
 
@@ -49,11 +48,10 @@ def get_challenge(endpoint: str | None = None):
         hmac_key=settings.ALTCHA_HMAC_KEY,
         max_number=max_number,
     ))
-    # Return raw challenge JSON — altcha-widget expects bare format, not envelope
-    return JSONResponse(content={
+    return {
         "algorithm": challenge.algorithm,
         "challenge": challenge.challenge,
-        "maxnumber": challenge.max_number,
+        "max_number": challenge.max_number,
         "salt": challenge.salt,
         "signature": challenge.signature,
-    })
+    }
