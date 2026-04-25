@@ -40,7 +40,7 @@ async def suggest_asset_fields(
 ):
     """调用 agent 服务，返回资产字段 AI 建议。"""
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=45.0) as client:
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/suggest/asset",
                 json=body.model_dump(),
