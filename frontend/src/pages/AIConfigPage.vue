@@ -39,21 +39,22 @@
         <van-field
           v-model="baseUrlInput"
           label="Base URL"
-          placeholder="留空使用默认端点（可选）"
+          :placeholder="selectedProvider === 'anthropic' ? '如: https://api.anthropic.com' : '如: https://api.openai.com'"
           clearable
           :disabled="saving"
         />
         <van-field
           v-model="modelIdInput"
           label="模型 ID"
-          placeholder="留空使用 provider 默认模型（可选）"
+          :placeholder="selectedProvider === 'anthropic' ? '如: claude-3-5-haiku-20241022' : '如: gpt-4o-mini'"
+          :required="!!selectedProvider"
           clearable
           :disabled="saving"
         />
         <van-field
           v-model="visionModelIdInput"
           label="图像模型 ID"
-          placeholder="留空使用主模型（可选）"
+          :placeholder="selectedProvider === 'anthropic' ? '如: claude-3-5-sonnet-20241022' : '如: gpt-4o'"
           clearable
           :disabled="saving"
         />
@@ -177,6 +178,7 @@ const validationError = computed(() => {
   if (saving.value) return null
   if (aiEnabled.value && !selectedProvider.value) return '请选择 AI Provider'
   if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return '请填写 API Key'
+  if (aiEnabled.value && selectedProvider.value && !modelIdInput.value.trim()) return '请填写模型 ID'
   return null
 })
 

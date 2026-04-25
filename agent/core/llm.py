@@ -5,12 +5,6 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-# Provider 默认模型（当 model_id 未配置时使用）
-_DEFAULT_MODEL: dict[str, str] = {
-    "anthropic": "claude-3-5-haiku-20241022",
-    "openai": "gpt-4o-mini",
-}
-
 
 class LLMClient:
     """统一 LLM 调用接口，支持 Anthropic 和 OpenAI。"""
@@ -19,13 +13,13 @@ class LLMClient:
         self,
         provider: str,
         api_key: str,
-        model_id: str | None = None,
+        model_id: str,
         vision_model_id: str | None = None,
         base_url: str | None = None,
     ) -> None:
         self.provider = provider
-        self.model_id = model_id or _DEFAULT_MODEL.get(provider, "")
-        self.vision_model_id = vision_model_id or self.model_id
+        self.model_id = model_id
+        self.vision_model_id = vision_model_id or model_id
         self._anthropic_client = None
         self._openai_client = None
         if provider == "anthropic":
@@ -115,7 +109,7 @@ class LLMClient:
 def get_llm_client(
     provider: str,
     api_key: str,
-    model_id: str | None = None,
+    model_id: str,
     vision_model_id: str | None = None,
     base_url: str | None = None,
 ) -> LLMClient:

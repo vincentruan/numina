@@ -87,13 +87,16 @@ class Orchestrator:
             # ── 3. Build LLM client ────────────────────────────────────────
             provider = ai_config.get("ai_provider")
             api_key = ai_config.get("api_key")
+            model_id = ai_config.get("ai_model_id")
             if not provider or not api_key:
                 return self._safe_response(capability, audit_id, "AI 服务商或 API Key 未配置")
+            if not model_id:
+                return self._safe_response(capability, audit_id, "AI 模型 ID 未配置，请在设置中填写")
 
             llm = LLMClient(
                 provider=provider,
                 api_key=api_key,
-                model_id=ai_config.get("ai_model_id"),
+                model_id=model_id,
                 vision_model_id=ai_config.get("ai_vision_model_id"),
                 base_url=ai_config.get("ai_base_url"),
             )

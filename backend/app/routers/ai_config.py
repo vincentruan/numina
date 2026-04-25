@@ -147,8 +147,10 @@ async def test_ai_config(
             base_url = base_url.rstrip("/")
             endpoint = f"{base_url}/v1/messages"
 
-            # 使用用户配置的模型，如果未配置则使用默认模型
-            model = family.ai_model_id or "claude-3-5-haiku-20241022"
+            # 使用用户配置的模型，未配置则报错
+            model = family.ai_model_id
+            if not model:
+                return AIConfigTestResult(success=False, message="未配置模型 ID，请在服务商配置中填写")
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
