@@ -43,7 +43,8 @@ export const useAssetStore = defineStore('asset', () => {
     loading.value = true
     try {
       const res = await assetApi.getAssets(filters)
-      assets.value = res.data
+      const raw = res.data as unknown as { items?: Asset[] } | Asset[]
+      assets.value = Array.isArray(raw) ? raw : ((raw as { items?: Asset[] }).items ?? [])
     } finally {
       loading.value = false
     }
