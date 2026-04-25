@@ -99,6 +99,7 @@ from app.routers import child_blind_box as child_blind_box_router
 from app.routers import milestones as milestones_router
 from app.routers import notifications as notifications_router
 from app.routers import treasures as treasures_router
+from app.routers import device as device_router
 from app.scheduler import (
     scheduler,
     setup_audit_log_purge_schedule,
@@ -377,6 +378,7 @@ app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(blind_box_router.router, prefix="/api/v1")
 app.include_router(child_blind_box_router.router, prefix="/api/v1")
+app.include_router(device_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
