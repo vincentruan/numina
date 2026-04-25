@@ -53,7 +53,7 @@
       <!-- Messages -->
       <template v-else>
         <div
-          v-for="msg in messages"
+          v-for="(msg, idx) in messages"
           :key="msg.id"
           class="message-row"
           :class="msg.role"
@@ -65,6 +65,45 @@
             <div class="bubble-body">
               <span class="bubble-text">{{ msg.content }}</span>
               <span class="msg-time">{{ formatTime(msg.created_at) }}</span>
+              <!-- Assistant message actions -->
+              <div v-if="msg.role === 'assistant'" class="msg-actions">
+                <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                </button>
+                <button class="msg-action-btn" aria-label="重新生成" title="重新生成" :disabled="asking" @click="onRegenerate(idx)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+                  </svg>
+                </button>
+                <button
+                  class="msg-action-btn"
+                  :class="{ 'msg-action-btn--active': msg.feedback === 1 }"
+                  aria-label="有帮助"
+                  title="有帮助"
+                  @click="onFeedback(msg.id, 1)"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                  </svg>
+                </button>
+                <button
+                  class="msg-action-btn"
+                  :class="{ 'msg-action-btn--active': msg.feedback === -1 }"
+                  aria-label="没帮助"
+                  title="没帮助"
+                  @click="onFeedback(msg.id, -1)"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/>
+                    <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+                  </svg>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -116,6 +155,7 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   created_at: string
+  feedback?: 1 | -1 | 0
 }
 
 const { t } = useI18n()
@@ -228,7 +268,7 @@ function onAbort() {
   abortController = null
 }
 
-async function onAction(type: 'file' | 'image' | 'link' | 'clear') {
+async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {
   if (type === 'clear') {
     try {
       await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmClearChat') })
@@ -240,6 +280,31 @@ async function onAction(type: 'file' | 'image' | 'link' | 'clear') {
     return
   }
   showToast('🚧 该功能即将上线')
+}
+
+async function onCopy(content: string) {
+  try {
+    await navigator.clipboard.writeText(content)
+    showToast('✅ 已复制')
+  } catch {
+    showToast('❌ 复制失败')
+  }
+}
+
+async function onRegenerate(idx: number) {
+  // Find the user message before this assistant message
+  const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
+  if (!prevUser || asking.value) return
+  // Remove the assistant message and re-ask
+  messages.value.splice(idx, 1)
+  inputText.value = prevUser.content
+  await onSend()
+}
+
+function onFeedback(id: string, value: 1 | -1) {
+  const msg = messages.value.find((m) => m.id === id)
+  if (!msg) return
+  msg.feedback = msg.feedback === value ? 0 : value
 }
 
 onMounted(async () => {
@@ -513,6 +578,48 @@ onMounted(async () => {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.25);
   padding: 0 4px;
+}
+
+/* ── Message action buttons ── */
+.msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.message-row:hover .msg-actions {
+  opacity: 1;
+}
+
+.msg-action-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.msg-action-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.msg-action-btn:disabled {
+  cursor: default;
+  opacity: 0.3;
+}
+
+.msg-action-btn--active {
+  color: #818cf8;
 }
 
 /* ── Typing dots ── */

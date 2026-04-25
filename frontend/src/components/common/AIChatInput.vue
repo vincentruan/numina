@@ -1,42 +1,75 @@
 <template>
-  <div class="input-shell">
-    <!-- Quick action bar -->
-    <div class="quick-bar">
-      <button class="quick-btn" aria-label="上传文件" title="上传文件" @click="emit('action', 'file')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="12" y1="18" x2="12" y2="12"/>
-          <line x1="9" y1="15" x2="15" y2="15"/>
-        </svg>
-        <span>文件</span>
-      </button>
-      <button class="quick-btn" aria-label="上传图片" title="上传图片" @click="emit('action', 'image')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <circle cx="8.5" cy="8.5" r="1.5"/>
-          <polyline points="21 15 16 10 5 21"/>
-        </svg>
-        <span>图片</span>
-      </button>
-      <button class="quick-btn" aria-label="解析链接" title="解析链接" @click="emit('action', 'link')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-        </svg>
-        <span>链接</span>
-      </button>
-      <div class="quick-bar-divider" aria-hidden="true" />
-      <button v-if="showClear" class="quick-btn quick-btn--danger" aria-label="清空记录" title="清空记录" @click="emit('action', 'clear')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="3 6 5 6 21 6"/>
-          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-          <path d="M10 11v6"/>
-          <path d="M14 11v6"/>
-          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
-        </svg>
-        <span>清空</span>
-      </button>
+  <div class="input-shell" @click.self="closePanel">
+    <!-- Plus panel overlay -->
+    <transition name="panel">
+      <div v-if="panelOpen" class="plus-panel" role="menu" aria-label="更多功能">
+        <button
+          v-for="item in panelItems"
+          :key="item.action"
+          class="panel-item"
+          role="menuitem"
+          @click="onPanelItem(item.action)"
+        >
+          <span class="panel-item-icon" aria-hidden="true">
+            <svg :viewBox="item.icon.viewBox" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path v-for="(d, i) in item.icon.paths" :key="i" :d="d" />
+            </svg>
+          </span>
+          <span class="panel-item-label">{{ item.label }}</span>
+        </button>
+      </div>
+    </transition>
+
+    <!-- Bottom toolbar: toggles left, plus right -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <!-- Deep think toggle -->
+        <button
+          class="toggle-btn"
+          :class="{ 'toggle-btn--active': deepThink }"
+          :aria-pressed="deepThink"
+          aria-label="深度思考"
+          title="深度思考"
+          @click="deepThink = !deepThink"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+            <path d="M9 21h6"/>
+          </svg>
+          <span>深度思考</span>
+        </button>
+        <!-- Web search toggle -->
+        <button
+          class="toggle-btn"
+          :class="{ 'toggle-btn--active': webSearch }"
+          :aria-pressed="webSearch"
+          aria-label="联网搜索"
+          title="联网搜索"
+          @click="webSearch = !webSearch"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>联网搜索</span>
+        </button>
+      </div>
+      <div class="toolbar-right">
+        <!-- Plus button -->
+        <button
+          class="plus-btn"
+          :class="{ 'plus-btn--open': panelOpen }"
+          aria-label="更多功能"
+          :aria-expanded="panelOpen"
+          @click.stop="panelOpen = !panelOpen"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Text input row -->
@@ -76,7 +109,7 @@
           <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
         </svg>
       </button>
-      <!-- Abort button (shown while loading) -->
+      <!-- Abort button -->
       <button
         v-if="loading"
         class="send-btn send-btn--abort"
@@ -87,7 +120,7 @@
           <rect x="4" y="4" width="16" height="16" rx="2"/>
         </svg>
       </button>
-      <!-- Send button (shown when not loading) -->
+      <!-- Send button -->
       <button
         v-else
         class="send-btn"
@@ -106,7 +139,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps<{
   modelValue: string
@@ -120,13 +153,51 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'submit', value: string): void
   (e: 'abort'): void
-  (e: 'action', type: 'file' | 'image' | 'link' | 'clear'): void
+  (e: 'action', type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history'): void
+  (e: 'update:deepThink', value: boolean): void
+  (e: 'update:webSearch', value: boolean): void
 }>()
 
 const internalValue = ref(props.modelValue)
 const expanded = ref(false)
 const focused = ref(false)
+const panelOpen = ref(false)
+const deepThink = ref(false)
+const webSearch = ref(false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+
+const panelItems = [
+  {
+    action: 'camera' as const,
+    label: '拍照',
+    icon: { viewBox: '0 0 24 24', paths: ['M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'] },
+  },
+  {
+    action: 'file' as const,
+    label: '上传文件',
+    icon: { viewBox: '0 0 24 24', paths: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M12 18v-6', 'M9 15h6'] },
+  },
+  {
+    action: 'image' as const,
+    label: '上传图片',
+    icon: { viewBox: '0 0 24 24', paths: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12'] },
+  },
+  {
+    action: 'ocr' as const,
+    label: '识图搜索',
+    icon: { viewBox: '0 0 24 24', paths: ['M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z'] },
+  },
+  {
+    action: 'webpage' as const,
+    label: '网页解析',
+    icon: { viewBox: '0 0 24 24', paths: ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'] },
+  },
+  {
+    action: 'history' as const,
+    label: '历史记录',
+    icon: { viewBox: '0 0 24 24', paths: ['M12 8v4l3 3', 'M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5'] },
+  },
+]
 
 watch(
   () => props.modelValue,
@@ -138,9 +209,9 @@ watch(
   },
 )
 
-watch(internalValue, (val) => {
-  emit('update:modelValue', val)
-})
+watch(internalValue, (val) => emit('update:modelValue', val))
+watch(deepThink, (val) => emit('update:deepThink', val))
+watch(webSearch, (val) => emit('update:webSearch', val))
 
 function onInput() {
   adjustHeight()
@@ -167,61 +238,183 @@ function adjustHeight() {
   el.style.height = `${Math.min(el.scrollHeight, 96)}px`
 }
 
-onMounted(() => nextTick(adjustHeight))
+function closePanel() {
+  panelOpen.value = false
+}
+
+function onPanelItem(action: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {
+  panelOpen.value = false
+  emit('action', action)
+}
+
+function onDocClick(e: MouseEvent) {
+  const el = e.target as HTMLElement
+  if (!el.closest('.input-shell')) panelOpen.value = false
+}
+
+onMounted(() => {
+  nextTick(adjustHeight)
+  document.addEventListener('click', onDocClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+})
 </script>
 
 <style scoped>
 .input-shell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
+  position: relative;
 }
 
-/* ── Quick action bar ── */
-.quick-bar {
+/* ── Toolbar ── */
+.toolbar {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 0 4px;
+  justify-content: space-between;
+  padding: 0 2px;
 }
 
-.quick-btn {
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+}
+
+/* ── Toggle buttons ── */
+.toggle-btn {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 10px;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.5);
+  padding: 5px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-  min-height: 32px;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  min-height: 30px;
   white-space: nowrap;
 }
 
-.quick-btn:hover {
+.toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.toggle-btn--active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #818cf8;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+}
+
+.toggle-btn--active:hover {
+  background: rgba(99, 102, 241, 0.22);
+}
+
+/* ── Plus button ── */
+.plus-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.plus-btn:hover {
   background: rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.8);
 }
 
-.quick-btn:active {
-  background: rgba(255, 255, 255, 0.14);
-  transform: scale(0.97);
+.plus-btn--open {
+  transform: rotate(45deg);
+  background: rgba(99, 102, 241, 0.15);
+  border-color: rgba(99, 102, 241, 0.4);
+  color: #818cf8;
 }
 
-.quick-btn--danger {
-  color: rgba(239, 68, 68, 0.6);
+/* ── Plus panel ── */
+.plus-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: #1e1e2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  min-width: 220px;
 }
 
-.quick-btn--danger:hover {
-  background: rgba(239, 68, 68, 0.12);
-  color: #ef4444;
+.panel-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
 }
 
-.quick-bar-divider {
-  flex: 1;
+.panel-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.panel-item:active {
+  transform: scale(0.95);
+}
+
+.panel-item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #818cf8;
+}
+
+.panel-item-label {
+  line-height: 1.2;
+}
+
+/* ── Panel transition ── */
+.panel-enter-active,
+.panel-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.panel-enter-from,
+.panel-leave-to {
+  opacity: 0;
+  transform: scale(0.92) translateY(4px);
 }
 
 /* ── Input row ── */
@@ -229,16 +422,12 @@ onMounted(() => nextTick(adjustHeight))
   position: relative;
   display: flex;
   align-items: flex-end;
-  gap: 0;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   padding: 10px 48px 10px 38px;
   min-height: 44px;
-  transition:
-    border-color 0.2s,
-    box-shadow 0.2s,
-    border-radius 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, border-radius 0.2s;
 }
 
 .input-row.is-focused {
@@ -322,7 +511,7 @@ onMounted(() => nextTick(adjustHeight))
   color: rgba(255, 255, 255, 0.6);
 }
 
-/* ── Send button ── */
+/* ── Send / Abort button ── */
 .send-btn {
   position: absolute;
   bottom: 4px;
@@ -337,10 +526,7 @@ onMounted(() => nextTick(adjustHeight))
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    background 0.2s,
-    color 0.2s,
-    transform 0.15s;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
 }
 
 .send-btn--active {
@@ -379,8 +565,11 @@ onMounted(() => nextTick(adjustHeight))
 
 @media (prefers-reduced-motion: reduce) {
   .send-btn,
-  .quick-btn,
-  .input-row {
+  .toggle-btn,
+  .plus-btn,
+  .input-row,
+  .panel-enter-active,
+  .panel-leave-active {
     transition: none;
   }
 }
