@@ -111,15 +111,17 @@ async function onSubmit() {
     router.push('/')
   } catch (error: any) {
     // Handle captcha-related errors
-    const detail = error.response?.data?.detail || ''
+    const code = error.response?.data?.code || ''
     const status = error.response?.status
 
-    if (status === 503) {
-      showToast(t('errors.CAPTCHA_SERVICE_UNAVAILABLE'))
-    } else if (detail.includes('验证码')) {
-      // Captcha error - reset widget but preserve form data
+    if (code.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()
-      showToast(detail)
+    }
+
+    // Use i18n for known error codes; api interceptor handles non-auth errors
+    const i18nKey = code ? `errors.${code}` : ''
+    if (i18nKey && t(i18nKey) !== i18nKey) {
+      showToast(t(i18nKey))
     }
   } finally {
     loading.value = false

@@ -140,10 +140,16 @@ function triggerVerification() {
   errorMessage.value = ''
 }
 
-const setupWidgetListeners = () => {
+const setupWidgetListeners = (retries = 0) => {
   const widget = document.querySelector('altcha-widget')
   if (!widget) {
-    setTimeout(setupWidgetListeners, 100)
+    if (retries < 30) {
+      setTimeout(() => setupWidgetListeners(retries + 1), 100)
+    } else {
+      // altcha script failed to load — treat as error so user sees feedback
+      state.value = 'error'
+      errorMessage.value = '验证组件加载失败，请刷新页面重试'
+    }
     return
   }
 

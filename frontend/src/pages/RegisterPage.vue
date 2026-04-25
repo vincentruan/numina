@@ -158,22 +158,16 @@ async function onSubmit() {
 
     // Handle captcha-related errors
     const code = error.response?.data?.code || ''
-    const message = error.response?.data?.message || ''
     const status = error.response?.status
 
-    const isCaptchaError = code.startsWith('CAPTCHA_')
-    if (status === 503 || code === 'CAPTCHA_SERVICE_UNAVAILABLE') {
-      showToast(message || t('toast.captchaServiceUnavailable'))
-    } else if (isCaptchaError) {
-      // Captcha error - reset widget but preserve form data
+    if (code.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()
-      showToast(message)
-    } else if (code === 'FAMILY_INVITATION_CODE_NOT_FOUND') {
-      showToast(t('errors.FAMILY_INVITATION_CODE_NOT_FOUND'))
-    } else if (code === 'FAMILY_INVITATION_CODE_ALREADY_USED') {
-      showToast(t('errors.FAMILY_INVITATION_CODE_ALREADY_USED'))
-    } else if (code === 'FAMILY_INVITATION_CODE_REVOKED') {
-      showToast(t('errors.FAMILY_INVITATION_CODE_REVOKED'))
+    }
+
+    // Use i18n for known error codes; api interceptor handles non-auth errors
+    const i18nKey = code ? `errors.${code}` : ''
+    if (i18nKey && t(i18nKey) !== i18nKey) {
+      showToast(t(i18nKey))
     }
   } finally {
     loading.value = false

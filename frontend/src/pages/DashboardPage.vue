@@ -170,11 +170,11 @@
             />
           </div>
           <div class="selection-actions">
-            <van-button icon="share-o" size="small" @click="handleBatchShare">分享</van-button>
-            <van-button icon="delete-o" size="small" @click="handleBatchDelete">删除</van-button>
-            <van-button icon="label-o" size="small" @click="handleBatchCategory">分类</van-button>
-            <van-button icon="tag-o" size="small" @click="handleBatchTag">标签</van-button>
-            <van-button icon="ellipsis" size="small" @click="showMoreActions = true">更多</van-button>
+            <van-button icon="share-o" @click="handleBatchShare">分享</van-button>
+            <van-button icon="delete-o" @click="handleBatchDelete">删除</van-button>
+            <van-button icon="label-o" @click="handleBatchCategory">分类</van-button>
+            <van-button icon="tag-o" @click="handleBatchTag">标签</van-button>
+            <van-button icon="ellipsis" @click="showMoreActions = true">更多</van-button>
           </div>
         </div>
       </template>
@@ -378,12 +378,14 @@ const moreActions = [
 ]
 
 const sectionTitle = computed(() => {
+  const status = activeStatus.value || 'in_use'
+  const pageInfo = dashboardStore.assetPageInfo.get(status)
+  // Use server-side total count when available, fallback to local count
+  const count = pageInfo ? pageInfo.total : filteredAssets.value.length
   if (!activeStatus.value) {
-    const count = filteredAssets.value.length
     return `资产列表 (${count})`
   }
   const label = statusLabelMap[activeStatus.value] || activeStatus.value
-  const count = filteredAssets.value.length
   return `${label} (${count})`
 })
 

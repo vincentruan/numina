@@ -96,20 +96,23 @@ async function onSubmit() {
     showToast(t('toast.loginSuccess'))
     router.push('/')
   } catch (error: unknown) {
-    // Handle captcha-related errors
-    const axiosError = error as { response?: { status?: number; data?: { detail?: string } } }
-    const detail = axiosError.response?.data?.detail || ''
+    const axiosError = error as { response?: { status?: number; data?: { code?: string; message?: string; detail?: string } } }
+    const code = axiosError.response?.data?.code
     const status = axiosError.response?.status
 
-    if (status === 503) {
-      showToast({ type: 'fail', message: t('toast.captchaServiceUnavailable') })
-    } else if (detail.includes('验证码')) {
-      // Captcha error - reset widget but preserve form data
+    // Reset captcha on any captcha-related error
+    if (code?.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()
-      showToast({ type: 'fail', message: detail })
+    }
+
+    // api/index.ts interceptor already shows the toast for most errors;
+    // only show here for auth endpoint errors (interceptor skips those)
+    const i18nKey = code ? `errors.${code}` : ''
+    if (i18nKey && t(i18nKey) !== i18nKey) {
+      showToast({ type: 'fail', message: t(i18nKey) })
     } else {
-      // Generic error fallback
-      showToast({ type: 'fail', message: detail || t('toast.loginFailedGeneric') })
+      const fallback = axiosError.response?.data?.message || axiosError.response?.data?.detail || t('toast.loginFailedGeneric')
+      showToast({ type: 'fail', message: fallback })
     }
   } finally {
     loading.value = false
