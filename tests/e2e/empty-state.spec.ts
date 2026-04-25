@@ -40,7 +40,7 @@ const EMPTY_STATE_PAGES = [
   {
     name: 'WishList',
     path: '/wishes',
-    emptySelector: '.van-empty',
+    emptySelector: '.empty-state',
     description: '心愿列表显示空状态',
   },
   {
