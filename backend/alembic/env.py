@@ -7,6 +7,7 @@ from app.config import settings
 from app.database import Base
 from app.db import get_engine
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
+from app.models.device_session import DeviceSession  # noqa: F401
 from app.models.asset import Asset  # noqa: F401
 from app.models.category import Category  # noqa: F401
 from app.models.child_bind_token import ChildBindToken  # noqa: F401
