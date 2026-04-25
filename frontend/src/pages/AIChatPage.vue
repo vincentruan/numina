@@ -781,7 +781,4 @@ onMounted(async () => {
     transition: none;
   }
 }
-    transition: none;
-  }
-}
 </style>
