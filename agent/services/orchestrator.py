@@ -102,7 +102,11 @@ class Orchestrator:
             )
 
             # ── 4. Fetch family context ────────────────────────────────────
-            raw_context = await self._build_context(client, family_id, free_text)
+            # suggest only needs free_text (asset name/category) — skip heavy fetches
+            if capability == "suggest":
+                raw_context = FamilyContext(family_id=family_id, free_text=free_text)
+            else:
+                raw_context = await self._build_context(client, family_id, free_text)
 
             # ── 5. PII redaction ───────────────────────────────────────────
             redacted = pii_redactor.redact(raw_context)
