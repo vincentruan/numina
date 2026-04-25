@@ -241,10 +241,6 @@ const sessionTitle = computed(() => {
 
 const suggestions = SUGGESTIONS
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-}
-
 async function scrollToBottom() {
   await nextTick()
   if (scrollRef.value) {
