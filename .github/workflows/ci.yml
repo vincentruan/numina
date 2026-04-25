@@ -128,7 +128,7 @@ jobs:
           done
 
       - name: Seed test accounts
-        run: bash tests/data/seed-data.sh --skip-demo
+        run: bash tests/data/seed-data.sh --skip-demo --invite-codes CI0001,CI0002,CI0003,CI0004,CI0005,CI0006,CI0007,CI0008
 
       - name: Run Playwright tests
         working-directory: tests
