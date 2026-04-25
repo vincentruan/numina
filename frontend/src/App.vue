@@ -2,6 +2,17 @@
   <van-config-provider :theme="resolvedTheme">
     <router-view />
   </van-config-provider>
+
+  <van-dialog
+    v-model:show="authStore.showTrustPrompt"
+    :title="t('device.trustPromptTitle')"
+    :message="t('device.trustPromptMessage')"
+    :confirm-button-text="t('device.trustConfirm')"
+    :cancel-button-text="t('device.trustCancel')"
+    show-cancel-button
+    @confirm="authStore.trustDevice()"
+    @cancel="authStore.dismissTrustPrompt()"
+  />
 </template>
 
 <script setup lang="ts">
@@ -13,7 +24,7 @@ import { useI18n } from 'vue-i18n'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
-const { locale } = useI18n()
+const { locale, t } = useI18n()
 
 // System dark mode detection
 const systemIsDark = ref(window.matchMedia('(prefers-color-scheme: dark)').matches)
