@@ -235,7 +235,7 @@ function adjustHeight() {
     return
   }
   el.style.height = '20px'
-  el.style.height = `${Math.min(el.scrollHeight, 96)}px`
+  el.style.height = `${Math.min(el.scrollHeight, 120)}px`
 }
 
 function closePanel() {

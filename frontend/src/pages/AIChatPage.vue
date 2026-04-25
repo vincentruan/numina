@@ -63,7 +63,7 @@
               <AIBrainIcon class="avatar-icon" />
             </div>
             <div class="bubble-body">
-              <span class="bubble-text">{{ msg.content }}</span>
+              <div class="bubble-text" v-html="msg.renderedContent ?? msg.content" />
               <span class="msg-time">{{ formatTime(msg.created_at) }}</span>
               <!-- Assistant message actions -->
               <div v-if="msg.role === 'assistant'" class="msg-actions">
@@ -145,15 +145,25 @@ import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 
+// Configure marked for inline rendering
+marked.setOptions({ breaks: true })
+
+function renderMarkdown(text: string): string {
+  return DOMPurify.sanitize(marked.parse(text) as string)
+}
+
 interface Message {
   id: string
   role: 'user' | 'assistant'
   content: string
+  renderedContent?: string
   created_at: string
   feedback?: 1 | -1 | 0
 }
@@ -241,24 +251,51 @@ async function onSend() {
 
   try {
     const res = await sendChatMessage(q)
-    messages.value.push({
+    const fullText = res.data.answer
+    // Typewriter effect
+    const msg: Message = {
       id: res.data.message_id,
       role: 'assistant',
-      content: res.data.answer,
+      content: '',
+      renderedContent: '',
       created_at: new Date().toISOString(),
-    })
+    }
+    messages.value.push(msg)
+    const idx = messages.value.length - 1
+    let i = 0
+    const tick = () => {
+      if (!asking.value && i === 0) return // aborted before start
+      const chunk = fullText.slice(0, i + 1)
+      messages.value[idx].content = chunk
+      messages.value[idx].renderedContent = renderMarkdown(chunk)
+      i++
+      if (i < fullText.length) {
+        setTimeout(tick, 18)
+        scrollToBottom()
+      } else {
+        asking.value = false
+        abortController = null
+        scrollToBottom()
+      }
+    }
+    tick()
+    return // don't set asking=false in finally yet — typewriter handles it
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'AbortError') return
     messages.value.push({
       id: Date.now().toString(),
       role: 'assistant',
       content: '抱歉，AI 服务暂时不可用，请稍后再试。',
+      renderedContent: '<p>抱歉，AI 服务暂时不可用，请稍后再试。</p>',
       created_at: new Date().toISOString(),
     })
   } finally {
-    asking.value = false
-    abortController = null
-    await scrollToBottom()
+    // Only reset if typewriter didn't take over
+    if (asking.value) {
+      asking.value = false
+      abortController = null
+      await scrollToBottom()
+    }
   }
 }
 
@@ -310,7 +347,10 @@ function onFeedback(id: string, value: 1 | -1) {
 onMounted(async () => {
   try {
     const res = await getChatHistory()
-    messages.value = res.data
+    messages.value = res.data.map((m) => ({
+      ...m,
+      renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,
+    }))
     await markChatRead()
     await scrollToBottom()
   } catch {
@@ -395,6 +435,16 @@ onMounted(async () => {
   flex-direction: column;
   gap: 12px;
   overscroll-behavior: contain;
+}
+
+/* Desktop centering */
+@media (min-width: 640px) {
+  .chat-body {
+    padding: 16px calc(50% - 384px + 16px) 8px;
+  }
+  .input-bar {
+    padding: 8px calc(50% - 384px + 16px) calc(12px + env(safe-area-inset-bottom));
+  }
 }
 
 /* ── Empty state ── */
@@ -560,6 +610,36 @@ onMounted(async () => {
   line-height: 1.6;
   word-break: break-word;
 }
+
+/* Markdown content inside assistant bubbles */
+.bubble.assistant .bubble-text :deep(p) { margin: 0 0 8px; }
+.bubble.assistant .bubble-text :deep(p:last-child) { margin-bottom: 0; }
+.bubble.assistant .bubble-text :deep(ul),
+.bubble.assistant .bubble-text :deep(ol) { margin: 4px 0 8px 16px; padding: 0; }
+.bubble.assistant .bubble-text :deep(li) { margin-bottom: 2px; }
+.bubble.assistant .bubble-text :deep(code) {
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.bubble.assistant .bubble-text :deep(pre) {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.bubble.assistant .bubble-text :deep(pre code) {
+  background: transparent;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.85);
+}
+.bubble.assistant .bubble-text :deep(strong) { color: rgba(255, 255, 255, 0.95); }
+.bubble.assistant .bubble-text :deep(a) { color: #818cf8; text-decoration: underline; }
 
 .bubble.user .bubble-text {
   background: linear-gradient(135deg, #6366f1, #7c3aed);
