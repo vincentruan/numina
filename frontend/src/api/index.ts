@@ -13,7 +13,7 @@
 
 import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
-import { showToast } from 'vant'
+import { showToast, showDialog } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
@@ -112,8 +112,13 @@ http.interceptors.response.use(
       // Refresh endpoint failure = session expired
       if (originalRequest.url?.includes('/auth/refresh')) {
         clearAuth()
-        router.push('/login')
-        showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_TOKEN_EXPIRED')))
+        showDialog({
+          title: t('device.sessionExpiredTitle'),
+          message: t('device.sessionExpiredMessage'),
+          confirmButtonText: t('device.sessionExpiredConfirm'),
+        }).then(() => {
+          router.push('/login')
+        })
         return Promise.reject(error)
       }
 
