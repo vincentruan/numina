@@ -627,7 +627,7 @@ Expected: FAIL with 404 (routes not registered yet)
 ```python
 """Device trust management endpoints."""
 
-from fastapi import APIRouter, Cookie, Depends, Request
+from fastapi import APIRouter, Cookie, Depends, Request, Response, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth.cookies import clear_auth_cookies, clear_child_auth_cookies
@@ -639,14 +639,10 @@ from app.auth.deps import (
     _verify_token,
     create_refresh_token,
     create_child_refresh_token,
-    get_current_user,
-    get_current_child_user,
 )
-from app.auth.jwt_utils import user_claims
 from app.auth.revoke_jti import revoke_jti
 from app.config import settings
 from app.database import get_db
-from app.models.user import User
 from app.schemas.device import DeviceTrustResponse, DeviceSessionResponse
 from app.services import device as device_service
 
@@ -688,23 +684,11 @@ def _get_refresh_jti_from_cookie(
     raise ValueError("no valid refresh token")
 
 
-@router.post("/device/trust", response_model=None)
-def trust_device(
-    request: Request,
-    response: "Response",
-    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
-    db: Session = Depends(get_db),
-    # Accept both adult and child users
-    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
-):
-    """Trust the current device — issue 30-day refresh token and create DeviceSession."""
-    from fastapi import Response as FastAPIResponse
-    from fastapi import HTTPException, status
-    from app.auth.deps import _verify_token
-
-    # Determine current user from whichever access token is present
+def _get_user_payload(
+    access_token_cookie: str | None,
+    child_access_token_cookie: str | None,
+) -> dict:
+    """Verify whichever access cookie is present and return its payload."""
     payload = None
     if access_token_cookie:
         payload = _verify_token(access_token_cookie, "access")
@@ -712,222 +696,21 @@ def trust_device(
         payload = _verify_token(child_access_token_cookie, "access")
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证凭据")
-
-    user_id = int(payload["sub"])
-    family_id = int(payload["fid"])
-    role = payload["role"]
-
-    # Get current refresh JTI
-    try:
-        old_jti, token_type = _get_refresh_jti_from_cookie(
-            refresh_token_cookie, child_refresh_token_cookie
-        )
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="缺少刷新令牌")
-
-    # Issue new 30-day refresh token
-    claims = {"sub": str(user_id), "fid": str(family_id), "role": role}
-    if role == "child":
-        new_refresh = create_child_refresh_token(claims)
-    else:
-        new_refresh = create_refresh_token(claims)
-
-    new_payload = _verify_token(new_refresh, "refresh")
-    new_jti = new_payload["jti"]
-
-    # Revoke old JTI
-    revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
-
-    # Create DeviceSession
-    device_name = _parse_device_name(request)
-    session = device_service.create_device_session(
-        db,
-        user_id=user_id,
-        family_id=family_id,
-        refresh_jti=new_jti,
-        device_name=device_name,
-    )
-
-    # Set new refresh cookie with 30-day max_age
-    max_age = 30 * 24 * 3600
-    cookie_name = CHILD_REFRESH_TOKEN_COOKIE if role == "child" else REFRESH_TOKEN_COOKIE
-    from fastapi import Response
-    # We need to set cookie on the response — use response parameter
-    # FastAPI will inject Response if declared in signature
-    # Return data and set cookie via response object passed in
-    return {
-        "code": "OK",
-        "message": "success",
-        "data": DeviceTrustResponse(
-            device_id=str(session.id),
-            device_name=session.device_name,
-            expires_at=session.expires_at,
-        ),
-    }
+    return payload
 
 
-# Re-implement with proper Response injection
-from fastapi import Response as FastAPIResponse  # noqa: E402
-
-
-@router.post("/device/trust", response_model=None, include_in_schema=False)
-def _trust_device_duplicate():
-    pass  # placeholder — remove above and use this pattern below
-
-
-# Clean implementation using FastAPI Response injection:
-router.routes = [r for r in router.routes if not (hasattr(r, 'path') and r.path == '/auth/device/trust' and getattr(r, 'include_in_schema', True) is False)]
-
-
-@router.get("/devices")
-def list_devices(
-    request: Request,
-    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
-    db: Session = Depends(get_db),
-    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
-):
-    """List trusted devices for the current user."""
-    from fastapi import HTTPException, status
-    payload = None
-    if access_token_cookie:
-        payload = _verify_token(access_token_cookie, "access")
-    if payload is None and child_access_token_cookie:
-        payload = _verify_token(child_access_token_cookie, "access")
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证凭据")
-
-    user_id = int(payload["sub"])
-
-    # Determine current JTI for is_current flag
-    current_jti = None
-    try:
-        current_jti, _ = _get_refresh_jti_from_cookie(
-            refresh_token_cookie, child_refresh_token_cookie
-        )
-    except ValueError:
-        pass
-
-    sessions = device_service.list_device_sessions(db, user_id=user_id)
-    return {
-        "code": "OK",
-        "message": "success",
-        "data": [
-            DeviceSessionResponse(
-                id=str(s.id),
-                device_name=s.device_name,
-                created_at=s.created_at,
-                last_seen_at=s.last_seen_at,
-                expires_at=s.expires_at,
-                is_current=(s.refresh_jti == current_jti),
-            )
-            for s in sessions
-        ],
-    }
-
-
-@router.delete("/devices/{device_id}")
-def revoke_device(
-    device_id: str,
-    response: FastAPIResponse,
-    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
-    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
-    db: Session = Depends(get_db),
-):
-    """Revoke a specific trusted device session."""
-    from fastapi import HTTPException, status
-    payload = None
-    if access_token_cookie:
-        payload = _verify_token(access_token_cookie, "access")
-    if payload is None and child_access_token_cookie:
-        payload = _verify_token(child_access_token_cookie, "access")
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证凭据")
-
-    user_id = int(payload["sub"])
-    role = payload["role"]
-
-    session = device_service.revoke_device_session(
-        db, device_id=int(device_id), user_id=user_id
-    )
-    # Add old JTI to revoked list
-    revoke_jti(session.refresh_jti, ttl_seconds=30 * 24 * 3600)
-
-    # If revoking current device, clear cookies
-    current_jti = None
-    try:
-        current_jti, _ = _get_refresh_jti_from_cookie(
-            refresh_token_cookie, child_refresh_token_cookie
-        )
-    except ValueError:
-        pass
-
-    if current_jti == session.refresh_jti:
-        if role == "child":
-            clear_child_auth_cookies(response)
-        else:
-            clear_auth_cookies(response)
-
-    return {"code": "OK", "message": "success", "data": None}
-
-
-@router.delete("/devices")
-def revoke_all_devices(
-    response: FastAPIResponse,
-    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
-    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
-    db: Session = Depends(get_db),
-):
-    """Revoke all trusted device sessions for the current user."""
-    from fastapi import HTTPException, status
-    payload = None
-    if access_token_cookie:
-        payload = _verify_token(access_token_cookie, "access")
-    if payload is None and child_access_token_cookie:
-        payload = _verify_token(child_access_token_cookie, "access")
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证凭据")
-
-    user_id = int(payload["sub"])
-    role = payload["role"]
-
-    jtis = device_service.revoke_all_device_sessions(db, user_id=user_id)
-    for jti in jtis:
-        revoke_jti(jti, ttl_seconds=30 * 24 * 3600)
-
-    if role == "child":
-        clear_child_auth_cookies(response)
-    else:
-        clear_auth_cookies(response)
-
-    return {"code": "OK", "message": "success", "data": None}
-```
-
-**Note:** The `trust_device` endpoint above has a structural issue with duplicate route registration. Replace the entire router file with the clean version below — the duplicate route hack should be removed. The clean `trust_device` uses `response: FastAPIResponse` as a parameter:
-
-```python
 @router.post("/device/trust")
 def trust_device(
     request: Request,
-    response: FastAPIResponse,
-    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
-    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    response: Response,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
     child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
     db: Session = Depends(get_db),
 ):
-    from fastapi import HTTPException, status
-    payload = None
-    if access_token_cookie:
-        payload = _verify_token(access_token_cookie, "access")
-    if payload is None and child_access_token_cookie:
-        payload = _verify_token(child_access_token_cookie, "access")
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无法验证凭据")
-
+    """Trust the current device — issue 30-day refresh token and create DeviceSession."""
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie)
     user_id = int(payload["sub"])
     family_id = int(payload["fid"])
     role = payload["role"]
@@ -973,23 +756,104 @@ def trust_device(
             expires_at=session.expires_at,
         ),
     }
+
+
+@router.get("/devices")
+def list_devices(
+    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """List trusted devices for the current user."""
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie)
+    user_id = int(payload["sub"])
+
+    current_jti = None
+    try:
+        current_jti, _ = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+    except ValueError:
+        pass
+
+    sessions = device_service.list_device_sessions(db, user_id=user_id)
+    return {
+        "code": "OK",
+        "message": "success",
+        "data": [
+            DeviceSessionResponse(
+                id=str(s.id),
+                device_name=s.device_name,
+                created_at=s.created_at,
+                last_seen_at=s.last_seen_at,
+                expires_at=s.expires_at,
+                is_current=(s.refresh_jti == current_jti),
+            )
+            for s in sessions
+        ],
+    }
+
+
+@router.delete("/devices/{device_id}")
+def revoke_device(
+    device_id: str,
+    response: Response,
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """Revoke a specific trusted device session."""
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie)
+    user_id = int(payload["sub"])
+    role = payload["role"]
+
+    session = device_service.revoke_device_session(db, device_id=int(device_id), user_id=user_id)
+    revoke_jti(session.refresh_jti, ttl_seconds=30 * 24 * 3600)
+
+    current_jti = None
+    try:
+        current_jti, _ = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+    except ValueError:
+        pass
+
+    if current_jti == session.refresh_jti:
+        if role == "child":
+            clear_child_auth_cookies(response)
+        else:
+            clear_auth_cookies(response)
+
+    return {"code": "OK", "message": "success", "data": None}
+
+
+@router.delete("/devices")
+def revoke_all_devices(
+    response: Response,
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """Revoke all trusted device sessions for the current user."""
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie)
+    user_id = int(payload["sub"])
+    role = payload["role"]
+
+    jtis = device_service.revoke_all_device_sessions(db, user_id=user_id)
+    for jti in jtis:
+        revoke_jti(jti, ttl_seconds=30 * 24 * 3600)
+
+    if role == "child":
+        clear_child_auth_cookies(response)
+    else:
+        clear_auth_cookies(response)
+
+    return {"code": "OK", "message": "success", "data": None}
 ```
 
-Use this clean version — write the full file with only the clean `trust_device` (no duplicate route hack).
+- [ ] **Step 4: Register device router in `backend/app/main.py`**
 
-- [ ] **Step 4: Register device router in `backend/app/routers/auth.py`**
-
-At the top of `backend/app/routers/auth.py`, after the existing router imports, add:
-```python
-from app.routers.device import router as device_router
-```
-
-And after `router = APIRouter(prefix="/auth", tags=["auth"])`, include:
-```python
-router.include_router(device_router)
-```
-
-Actually, the cleaner approach is to register in `backend/app/main.py`. Find where `auth.router` is included and add:
+Find where `auth.router` is included (search for `include_router`) and add the device router alongside it:
 ```python
 from app.routers.device import router as device_router
 app.include_router(device_router, prefix="/api/v1")
