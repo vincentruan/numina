@@ -37,6 +37,7 @@ async def suggest_asset_fields(name: str, category: str, asset_type: str, llm: L
         asset_type="实物资产" if asset_type == "physical" else "金融资产",
     )
 
+    raw = ""
     try:
         raw = await llm.complete(prompt, max_tokens=300)
         start = raw.find("{")

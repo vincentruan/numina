@@ -62,7 +62,11 @@ class LLMClient:
         if system:
             kwargs["system"] = system
         message = await self._anthropic_client.messages.create(**kwargs)
-        return message.content[0].text
+        # Skip ThinkingBlock entries; find the first TextBlock
+        for block in message.content:
+            if hasattr(block, "text"):
+                return block.text
+        return ""
 
     async def _complete_openai(self, prompt: str, max_tokens: int, system: str | None) -> str:
         messages = []
@@ -88,7 +92,10 @@ class LLMClient:
         if system:
             kwargs["system"] = system
         message = await self._anthropic_client.messages.create(**kwargs)
-        return message.content[0].text
+        for block in message.content:
+            if hasattr(block, "text"):
+                return block.text
+        return ""
 
     async def _complete_openai_vision(self, prompt: str, image_data: str, max_tokens: int, system: str | None) -> str:
         messages = []
