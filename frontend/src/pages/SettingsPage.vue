@@ -11,6 +11,10 @@
       <van-cell title="AI 智能助手" icon="smile-o" is-link to="/settings/ai" />
     </van-cell-group>
 
+    <van-cell-group inset title="账户安全" class="section">
+      <van-cell :title="t('device.title')" icon="phone-o" is-link to="/settings/devices" />
+    </van-cell-group>
+
     <van-cell-group inset :title="t('settings.userSettings')" class="section">
       <van-cell :title="t('settings.theme')" :value="themeLabel" is-link @click="showThemePicker = true" />
       <van-cell :title="t('settings.themeColor')" is-link @click="showThemeColorPicker = true">
