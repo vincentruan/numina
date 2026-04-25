@@ -52,12 +52,13 @@
 
       <!-- Messages -->
       <template v-else>
-        <div
-          v-for="(msg, idx) in messages"
-          :key="msg.id"
-          class="message-row"
-          :class="msg.role"
-        >
+        <transition-group name="msg" tag="div" class="msg-list">
+          <div
+            v-for="(msg, idx) in messages"
+            :key="msg.id"
+            class="message-row"
+            :class="msg.role"
+          >
           <div class="bubble" :class="msg.role">
             <div v-if="msg.role === 'assistant'" class="assistant-avatar" aria-hidden="true">
               <AIBrainIcon class="avatar-icon" />
@@ -107,20 +108,25 @@
             </div>
           </div>
         </div>
+        </transition-group>
 
-        <!-- Typing indicator -->
-        <div v-if="asking" class="message-row assistant">
-          <div class="bubble assistant">
-            <div class="assistant-avatar" aria-hidden="true">
-              <AIBrainIcon class="avatar-icon" />
-            </div>
-            <div class="bubble-body">
-              <div class="typing-dots" aria-label="AI 正在思考">
-                <span class="dot" /><span class="dot" /><span class="dot" />
+        <!-- Skeleton loading state -->
+        <transition name="msg">
+          <div v-if="asking" class="message-row assistant">
+            <div class="bubble assistant">
+              <div class="assistant-avatar" aria-hidden="true">
+                <AIBrainIcon class="avatar-icon" />
+              </div>
+              <div class="bubble-body">
+                <div class="skeleton-bubble" aria-label="AI 正在思考">
+                  <div class="skeleton-line skeleton-line--long" />
+                  <div class="skeleton-line skeleton-line--medium" />
+                  <div class="skeleton-line skeleton-line--short" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </transition>
       </template>
     </div>
 
@@ -702,32 +708,59 @@ onMounted(async () => {
   color: #818cf8;
 }
 
-/* ── Typing dots ── */
-.typing-dots {
+/* ── Message enter animation ── */
+.msg-list {
+  display: contents;
+}
+
+.msg-enter-active {
+  animation: msg-in 0.2s ease-out both;
+}
+
+@keyframes msg-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Skeleton loading ── */
+.skeleton-bubble {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 12px 16px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   border-bottom-left-radius: 4px;
+  min-width: 160px;
 }
 
-.dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: rgba(99, 102, 241, 0.7);
-  animation: bounce 1.2s ease-in-out infinite;
+.skeleton-line {
+  height: 12px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
 }
 
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
+.skeleton-line--long  { width: 85%; }
+.skeleton-line--medium { width: 65%; }
+.skeleton-line--short  { width: 45%; }
 
-@keyframes bounce {
-  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
-  30% { transform: translateY(-5px); opacity: 1; }
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* ── Input bar ── */
@@ -741,9 +774,13 @@ onMounted(async () => {
 
 @media (prefers-reduced-motion: reduce) {
   .hero-glow,
-  .dot,
-  .suggestion-card {
+  .suggestion-card,
+  .msg-enter-active,
+  .skeleton-line {
     animation: none;
+    transition: none;
+  }
+}
     transition: none;
   }
 }
