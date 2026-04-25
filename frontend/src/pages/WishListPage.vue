@@ -97,12 +97,50 @@
             </li>
           </ul>
         </template>
-        <van-empty v-else :description="emptyDescription">
-          <template #image>
-            <van-icon v-if="activeTab === 'realized'" name="star-o" size="48" color="#07c160" />
-            <van-icon v-else-if="activeTab === 'cancelled'" name="close" size="48" color="#999" />
+        <!-- Empty states -->
+        <div v-else class="empty-state">
+          <!-- Pending: guide to add first wish -->
+          <template v-if="activeTab === 'pending'">
+            <div class="empty-illustration empty-pending" aria-hidden="true">
+              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="40" cy="40" r="36" fill="var(--van-primary-color)" fill-opacity="0.08"/>
+                <path d="M40 22c-1.1 0-2 .9-2 2v14H24c-1.1 0-2 .9-2 2s.9 2 2 2h14v14c0 1.1.9 2 2 2s2-.9 2-2V42h14c1.1 0 2-.9 2-2s-.9-2-2-2H42V24c0-1.1-.9-2-2-2z" fill="var(--van-primary-color)"/>
+              </svg>
+            </div>
+            <p class="empty-title">还没有心愿</p>
+            <p class="empty-desc">记录你想要的东西，追踪实现进度</p>
+            <button class="empty-action-btn" @click="$router.push('/wishes/new')">
+              <svg viewBox="0 0 16 16" fill="none" width="14" height="14" aria-hidden="true">
+                <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              添加第一个心愿
+            </button>
           </template>
-        </van-empty>
+
+          <!-- Realized: encouraging -->
+          <template v-else-if="activeTab === 'realized'">
+            <div class="empty-illustration empty-realized" aria-hidden="true">
+              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="40" cy="40" r="36" fill="#07c160" fill-opacity="0.08"/>
+                <path d="M40 20l4.9 9.9 10.9 1.6-7.9 7.7 1.9 10.9L40 45.4l-9.8 5.1 1.9-10.9-7.9-7.7 10.9-1.6L40 20z" fill="#07c160" fill-opacity="0.25" stroke="#07c160" stroke-width="1.5" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <p class="empty-title">还没有实现的心愿</p>
+            <p class="empty-desc">实现心愿后会在这里展示，继续加油！</p>
+          </template>
+
+          <!-- Cancelled: neutral -->
+          <template v-else>
+            <div class="empty-illustration empty-cancelled" aria-hidden="true">
+              <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="40" cy="40" r="36" fill="#999" fill-opacity="0.08"/>
+                <path d="M28 28l24 24M52 28L28 52" stroke="#999" stroke-width="3" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <p class="empty-title">没有已取消的心愿</p>
+            <p class="empty-desc">取消的心愿会在这里保存记录</p>
+          </template>
+        </div>
       </van-pull-refresh>
     </div>
 
@@ -154,11 +192,6 @@ const sortedWishes = computed(() => {
   })
 })
 
-const emptyDescription = computed(() => {
-  if (activeTab.value === 'realized') return '还没有实现的心愿，继续加油！'
-  if (activeTab.value === 'cancelled') return '没有已取消的心愿'
-  return '添加你的第一个心愿吧'
-})
 
 function toggleSort(value: typeof sortBy.value) {
   if (sortBy.value === value) {
@@ -400,6 +433,62 @@ onMounted(loadWishes)
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 100%;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 32px 32px;
+  gap: 8px;
+  text-align: center;
+}
+
+.empty-illustration {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 8px;
+}
+
+.empty-illustration svg {
+  width: 100%;
+  height: 100%;
+}
+
+.empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.empty-desc {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.empty-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 20px;
+  border-radius: 20px;
+  border: none;
+  background: var(--van-primary-color);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  min-height: 44px;
+}
+
+.empty-action-btn:active {
+  opacity: 0.8;
 }
 
 /* ── Afford bar ── */

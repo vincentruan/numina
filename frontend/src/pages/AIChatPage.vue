@@ -2,43 +2,78 @@
   <div class="ai-chat-page">
     <PageHeader title="AI 问答助手" />
 
-    <!-- Chat history -->
+    <!-- Chat body -->
     <div ref="scrollRef" class="chat-body">
+
+      <!-- Empty state: hero + suggestion cards -->
       <div v-if="!messages.length" class="chat-empty">
-        <p class="empty-hint">你可以问我关于家庭资产的任何问题</p>
-        <div class="suggestion-chips">
-          <span
+        <div class="empty-hero" aria-hidden="true">
+          <div class="hero-glow" />
+          <svg class="hero-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+            <path d="M810.161862 222.967283a13.594179 13.594179 0 0 0-13.594179-13.594179H696.289285a13.594179 13.594179 0 0 0-13.594179 13.594179v71.21302h127.523635V222.967283zM810.161862 337.693051H682.638227v146.180081l127.523635 220.862745V337.693051zM417.864578 71.156141c76.218408 11.887796 155.565184 49.883242 229.337777 109.947897a13.651058 13.651058 0 0 0 19.168361-1.990779 13.651058 13.651058 0 0 0-1.9339-19.168361C586.853302 96.865634 503.126812 56.879409 422.130534 44.25218a13.651058 13.651058 0 0 0-4.265956 26.903961z"/>
+            <path d="M856.063545 396.165084a13.651058 13.651058 0 0 0-24.05999 12.740987c117.512859 222.057213 100.733433 458.334278-39.019275 549.739488-74.341388 48.575015-173.1978 50.736433-278.367827 6.029217-86.513581-36.800978-168.590568-101.643504-236.504583-185.768149l18.087652-31.454313h241.168694a6.029217 6.029217 0 0 0 5.232906-9.100706l-45.27601-78.322946a14.959285 14.959285 0 0 0-12.911625-7.394323H351.031273l109.037827-188.839638 221.488418 383.651614a13.992335 13.992335 0 0 0 12.172194 7.053046h114.441371c10.807088 0 17.632617-11.717158 12.172193-21.045381l-10.067655-17.518858-127.523635-220.862745L472.184414 230.475365a14.049214 14.049214 0 0 0-24.344387 0l-248.392379 430.23585C97.007832 470.847748 89.49975 262.78287 186.251625 148.625896a13.651058 13.651058 0 0 0-20.817864-17.632617c-106.364495 125.419097-97.150031 353.789924 18.087652 557.19069l-83.783369 145.156252a14.049214 14.049214 0 0 0 12.172193 21.102261h114.441371c5.005388 0 9.6695-2.673332 12.172194-7.053047l25.02694-43.34211c69.392879 83.669611 152.664334 148.284619 240.486141 185.597512 53.694162 22.865522 106.193857 34.241404 155.223907 34.241404 54.774871 0 105.283786-14.219852 148.682775-42.545798 74.853302-48.916292 120.470588-136.226185 128.376826-245.662167 7.7356-106.648892-20.817864-227.233239-80.256846-339.570072z"/>
+            <path d="M280.842082 142.539799l14.39049 40.896295 14.390491-40.896295c5.972338-17.063823 19.338999-30.373604 36.402822-36.402822L386.8653 91.746487l-40.953174-14.390491c-17.006943-5.972338-30.373604-19.338999-36.402822-36.402822L295.289452 0.056879l-14.390491 40.953175c-6.029217 17.006943-19.338999 30.373604-36.402821 36.345942l-40.953175 14.390491 40.953175 14.39049c16.950064 6.029217 30.373604 19.395878 36.402821 36.402822z"/>
+          </svg>
+        </div>
+        <p class="empty-title">你好，我是 Numina AI</p>
+        <p class="empty-subtitle">问我任何关于家庭资产的问题</p>
+
+        <!-- Suggestion cards -->
+        <div class="suggestion-grid">
+          <button
             v-for="s in suggestions"
-            :key="s"
-            class="chip"
-            role="button"
-            tabindex="0"
-            @click="onChipClick(s)"
-            @keydown.enter="onChipClick(s)"
-            @keydown.space.prevent="onChipClick(s)"
-          >{{ s }}</span>
+            :key="s.text"
+            class="suggestion-card"
+            @click="onChipClick(s.text)"
+          >
+            <span class="suggestion-icon" aria-hidden="true">
+              <svg :viewBox="s.icon.viewBox" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path v-for="(d, i) in s.icon.paths" :key="i" :d="d" />
+              </svg>
+            </span>
+            <span class="suggestion-text">{{ s.text }}</span>
+            <span class="suggestion-arrow" aria-hidden="true">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </span>
+          </button>
         </div>
       </div>
 
-      <div
-        v-for="msg in messages"
-        :key="msg.id"
-        class="message-row"
-        :class="msg.role"
-      >
-        <div class="bubble" :class="msg.role">
-          <AIBrainIcon v-if="msg.role === 'assistant'" class="ai-label-icon" />
-          <span class="bubble-text">{{ msg.content }}</span>
+      <!-- Messages -->
+      <template v-else>
+        <div
+          v-for="msg in messages"
+          :key="msg.id"
+          class="message-row"
+          :class="msg.role"
+        >
+          <div class="bubble" :class="msg.role">
+            <div v-if="msg.role === 'assistant'" class="assistant-avatar" aria-hidden="true">
+              <AIBrainIcon class="avatar-icon" />
+            </div>
+            <div class="bubble-body">
+              <span class="bubble-text">{{ msg.content }}</span>
+              <span class="msg-time">{{ formatTime(msg.created_at) }}</span>
+            </div>
+          </div>
         </div>
-        <div class="msg-time">{{ formatTime(msg.created_at) }}</div>
-      </div>
 
-      <!-- Typing indicator -->
-      <div v-if="asking" class="message-row assistant">
-        <div class="bubble assistant typing">
-          <span class="dot" /><span class="dot" /><span class="dot" />
+        <!-- Typing indicator -->
+        <div v-if="asking" class="message-row assistant">
+          <div class="bubble assistant">
+            <div class="assistant-avatar" aria-hidden="true">
+              <AIBrainIcon class="avatar-icon" />
+            </div>
+            <div class="bubble-body">
+              <div class="typing-dots" aria-label="AI 正在思考">
+                <span class="dot" /><span class="dot" /><span class="dot" />
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
 
     <!-- Input bar -->
@@ -47,14 +82,11 @@
         v-model="inputText"
         :disabled="asking"
         :loading="asking"
-        placeholder="问我关于你家资产的问题..."
+        :show-clear="messages.length > 0"
+        placeholder="请输入您的问题…"
         @submit="onSend"
+        @action="onAction"
       />
-    </div>
-
-    <!-- Clear history -->
-    <div v-if="messages.length" class="clear-row">
-      <van-button size="mini" plain @click="onClear">清空记录</van-button>
     </div>
   </div>
 </template>
@@ -86,11 +118,37 @@ const asking = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 
 const suggestions = [
-  '我们家净资产是多少？',
-  '哪类资产占比最高？',
-  '有哪些闲置资产？',
-  '负债总额是多少？',
-  '净资产趋势如何？',
+  {
+    text: '我们家净资产是多少？',
+    icon: {
+      viewBox: '0 0 24 24',
+      paths: ['M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
+    },
+  },
+  {
+    text: '哪类资产占比最高？',
+    icon: {
+      viewBox: '0 0 24 24',
+      paths: ['M21.21 15.89A10 10 0 1 1 8 2.83', 'M22 12A10 10 0 0 0 12 2v10z'],
+    },
+  },
+  {
+    text: '有哪些闲置资产？',
+    icon: {
+      viewBox: '0 0 24 24',
+      paths: [
+        'M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z',
+        'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16',
+      ],
+    },
+  },
+  {
+    text: '净资产趋势如何？',
+    icon: {
+      viewBox: '0 0 24 24',
+      paths: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'],
+    },
+  },
 ]
 
 function formatTime(iso: string) {
@@ -113,13 +171,12 @@ async function onSend() {
   const q = inputText.value.trim()
   if (!q || asking.value) return
 
-  const userMsg: Message = {
+  messages.value.push({
     id: Date.now().toString(),
     role: 'user',
     content: q,
     created_at: new Date().toISOString(),
-  }
-  messages.value.push(userMsg)
+  })
   inputText.value = ''
   asking.value = true
   await scrollToBottom()
@@ -145,14 +202,18 @@ async function onSend() {
   }
 }
 
-async function onClear() {
-  try {
-    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmClearChat') })
-    await clearChatHistory()
-    messages.value = []
-  } catch {
-    // cancelled
+async function onAction(type: 'file' | 'image' | 'link' | 'clear') {
+  if (type === 'clear') {
+    try {
+      await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmClearChat') })
+      await clearChatHistory()
+      messages.value = []
+    } catch {
+      // cancelled
+    }
+    return
   }
+  showToast('🚧 该功能即将上线')
 }
 
 onMounted(async () => {
@@ -167,121 +228,258 @@ onMounted(async () => {
   const q = aiStore.draftQuery || route.query.q
   if (typeof q === 'string' && q.trim()) {
     inputText.value = q.trim()
-    aiStore.draftQuery = '' // Clear it once picked up
+    aiStore.draftQuery = ''
     await onSend()
   }
 })
 </script>
 
 <style scoped>
+/* ── Page shell ── */
 .ai-chat-page {
   display: flex;
   flex-direction: column;
   height: calc(100dvh - 50px - env(safe-area-inset-bottom));
-  background: var(--bg-secondary);
+  background: #0f1117;
 }
+
+/* ── Chat body ── */
 .chat-body {
   flex: 1;
   overflow-y: auto;
-  padding: 12px 16px;
+  padding: 16px 16px 8px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overscroll-behavior: contain;
 }
+
+/* ── Empty state ── */
 .chat-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 0;
-  gap: 16px;
-}
-.empty-hint {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-.suggestion-chips {
-  display: flex;
-  flex-wrap: wrap;
+  padding: 32px 0 16px;
   gap: 8px;
+}
+
+.empty-hero {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  margin-bottom: 8px;
 }
-.chip {
-  padding: 6px 14px;
-  border-radius: 16px;
-  background: var(--bg-primary);
-  color: var(--van-primary-color);
+
+.hero-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+
+.hero-icon {
+  width: 48px;
+  height: 48px;
+  color: #6366f1;
+  position: relative;
+  z-index: 1;
+}
+
+.empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+}
+
+.empty-subtitle {
   font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+  margin: 0 0 16px;
+}
+
+/* ── Suggestion cards ── */
+.suggestion-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.suggestion-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   cursor: pointer;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  width: 100%;
 }
-.chip:focus-visible {
-  outline: 2px solid var(--van-primary-color);
-  outline-offset: 2px;
+
+.suggestion-card:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.3);
 }
+
+.suggestion-card:active {
+  transform: scale(0.98);
+}
+
+.suggestion-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.suggestion-text {
+  flex: 1;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.4;
+}
+
+.suggestion-arrow {
+  color: rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+/* ── Messages ── */
 .message-row {
   display: flex;
   flex-direction: column;
 }
+
 .message-row.user { align-items: flex-end; }
 .message-row.assistant { align-items: flex-start; }
+
 .bubble {
-  max-width: 80%;
+  max-width: 82%;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.bubble.user {
+  flex-direction: row-reverse;
+}
+
+.assistant-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.avatar-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.bubble-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.bubble.user .bubble-body {
+  align-items: flex-end;
+}
+
+.bubble-text {
+  display: block;
   padding: 10px 14px;
   border-radius: 16px;
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
 }
-.bubble.user {
-  background: var(--van-primary-color);
+
+.bubble.user .bubble-text {
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
   color: #fff;
   border-bottom-right-radius: 4px;
 }
-.bubble.assistant {
-  background: var(--bg-primary);
-  color: var(--text-primary);
+
+.bubble.assistant .bubble-text {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.85);
   border-bottom-left-radius: 4px;
-  display: flex;
-  gap: 6px;
-  align-items: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
-.ai-label-icon {
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  margin-top: 1px;
-}
-.bubble-text { flex: 1; }
+
 .msg-time {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-top: 3px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.25);
   padding: 0 4px;
 }
-.typing {
-  gap: 4px;
+
+/* ── Typing dots ── */
+.typing-dots {
+  display: flex;
   align-items: center;
+  gap: 4px;
   padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
 }
+
 .dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--text-secondary);
-  animation: bounce 1.2s infinite;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.7);
+  animation: bounce 1.2s ease-in-out infinite;
 }
+
 .dot:nth-child(2) { animation-delay: 0.2s; }
 .dot:nth-child(3) { animation-delay: 0.4s; }
+
 @keyframes bounce {
-  0%, 60%, 100% { transform: translateY(0); }
-  30% { transform: translateY(-6px); }
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-5px); opacity: 1; }
 }
+
+/* ── Input bar ── */
 .input-bar {
-  padding: 8px 16px 12px;
-  background: var(--bg-primary);
-  border-top: 1px solid var(--border-color, #f0f0f0);
+  padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
+  background: rgba(15, 17, 23, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-.clear-row {
-  display: flex;
-  justify-content: center;
-  padding: 4px 0 8px;
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-glow,
+  .dot,
+  .suggestion-card {
+    animation: none;
+    transition: none;
+  }
 }
 </style>
