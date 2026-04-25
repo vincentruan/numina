@@ -657,7 +657,11 @@ if [ "$GIFT_COUNT" = "0" ]; then
   fi
 
   # 为 test_child 创建 bonus_draw（available 状态）
-  NEXT_MONTH=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || NEXT_MONTH=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+  if date -v+30d >/dev/null 2>&1; then
+    NEXT_MONTH=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ)
+  else
+    NEXT_MONTH=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+  fi
   curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN_RICH" \
@@ -1867,7 +1871,11 @@ EOF
     fi
 
     # 为小宝创建 bonus_draw（available — 可直接使用）
-    NEXT_MONTH_DEMO=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || NEXT_MONTH_DEMO=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+    if date -v+30d >/dev/null 2>&1; then
+      NEXT_MONTH_DEMO=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ)
+    else
+      NEXT_MONTH_DEMO=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+    fi
     curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $TOKEN" \
