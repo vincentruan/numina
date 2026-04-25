@@ -217,3 +217,36 @@ def setup_revoked_token_cleanup_schedule() -> None:
         coalesce=True,
     )
     logger.info("撤销记录清理任务已配置（每小时）")
+
+
+def device_session_cleanup_job() -> None:
+    """APScheduler job: expire stale DeviceSessions and purge old revoked ones."""
+    from app.services.device import (
+        cleanup_expired_device_sessions,
+        delete_old_revoked_sessions,
+    )
+
+    db = SessionLocal()
+    try:
+        expired = cleanup_expired_device_sessions(db)
+        purged = delete_old_revoked_sessions(db)
+        if expired > 0 or purged > 0:
+            logger.info(f"设备会话清理: 过期 {expired} 条，删除 {purged} 条")
+    except Exception as e:
+        logger.exception(f"设备会话清理失败: {e}")
+    finally:
+        db.close()
+
+
+def setup_device_session_cleanup_schedule() -> None:
+    """Schedule hourly cleanup of expired device sessions."""
+    scheduler.add_job(
+        device_session_cleanup_job,
+        trigger="cron",
+        minute=15,
+        id="device_session_cleanup",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("设备会话清理任务已配置（每小时 :15）")

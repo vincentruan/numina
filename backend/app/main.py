@@ -103,6 +103,7 @@ from app.routers import device as device_router
 from app.scheduler import (
     scheduler,
     setup_audit_log_purge_schedule,
+    setup_device_session_cleanup_schedule,
     setup_exchange_rate_schedule,
     setup_file_sync_schedule,
     setup_revoked_token_cleanup_schedule,
@@ -194,6 +195,7 @@ async def lifespan(app: FastAPI):
         setup_file_sync_schedule()
         setup_audit_log_purge_schedule()
         setup_revoked_token_cleanup_schedule()
+        setup_device_session_cleanup_schedule()
         scheduler.start()
         logger.info("APScheduler 已启动")
     except Exception as e:
