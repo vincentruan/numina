@@ -76,15 +76,27 @@
           <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
         </svg>
       </button>
+      <!-- Abort button (shown while loading) -->
       <button
+        v-if="loading"
+        class="send-btn send-btn--abort"
+        aria-label="中止生成"
+        @click="emit('abort')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+        </svg>
+      </button>
+      <!-- Send button (shown when not loading) -->
+      <button
+        v-else
         class="send-btn"
         :class="{ 'send-btn--active': internalValue.trim() }"
-        :disabled="disabled || loading || !internalValue.trim()"
+        :disabled="disabled || !internalValue.trim()"
         aria-label="发送"
         @click="onSubmit"
       >
-        <van-loading v-if="loading" size="15px" color="currentColor" />
-        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="22" y1="2" x2="11" y2="13"/>
           <polygon points="22 2 15 22 11 13 2 9 22 2"/>
         </svg>
@@ -107,6 +119,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'submit', value: string): void
+  (e: 'abort'): void
   (e: 'action', type: 'file' | 'image' | 'link' | 'clear'): void
 }>()
 
@@ -346,6 +359,22 @@ onMounted(() => nextTick(adjustHeight))
 
 .send-btn:disabled {
   cursor: default;
+}
+
+.send-btn--abort {
+  background: #ff3b30;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(255, 59, 48, 0.4);
+  cursor: pointer;
+}
+
+.send-btn--abort:hover {
+  transform: scale(1.05);
+  background: #ff2d20;
+}
+
+.send-btn--abort:active {
+  transform: scale(0.95);
 }
 
 @media (prefers-reduced-motion: reduce) {

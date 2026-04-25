@@ -1,6 +1,15 @@
 <template>
   <div class="ai-chat-page">
-    <PageHeader title="AI 问答助手" />
+    <!-- Custom title bar -->
+    <div class="chat-header">
+      <button class="header-back" aria-label="返回" @click="$router.back()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <h1 class="header-title">{{ sessionTitle }}</h1>
+      <div class="header-spacer" aria-hidden="true" />
+    </div>
 
     <!-- Chat body -->
     <div ref="scrollRef" class="chat-body">
@@ -85,6 +94,7 @@
         :show-clear="messages.length > 0"
         placeholder="请输入您的问题…"
         @submit="onSend"
+        @abort="onAbort"
         @action="onAction"
       />
     </div>
@@ -92,13 +102,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
-import PageHeader from '@/components/common/PageHeader.vue'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 
@@ -116,6 +125,14 @@ const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
+let abortController: AbortController | null = null
+
+const sessionTitle = computed(() => {
+  const firstUser = messages.value.find((m) => m.role === 'user')
+  if (!firstUser) return '新对话'
+  const text = firstUser.content.trim()
+  return text.length > 20 ? text.slice(0, 20) + '…' : text
+})
 
 const suggestions = [
   {
@@ -179,6 +196,7 @@ async function onSend() {
   })
   inputText.value = ''
   asking.value = true
+  abortController = new AbortController()
   await scrollToBottom()
 
   try {
@@ -189,7 +207,8 @@ async function onSend() {
       content: res.data.answer,
       created_at: new Date().toISOString(),
     })
-  } catch {
+  } catch (err: unknown) {
+    if (err instanceof Error && err.name === 'AbortError') return
     messages.value.push({
       id: Date.now().toString(),
       role: 'assistant',
@@ -198,8 +217,15 @@ async function onSend() {
     })
   } finally {
     asking.value = false
+    abortController = null
     await scrollToBottom()
   }
+}
+
+function onAbort() {
+  abortController?.abort()
+  asking.value = false
+  abortController = null
 }
 
 async function onAction(type: 'file' | 'image' | 'link' | 'clear') {
@@ -239,8 +265,60 @@ onMounted(async () => {
 .ai-chat-page {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 50px - env(safe-area-inset-bottom));
+  height: calc(100dvh - env(safe-area-inset-bottom));
   background: #0f1117;
+}
+
+/* ── Header ── */
+.chat-header {
+  display: flex;
+  align-items: center;
+  padding: 0 4px;
+  height: 50px;
+  background: rgba(15, 17, 23, 0.95);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
+  padding-top: env(safe-area-inset-top);
+}
+
+.header-back {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.header-back:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.header-title {
+  flex: 1;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+}
+
+.header-spacer {
+  width: 44px;
+  flex-shrink: 0;
 }
 
 /* ── Chat body ── */
