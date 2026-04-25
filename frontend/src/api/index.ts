@@ -82,8 +82,12 @@ function onRefreshFailed(error: unknown) {
 http.interceptors.response.use(
   (response) => {
     const url = response.config.url ?? ''
-    // Unwrap /auth/me but keep login/register/refresh wrapped
-    const isAuthEndpoint = url.includes('/auth/') && !url.includes('/auth/me')
+    // Unwrap most endpoints; keep login/register/refresh/family-join wrapped (they return tokens directly)
+    // /auth/devices and /auth/me should be unwrapped like regular endpoints
+    const isAuthEndpoint =
+      url.includes('/auth/') &&
+      !url.includes('/auth/me') &&
+      !url.includes('/auth/devices')
 
     // If response has envelope format, unwrap for non-auth endpoints (and /auth/me)
     if (

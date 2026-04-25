@@ -36,7 +36,7 @@
                 v-for="wish in filteredWishes"
                 :key="wish.id"
                 class="wish-item"
-                @click="$router.push(`/wishes/${wish.id}`)"
+                @click="$router.push('/wish-review')"
               >
                 <div class="wish-header">
                   <span class="wish-name">{{ wish.name }}</span>
