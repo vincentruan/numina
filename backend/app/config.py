@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     # Security settings
     BCRYPT_ROUNDS: int = 12
     PIN_BCRYPT_ROUNDS: int = 8  # Lower cost for child PIN (still secure for 4-emoji)
-    CHILD_REFRESH_TOKEN_EXPIRE_DAYS: int = 3650  # ~10 years for child sessions
+    CHILD_REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days, same as trusted adult sessions
     ENABLE_SECURITY_LOGGING: bool = True
     ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
 

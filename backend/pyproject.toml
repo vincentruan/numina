@@ -22,6 +22,7 @@ dependencies = [
     "psycopg2-binary>=2.9.9",
     "webauthn>=2.7.1",
     "lunardate>=0.2.2",
+    "user-agents>=2.2.0",
 ]
 
 [dependency-groups]

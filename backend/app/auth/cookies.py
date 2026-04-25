@@ -86,12 +86,10 @@ def set_child_auth_cookies(
 ) -> None:
     """Set child authentication cookies on response.
 
-    Child tokens have longer expiry (10 years) for persistent sessions.
-
     Args:
         response: FastAPI response object
         access_token: JWT access token (15 min expiry, same as adult)
-        refresh_token: JWT refresh token (10 year expiry)
+        refresh_token: JWT refresh token (30 day expiry)
     """
     # Child access token cookie (same short-lived as adult)
     response.set_cookie(
@@ -104,13 +102,11 @@ def set_child_auth_cookies(
         path="/",
     )
 
-    # Child refresh token cookie (10 years for persistent sessions)
-    # Browser cookie max_age capped at 400 days per RFC 6265bis
-    # Token itself has 3650 days expiry; cookie is refreshed on each login
+    # Child refresh token cookie (30 days, same as trusted adult sessions)
     response.set_cookie(
         key=CHILD_REFRESH_TOKEN_COOKIE,
         value=refresh_token,
-        max_age=400 * 24 * 60 * 60,  # 400 days = 34,560,000s (browser max)
+        max_age=settings.CHILD_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
         samesite="strict",
