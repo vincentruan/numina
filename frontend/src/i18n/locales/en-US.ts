@@ -343,5 +343,26 @@ export default {
     networkError: '📡 Cannot connect to server, please check your network',
     corsError: '⛔ Cross-origin request blocked',
     requestFailed: '❌ Request failed',
-  }
+    // Device trust
+    deviceTrustSuccess: '✅ Device remembered (30 days)',
+    deviceRevokeSuccess: '🗑️ Device signed out',
+    deviceRevokeAllSuccess: '🗑️ All devices signed out',
+    deviceTrustFailed: '❌ Failed to remember device',
+  },
+  device: {
+    title: 'Signed-in Devices',
+    currentDevice: 'This device',
+    lastSeen: 'Last active',
+    expiresAt: 'Expires',
+    revoke: 'Revoke',
+    revokeThis: 'Sign out this device',
+    revokeAll: 'Sign out all other devices',
+    trustPromptTitle: 'Stay signed in?',
+    trustPromptMessage: 'Stay signed in on this device for 30 days',
+    trustConfirm: 'Stay signed in',
+    trustCancel: 'Not now',
+    sessionExpiredTitle: 'Session expired',
+    sessionExpiredMessage: 'Please sign in again to continue',
+    sessionExpiredConfirm: 'Sign in',
+  },
 }

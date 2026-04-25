@@ -343,5 +343,26 @@ export default {
     networkError: '📡 无法连接服务器，请检查网络',
     corsError: '⛔ 跨域请求被拒绝',
     requestFailed: '❌ 请求失败',
-  }
+    // Device trust
+    deviceTrustSuccess: '✅ 已记住此设备（30 天）',
+    deviceRevokeSuccess: '🗑️ 已退出该设备',
+    deviceRevokeAllSuccess: '🗑️ 已退出所有设备',
+    deviceTrustFailed: '❌ 记住设备失败，请重试',
+  },
+  device: {
+    title: '已登录设备',
+    currentDevice: '当前设备',
+    lastSeen: '最近活跃',
+    expiresAt: '到期时间',
+    revoke: '撤销',
+    revokeThis: '退出此设备',
+    revokeAll: '退出所有其他设备',
+    trustPromptTitle: '保持登录状态？',
+    trustPromptMessage: '在此设备上保持登录 30 天',
+    trustConfirm: '保持登录',
+    trustCancel: '暂不',
+    sessionExpiredTitle: '登录已过期',
+    sessionExpiredMessage: '请重新登录以继续',
+    sessionExpiredConfirm: '重新登录',
+  },
 }
