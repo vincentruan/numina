@@ -73,7 +73,7 @@ async def trigger_generate(
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/report/generate",
                 headers={
-                    "X-Family-Id": current_user.family_id,
+                    "X-Family-Id": str(current_user.family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                 },
             )
@@ -177,7 +177,7 @@ async def report_ws(
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/report/generate",
                 headers={
-                    "X-Family-Id": user.family_id,
+                    "X-Family-Id": str(user.family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                 },
             )

@@ -45,7 +45,7 @@ async def suggest_asset_fields(
                 f"{settings.AGENT_BASE_URL}/suggest/asset",
                 json=body.model_dump(),
                 headers={
-                    "X-Family-Id": current_user.family_id,
+                    "X-Family-Id": str(current_user.family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                 },
             )

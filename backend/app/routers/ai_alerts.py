@@ -61,7 +61,7 @@ async def refresh_alerts(
             resp = await client.post(
                 f"{settings.AGENT_BASE_URL}/alerts/aging",
                 headers={
-                    "X-Family-Id": current_user.family_id,
+                    "X-Family-Id": str(current_user.family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                 },
             )

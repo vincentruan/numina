@@ -96,7 +96,7 @@ async def check_drift(
                     "threshold": target.drift_threshold,
                 },
                 headers={
-                    "X-Family-Id": current_user.family_id,
+                    "X-Family-Id": str(current_user.family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                 },
             )
