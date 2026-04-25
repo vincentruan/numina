@@ -37,26 +37,35 @@
     </van-cell-group>
 
     <!-- Coin rate settings (owner only) -->
-    <van-cell-group v-if="authStore.user?.role === 'owner'" inset title="⭐ 星星币兑换比例" class="section">
-      <van-field
-        v-model="copperToSilverStr"
-        label="铜→银"
-        type="digit"
-        placeholder="默认 10"
+    <van-cell-group v-if="authStore.user?.role === 'owner'" inset class="section">
+      <van-cell
+        title="⭐ 星星币兑换比例"
+        :value="coinRatesExpanded ? '' : `铜→银 ${copperToSilverStr}，银→金 ${silverToGoldStr}`"
+        is-link
+        :arrow-direction="coinRatesExpanded ? 'up' : 'down'"
+        @click="coinRatesExpanded = !coinRatesExpanded"
       />
-      <van-field
-        v-model="silverToGoldStr"
-        label="银→金"
-        type="digit"
-        placeholder="默认 10"
-      />
-      <van-cell>
-        <template #title>
-          <van-button size="small" type="primary" :loading="savingRates" @click="saveCoinRates">
-            保存
-          </van-button>
-        </template>
-      </van-cell>
+      <template v-if="coinRatesExpanded">
+        <van-field
+          v-model="copperToSilverStr"
+          label="铜→银"
+          type="digit"
+          placeholder="默认 10"
+        />
+        <van-field
+          v-model="silverToGoldStr"
+          label="银→金"
+          type="digit"
+          placeholder="默认 10"
+        />
+        <van-cell>
+          <template #title>
+            <van-button size="small" type="primary" :loading="savingRates" @click="saveCoinRates">
+              保存
+            </van-button>
+          </template>
+        </van-cell>
+      </template>
     </van-cell-group>
 
     <van-cell-group inset :title="t('settings.accountInfo')" class="section">
@@ -195,6 +204,7 @@ const editTitleValue = ref('')
 const copperToSilverStr = ref(String(familyStore.coinCopperToSilver))
 const silverToGoldStr = ref(String(familyStore.coinSilverToGold))
 const savingRates = ref(false)
+const coinRatesExpanded = ref(false)
 const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 
 const themeColorOptions = [
