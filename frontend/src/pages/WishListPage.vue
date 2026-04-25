@@ -9,13 +9,14 @@
     </van-tabs>
 
     <!-- Sort bar -->
-    <div class="sort-bar">
+    <div class="sort-bar" role="toolbar" aria-label="排序选项">
       <button
         v-for="opt in sortOptions"
         :key="opt.value"
         class="sort-btn"
         :class="{ active: sortBy === opt.value }"
         :aria-label="`按${opt.label}排序`"
+        :aria-pressed="sortBy === opt.value"
         @click="toggleSort(opt.value)"
       >
         {{ opt.label }}
@@ -28,55 +29,73 @@
     <div class="list-content">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
         <template v-if="sortedWishes.length">
-          <div role="list" aria-label="心愿清单">
-            <div
+          <ul class="wish-list" aria-label="心愿清单">
+            <li
               v-for="wish in sortedWishes"
               :key="wish.id"
-              class="wish-card"
-              role="listitem"
+              class="wish-item"
+              :class="`priority-${wish.priority}`"
               tabindex="0"
-              :aria-label="`${wish.name}，${priorityText(wish.priority)}优先级`"
+              :aria-label="`${wish.name}，${priorityText(wish.priority)}优先级${wish.expected_price ? '，预算' + wish.expected_price.toLocaleString() + '元' : ''}`"
               @click="$router.push(`/wishes/${wish.id}`)"
               @keydown.enter="$router.push(`/wishes/${wish.id}`)"
             >
-              <div class="wish-header">
-                <span class="wish-name">{{ wish.name }}</span>
-                <div class="wish-header-right">
-                  <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="18" />
-                  <van-icon name="arrow" size="14" class="card-arrow" />
-                </div>
-              </div>
-              <div class="wish-meta">
-                <span class="priority-badge" :class="wish.priority">
-                  {{ priorityText(wish.priority) }}
-                </span>
-                <span v-if="wish.expected_price" class="wish-price">
-                  ¥{{ wish.expected_price.toLocaleString() }}
-                </span>
-              </div>
-              <div v-if="wish.category" class="wish-category">
-                <div class="wish-category-icon">
+              <!-- Priority stripe -->
+              <div class="priority-stripe" aria-hidden="true" />
+
+              <!-- Icon anchor -->
+              <div class="wish-icon" aria-hidden="true">
+                <template v-if="wish.category">
                   <svg class="icon-svg" aria-hidden="true">
                     <use :href="`#${getIconId(wish.category.icon)}`" />
                   </svg>
+                </template>
+                <span v-else class="wish-emoji">✨</span>
+              </div>
+
+              <!-- Main content -->
+              <div class="wish-body">
+                <div class="wish-top">
+                  <span class="wish-name">{{ wish.name }}</span>
+                  <div class="wish-right">
+                    <span v-if="wish.expected_price" class="wish-price">
+                      ¥{{ formatPrice(wish.expected_price) }}
+                    </span>
+                    <van-icon v-if="wish.status === 'realized'" name="success" color="#07c160" size="16" />
+                    <van-icon name="arrow" size="12" class="card-arrow" />
+                  </div>
                 </div>
-                <span>{{ wish.category.name }}</span>
+
+                <div class="wish-bottom">
+                  <span class="priority-badge" :class="wish.priority">
+                    {{ priorityText(wish.priority) }}优先
+                  </span>
+                  <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
+                  <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
+                </div>
+
+                <!-- Afford bar -->
+                <div
+                  v-if="wish.expected_price && dashboardStore.overview"
+                  class="afford-bar"
+                  :class="wish.expected_price <= dashboardStore.overview.net_worth ? 'afford-yes' : 'afford-no'"
+                >
+                  <template v-if="wish.expected_price <= dashboardStore.overview.net_worth">
+                    <svg class="afford-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    净资产可负担
+                  </template>
+                  <template v-else>
+                    <svg class="afford-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M8 3v5M8 11v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                    </svg>
+                    还差 ¥{{ formatPrice(wish.expected_price - dashboardStore.overview.net_worth) }}
+                  </template>
+                </div>
               </div>
-              <div v-if="wish.description" class="wish-notes">{{ wish.description }}</div>
-              <div
-                v-if="wish.expected_price && dashboardStore.overview"
-                class="wish-afford"
-                :class="wish.expected_price <= dashboardStore.overview.net_worth ? 'afford-yes' : 'afford-no'"
-              >
-                <template v-if="wish.expected_price <= dashboardStore.overview.net_worth">
-                  ✓ 当前净资产可负担
-                </template>
-                <template v-else>
-                  还差 ¥{{ ((wish.expected_price - dashboardStore.overview.net_worth) / 10000).toFixed(1) }}万
-                </template>
-              </div>
-            </div>
-          </div>
+            </li>
+          </ul>
         </template>
         <van-empty v-else :description="emptyDescription">
           <template #image>
@@ -155,6 +174,13 @@ function priorityText(priority: string): string {
   return map[priority] || '中'
 }
 
+function formatPrice(value: number): string {
+  if (value >= 10000) {
+    return (value / 10000).toFixed(value % 10000 === 0 ? 0 : 1) + '万'
+  }
+  return value.toLocaleString()
+}
+
 async function loadWishes() {
   const res = await getWishes()
   wishes.value = res.data
@@ -172,158 +198,235 @@ onMounted(loadWishes)
 </script>
 
 <style scoped>
+/* ── Sort bar ── */
 .sort-bar {
   display: flex;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 8px 16px;
   background: var(--card-bg);
   border-bottom: 1px solid var(--separator);
 }
+
 .sort-btn {
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 12px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
   border: 1px solid var(--separator);
   background: transparent;
   color: var(--text-secondary);
+  font-size: 13px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 3px;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  /* Extend touch target to 44pt without affecting layout */
+  position: relative;
 }
+
+.sort-btn::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
 .sort-btn.active {
   background: var(--van-primary-color);
   color: #fff;
   border-color: var(--van-primary-color);
 }
+
 .sort-dir {
   font-size: 11px;
 }
+
+/* ── List ── */
 .list-content {
-  padding: 12px;
+  padding: 12px 16px;
 }
-.wish-card {
+
+.wish-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Item ── */
+.wish-item {
+  display: flex;
+  align-items: stretch;
   background: var(--card-bg);
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 10px;
+  border-radius: 12px;
+  overflow: hidden;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
   cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-height: 72px;
 }
 
-[data-theme='dark'] .wish-card {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+[data-theme='dark'] .wish-item {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
-.wish-card:active {
-  transform: scale(0.98);
+.wish-item:active {
+  transform: scale(0.985);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
-.wish-card:focus-visible {
+
+.wish-item:focus-visible {
   outline: 2px solid var(--van-primary-color);
   outline-offset: 2px;
 }
-.wish-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
+
+/* ── Priority stripe (4px left border) ── */
+.priority-stripe {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 0;
 }
-.wish-header-right {
+
+.priority-high .priority-stripe  { background: #f44336; }
+.priority-medium .priority-stripe { background: #ff9800; }
+.priority-low .priority-stripe   { background: #4caf50; }
+
+/* ── Icon anchor ── */
+.wish-icon {
+  width: 44px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-svg {
+  width: 22px;
+  height: 22px;
+  color: var(--van-primary-color);
+}
+
+.wish-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* ── Body ── */
+.wish-body {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 12px 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Top row: name + price + arrow */
+.wish-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wish-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wish-right {
   display: flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
 }
+
+.wish-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ee0a24;
+  letter-spacing: -0.3px;
+}
+
 .card-arrow {
   color: var(--text-tertiary);
 }
-.wish-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  flex: 1;
-  margin-right: 8px;
-}
-.wish-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-.priority-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-.priority-badge.low {
-  background: rgba(76, 175, 80, 0.15);
-  color: #4caf50;
-}
 
-[data-theme='dark'] .priority-badge.low {
-  background: rgba(76, 175, 80, 0.2);
-  color: #81c784;
-}
-
-.priority-badge.medium {
-  background: rgba(255, 152, 0, 0.15);
-  color: #ff9800;
-}
-
-[data-theme='dark'] .priority-badge.medium {
-  background: rgba(255, 152, 0, 0.2);
-  color: #ffb74d;
-}
-
-.priority-badge.high {
-  background: rgba(244, 67, 54, 0.15);
-  color: #f44336;
-}
-
-[data-theme='dark'] .priority-badge.high {
-  background: rgba(244, 67, 54, 0.2);
-  color: #e57373;
-}
-
-.wish-price {
-  font-size: 13px;
-  color: #ee0a24;
-}
-.wish-category,
-.wish-notes {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
-}
-.wish-category {
+/* Bottom row: badge + category + desc */
+.wish-bottom {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
 }
-.wish-category-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
-  background: var(--color-action-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+
+.priority-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 10px;
   flex-shrink: 0;
 }
-.wish-afford {
-  font-size: 11px;
-  margin-top: 6px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  display: inline-block;
+
+.priority-badge.low    { background: rgba(76, 175, 80, 0.12); color: #4caf50; }
+.priority-badge.medium { background: rgba(255, 152, 0, 0.12); color: #ff9800; }
+.priority-badge.high   { background: rgba(244, 67, 54, 0.12); color: #f44336; }
+
+[data-theme='dark'] .priority-badge.low    { background: rgba(76, 175, 80, 0.2); color: #81c784; }
+[data-theme='dark'] .priority-badge.medium { background: rgba(255, 152, 0, 0.2); color: #ffb74d; }
+[data-theme='dark'] .priority-badge.high   { background: rgba(244, 67, 54, 0.2); color: #e57373; }
+
+.wish-cat {
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
+
+.wish-cat::before {
+  content: '·';
+  margin-right: 6px;
+  color: var(--text-tertiary);
+}
+
+.wish-desc {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ── Afford bar ── */
+.afford-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  align-self: flex-start;
+}
+
 .afford-yes {
-  background: rgba(7, 193, 96, 0.12);
+  background: rgba(7, 193, 96, 0.1);
   color: #07c160;
 }
+
 .afford-no {
-  background: rgba(255, 125, 0, 0.12);
+  background: rgba(255, 125, 0, 0.1);
   color: #ff7d00;
+}
+
+.afford-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 </style>
