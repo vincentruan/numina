@@ -13,6 +13,7 @@
   "AUTH_NO_PASSKEY_REGISTERED": "No passkey registered for this account",
   "AUTH_CREDENTIAL_NOT_FOUND": "Credential not found",
   "AUTH_WEBAUTHN_VERIFICATION_FAILED": "Passkey verification failed",
+  "AUTH_DEVICE_NOT_FOUND": "Device not found or access denied",
   "FAMILY_INVITATION_CODE_NOT_FOUND": "Family invitation code not found",
   "FAMILY_INVITATION_CODE_ALREADY_USED": "Family invitation code has already been used",
   "FAMILY_INVITATION_CODE_REVOKED": "Family invitation code has been revoked",
