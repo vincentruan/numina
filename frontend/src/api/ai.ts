@@ -97,8 +97,8 @@ export const checkAllocationDrift = () =>
   http.get<AllocationDriftResponse>('/ai/allocation-target/check')
 
 // Chat
-export const sendChatMessage = (question: string) =>
-  http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question })
+export const sendChatMessage = (question: string, signal?: AbortSignal) =>
+  http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question }, { signal })
 
 export const getChatHistory = () =>
   http.get<ChatMessage[]>('/ai/chat/history')

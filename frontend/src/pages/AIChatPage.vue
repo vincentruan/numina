@@ -64,7 +64,12 @@
               <AIBrainIcon class="avatar-icon" />
             </div>
             <div class="bubble-body">
-              <div class="bubble-text" v-html="msg.renderedContent ?? msg.content" />
+              <div
+                v-if="msg.role === 'assistant'"
+                class="bubble-text"
+                v-html="msg.renderedContent ?? ''"
+              />
+              <div v-else class="bubble-text">{{ msg.content }}</div>
               <span class="msg-time">{{ formatTime(msg.created_at) }}</span>
               <!-- Assistant message actions -->
               <div v-if="msg.role === 'assistant'" class="msg-actions">
@@ -158,8 +163,8 @@ import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 
-// Configure marked for inline rendering
-marked.setOptions({ breaks: true })
+// Configure marked
+marked.use({ breaks: true })
 
 function renderMarkdown(text: string): string {
   return DOMPurify.sanitize(marked.parse(text) as string)
@@ -256,7 +261,7 @@ async function onSend() {
   await scrollToBottom()
 
   try {
-    const res = await sendChatMessage(q)
+    const res = await sendChatMessage(q, abortController.signal)
     const fullText = res.data.answer
     // Typewriter effect
     const msg: Message = {
@@ -269,25 +274,36 @@ async function onSend() {
     messages.value.push(msg)
     const idx = messages.value.length - 1
     let i = 0
+    let cancelled = false
+    abortController.signal.addEventListener('abort', () => { cancelled = true })
+
     const tick = () => {
-      if (!asking.value && i === 0) return // aborted before start
+      if (cancelled) {
+        asking.value = false
+        abortController = null
+        return
+      }
       const chunk = fullText.slice(0, i + 1)
       messages.value[idx].content = chunk
-      messages.value[idx].renderedContent = renderMarkdown(chunk)
+      // Re-render markdown every 20 chars or at end to avoid O(n²)
+      if (i % 20 === 0 || i === fullText.length - 1) {
+        messages.value[idx].renderedContent = renderMarkdown(chunk)
+      }
       i++
       if (i < fullText.length) {
         setTimeout(tick, 18)
         scrollToBottom()
       } else {
+        messages.value[idx].renderedContent = renderMarkdown(fullText)
         asking.value = false
         abortController = null
         scrollToBottom()
       }
     }
     tick()
-    return // don't set asking=false in finally yet — typewriter handles it
+    return // typewriter handles asking=false
   } catch (err: unknown) {
-    if (err instanceof Error && err.name === 'AbortError') return
+    if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) return
     messages.value.push({
       id: Date.now().toString(),
       role: 'assistant',
@@ -676,8 +692,15 @@ onMounted(async () => {
   transition: opacity 0.15s;
 }
 
-.message-row:hover .msg-actions {
+.message-row:hover .msg-actions,
+.message-row:focus-within .msg-actions,
+.message-row:active .msg-actions {
   opacity: 1;
+}
+
+/* List reorder animation */
+.msg-move {
+  transition: transform 0.2s ease;
 }
 
 .msg-action-btn {
