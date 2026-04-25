@@ -28,7 +28,8 @@ test.describe('smoke: asset pages render without errors', () => {
     })
     expect(assetsResp.ok()).toBeTruthy()
     const assetsData = await assetsResp.json()
-    const assets = assetsData.data ?? assetsData
+    const raw = assetsData.data ?? assetsData
+    const assets = Array.isArray(raw) ? raw : (raw.items ?? [])
     expect(assets.length, 'test_asset should have 1 asset').toBeGreaterThan(0)
 
     // Navigate to frontend
@@ -65,7 +66,8 @@ test.describe('smoke: asset pages render without errors', () => {
     })
     expect(assetsResp.ok()).toBeTruthy()
     const assetsData = await assetsResp.json()
-    const assets = assetsData.data ?? assetsData
+    const raw = assetsData.data ?? assetsData
+    const assets = Array.isArray(raw) ? raw : (raw.items ?? [])
     expect(assets.length).toBeGreaterThan(0)
     const assetId = assets[0].id
 
