@@ -78,7 +78,7 @@ async def scan_spending_leaks(family_id: str, llm: LLMClient, ctx: RedactedConte
         if cat:
             category_assets[cat].append(asset)
 
-    for cat, assets in category_assets.items():
+    for _cat, assets in category_assets.items():
         if len(assets) < 2:
             continue
         sorted_assets = sorted(assets, key=lambda a: a.get("current_value") or 0, reverse=True)
