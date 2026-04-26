@@ -348,6 +348,8 @@ export default {
     deviceRevokeSuccess: '🗑️ 已退出该设备',
     deviceRevokeAllSuccess: '🗑️ 已退出所有设备',
     deviceTrustFailed: '❌ 记住设备失败，请重试',
+    // BuyVsRent
+    buyVsRentFieldsRequired: '⚠️ 请填写购入价格、月租金和使用月数',
   },
   device: {
     title: '已登录设备',

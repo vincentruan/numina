@@ -168,6 +168,12 @@
         />
       </van-cell-group>
 
+      <!-- Buy vs Rent Calculator -->
+      <BuyVsRentCalculator :initial-price="asset.purchase_price ?? undefined" />
+
+      <!-- Cost Equivalence -->
+      <CostEquivalenceCard :asset-id="asset.id" />
+
       <!-- Actions -->
       <div class="actions">
         <template v-if="asset.status === 'in_use' || asset.status === 'idle'">
@@ -215,6 +221,8 @@ import type { AssetValuation } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import DailyCostChart from '@/components/charts/DailyCostChart.vue'
+import BuyVsRentCalculator from '@/components/asset/BuyVsRentCalculator.vue'
+import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
 
 const { t } = useI18n()
 

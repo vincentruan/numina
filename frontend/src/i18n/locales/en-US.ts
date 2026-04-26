@@ -348,6 +348,8 @@ export default {
     deviceRevokeSuccess: '🗑️ Device signed out',
     deviceRevokeAllSuccess: '🗑️ All devices signed out',
     deviceTrustFailed: '❌ Failed to remember device',
+    // BuyVsRent
+    buyVsRentFieldsRequired: '⚠️ Please fill in purchase price, monthly rent, and usage months',
   },
   device: {
     title: 'Signed-in Devices',
