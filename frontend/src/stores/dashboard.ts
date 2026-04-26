@@ -104,29 +104,33 @@ export const useDashboardStore = defineStore('dashboard', () => {
   }
 
   async function fetchAll(): Promise<void> {
-    // 1. Dedup: if a request is already in-flight, return the same Promise
+    // Dedup: if a request is already in-flight, return the same Promise
     if (_fetchPromise !== null) {
       return _fetchPromise
     }
-    // 2. Issue new request (no cache)
+
     loading.value = true
     _fetchPromise = (async () => {
       try {
-        const res = await dashboardApi.getDashboardBundle()
-        const data = res.data
-        overview.value = data.overview
-        statesSummary.value = data.statesSummary
-        homeAssets.value = data.homeAssets
-        allocation.value = data.allocation.items
-        allocationTotal.value = data.allocation.total
-        trend.value = data.trend.points
-        lowUsageAssets.value = data.lowUsageAssets
-        expiringSoonAssets.value = data.expiringSoon
+        // Phase 1: critical data — blocks loading indicator
+        await Promise.all([fetchOverview(), fetchStatesSummary()])
       } finally {
         loading.value = false
         _fetchPromise = null
       }
+
+      // Phase 2: secondary data — fires in background, does not block
+      Promise.all([
+        fetchAllocation(),
+        fetchTrend(),
+        fetchLowUsageAssets(),
+        fetchExpiringSoonAssets(),
+      ]).catch(() => {
+        // Phase 2 failures are non-critical; individual fetch functions
+        // do not throw by default, so this is a safety net only
+      })
     })()
+
     return _fetchPromise
   }
 
