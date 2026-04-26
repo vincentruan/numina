@@ -31,7 +31,7 @@ export const calculateBuyVsRent = (params: BuyVsRentParams): Promise<BuyVsRentRe
   http.post('/assets/buy-vs-rent', params)
 
 export const getCostEquivalence = (
-  assetId: number,
+  assetId: string,
   params?: { hourly_wage?: number; yield_rate?: number; years?: number },
 ): Promise<CostEquivalenceResult> =>
   http.get(`/assets/${assetId}/cost-equivalence`, { params })
