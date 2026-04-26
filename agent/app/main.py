@@ -37,6 +37,7 @@ from routers import disposal as disposal_router
 from routers import liability as liability_router
 from routers import allocation as allocation_router
 from routers import chat as chat_router
+from routers import spending_leak as spending_leak_router
 
 app.include_router(report_router.router)
 app.include_router(suggest_router.router)
@@ -45,6 +46,7 @@ app.include_router(disposal_router.router)
 app.include_router(liability_router.router)
 app.include_router(allocation_router.router)
 app.include_router(chat_router.router)
+app.include_router(spending_leak_router.router)
 
 
 @app.get("/health")

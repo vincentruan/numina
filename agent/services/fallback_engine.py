@@ -94,6 +94,11 @@ class FallbackEngine:
             from services.allocation_advisor import analyze_allocation
             return await analyze_allocation(family_id=family_id, llm=llm)
 
+        elif capability == "spending_leak":
+            from services.spending_leak import scan_spending_leaks
+            leaks = await scan_spending_leaks(family_id=family_id, llm=llm, ctx=ctx)
+            return {"leaks": leaks, "summary": f"发现 {len(leaks)} 条消费漏洞"}
+
         elif capability == "chat":
             if ctx.free_text:
                 from services.chat import answer_question
