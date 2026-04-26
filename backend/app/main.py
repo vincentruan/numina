@@ -66,6 +66,7 @@ from app.models.wish import Wish  # noqa: F401
 from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
+from app.routers import ai_spending_leaks as ai_spending_leaks_router
 from app.routers import ai_allocation as ai_allocation_router
 from app.routers import ai_chat as ai_chat_router
 from app.routers import ai_config as ai_config_router
@@ -370,6 +371,7 @@ app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
 app.include_router(ai_alerts_router.router, prefix="/api/v1")
+app.include_router(ai_spending_leaks_router.router, prefix="/api/v1")
 app.include_router(ai_disposal_router.router, prefix="/api/v1")
 app.include_router(ai_liability_router.router, prefix="/api/v1")
 app.include_router(ai_allocation_router.router, prefix="/api/v1")
