@@ -22,7 +22,6 @@ from app.schemas.asset import (
 )
 from app.services import asset as asset_service
 from app.services.activity import record_activity
-from app.services.cache.factory import invalidate_dashboard_bundle
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -69,7 +68,6 @@ def create_asset(
 ):
     asset = asset_service.create_asset(db, user, req)
     record_activity(db, user, "create", "asset", asset.id, f"添加资产「{asset.name}」", asset.purchase_price)
-    invalidate_dashboard_bundle(user.family_id)
     return _to_response(asset)
 
 
@@ -91,7 +89,6 @@ def update_asset(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.update_asset(db, user, asset_id, req)
-    invalidate_dashboard_bundle(user.family_id)
     return _to_response(asset)
 
 
@@ -102,7 +99,6 @@ def delete_asset(
     user: User = Depends(require_adult),
 ):
     asset_service.archive_asset(db, user, asset_id)
-    invalidate_dashboard_bundle(user.family_id)
     return {"detail": "已归档"}
 
 
@@ -114,7 +110,6 @@ def update_value(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.update_asset_value(db, user, asset_id, req.current_value)
-    invalidate_dashboard_bundle(user.family_id)
     return _to_response(asset)
 
 
@@ -127,7 +122,6 @@ def sell_asset(
 ):
     result = asset_service.sell_asset(db, user, asset_id, req)
     record_activity(db, user, "sell", "asset", asset_id, f"出售资产「{result['name']}」", req.sell_price)
-    invalidate_dashboard_bundle(user.family_id)
     return result
 
 
@@ -139,7 +133,6 @@ def retire_asset(
 ):
     asset = asset_service.retire_asset(db, user, asset_id)
     record_activity(db, user, "retire", "asset", asset_id, f"退役资产「{asset.name}」")
-    invalidate_dashboard_bundle(user.family_id)
     return _to_response(asset)
 
 
@@ -151,7 +144,6 @@ def reactivate_asset(
 ):
     asset = asset_service.reactivate_asset(db, user, asset_id)
     record_activity(db, user, "reactivate", "asset", asset_id, f"恢复资产「{asset.name}」")
-    invalidate_dashboard_bundle(user.family_id)
     return _to_response(asset)
 
 
@@ -173,7 +165,6 @@ def batch_archive_assets(
 ):
     """批量归档资产"""
     result = asset_service.batch_archive_assets(db, user, req.asset_ids)
-    invalidate_dashboard_bundle(user.family_id)
     return result
 
 
@@ -185,7 +176,6 @@ def batch_update_category(
 ):
     """批量修改资产分类"""
     result = asset_service.batch_update_category(db, user, req.asset_ids, req.category_id)
-    invalidate_dashboard_bundle(user.family_id)
     return result
 
 
@@ -197,7 +187,6 @@ def batch_update_tags(
 ):
     """批量修改资产标签"""
     result = asset_service.batch_update_tags(db, user, req.asset_ids, req.tag_ids)
-    invalidate_dashboard_bundle(user.family_id)
     return result
 
 
@@ -209,7 +198,6 @@ def batch_update_status(
 ):
     """批量修改资产状态"""
     result = asset_service.batch_update_status(db, user, req.asset_ids, req.status)
-    invalidate_dashboard_bundle(user.family_id)
     return result
 
 

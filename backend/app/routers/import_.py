@@ -1,6 +1,6 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -11,7 +11,6 @@ from app.models.category import Category
 from app.models.liability import Liability
 from app.models.tag import Tag
 from app.models.user import User
-from app.services.cache.factory import invalidate_dashboard_bundle
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -137,7 +136,6 @@ def import_json(
         stats["liabilities"] += 1
 
     db.commit()
-    invalidate_dashboard_bundle(user.family_id)
     return {"detail": "导入成功", "stats": stats}
 
 

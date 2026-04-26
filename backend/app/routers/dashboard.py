@@ -1,7 +1,4 @@
-import random
-
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
@@ -19,7 +16,6 @@ from app.schemas.dashboard import (
     TrendResponse,
 )
 from app.services import dashboard as dashboard_service
-from app.services.cache.factory import get_dashboard_cache
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -141,16 +137,8 @@ def get_bundle(
     """Get all dashboard data in a single request.
 
     Combines overview, states-summary, home-assets, allocation, trend,
-    low-usage-assets, and expiring-soon into one cached response.
-    Uses fixed default parameters matching frontend fetchAll() defaults.
+    low-usage-assets, and expiring-soon into one response.
     """
-    cache = get_dashboard_cache()
-    cache_key = f"dashboard:bundle:{user.family_id}"
-
-    cached = cache.get(cache_key)
-    if cached is not None:
-        return JSONResponse(content=cached)
-
     overview = dashboard_service.get_overview(db, user)
     states_summary = dashboard_service.get_states_summary(db, user)
     home_assets = dashboard_service.get_home_assets(db, user, limit=5)
@@ -159,7 +147,7 @@ def get_bundle(
     low_usage_assets = dashboard_service.get_low_usage_assets(db, user)
     expiring_soon = dashboard_service.get_expiring_soon_assets(db, user, days_threshold=90)
 
-    bundle = {
+    return {
         "overview": overview.model_dump(mode='json'),
         "statesSummary": states_summary,
         "homeAssets": {k: [item.model_dump(mode='json') for item in v] for k, v in home_assets.items()},
@@ -168,6 +156,3 @@ def get_bundle(
         "lowUsageAssets": [item.model_dump(mode='json') for item in low_usage_assets],
         "expiringSoon": [item.model_dump(mode='json') for item in expiring_soon],
     }
-
-    cache.set(cache_key, bundle, ttl_seconds=random.randint(60, 90))
-    return JSONResponse(content=bundle)

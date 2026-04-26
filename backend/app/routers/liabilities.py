@@ -12,7 +12,6 @@ from app.schemas.liability import (
 )
 from app.services import liability as liability_service
 from app.services.activity import record_activity
-from app.services.cache.factory import invalidate_dashboard_bundle
 
 router = APIRouter(prefix="/liabilities", tags=["liabilities"])
 
@@ -34,7 +33,6 @@ def create_liability(
 ):
     liability = liability_service.create_liability(db, user, req)
     record_activity(db, user, "create", "liability", liability.id, f"添加负债「{liability.name}」", liability.original_amount)
-    invalidate_dashboard_bundle(user.family_id)
     return liability
 
 
@@ -55,7 +53,6 @@ def update_liability(
     user: User = Depends(require_adult),
 ):
     result = liability_service.update_liability(db, user, liability_id, req)
-    invalidate_dashboard_bundle(user.family_id)
     return result
 
 
@@ -66,7 +63,6 @@ def delete_liability(
     user: User = Depends(require_adult),
 ):
     liability_service.delete_liability(db, user, liability_id)
-    invalidate_dashboard_bundle(user.family_id)
     return {"detail": "已删除"}
 
 
@@ -79,7 +75,6 @@ def record_payment(
 ):
     liability = liability_service.record_payment(db, user, liability_id, req.amount)
     record_activity(db, user, "payment", "liability", liability_id, f"还款「{liability.name}」", req.amount)
-    invalidate_dashboard_bundle(user.family_id)
     return liability
 
 
