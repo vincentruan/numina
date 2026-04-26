@@ -2,7 +2,7 @@ import http from './index'
 import type { Wish, WishRealizeRequest } from '@/types'
 
 export function getWishes(status?: string) {
-  return http.get<Wish[]>('/wishes/', { params: status ? { status } : undefined })
+  return http.get<Wish[]>('/wishes', { params: status ? { status } : undefined })
 }
 
 export function getWish(id: string) {
@@ -10,7 +10,7 @@ export function getWish(id: string) {
 }
 
 export function createWish(data: Partial<Wish>) {
-  return http.post<Wish>('/wishes/', data)
+  return http.post<Wish>('/wishes', data)
 }
 
 export function updateWish(id: string, data: Partial<Wish>) {
