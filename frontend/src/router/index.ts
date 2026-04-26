@@ -195,6 +195,11 @@ const router = createRouter({
           component: () => import('@/pages/AIChatPage.vue')
         },
         {
+          path: 'ai/time-machine',
+          name: 'AITimeMachine',
+          component: () => import('@/pages/AITimeMachinePage.vue')
+        },
+        {
           path: 'ai/allocation',
           name: 'AIAllocation',
           component: () => import('@/pages/AIAllocationPage.vue')

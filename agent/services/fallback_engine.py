@@ -110,6 +110,38 @@ class FallbackEngine:
                 return {"summary": answer}
             return {"summary": "问答功能暂时不可用，请稍后重试"}
 
+        elif capability == "time_machine":
+            payload: dict = {}
+            if ctx.free_text:
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
+                    payload = json.loads(ctx.free_text)
+            analysis_type = payload.get("type", "unknown")
+            data = payload.get("data", {})
+            family_context = payload.get("family_context", {})
+
+            if analysis_type == "whatif":
+                prompt = (
+                    "你是家庭财务顾问。以下是用户的 What-if 消费模拟计算结果：\n"
+                    f"{json.dumps(data, ensure_ascii=False)}\n\n"
+                    f"家庭财务概况：{json.dumps(family_context, ensure_ascii=False)}\n\n"
+                    "请用 2-3 句话总结关键发现，给出一个明确的建议。语气：温和、实用、不说教。"
+                )
+            elif analysis_type == "projection":
+                prompt = (
+                    "你是家庭财务顾问。以下是用户的财务推演计算结果：\n"
+                    f"{json.dumps(data, ensure_ascii=False)}\n\n"
+                    f"家庭财务概况：{json.dumps(family_context, ensure_ascii=False)}\n\n"
+                    "请用 2-3 句话总结关键发现，给出一个明确的建议。语气：温和、实用、不说教。"
+                )
+            else:
+                return {"summary": "未知的分析类型"}
+
+            if not hasattr(llm, "chat"):
+                logger.warning("[time_machine] llm has no .chat() method, returning null summary")
+                return {"summary": None}
+            response = await llm.chat(prompt)
+            return {"summary": response}
+
         else:
             return {"summary": f"未知功能: {capability}"}
 
