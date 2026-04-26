@@ -164,7 +164,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   # 生成所有密钥
   SECRET_KEY=$(generate_hex_key)
   ALTCHA_HMAC_KEY=$(generate_hex_key)
-  AI_ENCRYPTION_KEY=$(generate_hex_key)
+  AI_ENCRYPTION_KEY=$(generate_fernet_key)
   AGENT_INTERNAL_TOKEN=$(generate_hex_key)
   STORAGE_ENCRYPTION_KEY=$(generate_fernet_key)
 
@@ -246,12 +246,19 @@ else
     NEED_UPDATE=true
   fi
 
-  # 检查 AI_ENCRYPTION_KEY
-  if ! grep -q "^AI_ENCRYPTION_KEY=." "$ENV_FILE" || grep -q "^AI_ENCRYPTION_KEY=$" "$ENV_FILE"; then
-    warn "AI_ENCRYPTION_KEY 需要配置"
-    AI_ENCRYPTION_KEY=$(generate_hex_key)
+  # 检查 AI_ENCRYPTION_KEY（必须是有效的 Fernet key，不能是 hex 字符串）
+  CURRENT_AI_KEY=$(grep "^AI_ENCRYPTION_KEY=" "$ENV_FILE" 2>/dev/null | cut -d= -f2-)
+  AI_KEY_VALID=false
+  if [[ -n "$CURRENT_AI_KEY" ]]; then
+    if python3 -c "from cryptography.fernet import Fernet; Fernet('${CURRENT_AI_KEY}'.encode())" 2>/dev/null; then
+      AI_KEY_VALID=true
+    fi
+  fi
+  if [[ "$AI_KEY_VALID" == false ]]; then
+    warn "AI_ENCRYPTION_KEY 无效或未配置（需要 Fernet 格式），自动生成..."
+    AI_ENCRYPTION_KEY=$(generate_fernet_key)
     if grep -q "^AI_ENCRYPTION_KEY=" "$ENV_FILE"; then
-      sed -i.bak "s/^AI_ENCRYPTION_KEY=.*/AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}/" "$ENV_FILE"
+      sed -i.bak "s|^AI_ENCRYPTION_KEY=.*|AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}|" "$ENV_FILE"
     else
       echo "AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY}" >> "$ENV_FILE"
     fi

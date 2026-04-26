@@ -18,7 +18,13 @@
           <van-button square type="danger" text="删除" class="swipe-btn" @click="onDelete(tag)" />
         </template>
       </van-swipe-cell>
-      <van-empty v-if="!tags.length" description="暂无标签" />
+      <van-empty v-if="!tags.length" description="暂无标签，快来创建第一个吧">
+        <template #bottom>
+          <van-button type="primary" round size="small" @click="showAddDialog">
+            ＋ 添加标签
+          </van-button>
+        </template>
+      </van-empty>
     </van-cell-group>
 
     <!-- Add/Edit Dialog -->

@@ -183,19 +183,9 @@ const panelItems = [
     icon: { viewBox: '0 0 24 24', paths: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12'] },
   },
   {
-    action: 'ocr' as const,
-    label: '识图搜索',
-    icon: { viewBox: '0 0 24 24', paths: ['M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z'] },
-  },
-  {
-    action: 'webpage' as const,
-    label: '网页解析',
-    icon: { viewBox: '0 0 24 24', paths: ['M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71', 'M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'] },
-  },
-  {
-    action: 'history' as const,
-    label: '历史记录',
-    icon: { viewBox: '0 0 24 24', paths: ['M12 8v4l3 3', 'M3.05 11a9 9 0 1 1 .5 4M3 16v-5h5'] },
+    action: 'clear' as const,
+    label: '清空对话',
+    icon: { viewBox: '0 0 24 24', paths: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'] },
   },
 ]
 

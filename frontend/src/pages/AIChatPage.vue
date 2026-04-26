@@ -1,15 +1,48 @@
 <template>
-  <div class="ai-chat-page">
-    <!-- Custom title bar -->
+  <div class="ai-chat-page" :class="{ 'theme-light': isLight }">
+    <!-- Fixed top bar: [history/sidebar] [title] [new chat] -->
     <div class="chat-header">
-      <button class="header-back" aria-label="返回" @click="$router.back()">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="15 18 9 12 15 6"/>
+      <button class="header-btn" aria-label="会话历史" @click="showHistory = true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
       <h1 class="header-title">{{ sessionTitle }}</h1>
-      <div class="header-spacer" aria-hidden="true" />
+      <div class="header-actions">
+        <button class="header-btn" aria-label="切换主题" @click="toggleTheme">
+          <svg v-if="isLight" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
+        <button class="header-btn" aria-label="新对话" @click="onNewChat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
     </div>
+
+    <!-- History sidebar drawer -->
+    <van-popup v-model:show="showHistory" position="left" :style="{ width: '80%', height: '100%' }">
+      <div class="history-panel">
+        <div class="history-header">
+          <span class="history-title">会话历史</span>
+          <button class="header-btn" @click="showHistory = false">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="history-empty">
+          <p>暂无历史会话</p>
+          <p class="history-hint">每次对话记录将显示在这里</p>
+        </div>
+      </div>
+    </van-popup>
 
     <!-- Chat body -->
     <div ref="scrollRef" class="chat-body">
@@ -59,69 +92,82 @@
             class="message-row"
             :class="msg.role"
           >
-          <div class="bubble" :class="msg.role">
-            <div v-if="msg.role === 'assistant'" class="assistant-avatar" aria-hidden="true">
-              <AIBrainIcon class="avatar-icon" />
-            </div>
-            <div class="bubble-body">
-              <div
-                v-if="msg.role === 'assistant'"
-                class="bubble-text"
-                v-html="msg.renderedContent ?? ''"
-              />
-              <div v-else class="bubble-text">{{ msg.content }}</div>
-              <span class="msg-time">{{ msg.displayTime }}</span>
-              <!-- Assistant message actions -->
-              <div v-if="msg.role === 'assistant'" class="msg-actions">
-                <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                  </svg>
-                </button>
-                <button class="msg-action-btn" aria-label="重新生成" title="重新生成" :disabled="asking" @click="onRegenerate(idx)">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="1 4 1 10 7 10"/>
-                    <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
-                  </svg>
-                </button>
-                <button
-                  class="msg-action-btn"
-                  :class="{ 'msg-action-btn--active': msg.feedback === 1 }"
-                  aria-label="有帮助"
-                  title="有帮助"
-                  @click="onFeedback(msg.id, 1)"
+            <div class="bubble" :class="msg.role">
+              <div class="bubble-body">
+                <!-- Deep think block (assistant only) -->
+                <div
+                  v-if="msg.role === 'assistant' && msg.thinkContent"
+                  class="think-block"
+                  :class="{ 'think-block--open': msg.thinkOpen }"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
-                    <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
-                  </svg>
-                </button>
-                <button
-                  class="msg-action-btn"
-                  :class="{ 'msg-action-btn--active': msg.feedback === -1 }"
-                  aria-label="没帮助"
-                  title="没帮助"
-                  @click="onFeedback(msg.id, -1)"
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/>
-                    <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
-                  </svg>
-                </button>
+                  <button class="think-toggle" @click="msg.thinkOpen = !msg.thinkOpen">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+                      <path d="M9 21h6"/>
+                    </svg>
+                    <span v-if="msg.thinkDone">已深度思考 {{ msg.thinkSeconds }}s</span>
+                    <span v-else class="think-ing">深度思考中…</span>
+                    <svg class="think-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </button>
+                  <div v-if="msg.thinkOpen" class="think-content" v-html="msg.thinkContent" />
+                </div>
+                <div
+                  v-if="msg.role === 'assistant'"
+                  class="bubble-text"
+                  v-html="msg.renderedContent ?? ''"
+                />
+                <div v-else class="bubble-text">{{ msg.content }}</div>
+                <span class="msg-time">{{ msg.displayTime }}</span>
+                <!-- Assistant message actions -->
+                <div v-if="msg.role === 'assistant'" class="msg-actions">
+                  <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                  <button class="msg-action-btn" aria-label="重新生成" title="重新生成" :disabled="asking" @click="onRegenerate(idx)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="1 4 1 10 7 10"/>
+                      <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="msg-action-btn"
+                    :class="{ 'msg-action-btn--active': msg.feedback === 1 }"
+                    aria-label="有帮助"
+                    title="有帮助"
+                    @click="onFeedback(msg.id, 1)"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
+                      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
+                    </svg>
+                  </button>
+                  <button
+                    class="msg-action-btn"
+                    :class="{ 'msg-action-btn--active': msg.feedback === -1 }"
+                    aria-label="没帮助"
+                    title="没帮助"
+                    @click="onFeedback(msg.id, -1)"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/>
+                      <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         </transition-group>
 
         <!-- Skeleton loading state -->
         <transition name="msg">
           <div v-if="asking" class="message-row assistant">
             <div class="bubble assistant">
-              <div class="assistant-avatar" aria-hidden="true">
-                <AIBrainIcon class="avatar-icon" />
-              </div>
               <div class="bubble-body">
                 <div class="skeleton-bubble" aria-label="AI 正在思考">
                   <div class="skeleton-line skeleton-line--long" />
@@ -157,13 +203,13 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
+import { useSettingsStore } from '@/stores/settings'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
-import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 
 // Configure marked
 marked.use({ breaks: true })
@@ -176,34 +222,19 @@ function renderMarkdown(text: string): string {
 const SUGGESTIONS = [
   {
     text: '我们家净资产是多少？',
-    icon: {
-      viewBox: '0 0 24 24',
-      paths: ['M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'],
-    },
+    icon: { viewBox: '0 0 24 24', paths: ['M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'] },
   },
   {
     text: '哪类资产占比最高？',
-    icon: {
-      viewBox: '0 0 24 24',
-      paths: ['M21.21 15.89A10 10 0 1 1 8 2.83', 'M22 12A10 10 0 0 0 12 2v10z'],
-    },
+    icon: { viewBox: '0 0 24 24', paths: ['M21.21 15.89A10 10 0 1 1 8 2.83', 'M22 12A10 10 0 0 0 12 2v10z'] },
   },
   {
     text: '有哪些闲置资产？',
-    icon: {
-      viewBox: '0 0 24 24',
-      paths: [
-        'M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z',
-        'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16',
-      ],
-    },
+    icon: { viewBox: '0 0 24 24', paths: ['M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z', 'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'] },
   },
   {
     text: '净资产趋势如何？',
-    icon: {
-      viewBox: '0 0 24 24',
-      paths: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'],
-    },
+    icon: { viewBox: '0 0 24 24', paths: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'] },
   },
 ]
 
@@ -219,18 +250,32 @@ interface Message {
   created_at: string
   displayTime: string
   feedback?: 1 | -1 | 0
+  // deep think fields
+  thinkContent?: string
+  thinkOpen?: boolean
+  thinkDone?: boolean
+  thinkSeconds?: number
 }
 
 const { t } = useI18n()
 const route = useRoute()
 const aiStore = useAIStore()
+const settingsStore = useSettingsStore()
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
 const deepThink = ref(false)
 const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
+const showHistory = ref(false)
+
+// Follow global theme: light when theme==='light', dark otherwise (dark/system default to dark)
+const isLight = computed(() => settingsStore.theme === 'light')
 let abortController: AbortController | null = null
+
+function toggleTheme() {
+  settingsStore.setTheme(isLight.value ? 'dark' : 'light')
+}
 
 const sessionTitle = computed(() => {
   const firstUser = messages.value.find((m) => m.role === 'user')
@@ -253,6 +298,17 @@ function onChipClick(text: string) {
   onSend()
 }
 
+async function onNewChat() {
+  if (messages.value.length === 0) return
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message: '开始新对话？当前对话将被清空。' })
+    await clearChatHistory()
+    messages.value = []
+  } catch {
+    // cancelled
+  }
+}
+
 async function onSend() {
   const q = inputText.value.trim()
   if (!q || asking.value) return
@@ -269,20 +325,67 @@ async function onSend() {
   abortController = new AbortController()
   await scrollToBottom()
 
-  try {
-    const res = await sendChatMessage(q, abortController.signal)
-    const fullText = res.data.answer
-    // Typewriter effect
-    const msg: Message = {
-      id: res.data.message_id,
+  // Deep think: start timer and add placeholder think block
+  let thinkTimer: ReturnType<typeof setInterval> | null = null
+  let thinkStart = 0
+  let thinkMsgIdx = -1
+
+  if (deepThink.value) {
+    thinkStart = Date.now()
+    const thinkMsg: Message = {
+      id: `think-${Date.now()}`,
       role: 'assistant',
       content: '',
       renderedContent: '',
       created_at: new Date().toISOString(),
       displayTime: formatTime(new Date().toISOString()),
+      thinkContent: '<p>正在深度分析您的问题…</p>',
+      thinkOpen: true,
+      thinkDone: false,
+      thinkSeconds: 0,
     }
-    messages.value.push(msg)
-    const idx = messages.value.length - 1
+    messages.value.push(thinkMsg)
+    thinkMsgIdx = messages.value.length - 1
+    thinkTimer = setInterval(() => {
+      if (thinkMsgIdx >= 0) {
+        messages.value[thinkMsgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+      }
+    }, 1000)
+    await scrollToBottom()
+  }
+
+  try {
+    const res = await sendChatMessage(q, abortController.signal)
+    const fullText = res.data.answer
+
+    // Finish deep think block
+    if (thinkTimer) {
+      clearInterval(thinkTimer)
+      thinkTimer = null
+    }
+
+    let msg: Message
+    if (thinkMsgIdx >= 0) {
+      // Reuse the think placeholder message, mark done and collapse
+      messages.value[thinkMsgIdx].thinkDone = true
+      messages.value[thinkMsgIdx].thinkOpen = false
+      messages.value[thinkMsgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+      messages.value[thinkMsgIdx].id = res.data.message_id
+      msg = messages.value[thinkMsgIdx]
+    } else {
+      msg = {
+        id: res.data.message_id,
+        role: 'assistant',
+        content: '',
+        renderedContent: '',
+        created_at: new Date().toISOString(),
+        displayTime: formatTime(new Date().toISOString()),
+      }
+      messages.value.push(msg)
+      thinkMsgIdx = messages.value.length - 1
+    }
+
+    const idx = thinkMsgIdx
     let i = 0
     let cancelled = false
     abortController.signal.addEventListener('abort', () => { cancelled = true })
@@ -295,7 +398,6 @@ async function onSend() {
       }
       const chunk = fullText.slice(0, i + 1)
       messages.value[idx].content = chunk
-      // Re-render markdown every 20 chars or at end to avoid O(n²)
       if (i % 20 === 0 || i === fullText.length - 1) {
         messages.value[idx].renderedContent = renderMarkdown(chunk)
       }
@@ -311,19 +413,26 @@ async function onSend() {
       }
     }
     tick()
-    return // typewriter handles asking=false
+    return
   } catch (err: unknown) {
+    if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
     if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) return
-    messages.value.push({
+    // Replace think placeholder or push new error message
+    const errMsg: Message = {
       id: Date.now().toString(),
       role: 'assistant',
       content: '抱歉，AI 服务暂时不可用，请稍后再试。',
       renderedContent: '<p>抱歉，AI 服务暂时不可用，请稍后再试。</p>',
       created_at: new Date().toISOString(),
       displayTime: formatTime(new Date().toISOString()),
-    })
+    }
+    if (thinkMsgIdx >= 0) {
+      messages.value[thinkMsgIdx] = errMsg
+    } else {
+      messages.value.push(errMsg)
+    }
   } finally {
-    // Only reset if typewriter didn't take over
+    if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
     if (asking.value) {
       asking.value = false
       abortController = null
@@ -362,10 +471,8 @@ async function onCopy(content: string) {
 }
 
 async function onRegenerate(idx: number) {
-  // Find the user message before this assistant message
   const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
   if (!prevUser || asking.value) return
-  // Remove the assistant message and re-ask
   messages.value.splice(idx, 1)
   inputText.value = prevUser.content
   await onSend()
@@ -400,12 +507,55 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ── CSS variables for day/night theme ── */
+.ai-chat-page {
+  --bg: #0f1117;
+  --bg-header: rgba(15, 17, 23, 0.95);
+  --border: rgba(255, 255, 255, 0.06);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.5);
+  --text-muted: rgba(255, 255, 255, 0.3);
+  --bubble-user-bg: linear-gradient(135deg, #6366f1, #7c3aed);
+  --bubble-user-color: #fff;
+  --bubble-ai-bg: rgba(255, 255, 255, 0.07);
+  --bubble-ai-color: rgba(255, 255, 255, 0.85);
+  --bubble-ai-border: rgba(255, 255, 255, 0.08);
+  --btn-color: rgba(255, 255, 255, 0.7);
+  --btn-hover-bg: rgba(255, 255, 255, 0.08);
+  --suggestion-bg: rgba(255, 255, 255, 0.08);
+  --suggestion-border: rgba(255, 255, 255, 0.12);
+  --think-bg: rgba(99, 102, 241, 0.08);
+  --think-border: rgba(99, 102, 241, 0.25);
+  --think-color: rgba(255, 255, 255, 0.55);
+}
+
+.ai-chat-page.theme-light {
+  --bg: #f5f5f7;
+  --bg-header: rgba(245, 245, 247, 0.95);
+  --border: rgba(0, 0, 0, 0.08);
+  --text-primary: rgba(0, 0, 0, 0.85);
+  --text-secondary: rgba(0, 0, 0, 0.45);
+  --text-muted: rgba(0, 0, 0, 0.3);
+  --bubble-user-bg: linear-gradient(135deg, #6366f1, #7c3aed);
+  --bubble-user-color: #fff;
+  --bubble-ai-bg: #fff;
+  --bubble-ai-color: rgba(0, 0, 0, 0.8);
+  --bubble-ai-border: rgba(0, 0, 0, 0.08);
+  --btn-color: rgba(0, 0, 0, 0.55);
+  --btn-hover-bg: rgba(0, 0, 0, 0.06);
+  --suggestion-bg: #fff;
+  --suggestion-border: rgba(0, 0, 0, 0.08);
+  --think-bg: rgba(99, 102, 241, 0.06);
+  --think-border: rgba(99, 102, 241, 0.2);
+  --think-color: rgba(0, 0, 0, 0.5);
+}
+
 /* ── Page shell ── */
 .ai-chat-page {
   display: flex;
   flex-direction: column;
   height: calc(100dvh - env(safe-area-inset-bottom));
-  background: #0f1117;
+  background: var(--bg);
 }
 
 /* ── Header ── */
@@ -413,16 +563,16 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   padding: 0 4px;
-  height: 50px;
-  background: rgba(15, 17, 23, 0.95);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: env(safe-area-inset-top);
+  height: calc(50px + env(safe-area-inset-top));
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   flex-shrink: 0;
-  padding-top: env(safe-area-inset-top);
 }
 
-.header-back {
+.header-btn {
   width: 44px;
   height: 44px;
   display: flex;
@@ -430,16 +580,16 @@ onMounted(async () => {
   justify-content: center;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--btn-color);
   cursor: pointer;
   border-radius: 10px;
   transition: background 0.15s, color 0.15s;
   flex-shrink: 0;
 }
 
-.header-back:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+.header-btn:hover {
+  background: var(--btn-hover-bg);
+  color: var(--text-primary);
 }
 
 .header-title {
@@ -447,17 +597,61 @@ onMounted(async () => {
   text-align: center;
   font-size: 16px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 0 8px;
+  padding: 0 4px;
 }
 
-.header-spacer {
-  width: 44px;
-  flex-shrink: 0;
+.header-actions {
+  display: flex;
+  align-items: center;
+}
+
+/* ── History sidebar ── */
+.history-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  padding: env(safe-area-inset-top) 0 0;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.history-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.history-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.history-empty p {
+  margin: 0;
+}
+
+.history-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 /* ── Chat body ── */
@@ -504,19 +698,19 @@ onMounted(async () => {
   position: absolute;
   inset: -8px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.25) 0%, transparent 70%);
+  background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
   animation: pulse-glow 3s ease-in-out infinite;
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.6; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.1); }
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.15); }
 }
 
 .hero-icon {
   width: 48px;
   height: 48px;
-  color: #6366f1;
+  color: #818cf8;
   position: relative;
   z-index: 1;
 }
@@ -524,13 +718,13 @@ onMounted(async () => {
 .empty-title {
   font-size: 18px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
   margin: 0;
 }
 
 .empty-subtitle {
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--text-secondary);
   margin: 0 0 16px;
 }
 
@@ -547,8 +741,8 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--suggestion-bg);
+  border: 1px solid var(--suggestion-border);
   border-radius: 12px;
   cursor: pointer;
   text-align: left;
@@ -580,12 +774,12 @@ onMounted(async () => {
 .suggestion-text {
   flex: 1;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--text-primary);
   line-height: 1.4;
 }
 
 .suggestion-arrow {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -599,31 +793,7 @@ onMounted(async () => {
 .message-row.assistant { align-items: flex-start; }
 
 .bubble {
-  max-width: 82%;
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.bubble.user {
-  flex-direction: row-reverse;
-}
-
-.assistant-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(99, 102, 241, 0.2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.avatar-icon {
-  width: 16px;
-  height: 16px;
+  max-width: 86%;
 }
 
 .bubble-body {
@@ -632,9 +802,65 @@ onMounted(async () => {
   gap: 3px;
 }
 
-.bubble.user .bubble-body {
+.message-row.user .bubble-body {
   align-items: flex-end;
 }
+
+/* ── Deep think block ── */
+.think-block {
+  background: var(--think-bg);
+  border: 1px solid var(--think-border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.think-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: #818cf8;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.think-toggle:hover {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.think-ing {
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.think-chevron {
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.think-block--open .think-chevron {
+  transform: rotate(180deg);
+}
+
+.think-content {
+  padding: 8px 12px 10px;
+  font-size: 12px;
+  color: var(--think-color);
+  line-height: 1.6;
+  border-top: 1px solid var(--think-border);
+}
+
+.think-content :deep(p) { margin: 0 0 4px; }
+.think-content :deep(p:last-child) { margin-bottom: 0; }
 
 .bubble-text {
   display: block;
@@ -660,8 +886,8 @@ onMounted(async () => {
   font-family: 'SF Mono', 'Fira Code', monospace;
 }
 .bubble.assistant .bubble-text :deep(pre) {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--bubble-ai-border);
   border-radius: 8px;
   padding: 10px 12px;
   overflow-x: auto;
@@ -670,27 +896,27 @@ onMounted(async () => {
 .bubble.assistant .bubble-text :deep(pre code) {
   background: transparent;
   padding: 0;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--bubble-ai-color);
 }
-.bubble.assistant .bubble-text :deep(strong) { color: rgba(255, 255, 255, 0.95); }
+.bubble.assistant .bubble-text :deep(strong) { color: var(--text-primary); }
 .bubble.assistant .bubble-text :deep(a) { color: #818cf8; text-decoration: underline; }
 
 .bubble.user .bubble-text {
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
-  color: #fff;
+  background: var(--bubble-user-bg);
+  color: var(--bubble-user-color);
   border-bottom-right-radius: 4px;
 }
 
 .bubble.assistant .bubble-text {
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.85);
+  background: var(--bubble-ai-bg);
+  color: var(--bubble-ai-color);
   border-bottom-left-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--bubble-ai-border);
 }
 
 .msg-time {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--text-muted);
   padding: 0 4px;
 }
 
@@ -721,7 +947,7 @@ onMounted(async () => {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -730,8 +956,8 @@ onMounted(async () => {
 }
 
 .msg-action-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--btn-hover-bg);
+  color: var(--btn-color);
 }
 
 .msg-action-btn:disabled {
@@ -801,10 +1027,11 @@ onMounted(async () => {
 /* ── Input bar ── */
 .input-bar {
   padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(15, 17, 23, 0.95);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--bg-header);
+  border-top: 1px solid var(--border);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+  flex-shrink: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -58,23 +58,29 @@ async function main() {
   const page = await browser.newPage();
   await page.setViewport(VIEWPORT);
 
-  // Get auth token and set localStorage
-  console.log('Getting auth token...');
-  const token = await getAuthToken();
-  if (!token) {
-    console.error('Failed to get auth token');
-    await browser.close();
-    process.exit(1);
-  }
-  console.log('Token obtained.\n');
+  // Login via form to get httpOnly cookie
+  console.log('Logging in via form...');
+  await page.goto(`${BASE_URL}login`, { waitUntil: 'networkidle2' });
+  await sleep(500);
 
-  // Navigate and set localStorage
-  await page.goto(BASE_URL, { waitUntil: 'networkidle2' });
-  await page.evaluate((t, u) => {
-    localStorage.setItem('token', t);
-    localStorage.setItem('refreshToken', '');
-    localStorage.setItem('user', JSON.stringify({ username: u }));
-  }, token, USERNAME);
+  // Fill username and password
+  const usernameInput = await page.$('input[type="text"], input[name="username"], .van-field__control');
+  const inputs = await page.$$('.van-field__control');
+  if (inputs.length >= 2) {
+    await inputs[0].click({ clickCount: 3 });
+    await inputs[0].type(USERNAME);
+    await inputs[1].click({ clickCount: 3 });
+    await inputs[1].type(PASSWORD);
+  }
+  await sleep(300);
+
+  // Click login button
+  const loginBtn = await page.$('.van-button--primary, button[type="submit"]');
+  if (loginBtn) {
+    await loginBtn.click();
+    await sleep(2000);
+  }
+  console.log('Login submitted, current URL:', page.url(), '\n');
 
   // ===========================================
   // 1. LOGIN & AUTH PAGES
@@ -101,8 +107,6 @@ async function main() {
   console.log('----------------------------------');
 
   await page.goto(BASE_URL, { waitUntil: 'networkidle2' });
-  await page.evaluate((t) => localStorage.setItem('token', t), token);
-  await page.goto(`${BASE_URL}`, { waitUntil: 'networkidle2' });
   await waitForPageLoad(page);
   await takeScreenshot(page, '04-dashboard', 'Dashboard overview');
 
@@ -205,6 +209,21 @@ async function main() {
   await page.goto(`${BASE_URL}settings/tags`, { waitUntil: 'networkidle2' });
   await waitForPageLoad(page);
   await takeScreenshot(page, '17-tag-manage', 'Tag management');
+
+  // ===========================================
+  // 9. AI CHAT PAGE
+  // ===========================================
+  console.log('\nSection 9: AI Chat');
+  console.log('----------------------------------');
+
+  await page.goto(`${BASE_URL}ai/chat`, { waitUntil: 'networkidle2' });
+  await waitForPageLoad(page);
+  await takeScreenshot(page, '18-ai-chat-empty', 'AI chat empty state');
+
+  // AI Hub
+  await page.goto(`${BASE_URL}ai`, { waitUntil: 'networkidle2' });
+  await waitForPageLoad(page);
+  await takeScreenshot(page, '19-ai-hub', 'AI hub page');
 
   // ===========================================
   // SUMMARY

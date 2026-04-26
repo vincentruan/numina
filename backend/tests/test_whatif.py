@@ -64,3 +64,60 @@ def test_empty_actions_validation():
 
     with pytest.raises(ValidationError):
         WhatIfRequest(actions=[], projection_years=10)
+
+
+def test_whatif_api(client, auth_headers, db):
+    from datetime import date
+
+    from app.models.asset import Asset
+    from app.models.category import Category
+
+    me = client.get("/api/v1/auth/me", headers=auth_headers).json()
+    family_id = me["data"]["family_id"]
+    user_id = me["data"]["id"]
+
+    cat = db.query(Category).filter_by(name="车辆").first()
+    asset = Asset(
+        user_id=user_id, family_id=family_id, category_id=cat.id,
+        name="测试车", asset_type="physical",
+        purchase_price=200000.0, current_value=150000.0,
+        purchase_date=date(2022, 1, 1),
+        annual_maintenance_cost=10000.0,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+
+    resp = client.post(
+        "/api/v1/ai/whatif",
+        json={
+            "actions": [{"action_type": "sell", "asset_id": asset.id, "liquidation_rate": 0.7}],
+            "projection_years": 5,
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert len(data["projection"]) == 6
+    assert "total_difference" in data
+
+
+def test_whatif_api_validation(client, auth_headers):
+    resp = client.post(
+        "/api/v1/ai/whatif",
+        json={"actions": [], "projection_years": 5},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 422
+
+
+def test_whatif_api_invalid_asset(client, auth_headers):
+    resp = client.post(
+        "/api/v1/ai/whatif",
+        json={
+            "actions": [{"action_type": "sell", "asset_id": 999999999}],
+            "projection_years": 5,
+        },
+        headers=auth_headers,
+    )
+    assert resp.status_code == 404
