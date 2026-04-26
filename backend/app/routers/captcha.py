@@ -2,6 +2,7 @@
 
 from altcha import ChallengeOptions, create_challenge
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 from app.config import settings
 
@@ -30,12 +31,16 @@ def get_captcha_config():
         raise
 
 
-@router.get("/challenge")
+@router.get("/challenge", response_class=JSONResponse)
 def get_challenge(endpoint: str | None = None):
     """Generate an ALTCHA challenge for the client to solve.
 
     Returns challenge data that the client must solve via proof-of-work.
     The challenge is validated on protected endpoints in production mode.
+
+    NOTE: This endpoint uses JSONResponse directly (not EnvelopeResponse) because
+    the altcha browser library fetches this URL and expects the raw challenge object,
+    not the standard {code, data} envelope format.
 
     Args:
         endpoint: Optional endpoint type to adjust difficulty.
@@ -48,10 +53,10 @@ def get_challenge(endpoint: str | None = None):
         hmac_key=settings.ALTCHA_HMAC_KEY,
         max_number=max_number,
     ))
-    return {
+    return JSONResponse(content={
         "algorithm": challenge.algorithm,
         "challenge": challenge.challenge,
         "max_number": challenge.max_number,
         "salt": challenge.salt,
         "signature": challenge.signature,
-    }
+    })
