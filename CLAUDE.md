@@ -54,6 +54,30 @@ Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visu
 | Agent | Python 3.11+ + FastAPI + DeerFlow/LangChain |
 | Infrastructure | Docker Compose + Nginx |
 
+## Known Pitfalls
+
+### FastAPI `redirect_slashes` and HTTPS Mixed Content
+
+FastAPI defaults to `redirect_slashes=True`, which redirects `/api/v1/assets` → `/api/v1/assets/` with a 307. In HTTPS deployments behind nginx, nginx forwards requests to FastAPI over plain HTTP internally. FastAPI then issues a `Location: http://...` redirect, which the browser blocks as Mixed Content.
+
+**Fix:** Set `redirect_slashes=False` in `app/main.py`:
+```python
+app = FastAPI(..., redirect_slashes=False)
+```
+
+**Also required:** All router root-path decorators must use `""` instead of `"/"`:
+```python
+# ✅ Correct
+@router.get("")
+@router.post("")
+
+# ❌ Causes 307 redirect → Mixed Content in HTTPS
+@router.get("/")
+@router.post("/")
+```
+
+This applies to every router file that has root-path endpoints (assets, liabilities, tags, wishes, family, etc.).
+
 ## Cross-Cutting Conventions
 
 These apply to all modules. Module-specific conventions live in each module's `CLAUDE.md`.

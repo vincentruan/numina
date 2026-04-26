@@ -32,7 +32,7 @@ class UpdateRoleRequest(BaseModel):
 
 
 @router.get("/info", response_model=FamilyResponse)
-@router.get("/", response_model=FamilyResponse)
+@router.get("", response_model=FamilyResponse)
 def get_family(
     response: Response,
     db: Session = Depends(get_db),

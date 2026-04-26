@@ -16,7 +16,7 @@ from app.services.activity import record_activity
 router = APIRouter(prefix="/liabilities", tags=["liabilities"])
 
 
-@router.get("/", response_model=list[LiabilityResponse])
+@router.get("", response_model=list[LiabilityResponse])
 def list_liabilities(
     is_active: bool | None = Query(None),
     db: Session = Depends(get_db),
@@ -25,7 +25,7 @@ def list_liabilities(
     return liability_service.list_liabilities(db, user, is_active)
 
 
-@router.post("/", response_model=LiabilityResponse, status_code=201)
+@router.post("", response_model=LiabilityResponse, status_code=201)
 def create_liability(
     req: LiabilityCreate,
     db: Session = Depends(get_db),

@@ -11,7 +11,7 @@ from app.schemas.tag import TagCreate, TagResponse, TagUpdate
 router = APIRouter(prefix="/tags", tags=["tags"])
 
 
-@router.get("/", response_model=list[TagResponse])
+@router.get("", response_model=list[TagResponse])
 def list_tags(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
@@ -19,7 +19,7 @@ def list_tags(
     return db.query(Tag).filter(Tag.family_id == user.family_id).all()
 
 
-@router.post("/", response_model=TagResponse, status_code=201)
+@router.post("", response_model=TagResponse, status_code=201)
 def create_tag(
     req: TagCreate,
     db: Session = Depends(get_db),

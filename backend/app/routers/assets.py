@@ -33,7 +33,7 @@ def _to_response(asset) -> AssetResponse:
     return resp
 
 
-@router.get("/", response_model=PaginatedAssetResponse)
+@router.get("", response_model=PaginatedAssetResponse)
 def list_assets(
     category_id: int | None = Query(None),
     asset_type: str | None = Query(None),
@@ -60,7 +60,7 @@ def list_assets(
     )
 
 
-@router.post("/", response_model=AssetResponse, status_code=201)
+@router.post("", response_model=AssetResponse, status_code=201)
 def create_asset(
     req: AssetCreate,
     db: Session = Depends(get_db),

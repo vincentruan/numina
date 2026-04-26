@@ -11,7 +11,7 @@ from app.services import wish as wish_service
 router = APIRouter(prefix="/wishes", tags=["wishes"])
 
 
-@router.get("/", response_model=list[WishResponse])
+@router.get("", response_model=list[WishResponse])
 def list_wishes(
     status: str | None = Query(None),
     db: Session = Depends(get_db),
@@ -20,7 +20,7 @@ def list_wishes(
     return wish_service.list_wishes(db, user, status)
 
 
-@router.post("/", response_model=WishResponse, status_code=201)
+@router.post("", response_model=WishResponse, status_code=201)
 def create_wish(req: WishCreate, db: Session = Depends(get_db), user: User = Depends(require_adult)):
     return wish_service.create_wish(db, user, req)
 
