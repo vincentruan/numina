@@ -96,7 +96,7 @@ def get_cost_equivalence(
     asset = db.query(Asset).filter(
         Asset.id == asset_id,
         Asset.family_id == user.family_id,
-        Asset.is_archived == False,
+        Asset.is_archived.is_(False),
     ).first()
     if not asset:
         raise AppError(ErrorCode.ASSET_NOT_FOUND)
@@ -132,3 +132,43 @@ def get_cost_equivalence(
         "time_cost_hours": round(time_cost_hours, 2),
         "opportunity_cost": round(opportunity_cost, 2),
     }
+
+
+@router.get("/assets/{asset_id}/purchasing-power")
+def get_asset_purchasing_power(
+    asset_id: int,
+    user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    from datetime import date as date_type
+
+    from app.services.purchasing_power import calculate_purchasing_power
+
+    asset = (
+        db.query(Asset)
+        .filter(
+            Asset.id == asset_id,
+            Asset.family_id == user.family_id,
+            Asset.is_archived.is_(False),
+        )
+        .first()
+    )
+    if not asset:
+        raise AppError(ErrorCode.ASSET_NOT_FOUND)
+
+    if asset.purchase_price is None or asset.purchase_date is None:
+        return {
+            "original_amount": None,
+            "adjusted_amount": None,
+            "from_year": None,
+            "to_year": None,
+            "cumulative_inflation": None,
+            "annual_avg_inflation": None,
+            "explanation": None,
+        }
+
+    return calculate_purchasing_power(
+        amount=asset.purchase_price,
+        from_year=asset.purchase_date.year,
+        to_year=date_type.today().year,
+    )
