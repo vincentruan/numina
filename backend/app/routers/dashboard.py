@@ -127,32 +127,3 @@ def get_expiring_soon(
     Financial assets (accounts, subscriptions) - needs attention, show with alert color.
     """
     return dashboard_service.get_expiring_soon_assets(db, user, days_threshold)
-
-
-@router.get("/bundle")
-def get_bundle(
-    db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
-):
-    """Get all dashboard data in a single request.
-
-    Combines overview, states-summary, home-assets, allocation, trend,
-    low-usage-assets, and expiring-soon into one response.
-    """
-    overview = dashboard_service.get_overview(db, user)
-    states_summary = dashboard_service.get_states_summary(db, user)
-    home_assets = dashboard_service.get_home_assets(db, user, limit=5)
-    allocation = dashboard_service.get_allocation(db, user)
-    trend = dashboard_service.get_trend(db, user, period="month")
-    low_usage_assets = dashboard_service.get_low_usage_assets(db, user)
-    expiring_soon = dashboard_service.get_expiring_soon_assets(db, user, days_threshold=90)
-
-    return {
-        "overview": overview.model_dump(mode='json'),
-        "statesSummary": states_summary,
-        "homeAssets": {k: [item.model_dump(mode='json') for item in v] for k, v in home_assets.items()},
-        "allocation": allocation.model_dump(mode='json'),
-        "trend": trend.model_dump(mode='json'),
-        "lowUsageAssets": [item.model_dump(mode='json') for item in low_usage_assets],
-        "expiringSoon": [item.model_dump(mode='json') for item in expiring_soon],
-    }
