@@ -88,6 +88,12 @@
       <p class="report-empty-sub">AI 将综合分析资产配置、负债压力和资产效率</p>
     </div>
 
+    <!-- Spending leaks -->
+    <div class="leaks-section">
+      <h2 class="feature-section-title">资金泄漏检测</h2>
+      <SpendingLeaksCard />
+    </div>
+
     <!-- Feature grid -->
     <div class="feature-section">
       <h2 class="feature-section-title">AI 功能</h2>
@@ -128,6 +134,7 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import SpendingLeaksCard from '@/components/ai/SpendingLeaksCard.vue'
 
 const { t } = useI18n()
 
@@ -548,6 +555,16 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-secondary);
   margin: 0;
+}
+
+/* ── Spending leaks ── */
+.leaks-section {
+  padding: 0 0 4px;
+}
+
+.leaks-section .feature-section-title {
+  padding: 0 16px;
+  margin: 12px 0 0;
 }
 
 /* ── Feature grid ── */
