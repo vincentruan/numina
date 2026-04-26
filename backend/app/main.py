@@ -214,6 +214,7 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
     default_response_class=EnvelopeResponse,
+    redirect_slashes=False,
 )
 
 app.add_exception_handler(AppError, app_error_handler)
