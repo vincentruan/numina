@@ -125,6 +125,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
         fetchTrend(),
         fetchLowUsageAssets(),
         fetchExpiringSoonAssets(),
+        fetchHomeAssets(),
       ]).catch(() => {
         // Phase 2 failures are non-critical; individual fetch functions
         // do not throw by default, so this is a safety net only
