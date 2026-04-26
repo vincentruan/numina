@@ -15,20 +15,6 @@ export interface ExpiringSoonItem {
   original_value: number
 }
 
-export interface DashboardBundleResponse {
-  overview: DashboardOverview
-  statesSummary: StatesSummaryResponse
-  homeAssets: Record<string, Asset[]>
-  allocation: AllocationResponse
-  trend: TrendResponse
-  lowUsageAssets: LowUsageItem[]
-  expiringSoon: ExpiringSoonItem[]
-}
-
-export function getDashboardBundle() {
-  return http.get<DashboardBundleResponse>('/dashboard/bundle')
-}
-
 export function getOverview() {
   return http.get<DashboardOverview>('/dashboard/overview')
 }
