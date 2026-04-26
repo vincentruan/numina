@@ -36,6 +36,7 @@ from app.models.ai_chat_message import AIChatMessage  # noqa: F401
 from app.models.ai_chat_session import AIChatSession  # noqa: F401
 from app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
 from app.models.ai_report import AIReport  # noqa: F401
+from app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from app.models.asset import Asset  # noqa: F401
 from app.models.cached_file import CachedFile  # noqa: F401
