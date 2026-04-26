@@ -63,6 +63,7 @@ from app.models.tag import Tag  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.wish import Wish  # noqa: F401
+from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
 from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
@@ -171,6 +172,8 @@ async def lifespan(app: FastAPI):
         seed_categories(db)
         seed_currencies(db)
         seed_invitation_codes(db)
+        from app.seed.category_financial_defaults import seed_category_financial_defaults
+        seed_category_financial_defaults(db)
         # Auto-generate daily snapshots for all families
         try:
             auto_generate_daily_snapshots(db)

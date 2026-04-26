@@ -22,6 +22,7 @@ from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_report import AIReport  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from app.models.device_session import DeviceSession  # noqa: F401
+from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
