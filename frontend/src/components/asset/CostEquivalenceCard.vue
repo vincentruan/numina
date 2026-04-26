@@ -21,7 +21,7 @@
 import { ref, onMounted } from 'vue'
 import { getCostEquivalence, type CostEquivalenceResult } from '@/api/assetsAnalysis'
 
-const props = defineProps<{ assetId: number }>()
+const props = defineProps<{ assetId: string }>()
 
 const loading = ref(false)
 const result = ref<CostEquivalenceResult | null>(null)

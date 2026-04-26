@@ -21,7 +21,7 @@
         <div class="leak-card" :class="`severity-${leak.severity}`">
           <div class="leak-header">
             <span class="leak-type-badge">{{ leakTypeLabel(leak.leak_type) }}</span>
-            <van-tag :type="severityTagType(leak.severity)" size="small">{{ severityLabel(leak.severity) }}</van-tag>
+            <van-tag :type="severityTagType(leak.severity)">{{ severityLabel(leak.severity) }}</van-tag>
           </div>
           <div class="leak-name">{{ leak.asset_name }}</div>
           <div v-if="leak.estimated_annual_waste != null" class="leak-meta">
