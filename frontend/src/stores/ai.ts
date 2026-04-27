@@ -31,6 +31,18 @@ export const useAIStore = defineStore('ai', () => {
     return aiApi.testAIConfig()
   }
 
+  async function testMainModel() {
+    return aiApi.testMainModelOnly()
+  }
+
+  async function testThinking() {
+    return aiApi.testThinkingOnly()
+  }
+
+  async function testVisionModel() {
+    return aiApi.testVisionModelOnly()
+  }
+
   return {
     config,
     loading,
@@ -40,5 +52,8 @@ export const useAIStore = defineStore('ai', () => {
     fetchConfig,
     updateConfig,
     testConnection,
+    testMainModel,
+    testThinking,
+    testVisionModel,
   }
 })

@@ -8,6 +8,21 @@ export interface AIConfig {
   ai_base_url: string | null
   ai_model_id: string | null
   ai_vision_model_id: string | null
+  // 主模型连接测试结果（独立）
+  ai_test_connected: boolean | null
+  ai_test_message: string | null
+  ai_test_latency_ms: number | null
+  ai_test_timestamp: string | null
+  // 主模型thinking测试结果（独立）
+  ai_test_thinking_success: boolean | null
+  ai_test_thinking_message: string | null
+  ai_test_thinking_latency_ms: number | null
+  ai_test_thinking_timestamp: string | null
+  // 图像模型测试结果（独立存储）
+  ai_vision_test_success: boolean | null
+  ai_vision_test_message: string | null
+  ai_vision_test_latency_ms: number | null
+  ai_vision_test_timestamp: string | null
 }
 
 export interface AIConfigUpdate {
@@ -20,12 +35,17 @@ export interface AIConfigUpdate {
 }
 
 export interface AIConfigTestResult {
-  success: boolean
+  connected: boolean // 连接测试成功与否
   message: string
   latency_ms?: number
-  supports_text?: boolean
-  supports_thinking?: boolean
-  supports_image?: boolean
+  // 思考能力测试结果（独立）
+  thinking_success?: boolean | null
+  thinking_message?: string | null
+  thinking_latency_ms?: number | null
+  // 图像模型测试结果（独立）
+  vision_success?: boolean | null
+  vision_message?: string | null
+  vision_latency_ms?: number | null
 }
 
 export const getAIConfig = () =>
@@ -36,6 +56,15 @@ export const updateAIConfig = (data: AIConfigUpdate) =>
 
 export const testAIConfig = () =>
   http.post<AIConfigTestResult>('/ai/config/test')
+
+export const testMainModelOnly = () =>
+  http.post<AIConfigTestResult>('/ai/config/test/main')
+
+export const testThinkingOnly = () =>
+  http.post<AIConfigTestResult>('/ai/config/test/thinking')
+
+export const testVisionModelOnly = () =>
+  http.post<AIConfigTestResult>('/ai/config/test/vision')
 
 export interface AIReportResponse {
   report: AIReport | null

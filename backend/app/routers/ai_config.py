@@ -122,6 +122,7 @@ def update_ai_config(
     # so the next request uses the new configuration
     try:
         import httpx
+
         from app.config import settings as backend_settings
 
         async def _invalidate_agent_cache():

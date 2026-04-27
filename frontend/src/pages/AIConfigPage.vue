@@ -50,14 +50,46 @@
           :required="!!selectedProvider"
           clearable
           :disabled="saving"
-        />
+        >
+          <template #right-icon>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <van-icon
+                v-if="testStatusIcon"
+                :name="testStatusIcon"
+                :color="testStatusColor"
+                style="cursor: pointer; font-size: 18px"
+                :aria-label="testStatusLabel"
+                @click="showTestDetails = true"
+              />
+              <van-icon
+                v-if="thinkingStatusIcon"
+                :name="thinkingStatusIcon"
+                :color="thinkingStatusColor"
+                style="cursor: pointer; font-size: 18px"
+                :aria-label="thinkingStatusLabel"
+                @click="showThinkingDetails = true"
+              />
+            </div>
+          </template>
+        </van-field>
         <van-field
           v-model="visionModelIdInput"
           label="图像模型 ID"
           :placeholder="selectedProvider === 'anthropic' ? '如: claude-3-5-sonnet-20241022' : '如: gpt-4o'"
           clearable
           :disabled="saving"
-        />
+        >
+          <template #right-icon>
+            <van-icon
+              v-if="visionTestStatusIcon"
+              :name="visionTestStatusIcon"
+              :color="visionTestStatusColor"
+              style="cursor: pointer; font-size: 18px"
+              :aria-label="visionTestStatusLabel"
+              @click="showVisionTestDetails = true"
+            />
+          </template>
+        </van-field>
       </van-cell-group>
 
       <div class="actions">
@@ -77,16 +109,6 @@
           <van-icon name="info-o" />
           <span>{{ validationError }}</span>
         </div>
-        <van-button
-          block
-          plain
-          class="test-btn"
-          :loading="testing"
-          :disabled="!aiStore.config?.ai_enabled"
-          @click="onTest"
-        >
-          测试连接
-        </van-button>
       </div>
     </template>
 
@@ -132,6 +154,84 @@
         @cancel="showProviderPicker = false"
       />
     </van-popup>
+
+    <!-- Connection Test Details Popup -->
+    <van-popup v-model:show="showTestDetails" round position="bottom" style="padding: 20px">
+      <div class="test-details">
+        <h3 style="margin-bottom: 16px; font-size: 16px">主模型连接测试</h3>
+        <van-cell-group inset>
+          <van-cell title="连接状态" :value="aiStore.config?.ai_test_connected ? '✅ 成功' : '❌ 失败'" />
+          <van-cell v-if="aiStore.config?.ai_test_message" title="消息" :value="aiStore.config.ai_test_message" />
+          <van-cell v-if="aiStore.config?.ai_test_latency_ms" title="延迟" :value="`${aiStore.config.ai_test_latency_ms}ms`" />
+          <van-cell v-if="aiStore.config?.ai_test_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_test_timestamp)" />
+        </van-cell-group>
+        <van-button
+          block
+          type="primary"
+          style="margin-top: 16px"
+          :loading="testingMain"
+          :disabled="!aiStore.config?.ai_enabled || !modelIdInput.trim()"
+          @click="onTestMain"
+        >
+          测试连接
+        </van-button>
+        <van-button block plain style="margin-top: 10px" @click="showTestDetails = false">
+          关闭
+        </van-button>
+      </div>
+    </van-popup>
+
+    <!-- Thinking Test Details Popup -->
+    <van-popup v-model:show="showThinkingDetails" round position="bottom" style="padding: 20px">
+      <div class="test-details">
+        <h3 style="margin-bottom: 16px; font-size: 16px">思考能力测试</h3>
+        <van-cell-group inset>
+          <van-cell title="测试结果" :value="aiStore.config?.ai_test_thinking_success ? '🧠 支持思考' : '❌ 不支持'" />
+          <van-cell v-if="aiStore.config?.ai_test_thinking_message" title="消息" :value="aiStore.config.ai_test_thinking_message" />
+          <van-cell v-if="aiStore.config?.ai_test_thinking_latency_ms" title="延迟" :value="`${aiStore.config.ai_test_thinking_latency_ms}ms`" />
+          <van-cell v-if="aiStore.config?.ai_test_thinking_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_test_thinking_timestamp)" />
+        </van-cell-group>
+        <van-button
+          block
+          type="primary"
+          style="margin-top: 16px"
+          :loading="testingThinking"
+          :disabled="!aiStore.config?.ai_enabled || !modelIdInput.trim()"
+          @click="onTestThinking"
+        >
+          测试思考能力
+        </van-button>
+        <van-button block plain style="margin-top: 10px" @click="showThinkingDetails = false">
+          关闭
+        </van-button>
+      </div>
+    </van-popup>
+
+    <!-- Vision Test Details Popup -->
+    <van-popup v-model:show="showVisionTestDetails" round position="bottom" style="padding: 20px">
+      <div class="test-details">
+        <h3 style="margin-bottom: 16px; font-size: 16px">图像模型测试结果</h3>
+        <van-cell-group inset>
+          <van-cell title="连接状态" :value="aiStore.config?.ai_vision_test_success ? '✅ 成功' : '❌ 失败'" />
+          <van-cell v-if="aiStore.config?.ai_vision_test_message" title="消息" :value="aiStore.config.ai_vision_test_message" />
+          <van-cell v-if="aiStore.config?.ai_vision_test_latency_ms" title="延迟" :value="`${aiStore.config.ai_vision_test_latency_ms}ms`" />
+          <van-cell v-if="aiStore.config?.ai_vision_test_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_vision_test_timestamp)" />
+        </van-cell-group>
+        <van-button
+          block
+          type="primary"
+          style="margin-top: 16px"
+          :loading="testingVision"
+          :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
+          @click="onTestVision"
+        >
+          测试图像模型
+        </van-button>
+        <van-button block plain style="margin-top: 10px" @click="showVisionTestDetails = false">
+          关闭
+        </van-button>
+      </div>
+    </van-popup>
   </div>
 </template>
 
@@ -149,8 +249,13 @@ const authStore = useAuthStore()
 const aiStore = useAIStore()
 
 const saving = ref(false)
-const testing = ref(false)
+const testingMain = ref(false)
+const testingThinking = ref(false)
+const testingVision = ref(false)
 const showProviderPicker = ref(false)
+const showTestDetails = ref(false)
+const showThinkingDetails = ref(false)
+const showVisionTestDetails = ref(false)
 const apiKeyInput = ref('')
 const baseUrlInput = ref('')
 const modelIdInput = ref('')
@@ -162,6 +267,61 @@ const showApiKey = ref(false)
 const isOwner = computed(() => authStore.user?.role === 'owner')
 
 const maskedKey = computed(() => aiStore.config?.ai_api_key_masked ?? null)
+
+const testStatusIcon = computed(() => {
+  if (aiStore.config?.ai_test_connected === null) return null
+  return aiStore.config?.ai_test_connected ? 'success' : 'cross'
+})
+
+const testStatusColor = computed(() => {
+  if (aiStore.config?.ai_test_connected === null) return '#999'
+  return aiStore.config?.ai_test_connected ? '#07c160' : '#ee0a24'
+})
+
+const testStatusLabel = computed(() => {
+  if (aiStore.config?.ai_test_connected === null) return '未测试'
+  return aiStore.config?.ai_test_connected ? '连接成功' : '连接失败'
+})
+
+const thinkingStatusIcon = computed(() => {
+  if (aiStore.config?.ai_test_thinking_success === null) return null
+  return aiStore.config?.ai_test_thinking_success ? 'success' : 'cross'
+})
+
+const thinkingStatusColor = computed(() => {
+  if (aiStore.config?.ai_test_thinking_success === null) return '#999'
+  return aiStore.config?.ai_test_thinking_success ? '#07c160' : '#ee0a24'
+})
+
+const thinkingStatusLabel = computed(() => {
+  if (aiStore.config?.ai_test_thinking_success === null) return '未测试'
+  return aiStore.config?.ai_test_thinking_success ? '支持思考' : '不支持'
+})
+
+const visionTestStatusIcon = computed(() => {
+  if (aiStore.config?.ai_vision_test_success === null) return null
+  return aiStore.config?.ai_vision_test_success ? 'success' : 'cross'
+})
+
+const visionTestStatusColor = computed(() => {
+  if (aiStore.config?.ai_vision_test_success === null) return '#999'
+  return aiStore.config?.ai_vision_test_success ? '#07c160' : '#ee0a24'
+})
+
+const visionTestStatusLabel = computed(() => {
+  if (aiStore.config?.ai_vision_test_success === null) return '未测试'
+  return aiStore.config?.ai_vision_test_success ? '测试成功' : '测试失败'
+})
+
+function formatTimestamp(ts: string): string {
+  return new Date(ts).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 const providerOptions = [
   { text: 'Anthropic (Claude)', value: 'anthropic', icon: '💬' },
@@ -231,26 +391,42 @@ async function onSave() {
   }
 }
 
-async function onTest() {
-  testing.value = true
+async function onTestMain() {
+  testingMain.value = true
   try {
-    const result = await aiStore.testConnection()
-    if (result.data.success) {
-      // 构建能力展示
-      const capabilities = []
-      if (result.data.supports_text) capabilities.push('✅ 文本')
-      if (result.data.supports_thinking) capabilities.push('🧠 思考')
-      if (result.data.supports_image) capabilities.push('👁️ 图像')
-
-      const capStr = capabilities.length > 0 ? `\n支持能力: ${capabilities.join(' ')}` : ''
-      showToast(`${result.data.message}${capStr}\n耗时: ${result.data.latency_ms ?? '-'}ms`)
-    } else {
-      showToast(`❌ ${result.data.message}`)
-    }
+    await aiStore.testMainModel()
+    await aiStore.fetchConfig()
+    showToast(aiStore.config?.ai_test_connected ? '✅ 主模型连接成功' : `❌ ${aiStore.config?.ai_test_message || '连接失败'}`)
   } catch {
     showToast(t('toast.aiTestFailed'))
   } finally {
-    testing.value = false
+    testingMain.value = false
+  }
+}
+
+async function onTestThinking() {
+  testingThinking.value = true
+  try {
+    await aiStore.testThinking()
+    await aiStore.fetchConfig()
+    showToast(aiStore.config?.ai_test_thinking_success ? '🧠 支持思考能力' : `❌ ${aiStore.config?.ai_test_thinking_message || '不支持'}`)
+  } catch {
+    showToast(t('toast.aiTestFailed'))
+  } finally {
+    testingThinking.value = false
+  }
+}
+
+async function onTestVision() {
+  testingVision.value = true
+  try {
+    await aiStore.testVisionModel()
+    await aiStore.fetchConfig()
+    showToast(aiStore.config?.ai_vision_test_success ? '✅ 图像模型测试成功' : `❌ ${aiStore.config?.ai_vision_test_message || '测试失败'}`)
+  } catch {
+    showToast(t('toast.aiTestFailed'))
+  } finally {
+    testingVision.value = false
   }
 }
 </script>
