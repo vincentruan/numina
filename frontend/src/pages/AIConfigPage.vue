@@ -305,13 +305,13 @@ function formatTimestamp(ts: string): string {
 }
 
 const providerOptions = [
-  { text: 'Anthropic (Claude)', value: 'anthropic', icon: '💬' },
-  { text: 'OpenAI (GPT)', value: 'openai', icon: '🤖' },
+  { text: 'Anthropic API 格式', value: 'anthropic', icon: '💬' },
+  { text: 'OpenAI API 格式', value: 'openai', icon: '🤖' },
 ]
 
 const providerLabel = computed(() => {
-  if (selectedProvider.value === 'anthropic') return '💬 Anthropic (Claude)'
-  if (selectedProvider.value === 'openai') return '🤖 OpenAI (GPT)'
+  if (selectedProvider.value === 'anthropic') return '💬 Anthropic API 格式'
+  if (selectedProvider.value === 'openai') return '🤖 OpenAI API 格式'
   return '未选择'
 })
 

@@ -3,7 +3,7 @@
 import time
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_owner
@@ -64,6 +64,7 @@ def get_ai_config(
 
 @router.put("/config", response_model=AIConfigResponse)
 def update_ai_config(
+    background_tasks: BackgroundTasks,
     payload: AIConfigUpdate,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
@@ -117,28 +118,41 @@ def update_ai_config(
     db.commit()
     db.refresh(family)
 
+    # 清空所有测试状态（配置变更后需要重新测试）
+    family.ai_test_connected = None
+    family.ai_test_message = None
+    family.ai_test_latency_ms = None
+    family.ai_test_timestamp = None
+    family.ai_test_thinking_success = None
+    family.ai_test_thinking_message = None
+    family.ai_test_thinking_latency_ms = None
+    family.ai_test_thinking_timestamp = None
+    family.ai_vision_test_success = None
+    family.ai_vision_test_message = None
+    family.ai_vision_test_latency_ms = None
+    family.ai_vision_test_timestamp = None
+    db.commit()
+
     # ── Invalidate agent cache ────────────────────────────────
     # When AI config changes, agent's DeerFlowAdapter cache must be cleared
     # so the next request uses the new configuration
-    try:
-        import httpx
+    def _invalidate_agent_cache_sync():
+        """Sync wrapper for agent cache invalidation (runs after response)."""
+        try:
+            import httpx
 
-        from app.config import settings as backend_settings
+            from app.config import settings as backend_settings
 
-        async def _invalidate_agent_cache():
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                await client.post(
-                    f"{backend_settings.AGENT_BASE_URL}/internal/cache/invalidate/{family.id}",
-                    headers={"X-Agent-Token": backend_settings.AGENT_INTERNAL_TOKEN},
-                )
+            httpx.post(
+                f"{backend_settings.AGENT_BASE_URL}/internal/cache/invalidate/{family.id}",
+                headers={"X-Agent-Token": backend_settings.AGENT_INTERNAL_TOKEN},
+                timeout=5.0,
+            )
+        except Exception:
+            # Don't fail the request if agent cache invalidation fails
+            pass
 
-        # Fire-and-forget: don't block the response on agent call
-        import asyncio
-        asyncio.create_task(_invalidate_agent_cache())
-    except Exception as e:
-        # Log but don't fail the request if agent cache invalidation fails
-        import logging
-        logging.getLogger(__name__).warning(f"Failed to invalidate agent cache for family={family.id}: {e}")
+    background_tasks.add_task(_invalidate_agent_cache_sync)
 
     _log_security_event(
         "ai_config_updated",
@@ -543,7 +557,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
             }
             logger.info(f"[DEBUG] Anthropic thinking request: endpoint={endpoint}, body={json.dumps(request_body)}")
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -604,7 +618,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
             )
             logger.info(f"[DEBUG] OpenAI thinking test: endpoint={endpoint}, model={model}")
 
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 # 先尝试带 reasoning_effort 的请求（部分模型支持）
                 request_body = {
                     "model": model,
@@ -676,7 +690,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
     except httpx.TimeoutException:
         return {
             "success": False,
-            "message": "思考能力测试超时（30秒）",
+            "message": "思考能力测试超时（120秒）",
             "latency_ms": None,
         }
     except Exception as e:
@@ -702,7 +716,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
             )
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -748,7 +762,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -791,7 +805,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
     except httpx.TimeoutException:
         return {
             "success": False,
-            "message": "图像模型连接超时（30秒）",
+            "message": "图像模型连接超时（120秒）",
             "latency_ms": None,
         }
     except Exception as e:

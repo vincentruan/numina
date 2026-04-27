@@ -22,9 +22,6 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
     ENVIRONMENT: str = "development"  # development / production
 
-    # Debug settings
-    DEBUG_HTTP_REQUESTS: bool = False  # Enable to log HTTP request/response bodies
-
     # Cache configuration
     CACHE_BACKEND: str = "memory"  # "memory" only — "redis" is not yet implemented (see backend/app/services/cache/redis.py)
     REDIS_URL: str = "redis://localhost:6379/0"
