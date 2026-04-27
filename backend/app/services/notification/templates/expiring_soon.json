@@ -1,0 +1,9 @@
+{
+  "telegram": {
+    "text": "🔧 *保修即将到期*\n\n*{asset_name}* 的保修将于 {expiry_date} 到期，还有 {days_left} 天。\n\n_Numina 家庭资产管理_"
+  },
+  "email": {
+    "subject": "【Numina】保修即将到期提醒",
+    "body": "你好，\n\n以下资产的保修即将到期：\n\n资产：{asset_name}\n到期日：{expiry_date}\n剩余天数：{days_left} 天\n\n请及时处理。\n\nNumina 家庭资产管理"
+  }
+}
