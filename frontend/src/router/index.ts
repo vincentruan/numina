@@ -174,6 +174,11 @@ const router = createRouter({
           component: () => import('@/pages/NotificationConfigPage.vue'),
         },
         {
+          path: 'settings/import-report',
+          name: 'ImportReport',
+          component: () => import('@/pages/ImportReportPage.vue'),
+        },
+        {
           path: 'ai/report',
           name: 'AIReport',
           component: () => import('@/pages/AIReportPage.vue')

@@ -24,6 +24,7 @@ dependencies = [
     "webauthn>=2.7.1",
     "lunardate>=0.2.2",
     "user-agents>=2.2.0",
+    "pdfplumber>=0.11",
 ]
 
 [dependency-groups]

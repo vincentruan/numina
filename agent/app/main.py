@@ -40,6 +40,7 @@ from routers import chat as chat_router
 from routers import spending_leak as spending_leak_router
 from routers import time_machine as time_machine_router
 from app.routers import cache as cache_router
+from routers import import_parse as import_parse_router
 
 app.include_router(report_router.router)
 app.include_router(suggest_router.router)
@@ -51,6 +52,7 @@ app.include_router(chat_router.router)
 app.include_router(spending_leak_router.router)
 app.include_router(time_machine_router.router)
 app.include_router(cache_router.router)
+app.include_router(import_parse_router.router)
 
 
 @app.get("/health")

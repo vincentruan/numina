@@ -142,6 +142,17 @@ class FallbackEngine:
             response = await llm.chat(prompt)
             return {"summary": response}
 
+        elif capability == "import_parse":
+            payload: dict = {}
+            if ctx.free_text:
+                with contextlib.suppress(json.JSONDecodeError, ValueError):
+                    payload = json.loads(ctx.free_text)
+            text = payload.get("text", "")
+            if text:
+                from services.import_parse_service import parse_holdings_from_text
+                return await parse_holdings_from_text(text=text, llm=llm)
+            return {"source": "", "report_date": None, "items": []}
+
         else:
             return {"summary": f"未知功能: {capability}"}
 

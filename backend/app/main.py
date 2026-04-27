@@ -105,6 +105,7 @@ from app.routers import device as device_router
 from app.routers import export as export_router
 from app.routers import files as files_router
 from app.routers import import_ as import_router
+from app.routers import import_report as import_report_router
 from app.routers import milestones as milestones_router
 from app.routers import notification_channels as notification_channels_router
 from app.routers import notification_config as notification_config_router
@@ -378,6 +379,7 @@ app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(family.router, prefix="/api/v1")
 app.include_router(export_router.router, prefix="/api/v1")
 app.include_router(import_router.router, prefix="/api/v1")
+app.include_router(import_report_router.router, prefix="/api/v1")
 app.include_router(wishes.router, prefix="/api/v1")
 app.include_router(currencies_router.router, prefix="/api/v1")
 app.include_router(activities_router.router, prefix="/api/v1")
