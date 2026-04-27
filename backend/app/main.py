@@ -100,6 +100,7 @@ from app.routers import currencies as currencies_router
 from app.routers import export as export_router
 from app.routers import files as files_router
 from app.routers import import_ as import_router
+from app.routers import import_report as import_report_router
 from app.routers import calendar as calendar_router
 from app.routers import blind_box as blind_box_router
 from app.routers import child_blind_box as child_blind_box_router
@@ -376,6 +377,7 @@ app.include_router(dashboard.router, prefix="/api/v1")
 app.include_router(family.router, prefix="/api/v1")
 app.include_router(export_router.router, prefix="/api/v1")
 app.include_router(import_router.router, prefix="/api/v1")
+app.include_router(import_report_router.router, prefix="/api/v1")
 app.include_router(wishes.router, prefix="/api/v1")
 app.include_router(currencies_router.router, prefix="/api/v1")
 app.include_router(activities_router.router, prefix="/api/v1")
