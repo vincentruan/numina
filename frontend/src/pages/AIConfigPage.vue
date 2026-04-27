@@ -54,16 +54,14 @@
           <template #right-icon>
             <div style="display: flex; gap: 8px; align-items: center;">
               <van-icon
-                v-if="testStatusIcon"
-                :name="testStatusIcon"
+                :name="testStatusIcon || 'info-o'"
                 :color="testStatusColor"
                 style="cursor: pointer; font-size: 18px"
                 :aria-label="testStatusLabel"
                 @click="showTestDetails = true"
               />
               <van-icon
-                v-if="thinkingStatusIcon"
-                :name="thinkingStatusIcon"
+                :name="thinkingStatusIcon || 'info-o'"
                 :color="thinkingStatusColor"
                 style="cursor: pointer; font-size: 18px"
                 :aria-label="thinkingStatusLabel"
