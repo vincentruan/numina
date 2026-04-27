@@ -141,18 +141,17 @@ def _now():
 
 
 def setup_exchange_rate_schedule() -> None:
-    """Schedule rate updates every 2 hours from 08:00 to 22:00 with random 0-15 min offset."""
-    for hour in [8, 10, 12, 14, 16, 18, 20, 22]:
-        offset = random.randint(0, 15)
-        scheduler.add_job(
-            fetch_rates_job,
-            trigger="cron",
-            hour=hour,
-            minute=offset,
-            id=f"exchange_rate_{hour}",
-            replace_existing=True,
-        )
-    logger.info("汇率定时任务已配置（每2小时，08:00-22:00）")
+    """Schedule rate updates every 2 hours from 08:00 to 22:00 with random 0-15 min offset (jitter)."""
+    scheduler.add_job(
+        fetch_rates_job,
+        trigger="cron",
+        hour="8,10,12,14,16,18,20,22",
+        jitter=15 * 60,  # 15 minutes jitter
+        id="exchange_rate",
+        name="fetch_rates_job (Cron: 08:00-22:00 every 2h, Jitter: 0-15m)",
+        replace_existing=True,
+    )
+    logger.info("汇率定时任务已配置 (Cron: hour='8,10,12,14,16,18,20,22', jitter=900s)")
 
 
 def setup_file_sync_schedule() -> None:

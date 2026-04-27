@@ -42,3 +42,6 @@ class AIConfigTestResult(BaseModel):
     success: bool
     message: str
     latency_ms: int | None = None
+    supports_text: bool = False
+    supports_thinking: bool = False
+    supports_image: bool = False

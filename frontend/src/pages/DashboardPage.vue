@@ -58,8 +58,6 @@
           @select="onStatusSelect"
         >
           <template #toolbar>
-            <van-icon name="sort" @click="showSortPopup = true" />
-            <van-icon name="filter-o" @click="showFilterPopup = true" />
             <van-icon name="checked" @click="enterSelectionMode" />
           </template>
         </StatusSummaryGrid>
@@ -148,57 +146,6 @@
       @click="$router.push('/assets/new')"
     />
 
-    <!-- Sort Popup -->
-    <van-popup v-model:show="showSortPopup" position="bottom" round>
-      <div class="sort-popup">
-        <div class="sort-header">
-          <span class="sort-title">排序方式</span>
-          <van-icon name="cross" @click="showSortPopup = false" />
-        </div>
-
-        <div class="sort-content">
-          <div v-for="group in sortGroups" :key="group.key" class="sort-group">
-            <div class="sort-group-label">{{ group.label }}</div>
-            <div class="sort-options">
-              <van-button
-                v-for="opt in group.options"
-                :key="opt.value"
-                :type="currentSort === opt.value ? 'primary' : 'default'"
-                size="small"
-                @click="selectSort(opt.value)"
-              >
-                {{ opt.label }}
-              </van-button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </van-popup>
-
-    <!-- Filter Popup -->
-    <van-popup v-model:show="showFilterPopup" position="bottom" round>
-      <div class="filter-popup">
-        <div class="filter-header">
-          <span>按标签筛选</span>
-          <van-button type="primary" size="small" @click="applyFilter">确定</van-button>
-        </div>
-        <van-checkbox-group v-model="selectedTags">
-          <van-cell-group>
-            <van-cell
-              v-for="tag in allTags"
-              :key="tag"
-              clickable
-              @click="toggleTag(tag)"
-            >
-              <template #title>
-                <van-checkbox :name="tag" @click.stop>{{ tag }}</van-checkbox>
-              </template>
-            </van-cell>
-          </van-cell-group>
-        </van-checkbox-group>
-      </div>
-    </van-popup>
-
     <!-- More Actions Sheet -->
     <van-action-sheet
       v-model:show="showMoreActions"
@@ -218,7 +165,7 @@ import { useCategoryStore } from '@/stores/category'
 import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
-import { batchArchiveAssets, batchUpdateCategory, batchUpdateTags, batchUpdateStatus, batchExportAssets } from '@/api/assets'
+import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
 import type { Asset } from '@/types'
 import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
@@ -259,11 +206,7 @@ const selectedIds = ref<string[]>([])
 const selectAll = ref(false)
 
 // Toolbar
-const showSortPopup = ref(false)
-const showFilterPopup = ref(false)
 const showMoreActions = ref(false)
-const selectedTags = ref<string[]>([])
-const currentSort = ref<string>('created_at_desc')
 
 const overview = computed(() => dashboardStore.overview)
 const categories = computed(() => categoryStore.categories)
@@ -282,51 +225,6 @@ const statusLabelMap: Record<string, string> = {
   retired: '已退役'
 }
 
-// Sort options
-// Sort options grouped
-const sortGroups = [
-  {
-    key: 'created_at',
-    label: '添加时间',
-    options: [
-      { label: '最新优先', value: 'created_at_desc' },
-      { label: '最早优先', value: 'created_at_asc' },
-    ]
-  },
-  {
-    key: 'purchase_date',
-    label: '购买时间',
-    options: [
-      { label: '最近购买', value: 'purchase_date_desc' },
-      { label: '最早购买', value: 'purchase_date_asc' },
-    ]
-  },
-  {
-    key: 'service_days',
-    label: '服役时长',
-    options: [
-      { label: '服役最久', value: 'service_days_desc' },
-      { label: '服役最短', value: 'service_days_asc' },
-    ]
-  },
-  {
-    key: 'current_value',
-    label: '物品价值',
-    options: [
-      { label: '价值最高', value: 'current_value_desc' },
-      { label: '价值最低', value: 'current_value_asc' },
-    ]
-  },
-  {
-    key: 'daily_cost',
-    label: '日均成本',
-    options: [
-      { label: '成本最高', value: 'daily_cost_desc' },
-      { label: '成本最低', value: 'daily_cost_asc' },
-    ]
-  },
-]
-
 // More actions
 const moreActions = [
   { name: '转为退役', value: 'retire' },
@@ -337,8 +235,8 @@ const moreActions = [
 const sectionTitle = computed(() => {
   const status = activeStatus.value || 'in_use'
   const pageInfo = dashboardStore.assetPageInfo.get(status)
-  // Use server-side total count when available, fallback to local count
-  const count = pageInfo ? pageInfo.total : filteredAssets.value.length
+  // Use server-side total count when available, fallback to displayed assets count
+  const count = pageInfo ? pageInfo.total : dashboardStore.displayedAssets.length
   if (!activeStatus.value) {
     return `资产列表 (${count})`
   }
@@ -346,100 +244,8 @@ const sectionTitle = computed(() => {
   return `${label} (${count})`
 })
 
-const filteredAssets = computed(() => {
-  if (!activeStatus.value) {
-    const allAssets = Object.values(dashboardStore.homeAssets).flat()
-    return allAssets
-  }
-  return dashboardStore.homeAssets[activeStatus.value] || []
-})
-
-// Get all unique tags from assets
-const allTags = computed(() => {
-  const tags = new Set<string>()
-  filteredAssets.value.forEach(asset => {
-    if (asset.tags && Array.isArray(asset.tags)) {
-      asset.tags.forEach(tag => {
-        if (typeof tag === 'string') {
-          tags.add(tag)
-        } else if (tag && typeof tag === 'object' && 'name' in tag) {
-          tags.add(tag.name)
-        }
-      })
-    }
-  })
-  return Array.from(tags)
-})
-
-// Apply tag filter
-const tagFilteredAssets = computed(() => {
-  if (selectedTags.value.length === 0) {
-    return filteredAssets.value
-  }
-  return filteredAssets.value.filter(asset => {
-    if (!asset.tags || !Array.isArray(asset.tags)) return false
-    return selectedTags.value.some(selectedTag => {
-      return asset.tags!.some(tag => {
-        if (typeof tag === 'string') {
-          return tag === selectedTag
-        } else if (tag && typeof tag === 'object' && 'name' in tag) {
-          return tag.name === selectedTag
-        }
-        return false
-      })
-    })
-  })
-})
-
-// Apply sorting
-const sortedAndFilteredAssets = computed(() => {
-  const assets = [...tagFilteredAssets.value]
-  const [field, order] = currentSort.value.split('_')
-  const isDesc = order === 'desc'
-
-  assets.sort((a, b) => {
-    let aVal: any
-    let bVal: any
-
-    switch (field) {
-      case 'created':
-        aVal = new Date(a.created_at).getTime()
-        bVal = new Date(b.created_at).getTime()
-        break
-      case 'purchase':
-        aVal = a.purchase_date ? new Date(a.purchase_date).getTime() : 0
-        bVal = b.purchase_date ? new Date(b.purchase_date).getTime() : 0
-        break
-      case 'service':
-        aVal = a.purchase_date ? Date.now() - new Date(a.purchase_date).getTime() : 0
-        bVal = b.purchase_date ? Date.now() - new Date(b.purchase_date).getTime() : 0
-        break
-      case 'current':
-        aVal = a.current_value || 0
-        bVal = b.current_value || 0
-        break
-      case 'daily':
-        aVal = a.daily_cost || 0
-        bVal = b.daily_cost || 0
-        break
-      default:
-        aVal = new Date(a.updated_at).getTime()
-        bVal = new Date(b.updated_at).getTime()
-    }
-
-    return isDesc ? bVal - aVal : aVal - bVal
-  })
-
-  return assets
-})
-
 function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
-  // Scroll to the category group
-  const categoryGroups = document.querySelectorAll('.category-group')
-  if (categoryGroups[index]) {
-    categoryGroups[index].scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
 }
 
 function onStatusSelect(status: string | null) {
@@ -448,27 +254,6 @@ function onStatusSelect(status: string | null) {
   const targetStatus = status || 'in_use'
   dashboardStore.resetAssetPagination(targetStatus)
   dashboardStore.fetchAssetsPage(targetStatus, 1, 20)
-}
-
-function selectSort(value: string) {
-  currentSort.value = value
-  showSortPopup.value = false
-}
-
-function toggleTag(tag: string) {
-  const index = selectedTags.value.indexOf(tag)
-  if (index > -1) {
-    selectedTags.value.splice(index, 1)
-  } else {
-    selectedTags.value.push(tag)
-  }
-}
-
-function applyFilter() {
-  showFilterPopup.value = false
-  if (selectedTags.value.length > 0) {
-    showToast(t('toast.tagsFiltered', { count: selectedTags.value.length }))
-  }
 }
 
 // Selection mode functions
@@ -806,55 +591,8 @@ onUnmounted(() => {
 }
 
 /* Filter Popup */
-.filter-popup {
-  padding: 16px;
-  max-height: 60vh;
-  overflow-y: auto;
-}
-.filter-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  font-size: 16px;
-  font-weight: 600;
-}
-
 .bottom-spacer {
   height: 80px;
-}
-
-/* Sort Popup */
-.sort-popup {
-  padding: 16px;
-}
-.sort-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.sort-title {
-  font-size: 16px;
-  font-weight: 600;
-}
-.sort-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.sort-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.sort-group-label {
-  font-size: 13px;
-  color: var(--text-tertiary);
-}
-.sort-options {
-  display: flex;
-  gap: 8px;
 }
 
 .quick-stats-section {

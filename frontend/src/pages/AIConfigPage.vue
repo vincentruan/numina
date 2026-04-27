@@ -236,9 +236,16 @@ async function onTest() {
   try {
     const result = await aiStore.testConnection()
     if (result.data.success) {
-      showToast(t('toast.connectionSuccess', { latency: result.data.latency_ms ?? '-' }))
+      // 构建能力展示
+      const capabilities = []
+      if (result.data.supports_text) capabilities.push('✅ 文本')
+      if (result.data.supports_thinking) capabilities.push('🧠 思考')
+      if (result.data.supports_image) capabilities.push('👁️ 图像')
+
+      const capStr = capabilities.length > 0 ? `\n支持能力: ${capabilities.join(' ')}` : ''
+      showToast(`${result.data.message}${capStr}\n耗时: ${result.data.latency_ms ?? '-'}ms`)
     } else {
-      showToast(t('toast.connectionFailed', { message: result.data.message }))
+      showToast(`❌ ${result.data.message}`)
     }
   } catch {
     showToast(t('toast.aiTestFailed'))

@@ -23,6 +23,9 @@ export interface AIConfigTestResult {
   success: boolean
   message: string
   latency_ms?: number
+  supports_text?: boolean
+  supports_thinking?: boolean
+  supports_image?: boolean
 }
 
 export const getAIConfig = () =>
