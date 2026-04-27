@@ -162,12 +162,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useCategoryStore } from '@/stores/category'
-import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
@@ -177,7 +176,6 @@ import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AlertCards from '@/components/dashboard/AlertCards.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
-import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
@@ -187,7 +185,6 @@ const { t } = useI18n()
 
 const dashboardStore = useDashboardStore()
 const categoryStore = useCategoryStore()
-const assetStore = useAssetStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
 const refreshing = ref(false)
