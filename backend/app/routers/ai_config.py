@@ -1,5 +1,7 @@
 """AI 配置管理路由。"""
 
+import json
+import logging
 import time
 
 import httpx
@@ -8,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_owner
 from app.auth.deps import require_adult
+from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.family import Family
@@ -17,6 +20,40 @@ from app.services.ai_crypto import decrypt_api_key, encrypt_api_key, mask_api_ke
 from app.services.security_log import _log_security_event
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
+
+logger = logging.getLogger(__name__)
+
+
+def _debug_http_client(timeout: float = 10.0) -> httpx.AsyncClient:
+    """创建带调试日志的 HTTP 客户端。"""
+    if not settings.DEBUG_HTTP_REQUESTS:
+        return httpx.AsyncClient(timeout=timeout)
+
+    def log_request(request: httpx.Request) -> None:
+        logger.info(f"[HTTP] >>> {request.method} {request.url}")
+        if request.content:
+            try:
+                body = json.loads(request.content)
+                logger.info(
+                    f"[HTTP] >>> Body: {json.dumps(body, indent=2, ensure_ascii=False)}"
+                )
+            except Exception:
+                logger.info(f"[HTTP] >>> Body (raw): {request.content[:500]}")
+
+    def log_response(response: httpx.Response) -> None:
+        logger.info(f"[HTTP] <<< {response.status_code} {response.url}")
+        try:
+            body = response.json()
+            logger.info(
+                f"[HTTP] <<< Body: {json.dumps(body, indent=2, ensure_ascii=False)[:1000]}"
+            )
+        except Exception:
+            logger.info(f"[HTTP] <<< Body (raw): {response.text[:500]}")
+
+    return httpx.AsyncClient(
+        timeout=timeout,
+        event_hooks={"request": [log_request], "response": [log_response]},
+    )
 
 
 def _get_family(db: Session, user: User) -> Family:
@@ -134,11 +171,15 @@ def update_ai_config(
 
         # Fire-and-forget: don't block the response on agent call
         import asyncio
+
         asyncio.create_task(_invalidate_agent_cache())
     except Exception as e:
         # Log but don't fail the request if agent cache invalidation fails
         import logging
-        logging.getLogger(__name__).warning(f"Failed to invalidate agent cache for family={family.id}: {e}")
+
+        logging.getLogger(__name__).warning(
+            f"Failed to invalidate agent cache for family={family.id}: {e}"
+        )
 
     _log_security_event(
         "ai_config_updated",
@@ -223,7 +264,9 @@ async def test_ai_config(
 
     api_key = decrypt_api_key(family.ai_api_key_encrypted)
     if not api_key:
-        return AIConfigTestResult(connected=False, message="API Key 解密失败，请重新配置")
+        return AIConfigTestResult(
+            connected=False, message="API Key 解密失败，请重新配置"
+        )
 
     api_key = api_key.strip()
 
@@ -288,7 +331,9 @@ async def test_ai_config(
         thinking_latency_ms=thinking_result["latency_ms"] if thinking_result else None,
         vision_success=vision_test_result["success"] if vision_test_result else None,
         vision_message=vision_test_result["message"] if vision_test_result else None,
-        vision_latency_ms=vision_test_result["latency_ms"] if vision_test_result else None,
+        vision_latency_ms=vision_test_result["latency_ms"]
+        if vision_test_result
+        else None,
     )
 
 
@@ -311,7 +356,9 @@ async def test_main_model_only(
 
     api_key = decrypt_api_key(family.ai_api_key_encrypted)
     if not api_key:
-        return AIConfigTestResult(connected=False, message="API Key 解密失败，请重新配置")
+        return AIConfigTestResult(
+            connected=False, message="API Key 解密失败，请重新配置"
+        )
 
     api_key = api_key.strip()
 
@@ -355,7 +402,9 @@ async def test_thinking_only(
 
     api_key = decrypt_api_key(family.ai_api_key_encrypted)
     if not api_key:
-        return AIConfigTestResult(connected=False, message="API Key 解密失败，请重新配置")
+        return AIConfigTestResult(
+            connected=False, message="API Key 解密失败，请重新配置"
+        )
 
     api_key = api_key.strip()
 
@@ -401,7 +450,9 @@ async def test_vision_model_only(
 
     api_key = decrypt_api_key(family.ai_api_key_encrypted)
     if not api_key:
-        return AIConfigTestResult(connected=False, message="API Key 解密失败，请重新配置")
+        return AIConfigTestResult(
+            connected=False, message="API Key 解密失败，请重新配置"
+        )
 
     api_key = api_key.strip()
 
@@ -442,7 +493,7 @@ async def _test_connection(family: Family, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with _debug_http_client(10.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -474,7 +525,7 @@ async def _test_connection(family: Family, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with _debug_http_client(10.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -525,11 +576,14 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
     """测试主模型思考能力。"""
     import json
     import logging
+
     logger = logging.getLogger(__name__)
     start = time.monotonic()
 
     try:
-        logger.info(f"[DEBUG] _test_thinking: provider={family.ai_provider}, model={model}, base_url={family.ai_base_url}")
+        logger.info(
+            f"[DEBUG] _test_thinking: provider={family.ai_provider}, model={model}, base_url={family.ai_base_url}"
+        )
 
         if family.ai_provider == "anthropic":
             endpoint = _build_endpoint(
@@ -541,9 +595,11 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                 "thinking": {"type": "enabled", "budget_tokens": 100},
                 "messages": [{"role": "user", "content": "think"}],
             }
-            logger.info(f"[DEBUG] Anthropic thinking request: endpoint={endpoint}, body={json.dumps(request_body)}")
+            logger.info(
+                f"[DEBUG] Anthropic thinking request: endpoint={endpoint}, body={json.dumps(request_body)}"
+            )
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with _debug_http_client(10.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -553,7 +609,9 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                     },
                     json=request_body,
                 )
-                logger.info(f"[DEBUG] Anthropic thinking response: status={resp.status_code}, body={resp.text[:500]}")
+                logger.info(
+                    f"[DEBUG] Anthropic thinking response: status={resp.status_code}, body={resp.text[:500]}"
+                )
 
                 # 判断是否支持 thinking
                 if resp.status_code == 200:
@@ -567,7 +625,9 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                     try:
                         error_data = resp.json()
                         error_type = error_data.get("error", {}).get("type", "")
-                        logger.info(f"[DEBUG] Anthropic 400 error: type={error_type}, full_error={json.dumps(error_data)}")
+                        logger.info(
+                            f"[DEBUG] Anthropic 400 error: type={error_type}, full_error={json.dumps(error_data)}"
+                        )
                         latency = int((time.monotonic() - start) * 1000)
                         # invalid_request_error 可能是参数问题，模型支持 thinking
                         if error_type == "invalid_request_error":
@@ -602,9 +662,11 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            logger.info(f"[DEBUG] OpenAI thinking request: endpoint={endpoint}, model={model}")
+            logger.info(
+                f"[DEBUG] OpenAI thinking request: endpoint={endpoint}, model={model}"
+            )
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with _debug_http_client(10.0) as client:
                 # o 系列使用 reasoning_effort，其他模型普通请求
                 request_body = {}
                 if model.startswith("o"):
@@ -621,7 +683,9 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                         "max_tokens": 1,
                         "messages": [{"role": "user", "content": "think"}],
                     }
-                logger.info(f"[DEBUG] OpenAI thinking request body: {json.dumps(request_body)}")
+                logger.info(
+                    f"[DEBUG] OpenAI thinking request body: {json.dumps(request_body)}"
+                )
 
                 resp = await client.post(
                     endpoint,
@@ -631,7 +695,9 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                     },
                     json=request_body,
                 )
-                logger.info(f"[DEBUG] OpenAI thinking response: status={resp.status_code}, body={resp.text[:500]}")
+                logger.info(
+                    f"[DEBUG] OpenAI thinking response: status={resp.status_code}, body={resp.text[:500]}"
+                )
                 latency = int((time.monotonic() - start) * 1000)
                 if resp.status_code in (200, 400):
                     # 连接成功，模型可用
@@ -680,7 +746,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with _debug_http_client(10.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -726,7 +792,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with _debug_http_client(10.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
