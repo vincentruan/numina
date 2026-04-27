@@ -146,6 +146,7 @@
 
     <van-floating-bubble
       icon="plus"
+      :offset="{ x: -16, y: -72 }"
       @click="$router.push('/wishes/new')"
     />
   </div>
