@@ -250,3 +250,30 @@ def setup_device_session_cleanup_schedule() -> None:
         coalesce=True,
     )
     logger.info("设备会话清理任务已配置（每小时 :15）")
+
+
+def setup_reminder_schedule() -> None:
+    """Schedule daily reminder checks at 09:20."""
+    from app.services.notification.dispatcher import run_scheduled_checks
+
+    def _reminder_job() -> None:
+        db = SessionLocal()
+        try:
+            run_scheduled_checks(db)
+            logger.info("智能提醒定时检测完成")
+        except Exception as e:
+            logger.exception(f"智能提醒定时检测失败: {e}")
+        finally:
+            db.close()
+
+    scheduler.add_job(
+        _reminder_job,
+        trigger="cron",
+        hour=9,
+        minute=20,
+        id="reminder_daily",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("智能提醒定时任务已配置（每日 09:20）")
