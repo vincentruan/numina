@@ -64,6 +64,10 @@ from app.models.user import User  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.wish import Wish  # noqa: F401
 from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
+from app.models.notification_channel import NotificationChannel  # noqa: F401
+from app.models.notification_subscription import NotificationSubscription  # noqa: F401
+from app.models.notification_config import NotificationConfig  # noqa: F401
+from app.models.reminder import Reminder  # noqa: F401
 from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
