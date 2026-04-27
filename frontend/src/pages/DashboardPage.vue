@@ -72,6 +72,9 @@
           @select-status="onStatusSelect"
         />
 
+        <!-- Smart Reminders -->
+        <SmartRemindersCard />
+
         <!-- Category Navigation (Sticky, shown when scrolled) -->
         <div v-if="showCategoryNav && categories.length > 1" class="category-nav-sticky">
           <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
@@ -271,6 +274,7 @@ import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
+import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 
 const { t } = useI18n()
 
