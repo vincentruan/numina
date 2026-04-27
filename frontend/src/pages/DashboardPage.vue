@@ -62,16 +62,12 @@
           </template>
         </StatusSummaryGrid>
 
-        <!-- Alert Cards: Idle + Expiring Soon -->
-        <AlertCards
-          v-if="hasAlertCards"
+        <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
+        <SmartRemindersCard
           :idle-assets="dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle')"
           :expiring-assets="dashboardStore.expiringSoonAssets"
           @select-status="onStatusSelect"
         />
-
-        <!-- Smart Reminders -->
-        <SmartRemindersCard />
 
         <!-- Category Navigation (Sticky, shown when scrolled) -->
         <div v-if="showCategoryNav && categoriesWithAssetCount.length > 0" class="category-nav-sticky">
@@ -148,6 +144,7 @@
       v-if="!selectionMode"
       icon="plus"
       aria-label="添加资产"
+      :offset="{ x: -16, y: -72 }"
       @click="$router.push('/assets/new')"
     />
 
@@ -174,7 +171,6 @@ import type { Asset } from '@/types'
 import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
-import AlertCards from '@/components/dashboard/AlertCards.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
@@ -243,13 +239,6 @@ const filteredByCategoryAssets = computed(() => {
     return dashboardStore.displayedAssets
   }
   return dashboardStore.displayedAssets.filter(asset => asset.category_id === activeCategoryId.value)
-})
-
-// Alert cards visibility
-const hasAlertCards = computed(() => {
-  const idleCount = dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle').length
-  const expiringCount = dashboardStore.expiringSoonAssets.length
-  return idleCount > 0 || expiringCount > 0
 })
 
 const statusLabelMap: Record<string, string> = {
