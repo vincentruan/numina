@@ -354,6 +354,10 @@ export default {
     timeMachineLoading: '⏳ 正在计算…',
     timeMachineError: '❌ 计算失败，请重试',
     timeMachineSuccess: '✅ 计算完成',
+    reminderDismissed: '🔕 已忽略该提醒',
+    channelSaved: '✅ 渠道配置已保存',
+    channelDeleted: '🗑️ 渠道已删除',
+    configSaved: '✅ 通知配置已保存',
   },
   timeMachine: {
     title: '资产时光机',
@@ -398,5 +402,29 @@ export default {
     sessionExpiredTitle: '登录已过期',
     sessionExpiredMessage: '请重新登录以继续',
     sessionExpiredConfirm: '重新登录',
+  },
+  reminders: {
+    title: '智能提醒',
+    empty: '暂无提醒',
+    dismiss: '忽略',
+    types: {
+      large_purchase: '大额消费',
+      allocation_drift: '配置失衡',
+      expiring_soon: '保修到期',
+      maturity: '理财到期',
+    },
+    severity: {
+      info: '提示',
+      warning: '警告',
+      critical: '紧急',
+    },
+    notificationSettings: '通知设置',
+    channelType: {
+      telegram: 'Telegram',
+      email: '邮件',
+    },
+    subscriptions: '订阅事件',
+    thresholdFixed: '固定金额阈值（元）',
+    thresholdMultiplier: '月均支出倍数',
   },
 }

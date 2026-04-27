@@ -354,6 +354,10 @@ export default {
     timeMachineLoading: '⏳ Calculating…',
     timeMachineError: '❌ Calculation failed, please try again',
     timeMachineSuccess: '✅ Calculation complete',
+    reminderDismissed: '🔕 Reminder dismissed',
+    channelSaved: '✅ Channel saved',
+    channelDeleted: '🗑️ Channel deleted',
+    configSaved: '✅ Config saved',
   },
   timeMachine: {
     title: 'Asset Time Machine',
@@ -398,5 +402,29 @@ export default {
     sessionExpiredTitle: 'Session expired',
     sessionExpiredMessage: 'Please sign in again to continue',
     sessionExpiredConfirm: 'Sign in',
+  },
+  reminders: {
+    title: 'Smart Reminders',
+    empty: 'No reminders',
+    dismiss: 'Dismiss',
+    types: {
+      large_purchase: 'Large Purchase',
+      allocation_drift: 'Allocation Drift',
+      expiring_soon: 'Warranty Expiring',
+      maturity: 'Maturity',
+    },
+    severity: {
+      info: 'Info',
+      warning: 'Warning',
+      critical: 'Critical',
+    },
+    notificationSettings: 'Notification Settings',
+    channelType: {
+      telegram: 'Telegram',
+      email: 'Email',
+    },
+    subscriptions: 'Subscribe to events',
+    thresholdFixed: 'Fixed threshold (¥)',
+    thresholdMultiplier: 'Monthly spend multiplier',
   },
 }
