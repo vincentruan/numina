@@ -109,6 +109,9 @@ from app.routers import treasures as treasures_router
 from app.routers import device as device_router
 from app.routers import assets_analysis as assets_analysis_router
 from app.routers import ai_time_machine as ai_time_machine_router
+from app.routers import notification_channels as notification_channels_router
+from app.routers import notification_config as notification_config_router
+from app.routers import reminders as reminders_router
 from app.scheduler import (
     scheduler,
     setup_audit_log_purge_schedule,
@@ -400,6 +403,9 @@ app.include_router(child_blind_box_router.router, prefix="/api/v1")
 app.include_router(device_router.router, prefix="/api/v1")
 app.include_router(assets_analysis_router.router, prefix="/api/v1")
 app.include_router(ai_time_machine_router.router, prefix="/api/v1")
+app.include_router(notification_channels_router.router, prefix="/api/v1")
+app.include_router(notification_config_router.router, prefix="/api/v1")
+app.include_router(reminders_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
