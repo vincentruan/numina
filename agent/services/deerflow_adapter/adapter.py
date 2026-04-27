@@ -140,7 +140,7 @@ class DeerFlowAdapter:
 
 
 def _make_adapter() -> DeerFlowAdapter | None:
-    """Construct the module-level singleton from settings. Returns None if config is missing.
+    """Construct the global singleton from settings. Returns None if config is missing.
 
     注意：此单例仅用于向后兼容（全局环境变量模式）。
     生产环境应使用家庭级配置模式（通过 get_family_adapter_cache）。
@@ -163,8 +163,29 @@ def _make_adapter() -> DeerFlowAdapter | None:
         return None
 
 
-# 向后兼容的全局单例（仅用于开发/测试）
-deerflow_adapter: DeerFlowAdapter | None = _make_adapter()
+# ── 向后兼容的全局单例（延迟初始化）──────────────────────────────────────────
+
+_UNINITIALIZED = object()  # sentinel constant for uninitialized state
+_deerflow_adapter_singleton: DeerFlowAdapter | None | object = _UNINITIALIZED
+
+
+def get_global_adapter() -> DeerFlowAdapter | None:
+    """获取全局单例（延迟初始化，仅用于向后兼容）。
+
+    生产环境应使用 create_family_adapter() 或家庭级缓存模式。
+    """
+    global _deerflow_adapter_singleton
+    if _deerflow_adapter_singleton is _UNINITIALIZED:
+        _deerflow_adapter_singleton = _make_adapter()
+    return _deerflow_adapter_singleton
+
+
+# 向后兼容的模块属性访问（延迟初始化）
+# 使用 __getattr__ 实现，避免模块导入时立即执行
+def __getattr__(name: str) -> Any:
+    if name == "deerflow_adapter":
+        return get_global_adapter()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # ── 家庭级配置模式的 API ──────────────────────────────────────────────────
