@@ -442,7 +442,7 @@ watch(() => props.initialData, (data) => {
       }
     }
     // Copy physical fields
-    const physicalKeys: (keyof Asset)[] = ['location', 'annual_maintenance_cost', 'usage_frequency']
+    const physicalKeys: (keyof Asset)[] = ['location', 'annual_maintenance_cost', 'usage_frequency', 'warranty_expiry_date']
     for (const key of physicalKeys) {
       const value = getAssetField<string | number>(data, key)
       if (value !== undefined) {
@@ -563,6 +563,7 @@ function onSubmit() {
     data.expected_lifespan_days = form.value.expected_lifespan_days ?? undefined
     data.annual_maintenance_cost = form.value.annual_maintenance_cost ? Number(form.value.annual_maintenance_cost) : undefined
     data.usage_frequency = form.value.usage_frequency || undefined
+    data.warranty_expiry_date = form.value.warranty_expiry_date || undefined
   } else {
     data.institution = form.value.institution || undefined
     data.interest_rate = form.value.interest_rate ? Number(form.value.interest_rate) : undefined
