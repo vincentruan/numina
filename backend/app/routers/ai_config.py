@@ -523,13 +523,26 @@ async def _test_connection(family: Family, api_key: str, model: str) -> dict:
 
 async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
     """测试主模型思考能力。"""
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
     start = time.monotonic()
 
     try:
+        logger.info(f"[DEBUG] _test_thinking: provider={family.ai_provider}, model={model}, base_url={family.ai_base_url}")
+
         if family.ai_provider == "anthropic":
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
             )
+            request_body = {
+                "model": model,
+                "max_tokens": 1024,
+                "thinking": {"type": "enabled", "budget_tokens": 100},
+                "messages": [{"role": "user", "content": "think"}],
+            }
+            logger.info(f"[DEBUG] Anthropic thinking request: endpoint={endpoint}, body={json.dumps(request_body)}")
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
                     endpoint,
@@ -538,13 +551,10 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                         "anthropic-version": "2023-06-01",
                         "content-type": "application/json",
                     },
-                    json={
-                        "model": model,
-                        "max_tokens": 1024,
-                        "thinking": {"type": "enabled", "budget_tokens": 100},
-                        "messages": [{"role": "user", "content": "think"}],
-                    },
+                    json=request_body,
                 )
+                logger.info(f"[DEBUG] Anthropic thinking response: status={resp.status_code}, body={resp.text[:500]}")
+
                 # 判断是否支持 thinking
                 if resp.status_code == 200:
                     latency = int((time.monotonic() - start) * 1000)
@@ -557,6 +567,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                     try:
                         error_data = resp.json()
                         error_type = error_data.get("error", {}).get("type", "")
+                        logger.info(f"[DEBUG] Anthropic 400 error: type={error_type}, full_error={json.dumps(error_data)}")
                         latency = int((time.monotonic() - start) * 1000)
                         # invalid_request_error 可能是参数问题，模型支持 thinking
                         if error_type == "invalid_request_error":
@@ -591,6 +602,8 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
+            logger.info(f"[DEBUG] OpenAI thinking request: endpoint={endpoint}, model={model}")
+
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # o 系列使用 reasoning_effort，其他模型普通请求
                 if model.startswith("o"):
