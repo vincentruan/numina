@@ -149,7 +149,7 @@ class NotificationConfig(Base):
 ```python
 # backend/app/models/reminder.py
 from datetime import datetime
-from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base
 from app.utils.snowflake import next_id
@@ -168,6 +168,7 @@ class Reminder(Base):
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     notified_channels: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    send_retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 ```
@@ -237,6 +238,7 @@ Expected: 生成 `alembic/versions/xxxx_phase4_smart_reminders.py`
 - `op.create_table('notification_configs', ...)`
 - `op.create_table('reminders', ...)`
 - `op.add_column('assets', sa.Column('warranty_expiry_date', sa.Date(), nullable=True))`
+- `op.add_column('reminders', sa.Column('send_retry_count', sa.Integer(), nullable=False, server_default='0'))`
 
 - [ ] **Step 4: 应用迁移**
 
@@ -905,6 +907,7 @@ from app.services.notification.rules import (
     check_maturity,
 )
 from app.services.notification.sender import NotificationSender, render_template
+from app.services.storage.config_crypto import decrypt_config
 from app.utils.snowflake import next_id
 
 logger = logging.getLogger(__name__)
@@ -1108,7 +1111,7 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
     for channel in channels:
         if channel.id in notified:
             continue
-        config = json.loads(channel.config)
+        config = decrypt_config(channel.config) or {}
         success = False
         if channel.channel_type == "telegram":
             success = asyncio.get_event_loop().run_until_complete(
@@ -1146,7 +1149,7 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
 
 async def _send_telegram_async(channel: NotificationChannel, reminder: Reminder,
                                 template_vars: dict, db: Session) -> None:
-    config = json.loads(channel.config)
+    config = decrypt_config(channel.config) or {}
     text = render_template(reminder.reminder_type, "telegram", template_vars)
     success = await NotificationSender.send_telegram(
         bot_token=config["bot_token"],
@@ -1292,6 +1295,7 @@ from app.schemas.notification_channel import (
     NotificationChannelResponse,
     NotificationChannelUpdate,
 )
+from app.services.storage.config_crypto import decrypt_config, encrypt_config
 from app.utils.snowflake import next_id
 
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])
@@ -1333,7 +1337,7 @@ def create_channel(
         family_id=user.family_id,
         channel_type=req.channel_type,
         name=req.name,
-        config=json.dumps(req.config, ensure_ascii=False),
+        config=encrypt_config(req.config),
         is_enabled=req.is_enabled,
     )
     db.add(channel)
@@ -1359,7 +1363,7 @@ def update_channel(
     if req.name is not None:
         channel.name = req.name
     if req.config is not None:
-        channel.config = json.dumps(req.config, ensure_ascii=False)
+        channel.config = encrypt_config(req.config)
     if req.is_enabled is not None:
         channel.is_enabled = req.is_enabled
     if req.subscriptions is not None:
@@ -2250,6 +2254,10 @@ function editChannel(channel: NotificationChannelResponse) {
 }
 
 async function saveChannel() {
+  if (form.channel_type === 'telegram' && !/^-?\d+$/.test(form.chat_id)) {
+    showToast('⚠️ Chat ID 必须为数字')
+    return
+  }
   const config: Record<string, string | number> =
     form.channel_type === 'telegram'
       ? { bot_token: form.bot_token, chat_id: form.chat_id }
@@ -2401,30 +2409,9 @@ git commit -m "feat(phase4): add NotificationConfigPage, router, settings entry,
 
 **背景：** Spec 要求发送失败后，下次 APScheduler 运行时重试未推送的 `active` reminder，最多重试 3 次后放弃推送（reminder 记录保留）。
 
-- [ ] **Step 1: 在 `reminder.py` 新增 `send_retry_count` 字段**
+- [ ] **Step 1: 在 `dispatcher.py` 的 `run_scheduled_checks` 末尾追加重试逻辑**
 
-在 `notified_channels` 行后追加：
-
-```python
-    send_retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-```
-
-并在 import 中补充 `Integer`：
-
-```python
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func
-```
-
-- [ ] **Step 2: 生成并应用迁移**
-
-```bash
-cd backend && uv run alembic revision --autogenerate -m "add_send_retry_count_to_reminders"
-cd backend && uv run alembic upgrade head
-```
-
-Expected: 无报错，`reminders` 表新增 `send_retry_count` 列
-
-- [ ] **Step 3: 在 `dispatcher.py` 的 `run_scheduled_checks` 末尾追加重试逻辑**
+> 注：`send_retry_count` 字段已在 Task 1 的 `reminder.py` 中定义，Task 2 的迁移已包含此列，无需额外迁移。
 
 在 `run_scheduled_checks` 函数末尾追加调用：
 
@@ -2469,7 +2456,7 @@ def _retry_failed_notifications(db: Session) -> None:
         db.commit()
 ```
 
-- [ ] **Step 4: 运行全量测试确认无回归**
+- [ ] **Step 2: 运行全量测试确认无回归**
 
 ```bash
 cd backend && uv run pytest tests/ -v --tb=short 2>&1 | tail -20
@@ -2477,12 +2464,10 @@ cd backend && uv run pytest tests/ -v --tb=short 2>&1 | tail -20
 
 Expected: 无新增失败
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 3: Commit**
 
 ```bash
-git add backend/app/models/reminder.py \
-        backend/app/services/notification/dispatcher.py \
-        backend/alembic/versions/
+git add backend/app/services/notification/dispatcher.py
 git commit -m "feat(phase4): add send retry logic for failed notification channels"
 ```
 
