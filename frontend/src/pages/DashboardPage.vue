@@ -199,6 +199,7 @@ const loadingMore = ref(false)
 // Category view
 const showCategoryNav = ref(false)
 const activeCategoryIndex = ref(0)
+const activeCategoryId = ref<string | null>(null)  // null = show all
 
 // Selection mode
 const selectionMode = ref(false)
@@ -210,6 +211,37 @@ const showMoreActions = ref(false)
 
 const overview = computed(() => dashboardStore.overview)
 const categories = computed(() => categoryStore.categories)
+
+// Filter and sort categories by asset count (descending)
+const categoriesWithAssetCount = computed(() => {
+  const allAssets = dashboardStore.displayedAssets
+  const counts = new Map<string, number>()
+
+  // Count assets per category
+  allAssets.forEach(asset => {
+    const catId = asset.category_id
+    counts.set(catId, (counts.get(catId) || 0) + 1)
+  })
+
+  // Filter categories with assets and sort by count descending
+  return categories.value
+    .filter(cat => counts.get(cat.id) > 0)
+    .map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      icon: cat.icon,
+      count: counts.get(cat.id) || 0
+    }))
+    .sort((a, b) => b.count - a.count)
+})
+
+// Filter displayed assets by selected category
+const filteredByCategoryAssets = computed(() => {
+  if (!activeCategoryId.value) {
+    return dashboardStore.displayedAssets
+  }
+  return dashboardStore.displayedAssets.filter(asset => asset.category_id === activeCategoryId.value)
+})
 
 // Alert cards visibility
 const hasAlertCards = computed(() => {
@@ -246,6 +278,12 @@ const sectionTitle = computed(() => {
 
 function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
+  if (index === 0) {
+    activeCategoryId.value = null  // "全部" tab
+  } else {
+    const category = categoriesWithAssetCount.value[index - 1]
+    activeCategoryId.value = category.id
+  }
 }
 
 function onStatusSelect(status: string | null) {
