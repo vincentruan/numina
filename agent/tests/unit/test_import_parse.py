@@ -1,0 +1,78 @@
+"""Tests for import_parse router."""
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+
+VALID_TOKEN = "test-token"
+
+
+@pytest.fixture(autouse=True)
+def patch_token(monkeypatch):
+    monkeypatch.setenv("AGENT_INTERNAL_TOKEN", VALID_TOKEN)
+
+
+def test_parse_returns_structured_items():
+    from app.main import app
+    from fastapi.testclient import TestClient
+
+    mock_response = {
+        "source": "华泰证券",
+        "report_date": "2026-04-01",
+        "items": [
+            {
+                "name": "贵州茅台",
+                "asset_type": "financial",
+                "category_hint": "股票",
+                "current_value": 158000.0,
+                "currency": "CNY",
+                "quantity": 100,
+            }
+        ],
+    }
+    with patch(
+        "routers.import_parse.orchestrator.dispatch",
+        new=AsyncMock(return_value=type("R", (), {"model_dump": lambda self: mock_response})()),
+    ):
+        client = TestClient(app)
+        resp = client.post(
+            "/import/parse",
+            json={"text": "贵州茅台 600519 100股 市值158000元"},
+            headers={"X-Agent-Token": VALID_TOKEN, "X-Family-Id": "fam1"},
+        )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["items"][0]["name"] == "贵州茅台"
+    assert data["items"][0]["current_value"] == 158000.0
+
+
+def test_parse_rejects_invalid_token():
+    from app.main import app
+    from fastapi.testclient import TestClient
+
+    client = TestClient(app)
+    resp = client.post(
+        "/import/parse",
+        json={"text": "some text"},
+        headers={"X-Agent-Token": "wrong", "X-Family-Id": "fam1"},
+    )
+    assert resp.status_code == 401
+
+
+def test_parse_returns_empty_items_when_llm_finds_nothing():
+    from app.main import app
+    from fastapi.testclient import TestClient
+
+    empty_response = {"source": "", "report_date": None, "items": []}
+    with patch(
+        "routers.import_parse.orchestrator.dispatch",
+        new=AsyncMock(return_value=type("R", (), {"model_dump": lambda self: empty_response})()),
+    ):
+        client = TestClient(app)
+        resp = client.post(
+            "/import/parse",
+            json={"text": "这不是金融文档"},
+            headers={"X-Agent-Token": VALID_TOKEN, "X-Family-Id": "fam1"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["items"] == []
