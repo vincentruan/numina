@@ -86,63 +86,18 @@
         <div v-if="!selectionMode" class="asset-section">
           <div class="section-header">
             <span class="section-title">{{ sectionTitle }}</span>
-            <router-link to="/assets" class="view-all">查看全部 &gt;</router-link>
-            <div class="section-actions">
-              <span class="view-toggle" :aria-label="viewMode === 'card' ? '切换列表视图' : '切换卡片视图'" @click="toggleViewMode">
-                <svg v-if="viewMode === 'card'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-                <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-              </span>
-              <span class="category-toggle" @click="toggleCategoryView">
-                {{ showCategoryGroups ? '列表' : '分类' }}
-              </span>
-            </div>
           </div>
 
-          <!-- Category Grouped View -->
-          <template v-if="showCategoryGroups && groupedByCategory.length">
-            <div v-for="group in groupedByCategory" :key="group.id" class="category-group">
-              <div class="category-group-header">
-                <span class="category-icon">{{ group.icon }}</span>
-                <span class="category-name">{{ group.name }}</span>
-                <span class="category-count">({{ group.assets.length }})</span>
-              </div>
-              <div v-if="viewMode === 'card'" class="asset-list">
-                <AssetCard
-                  v-for="asset in group.assets"
-                  :key="asset.id"
-                  :asset="asset"
-                  @click="$router.push(`/assets/${asset.id}`)"
-                />
-              </div>
-              <div v-else class="asset-list-compact">
-                <AssetListItem
-                  v-for="asset in group.assets"
-                  :key="asset.id"
-                  :asset="asset"
-                  @click="$router.push(`/assets/${asset.id}`)"
-                />
-              </div>
-            </div>
-          </template>
-
-          <!-- Normal List View -->
-          <template v-else-if="sortedAndFilteredAssets.length">
+          <!-- Asset List -->
+          <template v-if="dashboardStore.displayedAssets.length">
             <van-list
               v-model:loading="loadingMore"
               :finished="dashboardStore.assetListFinished"
               finished-text="没有更多了"
               @load="onLoadMore"
             >
-              <div v-if="viewMode === 'card'" class="asset-list">
+              <div class="asset-list">
                 <AssetCard
-                  v-for="asset in dashboardStore.displayedAssets"
-                  :key="asset.id"
-                  :asset="asset"
-                  @click="$router.push(`/assets/${asset.id}`)"
-                />
-              </div>
-              <div v-else class="asset-list-compact">
-                <AssetListItem
                   v-for="asset in dashboardStore.displayedAssets"
                   :key="asset.id"
                   :asset="asset"
@@ -164,7 +119,7 @@
           </div>
           <div class="selection-list-cards">
             <AssetCard
-              v-for="asset in sortedAndFilteredAssets"
+              v-for="asset in dashboardStore.displayedAssets"
               :key="asset.id"
               :asset="asset"
               :selectable="true"
@@ -285,7 +240,6 @@ const authStore = useAuthStore()
 const choreStore = useChoreStore()
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
-const viewMode = ref<'card' | 'list'>('card')
 const overviewCardRef = ref()
 
 // Chart collapse state (van-collapse v-model expects array of active names)
@@ -297,7 +251,6 @@ const loadingMore = ref(false)
 
 // Category view
 const showCategoryNav = ref(false)
-const showCategoryGroups = ref(false)
 const activeCategoryIndex = ref(0)
 
 // Selection mode
@@ -480,43 +433,6 @@ const sortedAndFilteredAssets = computed(() => {
   return assets
 })
 
-// Group assets by category
-const groupedByCategory = computed(() => {
-  const groups = new Map<string, { id: string; name: string; icon: string; assets: Asset[] }>()
-
-  sortedAndFilteredAssets.value.forEach(asset => {
-    const categoryId = asset.category_id
-    const category = asset.category || categories.value.find(c => c.id === categoryId)
-
-    if (category) {
-      if (!groups.has(categoryId)) {
-        groups.set(categoryId, {
-          id: categoryId,
-          name: category.name,
-          icon: category.icon,
-          assets: []
-        })
-      }
-      groups.get(categoryId)!.assets.push(asset)
-    }
-  })
-
-  return Array.from(groups.values())
-})
-
-function toggleViewMode() {
-  viewMode.value = viewMode.value === 'card' ? 'list' : 'card'
-}
-
-function toggleCategoryView() {
-  showCategoryGroups.value = !showCategoryGroups.value
-  if (showCategoryGroups.value) {
-    showToast(t('toast.switchedToCategoryView'))
-  } else {
-    showToast(t('toast.switchedToListView'))
-  }
-}
-
 function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
   // Scroll to the category group
@@ -570,7 +486,7 @@ function exitSelectionMode() {
 
 function toggleSelectAll() {
   if (selectAll.value) {
-    selectedIds.value = sortedAndFilteredAssets.value.map(a => a.id)
+    selectedIds.value = dashboardStore.displayedAssets.map(a => a.id)
   } else {
     selectedIds.value = []
   }
@@ -583,7 +499,7 @@ function toggleSelection(id: string) {
   } else {
     selectedIds.value.push(id)
   }
-  selectAll.value = selectedIds.value.length === sortedAndFilteredAssets.value.length
+  selectAll.value = selectedIds.value.length === dashboardStore.displayedAssets.length
 }
 
 async function handleBatchShare() {
@@ -599,7 +515,7 @@ async function handleBatchShare() {
   })
 
   try {
-    const selectedAssets = sortedAndFilteredAssets.value.filter(a => selectedIds.value.includes(a.id))
+    const selectedAssets = dashboardStore.displayedAssets.filter(a => selectedIds.value.includes(a.id))
 
     let blob: Blob
     let title: string
@@ -765,10 +681,6 @@ async function onRefresh() {
 }
 
 onMounted(() => {
-  // Initialize viewMode from user settings
-  if (authStore.user?.view_mode === 'list') {
-    viewMode.value = 'list'
-  }
   // Fetch dashboard bundle first, then load first page of assets
   dashboardStore.fetchAll().then(() => {
     const initialStatus = activeStatus.value || 'in_use'
@@ -779,13 +691,6 @@ onMounted(() => {
     choreStore.fetchPendingApprovals()
   }
   window.addEventListener('scroll', handleScroll)
-})
-
-// Watch for user settings changes
-watch(() => authStore.user?.view_mode, (newMode) => {
-  if (newMode === 'list' || newMode === 'card') {
-    viewMode.value = newMode
-  }
 })
 
 onUnmounted(() => {
@@ -858,76 +763,8 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--text-primary);
 }
-.view-all {
-  font-size: 13px;
-  color: var(--color-action-primary);
-  text-decoration: none;
-  margin-left: auto;
-  margin-right: 8px;
-}
-.section-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.view-toggle,
-.category-toggle {
-  font-size: 13px;
-  color: var(--color-action-primary);
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: rgba(21, 101, 192, 0.1);
-}
-[data-theme='dark'] .view-toggle,
-[data-theme='dark'] .category-toggle {
-  background: rgba(21, 101, 192, 0.15);
-}
-.view-toggle:active,
-.category-toggle:active {
-  opacity: 0.7;
-}
 .asset-list {
   /* cards have their own margin-bottom */
-}
-.asset-list-compact {
-  background: var(--card-bg);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-[data-theme='dark'] .asset-list-compact {
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* Category Group */
-.category-group {
-  margin-bottom: 16px;
-}
-.category-group-header {
-  display: flex;
-  align-items: center;
-  padding: 12px 8px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-[data-theme='dark'] .category-group-header {
-  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
-}
-.category-icon {
-  font-size: 20px;
-  margin-right: 8px;
-}
-.category-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-.category-count {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  margin-left: 4px;
 }
 
 /* Selection Mode */
