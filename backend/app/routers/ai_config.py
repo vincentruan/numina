@@ -587,12 +587,13 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                     }
 
         elif family.ai_provider == "openai":
-            # OpenAI thinking 测试（o 系列模型）
-            if model.startswith("o"):
-                endpoint = _build_endpoint(
-                    family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
-                )
-                async with httpx.AsyncClient(timeout=10.0) as client:
+            # OpenAI thinking 测试
+            endpoint = _build_endpoint(
+                family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
+            )
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                # o 系列使用 reasoning_effort，其他模型普通请求
+                if model.startswith("o"):
                     resp = await client.post(
                         endpoint,
                         headers={
@@ -606,25 +607,38 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
                             "messages": [{"role": "user", "content": "think"}],
                         },
                     )
-                    latency = int((time.monotonic() - start) * 1000)
-                    if resp.status_code in (200, 400):
-                        return {
-                            "success": True,
-                            "message": "支持思考能力",
-                            "latency_ms": latency,
-                        }
-                    else:
-                        return {
-                            "success": False,
-                            "message": f"思考测试失败: HTTP {resp.status_code}",
-                            "latency_ms": latency,
-                        }
-            else:
-                return {
-                    "success": False,
-                    "message": "非 o 系列模型，不支持思考能力",
-                    "latency_ms": None,
-                }
+                else:
+                    # 非 o 系列模型，测试普通请求是否成功
+                    resp = await client.post(
+                        endpoint,
+                        headers={
+                            "Authorization": f"Bearer {api_key}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": model,
+                            "max_tokens": 1,
+                            "messages": [{"role": "user", "content": "think"}],
+                        },
+                    )
+                latency = int((time.monotonic() - start) * 1000)
+                if resp.status_code in (200, 400):
+                    # 连接成功，模型可用
+                    # o 系列有专门的 reasoning，非 o 系列标记为"可用"而非"支持思考"
+                    message = "模型可用"
+                    if model.startswith("o"):
+                        message = "支持推理能力 (reasoning_effort)"
+                    return {
+                        "success": True,
+                        "message": message,
+                        "latency_ms": latency,
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "message": f"测试失败: HTTP {resp.status_code}",
+                        "latency_ms": latency,
+                    }
 
     except httpx.TimeoutException:
         return {
