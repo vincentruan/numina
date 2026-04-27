@@ -120,6 +120,11 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
     db.add(asset)
     db.commit()
     db.refresh(asset)
+    from app.services.notification.dispatcher import check_on_asset_write
+    try:
+        check_on_asset_write(db, asset)
+    except Exception:
+        pass  # 提醒检测失败不影响主流程
     return asset
 
 
@@ -137,6 +142,11 @@ def update_asset(db: Session, user: User, asset_id: str, req: AssetUpdate) -> As
 
     db.commit()
     db.refresh(asset)
+    from app.services.notification.dispatcher import check_on_asset_write
+    try:
+        check_on_asset_write(db, asset)
+    except Exception:
+        pass  # 提醒检测失败不影响主流程
     return asset
 
 
