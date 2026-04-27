@@ -105,3 +105,23 @@ def test_fetch_and_store_rates_http_failure(db):
     assert result is False
     # Verify DB is unchanged
     assert db.query(ExchangeRate).count() == initial_count
+
+
+def test_fetch_and_store_rates_bypasses_proxy(db):
+    """Exchange rate fetch explicitly bypasses system proxy (proxy=None)."""
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "rates": {"USD": 0.1374, "CNY": 1.0}
+    }
+    mock_response.raise_for_status = MagicMock()
+
+    # Mock httpx.get to capture the proxy parameter
+    with patch("httpx.get", return_value=mock_response) as mock_get:
+        result = ExchangeRateService.fetch_and_store_rates(db)
+
+    assert result is True
+    # Verify proxy=None was passed to bypass system proxy
+    mock_get.assert_called_once()
+    call_kwargs = mock_get.call_args.kwargs
+    assert "proxy" in call_kwargs, "proxy parameter must be explicitly set"
+    assert call_kwargs["proxy"] is None, "proxy=None should bypass system proxy"

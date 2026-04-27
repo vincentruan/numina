@@ -48,6 +48,7 @@ class ExchangeRateService:
             resp = httpx.get(
                 "https://api.exchangerate-api.com/v4/latest/CNY",
                 timeout=10,
+                proxy=None,  # Bypass system proxy (scheduled job shouldn't depend on user proxy)
             )
             resp.raise_for_status()
             data = resp.json()
