@@ -56,27 +56,22 @@ Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visu
 
 ## Known Pitfalls
 
-### FastAPI `redirect_slashes` and HTTPS Mixed Content
+### URL Style — No Trailing Slash, No Redirects
 
-FastAPI defaults to `redirect_slashes=True`, which redirects `/api/v1/assets` → `/api/v1/assets/` with a 307. In HTTPS deployments behind nginx, nginx forwards requests to FastAPI over plain HTTP internally. FastAPI then issues a `Location: http://...` redirect, which the browser blocks as Mixed Content.
+All API endpoints must respond with 200 directly. No 307 redirects. This keeps frontend/backend URL style consistent and avoids Mixed Content errors in HTTPS deployments.
 
-**Fix:** Set `redirect_slashes=False` in `app/main.py`:
+**Rule:** `redirect_slashes=False` is set in `app/main.py`. All router root-path decorators must use `""` not `"/"`:
 ```python
-app = FastAPI(..., redirect_slashes=False)
-```
-
-**Also required:** All router root-path decorators must use `""` instead of `"/"`:
-```python
-# ✅ Correct
+# ✅ Correct — hits 200 directly
 @router.get("")
 @router.post("")
 
-# ❌ Causes 307 redirect → Mixed Content in HTTPS
+# ❌ Wrong — FastAPI issues 307 redirect, breaks HTTPS behind nginx
 @router.get("/")
 @router.post("/")
 ```
 
-This applies to every router file that has root-path endpoints (assets, liabilities, tags, wishes, family, etc.).
+Applies to every router with root-path endpoints. Frontend calls must also omit trailing slashes.
 
 ## Cross-Cutting Conventions
 
@@ -87,6 +82,7 @@ These apply to all modules. Module-specific conventions live in each module's `C
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
 - **Python: Pydantic v2 only** — use `ConfigDict`, `model_validate`, `field_validator`. Never v1 style (`class Config`, `parse_obj`, `validator`).
+- **Past solutions** — `docs/solutions/` contains documented fixes for recurring problems. Check before debugging known issue categories.
 
 ## Module Documentation
 
@@ -97,6 +93,7 @@ For module-specific dev commands, conventions, and patterns:
 | Backend | [`backend/CLAUDE.md`](./backend/CLAUDE.md) | [`backend/README.md`](./backend/README.md) |
 | Frontend | [`frontend/CLAUDE.md`](./frontend/CLAUDE.md) | [`frontend/README.md`](./frontend/README.md) |
 | Agent | [`agent/CLAUDE.md`](./agent/CLAUDE.md) | [`agent/README.md`](./agent/README.md) |
+| Site | [`site/CLAUDE.md`](./site/CLAUDE.md) | — |
 
 ## Development Commands
 
