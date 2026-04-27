@@ -45,6 +45,7 @@ class Asset(Base):
     institution: Mapped[str | None] = mapped_column(String(200), nullable=True)
     interest_rate: Mapped[float | None] = mapped_column(Float, nullable=True)
     maturity_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    warranty_expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     expected_lifespan_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     annual_maintenance_cost: Mapped[float | None] = mapped_column(Float, nullable=True, default=0)
     usage_frequency: Mapped[str | None] = mapped_column(String(20), nullable=True)  # daily/weekly/monthly/rarely/idle
