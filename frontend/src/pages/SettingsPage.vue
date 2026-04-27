@@ -1,6 +1,6 @@
 <template>
   <div class="settings-page">
-    <PageHeader :title="t('settings.title')" />
+    <PageHeader :title="t('settings.title')" :show-back="false" />
 
     <van-cell-group inset :title="t('settings.dataManagement')">
       <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
@@ -234,9 +234,9 @@ const themeColorOptions = [
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 
 const themeOptions = [
-  { text: t('settings.themeLight'), value: 'light' },
-  { text: t('settings.themeDark'), value: 'dark' },
-  { text: t('settings.themeSystem'), value: 'system' },
+  { text: '☀️ ' + t('settings.themeLight'), value: 'light' },
+  { text: '🌙 ' + t('settings.themeDark'), value: 'dark' },
+  { text: '🌓 ' + t('settings.themeSystem'), value: 'system' },
 ]
 
 const languageOptions = [
@@ -251,9 +251,9 @@ const viewModeOptions = [
 
 const themeLabel = computed(() => {
   const theme = authStore.user?.theme
-  if (theme === 'dark') return t('settings.themeDark')
-  if (theme === 'system') return t('settings.themeSystem')
-  return t('settings.themeLight')
+  if (theme === 'dark') return '🌙 ' + t('settings.themeDark')
+  if (theme === 'system') return '🌓 ' + t('settings.themeSystem')
+  return '☀️ ' + t('settings.themeLight')
 })
 
 const languageLabel = computed(() => {

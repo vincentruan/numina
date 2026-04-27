@@ -1,10 +1,6 @@
 <template>
   <div class="family-page">
-    <PageHeader :title="t('family.title')" :show-back="false">
-      <template #right>
-        <van-icon name="setting-o" size="20" @click="$router.push('/settings')" />
-      </template>
-    </PageHeader>
+    <PageHeader :title="t('family.title')" />
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <template v-if="familyStore.family">
