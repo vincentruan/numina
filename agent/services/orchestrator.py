@@ -4,7 +4,7 @@ Pipeline per request:
   1. PolicyGuard.check()        — enforce admin switches
   2. BackendClient.fetch_context() — pull family data
   3. PIIRedactor.redact()       — strip PII before any LLM call
-  4. DeerFlowAdapter.dispatch() — if USE_DEERFLOW=true
+  4. DeerFlowAdapter.dispatch() — if USE_DEERFLOW=true (家庭级配置)
      OR FallbackEngine.run()   — legacy path / DeerFlow failure
   5. AuditLogger.log_call()     — structured audit entry
 
@@ -26,11 +26,6 @@ from services.fallback_engine import fallback_engine
 from services.output_mapper import output_mapper
 from services.pii_redactor import pii_redactor
 from services.policy_guard import policy_guard
-
-try:
-    from services.deerflow_adapter.adapter import deerflow_adapter as _deerflow_adapter
-except Exception:
-    _deerflow_adapter = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -115,9 +110,10 @@ class Orchestrator:
             if settings.USE_DEERFLOW:
                 deerflow_attempted = True
                 try:
-                    if _deerflow_adapter is None:
-                        raise RuntimeError("DeerFlow adapter not available")
-                    raw_output = await _deerflow_adapter.dispatch(
+                    # 使用家庭级 DeerFlowAdapter（动态注入 ai_config）
+                    from services.deerflow_adapter.adapter import create_family_adapter
+                    family_adapter = create_family_adapter(family_id, ai_config)
+                    raw_output = await family_adapter.dispatch(
                         skill_name=capability,
                         context=redacted,
                         thread_id=effective_thread_id,

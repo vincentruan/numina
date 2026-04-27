@@ -1,4 +1,9 @@
-"""DeerFlowAdapter — async wrapper around DeerFlowClient.stream()."""
+"""DeerFlowAdapter — async wrapper around DeerFlowClient.stream().
+
+支持两种模式：
+1. 全局单例模式（向后兼容）：使用全局环境变量配置
+2. 家庭级缓存模式：按家庭动态注入 AI 配置（api_key, model_id）
+"""
 
 import asyncio
 import json
@@ -6,9 +11,10 @@ import logging
 import os
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
+from typing import Any
 
 from schemas.context import RedactedContext
-from services.deerflow_adapter.client_factory import get_deerflow_client
+from services.deerflow_adapter.family_adapter_cache import get_family_adapter, invalidate_family_adapter
 from services.deerflow_adapter.exceptions import (
     DeerFlowError,
     DeerFlowSkillNotFoundError,
@@ -30,11 +36,43 @@ _CHECKPOINTER_LOCK = asyncio.Lock()
 
 
 class DeerFlowAdapter:
-    """Async adapter for DeerFlowClient. Protocol translation only — no business logic."""
+    """Async adapter for DeerFlowClient. Protocol translation only — no business logic.
 
-    def __init__(self, config_path: str, timeout_seconds: int = 120) -> None:
-        self._client = get_deerflow_client(config_path)
+    支持两种初始化方式：
+    1. 全局配置模式：传入 config_path（向后兼容）
+    2. 家庭配置模式：传入 family_id + ai_config（动态注入）
+    """
+
+    def __init__(
+        self,
+        config_path: str | None = None,
+        timeout_seconds: int = 120,
+        family_id: str | None = None,
+        ai_config: dict[str, Any] | None = None,
+    ) -> None:
+        """Initialize adapter.
+
+        Args:
+            config_path: 全局配置文件路径（向后兼容模式）
+            timeout_seconds: DeerFlow 调用超时时间
+            family_id: 家庭 ID（家庭级配置模式）
+            ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
+        """
         self._timeout = timeout_seconds
+        self._family_id = family_id
+        self._ai_config = ai_config
+
+        if family_id and ai_config:
+            # 家庭级配置模式：从缓存获取 DeerFlowClient
+            self._client = get_family_adapter(family_id, ai_config)
+            self._is_family_mode = True
+        elif config_path:
+            # 全局配置模式：直接初始化（向后兼容）
+            from services.deerflow_adapter.client_factory import get_deerflow_client
+            self._client = get_deerflow_client(config_path)
+            self._is_family_mode = False
+        else:
+            raise ValueError("Either config_path or (family_id + ai_config) must be provided")
 
     async def dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
         """Dispatch a skill call and return the full response string.
@@ -102,9 +140,22 @@ class DeerFlowAdapter:
 
 
 def _make_adapter() -> DeerFlowAdapter | None:
-    """Construct the module-level singleton from settings. Returns None if config is missing."""
+    """Construct the module-level singleton from settings. Returns None if config is missing.
+
+    注意：此单例仅用于向后兼容（全局环境变量模式）。
+    生产环境应使用家庭级配置模式（通过 get_family_adapter_cache）。
+    """
     try:
-        config_path = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
+        # DeerFlowClient expects a config file, not a directory
+        config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
+        # Use environment-specific config if DEERFLOW_ENV is set, otherwise base
+        env = os.getenv("DEERFLOW_ENV", "base")
+        config_path = os.path.join(config_dir, env, "config.yaml")
+
+        # Set DEER_FLOW_CONFIG_PATH so deerflow-harness can find it
+        # (passing config_path to DeerFlowClient doesn't work due to get_app_config() re-resolving)
+        os.environ["DEER_FLOW_CONFIG_PATH"] = config_path
+
         return DeerFlowAdapter(config_path=config_path, timeout_seconds=120)
     except Exception as e:
         import logging as _logging
@@ -112,4 +163,30 @@ def _make_adapter() -> DeerFlowAdapter | None:
         return None
 
 
+# 向后兼容的全局单例（仅用于开发/测试）
 deerflow_adapter: DeerFlowAdapter | None = _make_adapter()
+
+
+# ── 家庭级配置模式的 API ──────────────────────────────────────────────────
+
+def create_family_adapter(family_id: str, ai_config: dict[str, Any], timeout_seconds: int = 120) -> DeerFlowAdapter:
+    """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
+
+    Args:
+        family_id: 家庭 ID
+        ai_config: 家庭的 AI 配置（从 backend 获取）
+        timeout_seconds: DeerFlow 调用超时时间
+
+    Returns:
+        DeerFlowAdapter 实例（缓存复用）
+    """
+    return DeerFlowAdapter(family_id=family_id, ai_config=ai_config, timeout_seconds=timeout_seconds)
+
+
+def invalidate_family_adapter_cache(family_id: str) -> None:
+    """清理家庭的 DeerFlowAdapter 缓存（当家庭禁用 AI 或配置变更时调用）。
+
+    Args:
+        family_id: 家庭 ID
+    """
+    invalidate_family_adapter(family_id)

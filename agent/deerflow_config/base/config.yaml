@@ -3,9 +3,10 @@
 
 # LLM 配置（从环境变量读取，不硬编码）
 llm:
-  # 由 agent/ 的 DeerFlowAdapter 在运行时注入，此处为占位
-  model: ${AI_MODEL:-claude-haiku-4-5}
-  api_key: ${AI_API_KEY}  # 由 adapter 通过 RunnableConfig 注入，不从此处读取
+  # DeerFlow config loader expects simple $VAR syntax (not ${VAR:-default})
+  # Set AI_MODEL and AI_API_KEY env vars before starting the agent
+  model: $AI_MODEL
+  api_key: $AI_API_KEY  # 由 adapter 通过 RunnableConfig 注入，不从此处读取
 
 # 检查点（对话状态持久化）
 checkpointer:
@@ -20,6 +21,7 @@ memory:
 
 # 沙盒安全设置
 sandbox:
+  use: deerflow.sandbox.local:LocalSandboxProvider
   allow_host_bash: false  # 生产环境禁止本地 bash 执行
 
 # Skills 路径
