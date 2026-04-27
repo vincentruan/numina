@@ -18,6 +18,7 @@ class AssetCreate(BaseModel):
     institution: str | None = None
     interest_rate: float | None = None
     maturity_date: date | None = None
+    warranty_expiry_date: date | None = None
     expected_lifespan_days: int | None = None
     annual_maintenance_cost: float | None = 0
     usage_frequency: str | None = None
@@ -41,6 +42,7 @@ class AssetUpdate(BaseModel):
     institution: str | None = None
     interest_rate: float | None = None
     maturity_date: date | None = None
+    warranty_expiry_date: date | None = None
     expected_lifespan_days: int | None = None
     annual_maintenance_cost: float | None = None
     usage_frequency: str | None = None
@@ -112,6 +114,7 @@ class AssetResponse(SnowflakeBase):
     institution: str | None = None
     interest_rate: float | None = None
     maturity_date: date | None = None
+    warranty_expiry_date: date | None = None
     expected_lifespan_days: int | None = None
     annual_maintenance_cost: float | None = None
     usage_frequency: str | None = None
