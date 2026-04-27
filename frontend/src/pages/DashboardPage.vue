@@ -74,9 +74,14 @@
         <SmartRemindersCard />
 
         <!-- Category Navigation (Sticky, shown when scrolled) -->
-        <div v-if="showCategoryNav && categories.length > 1" class="category-nav-sticky">
+        <div v-if="showCategoryNav && categoriesWithAssetCount.length > 0" class="category-nav-sticky">
           <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
-            <van-tab v-for="(cat, index) in categories" :key="cat.id" :title="cat.name" />
+            <van-tab title="全部" />
+            <van-tab
+              v-for="cat in categoriesWithAssetCount"
+              :key="cat.id"
+              :title="`${cat.name} (${cat.count})`"
+            />
           </van-tabs>
         </div>
 
@@ -87,7 +92,7 @@
           </div>
 
           <!-- Asset List -->
-          <template v-if="dashboardStore.displayedAssets.length">
+          <template v-if="filteredByCategoryAssets.length">
             <van-list
               v-model:loading="loadingMore"
               :finished="dashboardStore.assetListFinished"
@@ -96,7 +101,7 @@
             >
               <div class="asset-list">
                 <AssetCard
-                  v-for="asset in dashboardStore.displayedAssets"
+                  v-for="asset in filteredByCategoryAssets"
                   :key="asset.id"
                   :asset="asset"
                   @click="$router.push(`/assets/${asset.id}`)"
