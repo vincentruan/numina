@@ -13,6 +13,12 @@
 
     <van-cell-group inset title="账户安全" class="section">
       <van-cell :title="t('device.title')" icon="phone-o" is-link to="/settings/devices" />
+      <van-cell
+        :title="t('reminders.notificationSettings')"
+        is-link
+        icon="bell"
+        @click="$router.push('/settings/notifications')"
+      />
     </van-cell-group>
 
     <van-cell-group inset :title="t('settings.userSettings')" class="section">

@@ -50,6 +50,7 @@ export interface Asset {
   institution?: string
   interest_rate?: number
   maturity_date?: string
+  warranty_expiry_date?: string
   expected_lifespan_days?: number
   annual_maintenance_cost?: number
   usage_frequency?: 'daily' | 'weekly' | 'monthly' | 'rarely' | 'idle'

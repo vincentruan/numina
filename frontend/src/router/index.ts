@@ -170,6 +170,10 @@ const router = createRouter({
           component: () => import('@/pages/DevicesPage.vue')
         },
         {
+          path: 'settings/notifications',
+          component: () => import('@/pages/NotificationConfigPage.vue'),
+        },
+        {
           path: 'ai/report',
           name: 'AIReport',
           component: () => import('@/pages/AIReportPage.vue')

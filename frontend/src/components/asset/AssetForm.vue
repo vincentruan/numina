@@ -205,6 +205,26 @@
       </van-popup>
     </van-cell-group>
 
+    <!-- Physical asset: warranty expiry date -->
+    <van-cell-group v-if="form.asset_type === 'physical'" inset title="保修信息">
+      <van-field
+        v-model="form.warranty_expiry_date"
+        is-link
+        readonly
+        label="保修到期日"
+        placeholder="选择保修到期日"
+        @click="showWarrantyPicker = true"
+      />
+      <van-popup v-model:show="showWarrantyPicker" position="bottom" round>
+        <van-date-picker
+          v-model="warrantyPickerValue"
+          title="保修到期日"
+          @confirm="onWarrantyConfirm"
+          @cancel="showWarrantyPicker = false"
+        />
+      </van-popup>
+    </van-cell-group>
+
     <!-- P1: Tags + notes -->
     <van-cell-group inset title="标签与备注">
       <van-cell title="标签">
@@ -270,6 +290,7 @@ const form = ref<Record<string, any>>({
   institution: '',
   interest_rate: '',
   maturity_date: '',
+  warranty_expiry_date: '',
   annual_maintenance_cost: '',
   usage_frequency: 'daily',
   notes: '',
@@ -460,6 +481,7 @@ fetchTags()
 const showDatePicker = ref(false)
 const showStatusPicker = ref(false)
 const showMaturityPicker = ref(false)
+const showWarrantyPicker = ref(false)
 
 const now = new Date()
 const datePickerValue = ref([
@@ -468,6 +490,7 @@ const datePickerValue = ref([
   String(now.getDate()).padStart(2, '0')
 ])
 const maturityPickerValue = ref([...datePickerValue.value])
+const warrantyPickerValue = ref([...datePickerValue.value])
 
 const statusColumns = [
   { text: '服役中', value: 'in_use' },
@@ -488,6 +511,11 @@ function onDateConfirm({ selectedValues }: any) {
 function onMaturityConfirm({ selectedValues }: any) {
   form.value.maturity_date = selectedValues.join('-')
   showMaturityPicker.value = false
+}
+
+function onWarrantyConfirm({ selectedValues }: any) {
+  form.value.warranty_expiry_date = selectedValues.join('-')
+  showWarrantyPicker.value = false
 }
 
 function onStatusConfirm({ selectedOptions }: any) {
