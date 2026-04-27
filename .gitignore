@@ -124,6 +124,9 @@ data/*.json
 !data/.gitkeep
 backend/data/uploads/
 
+# Storage backend config (contains credentials)
+backend/config/storage_backends.yaml
+
 # ===========================
 # Environment & Secrets
 # ===========================

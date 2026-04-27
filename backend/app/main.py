@@ -124,6 +124,7 @@ from app.scheduler import (
 from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.seed.invitation_codes import seed_invitation_codes
+from app.seed.storage_backends import seed_storage_backends
 from app.services.exchange_rate import ExchangeRateService
 from app.services.snapshot import auto_generate_daily_snapshots
 from app.services.storage.base import StorageError
@@ -181,6 +182,7 @@ async def lifespan(app: FastAPI):
         seed_categories(db)
         seed_currencies(db)
         seed_invitation_codes(db)
+        seed_storage_backends(db)
         from app.seed.category_financial_defaults import seed_category_financial_defaults
         seed_category_financial_defaults(db)
         # Auto-generate daily snapshots for all families
