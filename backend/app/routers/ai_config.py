@@ -442,7 +442,7 @@ async def _test_connection(family: Family, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -474,7 +474,7 @@ async def _test_connection(family: Family, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -504,7 +504,7 @@ async def _test_connection(family: Family, api_key: str, model: str) -> dict:
     except httpx.TimeoutException:
         return {
             "connected": False,
-            "message": "主模型连接超时（10秒）",
+            "message": "主模型连接超时（30秒）",
             "latency_ms": None,
         }
     except Exception as e:
@@ -543,7 +543,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
             }
             logger.info(f"[DEBUG] Anthropic thinking request: endpoint={endpoint}, body={json.dumps(request_body)}")
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -604,7 +604,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
             )
             logger.info(f"[DEBUG] OpenAI thinking test: endpoint={endpoint}, model={model}")
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 # 先尝试带 reasoning_effort 的请求（部分模型支持）
                 request_body = {
                     "model": model,
@@ -676,7 +676,7 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
     except httpx.TimeoutException:
         return {
             "success": False,
-            "message": "思考能力测试超时（10秒）",
+            "message": "思考能力测试超时（30秒）",
             "latency_ms": None,
         }
     except Exception as e:
@@ -702,7 +702,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -748,7 +748,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     endpoint,
                     headers={
@@ -791,7 +791,7 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
     except httpx.TimeoutException:
         return {
             "success": False,
-            "message": "图像模型连接超时（10秒）",
+            "message": "图像模型连接超时（30秒）",
             "latency_ms": None,
         }
     except Exception as e:
