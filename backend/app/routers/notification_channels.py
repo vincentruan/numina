@@ -12,7 +12,7 @@ from app.schemas.notification_channel import (
     NotificationChannelResponse,
     NotificationChannelUpdate,
 )
-from app.services.storage.config_crypto import decrypt_config, encrypt_config
+from app.services.storage.config_crypto import encrypt_config
 from app.utils.snowflake import next_id
 
 router = APIRouter(prefix="/notification-channels", tags=["notification-channels"])

@@ -1,7 +1,7 @@
 """Abstract cache backend interface for rate limiting and other caching needs."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Optional
+from typing import Any
 
 
 class CacheBackend(ABC):
@@ -12,7 +12,7 @@ class CacheBackend(ABC):
     """
 
     @abstractmethod
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         """Retrieve value by key.
 
         Args:
@@ -24,7 +24,7 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         """Store value with optional TTL.
 
         Args:
@@ -59,7 +59,7 @@ class CacheBackend(ABC):
         pass
 
     @abstractmethod
-    def get_ttl(self, key: str) -> Optional[int]:
+    def get_ttl(self, key: str) -> int | None:
         """Get remaining TTL in seconds.
 
         Args:

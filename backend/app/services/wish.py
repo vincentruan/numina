@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
-from app.models.wish import Wish
 from app.models.user import User
-from app.schemas.wish import WishCreate, WishUpdate, WishRealizeRequest
+from app.models.wish import Wish
+from app.schemas.wish import WishCreate, WishRealizeRequest, WishUpdate
 
 
 def list_wishes(db: Session, user: User, status_filter: str | None = None) -> list[Wish]:

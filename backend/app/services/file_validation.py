@@ -1,6 +1,5 @@
 """File upload security validation using magic bytes."""
 
-from typing import Optional
 
 # Magic bytes for allowed image formats
 MAGIC_BYTES = {
@@ -44,7 +43,7 @@ def validate_image_magic_bytes(content: bytes, extension: str) -> bool:
     return False
 
 
-def detect_image_format(content: bytes) -> Optional[str]:
+def detect_image_format(content: bytes) -> str | None:
     """Detect image format from magic bytes regardless of extension.
 
     Args:

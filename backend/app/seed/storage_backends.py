@@ -4,7 +4,6 @@ from pathlib import Path
 import yaml
 from sqlalchemy.orm import Session
 
-from app.config import settings
 from app.core.logging_config import get_logger
 from app.models.storage_backend import StorageBackend
 from app.services.storage.config_crypto import encrypt_config

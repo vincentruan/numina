@@ -8,19 +8,19 @@ import json
 from typing import Any
 
 from webauthn import (
-    generate_registration_options,
-    verify_registration_response,
     generate_authentication_options,
-    verify_authentication_response,
+    generate_registration_options,
     options_to_json,
-)
-from webauthn.helpers.structs import (
-    PublicKeyCredentialDescriptor,
-    UserVerificationRequirement,
-    AuthenticatorSelectionCriteria,
-    ResidentKeyRequirement,
+    verify_authentication_response,
+    verify_registration_response,
 )
 from webauthn.helpers.cose import COSEAlgorithmIdentifier
+from webauthn.helpers.structs import (
+    AuthenticatorSelectionCriteria,
+    PublicKeyCredentialDescriptor,
+    ResidentKeyRequirement,
+    UserVerificationRequirement,
+)
 
 from app.config import settings
 

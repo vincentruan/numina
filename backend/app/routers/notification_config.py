@@ -6,7 +6,10 @@ from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.notification_config import NotificationConfig
 from app.models.user import User
-from app.schemas.notification_config import NotificationConfigResponse, NotificationConfigUpdate
+from app.schemas.notification_config import (
+    NotificationConfigResponse,
+    NotificationConfigUpdate,
+)
 from app.utils.snowflake import next_id
 
 router = APIRouter(prefix="/notification-config", tags=["notification-config"])

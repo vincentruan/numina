@@ -6,8 +6,6 @@ Never update or delete rows — this table is append-only.
 
 from __future__ import annotations
 
-from typing import Any
-
 from app.config import settings
 from app.core.logging_config import get_logger
 
@@ -56,6 +54,7 @@ def purge_old_audit_logs(retention_days: int = 90) -> int:
     """Delete audit log entries older than retention_days. Returns count deleted."""
     try:
         from datetime import datetime, timedelta
+
         from app.database import SessionLocal
         from app.models.security_audit_log import SecurityAuditLog
 

@@ -4,7 +4,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.asset import Asset
-from app.models.category import Category
 from app.models.liability import Liability
 from app.models.snapshot import AssetSnapshot
 from app.models.user import User
@@ -374,8 +373,8 @@ def get_states_summary(db: Session, user: User) -> dict:
 
 def get_home_assets(db: Session, user: User, limit: int = 5) -> dict:
     """Get assets grouped by status for home page display."""
-    from app.services.asset import compute_daily_cost, compute_return_rate
     from app.schemas.asset import AssetResponse
+    from app.services.asset import compute_daily_cost, compute_return_rate
 
     family_id = user.family_id
     statuses = ["in_use", "idle", "sold", "retired"]
@@ -414,9 +413,10 @@ def get_home_assets_page(
     page_size: int = 20,
 ) -> dict:
     """分页获取指定状态的资产列表"""
-    from app.services.asset import compute_daily_cost, compute_return_rate
-    from app.schemas.asset import AssetResponse
     import math
+
+    from app.schemas.asset import AssetResponse
+    from app.services.asset import compute_daily_cost, compute_return_rate
 
     family_id = user.family_id
 

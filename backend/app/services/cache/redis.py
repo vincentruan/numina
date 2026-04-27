@@ -1,6 +1,6 @@
 """Redis cache backend implementation (placeholder for future use)."""
 
-from typing import Any, Optional
+from typing import Any
 
 from app.services.cache.base import CacheBackend
 
@@ -24,10 +24,10 @@ class RedisCacheBackend(CacheBackend):
         # Placeholder: self._client = redis.from_url(redis_url)
         self._redis_url = redis_url
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         raise NotImplementedError("Redis backend not yet implemented")
 
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         raise NotImplementedError("Redis backend not yet implemented")
 
     def delete(self, key: str) -> None:
@@ -36,7 +36,7 @@ class RedisCacheBackend(CacheBackend):
     def increment(self, key: str, delta: int = 1) -> int:
         raise NotImplementedError("Redis backend not yet implemented")
 
-    def get_ttl(self, key: str) -> Optional[int]:
+    def get_ttl(self, key: str) -> int | None:
         raise NotImplementedError("Redis backend not yet implemented")
 
     def clear(self) -> None:

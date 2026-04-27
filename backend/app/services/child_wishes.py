@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -376,7 +376,8 @@ def realize_child_wish(
         # Trigger bonus draw opportunity on wish realization (probabilistic)
         try:
             import random
-            from datetime import datetime, timedelta, timezone
+            from datetime import datetime, timedelta
+
             from app.models.blind_box_config import BlindBoxConfig
             from app.models.bonus_draw import BonusDraw
             config = db.query(BlindBoxConfig).filter_by(family_id=user.family_id).first()
@@ -386,7 +387,7 @@ def realize_child_wish(
                     family_id=wish.family_id,
                     child_user_id=wish.child_user_id,
                     source_wish_id=wish.id,
-                    expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+                    expires_at=datetime.now(UTC) + timedelta(days=7),
                 )
                 db.add(bonus)
                 db.commit()

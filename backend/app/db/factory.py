@@ -4,9 +4,9 @@ from sqlalchemy import Engine
 from sqlalchemy.engine.url import make_url
 
 from app.db.backend import DatabaseBackend
-from app.db.sqlite import SQLiteBackend
 from app.db.mysql import MySQLBackend
 from app.db.postgres import PostgreSQLBackend
+from app.db.sqlite import SQLiteBackend
 
 BACKEND_MAP: dict[str, type[DatabaseBackend]] = {
     "sqlite": SQLiteBackend,

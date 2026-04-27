@@ -83,7 +83,7 @@ async def file_sync_job() -> None:
                 db.commit()
                 logger.info(f"文件同步成功: {cached_file.id} -> {remote_path}")
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 loc.retry_count += 1
                 loc.last_error = "上传超时 (30s)"
                 if loc.retry_count >= 3:

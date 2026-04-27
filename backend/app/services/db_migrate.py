@@ -13,7 +13,6 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.engine import Engine
 
-from app.config import settings
 from app.database import Base
 
 logger = logging.getLogger(__name__)
@@ -156,8 +155,8 @@ def acquire_migration_lock(engine: Engine) -> bool:
     ensure_lock_table(engine)
 
     # Generate unique holder ID
-    import socket
     import os
+    import socket
     holder_id = f"{socket.gethostname()}-{os.getpid()}"
 
     lock_id = "schema_migration"
@@ -235,8 +234,8 @@ def acquire_migration_lock(engine: Engine) -> bool:
 
 def release_migration_lock(engine: Engine) -> None:
     """Release migration lock."""
-    import socket
     import os
+    import socket
     holder_id = f"{socket.gethostname()}-{os.getpid()}"
     lock_id = "schema_migration"
 
@@ -387,11 +386,7 @@ def add_column(engine: Engine, table_name: str, column_name: str, column_info: d
 
     if default_type == "func_now":
         # func.now() - use database-specific timestamp function
-        if db_type == "sqlite":
-            default_clause = "DEFAULT CURRENT_TIMESTAMP"
-        elif db_type == "mysql":
-            default_clause = "DEFAULT CURRENT_TIMESTAMP"
-        elif db_type == "postgresql":
+        if db_type == "sqlite" or db_type == "mysql" or db_type == "postgresql":
             default_clause = "DEFAULT CURRENT_TIMESTAMP"
     elif default_type == "sql_expr" and default_val is not None:
         # SQL expression default - use as-is

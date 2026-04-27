@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Response
 from pydantic import BaseModel
-from sqlalchemy import case, func as sqlfunc
+from sqlalchemy import case
+from sqlalchemy import func as sqlfunc
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
@@ -300,7 +301,7 @@ def get_children_chore_stats(
     'completed_this_week' = approved instances in the current ISO week.
     'total_this_week' = all instances (any status) in the current ISO week.
     """
-    from datetime import date, timedelta
+    from datetime import date
 
     from app.models.chore import ChoreInstance
 

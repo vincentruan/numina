@@ -14,6 +14,7 @@ import json
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
+from app.auth import webauthn as webauthn_helper
 from app.auth.captcha import verify_captcha
 from app.auth.cookies import (
     clear_auth_cookies,
@@ -48,7 +49,6 @@ from app.schemas.auth import (
     UserResponse,
     VerifyParentPasswordRequest,
 )
-from app.auth import webauthn as webauthn_helper
 from app.schemas.webauthn import (
     WebAuthnAuthenticationOptionsRequest,
     WebAuthnAuthenticationOptionsResponse,
@@ -507,8 +507,6 @@ def get_family_children(
     Fields NOT exposed: pin_hash, pin_fail_count, pin_locked_until, token_version.
     """
     from datetime import UTC, datetime
-
-    from fastapi import HTTPException, status
 
     from app.models.child_bind_token import ChildBindToken
     from app.schemas.children import ChildResponse

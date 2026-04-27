@@ -1,9 +1,9 @@
 """Coin ledger endpoints."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_child_user, require_adult
@@ -28,9 +28,9 @@ class CoinTransactionResponse(SnowflakeBase):
 
 
 def _relative_time(dt: datetime) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
+        dt = dt.replace(tzinfo=UTC)
     delta = now - dt
     days = delta.days
     if days == 0:

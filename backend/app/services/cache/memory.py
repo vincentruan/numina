@@ -1,7 +1,7 @@
 """In-memory cache backend implementation."""
 
 import time
-from typing import Any, Optional
+from typing import Any
 
 from app.services.cache.base import CacheBackend
 
@@ -15,9 +15,9 @@ class MemoryCacheBackend(CacheBackend):
     def __init__(self):
         # Structure: {key: (value, expire_at_timestamp)}
         # expire_at is None for no TTL
-        self._store: dict[str, tuple[Any, Optional[float]]] = {}
+        self._store: dict[str, tuple[Any, float | None]] = {}
 
-    def get(self, key: str) -> Optional[Any]:
+    def get(self, key: str) -> Any | None:
         entry = self._store.get(key)
         if entry is None:
             return None
@@ -28,7 +28,7 @@ class MemoryCacheBackend(CacheBackend):
             return None
         return value
 
-    def set(self, key: str, value: Any, ttl_seconds: Optional[int] = None) -> None:
+    def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
         expire_at = None
         if ttl_seconds is not None:
             expire_at = time.time() + ttl_seconds
@@ -48,7 +48,7 @@ class MemoryCacheBackend(CacheBackend):
         self._store[key] = (new_value, expire_at)
         return new_value
 
-    def get_ttl(self, key: str) -> Optional[int]:
+    def get_ttl(self, key: str) -> int | None:
         entry = self._store.get(key)
         if entry is None:
             return None

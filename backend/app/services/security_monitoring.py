@@ -2,17 +2,13 @@
 安全监控服务 - 实时检测和告警异常行为
 使用进程内存存储，无需Redis依赖（单机部署优化）
 """
-import json
-import asyncio
-import time
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Set
-from dataclasses import dataclass, asdict
-from enum import Enum
-from collections import defaultdict
-import threading
-
 import logging
+import threading
+import time
+from collections import defaultdict
+from dataclasses import asdict, dataclass
+from datetime import datetime, timedelta
+from enum import Enum
 
 logger = logging.getLogger("security")
 
@@ -45,8 +41,8 @@ class SecurityEvent:
     client_ip: str
     user_agent: str
     path: str
-    details: Dict
-    user_id: Optional[str] = None
+    details: dict
+    user_id: str | None = None
 
 
 class InMemorySecurityStore:
@@ -68,11 +64,11 @@ class InMemorySecurityStore:
     def _init_storage(self):
         """初始化存储结构"""
         # 事件存储: {event_type: [(timestamp, event_data), ...]}
-        self._events: Dict[str, List[tuple]] = defaultdict(list)
+        self._events: dict[str, list[tuple]] = defaultdict(list)
         # IP计数器: {counter_key: (count, expiry_timestamp)}
-        self._counters: Dict[str, tuple] = {}
+        self._counters: dict[str, tuple] = {}
         # 可疑IP集合
-        self._suspicious_ips: Set[str] = set()
+        self._suspicious_ips: set[str] = set()
         # 锁保护
         self._store_lock = threading.RLock()
         # 最后清理时间
@@ -140,7 +136,7 @@ class InMemorySecurityStore:
         with self._store_lock:
             return ip in self._suspicious_ips
 
-    def get_stats(self, start_time: float, end_time: float) -> Dict:
+    def get_stats(self, start_time: float, end_time: float) -> dict:
         """获取统计信息"""
         with self._store_lock:
             stats = {
@@ -192,8 +188,8 @@ class SecurityMonitor:
 
     def __init__(self):
         self._store = InMemorySecurityStore()
-        self.event_buffer: List[SecurityEvent] = []
-        self.alert_handlers: List[callable] = []
+        self.event_buffer: list[SecurityEvent] = []
+        self.alert_handlers: list[callable] = []
 
     def register_alert_handler(self, handler: callable):
         """注册告警处理器"""
@@ -301,9 +297,9 @@ class SecurityMonitor:
 
     async def get_security_stats(
         self,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None
-    ) -> Dict:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None
+    ) -> dict:
         """获取安全统计信息"""
         start_time = start_time or datetime.utcnow() - timedelta(hours=24)
         end_time = end_time or datetime.utcnow()
@@ -323,7 +319,7 @@ class SecurityMonitor:
 
 
 # 全局监控器实例
-_security_monitor: Optional[SecurityMonitor] = None
+_security_monitor: SecurityMonitor | None = None
 
 
 def get_security_monitor() -> SecurityMonitor:

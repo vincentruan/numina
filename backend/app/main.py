@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.core.logging_config import setup_logging
-from app.database import Base, SessionLocal, engine
+from app.database import SessionLocal, engine
 from app.error_handlers import (
     app_error_handler,
     http_exception_handler,
@@ -24,12 +24,7 @@ from app.errors.exceptions import AppError
 from app.middleware.family_context import FamilyContextMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.request_id import RequestIDMiddleware
-from app.services.db_migrate import run_schema_migration
 from app.models.activity import Activity  # noqa: F401
-from app.models.blind_box_config import BlindBoxConfig  # noqa: F401
-from app.models.blind_box_draw import BlindBoxDraw  # noqa: F401
-from app.models.blind_box_gift import BlindBoxGift  # noqa: F401
-from app.models.bonus_draw import BonusDraw  # noqa: F401
 from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from app.models.ai_chat_message import AIChatMessage  # noqa: F401
@@ -39,8 +34,13 @@ from app.models.ai_report import AIReport  # noqa: F401
 from app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from app.models.asset import Asset  # noqa: F401
+from app.models.blind_box_config import BlindBoxConfig  # noqa: F401
+from app.models.blind_box_draw import BlindBoxDraw  # noqa: F401
+from app.models.blind_box_gift import BlindBoxGift  # noqa: F401
+from app.models.bonus_draw import BonusDraw  # noqa: F401
 from app.models.cached_file import CachedFile  # noqa: F401
 from app.models.category import Category  # noqa: F401
+from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
 from app.models.child_bind_token import ChildBindToken  # noqa: F401
 from app.models.child_milestone import ChildMilestone  # noqa: F401
 from app.models.child_wish import ChildWish  # noqa: F401
@@ -51,7 +51,11 @@ from app.models.exchange_rate import ExchangeRate  # noqa: F401
 from app.models.family import Family  # noqa: F401
 from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
+from app.models.notification_channel import NotificationChannel  # noqa: F401
+from app.models.notification_config import NotificationConfig  # noqa: F401
+from app.models.notification_subscription import NotificationSubscription  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.reminder import Reminder  # noqa: F401
 from app.models.revoked_token import RevokedToken  # noqa: F401
 from app.models.security_audit_log import SecurityAuditLog  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
@@ -63,15 +67,9 @@ from app.models.tag import Tag  # noqa: F401
 from app.models.user import User  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.wish import Wish  # noqa: F401
-from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
-from app.models.notification_channel import NotificationChannel  # noqa: F401
-from app.models.notification_subscription import NotificationSubscription  # noqa: F401
-from app.models.notification_config import NotificationConfig  # noqa: F401
-from app.models.reminder import Reminder  # noqa: F401
 from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
-from app.routers import ai_spending_leaks as ai_spending_leaks_router
 from app.routers import ai_allocation as ai_allocation_router
 from app.routers import ai_chat as ai_chat_router
 from app.routers import ai_config as ai_config_router
@@ -79,7 +77,9 @@ from app.routers import ai_disposal as ai_disposal_router
 from app.routers import ai_internal as ai_internal_router
 from app.routers import ai_liability as ai_liability_router
 from app.routers import ai_report as ai_report_router
+from app.routers import ai_spending_leaks as ai_spending_leaks_router
 from app.routers import ai_suggest as ai_suggest_router
+from app.routers import ai_time_machine as ai_time_machine_router
 from app.routers import (
     assets,
     auth,
@@ -92,26 +92,25 @@ from app.routers import (
     upload,
     wishes,
 )
+from app.routers import assets_analysis as assets_analysis_router
+from app.routers import blind_box as blind_box_router
+from app.routers import calendar as calendar_router
+from app.routers import child_blind_box as child_blind_box_router
 from app.routers import child_wishes as child_wishes_router
 from app.routers import children as children_router
 from app.routers import chores as chores_router
 from app.routers import coins as coins_router
 from app.routers import currencies as currencies_router
+from app.routers import device as device_router
 from app.routers import export as export_router
 from app.routers import files as files_router
 from app.routers import import_ as import_router
-from app.routers import calendar as calendar_router
-from app.routers import blind_box as blind_box_router
-from app.routers import child_blind_box as child_blind_box_router
 from app.routers import milestones as milestones_router
-from app.routers import notifications as notifications_router
-from app.routers import treasures as treasures_router
-from app.routers import device as device_router
-from app.routers import assets_analysis as assets_analysis_router
-from app.routers import ai_time_machine as ai_time_machine_router
 from app.routers import notification_channels as notification_channels_router
 from app.routers import notification_config as notification_config_router
+from app.routers import notifications as notifications_router
 from app.routers import reminders as reminders_router
+from app.routers import treasures as treasures_router
 from app.scheduler import (
     scheduler,
     setup_audit_log_purge_schedule,
@@ -125,6 +124,7 @@ from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.seed.invitation_codes import seed_invitation_codes
 from app.seed.storage_backends import seed_storage_backends
+from app.services.db_migrate import run_schema_migration
 from app.services.exchange_rate import ExchangeRateService
 from app.services.snapshot import auto_generate_daily_snapshots
 from app.services.storage.base import StorageError
@@ -183,7 +183,9 @@ async def lifespan(app: FastAPI):
         seed_currencies(db)
         seed_invitation_codes(db)
         seed_storage_backends(db)
-        from app.seed.category_financial_defaults import seed_category_financial_defaults
+        from app.seed.category_financial_defaults import (
+            seed_category_financial_defaults,
+        )
         seed_category_financial_defaults(db)
         # Auto-generate daily snapshots for all families
         try:

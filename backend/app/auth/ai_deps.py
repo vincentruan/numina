@@ -7,7 +7,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, ALGORITHM
+from app.auth.deps import ALGORITHM, get_current_user
 from app.config import settings
 from app.database import get_db
 from app.models.family import Family

@@ -1,7 +1,7 @@
 """Calendar endpoints — monthly and daily activity aggregation for children."""
 
 import calendar
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
@@ -57,9 +57,9 @@ def _chores_for_child_in_month(db: Session, child_user_id: int, year: int, month
 
 def _wishes_realized_in_month(db: Session, child_user_id: int, year: int, month: int) -> list[ChildWish]:
     """Wishes whose updated_at falls in the month and status == realized."""
-    month_start = datetime(year, month, 1, tzinfo=timezone.utc)
+    month_start = datetime(year, month, 1, tzinfo=UTC)
     _, last_day = calendar.monthrange(year, month)
-    month_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+    month_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=UTC)
     return (
         db.query(ChildWish)
         .filter(
@@ -73,9 +73,9 @@ def _wishes_realized_in_month(db: Session, child_user_id: int, year: int, month:
 
 
 def _milestones_in_month(db: Session, child_user_id: int, year: int, month: int) -> list[ChildMilestone]:
-    month_start = datetime(year, month, 1, tzinfo=timezone.utc)
+    month_start = datetime(year, month, 1, tzinfo=UTC)
     _, last_day = calendar.monthrange(year, month)
-    month_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=timezone.utc)
+    month_end = datetime(year, month, last_day, 23, 59, 59, tzinfo=UTC)
     return (
         db.query(ChildMilestone)
         .filter(
@@ -141,8 +141,8 @@ def _build_day_detail(
         .all()
     )
 
-    day_start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=timezone.utc)
-    day_end = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=timezone.utc)
+    day_start = datetime(target_date.year, target_date.month, target_date.day, tzinfo=UTC)
+    day_end = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=UTC)
 
     wishes = (
         db.query(ChildWish)

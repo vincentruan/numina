@@ -3,12 +3,14 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_adult, require_owner
-from app.auth.deps import get_current_child_user
+from app.auth.deps import (
+    get_current_child_user,
+    require_adult,
+    require_owner,
+)
 from app.database import get_db
 from app.models.user import User
 from app.schemas.chore import (
-    ApproveRequest,
     ChoreInstanceResponse,
     ChoreTemplateCreate,
     ChoreTemplateResponse,

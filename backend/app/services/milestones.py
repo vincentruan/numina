@@ -8,7 +8,7 @@ the primary approval or wish-realize flow.
 """
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -289,7 +289,7 @@ def _insert_milestone(
         family_id=family_id,
         child_user_id=child_user_id,
         milestone_type=milestone_type,
-        triggered_at=datetime.now(timezone.utc),
+        triggered_at=datetime.now(UTC),
         ref_id=ref_id,
         ref_type=ref_type,
     )

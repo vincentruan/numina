@@ -456,7 +456,7 @@ def batch_export_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
                 "is_archived": asset.is_archived,
             }
             assets_data.append(asset_dict)
-        except Exception as e:
+        except Exception:
             errors.append(f"资产 {asset_id}: 导出失败")
 
     return {

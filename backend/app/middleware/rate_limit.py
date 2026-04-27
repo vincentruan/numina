@@ -22,14 +22,13 @@ See design.md for detailed trade-off analysis.
 
 import ipaddress
 import logging
-from typing import Optional
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.config import settings
 from app.errors import AppError, ErrorCode
-from app.services.security_log import _log_security_event, SecurityEventType
+from app.services.security_log import SecurityEventType, _log_security_event
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +117,7 @@ def _get_real_client_ip(request: Request) -> str:
     return ips[0] if ips else socket_ip
 
 
-def _decode_jwt_user_id(token: str) -> Optional[str]:
+def _decode_jwt_user_id(token: str) -> str | None:
     """Extract user_id from JWT token without full validation.
 
     This is a lightweight extraction for rate limiting purposes.
