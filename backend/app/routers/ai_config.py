@@ -606,34 +606,32 @@ async def _test_thinking(family: Family, api_key: str, model: str) -> dict:
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 # o 系列使用 reasoning_effort，其他模型普通请求
+                request_body = {}
                 if model.startswith("o"):
-                    resp = await client.post(
-                        endpoint,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": model,
-                            "max_completion_tokens": 1,
-                            "reasoning_effort": "low",
-                            "messages": [{"role": "user", "content": "think"}],
-                        },
-                    )
+                    request_body = {
+                        "model": model,
+                        "max_completion_tokens": 1,
+                        "reasoning_effort": "low",
+                        "messages": [{"role": "user", "content": "think"}],
+                    }
                 else:
                     # 非 o 系列模型，测试普通请求是否成功
-                    resp = await client.post(
-                        endpoint,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json={
-                            "model": model,
-                            "max_tokens": 1,
-                            "messages": [{"role": "user", "content": "think"}],
-                        },
-                    )
+                    request_body = {
+                        "model": model,
+                        "max_tokens": 1,
+                        "messages": [{"role": "user", "content": "think"}],
+                    }
+                logger.info(f"[DEBUG] OpenAI thinking request body: {json.dumps(request_body)}")
+
+                resp = await client.post(
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=request_body,
+                )
+                logger.info(f"[DEBUG] OpenAI thinking response: status={resp.status_code}, body={resp.text[:500]}")
                 latency = int((time.monotonic() - start) * 1000)
                 if resp.status_code in (200, 400):
                     # 连接成功，模型可用
