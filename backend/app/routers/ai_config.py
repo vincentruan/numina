@@ -15,6 +15,10 @@ from app.models.user import User
 from app.schemas.ai_config import AIConfigResponse, AIConfigTestResult, AIConfigUpdate
 from app.services.ai_crypto import decrypt_api_key, encrypt_api_key, mask_api_key
 from app.services.security_log import _log_security_event
+from app.services.vision_test_image import (
+    get_expected_ocr_text,
+    get_test_image_data_url,
+)
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
 
@@ -447,6 +451,60 @@ async def test_vision_model_only(
     )
 
 
+@router.post("/config/test/vision/text", response_model=AIConfigTestResult)
+async def test_vision_text_ocr(
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> AIConfigTestResult:
+    """测试图像模型 OCR 文本准确度（仅 owner）。
+
+    使用嵌入的测试图片，验证模型能否正确识别文字 "这是一个测试文本~"。
+    """
+    from datetime import datetime
+
+    family = _get_family(db, current_user)
+
+    if not family.ai_enabled:
+        return AIConfigTestResult(connected=False, message="AI 功能未开启")
+    if not family.ai_provider:
+        return AIConfigTestResult(connected=False, message="未配置 AI Provider")
+    if not family.ai_api_key_encrypted:
+        return AIConfigTestResult(connected=False, message="未配置 API Key")
+
+    api_key = decrypt_api_key(family.ai_api_key_encrypted)
+    if not api_key:
+        return AIConfigTestResult(connected=False, message="API Key 解密失败，请重新配置")
+
+    api_key = api_key.strip()
+
+    vision_model = family.ai_vision_model_id
+    if not vision_model:
+        return AIConfigTestResult(
+            connected=False,
+            message="未配置图像模型 ID",
+            vision_text_success=False,
+            vision_text_message="未配置图像模型 ID",
+        )
+
+    # 测试 OCR 文本准确度
+    ocr_result = await _test_vision_text_ocr(family, api_key, vision_model)
+
+    # 持久化 OCR 测试结果
+    family.ai_vision_text_test_success = ocr_result["success"]
+    family.ai_vision_text_test_message = ocr_result["message"]
+    family.ai_vision_text_test_latency_ms = ocr_result["latency_ms"]
+    family.ai_vision_text_test_timestamp = datetime.utcnow()
+    db.commit()
+
+    return AIConfigTestResult(
+        connected=True,
+        message="OCR 文本测试完成",
+        vision_text_success=ocr_result["success"],
+        vision_text_message=ocr_result["message"],
+        vision_text_latency_ms=ocr_result["latency_ms"],
+    )
+
+
 async def _test_connection(family: Family, api_key: str, model: str) -> dict:
     """测试主模型连接。"""
     start = time.monotonic()
@@ -821,3 +879,181 @@ async def _test_vision_model(family: Family, api_key: str, vision_model: str) ->
         "message": f"不支持的 Provider: {family.ai_provider}",
         "latency_ms": None,
     }
+
+
+async def _test_vision_text_ocr(family: Family, api_key: str, vision_model: str) -> dict:
+    """测试图像模型 OCR 文本准确度。
+
+    使用嵌入的 base64 测试图片，要求模型识别其中的文字，
+    然后计算识别结果与期望文本的相似度。
+    """
+    start = time.monotonic()
+    test_image_url = get_test_image_data_url()
+    expected_text = get_expected_ocr_text()
+
+    try:
+        if family.ai_provider == "anthropic":
+            endpoint = _build_endpoint(
+                family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
+            )
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    endpoint,
+                    headers={
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01",
+                        "content-type": "application/json",
+                    },
+                    json={
+                        "model": vision_model,
+                        "max_tokens": 100,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "请识别图片中的文字内容"},
+                                    {
+                                        "type": "image",
+                                        "source": {
+                                            "type": "base64",
+                                            "media_type": "image/png",
+                                            "data": test_image_url.replace(
+                                                "data:image/png;base64,", ""
+                                            ),
+                                        },
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                )
+                latency = int((time.monotonic() - start) * 1000)
+                if resp.status_code == 200:
+                    result = resp.json()
+                    recognized_text = result["content"][0]["text"]
+                    accuracy = _calculate_ocr_accuracy(recognized_text, expected_text)
+                    if accuracy >= 0.8:
+                        return {
+                            "success": True,
+                            "message": f"OCR 准确度 {accuracy:.0%}",
+                            "latency_ms": latency,
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "message": f"OCR 准确度 {accuracy:.0%}，低于 80% 阈值",
+                            "latency_ms": latency,
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "message": f"OCR 测试失败: HTTP {resp.status_code}",
+                        "latency_ms": latency,
+                    }
+
+        elif family.ai_provider == "openai":
+            endpoint = _build_endpoint(
+                family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
+            )
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": vision_model,
+                        "max_tokens": 100,
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": "请识别图片中的文字内容"},
+                                    {"type": "image_url", "image_url": {"url": test_image_url}},
+                                ],
+                            }
+                        ],
+                    },
+                )
+                latency = int((time.monotonic() - start) * 1000)
+                if resp.status_code == 200:
+                    result = resp.json()
+                    recognized_text = result["choices"][0]["message"]["content"]
+                    accuracy = _calculate_ocr_accuracy(recognized_text, expected_text)
+                    if accuracy >= 0.8:
+                        return {
+                            "success": True,
+                            "message": f"OCR 准确度 {accuracy:.0%}",
+                            "latency_ms": latency,
+                        }
+                    else:
+                        return {
+                            "success": False,
+                            "message": f"OCR 准确度 {accuracy:.0%}，低于 80% 阈值",
+                            "latency_ms": latency,
+                        }
+                else:
+                    return {
+                        "success": False,
+                        "message": f"OCR 测试失败: HTTP {resp.status_code}",
+                        "latency_ms": latency,
+                    }
+
+    except httpx.TimeoutException:
+        return {
+            "success": False,
+            "message": "OCR 测试超时（120秒）",
+            "latency_ms": None,
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"OCR 测试失败: {str(e)}",
+            "latency_ms": None,
+        }
+
+    return {
+        "success": False,
+        "message": f"不支持的 Provider: {family.ai_provider}",
+        "latency_ms": None,
+    }
+
+
+def _calculate_ocr_accuracy(recognized: str, expected: str) -> float:
+    """计算 OCR 识别准确度。
+
+    使用简单的字符匹配算法计算准确度。
+
+    Args:
+        recognized: 模型识别出的文本
+        expected: 期望的文本
+
+    Returns:
+        准确度 (0.0-1.0)
+    """
+    # 去除空白字符后比较
+    recognized_clean = recognized.strip()
+    expected_clean = expected.strip()
+
+    if not expected_clean:
+        return 1.0 if not recognized_clean else 0.0
+
+    # 如果完全匹配
+    if recognized_clean == expected_clean:
+        return 1.0
+
+    # 计算最长公共子序列
+    m, n = len(recognized_clean), len(expected_clean)
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if recognized_clean[i - 1] == expected_clean[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+
+    lcs_length = dp[m][n]
+    # 使用 expected 长度作为基准
+    return lcs_length / n
