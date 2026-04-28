@@ -68,6 +68,7 @@ def test_buy_vs_rent_validation(client, auth_headers):
 def test_cost_equivalence_full(client, auth_headers, db):
     """GET /assets/{id}/cost-equivalence 返回三种换算结果。"""
     from datetime import date, timedelta
+
     from app.models.asset import Asset
     from app.models.category import Category
 

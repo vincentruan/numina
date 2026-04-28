@@ -5,16 +5,17 @@ Revises: e3cba86157fd
 Create Date: 2026-04-24 00:14:59.343882
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
+
 from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '98c68a46add7'
-down_revision: Union[str, None] = 'e3cba86157fd'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = 'e3cba86157fd'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def _column_exists(conn, table: str, column: str) -> bool:

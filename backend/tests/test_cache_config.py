@@ -53,7 +53,7 @@ def test_lifespan_raises_on_redis_backend(monkeypatch):
     """App lifespan raises RuntimeError when CACHE_BACKEND=redis."""
     monkeypatch.setattr(settings, "CACHE_BACKEND", "redis")
 
-    from app.main import lifespan, app
+    from app.main import app, lifespan
 
     async def run_lifespan():
         async with lifespan(app):
@@ -67,7 +67,7 @@ def test_lifespan_raises_on_unknown_backend(monkeypatch):
     """App lifespan raises RuntimeError for any unrecognized CACHE_BACKEND value."""
     monkeypatch.setattr(settings, "CACHE_BACKEND", "memcached")
 
-    from app.main import lifespan, app
+    from app.main import app, lifespan
 
     async def run_lifespan():
         async with lifespan(app):

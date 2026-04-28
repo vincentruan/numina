@@ -28,13 +28,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app.database import SessionLocal
 from app.models.asset import Asset  # noqa: F401
 from app.models.category import Category  # noqa: F401
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
 from app.models.family import Family
 from app.models.family_invitation_code import FamilyInvitationCode
 from app.models.liability import Liability  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.tag import Tag  # noqa: F401
 from app.models.user import User
-from app.models.child_bind_token import ChildBindToken  # noqa: F401
 from app.models.wish import Wish  # noqa: F401
 
 

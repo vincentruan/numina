@@ -1,8 +1,6 @@
 """Tests for security logging service."""
 
 import logging
-import pytest
-from pathlib import Path
 
 from app.core.logging_config import setup_logging
 from app.services.security_log import (

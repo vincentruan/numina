@@ -1,9 +1,10 @@
-import pytest
 from datetime import datetime, timedelta
 
+import pytest
+
 from app.models.device_session import DeviceSession
-from app.models.user import User
 from app.models.family import Family
+from app.models.user import User
 from app.services import device as device_service
 
 
@@ -25,6 +26,7 @@ def _make_family(db) -> Family:
 
 def _make_user(db, family_id: int, role: str = "owner") -> User:
     import bcrypt
+
     from app.utils.snowflake import next_id
     user = User(
         id=next_id(),

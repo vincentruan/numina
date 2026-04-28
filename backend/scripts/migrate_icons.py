@@ -20,7 +20,6 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
-from app.database import Base
 
 # Emoji-to-IconID mapping for all 21 system categories
 EMOJI_TO_ICON_ID = {

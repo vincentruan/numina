@@ -6,12 +6,9 @@ Tests mock the py_webauthn library since we cannot test actual hardware authenti
 
 import base64
 import json
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from app.models.user import User
-
 
 # ---------------------------------------------------------------------------
 # Helpers

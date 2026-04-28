@@ -2,7 +2,6 @@
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -474,6 +473,7 @@ def test_pool_chore_approve_credits_submitter(client, db, auth_headers, child_us
 def test_auto_approve_timeout(client, db, auth_headers, child_user, daily_template):
     """Instances past auto_approve_hours are auto-approved when list_pending_approvals is called."""
     from datetime import datetime, timedelta
+
     from app.models.chore import ChoreInstance
     from app.models.coin_transaction import CoinTransaction
 

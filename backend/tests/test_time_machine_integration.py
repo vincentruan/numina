@@ -1,6 +1,7 @@
 """资产时光机端到端集成测试。"""
-import pytest
 from datetime import date
+
+import pytest
 
 from app.models.asset import Asset
 from app.models.category import Category

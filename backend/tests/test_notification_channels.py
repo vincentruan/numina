@@ -1,5 +1,4 @@
 # backend/tests/test_notification_channels.py
-import pytest
 
 
 def test_create_telegram_channel(client, auth_headers):

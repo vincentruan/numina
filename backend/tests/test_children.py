@@ -2,7 +2,6 @@
 
 import pytest
 
-
 VALID_PIN = ["🐱", "🐶", "🐸", "🦊"]
 VALID_PIN_2 = ["🐼", "🐨", "🦁", "🐯"]
 
@@ -107,8 +106,9 @@ def test_owner_unlocks_child(client, db):
     child_id = _create_child(client, headers).json()["data"]["id"]
 
     # Manually lock the child in DB
-    from app.models.user import User
     from datetime import datetime, timedelta
+
+    from app.models.user import User
     child = db.query(User).filter(User.id == child_id).first()
     child.pin_fail_count = 5
     child.pin_locked_until = datetime.utcnow() + timedelta(minutes=15)
@@ -223,14 +223,16 @@ def test_expired_bind_token(client, db):
     token_str = token_resp.json()["data"]["token"]
 
     # Expire it manually
-    from app.models.child_bind_token import ChildBindToken
     from datetime import datetime, timedelta
+
+    from app.models.child_bind_token import ChildBindToken
     bt = db.query(ChildBindToken).filter(ChildBindToken.token == token_str).first()
     bt.expires_at = datetime.utcnow() - timedelta(hours=1)
     db.commit()
 
-    from app.services.children import get_bind_info
     from fastapi import HTTPException
+
+    from app.services.children import get_bind_info
     with pytest.raises(HTTPException) as exc_info:
         get_bind_info(db, token_str)
     assert exc_info.value.status_code == 400

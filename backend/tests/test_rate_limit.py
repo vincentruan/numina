@@ -8,7 +8,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
-from app.middleware.rate_limit import RateLimitMiddleware, _decode_jwt_user_id
+from app.middleware.rate_limit import RateLimitMiddleware
 
 
 def _create_mock_jwt(user_id: str) -> str:
@@ -91,7 +91,6 @@ class TestGlobalRateLimit:
 
     def test_rate_limit_resets_after_window(self):
         """Test that rate limit window logic works."""
-        import time
 
         middleware = RateLimitMiddleware(None)
 

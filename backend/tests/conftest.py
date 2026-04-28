@@ -4,29 +4,28 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.auth import deps as auth_deps
 from app.database import Base, get_db
 from app.main import app
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.seed.categories import seed_categories
-from app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
+from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
+from app.models.ai_report import AIReport  # noqa: F401
+from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
+from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
+from app.models.device_session import DeviceSession  # noqa: F401
+from app.models.family import Family  # noqa: F401
+from app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
+from app.models.notification_channel import NotificationChannel  # noqa: F401
+from app.models.notification_config import NotificationConfig  # noqa: F401
+from app.models.notification_subscription import NotificationSubscription  # noqa: F401
+from app.models.reminder import Reminder  # noqa: F401
+from app.models.revoked_token import RevokedToken  # noqa: F401
 
 # Import all models to ensure they're registered with Base.metadata
 # This is required for Base.metadata.create_all() to create all tables
 from app.models.user import User  # noqa: F401
-from app.models.family import Family  # noqa: F401
-from app.models.child_bind_token import ChildBindToken  # noqa: F401
-from app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
-from app.models.revoked_token import RevokedToken  # noqa: F401
-from app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
-from app.models.ai_report import AIReport  # noqa: F401
-from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
-from app.models.device_session import DeviceSession  # noqa: F401
-from app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
-from app.models.notification_channel import NotificationChannel  # noqa: F401
-from app.models.notification_subscription import NotificationSubscription  # noqa: F401
-from app.models.notification_config import NotificationConfig  # noqa: F401
-from app.models.reminder import Reminder  # noqa: F401
+from app.seed.categories import seed_categories
+from app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
 
 # Use in-memory SQLite for tests
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
