@@ -21,7 +21,7 @@ import { configureAuthHttp, getHttp } from './http'
 export { configureAuthHttp }
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref<User | null>(getUser<User>())
+  const user = ref<User | null>(getUser() as User | null)
   const showTrustPrompt = ref(false)
 
   async function login(data: LoginRequest) {
