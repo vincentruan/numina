@@ -5,7 +5,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, field_validator
 
-
 # Minimal app to trigger validation errors
 app = FastAPI()
 
@@ -39,6 +38,7 @@ def short_endpoint(body: ShortModel):
 
 # Register the same handlers as the main app
 from fastapi.exceptions import RequestValidationError
+
 from app.error_handlers import validation_error_handler
 
 app.add_exception_handler(RequestValidationError, validation_error_handler)

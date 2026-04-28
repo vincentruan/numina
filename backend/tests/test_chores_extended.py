@@ -1,8 +1,8 @@
 """Additional tests for streak, auto-approve, idempotency, pool isolation, weekly, and grant cross-family."""
 
-import pytest
 from datetime import datetime, timedelta
 
+import pytest
 
 # ---------------------------------------------------------------------------
 # Fixtures (reuse pattern from test_chores.py)

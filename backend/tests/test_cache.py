@@ -2,10 +2,8 @@
 
 import time
 
-import pytest
-
-from app.services.cache.memory import MemoryCacheBackend
 from app.services.cache.factory import get_rate_limit_cache, reset_rate_limit_cache
+from app.services.cache.memory import MemoryCacheBackend
 
 
 class TestMemoryCacheBackend:

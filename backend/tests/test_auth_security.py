@@ -5,12 +5,9 @@ import time
 import unicodedata
 
 import bcrypt
-import pytest
 
+from app.auth.revoke_jti import _is_jti_revoked, revoke_all_user_tokens, revoke_jti
 from app.services.auth import hash_password
-from app.auth import deps as auth_deps
-from app.auth.revoke_jti import revoke_jti, revoke_all_user_tokens, _is_jti_revoked
-
 
 # ---------------------------------------------------------------------------
 # JTI revocation helpers
@@ -23,8 +20,9 @@ def test_revoke_jti_blocks_token_use(client, auth_headers):
     assert resp.status_code == 200
 
     from jose import jwt
-    from app.config import settings
+
     from app.auth.deps import ALGORITHM
+    from app.config import settings
     token = auth_headers["Authorization"].split(" ")[1]
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     jti = payload["jti"]
@@ -41,8 +39,9 @@ def test_revoke_all_user_tokens_blocks_access(client, auth_headers):
     assert resp.status_code == 200
 
     from jose import jwt
-    from app.config import settings
+
     from app.auth.deps import ALGORITHM
+    from app.config import settings
     token = auth_headers["Authorization"].split(" ")[1]
     payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
     user_id = payload["sub"]
@@ -56,8 +55,9 @@ def test_revoke_all_user_tokens_blocks_access(client, auth_headers):
 def test_refresh_rotates_jti(client, auth_headers):
     """After refresh, the old refresh token JTI should be revoked."""
     from jose import jwt
-    from app.config import settings
+
     from app.auth.deps import ALGORITHM
+    from app.config import settings
 
     old_refresh = auth_headers["_refresh_token"]
     old_jti = jwt.decode(old_refresh, settings.SECRET_KEY, algorithms=[ALGORITHM])["jti"]
@@ -245,7 +245,6 @@ class TestChildPinAuth:
 
     def test_child_login_resets_fail_count(self, client, db):
         """Successful login resets pin_fail_count to 0."""
-        from app.models.user import User as UserModel
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
@@ -393,7 +392,7 @@ class TestChildPinAuth:
     def test_pin_login_succeeds_after_lockout_expires(self, client, db):
         """After lockout window passes, child can login again and fail count resets."""
         from datetime import datetime, timedelta
-        from app.models.user import User
+
 
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
@@ -418,7 +417,9 @@ class TestChildPinAuth:
     def test_child_refresh_with_expired_token_returns_401(self, client):
         """Expired child refresh token is rejected."""
         from datetime import datetime, timedelta
+
         from jose import jwt
+
         from app.auth.deps import ALGORITHM
         from app.config import settings
 
@@ -563,10 +564,11 @@ class TestLoginErrorMessage:
 
 def test_refresh_rate_limit(client, auth_headers):
     """Exceeding 10 refresh calls per minute per user triggers 429."""
-    from app.services import auth as auth_service
     from jose import jwt
-    from app.config import settings
+
     from app.auth.deps import ALGORITHM
+    from app.config import settings
+    from app.services import auth as auth_service
 
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
@@ -585,10 +587,11 @@ def test_refresh_rate_limit(client, auth_headers):
 
 def test_password_change_rate_limit(client, auth_headers):
     """Exceeding 3 password change attempts per hour triggers 429."""
-    from app.services import auth as auth_service
     from jose import jwt
-    from app.config import settings
+
     from app.auth.deps import ALGORITHM
+    from app.config import settings
+    from app.services import auth as auth_service
 
     token = auth_headers["Authorization"].split(" ")[1]
     user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]

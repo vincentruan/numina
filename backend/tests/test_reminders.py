@@ -1,5 +1,4 @@
 # backend/tests/test_reminders.py
-import pytest
 
 
 def test_get_reminder_summary_empty(client, auth_headers):

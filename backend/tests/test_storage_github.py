@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import httpx
 import pytest
 
-from app.services.storage.github import GitHubStorageBackend
 from app.services.storage.base import (
     StorageConflictError,
     StorageConnectionError,
     StorageRateLimitError,
 )
+from app.services.storage.github import GitHubStorageBackend
 
 
 def run(coro):

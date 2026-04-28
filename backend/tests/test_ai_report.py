@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from app.models.ai_report import AIReport
 from app.models.ai_ws_ticket import AIWsTicket
 from app.models.family import Family

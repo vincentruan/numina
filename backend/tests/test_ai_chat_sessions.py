@@ -1,11 +1,7 @@
 """Tests for session-based AI chat API (JSONL storage)."""
 
 import json
-import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from app.models.ai_chat_session import AIChatSession
 from app.models.cached_file import CachedFile
@@ -227,8 +223,9 @@ def test_get_history_limit_applied(client, auth_headers, db, tmp_path):
 
 def test_get_sessions_returns_list(client, auth_headers, db, tmp_path):
     """GET /ai/chat/sessions returns list of sessions for the family."""
-    from app.services.chat_session import ChatSessionService
     import asyncio
+
+    from app.services.chat_session import ChatSessionService
 
     family_id = _enable_ai(db, auth_headers, client)
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
@@ -267,8 +264,9 @@ def test_get_sessions_empty_when_no_sessions(client, auth_headers, db):
 
 def test_delete_specific_session(client, auth_headers, db, tmp_path):
     """DELETE /ai/chat/history?session_id=X deletes only that session."""
-    from app.services.chat_session import ChatSessionService
     import asyncio
+
+    from app.services.chat_session import ChatSessionService
 
     family_id = _enable_ai(db, auth_headers, client)
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()

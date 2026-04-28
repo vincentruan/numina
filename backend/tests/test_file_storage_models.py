@@ -2,9 +2,9 @@
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.models.storage_backend import StorageBackend
 from app.models.cached_file import CachedFile
 from app.models.file_remote_location import FileRemoteLocation
+from app.models.storage_backend import StorageBackend
 from app.models.sync_event import SyncEvent
 
 

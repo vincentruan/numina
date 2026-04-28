@@ -199,9 +199,10 @@
       <div class="test-details">
         <h3 style="margin-bottom: 16px; font-size: 16px">图像模型测试</h3>
 
+        <!-- Image Understanding Test Section -->
         <div class="test-section">
           <div class="test-header">
-            <span class="capability-emoji" :class="visionEmojiClass">🖼️</span>
+            <span class="capability-emoji" :class="visionEmojiClass">️</span>
             <span>图像理解</span>
           </div>
           <van-cell-group inset>
@@ -212,16 +213,38 @@
           </van-cell-group>
         </div>
 
-        <van-button
-          block
-          type="primary"
-          style="margin-top: 16px"
-          :loading="testingVision"
-          :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
-          @click="onTestVision"
-        >
-          🖼️ 测试图像模型
-        </van-button>
+        <!-- OCR Text Accuracy Test Section -->
+        <div class="test-section">
+          <div class="test-header">
+            <span class="capability-emoji" :class="visionTextEmojiClass">📖</span>
+            <span>OCR 文本识别</span>
+          </div>
+          <van-cell-group inset>
+            <van-cell title="状态" :value="visionTextStatusText" />
+            <van-cell v-if="aiStore.config?.ai_vision_text_test_message" title="消息" :value="aiStore.config.ai_vision_text_test_message" />
+            <van-cell v-if="aiStore.config?.ai_vision_text_test_latency_ms" title="延迟" :value="`${aiStore.config.ai_vision_text_test_latency_ms}ms`" />
+            <van-cell v-if="aiStore.config?.ai_vision_text_test_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_vision_text_test_timestamp)" />
+          </van-cell-group>
+        </div>
+
+        <div class="test-buttons">
+          <van-button
+            type="primary"
+            :loading="testingVision"
+            :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
+            @click="onTestVision"
+          >
+            🖼️ 测试图像
+          </van-button>
+          <van-button
+            type="primary"
+            :loading="testingVisionText"
+            :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
+            @click="onTestVisionText"
+          >
+            📖 测试 OCR
+          </van-button>
+        </div>
         <van-button block plain style="margin-top: 10px" @click="showVisionModelPopup = false">
           关闭
         </van-button>
@@ -247,6 +270,7 @@ const saving = ref(false)
 const testingConnection = ref(false)
 const testingThinking = ref(false)
 const testingVision = ref(false)
+const testingVisionText = ref(false)
 const showProviderPicker = ref(false)
 const showMainModelPopup = ref(false)
 const showVisionModelPopup = ref(false)
@@ -278,6 +302,11 @@ const visionEmojiClass = computed(() => {
   return aiStore.config?.ai_vision_test_success ? 'success' : 'failed'
 })
 
+const visionTextEmojiClass = computed(() => {
+  if (aiStore.config?.ai_vision_text_test_success === null) return 'untested'
+  return aiStore.config?.ai_vision_text_test_success ? 'success' : 'failed'
+})
+
 // Status text for popups
 const connectionStatusText = computed(() => {
   if (aiStore.config?.ai_test_connected === null) return '⏳ 未测试'
@@ -292,6 +321,11 @@ const thinkingStatusText = computed(() => {
 const visionStatusText = computed(() => {
   if (aiStore.config?.ai_vision_test_success === null) return '⏳ 未测试'
   return aiStore.config?.ai_vision_test_success ? '✅ 连接成功' : '❌ 连接失败'
+})
+
+const visionTextStatusText = computed(() => {
+  if (aiStore.config?.ai_vision_text_test_success === null) return '⏳ 未测试'
+  return aiStore.config?.ai_vision_text_test_success ? '✅ OCR 准确' : '❌ OCR 失败'
 })
 
 function formatTimestamp(ts: string): string {
@@ -408,6 +442,19 @@ async function onTestVision() {
     showToast(t('toast.aiTestFailed'))
   } finally {
     testingVision.value = false
+  }
+}
+
+async function onTestVisionText() {
+  testingVisionText.value = true
+  try {
+    await aiStore.testVisionText()
+    await aiStore.fetchConfig()
+    showToast(aiStore.config?.ai_vision_text_test_success ? '✅ OCR 识别准确' : `❌ ${aiStore.config?.ai_vision_text_test_message || '识别失败'}`)
+  } catch {
+    showToast(t('toast.aiTestFailed'))
+  } finally {
+    testingVisionText.value = false
   }
 }
 </script>

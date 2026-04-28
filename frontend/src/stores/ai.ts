@@ -43,6 +43,14 @@ export const useAIStore = defineStore('ai', () => {
     return aiApi.testVisionModelOnly()
   }
 
+  async function testVisionImage() {
+    return aiApi.testVisionModelOnly()
+  }
+
+  async function testVisionText() {
+    return aiApi.testVisionTextOCR()
+  }
+
   return {
     config,
     loading,
@@ -55,5 +63,7 @@ export const useAIStore = defineStore('ai', () => {
     testMainModel,
     testThinking,
     testVisionModel,
+    testVisionImage,
+    testVisionText,
   }
 })

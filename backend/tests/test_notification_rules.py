@@ -1,8 +1,6 @@
 # backend/tests/test_notification_rules.py
 from datetime import date, timedelta
 
-import pytest
-
 from app.services.notification.rules import (
     check_allocation_drift,
     check_expiring_soon,

@@ -123,7 +123,6 @@ def test_first_chore_triggers_on_first_approval(client, auth_headers, child_user
 
 def test_first_chore_not_duplicated(client, auth_headers, child_user, template):
     """Second approval does not re-trigger first_chore."""
-    from datetime import date, timedelta
 
     # First approval
     instance = _get_instance(client, child_user["headers"])
@@ -353,11 +352,11 @@ def test_streak_7_retriggers_in_second_cycle(db, client, auth_headers, child_use
     had UniqueConstraint('child_user_id', 'milestone_type') which prevented
     streak_7/14/30 from being recorded more than once per child.
     """
-    from datetime import datetime, timezone
     from uuid import uuid4
+
+    from app.models.child_milestone import ChildMilestone
     from app.models.chore import ChoreInstance
     from app.services.milestones import check_and_record_milestones
-    from app.models.child_milestone import ChildMilestone
 
     child_id = child_user["id"]
     # Resolve family_id from DB

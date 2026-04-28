@@ -1,7 +1,8 @@
 """Tests for family invitation code validation during registration."""
 
-import pytest
 from datetime import datetime
+
+import pytest
 
 from app.errors import AppError, ErrorCode
 from app.models.family_invitation_code import FamilyInvitationCode

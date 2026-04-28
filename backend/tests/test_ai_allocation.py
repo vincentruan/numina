@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from app.models.ai_allocation_target import AIAllocationTarget
 from app.models.family import Family
 

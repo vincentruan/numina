@@ -1,3 +1,6 @@
+from datetime import UTC
+
+
 def test_create_blind_box_gift(db):
     from app.models.blind_box_gift import BlindBoxGift
     gift = BlindBoxGift(
@@ -50,8 +53,9 @@ def test_create_blind_box_config(db):
 
 
 def test_user_birthday_fields(db):
-    from app.models.user import User
     from sqlalchemy import inspect as sa_inspect
+
+    from app.models.user import User
     cols = {c.key for c in sa_inspect(User).mapper.column_attrs}
     assert "birthday" in cols
     assert "birthday_is_lunar" in cols
@@ -104,6 +108,7 @@ def test_should_trigger_free_draw():
 
 def test_is_special_day_birthday():
     from datetime import date
+
     from app.services.blind_box import is_special_day
 
     class FakeUser:
@@ -170,14 +175,15 @@ def test_child_list_draws(client, auth_headers):
 
 
 def test_create_bonus_draw(db):
+    from datetime import datetime, timedelta
+
     from app.models.bonus_draw import BonusDraw
-    from datetime import datetime, timezone, timedelta
 
     bonus = BonusDraw(
         family_id=1,
         child_user_id=2,
         source_wish_id=10,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        expires_at=datetime.now(UTC) + timedelta(days=7),
     )
     db.add(bonus)
     db.commit()

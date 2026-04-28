@@ -4,8 +4,12 @@ import os
 
 import pytest
 
+from app.services.storage.factory import (
+    get_backend_for_type,
+    get_local_backend,
+    reset_instances,
+)
 from app.services.storage.local import LocalStorageBackend
-from app.services.storage.factory import get_local_backend, get_backend_for_type, reset_instances
 
 
 def run(coro):

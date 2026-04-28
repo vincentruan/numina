@@ -1,5 +1,4 @@
 """Tests for admin child view switching."""
-import pytest
 
 
 def test_admin_switch_child_requires_owner(client, auth_headers):

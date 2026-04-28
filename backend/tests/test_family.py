@@ -1,6 +1,5 @@
 """Tests for family endpoints."""
 
-import pytest
 
 
 def test_get_family_info(client, auth_headers):

@@ -1,9 +1,7 @@
 """Tests for the upload router and StorageService."""
 import io
-import os
 from unittest.mock import patch
 
-import pytest
 from sqlalchemy.exc import IntegrityError
 
 from app.models.cached_file import CachedFile

@@ -1,8 +1,7 @@
 """Tests for file validation service."""
 
-import pytest
 
-from app.services.file_validation import validate_image_magic_bytes, detect_image_format
+from app.services.file_validation import detect_image_format, validate_image_magic_bytes
 
 
 class TestValidateImageMagicBytes:

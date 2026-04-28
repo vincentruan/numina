@@ -1,10 +1,6 @@
 """Tests for background sync job and file management API."""
 import asyncio
-import os
-from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from app.models.cached_file import CachedFile
 from app.models.file_remote_location import FileRemoteLocation
@@ -245,7 +241,7 @@ class TestFileSyncJob:
         loc_id = loc.id
 
         async def slow_save(*args, **kwargs):
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
         mock_backend = AsyncMock()
         mock_backend.save = AsyncMock(side_effect=slow_save)

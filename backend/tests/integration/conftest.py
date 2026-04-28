@@ -1,8 +1,9 @@
 """集成测试配置 - Docker 容器启动 fixtures"""
 
 import time
-import pytest
+
 import docker
+import pytest
 from docker.errors import DockerException
 
 

@@ -23,6 +23,11 @@ export interface AIConfig {
   ai_vision_test_message: string | null
   ai_vision_test_latency_ms: number | null
   ai_vision_test_timestamp: string | null
+  // 图像模型OCR文本准确度测试结果（独立存储）
+  ai_vision_text_test_success: boolean | null
+  ai_vision_text_test_message: string | null
+  ai_vision_text_test_latency_ms: number | null
+  ai_vision_text_test_timestamp: string | null
 }
 
 export interface AIConfigUpdate {
@@ -46,6 +51,10 @@ export interface AIConfigTestResult {
   vision_success?: boolean | null
   vision_message?: string | null
   vision_latency_ms?: number | null
+  // OCR文本准确度测试结果（独立）
+  vision_text_success?: boolean | null
+  vision_text_message?: string | null
+  vision_text_latency_ms?: number | null
 }
 
 export const getAIConfig = () =>
@@ -65,6 +74,9 @@ export const testThinkingOnly = () =>
 
 export const testVisionModelOnly = () =>
   http.post<AIConfigTestResult>('/ai/config/test/vision')
+
+export const testVisionTextOCR = () =>
+  http.post<AIConfigTestResult>('/ai/config/test/vision/text')
 
 export interface AIReportResponse {
   report: AIReport | null

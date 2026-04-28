@@ -1,9 +1,6 @@
 """Tests for import_report router (parse + confirm endpoints)."""
 from unittest.mock import AsyncMock, patch
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Parse endpoint tests
 # ---------------------------------------------------------------------------
@@ -26,16 +23,15 @@ def test_parse_returns_preview(client, auth_headers, db):
     with patch(
         "app.routers.import_report._call_agent_parse",
         new=AsyncMock(return_value=mock_agent_resp),
+    ), patch(
+        "app.routers.import_report._extract_pdf_text",
+        return_value="贵州茅台 100股",
     ):
-        with patch(
-            "app.routers.import_report._extract_pdf_text",
-            return_value="贵州茅台 100股",
-        ):
-            resp = client.post(
-                "/api/v1/import/parse-pdf",
-                files={"file": ("test.pdf", b"fake-pdf", "application/pdf")},
-                headers=auth_headers,
-            )
+        resp = client.post(
+            "/api/v1/import/parse-pdf",
+            files={"file": ("test.pdf", b"fake-pdf", "application/pdf")},
+            headers=auth_headers,
+        )
     assert resp.status_code == 200
     data = resp.json()["data"]
     assert len(data["items"]) == 1
@@ -61,16 +57,15 @@ def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
     with patch(
         "app.routers.import_report._call_agent_parse",
         new=AsyncMock(return_value=empty),
+    ), patch(
+        "app.routers.import_report._extract_pdf_text",
+        return_value="这不是金融文档",
     ):
-        with patch(
-            "app.routers.import_report._extract_pdf_text",
-            return_value="这不是金融文档",
-        ):
-            resp = client.post(
-                "/api/v1/import/parse-pdf",
-                files={"file": ("other.pdf", b"fake-pdf", "application/pdf")},
-                headers=auth_headers,
-            )
+        resp = client.post(
+            "/api/v1/import/parse-pdf",
+            files={"file": ("other.pdf", b"fake-pdf", "application/pdf")},
+            headers=auth_headers,
+        )
     assert resp.status_code == 422
 
 
@@ -104,8 +99,8 @@ def test_confirm_creates_new_asset(client, auth_headers):
 
 def test_confirm_updates_existing_asset(client, auth_headers, db):
     from app.models.asset import Asset
-    from app.models.user import User
     from app.models.category import Category
+    from app.models.user import User
 
     # Get the registered user and a category
     user = db.query(User).filter(User.username == "testuser").first()
@@ -156,8 +151,8 @@ def test_confirm_updates_existing_asset(client, auth_headers, db):
 def test_confirm_skips_cross_family_asset(client, auth_headers, second_user_headers, db):
     """matched_asset_id 属于其他家庭时，应降级为 create。"""
     from app.models.asset import Asset
-    from app.models.user import User
     from app.models.category import Category
+    from app.models.user import User
 
     # Get second user (different family) and seed an asset for them
     other_user = db.query(User).filter(User.username == "testuser2").first()

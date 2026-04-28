@@ -2,8 +2,6 @@
 
 import hashlib
 
-import pytest
-
 from app.services.cache import get_captcha_payload_cache, reset_captcha_payload_cache
 
 

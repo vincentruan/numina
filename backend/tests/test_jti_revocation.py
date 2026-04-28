@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 from app.auth import revoke_jti as revoke_module
 from app.auth.revoke_jti import (
-    revoke_jti,
-    revoke_all_user_tokens,
     _is_jti_revoked,
     _is_token_revoked_for_user,
     cleanup_expired_revoked_tokens,
+    revoke_all_user_tokens,
+    revoke_jti,
 )
 from app.models.revoked_token import RevokedToken
 
