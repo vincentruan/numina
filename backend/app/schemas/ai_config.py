@@ -29,9 +29,11 @@ class AIConfigResponse(BaseModel):
     ai_vision_test_message: str | None = None
     ai_vision_test_latency_ms: int | None = None
     ai_vision_test_timestamp: datetime | None = None
-    # 图像模型 OCR 测试详情
-    ai_vision_test_recognized_text: str | None = None  # 模型识别的文字
-    ai_vision_test_accuracy: int | None = None  # 字符准确率 (0-100)
+    # 图像模型OCR文本准确度测试结果（独立存储）
+    ai_vision_text_test_success: bool | None = None
+    ai_vision_text_test_message: str | None = None
+    ai_vision_text_test_latency_ms: int | None = None
+    ai_vision_text_test_timestamp: datetime | None = None
 
 
 class AIConfigUpdate(BaseModel):
@@ -70,6 +72,7 @@ class AIConfigTestResult(BaseModel):
     vision_success: bool | None = None  # 图像模型连接成功与否（None表示未测试）
     vision_message: str | None = None
     vision_latency_ms: int | None = None
-    # 图像模型 OCR 测试详情
-    vision_recognized_text: str | None = None  # 模型识别的文字
-    vision_accuracy: int | None = None  # 字符准确率 (0-100)
+    # OCR文本准确度测试结果（独立）
+    vision_text_success: bool | None = None  # OCR文本测试成功与否（None表示未测试）
+    vision_text_message: str | None = None
+    vision_text_latency_ms: int | None = None
