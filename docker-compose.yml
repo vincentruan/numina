@@ -47,14 +47,18 @@ services:
       start_period: 15s
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     container_name: numina-frontend
     restart: unless-stopped
     ports:
       - "28080:80"
 
   frontend-child:
-    build: ./frontend-child
+    build:
+      context: .
+      dockerfile: frontend-child/Dockerfile
     container_name: numina-frontend-child
     restart: unless-stopped
 

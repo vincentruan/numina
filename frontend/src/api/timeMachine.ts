@@ -1,4 +1,4 @@
-import request from '@/utils/request'
+import http from './index'
 
 export interface WhatIfAction {
   action_type: 'sell' | 'buy' | 'invest' | 'stop_expense'
@@ -61,11 +61,11 @@ export interface PurchasingPowerResponse {
 }
 
 export function postWhatIf(data: WhatIfRequest) {
-  return request.post<WhatIfResponse>('/ai/whatif', data)
+  return http.post<WhatIfResponse>('/ai/whatif', data)
 }
 
 export function postProjection(data: ProjectionRequest) {
-  return request.post<ProjectionResponse>('/ai/projection', data)
+  return http.post<ProjectionResponse>('/ai/projection', data)
 }
 
 export function getPurchasingPower(params: {
@@ -74,9 +74,9 @@ export function getPurchasingPower(params: {
   to_year: number
   custom_inflation_rate?: number
 }) {
-  return request.get<PurchasingPowerResponse>('/ai/purchasing-power', { params })
+  return http.get<PurchasingPowerResponse>('/ai/purchasing-power', { params })
 }
 
 export function getAssetPurchasingPower(assetId: number) {
-  return request.get<PurchasingPowerResponse>(`/assets/${assetId}/purchasing-power`)
+  return http.get<PurchasingPowerResponse>(`/assets/${assetId}/purchasing-power`)
 }
