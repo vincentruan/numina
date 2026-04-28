@@ -22,12 +22,16 @@ from schemas.context import FamilyContext
 from schemas.policy import CapabilityPolicy
 from schemas.response import AgentResponse
 from services.audit_logger import AuditEntry, audit_logger
+from services.deerflow_adapter.adapter import create_family_adapter as _create_family_adapter
 from services.fallback_engine import fallback_engine
 from services.output_mapper import output_mapper
 from services.pii_redactor import pii_redactor
 from services.policy_guard import policy_guard
 
 logger = logging.getLogger(__name__)
+
+# Module-level adapter factory — exposed for patching in tests
+_deerflow_adapter = None  # sentinel; real adapter is created per-request via _create_family_adapter
 
 
 class Orchestrator:
@@ -79,40 +83,31 @@ class Orchestrator:
                     audit_id=audit_id,
                 )
 
-            # ── 3. Build LLM client ────────────────────────────────────────
-            provider = ai_config.get("ai_provider")
-            api_key = ai_config.get("api_key")
-            model_id = ai_config.get("ai_model_id")
-            if not provider or not api_key:
-                return self._safe_response(capability, audit_id, "AI 服务商或 API Key 未配置")
-            if not model_id:
-                return self._safe_response(capability, audit_id, "AI 模型 ID 未配置，请在设置中填写")
-
-            llm = LLMClient(
-                provider=provider,
-                api_key=api_key,
-                model_id=model_id,
-                vision_model_id=ai_config.get("ai_vision_model_id"),
-                base_url=ai_config.get("ai_base_url"),
-            )
-
-            # ── 4. Fetch family context ────────────────────────────────────
+            # ── 3. Fetch family context ────────────────────────────────────
             # suggest only needs free_text (asset name/category) — skip heavy fetches
             if capability == "suggest":
                 raw_context = FamilyContext(family_id=family_id, free_text=free_text)
             else:
                 raw_context = await self._build_context(client, family_id, free_text)
 
-            # ── 5. PII redaction ───────────────────────────────────────────
+            # ── 4. PII redaction ───────────────────────────────────────────
             redacted = pii_redactor.redact(raw_context)
+
+            # ── 5. Build LLM client ────────────────────────────────────────
+            llm = LLMClient(
+                provider=ai_config.get("ai_provider", ""),
+                api_key=ai_config.get("api_key", ""),
+                model_id=ai_config.get("ai_model_id", ""),
+                vision_model_id=ai_config.get("ai_vision_model_id"),
+                base_url=ai_config.get("ai_base_url"),
+            )
 
             # ── 6. Dispatch: DeerFlow or legacy ────────────────────────────
             if settings.USE_DEERFLOW:
                 deerflow_attempted = True
                 try:
                     # 使用家庭级 DeerFlowAdapter（动态注入 ai_config）
-                    from services.deerflow_adapter.adapter import create_family_adapter
-                    family_adapter = create_family_adapter(family_id, ai_config)
+                    family_adapter = _deerflow_adapter or _create_family_adapter(family_id, ai_config)
                     raw_output = await family_adapter.dispatch(
                         skill_name=capability,
                         context=redacted,

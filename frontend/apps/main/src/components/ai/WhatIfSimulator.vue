@@ -130,7 +130,7 @@ const actionTypeOptions = computed(() => [
 ])
 
 function actionTypeLabel(type: string) {
-  return actionTypeOptions.find((o) => o.value === type)?.name ?? type
+  return actionTypeOptions.value.find((o: { name: string; value: string }) => o.value === type)?.name ?? type
 }
 
 function addAction() {

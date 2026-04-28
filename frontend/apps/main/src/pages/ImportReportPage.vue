@@ -47,14 +47,13 @@
               v-model="item.name"
               :label="t('importReport.assetName')"
               :placeholder="t('importReport.assetName')"
-              size="small"
             />
             <van-field
-              v-model.number="item.current_value"
+              :model-value="item.current_value ?? undefined"
+              @update:model-value="(v) => (item.current_value = v === '' ? null : Number(v))"
               :label="t('importReport.currentValue')"
               type="number"
               :placeholder="t('importReport.enterValue')"
-              size="small"
             />
           </div>
           <div class="item-meta">
@@ -83,6 +82,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
+import type { UploaderFileListItem } from 'vant'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { parseReport, confirmImport } from '@/api/importReport'
 import type { ImportPreview, ImportPreviewItem } from '@/api/importReport'
@@ -97,10 +97,12 @@ const confirming = ref(false)
 const updateCount = computed(() => editableItems.value.filter((i) => i.action === 'update').length)
 const createCount = computed(() => editableItems.value.filter((i) => i.action === 'create').length)
 
-async function handleFileRead(file: { file: File }) {
+async function handleFileRead(file: UploaderFileListItem | UploaderFileListItem[]) {
+  const item = Array.isArray(file) ? file[0] : file
+  if (!item.file) return
   step.value = 'parsing'
   try {
-    const result = await parseReport(file.file)
+    const result = await parseReport(item.file)
     preview.value = result
     editableItems.value = result.items.map((i) => ({ ...i }))
     step.value = 'preview'

@@ -223,7 +223,7 @@ const categoriesWithAssetCount = computed(() => {
 
   // Filter categories with assets and sort by count descending
   return categories.value
-    .filter(cat => counts.get(cat.id) > 0)
+    .filter(cat => (counts.get(cat.id) ?? 0) > 0)
     .map(cat => ({
       id: cat.id,
       name: cat.name,
