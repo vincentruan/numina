@@ -36,7 +36,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { ChildUser } from '@/types'
 import { listChildren, getFamilyChildren } from '@/api/children'
-import { getChildFamilyId } from '@/utils/storage'
+import { getChildFamilyId } from '@numina/auth'
 
 const router = useRouter()
 const children = ref<ChildUser[]>([])

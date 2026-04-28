@@ -226,7 +226,7 @@ const router = createRouter({
         {
           path: 'baby/calendar/day',
           name: 'BabyDayDetail',
-          component: () => import('@/pages/child/ChildDayDetailPage.vue')
+          component: () => import('@/pages/BabyDayDetailPage.vue')
         },
         {
           path: 'chore-approvals',
@@ -242,19 +242,12 @@ const router = createRouter({
     },
     {
       path: '/child',
-      component: () => import('@/layouts/ChildLayout.vue'),
-      children: [
-        { path: '', name: 'ChildHome', component: () => import('@/pages/child/ChildHomePage.vue') },
-        { path: 'wishes', name: 'ChildWishes', component: () => import('@/pages/child/ChildWishesPage.vue') },
-        { path: 'tasks', name: 'ChildTasks', component: () => import('@/pages/child/ChildTasksPage.vue') },
-        { path: 'ledger', name: 'ChildLedger', component: () => import('@/pages/child/ChildLedgerPage.vue') },
-        { path: 'treasures', name: 'ChildTreasures', component: () => import('@/pages/child/ChildTreasuresPage.vue') },
-        { path: 'blind-box', name: 'ChildBlindBox', component: () => import('@/pages/ChildBlindBoxPage.vue') },
-        { path: 'calendar/day', name: 'ChildDayDetail', component: () => import('@/pages/child/ChildDayDetailPage.vue') },
-        { path: 'select', name: 'ChildSelect', component: () => import('@/pages/ChildSelectPage.vue'), meta: { guest: true } },
-        { path: 'auth', name: 'ChildAuth', component: () => import('@/pages/ChildAuthPage.vue'), meta: { guest: true } },
-        { path: 'bind', name: 'ChildBind', component: () => import('@/pages/ChildBindPage.vue'), meta: { guest: true } },
-      ]
+      redirect: () => {
+        // Nginx routes /child/* to frontend-child container.
+        // This redirect handles any stale in-app navigation to /child/* paths.
+        window.location.replace('/child/')
+        return '/'
+      }
     }
   ]
 })
@@ -263,18 +256,17 @@ router.beforeEach((to, _from, next) => {
   const user = getUser()
   const isLoggedIn = !!user
   const isChild = user?.role === 'child'
-  const isChildBindRoute = to.path.startsWith('/child/bind')
 
-  // Child bind route — accessible without session
-  if (isChildBindRoute) {
-    next()
+  // Stale child session — redirect to child app via full navigation
+  if (isChild) {
+    window.location.replace('/child/')
     return
   }
 
   // Guest routes (login, register, join-family)
   if (to.meta.guest) {
     if (isLoggedIn) {
-      next(isChild ? '/child/' : '/')
+      next('/')
     } else {
       next()
     }
@@ -287,23 +279,7 @@ router.beforeEach((to, _from, next) => {
     return
   }
 
-  // Child user — only /child/* allowed
-  if (isChild) {
-    if (to.path.startsWith('/child')) {
-      next()
-    } else {
-      next('/child/')
-    }
-    return
-  }
-
-  // Adult user — block /child/* routes
-  if (to.path.startsWith('/child')) {
-    next('/')
-    return
-  }
-
-  // Adult user on adult route — allow
+  // Adult user — allow
   next()
 })
 

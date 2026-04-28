@@ -53,7 +53,7 @@
 import { ref, onMounted } from 'vue'
 import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
-import MilestoneCelebration from '@/components/child/MilestoneCelebration.vue'
+import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)

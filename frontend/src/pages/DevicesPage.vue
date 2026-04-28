@@ -33,7 +33,7 @@ async function handleRevoke(device: DeviceSession) {
   await revokeDevice(device.id)
   showToast(t('toast.deviceRevokeSuccess'))
   if (device.is_current) {
-    authStore.logout()
+    authStore.logout({ onLogout: () => router.push('/login') })
   } else {
     await load()
   }
@@ -47,7 +47,7 @@ async function handleRevokeAll() {
   }
   await revokeAllDevices()
   showToast(t('toast.deviceRevokeAllSuccess'))
-  authStore.logout()
+  authStore.logout({ onLogout: () => router.push('/login') })
 }
 
 function formatRelativeTime(dateStr: string): string {

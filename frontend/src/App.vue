@@ -10,14 +10,14 @@
     :confirm-button-text="t('device.trustConfirm')"
     :cancel-button-text="t('device.trustCancel')"
     show-cancel-button
-    @confirm="authStore.trustDevice()"
+    @confirm="authStore.trustDevice({ onSuccess: () => showToast(t('toast.deviceTrustSuccess')), onError: () => showToast(t('toast.deviceTrustFailed')) })"
     @cancel="authStore.dismissTrustPrompt()"
   />
 </template>
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
-
+import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'

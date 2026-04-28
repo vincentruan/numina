@@ -162,7 +162,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
@@ -173,11 +172,11 @@ import { grantCoins } from '@/api/coins'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { adminSwitchToChild } from '@/api/auth'
-import { setUser } from '@/utils/storage'
+import { setUser, clearAuth } from '@/utils/storage'
 import type { ChildUser } from '@/types'
 
 const { t } = useI18n()
-const router = useRouter()
+
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
 const refreshing = ref(false)
@@ -308,23 +307,23 @@ async function doGrant() {
     await grantCoins(grantTargetChild.value.id, amount, grantReason.value || '父母奖励')
     showToast(t('toast.childGrantedStars', { amount, name: grantTargetChild.value.display_name }))
     showGrantSheet.value = false
-    // Refresh balances
-    const res = await getAllChildBalances()
-    childBalances.value = res.data
   } catch {
     showToast(t('toast.grantFailed'))
+    return
   } finally {
     grantingCoins.value = false
   }
+  // Refresh balances separately so a fetch failure doesn't misreport the grant
+  try {
+    const res = await getAllChildBalances()
+    childBalances.value = res.data
+  } catch { /* non-critical */ }
 }
 
 async function switchToChildView(child: ChildUser) {
   try {
     // 调用管理员专用API获取孩子JWT
     await adminSwitchToChild(child.id)
-
-    // 标识这是管理员视角切换（用于退出逻辑）
-    localStorage.setItem('admin_child_view', child.id)
 
     // 更新用户状态为孩子
     setUser({
@@ -334,9 +333,15 @@ async function switchToChildView(child: ChildUser) {
       role: 'child',
     })
 
-    // 导航到孩子首页
-    router.push('/child/home')
+    // 标识这是管理员视角切换（用于退出逻辑）— set immediately before navigation
+    // so a mid-sequence throw doesn't leave a stale flag with no child session
+    localStorage.setItem('admin_child_view', '1')
+
+    // 导航到孩子首页（跨 SPA 全页导航）
+    window.location.href = '/child/'
   } catch {
+    localStorage.removeItem('admin_child_view')
+    clearAuth()
     showToast(t('toast.switchFailed'))
   }
 }

@@ -180,14 +180,17 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { updateSettings } from '@/api/auth'
 import { updateFamilySettings } from '@/api/family'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
+import axios from 'axios'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
@@ -330,8 +333,9 @@ async function onTitleConfirm() {
     const newTitle = editTitleValue.value.trim()
     await familyStore.updateFamilyTitle(newTitle || null)
     showToast(t('toast.familyTitleUpdated'))
-  } catch (err: any) {
-    showToast(err.response?.data?.detail || t('toast.modifyFailed'))
+  } catch (err) {
+    const detail = axios.isAxiosError(err) ? err.response?.data?.detail : undefined
+    showToast(detail || t('toast.modifyFailed'))
   }
 }
 
@@ -348,7 +352,7 @@ function selectThemeColor(color: string) {
 async function onLogout() {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('settings.logoutConfirm') })
-    authStore.logout()
+    authStore.logout({ onLogout: () => router.push('/login') })
   } catch {
     // cancelled
   }

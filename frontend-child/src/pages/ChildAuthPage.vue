@@ -34,10 +34,10 @@
       </div>
 
       <p v-if="childAuthStore.isLocked" class="lock-message">
-        {{ childAuthStore.lockMessage }}
+        {{ childAuthStore.lockMessage ? t(`errors.${childAuthStore.lockMessage}`) : '' }}
       </p>
       <p v-else-if="childAuthStore.loginError" class="error-message">
-        {{ childAuthStore.loginError }}
+        {{ childAuthStore.loginError ? t(`errors.${childAuthStore.loginError}`) : '' }}
       </p>
 
       <div class="emoji-grid">
@@ -75,11 +75,12 @@ import { ref, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { useChildAuthStore } from '@/stores/childAuth'
+import { useChildAuthStore } from '@numina/auth'
 import type { ChildUser } from '@/types'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import { getAuthenticationOptions, authenticateWithPasskey } from '@/api/webauthn'
-import { setUser } from '@/utils/storage'
+import { setUser } from '@numina/auth'
+import axios from 'axios'
 
 const { t } = useI18n()
 
@@ -135,10 +136,9 @@ async function attemptWebAuthn() {
     showToast(t('toast.loginSuccess'))
     router.push('/child/')
   } catch (err: unknown) {
-    const error = err as { name?: string; message?: string; response?: { status?: number } }
-    if (error.name === 'NotAllowedError') {
+    if (err instanceof Error && err.name === 'NotAllowedError') {
       // User cancelled — don't show error
-    } else if (error.response?.status === 400) {
+    } else if (axios.isAxiosError(err) && err.response?.status === 400) {
       showToast(t('toast.noPasskey'))
       authMode.value = 'pin'
     } else {
@@ -169,7 +169,7 @@ function deleteEmoji() {
 
 function clearPin() {
   pin.value = []
-  childAuthStore.loginError = null
+  childAuthStore.clearLoginError()
 }
 
 watch(

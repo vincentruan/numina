@@ -10,6 +10,7 @@
       v-model:show="showReturnModal"
       title="返回大人模式"
       :show-cancel-button="!hasAdminChildView"
+      :confirm-button-loading="returning"
       @confirm="handleReturnToAdult"
     >
       <div v-if="!hasAdminChildView" style="padding: 16px">
@@ -29,18 +30,23 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import ChildTabBar from '@/components/child/ChildTabBar.vue'
-import { useChildAuthStore } from '@/stores/childAuth'
-import { clearAuth } from '@/utils/storage'
+import ChildTabBar from '@/components/ChildTabBar.vue'
+import { useChildAuthStore } from '@numina/auth'
+import { clearAuth } from '@numina/auth'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const childAuthStore = useChildAuthStore()
 
 const showReturnModal = ref(false)
 const parentPassword = ref('')
 const returnError = ref('')
+const returning = ref(false)
 const hasAdminChildView = computed(() => localStorage.getItem('admin_child_view') !== null)
 
 async function handleReturnToAdult() {
+  if (returning.value) return
+  returning.value = true
   const adminChildView = localStorage.getItem('admin_child_view')
 
   if (adminChildView) {
@@ -59,7 +65,8 @@ async function handleReturnToAdult() {
     clearAuth()
     window.location.href = '/'
   } catch {
-    returnError.value = '密码错误，请重试'
+    returnError.value = t('errors.wrongPassword')
+    returning.value = false
   }
 }
 </script>

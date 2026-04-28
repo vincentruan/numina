@@ -32,7 +32,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { ChildBindInfo } from '@/types'
 import { getChildBindInfo } from '@/api/children'
-import { setChildFamilyId } from '@/utils/storage'
+import { setChildFamilyId } from '@numina/auth'
 
 const route = useRoute()
 const router = useRouter()

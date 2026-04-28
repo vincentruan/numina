@@ -1,0 +1,5 @@
+packages:
+  - 'frontend'
+  - 'frontend-child'
+  - 'packages/*'
+  - '!**/node_modules/**'

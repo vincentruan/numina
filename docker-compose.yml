@@ -53,6 +53,11 @@ services:
     ports:
       - "28080:80"
 
+  frontend-child:
+    build: ./frontend-child
+    container_name: numina-frontend-child
+    restart: unless-stopped
+
   nginx:
     image: nginx:alpine
     container_name: numina-nginx
@@ -65,6 +70,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - frontend-child
 
   # 可选 MySQL 服务（使用 --profile mysql 启动）
   mysql:
