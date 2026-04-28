@@ -47,9 +47,11 @@ class Family(Base):
     ai_vision_test_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     ai_vision_test_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ai_vision_test_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    # 图像模型 OCR 测试详情
-    ai_vision_test_recognized_text: Mapped[str | None] = mapped_column(Text, nullable=True)  # 模型识别的文字
-    ai_vision_test_accuracy: Mapped[int | None] = mapped_column(Integer, nullable=True)  # 字符准确率 (0-100)
+    # 图像模型OCR文本准确度测试结果（独立存储）
+    ai_vision_text_test_success: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    ai_vision_text_test_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_vision_text_test_latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ai_vision_text_test_timestamp: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # 儿童星星币系统配置
     auto_approve_hours: Mapped[int] = mapped_column(Integer, default=24, nullable=False)  # 1-168，仅 owner 可修改
