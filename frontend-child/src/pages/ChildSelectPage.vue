@@ -20,7 +20,7 @@
         @click="selectChild(child)"
       >
         <div class="child-avatar" :style="{ backgroundColor: child.avatar_color }">
-          {{ child.display_name.charAt(0) }}
+          {{ (child.display_name ?? '?').charAt(0) }}
         </div>
         <div class="child-info">
           <span class="child-name">{{ child.display_name }}</span>

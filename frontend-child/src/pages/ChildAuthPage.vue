@@ -1,7 +1,7 @@
 <template>
   <div class="auth-page">
     <div class="child-avatar" :style="{ backgroundColor: avatarColor }">
-      {{ displayName.charAt(0) }}
+      {{ (displayName ?? '?').charAt(0) }}
     </div>
     <p class="child-name">{{ displayName }}</p>
 
