@@ -20,18 +20,15 @@ export default tseslint.config(
         parser: tseslint.parser,
         extraFileExtensions: ['.vue'],
       },
-      // Browser globals for Vue SFCs (window, document, HTMLElement, etc.)
       globals: globals.browser,
     },
     rules: {
-      // Relax rules that conflict with Vue auto-import pattern (Vant)
       'vue/multi-word-component-names': 'off',
-      // Allow unused vars prefixed with _ (common in Vue destructuring)
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      // Prevent cross-app imports from child frontend
+      // Prevent cross-app imports from adult frontend
       'no-restricted-imports': ['error', {
         patterns: [{
-          group: ['**/frontend-child/src/**'],
+          group: ['**/apps/main/src/**'],
           message: 'Cross-app imports are not allowed. Use @numina/* shared packages instead.',
         }],
       }],
@@ -44,10 +41,10 @@ export default tseslint.config(
     },
     rules: {
       '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      // Prevent cross-app imports from child frontend
+      // Prevent cross-app imports from adult frontend
       'no-restricted-imports': ['error', {
         patterns: [{
-          group: ['**/frontend-child/src/**'],
+          group: ['**/apps/main/src/**'],
           message: 'Cross-app imports are not allowed. Use @numina/* shared packages instead.',
         }],
       }],

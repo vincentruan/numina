@@ -29,7 +29,7 @@ services:
       - "8000"
 
   frontend:
-    build: ./frontend
+    build: ./frontend/apps/main
     container_name: numina-frontend
     restart: unless-stopped
     # Don't expose frontend port externally

@@ -49,7 +49,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: frontend/Dockerfile
+      dockerfile: frontend/apps/main/Dockerfile
     container_name: numina-frontend
     restart: unless-stopped
     ports:
@@ -58,7 +58,7 @@ services:
   frontend-child:
     build:
       context: .
-      dockerfile: frontend-child/Dockerfile
+      dockerfile: frontend/apps/child/Dockerfile
     container_name: numina-frontend-child
     restart: unless-stopped
 

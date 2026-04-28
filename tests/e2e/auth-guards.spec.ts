@@ -15,7 +15,7 @@ import {
 test('routes.ts covers all route names in frontend/src/router/index.ts', () => {
   const routerPath = path.resolve(
     __dirname,
-    '../../frontend/src/router/index.ts'
+    '../../frontend/apps/main/src/router/index.ts'
   )
   const source = fs.readFileSync(routerPath, 'utf-8')
   const routerNames = extractRouteNamesFromSource(source)

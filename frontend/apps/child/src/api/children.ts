@@ -29,10 +29,10 @@ export async function getChildBindInfo(token: string): Promise<ChildBindInfo> {
 
 export async function getFamilyChildren(familyId: string): Promise<ChildUser[]> {
   const res = await http.get(`/auth/child/family/${familyId}/children`)
-  return res.data
+  return res.data?.data ?? res.data
 }
 
 export async function listChildren(): Promise<ChildUser[]> {
   const res = await http.get('/family/children')
-  return res.data
+  return res.data?.data ?? res.data
 }

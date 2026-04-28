@@ -243,7 +243,7 @@ const router = createRouter({
     {
       path: '/child',
       redirect: () => {
-        // Nginx routes /child/* to frontend-child container.
+        // Nginx routes /child/* to frontend/apps/child container.
         // This redirect handles any stale in-app navigation to /child/* paths.
         window.location.replace('/child/')
         return '/'
