@@ -18,7 +18,7 @@
       <div class="children-list">
         <div v-for="child in bindInfo.children" :key="child.id" class="child-item">
           <div class="child-avatar" :style="{ backgroundColor: child.avatar_color }">
-            {{ child.display_name.charAt(0) }}
+            {{ (child.display_name ?? '?').charAt(0) }}
           </div>
           <span>{{ child.display_name }}</span>
         </div>
