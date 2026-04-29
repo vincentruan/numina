@@ -528,8 +528,38 @@ docker-compose build agent && docker-compose up -d agent
 
 **解决**: 已修复脚本，将 `family/` 改为 `family`（无尾斜杠）。如遇类似问题，检查 API 调用是否有多余的尾斜杠。
 
----
+### Q: nginx 重启后 `/` 返回儿童端页面
 
-**文档版本**: 1.1
+**原因**: nginx worker 进程缓存了旧的 upstream DNS 解析结果。当 `frontend-child` 容器重建后，nginx 的 upstream `frontend` 可能短暂解析到错误 IP。
+
+**解决**:
+```bash
+# 重载 nginx 配置（不中断连接）
+docker exec numina-nginx nginx -s reload
+```
+
+**验证**:
+```bash
+curl -s http://localhost/ | grep title
+# 应显示: <title>Numina · 家庭资产管理</title>
+```
+
+### Q: E2E 测试中儿童路由重定向到 `/child/select` 而非 `/login`
+
+**原因**: 儿童路由（`/child/*`）由儿童端 SPA 独立处理，其路由守卫将未认证用户重定向到 `/child/select`（儿童登录页），而非成人端的 `/login`。这是正确行为。
+
+**说明**: `tests/lib/routes.ts` 中的 `CHILD_SPA_ROUTES` 记录了儿童 SPA 路由，不属于成人端 `PROTECTED_ROUTES`。
+
+### Q: 里程碑庆典弹窗不显示
+
+**原因**: `frontend/apps/child/src/api/milestones.ts` 中 `getMyMilestones()` 未正确解包 API 响应信封，返回 `{code, data}` 对象而非数组，导致 `filter()` 静默失败。
+
+**解决**: 已修复为 `return res.data.data ?? []`。修复后需重建儿童端容器：
+```bash
+docker-compose build frontend-child && docker-compose up -d frontend-child
+docker exec numina-nginx nginx -s reload
+```
+
+---
 **最后更新**: 2026-04-29
 **维护者**: Numina Team
