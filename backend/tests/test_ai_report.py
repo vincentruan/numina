@@ -14,9 +14,19 @@ def _enable_ai(db, auth_headers, client):
     family = db.query(Family).filter_by(id=family_id).first()
     family.ai_enabled = True
     # Also set role to owner for report generation
+    from app.models.ai_provider_config import AIProviderConfig
     from app.models.user import User
     user = db.query(User).filter_by(id=me["data"]["id"]).first()
     user.role = "owner"
+    cfg = AIProviderConfig(
+        family_id=family_id,
+        name="测试配置",
+        provider="anthropic",
+        api_key_encrypted="test_encrypted_key",
+        model_id="claude-3-5-sonnet-20241022",
+        is_active=True,
+    )
+    db.add(cfg)
     db.commit()
     return family_id
 
@@ -225,6 +235,15 @@ def test_cross_family_report_isolation(client, auth_headers, second_user_headers
     family_b_id = me2["data"]["family_id"]
     family_b = db.query(Family).filter_by(id=family_b_id).first()
     family_b.ai_enabled = True
+    from app.models.ai_provider_config import AIProviderConfig as APC2
+    db.add(APC2(
+        family_id=family_b_id,
+        name="测试配置B",
+        provider="anthropic",
+        api_key_encrypted="test_encrypted_key",
+        model_id="claude-3-5-sonnet-20241022",
+        is_active=True,
+    ))
     db.commit()
 
     # Create report for Family A

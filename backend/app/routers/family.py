@@ -15,6 +15,8 @@ from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.coin import ChildBalanceResponse
 from app.schemas.family import (
+    ChildEconomyConfigResponse,
+    ChildEconomyConfigUpdate,
     FamilyResponse,
     FamilySettingsResponse,
     FamilySettingsUpdate,
@@ -288,6 +290,50 @@ def get_all_child_balances(
 class ChoreStats(BaseModel):
     completed_this_week: int
     total_this_week: int
+
+
+@router.get("/economy-config", response_model=ChildEconomyConfigResponse)
+def get_economy_config(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+) -> ChildEconomyConfigResponse:
+    """获取子经济配置（所有成员可查看）。"""
+    from app.models.child_economy_config import ChildEconomyConfig
+
+    cfg = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
+    if not cfg:
+        cfg = ChildEconomyConfig(family_id=user.family_id)
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+    return ChildEconomyConfigResponse.model_validate(cfg)
+
+
+@router.put("/economy-config", response_model=ChildEconomyConfigResponse)
+def update_economy_config(
+    body: ChildEconomyConfigUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+) -> ChildEconomyConfigResponse:
+    """更新子经济配置（仅 owner）。"""
+    if user.role != "owner":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+
+    from app.models.child_economy_config import ChildEconomyConfig
+
+    cfg = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
+    if not cfg:
+        cfg = ChildEconomyConfig(family_id=user.family_id)
+        db.add(cfg)
+    if body.auto_approve_hours is not None:
+        cfg.auto_approve_hours = body.auto_approve_hours
+    if body.coin_copper_to_silver is not None:
+        cfg.coin_copper_to_silver = body.coin_copper_to_silver
+    if body.coin_silver_to_gold is not None:
+        cfg.coin_silver_to_gold = body.coin_silver_to_gold
+    db.commit()
+    db.refresh(cfg)
+    return ChildEconomyConfigResponse.model_validate(cfg)
 
 
 @router.get("/children/chore-stats", response_model=dict[str, ChoreStats])
