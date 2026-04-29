@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
 from app.database import get_db
+from app.models.asset_lifecycle_event import AssetLifecycleEvent
 from app.models.user import User
 from app.schemas.asset import (
     AssetCreate,
@@ -26,10 +27,16 @@ from app.services.activity import record_activity
 router = APIRouter(prefix="/assets", tags=["assets"])
 
 
-def _to_response(asset) -> AssetResponse:
+def _to_response(asset, db: Session) -> AssetResponse:
     resp = AssetResponse.model_validate(asset)
     resp.daily_cost = asset_service.compute_daily_cost(asset)
     resp.return_rate = asset_service.compute_return_rate(asset)
+    resp.lifecycle_events = (
+        db.query(AssetLifecycleEvent)
+        .filter(AssetLifecycleEvent.asset_id == asset.id)
+        .order_by(AssetLifecycleEvent.event_date.desc())
+        .all()
+    )
     return resp
 
 
@@ -50,7 +57,7 @@ def list_assets(
     assets, total = asset_service.list_assets(db, user, category_id, asset_type, status, tag_id, search, sort, page, page_size)
     total_pages = math.ceil(total / page_size) if total > 0 else 1
     return PaginatedAssetResponse(
-        items=[_to_response(a) for a in assets],
+        items=[_to_response(a, db) for a in assets],
         total=total,
         page=page,
         page_size=page_size,
@@ -68,7 +75,7 @@ def create_asset(
 ):
     asset = asset_service.create_asset(db, user, req)
     record_activity(db, user, "create", "asset", asset.id, f"添加资产「{asset.name}」", asset.purchase_price)
-    return _to_response(asset)
+    return _to_response(asset, db)
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)
@@ -78,7 +85,7 @@ def get_asset(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.get_asset(db, user, asset_id)
-    return _to_response(asset)
+    return _to_response(asset, db)
 
 
 @router.put("/{asset_id}", response_model=AssetResponse)
@@ -89,7 +96,7 @@ def update_asset(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.update_asset(db, user, asset_id, req)
-    return _to_response(asset)
+    return _to_response(asset, db)
 
 
 @router.delete("/{asset_id}")
@@ -110,7 +117,7 @@ def update_value(
     user: User = Depends(require_adult),
 ):
     asset = asset_service.update_asset_value(db, user, asset_id, req.current_value)
-    return _to_response(asset)
+    return _to_response(asset, db)
 
 
 @router.post("/{asset_id}/sell", response_model=AssetSellResponse)
@@ -133,7 +140,7 @@ def retire_asset(
 ):
     asset = asset_service.retire_asset(db, user, asset_id)
     record_activity(db, user, "retire", "asset", asset_id, f"退役资产「{asset.name}」")
-    return _to_response(asset)
+    return _to_response(asset, db)
 
 
 @router.post("/{asset_id}/reactivate", response_model=AssetResponse)
@@ -144,7 +151,7 @@ def reactivate_asset(
 ):
     asset = asset_service.reactivate_asset(db, user, asset_id)
     record_activity(db, user, "reactivate", "asset", asset_id, f"恢复资产「{asset.name}」")
-    return _to_response(asset)
+    return _to_response(asset, db)
 
 
 @router.get("/{asset_id}/valuations", response_model=list[ValuationResponse])
