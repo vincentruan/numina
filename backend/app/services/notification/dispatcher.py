@@ -13,6 +13,7 @@ from app.models.notification_channel import NotificationChannel
 from app.models.notification_config import NotificationConfig
 from app.models.notification_subscription import NotificationSubscription
 from app.models.reminder import Reminder
+from app.models.reminder_notification import ReminderNotification
 from app.models.user import User
 from app.schemas.reminder import ReminderSummary
 from app.services.notification.rules import (
@@ -248,6 +249,12 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
                 subject=subject,
                 body=body,
             )
+        rn = ReminderNotification(
+            reminder_id=reminder.id,
+            channel_id=channel.id,
+            status="sent" if success else "failed",
+        )
+        db.add(rn)
         if success:
             notified.append(channel.id)
     reminder.notified_channels = json.dumps(notified)
@@ -278,16 +285,24 @@ async def _send_telegram_async(
 def _retry_failed_notifications(db: Session) -> None:
     """重试尚未推送成功且重试次数 < 3 的 active reminders。"""
     MAX_RETRIES = 3
-    pending = (
-        db.query(Reminder)
-        .filter(
-            Reminder.status == "active",
-            Reminder.send_retry_count < MAX_RETRIES,
-        )
-        .all()
-    )
+    pending = db.query(Reminder).filter(Reminder.status == "active").all()
     for reminder in pending:
-        notified = json.loads(reminder.notified_channels)
+        # 查新表：已成功通知的渠道
+        sent_channel_ids = {
+            rn.channel_id
+            for rn in db.query(ReminderNotification).filter_by(
+                reminder_id=reminder.id, status="sent"
+            ).all()
+        }
+        # 查新表：失败次数
+        retry_count = (
+            db.query(ReminderNotification)
+            .filter_by(reminder_id=reminder.id, status="failed")
+            .count()
+        )
+        if retry_count >= MAX_RETRIES:
+            logger.info("提醒 %s 已达最大重试次数，放弃推送", reminder.id)
+            continue
         channels = (
             db.query(NotificationChannel)
             .join(
@@ -301,11 +316,9 @@ def _retry_failed_notifications(db: Session) -> None:
             )
             .all()
         )
-        all_notified = all(c.id in notified for c in channels)
-        if all_notified or not channels:
+        if not channels:
+            continue
+        all_notified = all(c.id in sent_channel_ids for c in channels)
+        if all_notified:
             continue
         _dispatch_notifications(db, reminder, {})
-        reminder.send_retry_count += 1
-        if reminder.send_retry_count >= MAX_RETRIES:
-            logger.info("提醒 %s 已达最大重试次数，放弃推送", reminder.id)
-        db.commit()
