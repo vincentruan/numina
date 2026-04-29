@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.ai_allocation_target import AIAllocationTarget
 from app.models.asset import Asset
 from app.models.notification_channel import NotificationChannel
+from app.models.notification_channel_config import NotificationChannelConfig
 from app.models.notification_config import NotificationConfig
 from app.models.notification_subscription import NotificationSubscription
 from app.models.reminder import Reminder
@@ -209,6 +210,24 @@ def _check_allocation_drift_all(db: Session) -> None:
                 ensure_reminder(db, result)
 
 
+def _get_channel_config(db: Session, channel: NotificationChannel) -> dict:
+    """Read channel config from NotificationChannelConfig table, fall back to channel.config."""
+    rows = db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).all()
+    if rows:
+        result = {}
+        for row in rows:
+            try:
+                decrypted = decrypt_config(row.value_encrypted)
+                if decrypted and isinstance(decrypted, dict):
+                    result.update(decrypted)
+                else:
+                    result[row.key] = row.value_encrypted
+            except Exception:
+                result[row.key] = row.value_encrypted
+        return result
+    return decrypt_config(channel.config) or {}
+
+
 def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict) -> None:
     """向订阅了该 reminder_type 的所有启用渠道发送通知（失败静默）。"""
     channels = (
@@ -225,15 +244,15 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
     for channel in channels:
         if channel.id in notified:
             continue
-        config = decrypt_config(channel.config) or {}
-        success = False
+        config = _get_channel_config(db, channel)
         if channel.channel_type == "telegram":
+            # Telegram is async — ReminderNotification is written inside
+            # _send_telegram_async once the actual result is known.
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(
                     _send_telegram_async(channel, reminder, template_vars, db)
                 )
-                success = True
             except RuntimeError:
                 pass
         elif channel.channel_type == "email":
@@ -249,14 +268,14 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
                 subject=subject,
                 body=body,
             )
-        rn = ReminderNotification(
-            reminder_id=reminder.id,
-            channel_id=channel.id,
-            status="sent" if success else "failed",
-        )
-        db.add(rn)
-        if success:
-            notified.append(channel.id)
+            rn = ReminderNotification(
+                reminder_id=reminder.id,
+                channel_id=channel.id,
+                status="sent" if success else "failed",
+            )
+            db.add(rn)
+            if success:
+                notified.append(channel.id)
     reminder.notified_channels = json.dumps(notified)
     db.commit()
 
@@ -267,19 +286,26 @@ async def _send_telegram_async(
     template_vars: dict,
     db: Session,
 ) -> None:
-    config = decrypt_config(channel.config) or {}
+    config = _get_channel_config(db, channel)
     text = render_template(reminder.reminder_type, "telegram", template_vars)
     success = await NotificationSender.send_telegram(
         bot_token=config.get("bot_token", ""),
         chat_id=config.get("chat_id", ""),
         text=text,
     )
+    # Write ReminderNotification with the actual send result.
+    rn = ReminderNotification(
+        reminder_id=reminder.id,
+        channel_id=channel.id,
+        status="sent" if success else "failed",
+    )
+    db.add(rn)
     if success:
         notified = json.loads(reminder.notified_channels)
         if channel.id not in notified:
             notified.append(channel.id)
             reminder.notified_channels = json.dumps(notified)
-            db.commit()
+    db.commit()
 
 
 def _retry_failed_notifications(db: Session) -> None:
