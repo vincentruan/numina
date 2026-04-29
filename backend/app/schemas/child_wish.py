@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.schemas.base import SnowflakeBase
 
@@ -106,6 +106,16 @@ class RealizeChildWishRequest(BaseModel):
     category_id: int | None = None
 
 
+class ChildWishCostHistoryItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    old_cost: int | None
+    new_cost: int
+    changed_by_user_id: int
+    created_at: datetime
+
+
 class ParentWishResponse(SnowflakeBase):
     id: int
     family_id: int
@@ -123,6 +133,7 @@ class ParentWishResponse(SnowflakeBase):
     created_at: datetime
     updated_at: datetime
     milestone_triggered: str | None = None
+    cost_history: list[ChildWishCostHistoryItem] = []
 
 
 class ChildWishStatsSimItem(BaseModel):

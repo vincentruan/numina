@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 
 from app.models.asset import Asset
 from app.models.child_wish import ChildWish
+from app.models.child_wish_cost_history import ChildWishCostHistory
 from app.models.coin_transaction import CoinTransaction
 from app.models.user import User
 from app.schemas.child_wish import (
     ApproveChildWishRequest,
+    ChildWishCostHistoryItem,
     ChildWishCreate,
     ChildWishListResponse,
     ChildWishResponse,
@@ -47,7 +49,16 @@ def _to_child_response(wish: ChildWish, balance: int = 0) -> ChildWishResponse:
     )
 
 
-def _to_parent_response(wish: ChildWish, child_display_name: str) -> ParentWishResponse:
+def _to_parent_response(wish: ChildWish, child_display_name: str, db: Session | None = None) -> ParentWishResponse:
+    cost_history: list[ChildWishCostHistoryItem] = []
+    if db is not None:
+        rows = (
+            db.query(ChildWishCostHistory)
+            .filter(ChildWishCostHistory.wish_id == wish.id)
+            .order_by(ChildWishCostHistory.created_at)
+            .all()
+        )
+        cost_history = [ChildWishCostHistoryItem.model_validate(r) for r in rows]
     return ParentWishResponse(
         id=wish.id,
         family_id=wish.family_id,
@@ -64,6 +75,7 @@ def _to_parent_response(wish: ChildWish, child_display_name: str) -> ParentWishR
         realized_asset_id=wish.realized_asset_id,
         created_at=wish.created_at,
         updated_at=wish.updated_at,
+        cost_history=cost_history,
     )
 
 
@@ -235,7 +247,7 @@ def list_parent_queue(db: Session, user: User) -> list[ParentWishResponse]:
         children = db.query(User).filter(User.id.in_(child_ids)).all()
         child_map = {c.id: c.display_name for c in children}
 
-    return [_to_parent_response(w, child_map.get(w.child_user_id, "未知用户")) for w in wishes]
+    return [_to_parent_response(w, child_map.get(w.child_user_id, "未知用户"), db) for w in wishes]
 
 
 def approve_child_wish(
@@ -258,7 +270,7 @@ def approve_child_wish(
         "message": f"你的心愿「{wish.name}」已被批准！",
         "target_user_id": wish.child_user_id,
     })
-    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
 
 
 def reject_child_wish(
@@ -281,7 +293,7 @@ def reject_child_wish(
         "message": f"你的心愿「{wish.name}」未被批准。",
         "target_user_id": wish.child_user_id,
     })
-    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
 
 
 def update_child_wish_cost(
@@ -298,6 +310,13 @@ def update_child_wish_cost(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "WISH_COST_DECREASE_ONLY", "message": "积分门槛只能降低，不能提高"},
         )
+    history_entry = ChildWishCostHistory(
+        wish_id=wish.id,
+        old_cost=wish.star_coin_cost,
+        new_cost=req.star_coin_cost,
+        changed_by_user_id=user.id,
+    )
+    db.add(history_entry)
     history = list(wish.star_coin_cost_history or [])
     history.append({
         "old": wish.star_coin_cost,
@@ -308,7 +327,7 @@ def update_child_wish_cost(
     wish.star_coin_cost_history = history
     db.commit()
     db.refresh(wish)
-    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
 
 
 def realize_child_wish(
@@ -400,7 +419,7 @@ def realize_child_wish(
             db, wish.child_user_id, wish.family_id,
             {"wish": wish},
         )
-        resp = _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+        resp = _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
         resp.milestone_triggered = milestone
         return resp
     except HTTPException:
@@ -423,4 +442,4 @@ def defer_redemption(db: Session, user: User, wish_id: str) -> ParentWishRespons
     wish.status = "active"
     db.commit()
     db.refresh(wish)
-    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id))
+    return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)
