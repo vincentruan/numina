@@ -103,6 +103,7 @@
     <van-popup v-model:show="showThemePicker" round position="bottom">
       <van-picker
         :columns="themeOptions"
+        :default-index="themeOptions.findIndex((o) => o.value === (authStore.user?.theme || 'system'))"
         @confirm="onThemeConfirm"
         @cancel="showThemePicker = false"
       />
@@ -237,9 +238,9 @@ const themeColorOptions = [
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 
 const themeOptions = [
+  { text: '🌓 ' + t('settings.themeSystem'), value: 'system' },
   { text: '☀️ ' + t('settings.themeLight'), value: 'light' },
   { text: '🌙 ' + t('settings.themeDark'), value: 'dark' },
-  { text: '🌓 ' + t('settings.themeSystem'), value: 'system' },
 ]
 
 const languageOptions = [
