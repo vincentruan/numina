@@ -1,5 +1,6 @@
 """AI 配置管理路由。"""
 
+import logging
 import time
 from datetime import datetime
 
@@ -29,6 +30,8 @@ from app.services.vision_test_image import (
 )
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
+
+logger = logging.getLogger(__name__)
 
 
 def _build_endpoint(base_url: str | None, default_base: str, path: str) -> str:
@@ -361,15 +364,9 @@ async def _test_connection(family: object, api_key: str, model: str) -> dict:
 
 async def _test_thinking(family: object, api_key: str, model: str) -> dict:
     """测试主模型思考能力。"""
-    import json
-    import logging
-
-    logger = logging.getLogger(__name__)
     start = time.monotonic()
 
     try:
-        logger.info(f"[DEBUG] _test_thinking: provider={family.ai_provider}, model={model}, base_url={family.ai_base_url}")
-
         if family.ai_provider == "anthropic":
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.anthropic.com", "/v1/messages"
@@ -380,7 +377,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                 "thinking": {"type": "enabled", "budget_tokens": 100},
                 "messages": [{"role": "user", "content": "think"}],
             }
-            logger.info(f"[DEBUG] Anthropic thinking request: endpoint={endpoint}, body={json.dumps(request_body)}")
 
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
@@ -392,7 +388,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                     },
                     json=request_body,
                 )
-                logger.info(f"[DEBUG] Anthropic thinking response: status={resp.status_code}, body={resp.text[:500]}")
 
                 if resp.status_code == 200:
                     latency = int((time.monotonic() - start) * 1000)
@@ -401,7 +396,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                     try:
                         error_data = resp.json()
                         error_type = error_data.get("error", {}).get("type", "")
-                        logger.info(f"[DEBUG] Anthropic 400 error: type={error_type}, full_error={json.dumps(error_data)}")
                         latency = int((time.monotonic() - start) * 1000)
                         if error_type == "invalid_request_error":
                             return {"success": True, "message": "支持思考能力", "latency_ms": latency}
@@ -418,7 +412,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
             endpoint = _build_endpoint(
                 family.ai_base_url, "https://api.openai.com", "/v1/chat/completions"
             )
-            logger.info(f"[DEBUG] OpenAI thinking test: endpoint={endpoint}, model={model}")
 
             async with httpx.AsyncClient(timeout=120.0) as client:
                 request_body = {
@@ -427,7 +420,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                     "reasoning_effort": "low",
                     "messages": [{"role": "user", "content": "think"}],
                 }
-                logger.info(f"[DEBUG] OpenAI thinking request (with reasoning_effort): body={json.dumps(request_body)}")
 
                 resp = await client.post(
                     endpoint,
@@ -437,7 +429,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                     },
                     json=request_body,
                 )
-                logger.info(f"[DEBUG] OpenAI thinking response (with reasoning_effort): status={resp.status_code}, body={resp.text[:500]}")
 
                 if resp.status_code == 200:
                     latency = int((time.monotonic() - start) * 1000)
@@ -448,7 +439,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                         "max_tokens": 1,
                         "messages": [{"role": "user", "content": "think"}],
                     }
-                    logger.info(f"[DEBUG] OpenAI fallback request (without reasoning_effort): body={json.dumps(request_body2)}")
 
                     resp2 = await client.post(
                         endpoint,
@@ -458,7 +448,6 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
                         },
                         json=request_body2,
                     )
-                    logger.info(f"[DEBUG] OpenAI fallback response: status={resp2.status_code}, body={resp2.text[:500]}")
 
                     latency = int((time.monotonic() - start) * 1000)
                     if resp2.status_code == 200:

@@ -41,7 +41,7 @@ class FamilySettingsResponse(BaseModel):
     ai_enabled: bool
     coin_copper_to_silver: int
     coin_silver_to_gold: int
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class MemberSummary(BaseModel):

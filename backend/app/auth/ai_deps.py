@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import ALGORITHM, get_current_user
 from app.config import settings
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.family import Family
 from app.models.user import User
 from app.services.audit_log import write_audit_log
@@ -21,10 +22,7 @@ _AGENT_TOKEN_TTL_SECONDS = 300
 def require_owner(current_user: User = Depends(get_current_user)) -> User:
     """要求当前用户为家庭 owner。"""
     if current_user.role != "owner":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "ai_not_authorized", "message": "此操作需要家庭管理员权限"},
-        )
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     return current_user
 
 
