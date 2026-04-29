@@ -71,6 +71,7 @@ def test_patch_coin_rate_over_100_rejected(client, auth_headers):
 def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "password": "ChildPass1",
         "username": "xiaoming7",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
@@ -100,6 +101,7 @@ def test_get_child_balance_cross_family_fails(client, auth_headers, second_user_
     """Parent cannot query balance of a child in another family."""
     resp = client.post("/api/v1/family/children", headers=second_user_headers, json={
         "display_name": "外家孩子",
+        "password": "ChildPass1",
         "username": "otherchild2",
         "avatar_color": "#AABBCC",
         "pin": ["🐸", "🦊", "🐼", "🐨"],
@@ -123,10 +125,12 @@ def test_get_all_child_balances_multiple_children(client, auth_headers):
     # Create two children
     child_a = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "password": "ChildPass1",
         "username": "xiaoming6", "avatar_color": "#FF5733", "pin": ["🐱", "🌟", "🎈", "🐶"],
     }).json()["data"]
     child_b = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小红",
+        "password": "ChildPass1",
         "username": "xiaohong5", "avatar_color": "#33AAFF", "pin": ["🌈", "🍎", "🐸", "🦁"],
     }).json()["data"]
 
@@ -150,6 +154,7 @@ def test_get_all_child_balances_cross_family_isolation(client, auth_headers, sec
     # Create child in second family
     client.post("/api/v1/family/children", headers=second_user_headers, json={
         "display_name": "外家孩子",
+        "password": "ChildPass1",
         "username": "otherchild", "avatar_color": "#AABBCC", "pin": ["🐸", "🦊", "🐼", "🐨"],
     })
 

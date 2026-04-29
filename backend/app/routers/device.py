@@ -19,7 +19,7 @@ from app.auth.revoke_jti import revoke_jti
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.schemas.device import DeviceSessionResponse, DeviceTrustResponse
+from app.schemas.device import DeviceCheckRequest, DeviceCheckResponse, DeviceSessionResponse, DeviceTrustResponse
 from app.services import device as device_service
 
 router = APIRouter(prefix="/auth", tags=["device"])
@@ -89,13 +89,20 @@ def _get_user_payload(
 def trust_device(
     request: Request,
     response: Response,
+    body: "DeviceTrustRequest | None" = None,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
     child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
     refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
     child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
     db: Session = Depends(get_db),
 ):
-    """Trust the current device — issue 30-day refresh token and create DeviceSession."""
+    """Trust the current device — issue 30-day refresh token and create DeviceSession.
+
+    Optionally accepts a browser fingerprint to enable fingerprint-based device detection.
+    """
+    from app.schemas.device import DeviceTrustRequest as _DeviceTrustRequest
+
+    body_fingerprint: str | None = body.fingerprint if body else None
     payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
     user_id = int(payload["sub"])
     family_id = int(payload["fid"])
@@ -123,6 +130,7 @@ def trust_device(
         family_id=family_id,
         refresh_jti=new_jti,
         device_name=device_name,
+        browser_fingerprint=body_fingerprint,
     )
 
     cookie_name = CHILD_REFRESH_TOKEN_COOKIE if role == "child" else REFRESH_TOKEN_COOKIE
@@ -225,4 +233,35 @@ def revoke_all_devices(
     else:
         clear_auth_cookies(response)
 
+    return None
+
+
+@router.post("/device/check", response_model=DeviceCheckResponse)
+def check_device(
+    req: DeviceCheckRequest,
+    db: Session = Depends(get_db),
+):
+    """Check if a device fingerprint is trusted. No auth required — used before login."""
+    from datetime import datetime
+
+    from app.models.device_session import DeviceSession
+
+    now = datetime.utcnow()
+    session = (
+        db.query(DeviceSession)
+        .filter(
+            DeviceSession.browser_fingerprint == req.fingerprint,
+            DeviceSession.is_revoked.is_(False),
+            DeviceSession.expires_at > now,
+        )
+        .first()
+    )
+    if not session:
+        return DeviceCheckResponse(trusted=False)
+
+    return DeviceCheckResponse(
+        trusted=True,
+        device_name=session.device_name,
+        user_id=str(session.user_id),
+    )
     return None

@@ -90,10 +90,7 @@ export const GUEST_ROUTES: RouteEntry[] = [
  * Adult authenticated users are NOT redirected away from these routes.
  */
 export const PUBLIC_ROUTES: RouteEntry[] = [
-  { name: 'ChildSelect', path: '/child/select' },
   { name: 'ChildAuth', path: '/child/auth' },
-  { name: 'ChildPinLogin', path: '/child/pin' },
-  { name: 'ChildBind', path: '/child/bind' },
 ]
 
 /**

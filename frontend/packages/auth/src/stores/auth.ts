@@ -13,7 +13,7 @@
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import type { User, LoginRequest, RegisterRequest, JoinFamilyRequest } from '../types'
+import type { User, LoginRequest, RegisterRequest, JoinFamilyRequest, LoginStep1Request, LoginStep1Response, LoginStep2Request } from '../types'
 import type { StoredUser } from '../utils/storage'
 import { getUser, setUser, clearAuth } from '../utils/storage'
 import { configureAuthHttp, getHttp } from './http'
@@ -30,6 +30,16 @@ export const useAuthStore = defineStore('auth', () => {
     showTrustPrompt.value = true
   }
 
+  async function loginStep1(data: LoginStep1Request): Promise<LoginStep1Response> {
+    const res = await getHttp().post<{ data: LoginStep1Response }>('/auth/login/step1', data)
+    return res.data.data
+  }
+
+  async function loginStep2(data: LoginStep2Request): Promise<void> {
+    await getHttp().post('/auth/login/step2', data)
+    await fetchMe()
+    showTrustPrompt.value = true
+  }
   async function register(data: RegisterRequest) {
     await getHttp().post('/auth/register', data)
     await fetchMe()
@@ -72,5 +82,5 @@ export const useAuthStore = defineStore('auth', () => {
     showTrustPrompt.value = false
   }
 
-  return { user, showTrustPrompt, login, register, joinFamily, fetchMe, logout, trustDevice, dismissTrustPrompt }
+  return { user, showTrustPrompt, login, loginStep1, loginStep2, register, joinFamily, fetchMe, logout, trustDevice, dismissTrustPrompt }
 })

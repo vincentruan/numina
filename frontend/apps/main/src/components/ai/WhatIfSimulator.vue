@@ -214,6 +214,7 @@ function renderChart(data: WhatIfResponse) {
 }
 .add-btn {
   margin: 8px 16px;
+  width: calc(100% - 32px);
 }
 .params {
   margin-top: 12px;

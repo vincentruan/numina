@@ -40,6 +40,7 @@ src/
 
 ## Key Invariants
 
+- **i18n required for all UI strings** — every user-facing string (toasts, dialogs, labels, status text) must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings in `.vue` templates or `.ts` logic — not even in ternary expressions like `condition ? '已完成' : '待审批'`. Move all status labels to i18n keys.
 - **Emoji convention** — All user-facing toast messages, confirmation dialogs, and error messages MUST include an emoji prefix via i18n keys. Never hard-code strings directly in Vue files. See Patterns section.
 - **Vant components are auto-imported** via `unplugin-vue-components`. Do not manually import them.
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly.

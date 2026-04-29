@@ -6,7 +6,6 @@ from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.user import User
 from app.schemas.children import (
-    ChildBindTokenResponse,
     ChildResponse,
     CreateChildRequest,
     UpdateChildRequest,
@@ -85,19 +84,3 @@ def force_logout_child(
     _require_owner(user)
     children_service.force_logout_child(db, child_id, user.family_id)
     return {"message": "已强制退出"}
-
-
-@router.post(
-    "/child-bind-token", response_model=ChildBindTokenResponse, status_code=201
-)
-def create_bind_token(
-    db: Session = Depends(get_db),
-    user: User = Depends(require_adult),
-):
-    _require_owner(user)
-    bind_token = children_service.create_bind_token(db, user.family_id)
-    return ChildBindTokenResponse(
-        token=bind_token.token,
-        expires_at=bind_token.expires_at.isoformat(),
-        bind_url=f"/child/bind?token={bind_token.token}",
-    )

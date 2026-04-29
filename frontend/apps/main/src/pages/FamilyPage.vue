@@ -123,9 +123,42 @@
                   <van-icon name="exchange" size="18" />
                   <span>切换视角</span>
                 </button>
+                <button class="action-btn action-btn--danger" @click="onForceLogout(child)">
+                  <van-icon name="revoke" size="18" />
+                  <span>{{ t('family.forceLogout') }}</span>
+                </button>
+                <button class="action-btn action-btn--warn" @click="onUnlockPin(child)">
+                  <van-icon name="lock" size="18" />
+                  <span>{{ t('family.unlockPin') }}</span>
+                </button>
+                <button class="action-btn" @click="openResetPinSheet(child)">
+                  <van-icon name="edit" size="18" />
+                  <span>{{ t('family.resetPin') }}</span>
+                </button>
               </div>
             </div>
           </div>
+          <!-- Add child button -->
+          <van-button
+            v-if="isOwner"
+            block
+            plain
+            type="primary"
+            size="small"
+            style="margin-top: 12px"
+            @click="showAddChildSheet = true"
+          >{{ t('family.addChild') }}</van-button>
+        </div>
+
+        <!-- Add child sheet (also shown when no children yet) -->
+        <div v-if="isOwner && childMembers.length === 0" class="section">
+          <van-button
+            block
+            plain
+            type="primary"
+            size="small"
+            @click="showAddChildSheet = true"
+          >{{ t('family.addChild') }}</van-button>
         </div>
 
         <!-- Manual coin grant bottom sheet -->
@@ -153,6 +186,59 @@
             @click="doGrant"
           >确认赠送</van-button>
         </van-popup>
+
+        <!-- Add child bottom sheet -->
+        <van-popup v-model:show="showAddChildSheet" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('family.addChildTitle') }}</p>
+          <van-field v-model="newChild.display_name" :label="t('family.childNickname')" :placeholder="t('family.childNicknamePlaceholder')" style="margin-top: 8px" />
+          <van-field v-model="newChild.username" :label="t('family.childUsername')" :placeholder="t('family.childUsernamePlaceholder')" style="margin-top: 8px" />
+          <van-field v-model="newChild.password" type="password" :label="t('family.childPassword')" :placeholder="t('family.childPasswordPlaceholder')" style="margin-top: 8px" />
+          <p class="sheet-label">{{ t('family.selectPinEmojis') }}</p>
+          <div class="emoji-picker">
+            <button
+              v-for="emoji in CHILD_EMOJIS"
+              :key="emoji"
+              class="emoji-pick-btn"
+              :class="{ selected: newChild.pin.includes(emoji) }"
+              :disabled="newChild.pin.length >= 4 && !newChild.pin.includes(emoji)"
+              @click="togglePinEmoji(emoji)"
+            >{{ emoji }}</button>
+          </div>
+          <p class="pin-preview">{{ newChild.pin.length ? t('family.pinSelected', { emojis: newChild.pin.join(' ') }) : t('family.pinSelectedEmpty') }}</p>
+          <van-button
+            block
+            type="primary"
+            :loading="addingChild"
+            :disabled="!newChild.display_name || !newChild.username || !newChild.password || newChild.pin.length !== 4"
+            style="margin-top: 16px; border-radius: 12px"
+            @click="doAddChild"
+          >{{ t('family.createAccount') }}</van-button>
+        </van-popup>
+
+        <!-- Reset PIN bottom sheet -->
+        <van-popup v-model:show="showResetPinSheet" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('family.resetPinTitle', { name: resetPinTarget?.display_name }) }}</p>
+          <p class="sheet-label">{{ t('family.selectNewPinEmojis') }}</p>
+          <div class="emoji-picker">
+            <button
+              v-for="emoji in CHILD_EMOJIS"
+              :key="emoji"
+              class="emoji-pick-btn"
+              :class="{ selected: newPin.includes(emoji) }"
+              :disabled="newPin.length >= 4 && !newPin.includes(emoji)"
+              @click="toggleNewPin(emoji)"
+            >{{ emoji }}</button>
+          </div>
+          <p class="pin-preview">{{ newPin.length ? t('family.pinSelected', { emojis: newPin.join(' ') }) : t('family.pinSelectedEmpty') }}</p>
+          <van-button
+            block
+            type="primary"
+            :loading="resettingPin"
+            :disabled="newPin.length !== 4"
+            style="margin-top: 16px; border-radius: 12px"
+            @click="doResetPin"
+          >{{ t('family.confirmResetPin') }}</van-button>
+        </van-popup>
       </template>
 
       <van-loading v-else class="page-loading" />
@@ -173,6 +259,7 @@ import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { adminSwitchToChild } from '@/api/auth'
 import { setUser, clearAuth } from '@/utils/storage'
+import { createChild, resetChildPin, forceLogoutChild, unlockChildPin } from '@/api/children'
 import type { ChildUser } from '@/types'
 
 const { t } = useI18n()
@@ -203,6 +290,19 @@ const adultMembers = computed(() =>
 )
 const currentUserId = computed(() => authStore.user?.id)
 const regenerating = ref(false)
+
+const CHILD_EMOJIS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🦁', '🐯', '🌟', '🌈', '🍎', '🎈']
+
+// Add child sheet
+const showAddChildSheet = ref(false)
+const addingChild = ref(false)
+const newChild = ref({ display_name: '', username: '', password: '', pin: [] as string[] })
+
+// Reset PIN sheet
+const showResetPinSheet = ref(false)
+const resettingPin = ref(false)
+const resetPinTarget = ref<{ id: string; display_name: string } | null>(null)
+const newPin = ref<string[]>([])
 
 function copyInviteCode() {
   const code = familyStore.family?.invite_code
@@ -352,7 +452,86 @@ async function onRefresh() {
   refreshing.value = false
 }
 
-onMounted(async () => {
+function togglePinEmoji(emoji: string) {
+  const idx = newChild.value.pin.indexOf(emoji)
+  if (idx >= 0) {
+    newChild.value.pin.splice(idx, 1)
+  } else if (newChild.value.pin.length < 4) {
+    newChild.value.pin.push(emoji)
+  }
+}
+
+function toggleNewPin(emoji: string) {
+  const idx = newPin.value.indexOf(emoji)
+  if (idx >= 0) {
+    newPin.value.splice(idx, 1)
+  } else if (newPin.value.length < 4) {
+    newPin.value.push(emoji)
+  }
+}
+
+async function doAddChild() {
+  addingChild.value = true
+  try {
+    await createChild({
+      display_name: newChild.value.display_name,
+      username: newChild.value.username,
+      password: newChild.value.password,
+      pin: [...newChild.value.pin],
+    })
+    showToast(t('toast.addSuccess'))
+    showAddChildSheet.value = false
+    newChild.value = { display_name: '', username: '', password: '', pin: [] }
+    await familyStore.fetchFamily()
+  } catch (err: unknown) {
+    const code = (err as { response?: { data?: { code?: string } } }).response?.data?.code
+    const i18nKey = code ? `errors.${code}` : ''
+    showToast({ type: 'fail', message: i18nKey && t(i18nKey) !== i18nKey ? t(i18nKey) : t('toast.operationFailed2') })
+  } finally {
+    addingChild.value = false
+  }
+}
+
+function openResetPinSheet(child: { id: string; display_name: string }) {
+  resetPinTarget.value = child
+  newPin.value = []
+  showResetPinSheet.value = true
+}
+
+async function doResetPin() {
+  if (!resetPinTarget.value || newPin.value.length !== 4) return
+  resettingPin.value = true
+  try {
+    await resetChildPin(resetPinTarget.value.id, [...newPin.value])
+    showToast(t('toast.saveSuccess'))
+    showResetPinSheet.value = false
+  } catch {
+    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+  } finally {
+    resettingPin.value = false
+  }
+}
+
+async function onForceLogout(child: { id: string; display_name: string }) {
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmForceLogout', { name: child.display_name }) })
+  } catch { return }
+  try {
+    await forceLogoutChild(child.id)
+    showToast(t('toast.saveSuccess'))
+  } catch {
+    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+  }
+}
+
+async function onUnlockPin(child: { id: string; display_name: string }) {
+  try {
+    await unlockChildPin(child.id)
+    showToast(t('toast.saveSuccess'))
+  } catch {
+    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+  }
+}
   await familyStore.fetchFamily()
   if (isOwner.value) {
     await loadChildDashboard()
@@ -524,6 +703,54 @@ onMounted(async () => {
   font-weight: 500;
   margin-right: 10px;
 }
+.action-btn--danger {
+  color: #ee0a24;
+}
+
+.action-btn--warn {
+  color: #ff976a;
+}
+
+.sheet-label {
+  font-size: 14px;
+  color: #666;
+  margin: 12px 0 8px;
+}
+
+.emoji-picker {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.emoji-pick-btn {
+  font-size: 24px;
+  padding: 6px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: #f5f5f5;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.emoji-pick-btn.selected {
+  border-color: #1989fa;
+  background: #e8f3ff;
+}
+
+.emoji-pick-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.pin-preview {
+  font-size: 20px;
+  text-align: center;
+  margin: 4px 0 0;
+  letter-spacing: 4px;
+}
+
 .swipe-btn {
   height: 100%;
 }

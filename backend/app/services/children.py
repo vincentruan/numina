@@ -1,15 +1,11 @@
 """Child account management service."""
 
-import secrets
 import unicodedata
-from datetime import UTC, datetime, timedelta
 
 import bcrypt
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.models.child_bind_token import ChildBindToken
-from app.models.family import Family
 from app.models.user import User
 from app.schemas.children import CreateChildRequest, UpdateChildRequest
 
@@ -36,12 +32,18 @@ def create_child(db: Session, family_id: str, req: CreateChildRequest) -> User:
 
         raise AppError(ErrorCode.AUTH_USERNAME_EXISTS)
 
+    try:
+        from app.config import settings
+        rounds = settings.BCRYPT_ROUNDS
+    except (ImportError, AttributeError):
+        rounds = 12
+
     user = User(
         family_id=family_id,
-        username=req.username.lower(),  # 新增：必填
+        username=req.username.lower(),
         display_name=req.display_name,
         avatar_color=req.avatar_color,
-        password_hash=None,
+        password_hash=bcrypt.hashpw(req.password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)).decode("utf-8"),
         role="child",
         pin_hash=_hash_pin(req.pin),
     )
@@ -137,48 +139,3 @@ def force_logout_child(db: Session, child_id: str, family_id: str) -> None:
         )
     child.token_version = (child.token_version or 0) + 1
     db.commit()
-
-
-def create_bind_token(db: Session, family_id: str) -> ChildBindToken:
-    token = ChildBindToken(
-        family_id=family_id,
-        token=secrets.token_urlsafe(32),
-        expires_at=datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=24),
-        used=False,
-    )
-    db.add(token)
-    db.commit()
-    db.refresh(token)
-    return token
-
-
-def get_bind_info(db: Session, token_str: str) -> tuple[Family, list[User]]:
-    bind_token = (
-        db.query(ChildBindToken).filter(ChildBindToken.token == token_str).first()
-    )
-    if not bind_token:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "BINDING_TOKEN_INVALID", "message": "无效的绑定令牌"}
-        )
-    now = datetime.now(UTC).replace(tzinfo=None)
-    if bind_token.expires_at < now:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "BINDING_TOKEN_EXPIRED", "message": "绑定令牌已过期"}
-        )
-    if bind_token.used:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail={"code": "BINDING_TOKEN_USED", "message": "绑定令牌已使用"}
-        )
-    bind_token.used = True
-    db.commit()
-    family = db.query(Family).filter(Family.id == bind_token.family_id).first()
-    children = (
-        db.query(User)
-        .filter(
-            User.family_id == bind_token.family_id,
-            User.role == "child",
-            User.is_active,
-        )
-        .all()
-    )
-    return family, children

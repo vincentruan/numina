@@ -2,28 +2,16 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getUser } from '@numina/auth'
 
 // Guest routes — accessible without child session
-const GUEST_ROUTES = ['/select', '/auth', '/bind']
+const GUEST_ROUTES = ['/auth']
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     // Guest routes (child auth flow)
     {
-      path: '/select',
-      name: 'ChildSelect',
-      component: () => import('@/pages/ChildSelectPage.vue'),
-      meta: { guest: true },
-    },
-    {
       path: '/auth',
       name: 'ChildAuth',
       component: () => import('@/pages/ChildAuthPage.vue'),
-      meta: { guest: true },
-    },
-    {
-      path: '/bind',
-      name: 'ChildBind',
-      component: () => import('@/pages/ChildBindPage.vue'),
       meta: { guest: true },
     },
     // Authenticated child routes
@@ -92,7 +80,7 @@ router.beforeEach((to, _from, next) => {
         next(false)
         return
       }
-      next('/select')
+      next('/auth')
     } else {
       next()
     }

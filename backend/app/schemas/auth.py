@@ -189,3 +189,82 @@ class VerifyParentPasswordRequest(BaseModel):
 
 class ChildRefreshResponse(BaseModel):
     message: str = "token refreshed"
+
+
+# ---------------------------------------------------------------------------
+# Two-step login schemas
+# ---------------------------------------------------------------------------
+
+
+class LoginStep1Request(BaseModel):
+    username: str
+    password: str
+    altcha: str | None = None
+
+    @field_validator("username")
+    @classmethod
+    def check_username(cls, v: str) -> str:
+        return validate_username(v)
+
+
+class LoginStep1Response(BaseModel):
+    temp_token: str | None = None          # present when second_factor_required=True
+    second_factor_required: bool
+    second_factor_type: str | None = None  # 'numeric_pin' | 'emoji_pin' | 'totp'
+    # present when second_factor_required=False (direct login)
+    access_token: str | None = None
+    refresh_token: str | None = None
+    token_type: str = "bearer"
+    # user info for UI display (always present)
+    user_id: int | None = None
+    display_name: str | None = None
+    avatar_color: str | None = None
+
+
+class LoginStep2Request(BaseModel):
+    temp_token: str
+    factor_type: str   # 'numeric_pin' | 'emoji_pin'
+    payload: dict      # e.g. {"pin": "1234"} or {"pin_sequence": ["🐱", ...]}
+
+
+# ---------------------------------------------------------------------------
+# PIN management schemas
+# ---------------------------------------------------------------------------
+
+
+class SetupNumericPinRequest(BaseModel):
+    pin: str
+
+    @field_validator("pin")
+    @classmethod
+    def check_pin(cls, v: str) -> str:
+        from app.constants.pin import NUMERIC_PIN_MAX_LENGTH, NUMERIC_PIN_MIN_LENGTH
+        if not v.isdigit():
+            raise ValueError("数字PIN只能包含数字")
+        if len(v) < NUMERIC_PIN_MIN_LENGTH or len(v) > NUMERIC_PIN_MAX_LENGTH:
+            raise ValueError(f"数字PIN长度必须在{NUMERIC_PIN_MIN_LENGTH}-{NUMERIC_PIN_MAX_LENGTH}位之间")
+        return v
+
+
+class ChangeNumericPinRequest(BaseModel):
+    old_pin: str
+    new_pin: str
+
+    @field_validator("new_pin")
+    @classmethod
+    def check_new_pin(cls, v: str) -> str:
+        from app.constants.pin import NUMERIC_PIN_MAX_LENGTH, NUMERIC_PIN_MIN_LENGTH
+        if not v.isdigit():
+            raise ValueError("数字PIN只能包含数字")
+        if len(v) < NUMERIC_PIN_MIN_LENGTH or len(v) > NUMERIC_PIN_MAX_LENGTH:
+            raise ValueError(f"数字PIN长度必须在{NUMERIC_PIN_MIN_LENGTH}-{NUMERIC_PIN_MAX_LENGTH}位之间")
+        return v
+
+
+class SetChildPasswordRequest(BaseModel):
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        return validate_password_strength(v)

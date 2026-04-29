@@ -1,70 +1,120 @@
 <template>
   <div class="auth-page">
-    <div class="child-avatar" :style="{ backgroundColor: avatarColor }">
-      {{ (displayName ?? '?').charAt(0) }}
-    </div>
-    <p class="child-name">{{ displayName }}</p>
-
-    <!-- WebAuthn mode -->
-    <div v-if="authMode === 'webauthn'" class="webauthn-mode">
-      <p class="instruction">使用面容或指纹解锁</p>
-      <van-button
-        round
-        type="primary"
-        size="large"
-        :loading="loading"
-        @click="attemptWebAuthn"
-      >
-        {{ loading ? '验证中...' : '🔓 解锁' }}
-      </van-button>
-      <van-button plain size="small" class="switch-btn" @click="switchToPin">
-        使用图形密码
-      </van-button>
-    </div>
-
-    <!-- PIN mode -->
-    <div v-else class="pin-mode">
-      <div class="pin-display" :class="{ shake: shaking }">
-        <span
-          v-for="i in 4"
-          :key="i"
-          class="pin-slot"
-          :class="{ filled: pin.length >= i }"
-        ></span>
+    <!-- Step 1: username + password -->
+    <div v-if="step === 1" class="step-container">
+      <div class="auth-header">
+        <div class="app-logo">🌟</div>
+        <h1 class="app-title">Numina</h1>
+        <p class="app-subtitle">儿童登录</p>
       </div>
 
-      <p v-if="childAuthStore.isLocked" class="lock-message">
-        {{ childAuthStore.lockMessage ? t(`errors.${childAuthStore.lockMessage}`) : '' }}
-      </p>
-      <p v-else-if="childAuthStore.loginError" class="error-message">
-        {{ childAuthStore.loginError ? t(`errors.${childAuthStore.loginError}`) : '' }}
-      </p>
+      <van-form class="login-form" @submit="onStep1Submit">
+        <van-cell-group inset>
+          <van-field
+            v-model="form.username"
+            name="username"
+            label="用户名"
+            placeholder="请输入用户名"
+            :rules="[{ required: true, message: '请输入用户名' }]"
+          />
+          <div class="password-field-wrapper">
+            <van-field
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              name="password"
+              label="密码"
+              placeholder="请输入密码"
+              :rules="[{ required: true, message: '请输入密码' }]"
+            >
+              <template #right-icon>
+                <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
+              </template>
+            </van-field>
+          </div>
+        </van-cell-group>
 
-      <div class="emoji-grid">
-        <button
-          v-for="emoji in EMOJIS"
-          :key="emoji"
-          class="emoji-btn"
-          :disabled="childAuthStore.isLocked || pin.length >= 4"
-          @click="addEmoji(emoji)"
+        <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
+
+        <div class="form-actions">
+          <van-button round block type="primary" native-type="submit" :loading="loading">
+            下一步
+          </van-button>
+        </div>
+      </van-form>
+    </div>
+
+    <!-- Step 2: emoji PIN -->
+    <div v-else class="step-container">
+      <div v-if="childInfo.avatarColor" class="child-avatar" :style="{ backgroundColor: childInfo.avatarColor }">
+        {{ (childInfo.displayName ?? '?').charAt(0) }}
+      </div>
+      <p class="child-name">{{ childInfo.displayName }}</p>
+
+      <!-- WebAuthn mode -->
+      <div v-if="authMode === 'webauthn'" class="webauthn-mode">
+        <p class="instruction">使用面容或指纹解锁</p>
+        <van-button
+          round
+          type="primary"
+          size="large"
+          :loading="loading"
+          @click="attemptWebAuthn"
         >
-          {{ emoji }}
-        </button>
+          {{ loading ? '验证中...' : '🔓 解锁' }}
+        </van-button>
+        <van-button plain size="small" class="switch-btn" @click="switchToPin">
+          使用图形密码
+        </van-button>
       </div>
 
-      <div class="pin-actions">
-        <van-button plain style="min-height:56px;min-width:80px" @click="deleteEmoji">删除</van-button>
-        <van-button plain style="min-height:56px;min-width:80px" @click="clearPin">清除</van-button>
+      <!-- PIN mode -->
+      <div v-else class="pin-mode">
+        <div class="pin-display" :class="{ shake: shaking }">
+          <span
+            v-for="i in 4"
+            :key="i"
+            class="pin-slot"
+            :class="{ filled: pin.length >= i }"
+          ></span>
+        </div>
+
+        <p v-if="childAuthStore.isLocked" class="lock-message">
+          {{ childAuthStore.lockMessage ? t(`errors.${childAuthStore.lockMessage}`) : '' }}
+        </p>
+        <p v-else-if="childAuthStore.loginError" class="error-message">
+          {{ childAuthStore.loginError ? t(`errors.${childAuthStore.loginError}`) : '' }}
+        </p>
+
+        <div class="emoji-grid">
+          <button
+            v-for="emoji in EMOJIS"
+            :key="emoji"
+            class="emoji-btn"
+            :disabled="childAuthStore.isLocked || pin.length >= 4"
+            @click="addEmoji(emoji)"
+          >
+            {{ emoji }}
+          </button>
+        </div>
+
+        <div class="pin-actions">
+          <van-button plain style="min-height:56px;min-width:80px" @click="deleteEmoji">删除</van-button>
+          <van-button plain style="min-height:56px;min-width:80px" @click="clearPin">清除</van-button>
+        </div>
+
+        <van-button
+          v-if="webAuthnAvailable"
+          plain
+          size="small"
+          class="switch-btn"
+          @click="switchToWebAuthn"
+        >
+          使用面容/指纹
+        </van-button>
       </div>
 
-      <van-button
-        v-if="webAuthnAvailable"
-        plain
-        size="small"
-        class="switch-btn"
-        @click="switchToWebAuthn"
-      >
-        使用面容/指纹
+      <van-button plain size="small" class="back-btn" @click="backToStep1">
+        返回重新登录
       </van-button>
     </div>
   </div>
@@ -72,11 +122,10 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChildAuthStore } from '@numina/auth'
-import type { ChildUser } from '@/types'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import { getAuthenticationOptions, authenticateWithPasskey } from '@/api/webauthn'
 import { setUser } from '@numina/auth'
@@ -86,55 +135,94 @@ const { t } = useI18n()
 
 const EMOJIS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🦁', '🐯', '🌟', '🌈', '🍎', '🎈']
 
-const route = useRoute()
 const router = useRouter()
 const childAuthStore = useChildAuthStore()
 
-const childId = route.query.childId as string
-const username = route.query.username as string  // 新增：username 方式
-const displayName = route.query.displayName as string
-const avatarColor = route.query.avatarColor as string
+const step = ref<1 | 2>(1)
+const loading = ref(false)
+const showPassword = ref(false)
+const step1Error = ref('')
+const tempToken = ref('')
+const childInfo = ref({ displayName: '', avatarColor: '', childId: '' })
 
 const authMode = ref<'webauthn' | 'pin'>('pin')
-const loading = ref(false)
 const pin = ref<string[]>([])
 const shaking = ref(false)
 const webAuthnAvailable = ref(false)
+const submitting = ref(false)
+
+const form = ref({ username: '', password: '' })
 
 onMounted(async () => {
   const support = checkWebAuthnSupport()
   if (!support.supported) return
-
   webAuthnAvailable.value = true
-
-  // Check if child has a registered passkey by requesting auth options
-  try {
-    await getAuthenticationOptions(childId)
-    // No error means passkey exists — use WebAuthn mode
-    authMode.value = 'webauthn'
-  } catch {
-    // No passkey registered — stay in PIN mode
-  }
 })
+
+async function onStep1Submit() {
+  loading.value = true
+  step1Error.value = ''
+  try {
+    const result = await childAuthStore.childLoginStep1(form.value.username, form.value.password)
+
+    if (result.second_factor_required && result.temp_token) {
+      tempToken.value = result.temp_token
+      // Try to get display info from the response or use username as fallback
+      childInfo.value = {
+        displayName: result.display_name ?? form.value.username,
+        avatarColor: result.avatar_color ?? '#4F46E5',
+        childId: result.user_id ? String(result.user_id) : '',
+      }
+      step.value = 2
+
+      // Check if child has a passkey
+      if (webAuthnAvailable.value && childInfo.value.childId) {
+        try {
+          await getAuthenticationOptions(childInfo.value.childId)
+          authMode.value = 'webauthn'
+        } catch {
+          authMode.value = 'pin'
+        }
+      }
+    } else {
+      showToast(t('toast.loginSuccess'))
+      router.push('/')
+    }
+  } catch (err: unknown) {
+    if (axios.isAxiosError(err) && err.response?.status === 423) {
+      step1Error.value = t('errors.ACCOUNT_LOCKED')
+    } else {
+      const code = axios.isAxiosError(err) ? err.response?.data?.code : undefined
+      const i18nKey = code ? `errors.${code}` : ''
+      if (i18nKey && t(i18nKey) !== i18nKey) {
+        step1Error.value = t(i18nKey)
+      } else {
+        step1Error.value = t('errors.INVALID_CREDENTIALS')
+      }
+    }
+  } finally {
+    loading.value = false
+  }
+}
 
 async function attemptWebAuthn() {
   loading.value = true
   try {
-    const optionsResponse = await getAuthenticationOptions(childId)
+    const optionsResponse = await getAuthenticationOptions(childInfo.value.childId)
     const { options, challenge } = optionsResponse
 
     const credential = await authenticatePasskey(options)
-    await authenticateWithPasskey(childId, credential, challenge)
+    await authenticateWithPasskey(childInfo.value.childId, credential, challenge)
 
     setUser({
-      id: childId,
-      display_name: displayName,
-      avatar_color: avatarColor,
+      id: childInfo.value.childId,
+      display_name: childInfo.value.displayName,
+      avatar_color: childInfo.value.avatarColor,
       role: 'child',
     })
 
     showToast(t('toast.loginSuccess'))
-    router.push('/child/')
+    router.push('/')
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'NotAllowedError') {
       // User cancelled — don't show error
@@ -149,49 +237,43 @@ async function attemptWebAuthn() {
   }
 }
 
-function switchToPin() {
-  authMode.value = 'pin'
-}
-
-function switchToWebAuthn() {
-  authMode.value = 'webauthn'
-}
+function switchToPin() { authMode.value = 'pin' }
+function switchToWebAuthn() { authMode.value = 'webauthn' }
 
 function addEmoji(emoji: string) {
-  if (pin.value.length < 4) {
-    pin.value.push(emoji)
-  }
+  if (pin.value.length < 4) pin.value.push(emoji)
 }
 
-function deleteEmoji() {
-  pin.value.pop()
-}
+function deleteEmoji() { pin.value.pop() }
 
 function clearPin() {
   pin.value = []
   childAuthStore.clearLoginError()
 }
 
+function backToStep1() {
+  step.value = 1
+  pin.value = []
+  tempToken.value = ''
+  step1Error.value = ''
+  childAuthStore.clearLoginError()
+}
+
 watch(
   () => pin.value.length,
   async (len) => {
-    if (len === 4) {
-      const selectedChild: ChildUser = {
-        id: childId,
-        username: username,  // 新增：传递 username
-        display_name: displayName,
-        avatar_color: avatarColor,
-        is_active: true,
-      }
+    if (len === 4 && !submitting.value) {
+      submitting.value = true
       try {
-        await childAuthStore.childLogin(selectedChild, [...pin.value])
-        router.push('/child/')
+        await childAuthStore.childLoginStep2(tempToken.value, [...pin.value])
+        showToast(t('toast.loginSuccess'))
+        router.push('/')
       } catch {
         shaking.value = true
         pin.value = []
-        setTimeout(() => {
-          shaking.value = false
-        }, 600)
+        setTimeout(() => { shaking.value = false }, 600)
+      } finally {
+        submitting.value = false
       }
     }
   },
@@ -204,10 +286,62 @@ watch(
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 40px 16px 24px;
   background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
 }
 
+.step-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding: 40px 16px 24px;
+}
+
+/* Step 1 header */
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.app-logo {
+  font-size: 48px;
+  margin-bottom: 8px;
+}
+
+.app-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: #333;
+  margin: 0;
+}
+
+.app-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.login-form {
+  width: 100%;
+  max-width: 400px;
+}
+
+.form-actions {
+  padding: 24px 16px 0;
+}
+
+.step1-error {
+  color: #e74c3c;
+  font-size: 14px;
+  text-align: center;
+  margin: 8px 16px 0;
+}
+
+.password-field-wrapper :deep(.van-field__right-icon) {
+  cursor: pointer;
+}
+
+/* Step 2 */
 .child-avatar {
   width: 80px;
   height: 80px;
@@ -228,7 +362,6 @@ watch(
   color: #333;
 }
 
-/* WebAuthn mode */
 .webauthn-mode {
   display: flex;
   flex-direction: column;
@@ -242,7 +375,6 @@ watch(
   margin: 0;
 }
 
-/* PIN mode */
 .pin-mode {
   display: flex;
   flex-direction: column;
@@ -277,9 +409,7 @@ watch(
   80% { transform: translateX(6px); }
 }
 
-.shake {
-  animation: shake 0.5s ease;
-}
+.shake { animation: shake 0.5s ease; }
 
 .lock-message,
 .error-message {
@@ -308,9 +438,7 @@ watch(
   transition: transform 0.1s, opacity 0.1s;
 }
 
-.emoji-btn:active {
-  transform: scale(0.92);
-}
+.emoji-btn:active { transform: scale(0.92); }
 
 .emoji-btn:disabled {
   opacity: 0.4;
@@ -322,7 +450,10 @@ watch(
   gap: 16px;
 }
 
-.switch-btn {
-  margin-top: 16px;
+.switch-btn { margin-top: 16px; }
+
+.back-btn {
+  margin-top: 24px;
+  color: #666;
 }
 </style>

@@ -27,7 +27,10 @@ export default {
   errors: {
     PIN_ERROR: '❌ PIN错误，请重试',
     ACCOUNT_LOCKED: '🔒 账号已锁定，请让爸爸妈妈帮你解锁',
+    INVALID_CREDENTIALS: '❌ 用户名或密码错误',
+    AUTH_INVALID_CREDENTIALS: '❌ 用户名或密码错误',
     AUTH_CHILD_NOT_FOUND: '❌ 孩子不存在',
+    AUTH_PIN_LOCKED: '🔒 PIN已锁定，请稍后再试',
     CHILD_NOT_FOUND: '❌ 孩子不存在',
     COIN_INSUFFICIENT: '⚠️ 余额不足',
     WISH_INSUFFICIENT_COINS: '⚠️ 积分不足，无法兑现',
@@ -36,6 +39,7 @@ export default {
   toast: {
     loginSuccess: '✅ 登录成功',
     logoutSuccess: '✅ 已退出',
+    loginFailedGeneric: '❌ 登录失败，请重试',
     noPasskey: '⚠️ 未注册面容/指纹，请使用图形密码',
     verifyFailed: '❌ 验证失败，请重试',
   },

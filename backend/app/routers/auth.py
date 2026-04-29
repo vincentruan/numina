@@ -23,12 +23,14 @@ from app.auth.cookies import (
     set_child_auth_cookies,
 )
 from app.auth.deps import (
+    create_temp_token,
     get_child_refresh_token_from_cookie,
     get_current_child_user,
     get_current_user,
     get_current_user_from_cookie,
     get_refresh_token_from_cookie,
     require_owner,
+    verify_temp_token,
 )
 from app.database import get_db
 from app.errors.codes import ErrorCode
@@ -37,12 +39,18 @@ from app.middleware.rate_limit import _get_real_client_ip
 from app.models.user import User
 from app.schemas.auth import (
     ChangePasswordRequest,
+    ChangeNumericPinRequest,
     ChildPinLoginRequest,
     ChildRefreshResponse,
     JoinFamilyRequest,
     LoginRequest,
+    LoginStep1Request,
+    LoginStep1Response,
+    LoginStep2Request,
     RefreshRequest,
     RegisterRequest,
+    SetChildPasswordRequest,
+    SetupNumericPinRequest,
     TokenResponse,
     UpdateProfileRequest,
     UpdateSettingsRequest,
@@ -472,62 +480,188 @@ def admin_switch_child(
     return tokens
 
 
-@router.get("/child/bind")
-def get_child_bind_info(
-    token: str,
+# ---------------------------------------------------------------------------
+# Two-step login
+# ---------------------------------------------------------------------------
+
+
+@router.post("/login/step1", response_model=LoginStep1Response)
+def login_step1(
+    req: LoginStep1Request,
+    response: Response,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Validate bind token and return family info with children.
+    """Step 1: Verify username + password. Returns temp token if second factor required."""
+    import bcrypt
 
-    Used by independent child devices to get selectable accounts.
-    Token is single-use — marked as used after this call.
-    """
-    from app.schemas.children import ChildResponse
-    from app.services import children as children_service
+    from app.auth.jwt_utils import user_claims
 
-    family, children = children_service.get_bind_info(db, token)
-    return {
-        "family_id": family.id,
-        "family_name": family.name,
-        "children": [ChildResponse.model_validate(c) for c in children],
-    }
+    # Find user (adult or child)
+    user = db.query(User).filter(
+        User.username == req.username.lower(),
+        User.is_active.is_(True),
+    ).first()
 
+    # Timing attack protection
+    if not user or not user.password_hash:
+        dummy = auth_service._get_dummy_hash()
+        bcrypt.checkpw(b"dummy", dummy.encode("utf-8"))
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-@router.get("/child/family/{family_id}/children")
-def get_family_children(
-    family_id: str,
-    bind_token: str,
-    db: Session = Depends(get_db),
-):
-    """Return active children for a family — requires a valid bind token.
+    if not bcrypt.checkpw(req.password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    The bind_token must belong to the requested family_id and must not be
-    expired. It may be used or unused (account-picker is called after binding).
-    Only non-sensitive display fields are exposed via ChildResponse.
-    Fields NOT exposed: pin_hash, pin_fail_count, pin_locked_until, token_version.
-    """
-    from datetime import UTC, datetime
-
-    from app.models.child_bind_token import ChildBindToken
-    from app.schemas.children import ChildResponse
-
-    token_record = (
-        db.query(ChildBindToken)
-        .filter(
-            ChildBindToken.token == bind_token,
-            ChildBindToken.family_id == family_id,
+    # If no second factor configured, issue tokens directly
+    if not user.second_factor_enabled or not user.second_factor_type:
+        from app.auth.deps import create_access_token, create_refresh_token
+        access_token = create_access_token(user_claims(user))
+        refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
+        if user.role == "child":
+            set_child_auth_cookies(response, access_token, refresh_token)
+        else:
+            set_auth_cookies(response, access_token, refresh_token)
+        return LoginStep1Response(
+            second_factor_required=False,
+            access_token=access_token,
+            refresh_token=refresh_token,
+            user_id=user.id,
+            display_name=user.display_name,
+            avatar_color=user.avatar_color,
         )
-        .first()
-    )
-    if not token_record:
-        raise AppError(ErrorCode.AUTH_INVITE_CODE_INVALID)
-    now = datetime.now(UTC).replace(tzinfo=None)
-    if token_record.expires_at < now:
-        raise AppError(ErrorCode.AUTH_INVITE_CODE_INVALID)
 
-    children = (
-        db.query(User)
-        .filter(User.family_id == family_id, User.role == "child", User.is_active)
-        .all()
+    # Issue temp token for step 2
+    temp_token = create_temp_token(user.id, user.role)
+    return LoginStep1Response(
+        temp_token=temp_token,
+        second_factor_required=True,
+        second_factor_type=user.second_factor_type,
+        user_id=user.id,
+        display_name=user.display_name,
+        avatar_color=user.avatar_color,
     )
-    return [ChildResponse.model_validate(c) for c in children]
+
+
+@router.post("/login/step2", response_model=TokenResponse)
+def login_step2(
+    req: LoginStep2Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Step 2: Verify second factor (PIN). Returns full tokens on success."""
+    from app.auth.jwt_utils import user_claims
+    from app.auth.second_factor import get_strategy
+
+    payload = verify_temp_token(req.temp_token)
+    user_id = int(payload["sub"])
+
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+    if not user:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    strategy = get_strategy(req.factor_type)
+    if not strategy.verify(db, user, req.payload):
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    from app.auth.deps import create_access_token, create_refresh_token
+    access_token = create_access_token(user_claims(user))
+    refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
+
+    if user.role == "child":
+        set_child_auth_cookies(response, access_token, refresh_token)
+    else:
+        set_auth_cookies(response, access_token, refresh_token)
+
+    return TokenResponse(access_token=access_token, refresh_token=refresh_token)
+
+
+# ---------------------------------------------------------------------------
+# PIN management
+# ---------------------------------------------------------------------------
+
+
+@router.post("/pin/setup")
+def setup_numeric_pin(
+    req: SetupNumericPinRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Set up numeric PIN for adult second factor."""
+    import bcrypt
+
+    from app.config import settings as app_settings
+
+    rounds = getattr(app_settings, "PIN_BCRYPT_ROUNDS", 10)
+    user_db = db.query(User).filter(User.id == user.id).first()
+    if not user_db:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    user_db.numeric_pin_hash = bcrypt.hashpw(
+        req.pin.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
+    ).decode("utf-8")
+    user_db.second_factor_type = "numeric_pin"
+    user_db.second_factor_enabled = True
+    db.commit()
+    return {"message": "数字PIN设置成功"}
+
+
+@router.post("/pin/change")
+def change_numeric_pin(
+    req: ChangeNumericPinRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Change numeric PIN — requires old PIN verification."""
+    import bcrypt
+
+    from app.auth.second_factor import NumericPinStrategy
+    from app.config import settings as app_settings
+
+    user_db = db.query(User).filter(User.id == user.id).first()
+    if not user_db:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    strategy = NumericPinStrategy()
+    if not strategy.verify(db, user_db, {"pin": req.old_pin}):
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    rounds = getattr(app_settings, "PIN_BCRYPT_ROUNDS", 10)
+    user_db.numeric_pin_hash = bcrypt.hashpw(
+        req.new_pin.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
+    ).decode("utf-8")
+    db.commit()
+    return {"message": "数字PIN修改成功"}
+
+
+@router.post("/child/{child_id}/password")
+def set_child_password(
+    child_id: int,
+    req: SetChildPasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Set or change a child's password. Allowed for family members (parents) or the child themselves."""
+    import bcrypt
+
+    from app.config import settings as app_settings
+
+    child = db.query(User).filter(
+        User.id == child_id,
+        User.role == "child",
+        User.is_active.is_(True),
+    ).first()
+    if not child:
+        raise AppError(ErrorCode.AUTH_CHILD_NOT_FOUND)
+
+    # Permission: same family + (parent role or child themselves)
+    if child.family_id != user.family_id:
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+    if user.role == "child" and user.id != child_id:
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+
+    rounds = getattr(app_settings, "BCRYPT_ROUNDS", 12)
+    child.password_hash = bcrypt.hashpw(
+        req.new_password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
+    ).decode("utf-8")
+    db.commit()
+    return {"message": "儿童密码设置成功"}

@@ -38,6 +38,7 @@ def _create_child(client, headers, display_name="WebAuthn Child", username="weba
         json={
             "username": username,
             "display_name": display_name,
+            "password": "ChildPass1",
             "pin": ["🐱", "🐶", "🐸", "🦊"],
         },
         headers=headers,

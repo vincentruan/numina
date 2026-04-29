@@ -10,18 +10,21 @@ export type {
   LoginRequest,
   RegisterRequest,
   JoinFamilyRequest,
-  ChildBindInfo,
-  ChildPinLoginRequest,
+  LoginStep1Request,
+  LoginStep1Response,
+  LoginStep2Request,
 } from './types'
 
 // Storage utils (shared between apps)
 export type { StoredUser } from './utils/storage'
 export {
   getUser, setUser, removeUser, clearAuth,
-  getChildFamilyId, setChildFamilyId, clearChildFamilyId,
 } from './utils/storage'
+
+// Device fingerprint
+export { getDeviceFingerprint } from './utils/fingerprint'
 
 // Stores
 export { useAuthStore } from './stores/auth'
 export { useChildAuthStore, CHILD_AUTH_ERROR } from './stores/childAuth'
-export type { ChildAuthErrorCode } from './stores/childAuth'
+export type { ChildAuthErrorCode, ChildLoginStep1Result } from './stores/childAuth'

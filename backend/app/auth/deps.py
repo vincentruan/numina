@@ -496,3 +496,36 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
     if user.role != "owner":
         raise AppError(ErrorCode.AUTH_OWNER_ONLY)
     return user
+
+
+# ---------------------------------------------------------------------------
+# Temporary token for two-step login
+# ---------------------------------------------------------------------------
+
+_TEMP_TOKEN_EXPIRE_MINUTES = 5
+
+
+def create_temp_token(user_id: int, role: str) -> str:
+    """Create a short-lived token for the second step of two-step login."""
+    to_encode = {
+        "sub": str(user_id),
+        "role": role,
+        "type": "temp",
+        "exp": datetime.utcnow() + timedelta(minutes=_TEMP_TOKEN_EXPIRE_MINUTES),
+        "jti": str(uuid4()),
+    }
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
+
+
+def verify_temp_token(temp_token: str) -> dict:
+    """Verify a temporary login token and return its payload.
+
+    Raises HTTPException 401 if invalid or expired.
+    """
+    try:
+        payload = jwt.decode(temp_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "temp":
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的临时令牌")
+        return payload
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="临时令牌已过期或无效")

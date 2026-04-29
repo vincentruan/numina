@@ -12,6 +12,7 @@ def child_user(client, auth_headers):
     # Create child via parent
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "password": "ChildPass1",
         "username": "xiaoming3",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
@@ -321,6 +322,7 @@ def test_child_cannot_view_other_childs_ledger(client, auth_headers, child_user)
     # Create second child
     resp2 = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小红",
+        "password": "ChildPass1",
         "username": "xiaohong3",
         "avatar_color": "#FF0000",
         "pin": ["🌈", "🐸", "🍎", "🦊"],
@@ -526,6 +528,7 @@ def test_cross_family_child_cannot_complete_chore(client, auth_headers, child_us
     # Create a child in family B
     child_b_resp = client.post("/api/v1/family/children", headers=second_user_headers, json={
         "display_name": "家庭B孩子",
+        "password": "ChildPass1",
         "username": "familybchild",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],

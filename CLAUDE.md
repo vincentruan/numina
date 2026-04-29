@@ -77,7 +77,8 @@ Applies to every router with root-path endpoints. Frontend calls must also omit 
 
 These apply to all modules. Module-specific conventions live in each module's `CLAUDE.md`.
 
-- **UI text in Chinese** — all user-facing messages (toasts, dialogs, labels) must be in Chinese. Frontend owns the emoji convention — see `frontend/CLAUDE.md`.
+- **i18n required for all UI strings** — every user-facing string (toasts, dialogs, labels, status text) must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings directly in `.vue` files or `.ts` logic — not even in template ternaries. Applies to both `frontend/apps/main` and `frontend/apps/child`.
+- **Emoji convention** — all toast/error strings must include an emoji prefix. See `frontend/apps/main/CLAUDE.md` for the full table.
 - **Error messages in Chinese** — backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
@@ -91,7 +92,8 @@ For module-specific dev commands, conventions, and patterns:
 | Module | CLAUDE.md | README |
 |--------|-----------|--------|
 | Backend | [`backend/CLAUDE.md`](./backend/CLAUDE.md) | [`backend/README.md`](./backend/README.md) |
-| Frontend | [`frontend/CLAUDE.md`](./frontend/CLAUDE.md) | [`frontend/README.md`](./frontend/README.md) |
+| Frontend (main) | [`frontend/apps/main/CLAUDE.md`](./frontend/apps/main/CLAUDE.md) | [`frontend/README.md`](./frontend/README.md) |
+| Frontend (child) | [`frontend/apps/child/CLAUDE.md`](./frontend/apps/child/CLAUDE.md) | — |
 | Agent | [`agent/CLAUDE.md`](./agent/CLAUDE.md) | [`agent/README.md`](./agent/README.md) |
 | Site | [`site/CLAUDE.md`](./site/CLAUDE.md) | — |
 

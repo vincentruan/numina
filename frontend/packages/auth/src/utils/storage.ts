@@ -47,17 +47,3 @@ export function removeUser(): void {
 export function clearAuth(): void {
   removeUser()
 }
-
-const CHILD_FAMILY_ID_KEY = 'numina_child_family_id'
-
-export function getChildFamilyId(): string | null {
-  return localStorage.getItem(CHILD_FAMILY_ID_KEY)
-}
-
-export function setChildFamilyId(familyId: string): void {
-  localStorage.setItem(CHILD_FAMILY_ID_KEY, familyId)
-}
-
-export function clearChildFamilyId(): void {
-  localStorage.removeItem(CHILD_FAMILY_ID_KEY)
-}

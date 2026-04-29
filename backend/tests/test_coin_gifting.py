@@ -8,6 +8,7 @@ def child_a(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "username": "xiaoming",
         "display_name": "小明",
+        "password": "ChildPass1",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -28,6 +29,7 @@ def child_b(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "username": "xiaohong",
         "display_name": "小红",
+        "password": "ChildPass1",
         "avatar_color": "#33AAFF",
         "pin": ["🌈", "🍎", "🐸", "🦁"],
     })
@@ -133,6 +135,7 @@ def test_gift_cross_family_fails(client, auth_headers, second_user_headers, chil
     resp = client.post("/api/v1/family/children", headers=second_user_headers, json={
         "username": "otherchild",
         "display_name": "外家孩子",
+        "password": "ChildPass1",
         "avatar_color": "#AABBCC",
         "pin": ["🐸", "🦊", "🐼", "🐨"],
     })

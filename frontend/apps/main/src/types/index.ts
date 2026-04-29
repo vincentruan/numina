@@ -416,18 +416,6 @@ export interface ChildUser {
   is_active: boolean
 }
 
-export interface ChildBindInfo {
-  family_id: string
-  family_name: string
-  children: ChildUser[]
-}
-
-export interface ChildPinLoginRequest {
-  child_id?: string  // 可选：UUID 方式
-  username?: string  // 新增：username 方式
-  pin_sequence: string[]
-}
-
 // ── Type guards for dynamic field access ──────────────────────────────────────
 
 /**

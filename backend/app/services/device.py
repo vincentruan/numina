@@ -15,6 +15,7 @@ def create_device_session(
     family_id: int,
     refresh_jti: str,
     device_name: str,
+    browser_fingerprint: str | None = None,
 ) -> DeviceSession:
     """Create a new trusted device session (30-day expiry)."""
     now = datetime.utcnow()
@@ -23,6 +24,7 @@ def create_device_session(
         family_id=family_id,
         refresh_jti=refresh_jti,
         device_name=device_name,
+        browser_fingerprint=browser_fingerprint,
         created_at=now,
         last_seen_at=now,
         expires_at=now + timedelta(days=30),

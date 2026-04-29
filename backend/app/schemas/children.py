@@ -9,8 +9,9 @@ _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
 class CreateChildRequest(BaseModel):
-    username: str  # 新增：必填，全局唯一
+    username: str  # 必填，全局唯一
     display_name: str
+    password: str  # 初始密码，由父母代设
     avatar_color: str = "#4F46E5"
     pin: list[str]  # 4 emojis
 
@@ -24,6 +25,12 @@ class CreateChildRequest(BaseModel):
         if not re.match(r"^[a-zA-Z0-9]+$", v):
             raise ValueError("用户名只能包含字母和数字")
         return v.lower()
+
+    @field_validator("password")
+    @classmethod
+    def check_password(cls, v: str) -> str:
+        from app.schemas.auth import validate_password_strength
+        return validate_password_strength(v)
 
     @field_validator("pin")
     @classmethod
@@ -93,13 +100,7 @@ class UpdateChildRequest(BaseModel):
 
 class ChildResponse(SnowflakeBase):
     id: int
-    username: str  # 新增：必填
+    username: str
     display_name: str
     avatar_color: str
     is_active: bool
-
-
-class ChildBindTokenResponse(BaseModel):
-    token: str
-    expires_at: str  # ISO format
-    bind_url: str  # shareable URL

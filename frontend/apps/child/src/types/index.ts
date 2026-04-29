@@ -1,6 +1,6 @@
 // Child app types
 // Shared auth types re-exported from @numina/auth
-export type { User, ChildUser, ChildBindInfo, ChildPinLoginRequest } from '@numina/auth'
+export type { User, ChildUser } from '@numina/auth'
 
 // Family type (used by family store)
 export interface Family {
