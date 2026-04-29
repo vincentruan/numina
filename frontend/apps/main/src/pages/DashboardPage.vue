@@ -140,13 +140,9 @@
     </van-pull-refresh>
 
     <!-- Add Asset FAB -->
-    <van-floating-bubble
-      v-if="!selectionMode"
-      icon="plus"
-      aria-label="添加资产"
-      :offset="{ x: -16, y: -72 }"
-      @click="$router.push('/assets/new')"
-    />
+    <div v-if="!selectionMode" class="fab" aria-label="添加资产" @click="$router.push('/assets/new')">
+      <van-icon name="plus" size="22" />
+    </div>
 
     <!-- More Actions Sheet -->
     <van-action-sheet
@@ -622,6 +618,35 @@ onUnmounted(() => {
 /* Filter Popup */
 .bottom-spacer {
   height: 80px;
+}
+
+/* FAB */
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--van-primary-color);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.45);
+  z-index: 10;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 8px rgba(25, 137, 250, 0.4);
+}
+
+[data-theme='dark'] .fab {
+  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.6);
 }
 
 .quick-stats-section {

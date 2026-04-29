@@ -144,11 +144,9 @@
       </van-pull-refresh>
     </div>
 
-    <van-floating-bubble
-      icon="plus"
-      :offset="{ x: -16, y: -72 }"
-      @click="$router.push('/wishes/new')"
-    />
+    <div class="fab" aria-label="添加心愿" @click="$router.push('/wishes/new')">
+      <van-icon name="plus" size="22" />
+    </div>
   </div>
 </template>
 
@@ -518,5 +516,34 @@ onMounted(loadWishes)
   width: 14px;
   height: 14px;
   flex-shrink: 0;
+}
+
+/* FAB */
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--van-primary-color);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.45);
+  z-index: 10;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 8px rgba(25, 137, 250, 0.4);
+}
+
+[data-theme='dark'] .fab {
+  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.6);
 }
 </style>
