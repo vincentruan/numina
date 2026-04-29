@@ -32,32 +32,34 @@ test.describe('child navigation guards', () => {
   })
 
   test.describe('adult session blocked from child routes', () => {
-    test('adult → /child redirects to /', async ({ page }) => {
+    test('adult → /child redirects to /child/select', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child')
-      await expect(page).toHaveURL(/localhost\/$|localhost\/\?|dashboard/, { timeout: 8_000 })
+      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
     })
 
-    test('adult → /child/tasks redirects to /', async ({ page }) => {
+    test('adult → /child/tasks redirects to /child/select', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child/tasks')
-      await expect(page).toHaveURL(/localhost\/$|localhost\/\?|dashboard/, { timeout: 8_000 })
+      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
     })
   })
 
   test.describe('unauthenticated access to child routes', () => {
-    test('unauthenticated → /child redirects to /login', async ({ page }) => {
+    test('unauthenticated → /child redirects to /child/select', async ({ page }) => {
       await page.goto('/')
       await page.evaluate(() => localStorage.removeItem('numina_user'))
+      await page.context().clearCookies()
       await page.goto('/child')
-      await expect(page).toHaveURL(/\/login/, { timeout: 8_000 })
+      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
     })
 
-    test('unauthenticated → /child/tasks redirects to /login', async ({ page }) => {
+    test('unauthenticated → /child/tasks redirects to /child/select', async ({ page }) => {
       await page.goto('/')
       await page.evaluate(() => localStorage.removeItem('numina_user'))
+      await page.context().clearCookies()
       await page.goto('/child/tasks')
-      await expect(page).toHaveURL(/\/login/, { timeout: 8_000 })
+      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
     })
   })
 })

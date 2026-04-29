@@ -13,7 +13,7 @@ const fs = require('fs')
 const path = require('path')
 const http = require('http')
 
-const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:8000'
+const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost'
 const SNAPSHOT_PATH = path.resolve(__dirname, '../fixtures/openapi.snapshot.json')
 
 function fetchJson(url) {

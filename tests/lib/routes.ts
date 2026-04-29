@@ -41,18 +41,29 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'CategoryManage', path: '/settings/categories' },
   { name: 'TagManage', path: '/settings/tags' },
   { name: 'AIConfig', path: '/settings/ai' },
+  { name: 'ImportReport', path: '/settings/import-report' },
   { name: 'AIReport', path: '/ai/report' },
   { name: 'AIAlerts', path: '/ai/alerts' },
   { name: 'AIDisposal', path: '/ai/disposal' },
   { name: 'AILiability', path: '/ai/liability' },
   { name: 'AIChat', path: '/ai/chat' },
   { name: 'AIAllocation', path: '/ai/allocation' },
+  { name: 'AITimeMachine', path: '/ai/time-machine' },
   { name: 'AIHub', path: '/ai' },
   { name: 'DataStats', path: '/stats' },
   // Family — chore & wish management
   { name: 'ChoreApprovals', path: '/chore-approvals' },
   { name: 'WishReview', path: '/wish-review' },
-  // Child routes (authenticated via child session)
+  { name: 'BabyDayDetail', path: '/baby/calendar/day' },
+]
+
+/**
+ * Child SPA routes — served by the child frontend SPA at /child/.
+ * These routes are NOT guarded by the adult auth router.
+ * Unauthenticated access redirects to /child/select (child auth page),
+ * not to /login. Adult sessions are also redirected to /child/select.
+ */
+export const CHILD_SPA_ROUTES: RouteEntry[] = [
   { name: 'ChildHome', path: '/child' },
   { name: 'ChildWishes', path: '/child/wishes' },
   { name: 'ChildTasks', path: '/child/tasks' },
@@ -60,7 +71,6 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'ChildTreasures', path: '/child/treasures' },
   { name: 'ChildBlindBox', path: '/child/blind-box' },
   { name: 'ChildDayDetail', path: '/child/calendar/day' },
-  { name: 'BabyDayDetail', path: '/baby/calendar/day' },
 ]
 
 /** Routes accessible only to guests. Authenticated access → redirect to / */

@@ -18,6 +18,6 @@ export interface Milestone {
 }
 
 export async function getMyMilestones(): Promise<Milestone[]> {
-  const res = await http.get<Milestone[]>('/child/milestones')
-  return res.data
+  const res = await http.get<{ data: Milestone[] }>('/child/milestones')
+  return res.data.data ?? []
 }
