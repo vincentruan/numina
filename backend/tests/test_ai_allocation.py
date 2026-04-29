@@ -3,15 +3,12 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.ai_allocation_target import AIAllocationTarget
-from app.models.family import Family
 
 
 def _enable_ai(db, auth_headers, client):
     """Enable AI for the test user's family and set as owner."""
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     family_id = me["data"]["family_id"]
-    family = db.query(Family).filter_by(id=family_id).first()
-    family.ai_enabled = True
     from app.models.ai_provider_config import AIProviderConfig
     from app.models.user import User
     user = db.query(User).filter_by(id=me["data"]["id"]).first()
@@ -229,13 +226,7 @@ def test_check_drift_calls_agent_with_target(client, auth_headers, db):
 
 def test_check_drift_requires_ai_enabled(client, auth_headers, db):
     """GET /ai/allocation-target/check returns 403 if AI not enabled."""
-    # Don't enable AI
-    me = client.get("/api/v1/auth/me", headers=auth_headers).json()
-    family_id = me["data"]["family_id"]
-    family = db.query(Family).filter_by(id=family_id).first()
-    family.ai_enabled = False
-    db.commit()
-
+    # Don't enable AI — no AIProviderConfig exists for this family
     resp = client.get("/api/v1/ai/allocation-target/check", headers=auth_headers)
     assert resp.status_code == 403
 
@@ -283,8 +274,6 @@ def test_cross_family_target_isolation(client, auth_headers, second_user_headers
     # Enable second user
     me2 = client.get("/api/v1/auth/me", headers=second_user_headers).json()
     family_b_id = me2["data"]["family_id"]
-    family_b = db.query(Family).filter_by(id=family_b_id).first()
-    family_b.ai_enabled = True
     from app.models.ai_provider_config import AIProviderConfig as APC2
     db.add(APC2(
         family_id=family_b_id,
@@ -318,8 +307,6 @@ def test_cross_family_cannot_modify_target(client, auth_headers, second_user_hea
     # Enable second user as owner
     me2 = client.get("/api/v1/auth/me", headers=second_user_headers).json()
     family_b_id = me2["data"]["family_id"]
-    family_b = db.query(Family).filter_by(id=family_b_id).first()
-    family_b.ai_enabled = True
     from app.models.ai_provider_config import AIProviderConfig as APC3
     from app.models.user import User
     user2 = db.query(User).filter_by(id=me2["data"]["id"]).first()

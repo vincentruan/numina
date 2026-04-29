@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -70,7 +70,6 @@ def _to_parent_response(wish: ChildWish, child_display_name: str, db: Session | 
         priority=wish.priority,
         status=wish.status,
         star_coin_cost=wish.star_coin_cost,
-        star_coin_cost_history=wish.star_coin_cost_history,
         rejection_reason=wish.rejection_reason,
         realized_asset_id=wish.realized_asset_id,
         created_at=wish.created_at,
@@ -317,14 +316,7 @@ def update_child_wish_cost(
         changed_by_user_id=user.id,
     )
     db.add(history_entry)
-    history = list(wish.star_coin_cost_history or [])
-    history.append({
-        "old": wish.star_coin_cost,
-        "new": req.star_coin_cost,
-        "changed_at": datetime.utcnow().isoformat(),
-    })
     wish.star_coin_cost = req.star_coin_cost
-    wish.star_coin_cost_history = history
     db.commit()
     db.refresh(wish)
     return _to_parent_response(wish, _get_child_name(db, wish.child_user_id), db)

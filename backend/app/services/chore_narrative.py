@@ -2,7 +2,7 @@
 
 Calls the agent service with a 2-second timeout.
 Falls back to a fixed template on timeout or any error.
-Skips AI entirely if family.ai_enabled is False.
+Skips AI entirely if the family has no active AIProviderConfig.
 """
 
 import logging
@@ -23,6 +23,25 @@ def _fallback_narrative(chore_name: str, coins: int, multiplier: float = 1.0) ->
     return f"你完成了{chore_name}！获得 {coins} 颗星", "⭐"
 
 
+def _is_ai_enabled(family: Family) -> bool:
+    """Check if the family has an active AI provider config."""
+    from sqlalchemy.orm import object_session
+    from app.models.ai_provider_config import AIProviderConfig
+
+    db = object_session(family)
+    if db is None:
+        return False
+    return (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.family_id == family.id,
+            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .first()
+    ) is not None
+
+
 async def generate_narrative(
     family: Family,
     child_name: str,
@@ -32,7 +51,7 @@ async def generate_narrative(
     multiplier: float = 1.0,
 ) -> tuple[str, str]:
     """Return (narrative_text, emoji). Never raises — falls back to fixed template."""
-    if not family.ai_enabled:
+    if not _is_ai_enabled(family):
         return _fallback_narrative(chore_name, coins, multiplier)
 
     bonus_hint = ""

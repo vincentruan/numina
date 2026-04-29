@@ -1,6 +1,5 @@
 # backend/app/services/notification/dispatcher.py
 import asyncio
-import json
 import logging
 from datetime import date, datetime, timedelta
 
@@ -211,21 +210,19 @@ def _check_allocation_drift_all(db: Session) -> None:
 
 
 def _get_channel_config(db: Session, channel: NotificationChannel) -> dict:
-    """Read channel config from NotificationChannelConfig table, fall back to channel.config."""
+    """Read channel config from NotificationChannelConfig table."""
     rows = db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).all()
-    if rows:
-        result = {}
-        for row in rows:
-            try:
-                decrypted = decrypt_config(row.value_encrypted)
-                if decrypted and isinstance(decrypted, dict):
-                    result.update(decrypted)
-                else:
-                    result[row.key] = row.value_encrypted
-            except Exception:
+    result = {}
+    for row in rows:
+        try:
+            decrypted = decrypt_config(row.value_encrypted)
+            if decrypted and isinstance(decrypted, dict):
+                result.update(decrypted)
+            else:
                 result[row.key] = row.value_encrypted
-        return result
-    return decrypt_config(channel.config) or {}
+        except Exception:
+            result[row.key] = row.value_encrypted
+    return result
 
 
 def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict) -> None:
@@ -240,9 +237,14 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
         )
         .all()
     )
-    notified: list[int] = json.loads(reminder.notified_channels)
+    already_sent = {
+        rn.channel_id
+        for rn in db.query(ReminderNotification).filter_by(
+            reminder_id=reminder.id, status="sent"
+        ).all()
+    }
     for channel in channels:
-        if channel.id in notified:
+        if channel.id in already_sent:
             continue
         config = _get_channel_config(db, channel)
         if channel.channel_type == "telegram":
@@ -274,9 +276,6 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
                 status="sent" if success else "failed",
             )
             db.add(rn)
-            if success:
-                notified.append(channel.id)
-    reminder.notified_channels = json.dumps(notified)
     db.commit()
 
 
@@ -293,18 +292,12 @@ async def _send_telegram_async(
         chat_id=config.get("chat_id", ""),
         text=text,
     )
-    # Write ReminderNotification with the actual send result.
     rn = ReminderNotification(
         reminder_id=reminder.id,
         channel_id=channel.id,
         status="sent" if success else "failed",
     )
     db.add(rn)
-    if success:
-        notified = json.loads(reminder.notified_channels)
-        if channel.id not in notified:
-            notified.append(channel.id)
-            reminder.notified_channels = json.dumps(notified)
     db.commit()
 
 

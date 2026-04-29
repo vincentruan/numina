@@ -176,10 +176,6 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
         raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
 
     asset.status = 'sold'
-    asset.sell_price = req.sell_price
-    asset.sell_fee = req.sell_fee
-    asset.sell_channel = req.sell_channel
-    asset.sell_date = date.today()
     if req.notes:
         asset.notes = req.notes
 
@@ -223,7 +219,6 @@ def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
     if asset.status == 'sold':
         raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
     asset.status = 'retired'
-    asset.retire_date = date.today()
 
     event = AssetLifecycleEvent(
         asset_id=asset.id,
@@ -242,7 +237,6 @@ def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
     if asset.status not in ('retired', 'idle'):
         raise AppError(ErrorCode.ASSET_FORBIDDEN)
     asset.status = 'in_use'
-    asset.retire_date = None
     db.commit()
     db.refresh(asset)
     return asset

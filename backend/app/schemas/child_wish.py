@@ -127,7 +127,6 @@ class ParentWishResponse(SnowflakeBase):
     priority: str
     status: str
     star_coin_cost: int | None
-    star_coin_cost_history: list | None
     rejection_reason: str | None
     realized_asset_id: int | None
     created_at: datetime

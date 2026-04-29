@@ -145,9 +145,17 @@ async def report_ws(
         return
 
     # Check AI enabled
-    from app.models.family import Family
-    family = db.query(Family).filter(Family.id == user.family_id).first()
-    if not family or not family.ai_enabled:
+    from app.models.ai_provider_config import AIProviderConfig
+    active_config = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.family_id == user.family_id,
+            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .first()
+    )
+    if not active_config:
         await websocket.send_json({"type": "error", "message": "AI 功能未启用"})
         await websocket.close(code=4003)
         return
