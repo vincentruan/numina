@@ -5,25 +5,25 @@
       <div v-if="stats" class="hero-banner">
         <div class="hero-balance">
           <span class="hero-balance-num">{{ stats.balance }}</span>
-          <span class="hero-balance-unit">⭐ 星星币</span>
+          <span class="hero-balance-unit">{{ t('wishes.starUnit') }}</span>
         </div>
         <div class="hero-divider" />
         <div class="hero-stat">
           <span class="hero-stat-num">{{ stats.active_wish_count }}</span>
-          <span class="hero-stat-label">进行中</span>
+          <span class="hero-stat-label">{{ t('wishes.activeCount') }}</span>
         </div>
         <div class="hero-divider" />
         <div class="hero-stat">
           <span class="hero-stat-num">{{ totalWishes }}</span>
-          <span class="hero-stat-label">全部心愿</span>
+          <span class="hero-stat-label">{{ t('wishes.allWishes') }}</span>
         </div>
       </div>
 
-      <div v-if="loading && !refreshing" class="loading">加载中...</div>
+      <div v-if="loading && !refreshing" class="loading">{{ t('common.loading') }}</div>
 
       <!-- Active wishes -->
       <div v-if="!loading && activeWishes.length > 0" class="section">
-        <p class="section-title">✨ 进行中</p>
+        <p class="section-title">{{ t('wishes.sectionActive') }}</p>
         <div v-for="wish in activeWishes" :key="wish.id" class="wish-card wish-card--active">
           <!-- Top row: emoji + name + priority -->
           <div class="wish-header">
@@ -54,14 +54,14 @@
                 {{ Math.min(Math.round((wish.progress ?? 0) * 100), 100) }}%
               </span>
               <span v-if="(wish.progress ?? 0) >= 1" class="progress-hint hint-full">
-                积分已够！快让爸妈实现吧 🎉
+                {{ t('wishes.progressFull') }}
               </span>
               <span v-else-if="daysToWish(wish.id) !== null" class="progress-hint hint-days">
-                再做约 {{ daysToWish(wish.id) }} 天家务 🎯
+                {{ t('wishes.progressDays', { days: daysToWish(wish.id) }) }}
               </span>
             </div>
           </div>
-          <div v-else class="progress-pending">⏳ 等待爸妈设定目标</div>
+          <div v-else class="progress-pending">{{ t('wishes.waitingGoal') }}</div>
 
           <!-- Redeem button -->
           <button
@@ -70,55 +70,55 @@
             :disabled="actioningId === wish.id"
             @click="redeem(wish.id)"
           >
-            🎉 让爸妈实现！
+            {{ t('wishes.redeemBtn') }}
           </button>
         </div>
       </div>
 
       <!-- Redemption requested -->
       <div v-if="!loading && redemptionWishes.length > 0" class="section">
-        <p class="section-title">🎁 兑现申请中</p>
+        <p class="section-title">{{ t('wishes.sectionRedemption') }}</p>
         <div v-for="wish in redemptionWishes" :key="wish.id" class="wish-card wish-card--redemption">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
-            <span class="status-badge status-redemption">等待爸妈兑现 🎁</span>
+            <span class="status-badge status-redemption">{{ t('wishes.waitingRedemption') }}</span>
           </div>
         </div>
       </div>
 
       <!-- Pending review -->
       <div v-if="!loading && pendingWishes.length > 0" class="section">
-        <p class="section-title">⏳ 审核中</p>
+        <p class="section-title">{{ t('wishes.sectionPending') }}</p>
         <div v-for="wish in pendingWishes" :key="wish.id" class="wish-card wish-card--pending">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
-            <span class="status-badge status-pending">等待爸妈审核 ⏳</span>
+            <span class="status-badge status-pending">{{ t('wishes.waitingReview') }}</span>
           </div>
         </div>
       </div>
 
       <!-- Realized -->
       <div v-if="!loading && realizedWishes.length > 0" class="section">
-        <p class="section-title">🎊 已实现</p>
+        <p class="section-title">{{ t('wishes.sectionRealized') }}</p>
         <div v-for="wish in realizedWishes" :key="wish.id" class="wish-card wish-card--realized">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
-            <span class="status-badge status-realized">已实现 ✅</span>
+            <span class="status-badge status-realized">{{ t('wishes.realized') }}</span>
           </div>
         </div>
       </div>
 
       <!-- Rejected -->
       <div v-if="!loading && rejectedWishes.length > 0" class="section">
-        <p class="section-title">❌ 未通过</p>
+        <p class="section-title">{{ t('wishes.sectionRejected') }}</p>
         <div v-for="wish in rejectedWishes" :key="wish.id" class="wish-card wish-card--rejected">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
-            <span class="status-badge status-rejected">未通过 ❌</span>
+            <span class="status-badge status-rejected">{{ t('wishes.rejected') }}</span>
             <p v-if="wish.rejection_reason" class="rejection-reason">{{ wish.rejection_reason }}</p>
           </div>
         </div>
@@ -127,8 +127,8 @@
       <!-- Empty state -->
       <div v-if="!loading && totalWishes === 0" class="empty-state">
         <p class="empty-icon">🌠</p>
-        <p class="empty-text">还没有心愿，快许个愿吧！</p>
-        <button class="btn-create-inline" @click="showCreate = true">+ 许个愿</button>
+        <p class="empty-text">{{ t('wishes.emptyText') }}</p>
+        <button class="btn-create-inline" @click="showCreate = true">{{ t('wishes.createBtn') }}</button>
       </div>
     </van-pull-refresh>
 
@@ -139,27 +139,27 @@
 
     <!-- Create wish bottom sheet -->
     <van-popup v-model:show="showCreate" position="bottom" round style="padding: 24px 16px 40px">
-      <p class="sheet-title">🌟 许个愿</p>
+      <p class="sheet-title">{{ t('wishes.sheetTitle') }}</p>
       <van-field
         v-model="form.name"
-        label="心愿名称"
-        placeholder="最多50字"
+        :label="t('wishes.wishNameLabel')"
+        :placeholder="t('wishes.wishNamePlaceholder')"
         maxlength="50"
         show-word-limit
         style="margin-bottom: 8px; border-radius: 8px; background: #f9f9f9"
       />
       <van-field
         v-model="form.emoji"
-        label="表情"
-        placeholder="可选，如 🎮 🚲"
+        :label="t('wishes.emojiLabel')"
+        :placeholder="t('wishes.emojiPlaceholder')"
         maxlength="4"
         style="margin-bottom: 8px; border-radius: 8px; background: #f9f9f9"
       />
       <van-field
         v-model="form.description"
-        label="描述"
+        :label="t('wishes.descLabel')"
         type="textarea"
-        placeholder="可选，最多200字"
+        :placeholder="t('wishes.descPlaceholder')"
         maxlength="200"
         show-word-limit
         rows="2"
@@ -167,7 +167,7 @@
         style="margin-bottom: 12px; border-radius: 8px; background: #f9f9f9"
       />
       <div class="priority-row">
-        <span class="priority-label">优先级</span>
+        <span class="priority-label">{{ t('wishes.priorityLabel') }}</span>
         <div class="priority-chips">
           <button
             v-for="p in priorities"
@@ -185,18 +185,21 @@
         :disabled="!form.name.trim()"
         style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
         @click="createWish"
-      >提交心愿</van-button>
+      >{{ t('wishes.submitBtn') }}</van-button>
     </van-popup>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   listChildWishes, getChildWishStats, createChildWish, requestRedemption,
   type ChildWishList, type ChildWishStats
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
+
+const { t } = useI18n()
 
 const wishList = ref<ChildWishList | null>(null)
 const stats = ref<ChildWishStats | null>(null)
@@ -209,11 +212,11 @@ const showCreate = ref(false)
 const creating = ref(false)
 const form = ref({ name: '', emoji: '', description: '', priority: 'medium' as 'high' | 'medium' | 'low' })
 
-const priorities = [
-  { value: 'high' as const, label: '高 🔥' },
-  { value: 'medium' as const, label: '中 ⭐' },
-  { value: 'low' as const, label: '低 💤' },
-]
+const priorities = computed(() => [
+  { value: 'high' as const, label: t('wishes.priorityHigh') },
+  { value: 'medium' as const, label: t('wishes.priorityMedium') },
+  { value: 'low' as const, label: t('wishes.priorityLow') },
+])
 
 const activeWishes = computed(() => wishList.value?.active ?? [])
 const pendingWishes = computed(() => wishList.value?.pending_review ?? [])
@@ -268,7 +271,7 @@ function daysToWish(wishId: string): number | null {
 }
 
 function priorityLabel(p: string) {
-  return p === 'high' ? '高优先级 🔥' : p === 'medium' ? '中优先级 ⭐' : '低优先级 💤'
+  return p === 'high' ? t('wishes.priorityLabelHigh') : p === 'medium' ? t('wishes.priorityLabelMedium') : t('wishes.priorityLabelLow')
 }
 
 function jarClass(progress: number) {

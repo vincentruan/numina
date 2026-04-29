@@ -4,12 +4,12 @@
       <span class="date-label">{{ todayLabel }}</span>
     </div>
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-if="error" class="error-msg">{{ error }}</div>
 
     <div v-else-if="!loading && chores.length === 0" class="empty">
-      <p>今天没有家务 🎉</p>
+      <p>{{ t('chore.noChoresTitle') }}</p>
     </div>
 
     <div v-else class="chore-list">
@@ -33,10 +33,10 @@
             class="btn-complete"
             :disabled="submittingId === chore.id"
             @click="complete(chore.id)"
-          >完成</button>
-          <span v-else-if="chore.status === 'pending_approval'" class="status-badge pending">审批中</span>
-          <span v-else-if="chore.status === 'approved'" class="status-badge approved">✅ 已获得</span>
-          <span v-else-if="chore.status === 'rejected'" class="status-badge rejected">❌ 被拒绝</span>
+          >{{ t('chore.complete') }}</button>
+          <span v-else-if="chore.status === 'pending_approval'" class="status-badge pending">{{ t('chore.pendingApproval') }}</span>
+          <span v-else-if="chore.status === 'approved'" class="status-badge approved">{{ t('chore.approved') }}</span>
+          <span v-else-if="chore.status === 'rejected'" class="status-badge rejected">{{ t('chore.rejected') }}</span>
         </div>
       </div>
     </div>
@@ -51,9 +51,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
+
+const { t } = useI18n()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -126,7 +129,7 @@ async function load() {
   try {
     chores.value = await getMyChores(today)
   } catch {
-    error.value = '加载失败，请刷新重试'
+    error.value = t('toast.loadFailed')
   } finally {
     loading.value = false
   }
@@ -139,7 +142,7 @@ async function complete(instanceId: string) {
     const idx = chores.value.findIndex(c => c.id === instanceId)
     if (idx !== -1) chores.value[idx] = updated
   } catch {
-    error.value = '提交失败，请重试'
+    error.value = t('toast.submitFailed')
   } finally {
     submittingId.value = null
   }

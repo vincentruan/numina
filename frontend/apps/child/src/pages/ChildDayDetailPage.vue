@@ -2,12 +2,12 @@
   <div class="day-detail-page">
     <PageHeader :title="pageTitle" :show-back="true" />
 
-    <div v-if="loading" class="hint">加载中...</div>
+    <div v-if="loading" class="hint">{{ t('common.loading') }}</div>
 
     <template v-else-if="detail">
       <!-- Chores -->
       <section v-if="detail.chores.length > 0" class="section">
-        <p class="section-title">📋 打卡任务</p>
+        <p class="section-title">{{ t('dayDetail.sectionChores') }}</p>
         <div class="card-list">
           <div v-for="c in detail.chores" :key="c.id" class="event-card chore-card">
             <span class="event-emoji">{{ c.chore_emoji || '✅' }}</span>
@@ -15,11 +15,11 @@
               <p class="event-name">{{ c.chore_name }}</p>
               <p class="event-sub">
                 +{{ c.coin_reward + c.streak_bonus }} ⭐
-                <span v-if="c.streak_bonus > 0" class="streak-badge">连击+{{ c.streak_bonus }}</span>
+                <span v-if="c.streak_bonus > 0" class="streak-badge">{{ t('dayDetail.streakBonus', { bonus: c.streak_bonus }) }}</span>
               </p>
             </div>
             <span class="status-tag" :class="c.status === 'approved' ? 'approved' : 'pending'">
-              {{ c.status === 'approved' ? '已完成' : '待审批' }}
+              {{ c.status === 'approved' ? t('dayDetail.statusApproved') : t('dayDetail.statusPending') }}
             </span>
           </div>
         </div>
@@ -27,29 +27,29 @@
 
       <!-- Wishes -->
       <section v-if="detail.wishes.length > 0" class="section">
-        <p class="section-title">🌟 心愿实现</p>
+        <p class="section-title">{{ t('dayDetail.sectionWishes') }}</p>
         <div class="card-list">
           <div v-for="w in detail.wishes" :key="w.id" class="event-card wish-card">
             <span class="event-emoji">{{ w.emoji || '🎁' }}</span>
             <div class="event-info">
               <p class="event-name">{{ w.name }}</p>
-              <p v-if="w.star_coin_cost" class="event-sub">花费 {{ w.star_coin_cost }} ⭐</p>
+              <p v-if="w.star_coin_cost" class="event-sub">{{ t('dayDetail.wishCost', { cost: w.star_coin_cost }) }}</p>
             </div>
-            <span class="status-tag realized">已实现</span>
+            <span class="status-tag realized">{{ t('dayDetail.statusRealized') }}</span>
           </div>
         </div>
       </section>
 
       <!-- Milestones -->
       <section v-if="detail.milestones.length > 0" class="section">
-        <p class="section-title">🏆 成就解锁</p>
+        <p class="section-title">{{ t('dayDetail.sectionMilestones') }}</p>
         <div class="card-list">
           <div v-for="m in detail.milestones" :key="m.id" class="event-card milestone-card">
             <span class="event-emoji">{{ milestoneEmoji(m.milestone_type) }}</span>
             <div class="event-info">
               <p class="event-name">{{ milestoneLabel(m.milestone_type) }}</p>
             </div>
-            <span class="status-tag milestone">新成就</span>
+            <span class="status-tag milestone">{{ t('dayDetail.statusMilestone') }}</span>
           </div>
         </div>
       </section>
@@ -57,7 +57,7 @@
       <!-- Empty -->
       <van-empty
         v-if="detail.chores.length === 0 && detail.wishes.length === 0 && detail.milestones.length === 0"
-        description="这天没有记录"
+        :description="t('dayDetail.empty')"
         image-size="80"
       />
     </template>
@@ -67,9 +67,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } from '@/api/calendar'
 
+const { t } = useI18n()
 const route = useRoute()
 const date = route.query.date as string
 const childId = route.query.child_id as string | undefined
@@ -80,20 +82,10 @@ const loading = ref(true)
 const isParentView = computed(() => !!childId)
 
 const pageTitle = computed(() => {
-  if (!date) return '当日明细'
+  if (!date) return t('dayDetail.defaultTitle')
   const d = new Date(date + 'T00:00:00')
-  return `${d.getMonth() + 1}月${d.getDate()}日`
+  return t('dayDetail.dateTitle', { month: d.getMonth() + 1, day: d.getDate() })
 })
-
-const MILESTONE_LABELS: Record<string, string> = {
-  first_chore: '完成第一个任务',
-  first_wish_realized: '第一个心愿实现',
-  coins_50: '累计获得50⭐',
-  coins_200: '累计获得200⭐',
-  streak_7: '连续打卡7天',
-  streak_14: '连续打卡14天',
-  streak_30: '连续打卡30天',
-}
 
 const MILESTONE_EMOJI: Record<string, string> = {
   first_chore: '🌱',
@@ -106,7 +98,9 @@ const MILESTONE_EMOJI: Record<string, string> = {
 }
 
 function milestoneLabel(type: string): string {
-  return MILESTONE_LABELS[type] ?? type
+  const key = `milestone.${type}` as Parameters<typeof t>[0]
+  const result = t(key)
+  return result !== key ? result : type
 }
 
 function milestoneEmoji(type: string): string {

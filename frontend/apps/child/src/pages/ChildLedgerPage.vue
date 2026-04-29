@@ -1,15 +1,15 @@
 <template>
   <div class="ledger-page">
     <div class="balance-card">
-      <p class="balance-label">我的星星币</p>
+      <p class="balance-label">{{ t('ledger.myStars') }}</p>
       <p class="balance-value"><CoinDisplay :amount="balance" :icon-size="28" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" /></p>
-      <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">🎁 送给兄弟姐妹</button>
+      <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">{{ t('ledger.giftBtn') }}</button>
     </div>
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-else-if="transactions.length === 0" class="empty">
-      <p>还没有记录，快去完成家务吧！</p>
+      <p>{{ t('ledger.empty') }}</p>
     </div>
 
     <div v-else class="tx-list">
@@ -27,7 +27,7 @@
 
     <!-- Gift bottom sheet -->
     <van-popup v-model:show="showGiftSheet" position="bottom" round style="padding: 24px 16px 40px">
-      <p class="sheet-title">🎁 送星星币</p>
+      <p class="sheet-title">{{ t('ledger.sheetTitle') }}</p>
       <div class="sibling-list">
         <div
           v-for="s in siblings"
@@ -45,8 +45,8 @@
       <van-field
         v-model="giftAmountStr"
         type="digit"
-        label="数量"
-        placeholder="输入星星币数量"
+        :label="t('ledger.amountLabel')"
+        :placeholder="t('ledger.amountPlaceholder')"
         style="margin-top: 16px; border-radius: 8px; background: #f9f9f9"
       />
       <van-button
@@ -55,7 +55,7 @@
         :disabled="!selectedSiblingId || !giftAmountStr"
         style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
         @click="doGift"
-      >确认赠送</van-button>
+      >{{ t('ledger.confirmGift') }}</van-button>
     </van-popup>
   </div>
 </template>

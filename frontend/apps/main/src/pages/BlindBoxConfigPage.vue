@@ -1,97 +1,97 @@
 <template>
   <div class="blind-box-config-page">
-    <van-nav-bar title="盲盒配置" left-arrow @click-left="$router.back()" />
+    <van-nav-bar :title="t('blindBox.configTitle')" left-arrow @click-left="$router.back()" />
 
-    <van-loading v-if="loading" vertical class="page-loading">加载中...</van-loading>
+    <van-loading v-if="loading" vertical class="page-loading">{{ t('common.loading') }}</van-loading>
 
     <template v-else-if="config">
-      <van-cell-group inset title="基本设置">
-        <van-cell title="启用盲盒功能" center>
+      <van-cell-group inset :title="t('blindBox.basicSettings')">
+        <van-cell :title="t('blindBox.enableFeature')" center>
           <template #right-icon>
             <van-switch v-model="form.enabled" @change="onSave" />
           </template>
         </van-cell>
       </van-cell-group>
 
-      <van-cell-group inset title="抽奖概率">
-        <van-cell :title="`普通日触发概率: ${Math.round((form.base_draw_prob ?? 0) * 100)}%`">
+      <van-cell-group inset :title="t('blindBox.drawProbGroup')">
+        <van-cell :title="t('blindBox.baseDrawProb', { pct: Math.round((form.base_draw_prob ?? 0) * 100) })">
           <template #label>
             <van-slider
               v-model="form.base_draw_prob"
               :min="0"
               :max="1"
               :step="0.05"
-              :aria-label="`普通日触发概率 ${Math.round((form.base_draw_prob ?? 0) * 100)}%`"
+              :aria-label="t('blindBox.baseDrawProb', { pct: Math.round((form.base_draw_prob ?? 0) * 100) })"
               @change="onSave"
             />
           </template>
         </van-cell>
-        <van-cell :title="`特殊日触发概率: ${Math.round((form.special_day_prob ?? 0) * 100)}%`">
+        <van-cell :title="t('blindBox.specialDayProb', { pct: Math.round((form.special_day_prob ?? 0) * 100) })">
           <template #label>
             <van-slider
               v-model="form.special_day_prob"
               :min="0"
               :max="1"
               :step="0.05"
-              :aria-label="`特殊日触发概率 ${Math.round((form.special_day_prob ?? 0) * 100)}%`"
+              :aria-label="t('blindBox.specialDayProb', { pct: Math.round((form.special_day_prob ?? 0) * 100) })"
               @change="onSave"
             />
           </template>
         </van-cell>
       </van-cell-group>
 
-      <van-cell-group inset title="惊喜升级概率">
-        <van-cell :title="`普通日惊喜概率: ${Math.round((form.surprise_prob_normal ?? 0) * 100)}%`">
+      <van-cell-group inset :title="t('blindBox.surpriseProbGroup')">
+        <van-cell :title="t('blindBox.surpriseProbNormal', { pct: Math.round((form.surprise_prob_normal ?? 0) * 100) })">
           <template #label>
             <van-slider
               v-model="form.surprise_prob_normal"
               :min="0"
               :max="1"
               :step="0.05"
-              :aria-label="`普通日惊喜概率 ${Math.round((form.surprise_prob_normal ?? 0) * 100)}%`"
+              :aria-label="t('blindBox.surpriseProbNormal', { pct: Math.round((form.surprise_prob_normal ?? 0) * 100) })"
               @change="onSave"
             />
           </template>
         </van-cell>
-        <van-cell :title="`父母生日惊喜概率: ${Math.round((form.surprise_prob_parent_bday ?? 0) * 100)}%`">
+        <van-cell :title="t('blindBox.surpriseProbParentBday', { pct: Math.round((form.surprise_prob_parent_bday ?? 0) * 100) })">
           <template #label>
             <van-slider
               v-model="form.surprise_prob_parent_bday"
               :min="0"
               :max="1"
               :step="0.05"
-              :aria-label="`父母生日惊喜概率 ${Math.round((form.surprise_prob_parent_bday ?? 0) * 100)}%`"
+              :aria-label="t('blindBox.surpriseProbParentBday', { pct: Math.round((form.surprise_prob_parent_bday ?? 0) * 100) })"
               @change="onSave"
             />
           </template>
         </van-cell>
-        <van-cell :title="`兄弟姐妹生日惊喜概率: ${Math.round((form.surprise_prob_sibling_bday ?? 0) * 100)}%`">
+        <van-cell :title="t('blindBox.surpriseProbSiblingBday', { pct: Math.round((form.surprise_prob_sibling_bday ?? 0) * 100) })">
           <template #label>
             <van-slider
               v-model="form.surprise_prob_sibling_bday"
               :min="0"
               :max="1"
               :step="0.05"
-              :aria-label="`兄弟姐妹生日惊喜概率 ${Math.round((form.surprise_prob_sibling_bday ?? 0) * 100)}%`"
+              :aria-label="t('blindBox.surpriseProbSiblingBday', { pct: Math.round((form.surprise_prob_sibling_bday ?? 0) * 100) })"
               @change="onSave"
             />
           </template>
         </van-cell>
       </van-cell-group>
 
-      <van-cell-group inset title="权重参数">
+      <van-cell-group inset :title="t('blindBox.weightGroup')">
         <van-field
           v-model.number="form.weight_scale"
-          label="权重系数"
+          :label="t('blindBox.weightScaleLabel')"
           type="number"
-          placeholder="默认 2.0"
+          :placeholder="t('blindBox.weightScalePlaceholder')"
           @blur="onSave"
         />
         <van-field
           v-model.number="form.surprise_threshold_coins"
-          label="惊喜门槛金币"
+          :label="t('blindBox.surpriseThresholdLabel')"
           type="number"
-          placeholder="默认 200"
+          :placeholder="t('blindBox.surpriseThresholdPlaceholder')"
           @blur="onSave"
         />
       </van-cell-group>
@@ -102,9 +102,11 @@
 <script setup lang="ts">
 import { onMounted, reactive, watch } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
 
+const { t } = useI18n()
 const store = useBlindBoxStore()
 const { config, loading } = storeToRefs(store)
 
@@ -134,7 +136,7 @@ function onSave() {
   if (_saveTimer) clearTimeout(_saveTimer)
   _saveTimer = setTimeout(async () => {
     await store.updateConfig({ ...form })
-    showToast('✅ 已保存')
+    showToast(t('toast.saveSuccess'))
   }, 600)
 }
 </script>

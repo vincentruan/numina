@@ -1,7 +1,7 @@
 <template>
   <div class="blind-box-gift-form-page">
     <van-nav-bar
-      :title="isEdit ? '编辑礼物' : '添加礼物'"
+      :title="isEdit ? t('blindBox.editGiftTitle') : t('blindBox.addGiftTitle')"
       left-arrow
       @click-left="$router.back()"
     />
@@ -11,34 +11,34 @@
         <van-field
           v-model="form.name"
           name="name"
-          label="礼物名称"
-          placeholder="例如：乐高积木"
-          :rules="[{ required: true, message: '请输入礼物名称' }]"
+          :label="t('blindBox.giftNameLabel')"
+          :placeholder="t('blindBox.giftNamePlaceholder')"
+          :rules="[{ required: true, message: t('blindBox.giftNameRequired') }]"
         />
         <van-field
           v-model="form.emoji"
           name="emoji"
-          label="表情符号"
-          placeholder="例如：🧱（可选）"
+          :label="t('blindBox.emojiLabel')"
+          :placeholder="t('blindBox.emojiPlaceholder')"
         />
         <van-field
           v-model="form.description"
           name="description"
-          label="描述"
+          :label="t('blindBox.descLabel')"
           type="textarea"
-          placeholder="礼物描述（可选）"
+          :placeholder="t('blindBox.descPlaceholder')"
           rows="2"
           autosize
         />
         <van-field
           v-model.number="form.value_score"
           name="value_score"
-          label="价值分 (1-10)"
+          :label="t('blindBox.valueScoreLabel')"
           type="number"
-          placeholder="1=最容易抽到，10=最稀有"
+          :placeholder="t('blindBox.valueScorePlaceholder')"
           :rules="[
-            { required: true, message: '请输入价值分' },
-            { validator: (v) => Number(v) >= 1 && Number(v) <= 10, message: '价值分须在 1-10 之间' },
+            { required: true, message: t('blindBox.valueScoreRequired') },
+            { validator: (v) => Number(v) >= 1 && Number(v) <= 10, message: t('blindBox.valueScoreRange') },
           ]"
         />
       </van-cell-group>
@@ -51,7 +51,7 @@
           native-type="submit"
           :loading="loading"
         >
-          {{ isEdit ? '保存修改' : '添加礼物' }}
+          {{ isEdit ? t('blindBox.saveBtn') : t('blindBox.addBtn') }}
         </van-button>
       </div>
     </van-form>
@@ -62,9 +62,11 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useBlindBoxStore()
@@ -103,7 +105,7 @@ async function onSubmit() {
         description: form.description || null,
         value_score: form.value_score,
       })
-      showToast('✅ 已保存')
+      showToast(t('toast.saveSuccess'))
     } else {
       const result = await store.createGift({
         name: form.name,
@@ -114,7 +116,7 @@ async function onSubmit() {
       if (result.warning) {
         showToast(`⚠️ ${result.warning}`)
       } else {
-        showToast('✅ 添加成功')
+        showToast(t('toast.addSuccess'))
       }
     }
     router.back()

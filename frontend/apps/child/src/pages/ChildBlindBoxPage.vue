@@ -1,10 +1,10 @@
 <template>
   <div class="child-blind-box-page">
-    <van-nav-bar title="🎁 盲盒抽奖" />
+    <van-nav-bar :title="t('blindBox.navTitle')" />
 
     <van-tabs v-model:active="activeTab" sticky>
-      <van-tab title="抽奖" name="draw" />
-      <van-tab title="历史" name="history" />
+      <van-tab :title="t('blindBox.tabDraw')" name="draw" />
+      <van-tab :title="t('blindBox.tabHistory')" name="history" />
     </van-tabs>
 
     <!-- Draw Tab -->
@@ -17,31 +17,31 @@
       />
 
       <div v-if="bonusDraws.length > 0" class="bonus-section">
-        <van-divider>免费抽奖机会 ({{ bonusDraws.length }})</van-divider>
-        <div class="bonus-list" role="list" aria-label="免费抽奖机会列表">
+        <van-divider>{{ t('blindBox.bonusDivider', { count: bonusDraws.length }) }}</van-divider>
+        <div class="bonus-list" role="list" :aria-label="t('blindBox.bonusListLabel')">
           <div
             v-for="bonus in bonusDraws"
             :key="bonus.id"
             class="bonus-item"
             role="listitem"
           >
-            <span>🎀 免费抽奖（{{ formatExpiry(bonus.expires_at) }}到期）</span>
+            <span>{{ t('blindBox.bonusItem', { expiry: formatExpiry(bonus.expires_at) }) }}</span>
             <van-button
               size="small"
               type="primary"
               :loading="loading"
               :disabled="loading"
-              :aria-label="`使用免费抽奖机会，${formatExpiry(bonus.expires_at)}到期`"
+              :aria-label="t('blindBox.bonusItemAriaLabel', { expiry: formatExpiry(bonus.expires_at) })"
               @click="onUseBonusDraw(bonus.id)"
             >
-              使用
+              {{ t('blindBox.useBtn') }}
             </van-button>
           </div>
         </div>
       </div>
 
       <div v-if="revealed && lastDraw" class="draw-actions">
-        <van-button block type="primary" @click="resetDraw">再抽一次</van-button>
+        <van-button block type="primary" @click="resetDraw">{{ t('blindBox.drawAgain') }}</van-button>
       </div>
     </div>
 
@@ -57,11 +57,13 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
 
+const { t } = useI18n()
 const store = useBlindBoxStore()
 const { draws, bonusDraws, loading, lastDraw } = storeToRefs(store)
 
@@ -77,10 +79,8 @@ onMounted(async () => {
 async function onDraw() {
   if (animating.value || revealed.value) return
 
-  // Tap-to-draw only works when there are bonus draws available.
-  // Chore-based draws are triggered from the task completion flow (not here).
   if (bonusDraws.value.length === 0) {
-    showToast('⚠️ 暂无免费抽奖机会，完成任务后可获得')
+    showToast(t('toast.noBonusDraws'))
     return
   }
 
@@ -92,7 +92,7 @@ async function onDraw() {
     await store.useBonusDraw(bonusDraws.value[0].id)
     revealed.value = true
   } catch {
-    showToast('❌ 抽奖失败，请稍后再试')
+    showToast(t('toast.drawFailed'))
   } finally {
     animating.value = false
   }
@@ -107,7 +107,7 @@ async function onUseBonusDraw(bonusId: number) {
     revealed.value = true
     activeTab.value = 'draw'
   } catch {
-    showToast('❌ 使用失败，请稍后再试')
+    showToast(t('toast.useBonusFailed'))
   } finally {
     animating.value = false
   }

@@ -2,15 +2,15 @@
   <div class="home-page">
     <!-- Balance hero -->
     <div class="hero-card">
-      <p class="hero-label">我的星星币 ⭐</p>
+      <p class="hero-label">{{ t('home.myStars') }}</p>
       <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
     </div>
 
     <!-- Today's chores -->
     <div class="section">
-      <p class="section-title">📋 今日任务</p>
-      <div v-if="loadingChores" class="hint">加载中...</div>
-      <div v-else-if="todayChores.length === 0" class="hint">今天没有任务，好好休息吧！</div>
+      <p class="section-title">{{ t('home.todayTasks') }}</p>
+      <div v-if="loadingChores" class="hint">{{ t('common.loading') }}</div>
+      <div v-else-if="todayChores.length === 0" class="hint">{{ t('home.noTasks') }}</div>
       <div v-else class="chore-list">
         <div
           v-for="c in todayChores"
@@ -34,7 +34,7 @@
         <span class="wish-preview-icon">{{ topWish.emoji || '🌟' }}</span>
         <div class="wish-preview-info">
           <p class="wish-preview-name">{{ topWish.name }}</p>
-          <p class="wish-preview-sub">我的心愿</p>
+          <p class="wish-preview-sub">{{ t('home.myWishes') }}</p>
         </div>
         <van-icon name="arrow" color="#ccc" size="16" />
       </div>
@@ -42,15 +42,15 @@
         <div class="wish-preview-fill" :style="{ width: Math.min((topWish.progress ?? 0) * 100, 100) + '%' }" />
       </div>
       <p v-if="topWish.has_cost_set && topWish.progress !== null" class="wish-preview-pct">
-        {{ Math.min(Math.round((topWish.progress ?? 0) * 100), 100) }}% 完成
-        <span v-if="(topWish.progress ?? 0) >= 1" class="wish-ready"> · 可以兑现啦 🎉</span>
+        {{ Math.min(Math.round((topWish.progress ?? 0) * 100), 100) }}{{ t('home.wishComplete') }}
+        <span v-if="(topWish.progress ?? 0) >= 1" class="wish-ready">{{ t('home.wishReady') }}</span>
       </p>
-      <p v-else class="wish-preview-pct">等待爸妈设定目标 ⏳</p>
+      <p v-else class="wish-preview-pct">{{ t('home.wishWaitingGoal') }}</p>
     </router-link>
 
     <!-- Calendar -->
     <div class="section">
-      <p class="section-title">📅 我的日历</p>
+      <p class="section-title">{{ t('home.myCalendar') }}</p>
       <ChildCalendar :fetch-month="fetchChildMonth" day-route="/child/calendar/day" variant="child" />
     </div>
 
@@ -58,19 +58,19 @@
     <div class="quick-links">
       <router-link to="/child/wishes" class="quick-card wishes">
         <span class="quick-icon">🌟</span>
-        <span class="quick-label">我的心愿</span>
+        <span class="quick-label">{{ t('home.quickWishes') }}</span>
       </router-link>
       <router-link to="/child/treasures" class="quick-card treasures">
         <span class="quick-icon">🏆</span>
-        <span class="quick-label">我的宝贝</span>
+        <span class="quick-label">{{ t('home.quickTreasures') }}</span>
       </router-link>
       <router-link to="/child/tasks" class="quick-card tasks">
         <span class="quick-icon">📋</span>
-        <span class="quick-label">所有任务</span>
+        <span class="quick-label">{{ t('home.quickTasks') }}</span>
       </router-link>
       <router-link to="/child/ledger" class="quick-card ledger">
         <span class="quick-icon">💰</span>
-        <span class="quick-label">星星账本</span>
+        <span class="quick-label">{{ t('home.quickLedger') }}</span>
       </router-link>
     </div>
   </div>
@@ -78,6 +78,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getCoinBalance } from '@/api/coins'
 import { getMyChores, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
@@ -86,6 +87,7 @@ import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { useFamilyStore } from '@/stores/family'
 
+const { t } = useI18n()
 const familyStore = useFamilyStore()
 const balance = ref(0)
 const todayChores = ref<ChoreInstance[]>([])
@@ -94,8 +96,8 @@ const topWish = ref<ChildWish | null>(null)
 
 function statusLabel(status: ChoreInstance['status']): string {
   switch (status) {
-    case 'available': return '待完成'
-    case 'pending_approval': return '待审批'
+    case 'available': return t('chore.complete')
+    case 'pending_approval': return t('chore.pendingApproval')
     case 'approved': return '✅'
     case 'rejected': return '❌'
     default: return ''

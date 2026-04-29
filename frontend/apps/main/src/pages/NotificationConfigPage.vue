@@ -6,7 +6,7 @@
   />
 
   <div class="page-content">
-    <van-cell-group inset title="大额消费阈值" class="section">
+    <van-cell-group inset :title="t('reminders.thresholdGroupTitle')" class="section">
       <van-field
         v-model="fixedThreshold"
         :label="t('reminders.thresholdFixed')"
@@ -22,16 +22,16 @@
         clearable
       />
       <van-cell>
-        <van-button type="primary" size="small" block @click="saveConfig">保存阈值配置</van-button>
+        <van-button type="primary" size="small" block @click="saveConfig">{{ t('reminders.saveThreshold') }}</van-button>
       </van-cell>
     </van-cell-group>
 
-    <van-cell-group inset title="通知渠道" class="section">
+    <van-cell-group inset :title="t('reminders.channelGroupTitle')" class="section">
       <van-swipe-cell v-for="channel in channels" :key="channel.id">
         <van-cell
           :title="channel.name"
           :label="`${t('reminders.channelType.' + channel.channel_type)} · ${channel.subscriptions.map((s) => t('reminders.types.' + s)).join('、')}`"
-          :value="channel.is_enabled ? '已启用' : '已停用'"
+          :value="channel.is_enabled ? t('reminders.channelEnabled') : t('reminders.channelDisabled')"
           is-link
           @click="editChannel(channel)"
         />
@@ -39,44 +39,44 @@
           <van-button
             square
             type="danger"
-            text="删除"
+            :text="t('common.delete')"
             class="delete-btn"
             @click="removeChannel(channel.id)"
           />
         </template>
       </van-swipe-cell>
-      <van-cell title="添加渠道" is-link icon="plus" @click="openAdd" />
+      <van-cell :title="t('reminders.addChannel')" is-link icon="plus" @click="openAdd" />
     </van-cell-group>
   </div>
 
   <van-popup v-model:show="showSheet" position="bottom" round :style="{ height: '75%' }">
     <div class="popup-content">
-      <van-nav-bar :title="editingChannel ? '编辑渠道' : '添加渠道'">
+      <van-nav-bar :title="editingChannel ? t('reminders.editChannelTitle') : t('reminders.addChannelTitle')">
         <template #right>
           <van-icon name="cross" @click="showSheet = false" />
         </template>
       </van-nav-bar>
       <van-cell-group inset>
-        <van-field v-model="form.name" label="渠道名称" placeholder="如：家庭群" />
+        <van-field v-model="form.name" :label="t('reminders.channelNameLabel')" :placeholder="t('reminders.channelNamePlaceholder')" />
         <van-field
           v-if="!editingChannel"
           :model-value="t('reminders.channelType.' + form.channel_type)"
-          label="渠道类型"
+          :label="t('reminders.channelTypeLabel')"
           readonly
           is-link
           @click="showTypePicker = true"
         />
         <template v-if="form.channel_type === 'telegram'">
-          <van-field v-model="form.bot_token" label="Bot Token" placeholder="从 @BotFather 获取" type="password" />
-          <van-field v-model="form.chat_id" label="Chat ID" placeholder="数字 ID" />
+          <van-field v-model="form.bot_token" :label="t('reminders.botTokenLabel')" :placeholder="t('reminders.botTokenPlaceholder')" type="password" />
+          <van-field v-model="form.chat_id" :label="t('reminders.chatIdLabel')" :placeholder="t('reminders.chatIdPlaceholder')" />
         </template>
         <template v-if="form.channel_type === 'email'">
-          <van-field v-model="form.smtp_host" label="SMTP 服务器" placeholder="smtp.example.com" />
-          <van-field v-model="form.smtp_port" label="端口" type="number" placeholder="587" />
-          <van-field v-model="form.smtp_user" label="用户名" />
-          <van-field v-model="form.smtp_password" label="密码" type="password" />
-          <van-field v-model="form.smtp_from" label="发件人" placeholder="from@example.com" />
-          <van-field v-model="form.email_to" label="收件人" placeholder="to@example.com" />
+          <van-field v-model="form.smtp_host" :label="t('reminders.smtpHostLabel')" placeholder="smtp.example.com" />
+          <van-field v-model="form.smtp_port" :label="t('reminders.smtpPortLabel')" type="number" placeholder="587" />
+          <van-field v-model="form.smtp_user" :label="t('reminders.smtpUserLabel')" />
+          <van-field v-model="form.smtp_password" :label="t('reminders.smtpPasswordLabel')" type="password" />
+          <van-field v-model="form.smtp_from" :label="t('reminders.smtpFromLabel')" placeholder="from@example.com" />
+          <van-field v-model="form.email_to" :label="t('reminders.emailToLabel')" placeholder="to@example.com" />
         </template>
         <van-cell :title="t('reminders.subscriptions')">
           <template #value>
@@ -94,7 +94,7 @@
           </template>
         </van-cell>
         <van-cell>
-          <van-button type="primary" block @click="saveChannel">保存</van-button>
+          <van-button type="primary" block @click="saveChannel">{{ t('common.save') }}</van-button>
         </van-cell>
       </van-cell-group>
     </div>
@@ -195,7 +195,7 @@ function editChannel(channel: NotificationChannelResponse) {
 
 async function saveChannel() {
   if (form.channel_type === 'telegram' && !/^-?\d+$/.test(form.chat_id)) {
-    showToast('⚠️ Chat ID 必须为数字')
+    showToast(t('reminders.chatIdInvalid'))
     return
   }
   const config: Record<string, string | number> =

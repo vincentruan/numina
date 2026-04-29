@@ -5,7 +5,7 @@
       <div class="auth-header">
         <div class="app-logo">🌟</div>
         <h1 class="app-title">Numina</h1>
-        <p class="app-subtitle">儿童登录</p>
+        <p class="app-subtitle">{{ t('auth.childLogin') }}</p>
       </div>
 
       <van-form class="login-form" @submit="onStep1Submit">
@@ -13,18 +13,18 @@
           <van-field
             v-model="form.username"
             name="username"
-            label="用户名"
-            placeholder="请输入用户名"
-            :rules="[{ required: true, message: '请输入用户名' }]"
+            :label="t('auth.username')"
+            :placeholder="t('auth.usernamePlaceholder')"
+            :rules="[{ required: true, message: t('auth.usernameRequired') }]"
           />
           <div class="password-field-wrapper">
             <van-field
               v-model="form.password"
               :type="showPassword ? 'text' : 'password'"
               name="password"
-              label="密码"
-              placeholder="请输入密码"
-              :rules="[{ required: true, message: '请输入密码' }]"
+              :label="t('auth.password')"
+              :placeholder="t('auth.passwordPlaceholder')"
+              :rules="[{ required: true, message: t('auth.passwordRequired') }]"
             >
               <template #right-icon>
                 <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
@@ -37,7 +37,7 @@
 
         <div class="form-actions">
           <van-button round block type="primary" native-type="submit" :loading="loading">
-            下一步
+            {{ t('auth.nextStep') }}
           </van-button>
         </div>
       </van-form>
@@ -52,7 +52,7 @@
 
       <!-- WebAuthn mode -->
       <div v-if="authMode === 'webauthn'" class="webauthn-mode">
-        <p class="instruction">使用面容或指纹解锁</p>
+        <p class="instruction">{{ t('auth.useFingerprint') }}</p>
         <van-button
           round
           type="primary"
@@ -60,10 +60,10 @@
           :loading="loading"
           @click="attemptWebAuthn"
         >
-          {{ loading ? '验证中...' : '🔓 解锁' }}
+          {{ loading ? t('auth.verifying') : t('auth.unlock') }}
         </van-button>
         <van-button plain size="small" class="switch-btn" @click="switchToPin">
-          使用图形密码
+          {{ t('auth.useEmojiPin') }}
         </van-button>
       </div>
 
@@ -109,12 +109,12 @@
           class="switch-btn"
           @click="switchToWebAuthn"
         >
-          使用面容/指纹
+          {{ t('auth.useFaceId') }}
         </van-button>
       </div>
 
       <van-button plain size="small" class="back-btn" @click="backToStep1">
-        返回重新登录
+        {{ t('auth.backToLogin') }}
       </van-button>
     </div>
   </div>

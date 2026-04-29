@@ -2,18 +2,18 @@
   <div class="treasures-page">
     <!-- Header summary -->
     <div class="summary-card">
-      <p class="summary-title">🏆 我的宝贝</p>
+      <p class="summary-title">{{ t('treasures.title') }}</p>
       <p v-if="treasures.length > 0" class="summary-desc">
-        你已经赚到了 <strong>{{ treasures.length }}</strong> 件宝贝！
+        {{ t('treasures.earnedCount', { count: treasures.length }) }}
       </p>
-      <p v-if="totalCoins > 0" class="summary-coins">共花费 {{ totalCoins }} 颗星 ⭐</p>
+      <p v-if="totalCoins > 0" class="summary-coins">{{ t('treasures.totalCoins', { coins: totalCoins }) }}</p>
     </div>
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-else-if="treasures.length === 0" class="empty">
       <p class="empty-emoji">🎁</p>
-      <p class="empty-text">还没有宝贝，快去完成家务赚星星币吧！</p>
+      <p class="empty-text">{{ t('treasures.empty') }}</p>
     </div>
 
     <div v-else class="grid">
@@ -39,8 +39,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
 
+const { t } = useI18n()
 const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
 

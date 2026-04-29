@@ -1,7 +1,7 @@
 <template>
   <div class="blind-box-gift-list-page">
     <van-nav-bar
-      title="礼物池"
+      :title="t('blindBox.giftPoolTitle')"
       left-arrow
       @click-left="$router.back()"
       @click-right="$router.push('/blind-box/gifts/new')"
@@ -12,21 +12,21 @@
     </van-nav-bar>
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-empty v-if="!loading && gifts.length === 0" description="礼物池为空，点击右上角添加礼物" />
+      <van-empty v-if="!loading && gifts.length === 0" :description="t('blindBox.giftPoolEmpty')" />
 
-      <div v-else class="gift-list" role="list" aria-label="礼物池列表">
+      <div v-else class="gift-list" role="list" :aria-label="t('blindBox.giftPoolTitle')">
         <div
           v-for="gift in gifts"
           :key="gift.id"
           class="gift-item"
           role="listitem"
-          :aria-label="`${gift.emoji ?? ''} ${gift.name}，价值分 ${gift.value_score}`"
+          :aria-label="t('blindBox.giftScoreAriaLabel', { emoji: gift.emoji ?? '', name: gift.name, score: gift.value_score })"
         >
           <div class="gift-info">
             <span class="gift-emoji" aria-hidden="true">{{ gift.emoji ?? '🎁' }}</span>
             <div class="gift-details">
               <span class="gift-name">{{ gift.name }}</span>
-              <span class="gift-score">价值分: {{ gift.value_score }}/10</span>
+              <span class="gift-score">{{ t('blindBox.giftScore', { score: gift.value_score }) }}</span>
             </div>
           </div>
           <div class="gift-actions">
@@ -34,19 +34,19 @@
               size="small"
               type="primary"
               plain
-              :aria-label="`编辑 ${gift.name}`"
+              :aria-label="`${t('blindBox.editGift')} ${gift.name}`"
               @click="$router.push(`/blind-box/gifts/${gift.id}/edit`)"
             >
-              编辑
+              {{ t('blindBox.editGift') }}
             </van-button>
             <van-button
               size="small"
               type="danger"
               plain
-              :aria-label="`删除 ${gift.name}`"
+              :aria-label="`${t('blindBox.deleteGift')} ${gift.name}`"
               @click="onDelete(gift)"
             >
-              删除
+              {{ t('blindBox.deleteGift') }}
             </van-button>
           </div>
         </div>
@@ -60,7 +60,7 @@
         type="default"
         @click="$router.push('/blind-box/config')"
       >
-        ⚙️ 盲盒配置
+        {{ t('blindBox.configBtn') }}
       </van-button>
     </div>
   </div>
@@ -69,10 +69,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
 import type { BlindBoxGift } from '@/types/blindBox'
 
+const { t } = useI18n()
 const store = useBlindBoxStore()
 const { gifts, loading } = storeToRefs(store)
 const refreshing = ref(false)
@@ -86,11 +88,11 @@ async function onRefresh() {
 
 async function onDelete(gift: BlindBoxGift) {
   await showConfirmDialog({
-    title: '删除礼物',
-    message: `⚠️ 确定要删除「${gift.name}」吗？`,
+    title: t('blindBox.deleteTitle'),
+    message: t('toast.confirmDelete', { name: gift.name }),
   })
   await store.deleteGift(gift.id)
-  showToast('🗑️ 已删除')
+  showToast(t('toast.deleteSuccess'))
 }
 </script>
 
