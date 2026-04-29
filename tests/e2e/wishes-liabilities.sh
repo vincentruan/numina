@@ -31,6 +31,19 @@ log_info() {
     echo -e "${YELLOW}ℹ $1${NC}" >&2
 }
 
+# 辅助函数：解包 API 响应信封
+json_value() {
+    local input="$1"
+    local path="$2"
+    local has_envelope
+    has_envelope=$(echo "$input" | jq -r 'if has("data") then "yes" else "no" end' 2>/dev/null)
+    if [ "$has_envelope" = "yes" ]; then
+        echo "$input" | jq -r ".data | $path" 2>/dev/null | sed 's/^null$//'
+    else
+        echo "$input" | jq -r "$path" 2>/dev/null | sed 's/^null$//'
+    fi
+}
+
 # 检查响应状态
 check_response() {
     local response=$1
@@ -61,7 +74,7 @@ get_token() {
             "password": "DemoPass123"
         }')
 
-    TOKEN=$(echo "$login_response" | jq -r '.access_token')
+    TOKEN=$(echo "$login_response" | jq -r 'if has("data") then .data.access_token else .access_token end')
 
     # 如果登录失败，尝试注册
     if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
@@ -76,7 +89,7 @@ get_token() {
                 "family_name": "Demo Family"
             }')
 
-        TOKEN=$(echo "$register_response" | jq -r '.access_token')
+        TOKEN=$(echo "$register_response" | jq -r 'if has("data") then .data.access_token else .access_token end')
 
         if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
             log_error "注册失败"
@@ -96,7 +109,7 @@ get_category_id() {
     local response=$(curl -sL -X GET "$BASE_URL/categories?asset_type=$asset_type" \
         -H "Authorization: Bearer $TOKEN")
 
-    echo "$response" | jq -r '.[0].id'
+    echo "$response" | jq -r 'if has("data") then .data[0].id else .[0].id end'
 }
 
 # 创建资产（用于负债关联）
@@ -120,7 +133,7 @@ create_test_asset() {
             \"annual_maintenance_cost\": 10000
         }")
 
-    local asset_id=$(echo "$response" | jq -r '.id')
+    local asset_id=$(echo "$response" | jq -r 'if has("data") then .data.id else .id end')
 
     if [ -z "$asset_id" ] || [ "$asset_id" = "null" ]; then
         log_error "创建测试资产失败"
@@ -155,7 +168,7 @@ test_wish_creation() {
         }")
 
     check_response "$wish1" 201 "创建心愿 1"
-    local wish1_id=$(echo "$wish1" | jq -r '.id')
+    local wish1_id=$(echo "$wish1" | jq -r 'if has("data") then .data.id else .id end')
 
     # 测试用例 2: 最小字段心愿
     log_info "创建心愿 2: 换手机（最小字段）"
@@ -232,7 +245,7 @@ test_liability_creation() {
         -d "$json_data")
 
     check_response "$liability1" 201 "创建负债 1"
-    local liability1_id=$(echo "$liability1" | jq -r '.id')
+    local liability1_id=$(echo "$liability1" | jq -r 'if has("data") then .data.id else .id end')
 
     # 测试用例 2: 车贷（完整字段）
     log_info "创建负债 2: 车贷（完整字段）"
@@ -323,7 +336,7 @@ test_list_display() {
     local all_wishes=$(curl -sL -X GET "$BASE_URL/wishes" \
         -H "Authorization: Bearer $TOKEN")
 
-    local wish_count=$(echo "$all_wishes" | jq 'length')
+    local wish_count=$(echo "$all_wishes" | jq 'if has("data") then .data | length else length end')
     log_success "获取到 $wish_count 条心愿记录"
 
     # 测试 3.2: 心愿列表（按状态筛选）
@@ -331,7 +344,7 @@ test_list_display() {
     local pending_wishes=$(curl -sL -X GET "$BASE_URL/wishes?status=pending" \
         -H "Authorization: Bearer $TOKEN")
 
-    local pending_count=$(echo "$pending_wishes" | jq 'length')
+    local pending_count=$(echo "$pending_wishes" | jq 'if has("data") then .data | length else length end')
     log_success "获取到 $pending_count 条待实现心愿"
 
     # 测试 3.3: 负债列表（全部）
@@ -339,7 +352,7 @@ test_list_display() {
     local all_liabilities=$(curl -sL -X GET "$BASE_URL/liabilities" \
         -H "Authorization: Bearer $TOKEN")
 
-    local liability_count=$(echo "$all_liabilities" | jq 'length')
+    local liability_count=$(echo "$all_liabilities" | jq 'if has("data") then .data | length else length end')
     log_success "获取到 $liability_count 条负债记录"
 
     # 测试 3.4: 负债列表（仅活跃）
@@ -347,7 +360,7 @@ test_list_display() {
     local active_liabilities=$(curl -sL -X GET "$BASE_URL/liabilities?is_active=true" \
         -H "Authorization: Bearer $TOKEN")
 
-    local active_count=$(echo "$active_liabilities" | jq 'length')
+    local active_count=$(echo "$active_liabilities" | jq 'if has("data") then .data | length else length end')
     log_success "获取到 $active_count 条活跃负债"
 
     # 测试 3.5: 负债列表（仅已还清）
@@ -355,17 +368,17 @@ test_list_display() {
     local inactive_liabilities=$(curl -sL -X GET "$BASE_URL/liabilities?is_active=false" \
         -H "Authorization: Bearer $TOKEN")
 
-    local inactive_count=$(echo "$inactive_liabilities" | jq 'length')
+    local inactive_count=$(echo "$inactive_liabilities" | jq 'if has("data") then .data | length else length end')
     log_success "获取到 $inactive_count 条已还清负债"
 
     # 显示详细信息
     echo ""
     log_info "========== 心愿列表详情 =========="
-    echo "$all_wishes" | jq -r '.[] | "[\(.priority)] \(.name) - ¥\(.expected_price // 0) - \(.status)"'
+    echo "$all_wishes" | jq -r 'if has("data") then .data[] else .[] end | "[\(.priority)] \(.name) - ¥\(.expected_price // 0) - \(.status)"'
 
     echo ""
     log_info "========== 负债列表详情 =========="
-    echo "$all_liabilities" | jq -r '.[] | "[\(.category)] \(.name) - 剩余: ¥\(.remaining_amount) / 总额: ¥\(.original_amount) - \(if .is_active then "活跃" else "已还清" end)"'
+    echo "$all_liabilities" | jq -r 'if has("data") then .data[] else .[] end | "[\(.category)] \(.name) - 剩余: ¥\(.remaining_amount) / 总额: ¥\(.original_amount) - \(if .is_active then "活跃" else "已还清" end)"'
 
     log_success "列表展示功能验证完成"
 }
@@ -392,7 +405,7 @@ test_wish_realization() {
 
     check_response "$response" 201 "心愿实现"
 
-    local asset_id=$(echo "$response" | jq -r '.id')
+    local asset_id=$(echo "$response" | jq -r 'if has("data") then .data.id else .id end')
     log_success "心愿已实现，创建资产: $asset_id"
 }
 
@@ -415,7 +428,7 @@ test_liability_payment() {
 
     check_response "$response" 200 "记录还款"
 
-    local remaining=$(echo "$response" | jq -r '.remaining_amount')
+    local remaining=$(echo "$response" | jq -r 'if has("data") then .data.remaining_amount else .remaining_amount end')
     log_success "还款成功，剩余金额: ¥$remaining"
 }
 

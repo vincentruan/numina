@@ -370,6 +370,10 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
     # User found - normal verification
+    # Child accounts have no password_hash (PIN-only) — reject password login with timing safety
+    if user.password_hash is None:
+        bcrypt.checkpw(req.password.encode("utf-8"), _get_dummy_hash().encode("utf-8"))
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
     if not verify_password(req.password, user.password_hash):
         _record_failed_login(req.username)
         _log_security_event(

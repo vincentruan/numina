@@ -532,6 +532,7 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
   }
 }
+onMounted(async () => {
   await familyStore.fetchFamily()
   if (isOwner.value) {
     await loadChildDashboard()
