@@ -10,8 +10,8 @@ COPY vendor/deerflow-harness /opt/deerflow-harness
 # 同时复制到 vendor/ 目录以满足 pyproject.toml workspace 配置
 COPY vendor/deerflow-harness /app/vendor/deerflow-harness
 
-COPY pyproject.toml .
-RUN uv pip install --system -e .
+COPY pyproject.toml requirements.txt ./
+RUN uv pip install --system --no-cache -r requirements.txt
 
 COPY . .
 
