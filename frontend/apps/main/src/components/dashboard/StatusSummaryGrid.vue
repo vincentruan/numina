@@ -79,7 +79,7 @@ function onSelect(status: string | null) {
   align-items: center;
   gap: 4px;
   padding: 8px 14px;
-  border-radius: var(--radius-pill);
+  border-radius: 8px;
   background: var(--bg-secondary);
   border: 1px solid transparent;
   cursor: pointer;
@@ -97,8 +97,9 @@ function onSelect(status: string | null) {
   border-color: var(--color-primary);
 }
 [data-theme='dark'] .status-tab.active {
-  background: var(--color-coral);
-  border-color: var(--color-coral);
+  background: rgba(189, 187, 255, 0.15);
+  border-color: var(--color-lavender);
+  color: var(--color-lavender);
 }
 .tab-label {
   font-size: 14px;
