@@ -54,24 +54,26 @@
       <ChildCalendar :fetch-month="fetchChildMonth" day-route="/calendar/day" variant="child" />
     </div>
 
-    <!-- Quick links — Clay feature-card palette -->
-    <div class="quick-links">
-      <router-link to="/wishes" class="quick-card quick-card--pink">
-        <span class="quick-icon">🌟</span>
-        <span class="quick-label">{{ t('home.quickWishes') }}</span>
-      </router-link>
-      <router-link to="/treasures" class="quick-card quick-card--ochre">
-        <span class="quick-icon">🏆</span>
-        <span class="quick-label">{{ t('home.quickTreasures') }}</span>
-      </router-link>
-      <router-link to="/tasks" class="quick-card quick-card--teal">
-        <span class="quick-icon">📋</span>
-        <span class="quick-label">{{ t('home.quickTasks') }}</span>
-      </router-link>
-      <router-link to="/ledger" class="quick-card quick-card--lavender">
-        <span class="quick-icon">💰</span>
-        <span class="quick-label">{{ t('home.quickLedger') }}</span>
-      </router-link>
+    <!-- Settings section — collapsible -->
+    <div class="settings-section">
+      <button class="settings-toggle" @click="settingsExpanded = !settingsExpanded">
+        <span>{{ t('home.settings') }}</span>
+        <van-icon :name="settingsExpanded ? 'arrow-up' : 'arrow-down'" size="14" />
+      </button>
+      <div v-if="settingsExpanded" class="settings-body">
+        <p class="settings-label">{{ t('home.settingsTheme') }}</p>
+        <div class="theme-options">
+          <button
+            v-for="opt in themeOptions"
+            :key="opt.value"
+            class="theme-btn"
+            :class="{ active: themeMode === opt.value }"
+            @click="setMode(opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -86,13 +88,23 @@ import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { useFamilyStore } from '@/stores/family'
+import { useDarkMode } from '@/utils/darkMode'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
+const { themeMode, setMode } = useDarkMode()
+
 const balance = ref(0)
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
 const topWish = ref<ChildWish | null>(null)
+const settingsExpanded = ref(false)
+
+const themeOptions = [
+  { value: 'system' as const, label: t('home.themeSystem') },
+  { value: 'light' as const, label: t('home.themeLight') },
+  { value: 'dark' as const, label: t('home.themeDark') },
+]
 
 function statusLabel(status: ChoreInstance['status']): string {
   switch (status) {
@@ -270,44 +282,66 @@ onMounted(async () => {
   font-weight: 700;
 }
 
-/* ── Quick links — Clay feature-card palette ── */
-.quick-links {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+/* ── Settings section ── */
+.settings-section {
+  margin-top: 8px;
+  margin-bottom: 24px;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-hairline);
+  overflow: hidden;
 }
-.quick-card {
+.settings-toggle {
+  width: 100%;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 24px 12px;
-  border-radius: var(--radius-xl);
-  text-decoration: none;
-  transition: transform 0.1s;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
 }
-.quick-card:active { transform: scale(0.96); }
-.quick-icon { font-size: 32px; }
-.quick-label {
+.settings-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid var(--color-hairline);
+}
+.settings-label {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 12px 0 10px;
+}
+.theme-options {
+  display: flex;
+  gap: 8px;
+}
+.theme-btn {
+  flex: 1;
+  padding: 10px 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-surface-soft);
   font-family: Inter, sans-serif;
   font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.theme-btn.active {
+  background: var(--color-brand-ochre);
+  border-color: var(--color-brand-ochre);
+  color: var(--color-ink);
   font-weight: 600;
 }
-
-/* Pink card — on-dark text */
-.quick-card--pink { background: var(--color-brand-pink); color: var(--color-on-dark); }
-.quick-card--pink .quick-label { color: var(--color-on-dark); }
-
-/* Ochre card — ink text */
-.quick-card--ochre { background: var(--color-brand-ochre); color: var(--color-ink); }
-.quick-card--ochre .quick-label { color: var(--color-ink); }
-
-/* Teal card — on-dark text */
-.quick-card--teal { background: var(--color-brand-teal); color: var(--color-on-dark); }
-.quick-card--teal .quick-label { color: var(--color-on-dark); }
-
-/* Lavender card — ink text */
-.quick-card--lavender { background: var(--color-brand-lavender); color: var(--color-ink); }
-.quick-card--lavender .quick-label { color: var(--color-ink); }
+.theme-btn:active {
+  transform: scale(0.96);
+}
 </style>

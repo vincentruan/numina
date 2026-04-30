@@ -90,6 +90,11 @@ export default {
     wishComplete: '% 完成',
     wishReady: ' · 可以兑现啦 🎉',
     wishWaitingGoal: '等待爸妈设定目标 ⏳',
+    settings: '⚙️ 设置',
+    settingsTheme: '主题模式',
+    themeSystem: '🌓 跟随系统',
+    themeLight: '☀️ 日间模式',
+    themeDark: '🌙 夜间模式',
   },
   ledger: {
     myStars: '我的星星币',

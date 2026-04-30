@@ -1,71 +1,73 @@
 <template>
   <div class="tab-bar-wrapper">
-    <van-tabbar route>
-      <van-tabbar-item to="/">
+    <van-tabbar v-model="activeTab" @change="onTabChange">
+      <van-tabbar-item name="home">
         <template #icon><span class="tab-icon">🏠</span></template>
-        首页
+        {{ t('nav.home') }}
       </van-tabbar-item>
-      <van-tabbar-item to="/wishes">
+      <van-tabbar-item name="wishes">
         <template #icon><span class="tab-icon">🌟</span></template>
-        心愿
+        {{ t('nav.wishes') }}
       </van-tabbar-item>
-      <van-tabbar-item to="/tasks">
+      <van-tabbar-item name="tasks">
         <template #icon><span class="tab-icon">📋</span></template>
-        任务
+        {{ t('nav.tasks') }}
       </van-tabbar-item>
-      <van-tabbar-item to="/treasures">
+      <van-tabbar-item name="treasures">
         <template #icon><span class="tab-icon">🏆</span></template>
-        宝贝
+        {{ t('nav.treasures') }}
       </van-tabbar-item>
-      <van-tabbar-item to="/ledger">
+      <van-tabbar-item name="ledger">
         <template #icon><span class="tab-icon">💰</span></template>
-        账本
+        {{ t('nav.ledger') }}
       </van-tabbar-item>
     </van-tabbar>
-
-    <!-- Dark mode toggle — floats above tab bar -->
-    <button
-      class="theme-toggle"
-      :aria-label="isDark ? '切换到日间模式' : '切换到夜间模式'"
-      @click="toggle"
-    >
-      {{ isDark ? '☀️' : '🌙' }}
-    </button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { useDarkMode } from '@/utils/darkMode'
+import { ref, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 
-const { isDark, toggle } = useDarkMode()
+const { t } = useI18n()
+const router = useRouter()
+const route = useRoute()
+
+const TAB_ROUTES: Record<string, string> = {
+  home: '/',
+  wishes: '/wishes',
+  tasks: '/tasks',
+  treasures: '/treasures',
+  ledger: '/ledger',
+}
+
+function routeToTab(path: string): string {
+  if (path === '/') return 'home'
+  const name = path.split('/')[1]
+  return name in TAB_ROUTES ? name : 'home'
+}
+
+const activeTab = ref(routeToTab(route.path))
+
+watch(() => route.path, (path) => {
+  activeTab.value = routeToTab(path)
+})
+
+function onTabChange(name: string) {
+  const target = TAB_ROUTES[name] ?? '/'
+  // Always navigate — replace when already on the same route to avoid duplicate errors
+  if (route.path === target) {
+    router.replace(target)
+  } else {
+    router.push(target)
+  }
+}
 </script>
 
 <style scoped>
 .tab-bar-wrapper {
   position: relative;
-}
-
-.theme-toggle {
-  position: fixed;
-  bottom: 68px;
-  right: 16px;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-card);
-  border: 1px solid var(--color-hairline);
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 100;
-  transition: transform 0.15s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-}
-
-.theme-toggle:active {
-  transform: scale(0.9);
 }
 
 .tab-icon {
