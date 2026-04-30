@@ -626,7 +626,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(23, 23, 28, 0.35);
+  box-shadow: var(--shadow-elevated);
   z-index: 10;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
@@ -639,8 +639,9 @@ onUnmounted(() => {
 }
 
 [data-theme='dark'] .fab {
-  background: var(--color-coral);
-  box-shadow: 0 4px 20px rgba(255, 119, 89, 0.4);
+  background: var(--color-lavender);
+  color: #010120;
+  box-shadow: 0 4px 20px rgba(189, 187, 255, 0.3);
 }
 
 .chart-section {
