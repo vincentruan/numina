@@ -258,6 +258,55 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 6px;
   position: relative;
+  /* Dark mode defaults */
+  --ai-btn-border: rgba(255, 255, 255, 0.1);
+  --ai-btn-color: rgba(255, 255, 255, 0.4);
+  --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
+  --ai-btn-hover-color: rgba(255, 255, 255, 0.7);
+  --ai-plus-border: rgba(255, 255, 255, 0.12);
+  --ai-plus-bg: rgba(255, 255, 255, 0.06);
+  --ai-plus-color: rgba(255, 255, 255, 0.5);
+  --ai-plus-hover-bg: rgba(255, 255, 255, 0.1);
+  --ai-plus-hover-color: rgba(255, 255, 255, 0.8);
+  --ai-panel-bg: #1e1e2e;
+  --ai-panel-border: rgba(255, 255, 255, 0.1);
+  --ai-panel-item-color: rgba(255, 255, 255, 0.6);
+  --ai-panel-item-hover-bg: rgba(255, 255, 255, 0.08);
+  --ai-panel-item-hover-color: rgba(255, 255, 255, 0.9);
+  --ai-input-bg: rgba(255, 255, 255, 0.07);
+  --ai-input-border: rgba(255, 255, 255, 0.1);
+  --ai-text-color: rgba(255, 255, 255, 0.9);
+  --ai-placeholder-color: rgba(255, 255, 255, 0.3);
+  --ai-scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --ai-expand-color: rgba(255, 255, 255, 0.3);
+  --ai-expand-hover-bg: rgba(255, 255, 255, 0.08);
+  --ai-expand-hover-color: rgba(255, 255, 255, 0.6);
+}
+
+/* Light mode overrides */
+:global(.theme-light) .input-shell {
+  --ai-btn-border: rgba(0, 0, 0, 0.15);
+  --ai-btn-color: rgba(0, 0, 0, 0.55);
+  --ai-btn-hover-bg: rgba(0, 0, 0, 0.06);
+  --ai-btn-hover-color: rgba(0, 0, 0, 0.8);
+  --ai-plus-border: rgba(0, 0, 0, 0.18);
+  --ai-plus-bg: rgba(0, 0, 0, 0.05);
+  --ai-plus-color: rgba(0, 0, 0, 0.5);
+  --ai-plus-hover-bg: rgba(0, 0, 0, 0.09);
+  --ai-plus-hover-color: rgba(0, 0, 0, 0.8);
+  --ai-panel-bg: #ffffff;
+  --ai-panel-border: rgba(0, 0, 0, 0.1);
+  --ai-panel-item-color: rgba(0, 0, 0, 0.6);
+  --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.06);
+  --ai-panel-item-hover-color: rgba(0, 0, 0, 0.85);
+  --ai-input-bg: rgba(0, 0, 0, 0.04);
+  --ai-input-border: rgba(0, 0, 0, 0.15);
+  --ai-text-color: rgba(0, 0, 0, 0.85);
+  --ai-placeholder-color: rgba(0, 0, 0, 0.35);
+  --ai-scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --ai-expand-color: rgba(0, 0, 0, 0.3);
+  --ai-expand-hover-bg: rgba(0, 0, 0, 0.06);
+  --ai-expand-hover-color: rgba(0, 0, 0, 0.6);
 }
 
 /* ── Toolbar ── */
@@ -285,10 +334,10 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--ai-btn-border);
   border-radius: 20px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--ai-btn-color);
   font-size: 12px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
@@ -297,8 +346,8 @@ onBeforeUnmount(() => {
 }
 
 .toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
+  background: var(--ai-btn-hover-bg);
+  color: var(--ai-btn-hover-color);
 }
 
 .toggle-btn--active {
@@ -317,9 +366,9 @@ onBeforeUnmount(() => {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--ai-plus-border);
+  background: var(--ai-plus-bg);
+  color: var(--ai-plus-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -328,8 +377,8 @@ onBeforeUnmount(() => {
 }
 
 .plus-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.8);
+  background: var(--ai-plus-hover-bg);
+  color: var(--ai-plus-hover-color);
 }
 
 .plus-btn--open {
@@ -344,8 +393,8 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: calc(100% + 8px);
   right: 0;
-  background: #1e1e2e;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--ai-panel-bg);
+  border: 1px solid var(--ai-panel-border);
   border-radius: 14px;
   padding: 8px;
   display: grid;
@@ -365,15 +414,15 @@ onBeforeUnmount(() => {
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--ai-panel-item-color);
   font-size: 11px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 .panel-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--ai-panel-item-hover-bg);
+  color: var(--ai-panel-item-hover-color);
 }
 
 .panel-item:active {
@@ -412,8 +461,8 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   align-items: flex-end;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--ai-input-bg);
+  border: 1px solid var(--ai-input-border);
   border-radius: 18px;
   padding: 10px 48px 10px 38px;
   min-height: 44px;
@@ -449,7 +498,7 @@ onBeforeUnmount(() => {
   border: none;
   background: transparent;
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--ai-text-color);
   outline: none;
   resize: none;
   overflow-y: auto;
@@ -462,7 +511,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-textarea::placeholder {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--ai-placeholder-color);
 }
 
 .chat-textarea:disabled {
@@ -474,7 +523,7 @@ onBeforeUnmount(() => {
 }
 
 .chat-textarea::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--ai-scrollbar-thumb);
   border-radius: 2px;
 }
 
@@ -492,13 +541,13 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--ai-expand-color);
   transition: background 0.15s, color 0.15s;
 }
 
 .expand-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
+  background: var(--ai-expand-hover-bg);
+  color: var(--ai-expand-hover-color);
 }
 
 /* ── Send / Abort button ── */
