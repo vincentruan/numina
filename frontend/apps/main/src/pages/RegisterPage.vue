@@ -178,7 +178,7 @@ async function onSubmit() {
 <style scoped>
 .register-page {
   min-height: 100vh;
-  background: linear-gradient(160deg, #17171c 0%, #0d0d10 100%);
+  background: linear-gradient(160deg, #010120 0%, #000010 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -190,9 +190,10 @@ async function onSubmit() {
 }
 .app-title {
   font-size: 28px;
-  font-weight: 700;
+  font-weight: 500;
   color: #fff;
   margin: 0;
+  letter-spacing: -0.02em;
 }
 .app-subtitle {
   font-size: 14px;
