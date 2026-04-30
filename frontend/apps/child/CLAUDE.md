@@ -92,7 +92,38 @@ This applies to:
 
 `@/` maps to `src/` — configured in both `vite.config.ts` and `tsconfig.app.json`.
 
+## Design System (DESIGN.md — mandatory)
+
+This app uses the **Clay** design system defined in [`DESIGN.md`](./DESIGN.md). All UI work **must** follow it. Do not invent colors, spacing, typography, or component styles — reference DESIGN.md exclusively.
+
+### Non-negotiable rules
+
+- **Colors** — use only tokens from `DESIGN.md colors`. Never hardcode hex values. Map to CSS variables or Tailwind tokens derived from that palette.
+- **Typography** — use only the type scale defined in `DESIGN.md typography` (display-xl → caption-uppercase). Match `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing` exactly.
+- **Spacing** — use only the spacing scale (`xxs: 4px` → `section: 96px`). No arbitrary pixel values.
+- **Border radius** — use only `rounded` tokens (`xs: 6px` → `pill: 9999px`).
+- **Components** — buttons, cards, inputs, nav must match the component specs in `DESIGN.md components`. Use the correct variant (e.g. `button-primary` vs `button-secondary` vs `button-on-color`).
+- **Feature cards** — use the named color variants (`feature-card-pink`, `feature-card-teal`, `feature-card-lavender`, `feature-card-peach`, `feature-card-ochre`, `feature-card-cream`). Do not create ad-hoc card colors.
+- **Canvas background** — default page background is `canvas: #fffaf0`, not white (`#ffffff`).
+- **Dark surfaces** — use `surface-dark` / `surface-dark-elevated` for dark-mode or inverted sections; never plain black.
+
+### Before writing any UI component
+
+1. Open `DESIGN.md` and locate the relevant component spec.
+2. Apply the exact `backgroundColor`, `textColor`, `rounded`, `padding`, and `typography` values.
+3. If a component variant doesn't exist in DESIGN.md, use the closest existing variant and note the gap — do not freestyle.
+
+### Anti-patterns (never do these)
+
+- Hardcoded hex colors not in the DESIGN.md palette
+- Font sizes or weights outside the type scale
+- Arbitrary border-radius values
+- Inventing new component variants without a DESIGN.md entry
+- Using `#ffffff` as canvas (correct value is `#fffaf0`)
+- Using raw black (`#000000`) — use `ink: #0a0a0a` instead
+
 ## Links
 
 - Root [`CLAUDE.md`](../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
 - Main app [`CLAUDE.md`](../main/CLAUDE.md) — same i18n rules, emoji convention reference
+- [`DESIGN.md`](./DESIGN.md) — Clay design system (colors, typography, components, spacing)
