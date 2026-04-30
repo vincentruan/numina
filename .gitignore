@@ -153,6 +153,9 @@ backend/config/storage_backends.yaml
 .superpowers/
 .worktrees/
 
+# Dogfood audit output (screenshots, reports — local only)
+dogfood-output/
+
 # Playwright E2E Tests
 tests/playwright-report/
 tests/test-results/
