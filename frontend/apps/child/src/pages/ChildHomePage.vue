@@ -21,7 +21,7 @@
           <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
           <div class="chore-info">
             <p class="chore-name">{{ c.chore_name }}</p>
-            <p class="chore-reward">+{{ c.coin_reward + c.streak_bonus }} ⭐</p>
+            <p class="chore-reward">+{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐</p>
           </div>
           <span class="chore-status-badge">{{ statusLabel(c.status) }}</span>
         </div>
@@ -51,7 +51,7 @@
     <!-- Calendar -->
     <div class="section">
       <p class="section-title">{{ t('home.myCalendar') }}</p>
-      <ChildCalendar :fetch-month="fetchChildMonth" day-route="/child/calendar/day" variant="child" />
+      <ChildCalendar :fetch-month="fetchChildMonth" day-route="/calendar/day" variant="child" />
     </div>
 
     <!-- Quick links — Clay feature-card palette -->

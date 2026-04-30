@@ -161,7 +161,7 @@ async function loadMonth() {
   loading.value = true
   try {
     const res = await props.fetchMonth(year.value, month.value)
-    days.value = res.days
+    days.value = res.days ?? []
   } catch {
     days.value = []
   } finally {
