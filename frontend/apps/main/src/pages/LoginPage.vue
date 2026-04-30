@@ -228,7 +228,7 @@ function backToStep1() {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(160deg, #17171c 0%, #0d0d10 100%);
+  background: linear-gradient(160deg, #010120 0%, #000010 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -262,10 +262,10 @@ function backToStep1() {
 
 .app-title {
   font-size: 36px;
-  font-weight: 700;
+  font-weight: 500;
   color: #fff;
   margin: 0;
-  letter-spacing: 2px;
+  letter-spacing: -0.02em;
 }
 
 .app-subtitle {
@@ -375,8 +375,8 @@ function backToStep1() {
 .numpad-btn {
   height: 60px;
   border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
   font-size: 22px;
   font-weight: 600;
