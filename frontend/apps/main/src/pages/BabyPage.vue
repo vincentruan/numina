@@ -16,26 +16,20 @@
       <!-- Child Selector + Content -->
       <template v-else>
         <!-- Child Tabs -->
-        <van-tabs v-model:active="activeChildIndex" scrollable>
+        <van-tabs v-model:active="activeChildIndex" scrollable class="child-tabs">
           <van-tab title="全部" />
-          <van-tab v-for="child in childMembers" :key="child.id" :title="child.display_name" />
+          <van-tab v-for="child in childMembers" :key="child.id">
+            <template #title>
+              <div class="child-tab-title">
+                <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B' }">
+                  {{ (child.display_name ?? '?').charAt(0) }}
+                </div>
+                <span class="child-tab-name">{{ child.display_name }}</span>
+                <span class="child-tab-balance">{{ childBalances[child.id] ?? 0 }}⭐</span>
+              </div>
+            </template>
+          </van-tab>
         </van-tabs>
-
-        <!-- Child Info Cards (one per child, or aggregate) -->
-        <div v-if="activeChildIndex === 0" class="child-cards-row">
-          <div
-            v-for="child in childMembers"
-            :key="child.id"
-            class="child-info-card"
-            @click="activeChildIndex = childMembers.indexOf(child) + 1"
-          >
-            <div class="child-avatar" :style="{ background: child.avatar_color || '#FF6B6B' }">
-              {{ (child.display_name ?? '?').charAt(0) }}
-            </div>
-            <p class="child-card-name">{{ child.display_name }}</p>
-            <p class="child-card-balance">{{ childBalances[child.id] ?? 0 }} ⭐</p>
-          </div>
-        </div>
 
         <!-- Summary Card -->
         <van-cell-group inset class="summary-card">
@@ -270,54 +264,57 @@ onMounted(async () => {
   padding-bottom: 20px;
 }
 
-/* Child info cards row */
-.child-cards-row {
-  display: flex;
-  gap: 10px;
-  padding: 12px 16px 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.child-cards-row::-webkit-scrollbar { display: none; }
-
-.child-info-card {
-  flex-shrink: 0;
+/* Child tab custom title */
+.child-tab-title {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  background: #eeece7;
-  border-radius: 8px;
-  padding: 12px 16px;
-  cursor: pointer;
-  min-width: 80px;
-  transition: transform 0.1s;
+  gap: 3px;
+  padding: 4px 2px;
 }
-.child-info-card:active { transform: scale(0.96); }
 
-.child-avatar {
-  width: 40px;
-  height: 40px;
+.child-tab-avatar {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
   color: #fff;
+  flex-shrink: 0;
 }
 
-.child-card-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #17171c;
-  margin: 0;
-}
-
-.child-card-balance {
+.child-tab-name {
   font-size: 12px;
-  color: #666;
-  margin: 0;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.child-tab-balance {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.8;
+}
+
+/* Fix tab text visibility in dark mode */
+.child-tabs :deep(.van-tab) {
+  color: var(--van-gray-6, #969799);
+}
+
+.child-tabs :deep(.van-tab--active) {
+  color: var(--van-tabs-default-color, var(--van-primary-color, #1989fa));
+}
+
+[data-theme='dark'] .child-tabs :deep(.van-tab),
+.dark .child-tabs :deep(.van-tab) {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+[data-theme='dark'] .child-tabs :deep(.van-tab--active),
+.dark .child-tabs :deep(.van-tab--active) {
+  color: #fff;
 }
 
 .summary-card {
