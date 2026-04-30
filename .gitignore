@@ -162,3 +162,4 @@ tests/screenshot/screenshots/audit-*.png
 tests/screenshot/screenshots/live-*.png
 tests/screenshot/screenshots/*-after-*.png
 .gstack/
+.worktrees
