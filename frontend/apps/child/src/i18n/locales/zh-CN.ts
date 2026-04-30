@@ -51,6 +51,7 @@ export default {
     COIN_INSUFFICIENT: '⚠️ 余额不足',
     WISH_INSUFFICIENT_COINS: '⚠️ 积分不足，无法兑现',
     wrongPassword: '❌ 密码错误，请重试',
+    LOAD_FAILED: '❌ 加载失败，请刷新重试',
   },
   toast: {
     loginSuccess: '✅ 登录成功',
@@ -98,6 +99,15 @@ export default {
     amountLabel: '数量',
     amountPlaceholder: '输入星星币数量',
     confirmGift: '确认赠送',
+    txType: {
+      parent_grant: '零花钱',
+      wish_spend: '兑换心愿',
+      chore_reward: '家务奖励',
+      streak_bonus: '连续奖励',
+      milestone_bonus: '里程碑奖励',
+      sibling_gift: '兄弟姐妹赠送',
+      adjustment: '余额调整',
+    },
   },
   wishes: {
     starUnit: '⭐ 星星币',

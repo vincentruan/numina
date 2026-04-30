@@ -21,7 +21,7 @@
       <div v-for="tx in transactions" :key="tx.id" class="tx-card">
         <span class="tx-emoji">{{ tx.narrative_emoji || '⭐' }}</span>
         <div class="tx-info">
-          <p class="tx-narrative">{{ tx.narrative || tx.transaction_type }}</p>
+          <p class="tx-narrative">{{ tx.narrative || t(`ledger.txType.${tx.transaction_type}`, tx.transaction_type) }}</p>
           <p class="tx-time">{{ tx.relative_time }}</p>
         </div>
         <span class="tx-amount" :class="tx.amount > 0 ? 'positive' : 'negative'">
