@@ -35,6 +35,13 @@
           </van-collapse>
         </van-cell-group>
 
+        <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
+        <SmartRemindersCard
+          :idle-assets="dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle')"
+          :expiring-assets="dashboardStore.expiringSoonAssets"
+          @select-status="onStatusSelect"
+        />
+
         <!-- Allocation Chart -->
         <van-cell-group inset class="chart-section">
           <van-collapse v-model="allocationExpanded" @change="toggleAllocation">
@@ -55,13 +62,6 @@
             <van-icon name="checked" @click="enterSelectionMode" />
           </template>
         </StatusSummaryGrid>
-
-        <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
-        <SmartRemindersCard
-          :idle-assets="dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle')"
-          :expiring-assets="dashboardStore.expiringSoonAssets"
-          @select-status="onStatusSelect"
-        />
 
         <!-- Category Navigation (Sticky, shown when scrolled) -->
         <div v-if="showCategoryNav && categoriesWithAssetCount.length > 0" class="category-nav-sticky">
