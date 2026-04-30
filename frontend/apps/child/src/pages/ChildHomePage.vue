@@ -29,7 +29,7 @@
     </div>
 
     <!-- Top active wish progress -->
-    <router-link v-if="topWish" to="/child/wishes" class="wish-preview">
+    <router-link v-if="topWish" to="/wishes" class="wish-preview">
       <div class="wish-preview-header">
         <span class="wish-preview-icon">{{ topWish.emoji || '🌟' }}</span>
         <div class="wish-preview-info">
@@ -56,19 +56,19 @@
 
     <!-- Quick links — Clay feature-card palette -->
     <div class="quick-links">
-      <router-link to="/child/wishes" class="quick-card quick-card--pink">
+      <router-link to="/wishes" class="quick-card quick-card--pink">
         <span class="quick-icon">🌟</span>
         <span class="quick-label">{{ t('home.quickWishes') }}</span>
       </router-link>
-      <router-link to="/child/treasures" class="quick-card quick-card--ochre">
+      <router-link to="/treasures" class="quick-card quick-card--ochre">
         <span class="quick-icon">🏆</span>
         <span class="quick-label">{{ t('home.quickTreasures') }}</span>
       </router-link>
-      <router-link to="/child/tasks" class="quick-card quick-card--teal">
+      <router-link to="/tasks" class="quick-card quick-card--teal">
         <span class="quick-icon">📋</span>
         <span class="quick-label">{{ t('home.quickTasks') }}</span>
       </router-link>
-      <router-link to="/child/ledger" class="quick-card quick-card--lavender">
+      <router-link to="/ledger" class="quick-card quick-card--lavender">
         <span class="quick-icon">💰</span>
         <span class="quick-label">{{ t('home.quickLedger') }}</span>
       </router-link>
