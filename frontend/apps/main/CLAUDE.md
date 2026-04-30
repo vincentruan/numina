@@ -88,17 +88,20 @@ showToast('添加成功')
 **All visual changes MUST follow the design system defined in [`DESIGN.md`](./DESIGN.md).**
 
 Before writing any CSS, colors, typography, spacing, or component styles:
-1. Read `DESIGN.md` to understand the Cohere-inspired visual language
+1. Read `DESIGN.md` to understand the Together AI-inspired visual language
 2. Use only the color tokens, type scale, radius values, and spacing defined there
 3. Override Vant component styles to match — do not introduce new design decisions
 
 Key constraints from `DESIGN.md`:
-- **Primary action color**: `#17171c` (near-black pill CTAs), not Vant's default `#1989fa`
-- **Accent**: `#ff7759` coral for taxonomy chips and warm markers
-- **Surface**: white canvas (`#ffffff`) as default; `#eeece7` soft-stone for secondary cards
-- **Border radius**: `8px` cards, `32px` pill buttons — match the token scale exactly
-- **No blue gradients**: replace existing `linear-gradient(135deg, #1677ff …)` patterns
-- **Typography**: system sans-serif fallback (Unica77 not available); tight line-height, negative tracking on headings
+- **Dark surface**: `#010120` midnight blue for dark sections — never generic gray-black
+- **Brand accents**: magenta `#ef2cc1` and orange `#fc4c02` are illustration-only, never UI chrome
+- **Soft accent**: lavender `#bdbbff` for subtle secondary highlights
+- **Surface**: white canvas (`#ffffff`) as default; `#010120` for dark/research sections
+- **Border radius**: `4px` sharp for buttons/badges, `8px` for larger cards — no pills, no generous rounding
+- **No blue gradients**: pastel gradients (pink/lavender/blue) are decorative hero backgrounds only
+- **Typography**: system sans-serif fallback ("The Future" not available); tight negative letter-spacing on all headings
+- **Shadows**: always dark-blue-tinted `rgba(1, 1, 32, 0.1)` — never generic black shadows
+- **Dual atmosphere**: light sections (business, white canvas) vs dark sections (research, `#010120`)
 
 ### Mobile-First Priority
 
