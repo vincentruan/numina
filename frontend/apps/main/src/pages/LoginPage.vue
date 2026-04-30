@@ -98,7 +98,7 @@
         <span class="divider">|</span>
         <router-link to="/join-family">加入家庭</router-link>
         <span class="divider">|</span>
-        <router-link to="/child/auth">儿童登录</router-link>
+        <a href="/child/">儿童登录</a>
       </div>
     </div>
   </div>
