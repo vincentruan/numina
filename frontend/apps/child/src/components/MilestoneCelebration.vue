@@ -1,14 +1,21 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="milestone-overlay" @click="dismiss">
-      <div class="confetti-container">
+    <div
+      v-if="visible"
+      class="milestone-overlay"
+      :aria-label="t('milestone.overlayLabel')"
+      role="dialog"
+      aria-modal="true"
+      @click="dismiss"
+    >
+      <div class="confetti-container" aria-hidden="true">
         <span v-for="i in 20" :key="i" class="confetti" :style="confettiStyle(i)" />
       </div>
-      <div class="milestone-card">
-        <div class="milestone-icon">{{ icon }}</div>
+      <div class="milestone-card" @click.stop>
+        <div class="milestone-icon" aria-hidden="true">{{ icon }}</div>
         <div class="milestone-title">{{ title }}</div>
         <div class="milestone-desc">{{ desc }}</div>
-        <button class="dismiss-btn" @click.stop="dismiss">太棒了！</button>
+        <button class="dismiss-btn" @click="dismiss">{{ t('milestone.dismissBtn') }}</button>
       </div>
     </div>
   </Teleport>
@@ -16,35 +23,27 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { MilestoneType } from '@/api/milestones'
 
 const props = defineProps<{
   visible: boolean
-  milestoneType: MilestoneType | string  // string fallback for future types
+  milestoneType: MilestoneType | string
 }>()
 
 const emit = defineEmits<{ (e: 'dismiss'): void }>()
+const { t } = useI18n()
 
 function dismiss() {
   emit('dismiss')
 }
 
-const MILESTONE_META: Record<string, { icon: string; title: string; desc: string }> = {
-  first_chore:        { icon: '🌟', title: '第一个家务！',     desc: '你完成了人生第一个家务，太棒了！' },
-  first_wish_realized:{ icon: '🎁', title: '第一个心愿实现！', desc: '你的努力换来了心愿成真！' },
-  coins_50:           { icon: '💰', title: '攒到50颗星星币！', desc: '继续加油，更多心愿等着你！' },
-  coins_200:          { icon: '🏆', title: '攒到200颗星星币！',desc: '你是理财小达人！' },
-  streak_7:           { icon: '🔥', title: '连续打卡7天！',    desc: '一周不间断，获得1.5倍奖励！' },
-  streak_14:          { icon: '🔥🔥', title: '连续打卡14天！', desc: '两周坚持，获得2倍奖励！' },
-  streak_30:          { icon: '👑', title: '连续打卡30天！',   desc: '一个月的坚持，你是冠军！' },
-}
+const icon  = computed(() => t(`milestone.icons.${props.milestoneType}`, t('milestone.icons.default')))
+const title = computed(() => t(`milestone.titles.${props.milestoneType}`, t('milestone.titles.default')))
+const desc  = computed(() => t(`milestone.descs.${props.milestoneType}`, t('milestone.descs.default')))
 
-const meta = computed(() => MILESTONE_META[props.milestoneType] ?? { icon: '🎉', title: '新成就！', desc: '恭喜你解锁了新成就！' })
-const icon = computed(() => meta.value.icon)
-const title = computed(() => meta.value.title)
-const desc = computed(() => meta.value.desc)
-
-const COLORS = ['#ff6b6b', '#ffd93d', '#6bcb77', '#4d96ff', '#ff922b', '#cc5de8']
+/* Clay brand palette for confetti */
+const COLORS = ['#ff4d8b', '#e8b94a', '#a4d4c5', '#b8a4ed', '#ffb084', '#ff6b5a']
 
 function confettiStyle(i: number) {
   const color = COLORS[i % COLORS.length]
@@ -65,12 +64,13 @@ function confettiStyle(i: number) {
 .milestone-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(10, 10, 10, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
 }
+
 .confetti-container {
   position: absolute;
   inset: 0;
@@ -87,28 +87,49 @@ function confettiStyle(i: number) {
   0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
   100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
 }
+
+/* Card — cream surface */
 .milestone-card {
-  background: #fff;
-  border-radius: 20px;
+  background: var(--color-canvas);
+  border-radius: var(--radius-xl);
   padding: 32px 28px;
   text-align: center;
   max-width: 300px;
   width: 90%;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.25);
   position: relative;
   z-index: 1;
+  border: 1px solid var(--color-hairline);
 }
-.milestone-icon { font-size: 56px; margin-bottom: 12px; }
-.milestone-title { font-size: 22px; font-weight: 800; color: #333; margin-bottom: 8px; }
-.milestone-desc { font-size: 15px; color: #666; margin-bottom: 24px; line-height: 1.5; }
-.dismiss-btn {
-  background: linear-gradient(135deg, #f5a623, #ff6d00);
-  color: #fff;
-  border: none;
-  border-radius: 24px;
-  padding: 12px 32px;
-  font-size: 16px;
+.milestone-icon  { font-size: 56px; margin-bottom: 12px; }
+.milestone-title {
+  font-family: Inter, sans-serif;
+  font-size: 22px;
   font-weight: 700;
-  cursor: pointer;
+  color: var(--color-ink);
+  margin-bottom: 8px;
+  letter-spacing: -0.3px;
 }
+.milestone-desc {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  color: var(--color-body);
+  margin-bottom: 24px;
+  line-height: 1.55;
+}
+
+/* Dismiss — primary CTA */
+.dismiss-btn {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 12px 32px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  height: 44px;
+  min-width: 44px;
+}
+.dismiss-btn:active { transform: scale(0.96); }
 </style>

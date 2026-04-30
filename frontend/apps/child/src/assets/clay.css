@@ -1,0 +1,102 @@
+/* Clay Design System — CSS Custom Properties
+ * Light mode = DESIGN.md canonical values
+ * Dark mode = surface inversion for readability
+ */
+
+:root {
+  /* ── Brand accent (unchanged in dark) ── */
+  --color-brand-pink:    #ff4d8b;
+  --color-brand-teal:    #1a3a3a;
+  --color-brand-lavender:#b8a4ed;
+  --color-brand-peach:   #ffb084;
+  --color-brand-ochre:   #e8b94a;
+  --color-brand-mint:    #a4d4c5;
+  --color-brand-coral:   #ff6b5a;
+
+  /* ── Semantic ── */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error:   #ef4444;
+
+  /* ── Light mode surfaces ── */
+  --color-canvas:          #fffaf0;
+  --color-surface-soft:    #faf5e8;
+  --color-surface-card:    #f5f0e0;
+  --color-surface-strong:  #ebe6d6;
+  --color-surface-dark:    #0a1a1a;
+  --color-surface-dark-el: #1a2a2a;
+
+  /* ── Light mode text ── */
+  --color-ink:         #0a0a0a;
+  --color-body-strong: #1a1a1a;
+  --color-body:        #3a3a3a;
+  --color-muted:       #6a6a6a;
+  --color-muted-soft:  #9a9a9a;
+  --color-on-primary:  #ffffff;
+  --color-on-dark:     #ffffff;
+  --color-on-dark-soft:#a0a0a0;
+
+  /* ── Light mode borders ── */
+  --color-hairline:      #e5e5e5;
+  --color-hairline-soft: #f0f0f0;
+
+  /* ── Primary CTA ── */
+  --color-primary:          #0a0a0a;
+  --color-primary-active:   #1f1f1f;
+  --color-primary-disabled: #e5e5e5;
+
+  /* ── Spacing ── */
+  --space-xxs: 4px;
+  --space-xs:  8px;
+  --space-sm:  12px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  32px;
+  --space-xxl: 48px;
+  --space-section: 96px;
+
+  /* ── Border radius ── */
+  --radius-xs:   6px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   24px;
+  --radius-pill: 9999px;
+}
+
+/* ── Dark mode overrides ── */
+[data-theme="dark"] {
+  --color-canvas:          #0a1a1a;
+  --color-surface-soft:    #0f2020;
+  --color-surface-card:    #152828;
+  --color-surface-strong:  #1a3030;
+  --color-surface-dark:    #000d0d;
+  --color-surface-dark-el: #0a1a1a;
+
+  --color-ink:         #f0ece0;
+  --color-body-strong: #e0dcd0;
+  --color-body:        #c0bcb0;
+  --color-muted:       #8a8a80;
+  --color-muted-soft:  #606060;
+  --color-on-primary:  #0a0a0a;
+  --color-on-dark:     #f0ece0;
+  --color-on-dark-soft:#8a8a80;
+
+  --color-hairline:      #1e3030;
+  --color-hairline-soft: #162828;
+
+  --color-primary:          #e8b94a;
+  --color-primary-active:   #d4a83a;
+  --color-primary-disabled: #2a3a3a;
+
+  /* Brand accents stay vivid but slightly muted */
+  --color-brand-ochre:   #d4a83a;
+  --color-brand-peach:   #e09870;
+  --color-brand-lavender:#9a8cd0;
+  --color-brand-mint:    #8abcad;
+}
+
+/* ── Smooth theme transition ── */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}

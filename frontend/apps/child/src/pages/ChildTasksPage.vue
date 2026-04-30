@@ -66,7 +66,6 @@ const celebrationVisible = ref(false)
 const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 
-// Use local date (not UTC) to avoid wrong date for users east of UTC
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 const todayLabel = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })
@@ -84,7 +83,6 @@ function getSeenIds(): Set<string> {
 function markSeen(id: string) {
   const seen = getSeenIds()
   seen.add(id)
-  // Prune to last 200 entries to prevent unbounded localStorage growth
   const pruned = [...seen].slice(-200)
   localStorage.setItem(SEEN_KEY, JSON.stringify(pruned))
 }
@@ -99,7 +97,7 @@ async function checkNewMilestones() {
       showNextMilestone()
     }
   } catch {
-    // Milestone check failure is non-blocking
+    // non-blocking
   }
 }
 
@@ -110,14 +108,12 @@ function showNextMilestone() {
 }
 
 function dismissCelebration() {
-  if (!celebrationVisible.value) return  // guard against rapid double-tap
+  if (!celebrationVisible.value) return
   celebrationVisible.value = false
-  // Mark current as seen only after user dismisses
   if (milestoneQueue.value.length > 0) {
     markSeen(milestoneQueue.value[0].id)
     milestoneQueue.value = milestoneQueue.value.slice(1)
   }
-  // Show next queued milestone after a short delay
   if (milestoneQueue.value.length > 0) {
     setTimeout(showNextMilestone, 300)
   }
@@ -155,74 +151,115 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .chores-page {
   padding: 16px;
-  background: #FFF9E6;
+  background: var(--color-canvas);
   min-height: 100vh;
 }
+
 .header {
   text-align: center;
   margin-bottom: 16px;
 }
 .date-label {
-  font-size: 14px;
-  color: #999;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-muted-soft);
 }
+
 .loading, .empty {
   text-align: center;
   margin-top: 60px;
-  color: #999;
+  color: var(--color-muted-soft);
   font-size: 16px;
+  font-family: Inter, sans-serif;
 }
-.chore-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
+
+/* ── Chore list ── */
+.chore-list { display: flex; flex-direction: column; gap: 12px; }
+
 .chore-card {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-radius: 12px;
-  padding: 14px 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-lg);
+  padding: 16px;
   gap: 12px;
+  border: 1px solid var(--color-hairline);
+  transition: transform 0.1s;
 }
-.chore-card.approved { opacity: 0.6; }
-.chore-card.rejected { opacity: 0.5; }
+.chore-card:active { transform: scale(0.98); }
+.chore-card.approved { opacity: 0.55; }
+.chore-card.rejected { opacity: 0.45; }
+
 .chore-emoji { font-size: 28px; }
+
 .chore-info { flex: 1; }
-.chore-name { font-size: 16px; font-weight: 600; color: #333; margin: 0; }
-.chore-reward { font-size: 13px; color: #f5a623; margin: 2px 0 0; }
+.chore-name {
+  font-family: Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+.chore-reward {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-brand-ochre);
+  margin: 4px 0 0;
+  font-weight: 500;
+}
+
 .streak-badge {
   display: inline-block;
   margin-left: 6px;
   font-size: 12px;
-  background: #fff3e0;
-  color: #e65100;
-  border-radius: 10px;
-  padding: 1px 6px;
-  font-weight: 700;
+  background: var(--color-brand-peach);
+  color: var(--color-ink);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  font-weight: 600;
 }
+
+/* ── Complete button — primary CTA ── */
 .btn-complete {
-  background: #f5a623;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border: none;
-  border-radius: 20px;
+  border-radius: var(--radius-md);
   padding: 8px 18px;
+  font-family: Inter, sans-serif;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-}
-.status-badge {
-  font-size: 13px;
-  padding: 4px 10px;
-  border-radius: 12px;
+  height: 44px;
   white-space: nowrap;
 }
-.status-badge.pending { background: #fff3cd; color: #856404; }
-.status-badge.approved { background: #d4edda; color: #155724; }
-.status-badge.rejected { background: #f8d7da; color: #721c24; }
-.btn-complete:disabled { opacity: 0.5; cursor: not-allowed; }
-.error-msg { background: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
+.btn-complete:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-complete:active:not(:disabled) { transform: scale(0.96); }
+
+/* ── Status badges ── */
+.status-badge {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  font-weight: 500;
+}
+.status-badge.pending  { background: var(--color-surface-card); color: var(--color-muted); }
+.status-badge.approved { background: var(--color-brand-mint); color: var(--color-ink); }
+.status-badge.rejected { background: var(--color-brand-coral); color: var(--color-on-dark); }
+
+.error-msg {
+  background: var(--color-brand-coral);
+  color: var(--color-on-dark);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+}
 </style>

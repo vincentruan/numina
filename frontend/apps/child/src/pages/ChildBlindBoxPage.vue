@@ -25,13 +25,13 @@
             class="bonus-item"
             role="listitem"
           >
-            <span>{{ t('blindBox.bonusItem', { expiry: formatExpiry(bonus.expires_at) }) }}</span>
+            <span class="bonus-text">{{ t('blindBox.bonusItem', { expiry: formatExpiry(bonus.expires_at) }) }}</span>
             <van-button
               size="small"
-              type="primary"
               :loading="loading"
               :disabled="loading"
               :aria-label="t('blindBox.bonusItemAriaLabel', { expiry: formatExpiry(bonus.expires_at) })"
+              style="background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: 8px;"
               @click="onUseBonusDraw(bonus.id)"
             >
               {{ t('blindBox.useBtn') }}
@@ -41,7 +41,9 @@
       </div>
 
       <div v-if="revealed && lastDraw" class="draw-actions">
-        <van-button block type="primary" @click="resetDraw">{{ t('blindBox.drawAgain') }}</van-button>
+        <van-button block style="background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: var(--radius-md); height: 44px;" @click="resetDraw">
+          {{ t('blindBox.drawAgain') }}
+        </van-button>
       </div>
     </div>
 
@@ -129,33 +131,45 @@ function formatExpiry(dateStr: string) {
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .child-blind-box-page {
   min-height: 100vh;
-  background: var(--van-background);
+  background: var(--color-canvas);
 }
+
 .draw-tab {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
+
 .bonus-section {
   width: 100%;
   padding: 0 16px;
 }
+
 .bonus-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+
 .bonus-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--van-background-2);
-  border-radius: 10px;
-  padding: 10px 14px;
-  font-size: 13px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  border: 1px solid var(--color-hairline);
 }
+
+.bonus-text {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-body);
+}
+
 .draw-actions {
   width: 100%;
   padding: 16px;

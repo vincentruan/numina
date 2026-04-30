@@ -1,7 +1,7 @@
 <template>
   <div class="wishes-page">
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <!-- Hero stats banner -->
+      <!-- Hero stats banner — peach feature card -->
       <div v-if="stats" class="hero-banner">
         <div class="hero-balance">
           <span class="hero-balance-num">{{ stats.balance }}</span>
@@ -21,11 +21,12 @@
 
       <div v-if="loading && !refreshing" class="loading">{{ t('common.loading') }}</div>
 
+      <div v-if="error && !loading" class="error-msg">{{ error }}</div>
+
       <!-- Active wishes -->
       <div v-if="!loading && activeWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionActive') }}</p>
         <div v-for="wish in activeWishes" :key="wish.id" class="wish-card wish-card--active">
-          <!-- Top row: emoji + name + priority -->
           <div class="wish-header">
             <div class="wish-emoji-wrap">
               <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
@@ -36,7 +37,6 @@
             </div>
           </div>
 
-          <!-- Progress section -->
           <div v-if="wish.has_cost_set && wish.progress !== null" class="progress-section">
             <div class="progress-track">
               <div
@@ -44,7 +44,6 @@
                 :class="jarClass(wish.progress)"
                 :style="{ width: Math.min((wish.progress ?? 0) * 100, 100) + '%' }"
               />
-              <!-- Star milestone markers -->
               <span class="progress-star" :style="{ left: '25%' }">⭐</span>
               <span class="progress-star" :style="{ left: '50%' }">⭐</span>
               <span class="progress-star" :style="{ left: '75%' }">⭐</span>
@@ -63,7 +62,6 @@
           </div>
           <div v-else class="progress-pending">{{ t('wishes.waitingGoal') }}</div>
 
-          <!-- Redeem button -->
           <button
             v-if="wish.status === 'active' && wish.progress !== null && wish.progress >= 1"
             class="btn-redeem"
@@ -78,7 +76,7 @@
       <!-- Redemption requested -->
       <div v-if="!loading && redemptionWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionRedemption') }}</p>
-        <div v-for="wish in redemptionWishes" :key="wish.id" class="wish-card wish-card--redemption">
+        <div v-for="wish in redemptionWishes" :key="wish.id" class="wish-card wish-card--simple">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
@@ -90,7 +88,7 @@
       <!-- Pending review -->
       <div v-if="!loading && pendingWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionPending') }}</p>
-        <div v-for="wish in pendingWishes" :key="wish.id" class="wish-card wish-card--pending">
+        <div v-for="wish in pendingWishes" :key="wish.id" class="wish-card wish-card--simple">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
@@ -102,7 +100,7 @@
       <!-- Realized -->
       <div v-if="!loading && realizedWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionRealized') }}</p>
-        <div v-for="wish in realizedWishes" :key="wish.id" class="wish-card wish-card--realized">
+        <div v-for="wish in realizedWishes" :key="wish.id" class="wish-card wish-card--simple wish-card--dim">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
@@ -114,7 +112,7 @@
       <!-- Rejected -->
       <div v-if="!loading && rejectedWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionRejected') }}</p>
-        <div v-for="wish in rejectedWishes" :key="wish.id" class="wish-card wish-card--rejected">
+        <div v-for="wish in rejectedWishes" :key="wish.id" class="wish-card wish-card--simple wish-card--dim">
           <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
           <div class="wish-meta">
             <p class="wish-name">{{ wish.name }}</p>
@@ -133,7 +131,7 @@
     </van-pull-refresh>
 
     <!-- FAB -->
-    <button v-if="totalWishes > 0" class="fab" @click="showCreate = true">
+    <button v-if="totalWishes > 0" class="fab" @click="showCreate = true" :aria-label="t('wishes.createBtn')">
       <van-icon name="plus" size="22" color="#fff" />
     </button>
 
@@ -146,14 +144,14 @@
         :placeholder="t('wishes.wishNamePlaceholder')"
         maxlength="50"
         show-word-limit
-        style="margin-bottom: 8px; border-radius: 8px; background: #f9f9f9"
+        style="margin-bottom: 8px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
       />
       <van-field
         v-model="form.emoji"
         :label="t('wishes.emojiLabel')"
         :placeholder="t('wishes.emojiPlaceholder')"
         maxlength="4"
-        style="margin-bottom: 8px; border-radius: 8px; background: #f9f9f9"
+        style="margin-bottom: 8px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
       />
       <van-field
         v-model="form.description"
@@ -164,7 +162,7 @@
         show-word-limit
         rows="2"
         autosize
-        style="margin-bottom: 12px; border-radius: 8px; background: #f9f9f9"
+        style="margin-bottom: 12px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
       />
       <div class="priority-row">
         <span class="priority-label">{{ t('wishes.priorityLabel') }}</span>
@@ -183,7 +181,7 @@
         type="primary"
         :loading="creating"
         :disabled="!form.name.trim()"
-        style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
+        style="margin-top: 16px; border-radius: var(--radius-md); background: var(--color-primary); border: none"
         @click="createWish"
       >{{ t('wishes.submitBtn') }}</van-button>
     </van-popup>
@@ -205,6 +203,7 @@ const wishList = ref<ChildWishList | null>(null)
 const stats = ref<ChildWishStats | null>(null)
 const ledger = ref<CoinTransaction[]>([])
 const loading = ref(true)
+const error = ref('')
 const refreshing = ref(false)
 const actioningId = ref<string | null>(null)
 
@@ -228,7 +227,6 @@ const totalWishes = computed(() =>
   realizedWishes.value.length + rejectedWishes.value.length
 )
 
-// Pre-computed map of days-to-wish for each wish (performance optimization)
 const wishDaysMap = computed(() => {
   const map = new Map<string, number | null>()
   if (!stats.value?.priority_simulation) return map
@@ -236,7 +234,6 @@ const wishDaysMap = computed(() => {
   const now = Date.now()
   const cutoff7d = now - 7 * 24 * 60 * 60 * 1000
 
-  // Compute earn history from ledger (last 7 calendar days)
   const earnEntries = ledger.value.filter(tx => tx.amount > 0 && new Date(tx.created_at).getTime() >= cutoff7d)
   const earnDays = new Set<string>()
   let earnSum = 0
@@ -246,7 +243,7 @@ const wishDaysMap = computed(() => {
   }
 
   const distinctDays = earnDays.size
-  if (distinctDays < 3) return map // minimum activity gate
+  if (distinctDays < 3) return map
 
   const dailyAvg = earnSum / distinctDays
   if (dailyAvg <= 0) return map
@@ -258,7 +255,7 @@ const wishDaysMap = computed(() => {
     }
     const remaining = sim.star_coin_cost - stats.value.balance
     if (remaining <= 0) {
-      map.set(sim.wish_id, null) // already affordable
+      map.set(sim.wish_id, null)
       continue
     }
     map.set(sim.wish_id, Math.ceil(remaining / dailyAvg))
@@ -282,11 +279,14 @@ function jarClass(progress: number) {
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
     const [list, s, l] = await Promise.all([listChildWishes(), getChildWishStats(), getCoinLedger()])
     wishList.value = list
     stats.value = s
     ledger.value = l
+  } catch {
+    error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
   }
@@ -329,119 +329,93 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .wishes-page {
-  background: #fff9e6;
+  background: var(--color-canvas);
   min-height: 100vh;
   padding: 16px 16px 100px;
 }
 
-/* Hero banner */
+/* ── Hero banner — peach feature card ── */
 .hero-banner {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  background: linear-gradient(135deg, #f5a623, #f7c948);
-  border-radius: 20px;
-  padding: 20px 16px;
-  margin-bottom: 20px;
-  color: #fff;
+  background: var(--color-brand-peach);
+  border-radius: var(--radius-xl);
+  padding: 24px 16px;
+  margin-bottom: 24px;
+  color: var(--color-ink);
 }
-
 .hero-balance {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
-
 .hero-balance-num {
+  font-family: Inter, sans-serif;
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1;
 }
-
 .hero-balance-unit {
+  font-family: Inter, sans-serif;
   font-size: 13px;
-  opacity: 0.85;
+  opacity: 0.7;
 }
-
 .hero-divider {
   width: 1px;
   height: 36px;
-  background: rgba(255, 255, 255, 0.4);
+  background: rgba(10, 10, 10, 0.2);
 }
-
 .hero-stat {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
 }
-
 .hero-stat-num {
+  font-family: Inter, sans-serif;
   font-size: 24px;
   font-weight: 700;
   line-height: 1;
 }
-
 .hero-stat-label {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  opacity: 0.85;
+  opacity: 0.7;
 }
 
-/* Sections */
-.section {
-  margin-bottom: 20px;
-}
-
+/* ── Sections ── */
+.section { margin-bottom: 24px; }
 .section-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: #555;
-  margin: 0 0 10px;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 0 0 12px;
 }
 
-/* Wish cards */
+/* ── Wish cards ── */
 .wish-card {
-  background: #fff;
-  border-radius: 16px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-lg);
   padding: 16px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--color-hairline);
   margin-bottom: 12px;
 }
-
 .wish-card--active {
-  border-left: 4px solid #f5a623;
+  border-left: 4px solid var(--color-brand-ochre);
 }
-
-.wish-card--redemption {
+.wish-card--simple {
   display: flex;
   align-items: center;
   gap: 12px;
-  border-left: 4px solid #10b981;
 }
-
-.wish-card--pending {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-left: 4px solid #f59e0b;
-  opacity: 0.85;
-}
-
-.wish-card--realized {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  opacity: 0.65;
-}
-
-.wish-card--rejected {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  opacity: 0.55;
-}
+.wish-card--dim { opacity: 0.6; }
 
 .wish-header {
   display: flex;
@@ -449,85 +423,70 @@ onMounted(load)
   gap: 12px;
   margin-bottom: 14px;
 }
-
 .wish-emoji-wrap {
   width: 48px;
   height: 48px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, #fff3cd, #fde68a);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-card);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
-
-.wish-emoji {
-  font-size: 26px;
-}
-
-.wish-meta {
-  flex: 1;
-  min-width: 0;
-}
-
+.wish-emoji { font-size: 26px; }
+.wish-meta { flex: 1; min-width: 0; }
 .wish-name {
+  font-family: Inter, sans-serif;
   font-size: 16px;
-  font-weight: 700;
-  color: #333;
+  font-weight: 600;
+  color: var(--color-ink);
   margin: 0 0 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+/* Priority badges */
 .priority-badge {
+  font-family: Inter, sans-serif;
   font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
   display: inline-block;
-  font-weight: 500;
+  font-weight: 600;
 }
-
-.priority-badge.high { background: #ffe0e0; color: #c0392b; }
-.priority-badge.medium { background: #fff3cd; color: #856404; }
-.priority-badge.low { background: #e8f4fd; color: #1a6fa8; }
+.priority-badge.high     { background: var(--color-brand-pink); color: var(--color-on-dark); }
+.priority-badge.medium   { background: var(--color-brand-ochre); color: var(--color-ink); }
+.priority-badge.low      { background: var(--color-brand-lavender); color: var(--color-ink); }
 
 /* Progress track */
-.progress-section {
-  margin-bottom: 12px;
-}
-
+.progress-section { margin-bottom: 12px; }
 .progress-track {
   position: relative;
-  height: 14px;
-  background: #f0f0f0;
-  border-radius: 7px;
+  height: 12px;
+  background: var(--color-surface-strong);
+  border-radius: 6px;
   overflow: visible;
   margin-bottom: 8px;
 }
-
 .progress-fill {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   height: 100%;
-  border-radius: 7px;
+  border-radius: 6px;
   transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   max-width: 100%;
 }
-
-.progress-fill.low { background: linear-gradient(90deg, #74b9ff, #0984e3); }
-.progress-fill.half { background: linear-gradient(90deg, #fdcb6e, #e17055); }
+.progress-fill.low  { background: var(--color-brand-lavender); }
+.progress-fill.half { background: var(--color-brand-peach); }
 .progress-fill.full {
-  background: linear-gradient(90deg, #f9ca24, #f0932b);
+  background: var(--color-brand-ochre);
   animation: goldShimmer 1.5s ease-in-out infinite;
 }
-
 @keyframes goldShimmer {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.75; }
+  50% { opacity: 0.7; }
 }
-
 .progress-star {
   position: absolute;
   top: 50%;
@@ -537,101 +496,99 @@ onMounted(load)
   pointer-events: none;
   opacity: 0.5;
 }
-
 .progress-footer {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
 .progress-pct {
+  font-family: Inter, sans-serif;
   font-size: 13px;
   font-weight: 700;
-  color: #999;
+  color: var(--color-muted-soft);
   min-width: 36px;
 }
-
-.progress-pct.pct-full {
-  color: #f5a623;
-}
-
-.progress-hint {
-  font-size: 12px;
-}
-
-.hint-full { color: #f5a623; font-weight: 600; }
-.hint-days { color: #2ecc71; font-weight: 500; }
-
+.progress-pct.pct-full { color: var(--color-brand-ochre); }
+.progress-hint { font-family: Inter, sans-serif; font-size: 12px; }
+.hint-full  { color: var(--color-brand-ochre); font-weight: 600; }
+.hint-days  { color: var(--color-brand-mint); font-weight: 500; }
 .progress-pending {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  color: #aaa;
+  color: var(--color-muted-soft);
   margin-bottom: 4px;
 }
 
-/* Redeem button */
+/* Redeem button — primary CTA */
 .btn-redeem {
   width: 100%;
-  background: linear-gradient(135deg, #f9ca24, #f0932b);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   border: none;
-  border-radius: 20px;
-  padding: 11px;
-  font-size: 15px;
-  font-weight: 700;
+  border-radius: var(--radius-md);
+  padding: 12px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  height: 44px;
   animation: goldShimmer 1.5s ease-in-out infinite;
 }
-
 .btn-redeem:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
   animation: none;
 }
+.btn-redeem:active:not(:disabled) { transform: scale(0.97); animation: none; }
 
 /* Status badges */
 .status-badge {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
   display: inline-block;
   font-weight: 500;
 }
-
-.status-pending { background: #fff3cd; color: #856404; }
-.status-redemption { background: #d4edda; color: #155724; }
-.status-realized { background: #d4edda; color: #155724; }
-.status-rejected { background: #f8d7da; color: #721c24; }
+.status-pending    { background: var(--color-surface-card); color: var(--color-muted); }
+.status-redemption { background: var(--color-brand-mint); color: var(--color-ink); }
+.status-realized   { background: var(--color-brand-mint); color: var(--color-ink); }
+.status-rejected   { background: var(--color-brand-coral); color: var(--color-on-dark); }
 
 .rejection-reason {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  color: #999;
+  color: var(--color-muted-soft);
   margin: 4px 0 0;
 }
 
 /* Empty state */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
-}
-
-.empty-icon { font-size: 56px; margin: 0 0 12px; }
-.empty-text { font-size: 16px; color: #999; margin: 0 0 20px; }
-
-.btn-create-inline {
-  background: #f5a623;
-  color: #fff;
-  border: none;
-  border-radius: 24px;
-  padding: 12px 28px;
+.empty-state { text-align: center; padding: 60px 20px; }
+.empty-icon  { font-size: 56px; margin: 0 0 12px; }
+.empty-text  {
+  font-family: Inter, sans-serif;
   font-size: 16px;
-  font-weight: 700;
+  color: var(--color-muted-soft);
+  margin: 0 0 20px;
+}
+.btn-create-inline {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 12px 28px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  height: 44px;
 }
 
 .loading {
   text-align: center;
   padding: 40px 0;
-  color: #999;
+  color: var(--color-muted-soft);
+  font-family: Inter, sans-serif;
   font-size: 15px;
 }
 
@@ -642,60 +599,65 @@ onMounted(load)
   right: 20px;
   width: 52px;
   height: 52px;
-  border-radius: 50%;
-  background: #f5a623;
+  border-radius: var(--radius-pill);
+  background: var(--color-primary);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 14px rgba(245, 166, 35, 0.5);
   cursor: pointer;
   z-index: 10;
   transition: transform 0.15s;
 }
-
 .fab:active { transform: scale(0.92); }
 
 /* Create sheet */
 .sheet-title {
+  font-family: Inter, sans-serif;
   font-size: 18px;
-  font-weight: 700;
-  color: #333;
+  font-weight: 600;
+  color: var(--color-ink);
   text-align: center;
   margin: 0 0 16px;
 }
-
 .priority-row {
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 0 16px;
 }
-
 .priority-label {
+  font-family: Inter, sans-serif;
   font-size: 14px;
-  color: #666;
+  color: var(--color-muted);
   white-space: nowrap;
 }
-
-.priority-chips {
-  display: flex;
-  gap: 8px;
-}
-
+.priority-chips { display: flex; gap: 8px; }
 .priority-chip {
   padding: 6px 14px;
-  border: 1px solid #e0e0e0;
-  border-radius: 16px;
-  background: #f8f8f8;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-soft);
+  font-family: Inter, sans-serif;
   font-size: 13px;
   cursor: pointer;
   transition: all 0.15s;
+  color: var(--color-body);
+}
+.priority-chip.active {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
 }
 
-.priority-chip.active {
-  background: #f5a623;
-  color: #fff;
-  border-color: #f5a623;
+.error-msg {
+  background: var(--color-brand-coral);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 0 16px 16px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  text-align: center;
 }
 </style>
