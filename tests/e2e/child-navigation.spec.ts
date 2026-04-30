@@ -48,20 +48,22 @@ test.describe('child navigation guards', () => {
   })
 
   test.describe('unauthenticated access to child routes', () => {
-    test('unauthenticated → /child redirects to /child/select', async ({ page }) => {
+    test('unauthenticated → /child redirects to child SPA (/child/)', async ({ page }) => {
       await page.goto('/')
       await page.evaluate(() => localStorage.removeItem('numina_user'))
       await page.context().clearCookies()
       await page.goto('/child')
-      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
+      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
+      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
     })
 
-    test('unauthenticated → /child/tasks redirects to /child/select', async ({ page }) => {
+    test('unauthenticated → /child/tasks redirects to child SPA (/child/)', async ({ page }) => {
       await page.goto('/')
       await page.evaluate(() => localStorage.removeItem('numina_user'))
       await page.context().clearCookies()
       await page.goto('/child/tasks')
-      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
+      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
+      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
     })
   })
 })
