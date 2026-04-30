@@ -232,25 +232,24 @@ export function getScaledCount(baseCount: number, viewportArea: number, maxMulti
 }
 
 /**
- * Star colors - soft whites and light blues to complement the purple-blue gradient
- * The gradient is #667eea (blue-purple) → #764ba2 (purple)
+ * Star colors - lavender palette to complement the #010120 midnight blue background
  */
 export const STAR_COLORS = {
-  // Primary star color - soft white with slight blue tint
-  primary: 'rgba(255, 255, 255, 1)',
-  // Secondary - light blue for variety
-  secondary: 'rgba(200, 220, 255, 1)',
-  // Bright stars - warmer white
-  bright: 'rgba(255, 250, 245, 1)',
-  // Accent - faint purple, complements the #764ba2 gradient end
-  accent: 'rgba(180, 160, 255, 1)',
+  // Primary star color — soft lavender-white
+  primary: 'rgba(220, 218, 255, 1)',
+  // Secondary — slightly cooler lavender
+  secondary: 'rgba(189, 187, 255, 1)',
+  // Bright stars — near-white with lavender tint
+  bright: 'rgba(240, 239, 255, 1)',
+  // Accent — deeper lavender for mid-layer variety
+  accent: 'rgba(150, 140, 255, 1)',
 }
 
 /**
  * Background gradient colors (from existing LoginPage)
  */
 export const GRADIENT_COLORS = {
-  start: '#667eea',
-  end: '#764ba2',
-  angle: 135,
+  start: '#010120',
+  end: '#000010',
+  angle: 160,
 }
