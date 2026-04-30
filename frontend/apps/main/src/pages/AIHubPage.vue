@@ -318,16 +318,14 @@ onMounted(async () => {
 .hub-header {
   position: relative;
   padding: 20px 20px 16px;
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  background: #010120;
   overflow: hidden;
 }
 
 .hub-header-bg {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
-    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.05) 0%, transparent 40%);
+  background: linear-gradient(180deg, rgba(189,187,255,0.08) 0%, transparent 100%);
   pointer-events: none;
 }
 
@@ -658,10 +656,6 @@ onMounted(async () => {
   border-top: 1px solid var(--separator);
 }
 
-/* Dark mode */
-[data-theme='dark'] .hub-header {
-  background: linear-gradient(135deg, #3730a3 0%, #5b21b6 100%);
-}
 
 /* Focus rings for interactive cards */
 .report-summary-card:focus-visible,
