@@ -97,9 +97,9 @@ function onSelect(status: string | null) {
   border-color: var(--color-primary);
 }
 [data-theme='dark'] .status-tab.active {
-  background: rgba(189, 187, 255, 0.15);
+  background: rgba(189, 187, 255, 0.25);
   border-color: var(--color-lavender);
-  color: var(--color-lavender);
+  color: #ffffff;
 }
 .tab-label {
   font-size: 14px;

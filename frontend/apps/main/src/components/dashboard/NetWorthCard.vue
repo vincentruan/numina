@@ -84,7 +84,7 @@ const changeText = computed(() => {
 }
 .ov-amount :deep(.money-display) {
   color: #fff;
-  font-size: 36px;
+  font-size: clamp(28px, 8vw, 36px);
   font-weight: 500;
   letter-spacing: -0.03em;
 }

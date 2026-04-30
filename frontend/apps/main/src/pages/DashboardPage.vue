@@ -640,7 +640,7 @@ onUnmounted(() => {
 
 [data-theme='dark'] .fab {
   background: var(--color-lavender);
-  color: #010120;
+  color: #ffffff;
   box-shadow: 0 4px 20px rgba(189, 187, 255, 0.3);
 }
 
