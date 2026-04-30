@@ -86,6 +86,7 @@ onMounted(load)
   margin-bottom: var(--space-lg);
   color: var(--color-ink);
 }
+[data-theme="dark"] .summary-card { color: var(--color-on-feature-lavender); }
 .summary-title {
   font-family: Inter, sans-serif;
   font-size: 18px;
@@ -95,7 +96,7 @@ onMounted(load)
 .summary-count {
   font-family: Inter, sans-serif;
   font-size: 48px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1;
   margin: 4px 0 4px;
 }

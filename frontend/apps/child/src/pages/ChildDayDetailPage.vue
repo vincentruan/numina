@@ -144,12 +144,10 @@ onMounted(async () => {
 
 .section-title {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-muted);
   margin: 0 0 10px;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
 }
 
 .card-list {

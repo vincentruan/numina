@@ -2,7 +2,7 @@
   <div class="auth-page">
     <!-- Step 1: username only -->
     <div v-if="step === 1" class="step-container">
-      <div class="auth-header">
+      <div class="auth-hero">
         <div class="app-logo">🌟</div>
         <h1 class="app-title">Numina</h1>
         <p class="app-subtitle">{{ t('auth.childLogin') }}</p>
@@ -250,8 +250,12 @@ watch(
   padding: 48px 16px 24px;
 }
 
-/* ── Step 1 header ── */
-.auth-header {
+/* ── Step 1 hero — peach feature card ── */
+.auth-hero {
+  width: 100%;
+  background: var(--color-brand-peach);
+  border-radius: var(--radius-xl);
+  padding: 32px 20px;
   text-align: center;
   margin-bottom: 32px;
 }
@@ -259,7 +263,7 @@ watch(
 .app-title {
   font-family: Inter, sans-serif;
   font-size: 28px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--color-ink);
   margin: 0;
   letter-spacing: -0.5px;
@@ -267,7 +271,8 @@ watch(
 .app-subtitle {
   font-family: Inter, sans-serif;
   font-size: 14px;
-  color: var(--color-muted);
+  color: var(--color-ink);
+  opacity: 0.7;
   margin-top: 4px;
 }
 
@@ -401,6 +406,10 @@ watch(
 }
 .emoji-btn:active { transform: scale(0.92); }
 .emoji-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.emoji-btn:focus-visible {
+  outline: 3px solid var(--color-brand-ochre);
+  outline-offset: 2px;
+}
 
 /* ── PIN action buttons ── */
 .pin-actions { display: flex; gap: 16px; margin-bottom: 4px; }

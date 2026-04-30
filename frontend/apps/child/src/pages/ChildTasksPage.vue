@@ -168,6 +168,7 @@ onMounted(async () => {
   text-align: center;
   margin-bottom: var(--space-lg);
 }
+[data-theme="dark"] .date-hero .date-label { color: var(--color-on-feature-pink); }
 .date-label {
   font-family: Inter, sans-serif;
   font-size: 16px;
@@ -233,10 +234,10 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-/* ── Complete button — primary CTA ── */
+/* ── Complete button — pink brand CTA ── */
 .btn-complete {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-brand-pink);
+  color: var(--color-on-dark);
   border: none;
   border-radius: var(--radius-md);
   padding: 0 18px;

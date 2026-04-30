@@ -140,6 +140,7 @@ onMounted(load)
   margin-bottom: var(--space-lg);
   color: var(--color-on-dark);
 }
+[data-theme="dark"] .balance-card { color: var(--color-on-feature-teal); }
 .balance-label {
   font-family: Inter, sans-serif;
   font-size: 12px;
@@ -151,7 +152,7 @@ onMounted(load)
 }
 .balance-value {
   font-size: 32px;
-  font-weight: 500;
+  font-weight: 600;
   margin: 8px 0 0;
 }
 

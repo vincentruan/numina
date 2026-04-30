@@ -155,6 +155,7 @@ onMounted(async () => {
   color: var(--color-ink);
   margin-bottom: var(--space-lg);
 }
+[data-theme="dark"] .hero-card { color: var(--color-on-feature-ochre); }
 .hero-label {
   font-family: Inter, sans-serif;
   font-size: 12px;
@@ -166,17 +167,15 @@ onMounted(async () => {
 }
 .hero-balance {
   font-size: 32px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 /* ── Sections ── */
 .section { margin-bottom: var(--space-lg); }
 .section-title {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
   color: var(--color-muted);
   margin: 0 0 12px;
 }

@@ -94,6 +94,13 @@
   --color-brand-peach:   #e09870;
   --color-brand-lavender:#9a8cd0;
   --color-brand-mint:    #8abcad;
+
+  /* Feature card text — ensures contrast on brand surfaces in dark mode */
+  --color-on-feature-ochre:   #1a1000;
+  --color-on-feature-peach:   #1a0a00;
+  --color-on-feature-lavender:#0a0820;
+  --color-on-feature-pink:    #ffffff;
+  --color-on-feature-teal:    #f0ece0;
 }
 
 /* ── Vant dark mode overrides ── */

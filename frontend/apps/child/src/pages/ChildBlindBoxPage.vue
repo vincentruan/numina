@@ -155,6 +155,7 @@ function formatExpiry(dateStr: string) {
   text-align: center;
   margin-bottom: var(--space-md);
 }
+[data-theme="dark"] .page-header { color: var(--color-on-feature-lavender); }
 .page-title {
   font-family: Inter, sans-serif;
   font-size: 18px;
@@ -253,15 +254,15 @@ function formatExpiry(dateStr: string) {
 .btn-use:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-use:active:not(:disabled) { opacity: 0.8; }
 
-/* Draw again button */
+/* Draw again button — lavender brand CTA */
 .draw-actions {
   width: 100%;
   padding: var(--space-md);
 }
 .btn-draw-again {
   width: 100%;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-brand-lavender);
+  color: var(--color-ink);
   border: none;
   border-radius: var(--radius-md);
   height: 44px;
