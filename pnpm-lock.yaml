@@ -6,8 +6,6 @@ settings:
 
 importers:
 
-  .: {}
-
   frontend/apps/child:
     dependencies:
       '@numina/auth':
