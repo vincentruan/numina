@@ -309,7 +309,7 @@ onMounted(loadWishes)
 }
 
 .wish-item:focus-visible {
-  outline: 2px solid var(--van-primary-color);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 
@@ -531,7 +531,7 @@ onMounted(loadWishes)
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.45);
+  box-shadow: 0 4px 16px rgba(23, 23, 28, 0.35);
   z-index: 10;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
@@ -540,10 +540,10 @@ onMounted(loadWishes)
 
 .fab:active {
   transform: scale(0.93);
-  box-shadow: 0 2px 8px rgba(25, 137, 250, 0.4);
+  box-shadow: 0 2px 8px rgba(23, 23, 28, 0.25);
 }
 
 [data-theme='dark'] .fab {
-  box-shadow: 0 4px 16px rgba(25, 137, 250, 0.6);
+  box-shadow: 0 4px 16px rgba(255, 119, 89, 0.4);
 }
 </style>

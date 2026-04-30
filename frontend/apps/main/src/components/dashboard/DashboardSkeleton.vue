@@ -35,7 +35,7 @@ import AssetCardSkeleton from '@/components/common/AssetCardSkeleton.vue'
   padding: 0 12px;
 }
 .skeleton-overview {
-  background: linear-gradient(135deg, #1677ff 0%, #0052d9 50%, #2b3a8e 100%);
+  background: var(--color-primary);
   padding: 24px 20px 16px;
   border-radius: 0;
 }

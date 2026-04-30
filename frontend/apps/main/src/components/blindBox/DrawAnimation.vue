@@ -55,8 +55,8 @@ defineEmits<{
   align-items: center;
   justify-content: center;
   border-radius: 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  background: var(--color-primary);
+  box-shadow: 0 8px 24px rgba(23, 23, 28, 0.35);
   transition: transform 0.2s;
 }
 .box:active {

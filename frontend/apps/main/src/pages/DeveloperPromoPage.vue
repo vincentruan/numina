@@ -361,7 +361,7 @@ const deployOptions = [
   display: block;
   font-size: 24px;
   font-weight: 700;
-  color: #007aff;
+  color: var(--color-action-blue);
 }
 
 .badge-label {
@@ -381,7 +381,7 @@ const deployOptions = [
 .badge-link {
   display: inline-block;
   font-size: 12px;
-  color: #007aff;
+  color: var(--color-action-blue);
   margin-top: 8px;
 }
 

@@ -37,7 +37,7 @@
       <div v-if="asset.image_url && !imageError" class="card-image">
         <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
       </div>
-      <div v-else class="card-icon" :style="{ background: asset.category?.color || '#1989fa' }">
+      <div v-else class="card-icon" :style="{ background: asset.category?.color || 'var(--color-primary)' }">
         <svg class="icon-svg" aria-hidden="true">
           <use :href="`#${getIconId(asset.category?.icon)}`" />
         </svg>
@@ -178,33 +178,35 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   position: relative;
   display: flex;
   background: var(--card-bg);
-  border-radius: 12px;
-  padding: 12px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 14px 12px;
+  margin-bottom: 8px;
+  border: 1px solid var(--color-card-border);
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+  transition: transform 0.15s, border-color 0.15s;
 }
 [data-theme='dark'] .asset-card {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border-color: var(--color-hairline);
 }
 .asset-card:active {
-  transform: scale(0.98);
+  transform: scale(0.985);
+  border-color: var(--color-hairline);
 }
 /* Selection mode styles */
 .asset-card.selection-mode {
   border: 2px solid transparent;
 }
 .asset-card.selection-mode.selected {
-  border-color: var(--van-primary-color);
-  background: rgba(25, 137, 250, 0.05);
+  border-color: var(--color-primary);
+  background: rgba(23, 23, 28, 0.04);
 }
 [data-theme='dark'] .asset-card.selection-mode.selected {
-  background: rgba(10, 132, 255, 0.1);
+  border-color: var(--color-coral);
+  background: rgba(255, 119, 89, 0.08);
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
-  outline: 2px solid var(--van-primary-color);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 /* Syncing state styles */
@@ -274,7 +276,7 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   align-items: center;
 }
 .card-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
   overflow: hidden;
@@ -292,16 +294,16 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   color: var(--text-tertiary);
 }
 .card-days {
-  font-size: 10px;
-  color: var(--color-action-primary);
-  background: rgba(21, 101, 192, 0.1);
-  padding: 1px 6px;
-  border-radius: 8px;
+  font-size: 11px;
+  color: var(--color-body-muted);
+  background: var(--bg-secondary);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   line-height: 1.4;
 }
 [data-theme='dark'] .card-days {
-  color: #90caf9;
-  background: rgba(21, 101, 192, 0.2);
+  color: var(--color-muted);
+  background: rgba(255, 255, 255, 0.06);
 }
 .card-row-prices {
   display: flex;

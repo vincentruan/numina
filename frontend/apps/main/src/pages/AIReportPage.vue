@@ -261,11 +261,11 @@ onUnmounted(() => {
   margin-bottom: 6px;
 }
 .score-excellent { background: #e8f5e9; color: #2e7d32; }
-.score-good      { background: #e3f2fd; color: #1565c0; }
+.score-good      { background: var(--color-soft-stone); color: var(--color-primary); }
 .score-fair      { background: #fff8e1; color: #f57f17; }
 .score-poor      { background: #fce4ec; color: #c62828; }
 [data-theme='dark'] .score-excellent { background: #1b3a1f; color: #81c784; }
-[data-theme='dark'] .score-good      { background: #0d2137; color: #64b5f6; }
+[data-theme='dark'] .score-good      { background: #1e1e24; color: var(--color-coral); }
 [data-theme='dark'] .score-fair      { background: #2e2200; color: #ffd54f; }
 [data-theme='dark'] .score-poor      { background: #3b0a14; color: #ef9a9a; }
 .overall-label {
@@ -289,7 +289,7 @@ onUnmounted(() => {
 }
 .card-data {
   margin-top: 10px;
-  border-top: 1px solid var(--border-color, #f0f0f0);
+  border-top: 1px solid var(--separator);
   padding-top: 8px;
 }
 .data-row {
@@ -303,7 +303,7 @@ onUnmounted(() => {
 .negative { color: #4caf50; }
 .alloc-bars {
   margin-top: 10px;
-  border-top: 1px solid var(--border-color, #f0f0f0);
+  border-top: 1px solid var(--separator);
   padding-top: 8px;
   display: flex;
   flex-direction: column;
@@ -331,7 +331,7 @@ onUnmounted(() => {
 }
 .alloc-bar-fill {
   height: 100%;
-  background: var(--van-primary-color, #007aff);
+  background: var(--color-primary);
   border-radius: 3px;
   transition: width 0.4s ease;
 }

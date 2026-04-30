@@ -16,86 +16,156 @@
 }
 
 :root {
-  /* Light mode colors (Apple HIG) */
-  --bg-primary: #ffffff;
-  --bg-secondary: #f2f2f7;
-  --bg-tertiary: #ffffff;
-  --text-primary: #000000;
-  --text-secondary: #3c3c43;
-  --text-tertiary: #6e6e73;
-  --separator: #3c3c4329;
-  --card-bg: #ffffff;
-  --van-primary-color: #007aff;
-  --theme-primary: #007aff;
-  --theme-gradient-start: #007aff;
-  --theme-gradient-end: #5856d6;
-  /* WCAG AA contrast-safe action blue (≥4.5:1 with white) */
-  --color-action-primary: #1565c0;
-  --color-action-primary-active: #0d47a1;
+  /* ── Cohere Design System Tokens ── */
+
+  /* Brand & Accent */
+  --color-primary: #17171c;
+  --color-ink: #212121;
+  --color-deep-green: #003c33;
+  --color-dark-navy: #071829;
+  --color-coral: #ff7759;
+  --color-coral-soft: #ffad9b;
+  --color-action-blue: #1863dc;
+  --color-focus-blue: #4c6ee6;
+  --color-form-focus: #9b60aa;
+  --color-error: #b30000;
+
+  /* Surface & Background */
+  --color-canvas: #ffffff;
+  --color-soft-stone: #eeece7;
+  --color-pale-green: #edfce9;
+  --color-pale-blue: #f1f5ff;
+
+  /* Text & Rules */
+  --color-muted: #93939f;
+  --color-slate: #75758a;
+  --color-body-muted: #616161;
+  --color-hairline: #d9d9dd;
+  --color-border-light: #e5e7eb;
+  --color-card-border: #f2f2f2;
+
+  /* On-color text */
+  --color-on-primary: #ffffff;
+  --color-on-dark: #ffffff;
+
+  /* ── Semantic UI Aliases ── */
+  --bg-primary: var(--color-canvas);
+  --bg-secondary: var(--color-soft-stone);
+  --bg-tertiary: var(--color-canvas);
+  --text-primary: var(--color-ink);
+  --text-secondary: var(--color-body-muted);
+  --text-tertiary: var(--color-muted);
+  --separator: var(--color-hairline);
+  --card-bg: var(--color-canvas);
+
+  /* ── Vant Theme Overrides ── */
+  --van-primary-color: var(--color-primary);
+  --van-button-primary-background: var(--color-primary);
+  --van-button-primary-border-color: var(--color-primary);
+  --van-button-primary-color: var(--color-on-primary);
+  --van-tabs-bottom-bar-color: var(--color-coral);
+  --van-tab-active-text-color: var(--color-primary);
+  --van-checkbox-checked-icon-color: var(--color-primary);
+  --van-switch-on-background: var(--color-primary);
+
+  /* ── Radius Scale ── */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 30px;
+  --radius-pill: 32px;
+  --radius-full: 9999px;
+
+  /* ── Spacing Scale ── */
+  --space-xxs: 2px;
+  --space-xs: 6px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-xxl: 32px;
+  --space-section: 80px;
+
+  /* ── Typography ── */
+  --font-display: 'Space Grotesk', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter', 'Arial', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'Menlo', monospace;
+
+  /* ── Legacy aliases (kept for Vant compat) ── */
+  --theme-primary: var(--color-primary);
+  --color-action-primary: var(--color-primary);
+  --color-action-primary-active: #0d0d10;
 }
 
 [data-theme='dark'] {
-  /* Dark mode colors (Apple HIG) */
-  --bg-primary: #000000;
-  --bg-secondary: #1c1c1e;
-  --bg-tertiary: #2c2c2e;
-  --text-primary: #ffffff;
-  --text-secondary: #ebebf5;
-  --text-tertiary: #adadb8;
-  --separator: #38383a;
-  --card-bg: #1c1c1e;
-  --van-primary-color: #0a84ff;
+  /* Dark mode — Cohere dark surface hierarchy */
+  --bg-primary: #0d0d10;
+  --bg-secondary: #17171c;
+  --bg-tertiary: #1e1e24;
+  --text-primary: #f5f5f5;
+  --text-secondary: #c8c8d0;
+  --text-tertiary: var(--color-muted);
+  --separator: #2a2a32;
+  --card-bg: #1e1e24;
+  --color-canvas: #17171c;
+  --color-soft-stone: #1e1e24;
+  --color-card-border: #2a2a32;
+  --color-hairline: #2a2a32;
+
+  --van-primary-color: var(--color-coral);
+  --van-button-primary-background: var(--color-coral);
+  --van-button-primary-border-color: var(--color-coral);
+  --van-tabs-bottom-bar-color: var(--color-coral);
+  --van-tab-active-text-color: var(--color-coral);
 }
 
-/* Vant Toast/Notify 主题适配 - 确保在任何主题下文字清晰可见 */
+/* ── Vant Toast / Notify theme ── */
 :root {
-  /* Toast 默认深色背景 + 白色文字 - 保持原样即可 */
-  --van-toast-background: rgba(0, 0, 0, 0.7);
+  --van-toast-background: rgba(23, 23, 28, 0.92);
   --van-toast-text-color: #ffffff;
-
-  /* Notify 各类型背景色保持原样，文字为白色 */
   --van-notify-text-color: #ffffff;
-  --van-notify-primary-background: #1989fa;
-  --van-notify-success-background: #07c160;
-  --van-notify-danger-background: #ee0a24;
-  --van-notify-warning-background: #ff976a;
+  --van-notify-primary-background: var(--color-primary);
+  --van-notify-success-background: #1a7a4a;
+  --van-notify-danger-background: var(--color-error);
+  --van-notify-warning-background: var(--color-coral);
 }
 
-/* 强制确保 Toast 和 Notify 文字清晰可见 */
+/* Force toast legibility */
 .van-toast,
 .van-toast--text,
 .van-toast--loading,
 .van-toast--html {
   color: #ffffff !important;
-  background: rgba(0, 0, 0, 0.7) !important;
+  background: rgba(23, 23, 28, 0.92) !important;
+  border-radius: var(--radius-sm) !important;
 }
 
 .van-notify {
   color: #ffffff !important;
 }
 
-/* Fail Toast 特殊处理 - 红色背景 + 白色文字 */
 .van-toast--fail {
-  background: #ee0a24 !important;
+  background: var(--color-error) !important;
   color: #ffffff !important;
 }
 
-/* Success Toast 特殊处理 - 绿色背景 + 白色文字 */
 .van-toast--success {
-  background: #07c160 !important;
+  background: #1a7a4a !important;
   color: #ffffff !important;
 }
 
+/* ── Base ── */
 body {
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 16px;
+  line-height: 1.5;
 }
 
 #app {
@@ -105,6 +175,55 @@ body {
 }
 
 a {
-  color: var(--van-primary-color);
+  color: var(--color-action-blue);
   text-decoration: none;
+}
+
+/* ── Vant global overrides ── */
+
+/* Pill primary buttons */
+.van-button--primary {
+  border-radius: var(--radius-pill) !important;
+  font-weight: 500;
+  letter-spacing: 0;
+  min-height: 44px;
+}
+
+/* Normal/default buttons */
+.van-button--normal {
+  border-radius: var(--radius-sm) !important;
+  min-height: 44px;
+}
+
+/* Small buttons — still meet 44px touch target via padding */
+.van-button--small {
+  border-radius: var(--radius-pill) !important;
+  min-height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* Tabs active line → coral */
+.van-tabs__line {
+  background: var(--color-coral) !important;
+  height: 2px !important;
+  border-radius: var(--radius-full) !important;
+}
+
+.van-tab--active {
+  color: var(--color-primary) !important;
+  font-weight: 600;
+}
+
+/* Cell groups — hairline borders */
+.van-cell-group--inset {
+  border-radius: var(--radius-sm) !important;
+  overflow: hidden;
+}
+
+/* Collapse items */
+.van-collapse-item__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
 }

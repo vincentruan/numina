@@ -108,7 +108,7 @@ const screenshots = [
 <style scoped>
 .family-promo-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #667eea 0%, #f5f5f7 40%);
+  background: linear-gradient(180deg, #17171c 0%, var(--color-soft-stone) 40%);
 }
 
 /* Privacy Hero */
@@ -158,7 +158,7 @@ const screenshots = [
 }
 
 .flow-node.local {
-  background: rgba(0, 122, 255, 0.3);
+  background: rgba(255, 119, 89, 0.2);
 }
 
 .flow-node.secure {
@@ -197,7 +197,7 @@ const screenshots = [
 .badge-link {
   display: inline-block;
   margin-top: 8px;
-  color: #007aff;
+  color: var(--color-action-blue);
   font-size: 14px;
 }
 
@@ -235,7 +235,7 @@ const screenshots = [
 /* CTA */
 .cta-section {
   padding: 48px 16px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-primary);
   text-align: center;
 }
 
@@ -261,7 +261,7 @@ const screenshots = [
 }
 
 .promo-footer a {
-  color: #007aff;
+  color: var(--color-action-blue);
   font-size: 14px;
 }
 

@@ -192,7 +192,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border-color, #f5f5f5);
+  border-bottom: 1px solid var(--separator);
 }
 .drift-info { display: flex; flex-direction: column; gap: 2px; }
 .drift-cat { font-size: 14px; color: var(--text-primary); }

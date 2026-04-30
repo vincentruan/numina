@@ -61,87 +61,94 @@ const changeText = computed(() => {
 
 <style scoped>
 .overview-card {
-  background: linear-gradient(135deg, #1677ff 0%, #0052d9 50%, #2b3a8e 100%);
-  padding: 16px 16px 12px;
-  color: #fff;
+  background: var(--color-primary);
+  padding: 20px 16px 16px;
+  color: var(--color-on-primary);
 }
 [data-theme='dark'] .overview-card {
-  background: linear-gradient(135deg, #0d4a99 0%, #003d8f 50%, #1a2456 100%);
+  background: #0d0d10;
 }
 .ov-main {
   display: flex;
   flex-direction: column;
 }
 .ov-label {
-  font-size: 12px;
-  opacity: 0.85;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  opacity: 0.65;
+  text-transform: uppercase;
 }
 .ov-amount {
-  margin: 2px 0 4px;
+  margin: 6px 0 8px;
 }
 .ov-amount :deep(.money-display) {
   color: #fff;
+  font-size: 36px;
+  font-weight: 400;
+  letter-spacing: -0.5px;
 }
 .ov-sub-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  opacity: 0.9;
+  gap: 10px;
+  font-size: 13px;
+  opacity: 0.85;
 }
 .ov-daily {
-  background: rgba(255, 255, 255, 0.2);
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 10px;
-  backdrop-filter: blur(4px);
-}
-[data-theme='dark'] .ov-daily {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 119, 89, 0.25);
+  color: var(--color-coral-soft);
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
 }
 .ov-count {
-  font-size: 11px;
+  font-size: 13px;
+  opacity: 0.75;
 }
 .ov-change.positive {
-  color: #7dffa8;
+  color: #6ee7a0;
+  font-weight: 500;
 }
 .ov-change.negative {
-  color: #ffb3b3;
+  color: var(--color-coral-soft);
+  font-weight: 500;
 }
 .ov-detail {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-top: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  margin-top: 12px;
 }
 [data-theme='dark'] .ov-detail {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 .ov-detail-item {
   flex: 1;
   text-align: center;
 }
 .ov-detail-label {
-  font-size: 11px;
-  opacity: 0.75;
+  font-size: 12px;
+  opacity: 0.6;
+  letter-spacing: 0.3px;
 }
 .ov-detail-value {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 .ov-detail-value :deep(.money-display) {
   color: #fff;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 500;
 }
 .ov-detail-divider {
   width: 1px;
-  height: 24px;
-  background: rgba(255, 255, 255, 0.25);
-}
-[data-theme='dark'] .ov-detail-divider {
+  height: 28px;
   background: rgba(255, 255, 255, 0.15);
 }
 </style>

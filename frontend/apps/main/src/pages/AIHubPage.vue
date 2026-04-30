@@ -655,7 +655,7 @@ onMounted(async () => {
   z-index: 10;
   padding: 8px 16px 12px;
   background: var(--bg-primary, #fff);
-  border-top: 1px solid var(--border-color, #eee);
+  border-top: 1px solid var(--separator);
 }
 
 /* Dark mode */

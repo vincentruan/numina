@@ -359,13 +359,13 @@ onMounted(async () => {
   padding-bottom: 20px;
 }
 .hero-card {
-  background: linear-gradient(135deg, #1677ff 0%, #0052d9 50%, #2b3a8e 100%);
+  background: var(--color-primary);
   padding: 20px 16px 16px;
   color: #fff;
   position: relative;
 }
 .hero-card.sold {
-  background: linear-gradient(135deg, #646566 0%, #969799 100%);
+  background: #646566;
 }
 .status-badge {
   position: absolute;

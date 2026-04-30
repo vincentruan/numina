@@ -83,14 +83,14 @@ const chartOption = computed(() => ({
       data: props.data.map(d => d.net_worth),
       smooth: true,
       lineStyle: { width: 2 },
-      itemStyle: { color: '#1989fa' },
+      itemStyle: { color: '#17171c' },
       areaStyle: {
         color: {
           type: 'linear',
           x: 0, y: 0, x2: 0, y2: 1,
           colorStops: [
-            { offset: 0, color: 'rgba(25,137,250,0.25)' },
-            { offset: 1, color: 'rgba(25,137,250,0.02)' }
+            { offset: 0, color: 'rgba(23,23,28,0.18)' },
+            { offset: 1, color: 'rgba(23,23,28,0.02)' }
           ]
         }
       }

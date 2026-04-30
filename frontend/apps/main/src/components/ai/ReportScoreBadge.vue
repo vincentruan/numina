@@ -48,11 +48,11 @@ const label = computed(() => {
   margin-top: 2px;
 }
 .level-excellent { background: #e8f5e9; color: #2e7d32; }
-.level-good      { background: #e3f2fd; color: #1565c0; }
+.level-good      { background: var(--color-soft-stone); color: var(--color-primary); }
 .level-fair      { background: #fff8e1; color: #f57f17; }
 .level-poor      { background: #fce4ec; color: #c62828; }
 [data-theme='dark'] .level-excellent { background: #1b3a1f; color: #81c784; }
-[data-theme='dark'] .level-good      { background: #0d2137; color: #64b5f6; }
+[data-theme='dark'] .level-good      { background: #1e1e24; color: var(--color-coral); }
 [data-theme='dark'] .level-fair      { background: #2e2200; color: #ffd54f; }
 [data-theme='dark'] .level-poor      { background: #3b0a14; color: #ef9a9a; }
 </style>

@@ -62,6 +62,7 @@ function onSelect(status: string | null) {
   background: var(--card-bg);
   padding: 12px 16px;
   gap: 12px;
+  border-bottom: 1px solid var(--color-hairline);
 }
 .status-tabs {
   display: flex;
@@ -77,28 +78,39 @@ function onSelect(status: string | null) {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 12px;
-  border-radius: 16px;
+  padding: 8px 14px;
+  border-radius: var(--radius-pill);
   background: var(--bg-secondary);
+  border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
   white-space: nowrap;
   flex-shrink: 0;
+  min-height: 36px;
 }
 .status-tab:active {
-  opacity: 0.7;
+  transform: scale(0.96);
 }
 .status-tab.active {
-  background: var(--color-action-primary);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border-color: var(--color-primary);
+}
+[data-theme='dark'] .status-tab.active {
+  background: var(--color-coral);
+  border-color: var(--color-coral);
 }
 .tab-label {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
 }
 .tab-count {
   font-size: 13px;
   font-weight: 600;
+  opacity: 0.8;
+}
+.status-tab.active .tab-count {
+  opacity: 1;
 }
 .toolbar-slot {
   display: flex;

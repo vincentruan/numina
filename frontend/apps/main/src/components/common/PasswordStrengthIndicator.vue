@@ -76,7 +76,7 @@ const strengthText = computed(() => {
 .strength-bar {
   width: 16px;
   height: 3px;
-  background: var(--van-gray-3);
+  background: var(--separator);
   border-radius: 2px;
   transition: background 0.3s;
 }
@@ -99,9 +99,9 @@ const strengthText = computed(() => {
 .strength-bars:has(.active:nth-child(2)) .strength-bar.active {
   color: #ff976a;
 }
-/* When 3+ bars active, change to blue */
+/* When 3+ bars active, change to primary */
 .strength-bars:has(.active:nth-child(3)) .strength-bar.active {
-  color: #1989fa;
+  color: var(--color-action-blue);
 }
 /* When 4 bars active, change to green */
 .strength-bars:has(.active:nth-child(4)) .strength-bar.active {
@@ -111,7 +111,7 @@ const strengthText = computed(() => {
   color: #ff976a;
 }
 .strength-label.good {
-  color: #1989fa;
+  color: var(--color-action-blue);
 }
 .strength-label.strong {
   color: #07c160;

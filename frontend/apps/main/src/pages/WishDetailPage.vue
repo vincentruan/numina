@@ -316,7 +316,7 @@ onMounted(async () => {
   color: #fff;
 }
 .status-banner.pending {
-  background: linear-gradient(135deg, #1989fa 0%, #1976d2 100%);
+  background: var(--color-primary);
 }
 .status-banner.realized {
   background: linear-gradient(135deg, #07c160 0%, #06ad56 100%);

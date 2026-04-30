@@ -39,7 +39,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
     top: 0;
     width: 750px;
     height: 1000px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #17171c 0%, #0d0d10 100%);
     padding: 40px;
     box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -75,7 +75,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
       ">
         ${safeImageUrl(asset.image_url)
           ? `<img src="${safeImageUrl(asset.image_url)}" style="width: 100%; height: 100%; object-fit: cover;" />`
-          : `<div style="font-size: 32px; font-weight: bold; color: #667eea;">${escapeHtml(asset.category?.name || '资产')}</div>`
+          : `<div style="font-size: 32px; font-weight: bold; color: #17171c;">${escapeHtml(asset.category?.name || '资产')}</div>`
         }
       </div>
 
@@ -93,7 +93,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
       <!-- 分类标签 -->
       <div style="
         display: inline-block;
-        background: #667eea;
+        background: #17171c;
         color: white;
         padding: 8px 16px;
         border-radius: 20px;
@@ -175,7 +175,7 @@ export async function generateAssetCard(asset: Asset): Promise<Blob> {
         <div style="
           font-size: 24px;
           font-weight: bold;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #17171c 0%, #0d0d10 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
@@ -238,7 +238,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
     top: 0;
     width: 750px;
     height: 1000px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #17171c 0%, #0d0d10 100%);
     padding: 40px;
     box-sizing: border-box;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -260,7 +260,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
         <span style="
           font-size: 24px;
           font-weight: bold;
-          color: #667eea;
+          color: #17171c;
         ">${cat.count} 项</span>
       </div>
     `)
@@ -282,7 +282,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
         font-weight: bold;
         text-align: center;
         margin: 0 0 40px 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #17171c 0%, #0d0d10 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -296,7 +296,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
         margin-bottom: 32px;
       ">
         <div style="
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #17171c 0%, #0d0d10 100%);
           padding: 24px;
           border-radius: 16px;
           color: white;
@@ -355,7 +355,7 @@ export async function generateSummaryCard(assets: Asset[]): Promise<Blob> {
         <div style="
           font-size: 28px;
           font-weight: bold;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          background: linear-gradient(135deg, #17171c 0%, #0d0d10 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           background-clip: text;
