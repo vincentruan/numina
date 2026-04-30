@@ -1,6 +1,6 @@
 <template>
   <div class="home-page">
-    <!-- Balance hero -->
+    <!-- Balance hero — ochre feature card -->
     <div class="hero-card">
       <p class="hero-label">{{ t('home.myStars') }}</p>
       <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
@@ -36,7 +36,7 @@
           <p class="wish-preview-name">{{ topWish.name }}</p>
           <p class="wish-preview-sub">{{ t('home.myWishes') }}</p>
         </div>
-        <van-icon name="arrow" color="#ccc" size="16" />
+        <van-icon name="arrow" color="#9a9a9a" size="16" />
       </div>
       <div v-if="topWish.has_cost_set && topWish.progress !== null" class="wish-preview-bar">
         <div class="wish-preview-fill" :style="{ width: Math.min((topWish.progress ?? 0) * 100, 100) + '%' }" />
@@ -54,21 +54,21 @@
       <ChildCalendar :fetch-month="fetchChildMonth" day-route="/child/calendar/day" variant="child" />
     </div>
 
-    <!-- Quick links -->
+    <!-- Quick links — Clay feature-card palette -->
     <div class="quick-links">
-      <router-link to="/child/wishes" class="quick-card wishes">
+      <router-link to="/child/wishes" class="quick-card quick-card--pink">
         <span class="quick-icon">🌟</span>
         <span class="quick-label">{{ t('home.quickWishes') }}</span>
       </router-link>
-      <router-link to="/child/treasures" class="quick-card treasures">
+      <router-link to="/child/treasures" class="quick-card quick-card--ochre">
         <span class="quick-icon">🏆</span>
         <span class="quick-label">{{ t('home.quickTreasures') }}</span>
       </router-link>
-      <router-link to="/child/tasks" class="quick-card tasks">
+      <router-link to="/child/tasks" class="quick-card quick-card--teal">
         <span class="quick-icon">📋</span>
         <span class="quick-label">{{ t('home.quickTasks') }}</span>
       </router-link>
-      <router-link to="/child/ledger" class="quick-card ledger">
+      <router-link to="/child/ledger" class="quick-card quick-card--lavender">
         <span class="quick-icon">💰</span>
         <span class="quick-label">{{ t('home.quickLedger') }}</span>
       </router-link>
@@ -121,124 +121,156 @@ onMounted(async () => {
   balance.value = bal
   todayChores.value = chores
   loadingChores.value = false
-  // Pick the highest-priority active wish as the preview
   const active = wishData?.active ?? []
   topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
 })
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .home-page {
   padding: 16px;
-  background: #fff9e6;
+  background: var(--color-canvas);
   min-height: 100vh;
 }
 
+/* ── Hero card — ochre feature card ── */
 .hero-card {
-  background: linear-gradient(135deg, #f5a623, #f7c948);
-  border-radius: 20px;
+  background: var(--color-brand-ochre);
+  border-radius: var(--radius-xl);
   padding: 28px 20px;
   text-align: center;
-  color: #fff;
-  margin-bottom: 20px;
+  color: var(--color-ink);
+  margin-bottom: 24px;
 }
-.hero-label { font-size: 15px; margin: 0 0 8px; opacity: 0.9; }
-.hero-balance { font-size: 40px; font-weight: bold; }
+.hero-label {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 0 0 8px;
+  opacity: 0.7;
+}
+.hero-balance {
+  font-size: 40px;
+  font-weight: bold;
+}
 
-.section { margin-bottom: 20px; }
-.section-title { font-size: 16px; font-weight: bold; color: #333; margin: 0 0 10px; }
-.hint { font-size: 14px; color: #999; text-align: center; padding: 16px 0; }
+/* ── Sections ── */
+.section { margin-bottom: 24px; }
+.section-title {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  margin: 0 0 12px;
+}
+.hint {
+  font-size: 14px;
+  color: var(--color-muted-soft);
+  text-align: center;
+  padding: 16px 0;
+}
 
+/* ── Chore cards ── */
 .chore-list { display: flex; flex-direction: column; gap: 8px; }
 .chore-card {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-radius: 12px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
   padding: 12px 14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
   gap: 12px;
+  border: 1px solid var(--color-hairline);
 }
-.chore-card.approved { opacity: 0.6; }
+.chore-card.approved { opacity: 0.55; }
 .chore-emoji { font-size: 24px; }
 .chore-info { flex: 1; }
-.chore-name { font-size: 14px; font-weight: 600; color: #333; margin: 0; }
-.chore-reward { font-size: 12px; color: #f5a623; margin: 2px 0 0; }
-.chore-status-badge { font-size: 12px; color: #999; white-space: nowrap; }
-
-/* Wish preview widget */
-.wish-preview {
-  display: block;
-  background: linear-gradient(135deg, #fff9e6, #fef3c7);
-  border-radius: 16px;
-  padding: 14px 16px;
-  margin-bottom: 20px;
-  text-decoration: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  border: 2px solid #fde68a;
+.chore-name {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+.chore-reward {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-brand-ochre);
+  margin: 2px 0 0;
+  font-weight: 500;
+}
+.chore-status-badge {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-muted);
+  white-space: nowrap;
 }
 
+/* ── Wish preview — cream card ── */
+.wish-preview {
+  display: block;
+  background: var(--color-surface-card);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 24px;
+  text-decoration: none;
+  border: 1px solid var(--color-hairline);
+}
 .wish-preview-header {
   display: flex;
   align-items: center;
   gap: 12px;
   margin-bottom: 10px;
 }
-
-.wish-preview-icon {
-  font-size: 32px;
-  flex-shrink: 0;
-}
-
-.wish-preview-info {
-  flex: 1;
-  min-width: 0;
-}
-
+.wish-preview-icon { font-size: 32px; flex-shrink: 0; }
+.wish-preview-info { flex: 1; min-width: 0; }
 .wish-preview-name {
+  font-family: Inter, sans-serif;
   font-size: 15px;
-  font-weight: 700;
-  color: #333;
+  font-weight: 600;
+  color: var(--color-ink);
   margin: 0 0 2px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .wish-preview-sub {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  color: #999;
+  color: var(--color-muted-soft);
   margin: 0;
 }
-
 .wish-preview-bar {
   height: 8px;
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--color-surface-strong);
   border-radius: 4px;
   overflow: hidden;
   margin-bottom: 6px;
 }
-
 .wish-preview-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f9ca24, #f0932b);
+  background: var(--color-brand-ochre);
   border-radius: 4px;
   transition: width 0.6s ease;
   max-width: 100%;
 }
-
 .wish-preview-pct {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  color: #666;
+  color: var(--color-muted);
   margin: 0;
   font-weight: 500;
 }
-
 .wish-ready {
-  color: #f5a623;
+  color: var(--color-brand-ochre);
   font-weight: 700;
 }
 
+/* ── Quick links — Clay feature-card palette ── */
 .quick-links {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -250,18 +282,32 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 20px 12px;
-  border-radius: 16px;
+  padding: 24px 12px;
+  border-radius: var(--radius-xl);
   text-decoration: none;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
   transition: transform 0.1s;
 }
 .quick-card:active { transform: scale(0.96); }
 .quick-icon { font-size: 32px; }
-.quick-label { font-size: 13px; font-weight: 600; color: #333; }
-.quick-card.wishes { background: linear-gradient(135deg, #fff9e6, #fef3c7); }
-.quick-card.treasures { background: linear-gradient(135deg, #fef3c7, #fde68a); }
-.quick-card.tasks { background: linear-gradient(135deg, #e0f2fe, #bae6fd); }
-.quick-card.ledger { background: linear-gradient(135deg, #f0fdf4, #dcfce7); }
+.quick-label {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Pink card — on-dark text */
+.quick-card--pink { background: var(--color-brand-pink); color: var(--color-on-dark); }
+.quick-card--pink .quick-label { color: var(--color-on-dark); }
+
+/* Ochre card — ink text */
+.quick-card--ochre { background: var(--color-brand-ochre); color: var(--color-ink); }
+.quick-card--ochre .quick-label { color: var(--color-ink); }
+
+/* Teal card — on-dark text */
+.quick-card--teal { background: var(--color-brand-teal); color: var(--color-on-dark); }
+.quick-card--teal .quick-label { color: var(--color-on-dark); }
+
+/* Lavender card — ink text */
+.quick-card--lavender { background: var(--color-brand-lavender); color: var(--color-ink); }
+.quick-card--lavender .quick-label { color: var(--color-ink); }
 </style>

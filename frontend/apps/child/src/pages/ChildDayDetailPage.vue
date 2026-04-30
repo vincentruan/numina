@@ -9,7 +9,7 @@
       <section v-if="detail.chores.length > 0" class="section">
         <p class="section-title">{{ t('dayDetail.sectionChores') }}</p>
         <div class="card-list">
-          <div v-for="c in detail.chores" :key="c.id" class="event-card chore-card">
+          <div v-for="c in detail.chores" :key="c.id" class="event-card">
             <span class="event-emoji">{{ c.chore_emoji || '✅' }}</span>
             <div class="event-info">
               <p class="event-name">{{ c.chore_name }}</p>
@@ -29,7 +29,7 @@
       <section v-if="detail.wishes.length > 0" class="section">
         <p class="section-title">{{ t('dayDetail.sectionWishes') }}</p>
         <div class="card-list">
-          <div v-for="w in detail.wishes" :key="w.id" class="event-card wish-card">
+          <div v-for="w in detail.wishes" :key="w.id" class="event-card">
             <span class="event-emoji">{{ w.emoji || '🎁' }}</span>
             <div class="event-info">
               <p class="event-name">{{ w.name }}</p>
@@ -44,7 +44,7 @@
       <section v-if="detail.milestones.length > 0" class="section">
         <p class="section-title">{{ t('dayDetail.sectionMilestones') }}</p>
         <div class="card-list">
-          <div v-for="m in detail.milestones" :key="m.id" class="event-card milestone-card">
+          <div v-for="m in detail.milestones" :key="m.id" class="event-card">
             <span class="event-emoji">{{ milestoneEmoji(m.milestone_type) }}</span>
             <div class="event-info">
               <p class="event-name">{{ milestoneLabel(m.milestone_type) }}</p>
@@ -54,7 +54,6 @@
         </div>
       </section>
 
-      <!-- Empty -->
       <van-empty
         v-if="detail.chores.length === 0 && detail.wishes.length === 0 && detail.milestones.length === 0"
         :description="t('dayDetail.empty')"
@@ -73,8 +72,11 @@ import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } fr
 
 const { t } = useI18n()
 const route = useRoute()
-const date = route.query.date as string
-const childId = route.query.child_id as string | undefined
+const rawDate = route.query.date
+const rawChildId = route.query.child_id
+// Safely extract string values — route.query values can be string | string[] | null
+const date = typeof rawDate === 'string' ? rawDate : ''
+const childId = typeof rawChildId === 'string' ? rawChildId : undefined
 
 const detail = ref<CalendarDayDetail | null>(null)
 const loading = ref(true)
@@ -124,30 +126,31 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .day-detail-page {
-  background: #f7f7f7;
+  background: var(--color-canvas);
   min-height: 100vh;
   padding-bottom: 24px;
 }
 
 .hint {
   text-align: center;
-  color: #999;
+  color: var(--color-muted-soft);
   padding: 40px 0;
+  font-family: Inter, sans-serif;
   font-size: 14px;
 }
 
-.section {
-  margin: 12px 16px 0;
-}
+.section { margin: 16px 16px 0; }
 
 .section-title {
-  font-size: 13px;
+  font-family: Inter, sans-serif;
+  font-size: 12px;
   font-weight: 600;
-  color: #888;
-  margin: 0 0 8px;
+  color: var(--color-muted);
+  margin: 0 0 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1.5px;
 }
 
 .card-list {
@@ -160,57 +163,55 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #fff;
-  border-radius: 10px;
-  padding: 12px 14px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  border: 1px solid var(--color-hairline);
 }
 
-.event-emoji {
-  font-size: 24px;
-  flex-shrink: 0;
-}
+.event-emoji { font-size: 24px; flex-shrink: 0; }
 
-.event-info {
-  flex: 1;
-  min-width: 0;
-}
-
+.event-info { flex: 1; min-width: 0; }
 .event-name {
+  font-family: Inter, sans-serif;
   font-size: 14px;
-  font-weight: 500;
-  color: #1a1a1a;
+  font-weight: 600;
+  color: var(--color-ink);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .event-sub {
+  font-family: Inter, sans-serif;
   font-size: 12px;
-  color: #f5a623;
+  color: var(--color-brand-ochre);
   margin: 2px 0 0;
   display: flex;
   align-items: center;
   gap: 6px;
+  font-weight: 500;
 }
 
 .streak-badge {
-  background: #fff3e0;
-  color: #f5a623;
-  border-radius: 4px;
-  padding: 1px 5px;
+  background: var(--color-brand-peach);
+  color: var(--color-ink);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
   font-size: 11px;
+  font-weight: 600;
 }
 
 .status-tag {
+  font-family: Inter, sans-serif;
   font-size: 11px;
-  border-radius: 4px;
-  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  padding: 3px 10px;
   flex-shrink: 0;
-  font-weight: 500;
+  font-weight: 600;
 }
-.status-tag.approved  { background: #e8f5e9; color: #4caf50; }
-.status-tag.pending   { background: #fff8e1; color: #f5a623; }
-.status-tag.realized  { background: #fff3e0; color: #f5a623; }
-.status-tag.milestone { background: #f3e5f5; color: #9c27b0; }
+.status-tag.approved  { background: var(--color-brand-mint); color: var(--color-ink); }
+.status-tag.pending   { background: var(--color-surface-card); color: var(--color-muted); }
+.status-tag.realized  { background: var(--color-brand-ochre); color: var(--color-ink); }
+.status-tag.milestone { background: var(--color-brand-lavender); color: var(--color-ink); }
 </style>

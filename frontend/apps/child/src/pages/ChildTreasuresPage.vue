@@ -1,6 +1,6 @@
 <template>
   <div class="treasures-page">
-    <!-- Header summary -->
+    <!-- Header summary — lavender feature card -->
     <div class="summary-card">
       <p class="summary-title">{{ t('treasures.title') }}</p>
       <p v-if="treasures.length > 0" class="summary-desc">
@@ -10,6 +10,8 @@
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+
+    <div v-else-if="error" class="error-msg">{{ error }}</div>
 
     <div v-else-if="treasures.length === 0" class="empty">
       <p class="empty-emoji">🎁</p>
@@ -24,7 +26,7 @@
           width="100%"
           height="100px"
           fit="cover"
-          radius="12px 12px 0 0"
+          radius="16px 16px 0 0"
         />
         <div v-else class="placeholder-img">🎁</div>
         <div class="card-body">
@@ -45,6 +47,7 @@ import { listTreasures, type TreasureItem } from '@/api/treasures'
 const { t } = useI18n()
 const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
+const error = ref<string>('')
 
 const totalCoins = computed(() =>
   treasures.value.reduce((sum, t) => sum + (t.coins_spent ?? 0), 0),
@@ -52,8 +55,11 @@ const totalCoins = computed(() =>
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
     treasures.value = await listTreasures()
+  } catch {
+    error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
   }
@@ -63,50 +69,54 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .treasures-page {
   padding: 16px;
-  background: #fff9e6;
+  background: var(--color-canvas);
   min-height: 100vh;
 }
 
+/* ── Summary card — lavender feature card ── */
 .summary-card {
-  background: linear-gradient(135deg, #f5a623, #f7c948);
-  border-radius: 16px;
-  padding: 20px;
+  background: var(--color-brand-lavender);
+  border-radius: var(--radius-xl);
+  padding: 24px 20px;
   text-align: center;
-  margin-bottom: 20px;
-  color: #fff;
+  margin-bottom: 24px;
+  color: var(--color-ink);
 }
 .summary-title {
-  font-size: 20px;
-  font-weight: bold;
+  font-family: Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
   margin: 0 0 6px;
 }
 .summary-desc {
+  font-family: Inter, sans-serif;
   font-size: 14px;
   margin: 0 0 4px;
-  opacity: 0.95;
+  opacity: 0.75;
 }
 .summary-coins {
+  font-family: Inter, sans-serif;
   font-size: 14px;
   margin: 0;
-  opacity: 0.9;
+  opacity: 0.7;
 }
 
 .loading,
 .empty {
   text-align: center;
   margin-top: 60px;
-  color: #999;
+  color: var(--color-muted-soft);
 }
-.empty-emoji {
-  font-size: 56px;
-  margin: 0 0 12px;
-}
-.empty-text {
+.empty-emoji { font-size: 56px; margin: 0 0 12px; }
+.empty-text  {
+  font-family: Inter, sans-serif;
   font-size: 15px;
 }
 
+/* ── Grid ── */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -114,11 +124,13 @@ onMounted(load)
 }
 
 .treasure-card {
-  background: #fff;
-  border-radius: 12px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  border: 1px solid var(--color-hairline);
+  transition: transform 0.15s;
 }
+.treasure-card:active { transform: scale(0.97); }
 
 .placeholder-img {
   height: 100px;
@@ -126,30 +138,42 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   font-size: 40px;
-  background: #fef3c7;
+  background: var(--color-surface-card);
 }
 
-.card-body {
-  padding: 10px 12px;
-}
+.card-body { padding: 10px 12px; }
 .card-name {
+  font-family: Inter, sans-serif;
   font-size: 14px;
-  font-weight: bold;
-  color: #333;
+  font-weight: 600;
+  color: var(--color-ink);
   margin: 0 0 4px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .card-date {
+  font-family: Inter, sans-serif;
   font-size: 11px;
-  color: #aaa;
+  color: var(--color-muted-soft);
   margin: 0 0 4px;
 }
 .card-coins {
+  font-family: Inter, sans-serif;
   font-size: 13px;
-  font-weight: bold;
-  color: #f5a623;
+  font-weight: 600;
+  color: var(--color-brand-ochre);
   margin: 0;
+}
+
+.error-msg {
+  background: var(--color-brand-coral);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  text-align: center;
 }
 </style>

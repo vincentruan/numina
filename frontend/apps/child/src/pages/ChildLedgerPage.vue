@@ -1,12 +1,17 @@
 <template>
   <div class="ledger-page">
+    <!-- Balance hero — teal feature card -->
     <div class="balance-card">
       <p class="balance-label">{{ t('ledger.myStars') }}</p>
-      <p class="balance-value"><CoinDisplay :amount="balance" :icon-size="28" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" /></p>
+      <p class="balance-value">
+        <CoinDisplay :amount="balance" :icon-size="28" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+      </p>
       <button v-if="hasSiblings" class="gift-btn" @click="showGiftSheet = true">{{ t('ledger.giftBtn') }}</button>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+
+    <div v-else-if="error" class="error-msg">{{ error }}</div>
 
     <div v-else-if="transactions.length === 0" class="empty">
       <p>{{ t('ledger.empty') }}</p>
@@ -36,7 +41,7 @@
           :class="{ selected: selectedSiblingId === s.id }"
           @click="selectedSiblingId = s.id"
         >
-          <span class="sibling-avatar" :style="{ background: s.avatar_color || '#f5a623' }">
+          <span class="sibling-avatar" :style="{ background: s.avatar_color || '#e8b94a' }">
             {{ s.display_name[0] }}
           </span>
           <span class="sibling-name">{{ s.display_name }}</span>
@@ -47,13 +52,13 @@
         type="digit"
         :label="t('ledger.amountLabel')"
         :placeholder="t('ledger.amountPlaceholder')"
-        style="margin-top: 16px; border-radius: 8px; background: #f9f9f9"
+        style="margin-top: 16px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
       />
       <van-button
         block
         type="primary"
         :disabled="!selectedSiblingId || !giftAmountStr"
-        style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
+        style="margin-top: 16px; border-radius: var(--radius-md); background: var(--color-primary); border: none"
         @click="doGift"
       >{{ t('ledger.confirmGift') }}</van-button>
     </van-popup>
@@ -74,6 +79,7 @@ const familyStore = useFamilyStore()
 const balance = ref(0)
 const transactions = ref<CoinTransaction[]>([])
 const loading = ref(true)
+const error = ref('')
 const siblings = ref<Sibling[]>([])
 const showGiftSheet = ref(false)
 const selectedSiblingId = ref('')
@@ -83,11 +89,14 @@ const hasSiblings = computed(() => siblings.value.length > 0)
 
 async function load() {
   loading.value = true
+  error.value = ''
   try {
     const [bal, txs, sibs] = await Promise.all([getCoinBalance(), getCoinLedger(), getSiblings()])
     balance.value = bal
     transactions.value = txs
     siblings.value = sibs
+  } catch {
+    error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
   }
@@ -112,56 +121,100 @@ onMounted(load)
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .ledger-page {
   padding: 16px;
-  background: #FFF9E6;
+  background: var(--color-canvas);
   min-height: 100vh;
 }
+
+/* ── Balance card — teal feature card ── */
 .balance-card {
-  background: linear-gradient(135deg, #f5a623, #f7c948);
-  border-radius: 16px;
-  padding: 24px;
+  background: var(--color-brand-teal);
+  border-radius: var(--radius-xl);
+  padding: 28px 24px;
   text-align: center;
-  margin-bottom: 20px;
-  color: #fff;
+  margin-bottom: 24px;
+  color: var(--color-on-dark);
 }
-.balance-label { font-size: 14px; margin: 0; opacity: 0.9; }
-.balance-value { font-size: 36px; font-weight: bold; margin: 8px 0 0; }
+.balance-label {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin: 0;
+  opacity: 0.7;
+}
+.balance-value {
+  font-size: 36px;
+  font-weight: bold;
+  margin: 8px 0 0;
+}
 .gift-btn {
-  margin-top: 12px;
-  background: rgba(255,255,255,0.25);
-  border: 1.5px solid rgba(255,255,255,0.6);
-  color: #fff;
-  border-radius: 20px;
-  padding: 6px 18px;
+  margin-top: 16px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  color: var(--color-on-dark);
+  border-radius: var(--radius-md);
+  padding: 8px 20px;
+  font-family: Inter, sans-serif;
   font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
+  height: 44px;
 }
+
 .loading, .empty {
   text-align: center;
   margin-top: 40px;
-  color: #999;
+  color: var(--color-muted-soft);
+  font-family: Inter, sans-serif;
   font-size: 15px;
 }
-.tx-list { display: flex; flex-direction: column; gap: 10px; }
+
+/* ── Transaction list ── */
+.tx-list { display: flex; flex-direction: column; gap: 8px; }
 .tx-card {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px 16px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
   gap: 12px;
+  border: 1px solid var(--color-hairline);
 }
 .tx-emoji { font-size: 24px; }
 .tx-info { flex: 1; }
-.tx-narrative { font-size: 14px; color: #333; margin: 0; }
-.tx-time { font-size: 12px; color: #999; margin: 2px 0 0; }
-.tx-amount { font-size: 18px; font-weight: bold; }
-.tx-amount.positive { color: #f5a623; }
-.tx-amount.negative { color: #e74c3c; }
+.tx-narrative {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  color: var(--color-body-strong);
+  margin: 0;
+}
+.tx-time {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-muted-soft);
+  margin: 2px 0 0;
+}
+.tx-amount {
+  font-family: Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+}
+.tx-amount.positive { color: var(--color-brand-ochre); }
+.tx-amount.negative { color: var(--color-brand-coral); }
 
-.sheet-title { font-size: 18px; font-weight: bold; text-align: center; margin: 0 0 16px; }
+/* ── Gift sheet ── */
+.sheet-title {
+  font-family: Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-ink);
+  text-align: center;
+  margin: 0 0 16px;
+}
 .sibling-list { display: flex; gap: 12px; flex-wrap: wrap; }
 .sibling-item {
   display: flex;
@@ -169,23 +222,41 @@ onMounted(load)
   align-items: center;
   gap: 6px;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: var(--radius-lg);
   border: 2px solid transparent;
   cursor: pointer;
   transition: border-color 0.15s;
 }
-.sibling-item.selected { border-color: #f5a623; background: #fff9e6; }
+.sibling-item.selected {
+  border-color: var(--color-ink);
+  background: var(--color-surface-soft);
+}
 .sibling-avatar {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: Inter, sans-serif;
   font-size: 20px;
-  font-weight: bold;
-  color: #fff;
+  font-weight: 700;
+  color: var(--color-on-dark);
 }
-.sibling-name { font-size: 13px; color: #333; }
-</style>
+.sibling-name {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-body-strong);
+}
 
+.error-msg {
+  background: var(--color-brand-coral);
+  color: var(--color-on-primary);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  margin: 0 0 16px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  text-align: center;
+}
+</style>

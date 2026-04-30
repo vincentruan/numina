@@ -36,7 +36,9 @@
         <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
 
         <div class="form-actions">
-          <van-button round block type="primary" native-type="submit" :loading="loading">
+          <van-button
+round block type="primary" native-type="submit" :loading="loading"
+            style="background: var(--color-primary); border: none; border-radius: var(--radius-md); height: 44px;">
             {{ t('auth.nextStep') }}
           </van-button>
         </div>
@@ -55,16 +57,16 @@
         <p class="instruction">{{ t('auth.useFingerprint') }}</p>
         <van-button
           round
-          type="primary"
           size="large"
           :loading="loading"
+          style="background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: var(--radius-md); height: 44px; min-width: 160px;"
           @click="attemptWebAuthn"
         >
           {{ loading ? t('auth.verifying') : t('auth.unlock') }}
         </van-button>
-        <van-button plain size="small" class="switch-btn" @click="switchToPin">
+        <button class="switch-btn" @click="switchToPin">
           {{ t('auth.useEmojiPin') }}
-        </van-button>
+        </button>
       </div>
 
       <!-- PIN mode -->
@@ -98,24 +100,22 @@
         </div>
 
         <div class="pin-actions">
-          <van-button plain style="min-height:56px;min-width:80px" @click="deleteEmoji">删除</van-button>
-          <van-button plain style="min-height:56px;min-width:80px" @click="clearPin">清除</van-button>
+          <button class="pin-action-btn" @click="deleteEmoji">删除</button>
+          <button class="pin-action-btn" @click="clearPin">清除</button>
         </div>
 
-        <van-button
+        <button
           v-if="webAuthnAvailable"
-          plain
-          size="small"
           class="switch-btn"
           @click="switchToWebAuthn"
         >
           {{ t('auth.useFaceId') }}
-        </van-button>
+        </button>
       </div>
 
-      <van-button plain size="small" class="back-btn" @click="backToStep1">
+      <button class="back-btn" @click="backToStep1">
         {{ t('auth.backToLogin') }}
-      </van-button>
+      </button>
     </div>
   </div>
 </template>
@@ -167,7 +167,6 @@ async function onStep1Submit() {
 
     if (result.second_factor_required && result.temp_token) {
       tempToken.value = result.temp_token
-      // Try to get display info from the response or use username as fallback
       childInfo.value = {
         displayName: result.display_name ?? form.value.username,
         avatarColor: result.avatar_color ?? '#4F46E5',
@@ -175,7 +174,6 @@ async function onStep1Submit() {
       }
       step.value = 2
 
-      // Check if child has a passkey
       if (webAuthnAvailable.value && childInfo.value.childId) {
         try {
           await getAuthenticationOptions(childInfo.value.childId)
@@ -225,7 +223,7 @@ async function attemptWebAuthn() {
     router.push('/')
   } catch (err: unknown) {
     if (err instanceof Error && err.name === 'NotAllowedError') {
-      // User cancelled — don't show error
+      // user cancelled — no error shown
     } else if (axios.isAxiosError(err) && err.response?.status === 400) {
       showToast(t('toast.noPasskey'))
       authMode.value = 'pin'
@@ -281,12 +279,13 @@ watch(
 </script>
 
 <style scoped>
+/* ── Canvas ── */
 .auth-page {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  background: var(--color-canvas);
 }
 
 .step-container {
@@ -294,30 +293,27 @@ watch(
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding: 40px 16px 24px;
+  padding: 48px 16px 24px;
 }
 
-/* Step 1 header */
+/* ── Step 1 header ── */
 .auth-header {
   text-align: center;
   margin-bottom: 32px;
 }
-
-.app-logo {
-  font-size: 48px;
-  margin-bottom: 8px;
-}
-
+.app-logo { font-size: 48px; margin-bottom: 8px; }
 .app-title {
+  font-family: Inter, sans-serif;
   font-size: 28px;
-  font-weight: 700;
-  color: #333;
+  font-weight: 600;
+  color: var(--color-ink);
   margin: 0;
+  letter-spacing: -0.5px;
 }
-
 .app-subtitle {
+  font-family: Inter, sans-serif;
   font-size: 14px;
-  color: #666;
+  color: var(--color-muted);
   margin-top: 4px;
 }
 
@@ -325,41 +321,38 @@ watch(
   width: 100%;
   max-width: 400px;
 }
-
-.form-actions {
-  padding: 24px 16px 0;
-}
+.form-actions { padding: 24px 16px 0; }
 
 .step1-error {
-  color: #e74c3c;
+  font-family: Inter, sans-serif;
+  color: var(--color-brand-coral);
   font-size: 14px;
   text-align: center;
   margin: 8px 16px 0;
 }
 
-.password-field-wrapper :deep(.van-field__right-icon) {
-  cursor: pointer;
-}
+.password-field-wrapper :deep(.van-field__right-icon) { cursor: pointer; }
 
-/* Step 2 */
+/* ── Step 2 ── */
 .child-avatar {
   width: 80px;
   height: 80px;
-  border-radius: 50%;
+  border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: Inter, sans-serif;
   font-size: 36px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-on-dark);
   margin-bottom: 12px;
 }
-
 .child-name {
+  font-family: Inter, sans-serif;
   font-size: 20px;
   font-weight: 600;
   margin: 0 0 24px;
-  color: #333;
+  color: var(--color-ink);
 }
 
 .webauthn-mode {
@@ -368,10 +361,10 @@ watch(
   align-items: center;
   gap: 16px;
 }
-
 .instruction {
+  font-family: Inter, sans-serif;
   font-size: 16px;
-  color: #666;
+  color: var(--color-muted);
   margin: 0;
 }
 
@@ -384,21 +377,19 @@ watch(
 .pin-display {
   display: flex;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
-
 .pin-slot {
   width: 20px;
   height: 20px;
-  border-radius: 50%;
-  border: 2px solid #999;
+  border-radius: var(--radius-pill);
+  border: 2px solid var(--color-muted-soft);
   background: transparent;
   transition: background 0.15s;
 }
-
 .pin-slot.filled {
-  background: #333;
-  border-color: #333;
+  background: var(--color-ink);
+  border-color: var(--color-ink);
 }
 
 @keyframes shake {
@@ -408,16 +399,17 @@ watch(
   60% { transform: translateX(-6px); }
   80% { transform: translateX(6px); }
 }
-
 .shake { animation: shake 0.5s ease; }
 
 .lock-message,
 .error-message {
-  color: #e74c3c;
+  font-family: Inter, sans-serif;
+  color: var(--color-brand-coral);
   font-size: 14px;
   margin: 0 0 16px;
 }
 
+/* ── Emoji grid ── */
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -426,34 +418,52 @@ watch(
   width: 100%;
   max-width: 320px;
 }
-
 .emoji-btn {
   font-size: 28px;
   min-height: 56px;
   min-width: 56px;
-  border: none;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
   cursor: pointer;
   transition: transform 0.1s, opacity 0.1s;
 }
-
 .emoji-btn:active { transform: scale(0.92); }
+.emoji-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-.emoji-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+/* ── PIN action buttons ── */
+.pin-actions { display: flex; gap: 16px; margin-bottom: 4px; }
+.pin-action-btn {
+  min-height: 44px;
+  min-width: 80px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-body);
+  cursor: pointer;
 }
 
-.pin-actions {
-  display: flex;
-  gap: 16px;
+/* ── Utility buttons ── */
+.switch-btn {
+  margin-top: 16px;
+  background: transparent;
+  border: none;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-muted);
+  cursor: pointer;
+  text-decoration: underline;
 }
-
-.switch-btn { margin-top: 16px; }
-
 .back-btn {
   margin-top: 24px;
-  color: #666;
+  background: transparent;
+  border: none;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-muted-soft);
+  cursor: pointer;
 }
 </style>
