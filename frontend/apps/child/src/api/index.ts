@@ -24,4 +24,15 @@ http.interceptors.request.use(
   (error) => Promise.reject(error),
 )
 
+// Response interceptor — unwrap {code, data} envelope so callers get res.data directly
+http.interceptors.response.use(
+  (response) => {
+    if (response.data && typeof response.data === 'object' && 'code' in response.data && 'data' in response.data) {
+      response.data = response.data.data
+    }
+    return response
+  },
+  (error) => Promise.reject(error),
+)
+
 export default http

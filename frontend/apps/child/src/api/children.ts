@@ -23,5 +23,5 @@ export async function childLogout(): Promise<void> {
 
 export async function listChildren(): Promise<ChildUser[]> {
   const res = await http.get('/family/children')
-  return res.data?.data ?? res.data
+  return res.data
 }

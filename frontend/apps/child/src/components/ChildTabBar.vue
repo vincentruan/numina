@@ -1,11 +1,26 @@
 <template>
   <div class="tab-bar-wrapper">
     <van-tabbar route>
-      <van-tabbar-item to="/" icon="home-o">首页</van-tabbar-item>
-      <van-tabbar-item to="/wishes" icon="star-o">心愿</van-tabbar-item>
-      <van-tabbar-item to="/tasks" icon="todo-list-o">任务</van-tabbar-item>
-      <van-tabbar-item to="/treasures" icon="gift-o">我的宝贝</van-tabbar-item>
-      <van-tabbar-item to="/ledger" icon="bill-o">账本</van-tabbar-item>
+      <van-tabbar-item to="/">
+        <template #icon><span class="tab-icon">🏠</span></template>
+        首页
+      </van-tabbar-item>
+      <van-tabbar-item to="/wishes">
+        <template #icon><span class="tab-icon">🌟</span></template>
+        心愿
+      </van-tabbar-item>
+      <van-tabbar-item to="/tasks">
+        <template #icon><span class="tab-icon">📋</span></template>
+        任务
+      </van-tabbar-item>
+      <van-tabbar-item to="/treasures">
+        <template #icon><span class="tab-icon">🏆</span></template>
+        宝贝
+      </van-tabbar-item>
+      <van-tabbar-item to="/ledger">
+        <template #icon><span class="tab-icon">💰</span></template>
+        账本
+      </van-tabbar-item>
     </van-tabbar>
 
     <!-- Dark mode toggle — floats above tab bar -->
@@ -51,5 +66,10 @@ const { isDark, toggle } = useDarkMode()
 
 .theme-toggle:active {
   transform: scale(0.9);
+}
+
+.tab-icon {
+  font-size: 20px;
+  line-height: 1;
 }
 </style>

@@ -241,9 +241,9 @@ onMounted(loadWishes)
 
 .sort-btn {
   min-height: 32px;
-  padding: 0 12px;
-  border-radius: 16px;
-  border: 1px solid var(--separator);
+  padding: 0 14px;
+  border-radius: 30px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
   background: transparent;
   color: var(--text-secondary);
   font-size: 13px;
@@ -252,7 +252,6 @@ onMounted(loadWishes)
   align-items: center;
   gap: 3px;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
-  /* Extend touch target to 44pt without affecting layout */
   position: relative;
 }
 
@@ -263,9 +262,20 @@ onMounted(loadWishes)
 }
 
 .sort-btn.active {
-  background: var(--van-primary-color);
-  color: #fff;
-  border-color: var(--van-primary-color);
+  background: #eeece7;
+  color: #17171c;
+  border-color: #17171c;
+  font-weight: 500;
+}
+
+[data-theme='dark'] .sort-btn {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme='dark'] .sort-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .sort-dir {

@@ -1,10 +1,179 @@
-# Child Frontend Issues Report
+# Numina UI/UX 审计报告 — 2026-04-30
 
-**Date:** 2026-04-28  
-**Branch:** feat/child-frontend-module-split  
-**Tester:** Kiro (automated browser testing via Chrome DevTools MCP)
+**测试视口**: 375×812 (iPhone 标准移动端)  
+**成人前端设计系统**: Cohere (白色画布, 近黑色 pill CTA, coral 强调色)  
+**儿童前端设计系统**: Clay (奶油色画布 #fffaf0, 饱和特色卡片, 圆润风格)  
+**截图数量**: 11 张  
+**发现问题**: 11 项 (P0: 2, P1: 4, P2: 3, P3: 2)
 
 ---
+
+## P0 — 严重问题 (阻断功能)
+
+### P0-1: 儿童前端登录页无法登录儿童账号
+
+- **页面**: `/child/auth`
+- **组件**: `ChildAuthPage.vue` — `onStep1Submit()`
+- **问题**: 登录页使用 `/auth/login/step1` (成人账号端点，需要用户名+密码)。儿童账号 (xiaobao/dabao) 没有密码，只有 emoji PIN。用成人账号 (demouser) 登录后，router guard 检测到 `role !== 'child'` 会重定向回 `/auth`，造成死循环。儿童账号输入用户名+任意密码会返回 `AUTH_INVALID_CREDENTIALS`。
+- **根因**: `ChildAuthPage.vue` 只调用 `childLoginStep1(username, password)`，但 `childAuth` store 中已有 `childLogin(child, pin)` 方法调用正确的 `/auth/child/login` 端点，却从未在 UI 中使用。
+- **修复**: 将 step1 改为只输入用户名，跳过密码字段，直接进入 PIN 输入界面，调用 `childLogin()` 而非 `childLoginStep1()`。
+- **影响**: 儿童完全无法通过正常 UI 登录儿童前端
+- **工作量**: M
+
+### P0-2: 儿童首页快捷链接路径重复 (`/child/child/wishes`)
+
+- **页面**: `/child/` (ChildHomePage)
+- **组件**: `ChildHomePage.vue` — 快捷链接区域
+- **问题**: 快捷链接 href 为 `http://localhost/child/child/wishes`、`/child/child/tasks` 等，路径中 `/child/` 重复了两次。点击后会 404 或跳转到错误路由。
+- **根因**: 链接硬编码了 `/child/` 前缀，但 Vue Router 的 `BASE_URL` 已经是 `/child/`，导致双重前缀。
+- **修复**: 将链接改为相对路径 (`/wishes`, `/tasks`) 或使用 `router-link :to="{ name: 'ChildWishes' }"`
+- **影响**: 首页所有快捷入口点击后跳转失败
+- **工作量**: S
+
+---
+
+## P1 — 主要 UX 问题
+
+### P1-1: 儿童前端所有 API 请求返回 401
+
+- **页面**: 所有儿童页面
+- **组件**: axios 实例 / `configureAuthHttp()` 配置
+- **问题**: 儿童前端所有 API 请求 (`/child/coins/balance`、`/child/chores`、`/child/wishes`、`/child/calendar`) 均返回 401，导致所有数据为空，星星币余额显示 0，任务显示"加载失败"。
+- **根因**: 儿童前端 axios 实例可能未配置 `withCredentials: true`，或 `configureAuthHttp()` 在 child app `main.ts` 中未正确调用，导致 Cookie 未随请求发送。
+- **修复**: 检查 `frontend/apps/child/src/` 中 axios 实例是否有 `withCredentials: true`；确认 `main.ts` 中 `configureAuthHttp()` 调用正确。
+- **影响**: 儿童前端所有功能数据为空
+- **工作量**: S
+
+### P1-2: 儿童任务页错误提示对儿童不友好
+
+- **页面**: `/child/tasks`
+- **组件**: `ChildTasksPage.vue` — 错误状态
+- **问题**: 因 401 错误，任务页显示 `❌ 加载失败，请刷新重试`。对儿童用户来说过于技术性，且没有重试按钮。
+- **修复**: 先修复 P1-1；错误状态改为更友好的提示，加上重试按钮，使用 Clay 设计系统的 feature-card-coral 样式。
+- **工作量**: S
+
+### P1-3: 成人前端宝贝页儿童卡片信息不完整
+
+- **页面**: `/baby`
+- **组件**: `BabyPage.vue`
+- **问题**: 宝贝页只显示汇总数字 (余额 140⭐, 进行中心愿 2)，没有儿童头像、用户名、详细信息卡片。心愿列表只有名称和状态，缺少 emoji、优先级、金额。
+- **设计系统对照 (Cohere)**: 应使用 `product-card` (soft-stone 背景 #eeece7, 8px 圆角) 展示每个儿童的完整信息卡片。
+- **修复**: 补充儿童卡片的头像、用户名、余额展示；心愿列表补充 emoji 和金额字段。
+- **工作量**: M
+
+### P1-4: 成人前端负债页类型筛选按钮不符合 Cohere 设计系统
+
+- **页面**: `/liabilities`
+- **组件**: 类型筛选按钮 (全部/房贷/车贷/信用卡/个人贷款/其他)
+- **问题**: 筛选按钮使用 Vant 默认样式，不符合 Cohere 的 `button-pill-outline` 规范 (透明背景, 1px 深色边框, 30px pill 圆角)。
+- **设计系统对照 (Cohere)**: 应使用 `button-pill-outline`: `border-radius: 30px; border: 1px solid var(--color-primary); background: transparent`
+- **工作量**: S
+
+---
+
+## P2 — 轻微打磨问题
+
+### P2-1: 儿童前端底部导航栏图标未显示
+
+- **页面**: 所有儿童页面
+- **组件**: `ChildLayout.vue` — 底部 tab bar
+- **问题**: 底部导航标签文字前有空白字符 (` 首页`, ` 心愿` 等)，图标未渲染，显示为空白方块。
+- **设计系统对照 (Clay)**: 导航图标应清晰可见，符合 44px 最小触控目标。
+- **修复**: 检查 Vant icon 名称是否正确，或改用 emoji 图标作为备选。
+- **工作量**: S
+
+### P2-2: 成人前端资产列表重复数据无视觉区分
+
+- **页面**: `/` (Dashboard)
+- **组件**: 资产列表
+- **问题**: "测试房产"出现 4 次，"买新车"/"换新房"各出现多次。UI 没有去重提示或分组，列表视觉混乱。
+- **修复**: seed 脚本层面去重；UI 层可按名称分组或添加序号区分同名资产。
+- **工作量**: S (数据) / M (UI 分组)
+
+### P2-3: 儿童前端星星币图标不统一 (★ vs ⭐)
+
+- **页面**: `/child/` 和 `/child/ledger`
+- **组件**: 星星币余额显示
+- **问题**: 儿童端使用 `★` (字符)，成人端宝贝页使用 `⭐` (emoji)，两处不一致，且 `★` 在小字号下可读性差。
+- **修复**: 统一改为 `⭐` emoji。
+- **工作量**: XS
+
+---
+
+## P3 — 优化建议
+
+### P3-1: 儿童前端空状态缺少 Clay 风格插画
+
+- **页面**: `/child/wishes`, `/child/treasures`, `/child/ledger`
+- **问题**: 空状态只有单个 emoji + 文字，缺少 Clay 设计系统的 3D 黏土风格插画，对儿童用户视觉吸引力不足。
+- **修复**: 添加 SVG 或 Lottie 动画插画到空状态区域。
+- **工作量**: L
+
+### P3-2: 成人前端心愿页排序按钮可改为 Cohere category-tab 样式
+
+- **页面**: `/wishes`
+- **问题**: 排序按钮 (按优先级/按价格/按名称) 使用普通按钮样式，不符合 Cohere `category-tab` 规范 (pill 形状, 激活态 soft-stone 背景)。
+- **修复**: 改为 `category-tab` + `category-tab-active` 样式。
+- **工作量**: S
+
+---
+
+## API 测试结果
+
+- seed-data.sh: ✅ 成功 (所有测试账号创建完成)
+- 成人前端 API: ✅ 正常 (demouser 登录后所有请求 200)
+- 儿童前端 API: ❌ 全部 401 (见 P1-1)
+
+---
+
+## 设计系统合规性总结
+
+### 成人前端 (Cohere)
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 白色画布 (#ffffff) | ✅ | 正确 |
+| 近黑色主色 (#17171c) | ⚠️ | 部分按钮仍用 Vant 蓝色默认色 |
+| Pill 形 CTA 按钮 | ⚠️ | 筛选按钮圆角不足 (P1-4) |
+| Coral 强调色 | ✅ | 状态标签使用正确 |
+| 8px 卡片圆角 | ✅ | 资产卡片符合 |
+| 移动端 375px 单列布局 | ✅ | 无溢出 |
+| 最小触控目标 44px | ✅ | 主要按钮符合 |
+
+### 儿童前端 (Clay)
+
+| 维度 | 状态 | 备注 |
+|------|------|------|
+| 奶油色画布 (#fffaf0) | ✅ | 正确 |
+| 饱和特色卡片 | ⚠️ | 首页快捷入口未使用 feature-card 变体 |
+| 圆润边框 (pill/xl) | ✅ | 按钮和卡片圆角符合 |
+| 底部导航图标 | ❌ | 图标未显示 (P2-1) |
+| 移动端 375px 布局 | ✅ | 无溢出 |
+| 儿童友好字体大小 | ✅ | 字号适合儿童阅读 |
+
+---
+
+## 修复优先级建议
+
+**立即修复 (本 sprint)**:
+- P0-1: 儿童登录流程 — 改用 `childLogin()` + PIN 输入
+- P0-2: 首页快捷链接路径重复
+- P1-1: 儿童前端 axios `withCredentials` 配置
+
+**下个 sprint**:
+- P1-2: 任务页错误状态友好化
+- P1-3: 宝贝页儿童卡片完善
+- P1-4: 负债页筛选按钮样式
+- P2-1: 底部导航图标修复
+- P2-3: 星星币图标统一
+
+**后续迭代**:
+- P3-1: 空状态插画
+- P3-2: 心愿排序按钮样式
+
+---
+
+## 历史问题记录 (2026-04-28)
 
 ## Issue #1 — ChildSelectPage 渲染空白（名字/用户名不显示）
 

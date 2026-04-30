@@ -1,6 +1,6 @@
 <template>
   <div class="auth-page">
-    <!-- Step 1: username + password -->
+    <!-- Step 1: username only -->
     <div v-if="step === 1" class="step-container">
       <div class="auth-header">
         <div class="app-logo">🌟</div>
@@ -17,20 +17,6 @@
             :placeholder="t('auth.usernamePlaceholder')"
             :rules="[{ required: true, message: t('auth.usernameRequired') }]"
           />
-          <div class="password-field-wrapper">
-            <van-field
-              v-model="form.password"
-              :type="showPassword ? 'text' : 'password'"
-              name="password"
-              :label="t('auth.password')"
-              :placeholder="t('auth.passwordPlaceholder')"
-              :rules="[{ required: true, message: t('auth.passwordRequired') }]"
-            >
-              <template #right-icon>
-                <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
-              </template>
-            </van-field>
-          </div>
         </van-cell-group>
 
         <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
@@ -140,9 +126,7 @@ const childAuthStore = useChildAuthStore()
 
 const step = ref<1 | 2>(1)
 const loading = ref(false)
-const showPassword = ref(false)
 const step1Error = ref('')
-const tempToken = ref('')
 const childInfo = ref({ displayName: '', avatarColor: '', childId: '' })
 
 const authMode = ref<'webauthn' | 'pin'>('pin')
@@ -151,7 +135,7 @@ const shaking = ref(false)
 const webAuthnAvailable = ref(false)
 const submitting = ref(false)
 
-const form = ref({ username: '', password: '' })
+const form = ref({ username: '' })
 
 onMounted(async () => {
   const support = checkWebAuthnSupport()
@@ -159,48 +143,16 @@ onMounted(async () => {
   webAuthnAvailable.value = true
 })
 
-async function onStep1Submit() {
-  loading.value = true
+// Step 1: just advance to PIN input — no password needed for child accounts
+function onStep1Submit() {
+  if (!form.value.username.trim()) return
   step1Error.value = ''
-  try {
-    const result = await childAuthStore.childLoginStep1(form.value.username, form.value.password)
-
-    if (result.second_factor_required && result.temp_token) {
-      tempToken.value = result.temp_token
-      childInfo.value = {
-        displayName: result.display_name ?? form.value.username,
-        avatarColor: result.avatar_color ?? '#4F46E5',
-        childId: result.user_id ? String(result.user_id) : '',
-      }
-      step.value = 2
-
-      if (webAuthnAvailable.value && childInfo.value.childId) {
-        try {
-          await getAuthenticationOptions(childInfo.value.childId)
-          authMode.value = 'webauthn'
-        } catch {
-          authMode.value = 'pin'
-        }
-      }
-    } else {
-      showToast(t('toast.loginSuccess'))
-      router.push('/')
-    }
-  } catch (err: unknown) {
-    if (axios.isAxiosError(err) && err.response?.status === 423) {
-      step1Error.value = t('errors.ACCOUNT_LOCKED')
-    } else {
-      const code = axios.isAxiosError(err) ? err.response?.data?.code : undefined
-      const i18nKey = code ? `errors.${code}` : ''
-      if (i18nKey && t(i18nKey) !== i18nKey) {
-        step1Error.value = t(i18nKey)
-      } else {
-        step1Error.value = t('errors.INVALID_CREDENTIALS')
-      }
-    }
-  } finally {
-    loading.value = false
+  childInfo.value = {
+    displayName: form.value.username,
+    avatarColor: '#FF6B6B',
+    childId: '',
   }
+  step.value = 2
 }
 
 async function attemptWebAuthn() {
@@ -252,7 +204,6 @@ function clearPin() {
 function backToStep1() {
   step.value = 1
   pin.value = []
-  tempToken.value = ''
   step1Error.value = ''
   childAuthStore.clearLoginError()
 }
@@ -263,7 +214,10 @@ watch(
     if (len === 4 && !submitting.value) {
       submitting.value = true
       try {
-        await childAuthStore.childLoginStep2(tempToken.value, [...pin.value])
+        await childAuthStore.childLogin(
+          { id: '', username: form.value.username, display_name: form.value.username, avatar_color: '#FF6B6B', is_active: true },
+          [...pin.value],
+        )
         showToast(t('toast.loginSuccess'))
         router.push('/')
       } catch {

@@ -21,6 +21,22 @@
           <van-tab v-for="child in childMembers" :key="child.id" :title="child.display_name" />
         </van-tabs>
 
+        <!-- Child Info Cards (one per child, or aggregate) -->
+        <div v-if="activeChildIndex === 0" class="child-cards-row">
+          <div
+            v-for="child in childMembers"
+            :key="child.id"
+            class="child-info-card"
+            @click="activeChildIndex = childMembers.indexOf(child) + 1"
+          >
+            <div class="child-avatar" :style="{ background: child.avatar_color || '#FF6B6B' }">
+              {{ (child.display_name ?? '?').charAt(0) }}
+            </div>
+            <p class="child-card-name">{{ child.display_name }}</p>
+            <p class="child-card-balance">{{ childBalances[child.id] ?? 0 }} ⭐</p>
+          </div>
+        </div>
+
         <!-- Summary Card -->
         <van-cell-group inset class="summary-card">
           <van-cell title="余额" :value="`${currentBalance} ⭐`" />
@@ -39,12 +55,14 @@
                 @click="$router.push('/wish-review')"
               >
                 <div class="wish-header">
+                  <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
                   <span class="wish-name">{{ wish.name }}</span>
                   <van-tag :type="getWishStatusType(wish.status)">{{ getWishStatusLabel(wish.status) }}</van-tag>
                 </div>
+                <div v-if="wish.star_coin_cost" class="wish-cost">{{ wish.star_coin_cost }} ⭐</div>
                 <van-progress
                   v-if="wish.status === 'active' && wish.star_coin_cost"
-                  :percentage="50"
+                  :percentage="Math.min(Math.round(((childBalances[wish.child_user_id] ?? 0) / wish.star_coin_cost) * 100), 100)"
                   stroke-width="6"
                   color="#f5a623"
                 />
@@ -252,6 +270,56 @@ onMounted(async () => {
   padding-bottom: 20px;
 }
 
+/* Child info cards row */
+.child-cards-row {
+  display: flex;
+  gap: 10px;
+  padding: 12px 16px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.child-cards-row::-webkit-scrollbar { display: none; }
+
+.child-info-card {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: #eeece7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  cursor: pointer;
+  min-width: 80px;
+  transition: transform 0.1s;
+}
+.child-info-card:active { transform: scale(0.96); }
+
+.child-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.child-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #17171c;
+  margin: 0;
+}
+
+.child-card-balance {
+  font-size: 12px;
+  color: #666;
+  margin: 0;
+}
+
 .summary-card {
   margin-top: 12px;
 }
@@ -278,12 +346,26 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
+  gap: 6px;
+}
+
+.wish-emoji-icon {
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
 .wish-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+  flex: 1;
+}
+
+.wish-cost {
+  font-size: 12px;
+  color: #f5a623;
+  font-weight: 500;
+  margin-bottom: 6px;
 }
 
 .calendar-wrap {

@@ -384,24 +384,31 @@ liabilityStore.fetchLiabilities({ is_active: true })
 
 .chip {
   flex-shrink: 0;
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 4px 14px;
+  border-radius: 30px;
+  border: 1px solid rgba(0, 0, 0, 0.18);
   background: transparent;
   font-size: 13px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
 .chip.active {
-  background: #dc2626;
-  border-color: #dc2626;
+  background: #17171c;
+  border-color: #17171c;
   color: #fff;
 }
 
 [data-theme='dark'] .chip {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme='dark'] .chip.active {
+  background: #f5f5f5;
+  border-color: #f5f5f5;
+  color: #17171c;
 }
 
 .sort-btn {
