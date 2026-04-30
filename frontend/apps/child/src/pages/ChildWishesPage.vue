@@ -340,7 +340,7 @@ onMounted(load)
 .wishes-page {
   background: var(--color-canvas);
   min-height: 100vh;
-  padding: var(--space-md) var(--space-md) 100px;
+  padding: var(--space-md) var(--space-md) 140px;
 }
 
 /* ── Hero banner — peach feature card ── */
@@ -375,7 +375,8 @@ onMounted(load)
 .hero-divider {
   width: 1px;
   height: 36px;
-  background: rgba(10, 10, 10, 0.2);
+  background: var(--color-hairline);
+  opacity: 0.4;
 }
 .hero-stat {
   display: flex;
@@ -415,6 +416,7 @@ onMounted(load)
 }
 .wish-card--active {
   border-left: 4px solid var(--color-brand-ochre);
+  background: var(--color-surface-soft);
   background: color-mix(in srgb, var(--color-brand-ochre) 6%, var(--color-surface-soft));
 }
 .wish-card--simple {

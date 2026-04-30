@@ -143,12 +143,10 @@ onMounted(load)
 [data-theme="dark"] .balance-card { color: var(--color-on-feature-teal); }
 .balance-label {
   font-family: Inter, sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
   margin: 0;
-  opacity: 0.7;
+  opacity: 0.75;
 }
 .balance-value {
   font-size: 32px;

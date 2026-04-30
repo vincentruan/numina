@@ -173,9 +173,8 @@ onMounted(async () => {
   font-family: Inter, sans-serif;
   font-size: 16px;
   font-weight: 600;
-  color: var(--color-on-primary);
+  color: var(--color-on-dark);
   margin: 0;
-  letter-spacing: 0.3px;
 }
 
 .loading, .empty {
