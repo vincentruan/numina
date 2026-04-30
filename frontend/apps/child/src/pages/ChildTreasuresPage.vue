@@ -176,6 +176,4 @@ onMounted(load)
   font-size: 14px;
   text-align: center;
 }
-  margin: 0;
-}
 </style>

@@ -131,7 +131,7 @@
     </van-pull-refresh>
 
     <!-- FAB -->
-    <button v-if="totalWishes > 0" class="fab" @click="showCreate = true" :aria-label="t('wishes.createBtn')">
+    <button v-if="totalWishes > 0" class="fab" :aria-label="t('wishes.createBtn')" @click="showCreate = true">
       <van-icon name="plus" size="22" color="#fff" />
     </button>
 

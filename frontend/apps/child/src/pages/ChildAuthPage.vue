@@ -36,7 +36,8 @@
         <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
 
         <div class="form-actions">
-          <van-button round block type="primary" native-type="submit" :loading="loading"
+          <van-button
+round block type="primary" native-type="submit" :loading="loading"
             style="background: var(--color-primary); border: none; border-radius: var(--radius-md); height: 44px;">
             {{ t('auth.nextStep') }}
           </van-button>
