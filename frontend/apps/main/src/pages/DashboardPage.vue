@@ -25,12 +25,6 @@
           :month-over-month-change="overview?.month_over_month_change"
         />
 
-        <!-- Quick Stats -->
-        <van-cell-group inset class="quick-stats-section">
-          <van-cell title="资产数量" :value="`${overview?.asset_count ?? 0} 项`" />
-          <van-cell title="日均成本总计" :value="`¥${(overview?.total_daily_cost ?? 0).toFixed(2)}/天`" />
-        </van-cell-group>
-
         <!-- Trend Chart -->
         <van-cell-group inset class="chart-section">
           <van-collapse v-model="trendExpanded" @change="toggleTrend">
@@ -647,10 +641,6 @@ onUnmounted(() => {
 
 [data-theme='dark'] .fab {
   box-shadow: 0 4px 16px rgba(25, 137, 250, 0.6);
-}
-
-.quick-stats-section {
-  margin-top: 12px;
 }
 
 .chart-section {
