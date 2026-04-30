@@ -66,7 +66,7 @@ const changeText = computed(() => {
   color: var(--color-on-primary);
 }
 [data-theme='dark'] .overview-card {
-  background: #0d0d10;
+  background: #010120;
 }
 .ov-main {
   display: flex;
@@ -85,8 +85,8 @@ const changeText = computed(() => {
 .ov-amount :deep(.money-display) {
   color: #fff;
   font-size: 36px;
-  font-weight: 400;
-  letter-spacing: -0.5px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
 }
 .ov-sub-row {
   display: flex;
@@ -99,7 +99,7 @@ const changeText = computed(() => {
   background: rgba(255, 119, 89, 0.25);
   color: var(--color-coral-soft);
   padding: 3px 10px;
-  border-radius: var(--radius-pill);
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
 }
