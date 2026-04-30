@@ -16,7 +16,7 @@
 }
 
 :root {
-  /* ── Cohere Design System Tokens ── */
+  /* ── Together AI Design System Tokens ── */
 
   /* Brand & Accent */
   --color-primary: #010120;
@@ -42,7 +42,7 @@
   --color-body-muted: #616161;
   --color-hairline: rgba(1,1,32,0.08);
   --color-border-light: rgba(1,1,32,0.08);
-  --color-card-border: #f2f2f2;
+  --color-card-border: rgba(1,1,32,0.08);
 
   /* On-color text */
   --color-on-primary: #ffffff;
@@ -63,7 +63,7 @@
   --van-button-primary-background: var(--color-primary);
   --van-button-primary-border-color: var(--color-primary);
   --van-button-primary-color: var(--color-on-primary);
-  --van-tabs-bottom-bar-color: var(--color-coral);
+  --van-tabs-bottom-bar-color: var(--color-primary);
   --van-tab-active-text-color: var(--color-primary);
   --van-checkbox-checked-icon-color: var(--color-primary);
   --van-switch-on-background: var(--color-primary);
@@ -139,7 +139,7 @@
 
 /* ── Vant Toast / Notify theme ── */
 :root {
-  --van-toast-background: rgba(23, 23, 28, 0.92);
+  --van-toast-background: rgba(1, 1, 32, 0.92);
   --van-toast-text-color: #ffffff;
   --van-notify-text-color: #ffffff;
   --van-notify-primary-background: var(--color-primary);
@@ -154,7 +154,7 @@
 .van-toast--loading,
 .van-toast--html {
   color: #ffffff !important;
-  background: rgba(23, 23, 28, 0.92) !important;
+  background: rgba(1, 1, 32, 0.92) !important;
   border-radius: var(--radius-sm) !important;
 }
 
@@ -224,9 +224,9 @@ a {
   font-size: 14px;
 }
 
-/* Tabs active line → coral */
+/* Tabs active line → primary */
 .van-tabs__line {
-  background: var(--color-coral) !important;
+  background: var(--color-primary) !important;
   height: 2px !important;
   border-radius: var(--radius-full) !important;
 }
