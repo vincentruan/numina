@@ -151,7 +151,8 @@ async function onStep1Submit() {
       secondFactorType.value = result.second_factor_type ?? 'numeric_pin'
       step.value = 2
     } else {
-      // No second factor — login complete
+      // No second factor — login complete; populate user store before navigating
+      await authStore.fetchMe()
       showToast(t('toast.loginSuccess'))
       router.push('/')
     }
