@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios'
+import { clearAuth } from '@numina/auth'
 
 const http = axios.create({
   baseURL: '/api/v1',
@@ -25,6 +26,7 @@ http.interceptors.request.use(
 )
 
 // Response interceptor — unwrap {code, data} envelope so callers get res.data directly
+// On 401, clear stale localStorage session and redirect to login
 http.interceptors.response.use(
   (response) => {
     if (response.data && typeof response.data === 'object' && 'code' in response.data && 'data' in response.data) {
@@ -32,7 +34,17 @@ http.interceptors.response.use(
     }
     return response
   },
-  (error) => Promise.reject(error),
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
+      const url = error.config?.url ?? ''
+      // Don't redirect on auth endpoints themselves (login, refresh)
+      if (!url.includes('/auth/')) {
+        clearAuth()
+        window.location.replace('/child/auth')
+      }
+    }
+    return Promise.reject(error)
+  },
 )
 
 export default http
