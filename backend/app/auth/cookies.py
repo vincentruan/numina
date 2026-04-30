@@ -3,14 +3,15 @@
 Cookie Security Configuration:
 - httpOnly: True - JavaScript cannot read (XSS protection)
 - secure: True in production - HTTPS only
-- sameSite: 'strict' - Same-site requests only (CSRF protection)
+- sameSite: 'lax' - Allows same-site + top-level cross-site GET (CSRF protection)
 - path: '/' - Available for all routes
 
 Trade-offs:
-- sameSite='strict': Most secure, but breaks cross-site navigation
-  (e.g., clicking a link from email won't carry auth cookie)
-- Alternative: sameSite='lax' allows cross-site GET but blocks POST
-  For this app, 'strict' is appropriate (no cross-site auth needed)
+- sameSite='lax': Allows cookie on top-level navigation (e.g., link from email,
+  redirect after login). Blocks cross-site POST. Required for iOS Safari which
+  drops 'strict' cookies after page navigation even on the same domain.
+- sameSite='strict': Most secure, but iOS Safari drops cookies after redirects,
+  causing 401s on all API calls after login.
 
 References:
 - https://developer.mozilla.org/en-US/docs/Web/HTTP/Cookies
@@ -47,7 +48,7 @@ def set_auth_cookies(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 15 min = 900s
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
@@ -58,7 +59,7 @@ def set_auth_cookies(
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,  # 7 days = 604800s
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
@@ -98,7 +99,7 @@ def set_child_auth_cookies(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # 15 min = 900s
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
@@ -109,7 +110,7 @@ def set_child_auth_cookies(
         max_age=settings.CHILD_REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
-        samesite="strict",
+        samesite="lax",
         path="/",
     )
 
