@@ -201,8 +201,8 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   background: rgba(23, 23, 28, 0.04);
 }
 [data-theme='dark'] .asset-card.selection-mode.selected {
-  border-color: var(--color-coral);
-  background: rgba(255, 119, 89, 0.08);
+  border-color: var(--color-lavender);
+  background: rgba(189, 187, 255, 0.08);
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
@@ -298,7 +298,7 @@ const statusType = computed(() => statusMap[props.asset.status]?.type || 'defaul
   color: var(--color-body-muted);
   background: var(--bg-secondary);
   padding: 2px 8px;
-  border-radius: var(--radius-pill);
+  border-radius: 4px;
   line-height: 1.4;
 }
 [data-theme='dark'] .card-days {
