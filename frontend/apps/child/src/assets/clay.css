@@ -96,6 +96,45 @@
   --color-brand-mint:    #8abcad;
 }
 
+/* ── Vant dark mode overrides ── */
+[data-theme="dark"] {
+  --van-tabbar-background: #0f2020;
+  --van-tabbar-item-text-color: #606060;
+  --van-tabbar-item-active-color: #d4a83a;
+  --van-tabbar-item-active-background: #0f2020;
+  --van-nav-bar-background: #0f2020;
+  --van-nav-bar-title-text-color: #f0ece0;
+  --van-nav-bar-icon-color: #f0ece0;
+  --van-cell-background: #152828;
+  --van-cell-border-color: #1e3030;
+  --van-cell-text-color: #f0ece0;
+  --van-cell-label-color: #8a8a80;
+  --van-cell-value-color: #8a8a80;
+  --van-cell-group-background: #152828;
+  --van-cell-group-title-color: #8a8a80;
+  --van-field-background: #152828;
+  --van-field-label-color: #f0ece0;
+  --van-field-input-text-color: #f0ece0;
+  --van-field-placeholder-text-color: #606060;
+  --van-popup-background: #152828;
+  --van-picker-background: #152828;
+  --van-picker-toolbar-background: #152828;
+  --van-picker-title-text-color: #f0ece0;
+  --van-picker-cancel-action-color: #8a8a80;
+  --van-picker-confirm-action-color: #d4a83a;
+  --van-picker-option-text-color: #f0ece0;
+  --van-dialog-background: #152828;
+  --van-dialog-header-isolated-padding: 26px 16px 0;
+  --van-dialog-message-text-color: #c0bcb0;
+  --van-dialog-header-font-color: #f0ece0;
+  --van-button-default-background: #1a3030;
+  --van-button-default-border-color: #1e3030;
+  --van-button-default-color: #f0ece0;
+  --van-toast-background: #1a3030;
+  --van-toast-text-color: #f0ece0;
+  --van-overlay-background: rgba(0, 0, 0, 0.7);
+}
+
 /* ── Smooth theme transition ── */
 *, *::before, *::after {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;

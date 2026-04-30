@@ -101,13 +101,15 @@ function dayTotal(day: CalendarDaySummary): number {
   return day.chore_count + day.wish_count + day.milestone_count
 }
 
+// Heat colors use CSS variables so dark mode overrides apply automatically.
+// We return a var() string; the actual color is resolved by the browser.
 function heatColor(day: CalendarDaySummary): string {
   const total = dayTotal(day)
-  if (total === 0) return '#ffffff'
-  if (total === 1) return '#fff3e0'
-  if (total <= 3) return '#ffe0b2'
-  if (total <= 6) return '#ffb74d'
-  return '#f5a623'
+  if (total === 0) return 'transparent'
+  if (total === 1) return 'var(--heat-1)'
+  if (total <= 3) return 'var(--heat-2)'
+  if (total <= 6) return 'var(--heat-3)'
+  return 'var(--heat-4)'
 }
 
 function isDark(day: CalendarDaySummary): boolean {
@@ -198,9 +200,22 @@ onMounted(loadMonth)
 
 <style scoped>
 .child-calendar {
-  background: #fff;
+  /* Heat color tokens — overridden in dark mode via [data-theme="dark"] in clay.css */
+  --heat-1: #fff3e0;
+  --heat-2: #ffe0b2;
+  --heat-3: #ffb74d;
+  --heat-4: #f5a623;
+
+  background: var(--color-surface-card);
   border-radius: 12px;
   padding: 12px;
+}
+
+[data-theme="dark"] .child-calendar {
+  --heat-1: #1a2e1a;
+  --heat-2: #1e3a1a;
+  --heat-3: #2a4a1a;
+  --heat-4: #3a5a20;
 }
 
 /* Header */
@@ -213,16 +228,16 @@ onMounted(loadMonth)
 .cal-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--color-ink);
 }
 .nav-btn {
   width: 44px;
   height: 44px;
   border: none;
-  background: #f5f5f5;
+  background: var(--color-surface-strong);
   border-radius: 10px;
   font-size: 20px;
-  color: #555;
+  color: var(--color-muted);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -230,7 +245,7 @@ onMounted(loadMonth)
   -webkit-tap-highlight-color: transparent;
 }
 .nav-btn:active {
-  background: #e8e8e8;
+  background: var(--color-hairline);
 }
 
 /* Weekday row */
@@ -242,7 +257,7 @@ onMounted(loadMonth)
 .cal-weekdays span {
   text-align: center;
   font-size: 11px;
-  color: #999;
+  color: var(--color-muted-soft);
   padding: 4px 0;
 }
 
@@ -281,8 +296,8 @@ onMounted(loadMonth)
   transform: scale(0.92);
 }
 .cal-cell.today .day-num {
-  background: #f5a623;
-  color: #fff;
+  background: var(--color-brand-ochre);
+  color: var(--color-ink);
   border-radius: 50%;
   width: 26px;
   height: 26px;
@@ -297,7 +312,7 @@ onMounted(loadMonth)
 
 .day-num {
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--color-ink);
   line-height: 1;
   width: 26px;
   height: 26px;
@@ -321,12 +336,12 @@ onMounted(loadMonth)
   flex-shrink: 0;
 }
 .dot-chore { background: #4caf50; }
-.dot-wish  { background: #f5a623; }
-.dot-milestone { background: #9c27b0; }
+.dot-wish  { background: var(--color-brand-ochre); }
+.dot-milestone { background: var(--color-brand-lavender); }
 
-/* 深色背景时圆点加白描边 */
+/* 深色背景时圆点加描边 */
 .dot-dark .dot {
-  box-shadow: 0 0 0 1px #fff;
+  box-shadow: 0 0 0 1px var(--color-canvas);
 }
 
 .dot-wrap {
@@ -348,11 +363,11 @@ onMounted(loadMonth)
 }
 
 .dot-count-chore    { color: #2e7d32; }
-.dot-count-wish     { color: #e65100; }
-.dot-count-milestone { color: #6a1b9a; }
+.dot-count-wish     { color: var(--color-brand-ochre); }
+.dot-count-milestone { color: var(--color-brand-lavender); }
 
 .dot-dark .dot-count {
-  color: #fff;
+  color: var(--color-on-dark);
 }
 
 /* 父母视角圆角 */
@@ -367,14 +382,14 @@ onMounted(loadMonth)
   justify-content: center;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--color-hairline-soft);
 }
 .legend-item {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #888;
+  color: var(--color-muted-soft);
 }
 
 /* Stats bar */
@@ -386,10 +401,10 @@ onMounted(loadMonth)
   gap: 4px;
   margin-top: 8px;
   font-size: 11px;
-  color: #aaa;
+  color: var(--color-muted-soft);
 }
-.stats-sep { color: #ddd; }
-.stats-rate { color: #f5a623; font-weight: 600; }
+.stats-sep { color: var(--color-hairline); }
+.stats-rate { color: var(--color-brand-ochre); font-weight: 600; }
 
 /* Streak connector */
 .cal-cell.streak::before {
@@ -399,7 +414,7 @@ onMounted(loadMonth)
   top: 50%;
   width: 50%;
   height: 2px;
-  background: #f5a623;
+  background: var(--color-brand-ochre);
   opacity: 0.5;
   transform: translateY(-50%);
   pointer-events: none;
