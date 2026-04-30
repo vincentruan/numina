@@ -1054,8 +1054,13 @@ EOF
 )"
     log_ok "创建: 西装套装"
 
-    # 美妆 - 消耗品
+    # 美妆 - 消耗品（purchase_date 动态计算，使其在 ~45 天后到期，用于演示「即将到期」卡片）
     CAT_BEAUTY=$(get_category_id "$TOKEN" "美妆" "physical")
+    if date -v-685d >/dev/null 2>&1; then
+      SKII_PURCHASE=$(date -v-685d +%Y-%m-%d)
+    else
+      SKII_PURCHASE=$(date -d "685 days ago" +%Y-%m-%d)
+    fi
     create_physical_asset "$TOKEN" "$(cat <<EOF
 {
   "name":"SK-II套装",
@@ -1064,7 +1069,7 @@ EOF
   "purchase_price":3000,
   "current_value":2500,
   "currency":"CNY",
-  "purchase_date":"2024-01-01",
+  "purchase_date":"$SKII_PURCHASE",
   "status":"in_use",
   "location":"浴室",
   "usage_frequency":"daily",
