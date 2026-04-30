@@ -2,7 +2,7 @@
   <div class="altcha-container">
     <!-- Captcha disabled (per server config): silent pass-through -->
     <div v-if="!captchaEnabled" class="altcha-dev-notice">
-      <van-notice-bar color="#1989fa" background="#ecf9ff">
+      <van-notice-bar color="var(--color-primary)" background="var(--color-soft-stone)">
         验证码已禁用
       </van-notice-bar>
     </div>

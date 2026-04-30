@@ -103,7 +103,7 @@ onMounted(async () => {
 }
 
 .summary-value.primary {
-  color: #1989fa;
+  color: var(--color-primary);
 }
 
 .summary-value.danger {

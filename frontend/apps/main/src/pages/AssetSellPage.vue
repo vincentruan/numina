@@ -211,7 +211,7 @@ onMounted(() => {
   flex-direction: column;
   gap: 8px;
 }
-.highlight { color: #1989fa; font-weight: 600; }
+.highlight { color: var(--color-primary); font-weight: 600; }
 .positive { color: #07c160; font-weight: 600; }
 .negative { color: #ee0a24; font-weight: 600; }
 .page-loading {

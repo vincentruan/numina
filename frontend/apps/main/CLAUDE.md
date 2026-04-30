@@ -83,6 +83,35 @@ showToast('添加成功')
 
 `@/` maps to `src/` — configured in both `vite.config.ts` and `tsconfig.app.json`.
 
+## Design System
+
+**All visual changes MUST follow the design system defined in [`DESIGN.md`](./DESIGN.md).**
+
+Before writing any CSS, colors, typography, spacing, or component styles:
+1. Read `DESIGN.md` to understand the Cohere-inspired visual language
+2. Use only the color tokens, type scale, radius values, and spacing defined there
+3. Override Vant component styles to match — do not introduce new design decisions
+
+Key constraints from `DESIGN.md`:
+- **Primary action color**: `#17171c` (near-black pill CTAs), not Vant's default `#1989fa`
+- **Accent**: `#ff7759` coral for taxonomy chips and warm markers
+- **Surface**: white canvas (`#ffffff`) as default; `#eeece7` soft-stone for secondary cards
+- **Border radius**: `8px` cards, `32px` pill buttons — match the token scale exactly
+- **No blue gradients**: replace existing `linear-gradient(135deg, #1677ff …)` patterns
+- **Typography**: system sans-serif fallback (Unica77 not available); tight line-height, negative tracking on headings
+
+### Mobile-First Priority
+
+This app is **mobile-first**. All design decisions must prioritize the phone viewport (≤425px) before considering larger screens.
+
+- Touch targets minimum 44×44px; pill CTAs and action buttons must be comfortably tappable
+- Single-column layout is the default; multi-column only when screen width ≥768px
+- Avoid hover-only interactions — all affordances must work on touch
+- Sticky elements (nav, category tabs, action bars) must not consume more than 15% of viewport height
+- Font sizes: body minimum `14px`, primary labels `16px` — never smaller on mobile
+- Spacing scale from `DESIGN.md` applies; prefer `8px`/`12px`/`16px` gutters on mobile over `24px`+
+- Test every component at 375px width before considering it done
+
 ## Links
 
 - Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, cross-cutting conventions

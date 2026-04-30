@@ -21,7 +21,7 @@
       />
     </div>
     <div class="item-main">
-      <div class="item-icon" :style="{ background: asset.category?.color || '#1989fa' }">
+      <div class="item-icon" :style="{ background: asset.category?.color || 'var(--color-primary)' }">
         <svg class="icon-svg" aria-hidden="true">
           <use :href="`#${getIconId(asset.category?.icon)}`" />
         </svg>
@@ -191,11 +191,12 @@ function getIconId(icon: string | undefined): string {
   border-left: 3px solid transparent;
 }
 .asset-list-item.selection-mode.selected {
-  border-left-color: var(--van-primary-color);
-  background: rgba(25, 137, 250, 0.05);
+  border-left-color: var(--color-primary);
+  background: rgba(23, 23, 28, 0.04);
 }
 [data-theme='dark'] .asset-list-item.selection-mode.selected {
-  background: rgba(10, 132, 255, 0.1);
+  border-left-color: var(--color-coral);
+  background: rgba(255, 119, 89, 0.08);
 }
 
 /* Selection checkbox */
@@ -206,7 +207,7 @@ function getIconId(icon: string | undefined): string {
 
 /* Accessibility - Focus styles */
 .asset-list-item:focus-visible {
-  outline: 2px solid var(--van-primary-color);
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: -2px;
 }
 
@@ -309,12 +310,12 @@ function getIconId(icon: string | undefined): string {
   left: 0;
   top: 0;
   height: 100%;
-  background: linear-gradient(90deg, #1989fa 0%, #4facfe 100%);
+  background: var(--color-primary);
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 [data-theme='dark'] .progress-fill {
-  background: linear-gradient(90deg, #0a84ff 0%, #5ac8fa 100%);
+  background: var(--color-coral);
 }
 
 .progress-marker {
@@ -323,15 +324,15 @@ function getIconId(icon: string | undefined): string {
   transform: translate(-50%, -50%);
   width: 12px;
   height: 12px;
-  background: #1989fa;
+  background: var(--color-primary);
   border: 2px solid var(--card-bg);
   border-radius: 50%;
-  box-shadow: 0 2px 4px rgba(25, 137, 250, 0.3);
+  box-shadow: 0 2px 4px rgba(23, 23, 28, 0.25);
   transition: left 0.3s ease;
 }
 [data-theme='dark'] .progress-marker {
-  background: #0a84ff;
-  box-shadow: 0 2px 4px rgba(10, 132, 255, 0.3);
+  background: var(--color-coral);
+  box-shadow: 0 2px 4px rgba(255, 119, 89, 0.3);
 }
 
 .progress-info {
@@ -346,10 +347,10 @@ function getIconId(icon: string | undefined): string {
 }
 
 .progress-remaining {
-  color: #1989fa;
+  color: var(--color-primary);
   font-weight: 500;
 }
 [data-theme='dark'] .progress-remaining {
-  color: #0a84ff;
+  color: var(--color-coral);
 }
 </style>

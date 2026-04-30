@@ -51,7 +51,7 @@
 <style scoped>
 .welcome-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(160deg, #17171c 0%, #0d0d10 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -108,7 +108,7 @@
 }
 
 .portal-card:focus {
-  outline: 2px solid #007aff;
+  outline: 2px solid var(--color-focus-blue);
   outline-offset: 2px;
 }
 

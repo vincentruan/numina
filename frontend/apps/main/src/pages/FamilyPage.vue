@@ -19,7 +19,7 @@
           <van-swipe-cell v-for="member in adultMembers" :key="member.id">
             <van-cell :title="member.display_name" :label="'@' + member.username">
               <template #icon>
-                <div class="avatar" :style="{ background: member.avatar_color || '#1989fa' }">
+                <div class="avatar" :style="{ background: member.avatar_color || 'var(--color-primary)' }">
                   {{ member.display_name.charAt(0) }}
                 </div>
               </template>
@@ -681,7 +681,7 @@ onMounted(async () => {
 }
 
 .action-btn--switch {
-  color: #1989fa;
+  color: var(--color-action-blue);
 }
 
 .sheet-title {
@@ -736,8 +736,8 @@ onMounted(async () => {
 }
 
 .emoji-pick-btn.selected {
-  border-color: #1989fa;
-  background: #e8f3ff;
+  border-color: var(--color-primary);
+  background: var(--color-soft-stone);
 }
 
 .emoji-pick-btn:disabled {

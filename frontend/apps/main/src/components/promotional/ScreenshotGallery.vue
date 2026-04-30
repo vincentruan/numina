@@ -33,7 +33,7 @@ const props = withDefaults(defineProps<Props>(), {
   interval: 3000
 })
 
-const indicatorColor = '#007aff'
+const indicatorColor = '#17171c'
 
 // Track failed images to show placeholder
 const failedImages = ref<Set<number>>(new Set())
