@@ -192,6 +192,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import {
   listChildWishes, getChildWishStats, createChildWish, requestRedemption,
@@ -304,6 +305,8 @@ async function redeem(wishId: string) {
   try {
     await requestRedemption(wishId)
     await load()
+  } catch {
+    showToast(t('toast.submitFailed'))
   } finally {
     actioningId.value = null
   }
@@ -322,6 +325,8 @@ async function createWish() {
     showCreate.value = false
     form.value = { name: '', emoji: '', description: '', priority: 'medium' }
     await load()
+  } catch {
+    showToast(t('toast.submitFailed'))
   } finally {
     creating.value = false
   }

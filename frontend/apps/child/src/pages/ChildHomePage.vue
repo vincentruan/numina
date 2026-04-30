@@ -110,8 +110,8 @@ function statusLabel(status: ChoreInstance['status']): string {
   switch (status) {
     case 'available': return t('chore.complete')
     case 'pending_approval': return t('chore.pendingApproval')
-    case 'approved': return '✅'
-    case 'rejected': return '❌'
+    case 'approved': return t('chore.approved')
+    case 'rejected': return t('chore.rejected')
     default: return ''
   }
 }

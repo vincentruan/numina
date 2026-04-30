@@ -7,9 +7,9 @@
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
-    <div v-if="error" class="error-msg">{{ error }}</div>
+    <div v-else-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else-if="!loading && chores.length === 0" class="empty">
+    <div v-else-if="chores.length === 0" class="empty">
       <p>{{ t('chore.noChoresTitle') }}</p>
     </div>
 
@@ -19,7 +19,7 @@
         :key="chore.id"
         class="chore-card"
         :class="chore.status"
-        @click="chore.status === 'available' && !submittingId ? complete(chore.id) : undefined"
+        @click="chore.status === 'available' && !submittingId.value ? complete(chore.id) : undefined"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <div class="chore-info">

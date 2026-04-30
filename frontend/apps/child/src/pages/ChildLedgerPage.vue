@@ -22,7 +22,7 @@
       <div v-for="tx in transactions" :key="tx.id" class="tx-card">
         <span class="tx-emoji">{{ tx.narrative_emoji || '⭐' }}</span>
         <div class="tx-info">
-          <p class="tx-narrative">{{ tx.narrative || t(`ledger.txType.${tx.transaction_type}`, tx.transaction_type) }}</p>
+          <p class="tx-narrative">{{ tx.narrative || t(`ledger.txType.${tx.transaction_type}`) }}</p>
           <p class="tx-time">{{ tx.relative_time }}</p>
         </div>
         <span class="tx-amount" :class="tx.amount > 0 ? 'positive' : 'negative'">
@@ -43,7 +43,7 @@
             :class="{ selected: selectedSiblingId === s.id }"
             @click="selectedSiblingId = s.id"
           >
-            <span class="sibling-avatar" :style="{ background: s.avatar_color || '#e8b94a' }">
+            <span class="sibling-avatar" :style="{ background: s.avatar_color || 'var(--color-brand-ochre)' }">
               {{ s.display_name[0] }}
             </span>
             <span class="sibling-name">{{ s.display_name }}</span>
