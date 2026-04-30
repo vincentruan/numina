@@ -15,6 +15,7 @@ def test_admin_switch_child_requires_owner(client, auth_headers):
         json={
             "username": "testchild1",
             "display_name": "TestChild",
+            "password": "ChildPass1",
             "pin": ["🐱", "🐶", "🐸", "🦊"],  # Required 4-emoji PIN
         },
     )
@@ -59,6 +60,7 @@ def test_admin_switch_child_success(client, auth_headers):
         json={
             "username": "testchild1",
             "display_name": "TestChild",
+            "password": "ChildPass1",
             "pin": ["🐱", "🐶", "🐸", "🦊"],  # Required 4-emoji PIN
         },
     )
@@ -89,6 +91,7 @@ def test_admin_switch_child_cross_family_isolation(client, auth_headers):
         json={
             "username": "owner1child",
             "display_name": "Owner1Child",
+            "password": "ChildPass1",
             "pin": ["🐱", "🐶", "🐸", "🦊"],
         },
     )
@@ -121,6 +124,7 @@ def test_admin_switch_child_cross_family_isolation(client, auth_headers):
         json={
             "username": "owner2child",
             "display_name": "Owner2Child",
+            "password": "ChildPass1",
             "pin": ["🦁", "🐯", "🌟", "🌈"],
         },
     )

@@ -71,7 +71,7 @@ def test_no_bare_http_exception_in_routers():
 
 def test_app_error_returns_envelope(client):
     """AppError should return a structured envelope with code and message."""
-    response = client.get("/api/v1/assets/")
+    response = client.get("/api/v1/assets")
     assert response.status_code == 401
     body = response.json()
     assert "code" in body
@@ -83,14 +83,14 @@ def test_app_error_returns_envelope(client):
 
 def test_request_id_in_response_header(client):
     """Every response should include X-Request-ID header."""
-    response = client.get("/api/v1/assets/")
+    response = client.get("/api/v1/assets")
     assert "x-request-id" in {k.lower() for k in response.headers}
 
 
 def test_request_id_passthrough(client):
     """Client-supplied X-Request-ID should be echoed back."""
     custom_id = "test-request-abc123"
-    response = client.get("/api/v1/assets/", headers={"X-Request-ID": custom_id})
+    response = client.get("/api/v1/assets", headers={"X-Request-ID": custom_id})
     assert response.headers.get("x-request-id") == custom_id
 
 
@@ -111,7 +111,7 @@ def test_validation_error_returns_details(client):
 
 def test_success_response_envelope(client, auth_headers):
     """Success responses should be wrapped in envelope."""
-    response = client.get("/api/v1/assets/", headers=auth_headers)
+    response = client.get("/api/v1/assets", headers=auth_headers)
     assert response.status_code == 200
     body = response.json()
     assert body["code"] == "OK"
@@ -121,14 +121,14 @@ def test_success_response_envelope(client, auth_headers):
 
 def test_accept_language_zh(client):
     """zh-CN Accept-Language should return Chinese error messages."""
-    response = client.get("/api/v1/assets/", headers={"Accept-Language": "zh-CN"})
+    response = client.get("/api/v1/assets", headers={"Accept-Language": "zh-CN"})
     body = response.json()
     assert body["message"]
 
 
 def test_accept_language_en(client):
     """en-US Accept-Language should return English error messages."""
-    response = client.get("/api/v1/assets/", headers={"Accept-Language": "en-US"})
+    response = client.get("/api/v1/assets", headers={"Accept-Language": "en-US"})
     body = response.json()
     assert body["message"]
     assert not re.search(r'[\u4e00-\u9fff]', body["message"])

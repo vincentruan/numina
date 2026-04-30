@@ -10,7 +10,6 @@ from sqlalchemy.orm import Session
 from app.auth.ai_deps import verify_agent_token
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.models.family import Family
 from app.models.user import User
 from app.services import dashboard as dashboard_service
 from app.services.ai_crypto import decrypt_api_key
@@ -126,21 +125,28 @@ def internal_get_ai_config(
     db: Session = Depends(get_db),
 ):
     """返回家庭 AI 配置，包含解密后的 API Key（仅供 agent 内部使用）。"""
-    family = db.query(Family).filter(Family.id == family_id).first()
-    if not family:
+    from app.models.ai_provider_config import AIProviderConfig
+
+    cfg = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.family_id == family_id,
+            AIProviderConfig.is_active == True,  # noqa: E712
+        )
+        .first()
+    )
+    if not cfg or not cfg.api_key_encrypted:
         return {"ai_enabled": False}
 
-    api_key = None
-    if family.ai_api_key_encrypted:
-        api_key = decrypt_api_key(family.ai_api_key_encrypted)
+    api_key = decrypt_api_key(cfg.api_key_encrypted)
 
     return {
-        "ai_enabled": family.ai_enabled,
-        "ai_provider": family.ai_provider,
+        "ai_enabled": True,
+        "ai_provider": cfg.provider,
         "api_key": api_key,  # 明文，仅在内部网络传输
-        "ai_base_url": family.ai_base_url,
-        "ai_model_id": family.ai_model_id,
-        "ai_vision_model_id": family.ai_vision_model_id,
+        "ai_base_url": cfg.base_url,
+        "ai_model_id": cfg.model_id,
+        "ai_vision_model_id": cfg.vision_model_id,
     }
 
 
@@ -152,7 +158,17 @@ def internal_get_enabled_families(
     """返回所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。
 
     注意：verify_agent_token 要求 X-Family-Id header，定时任务调用时传入任意有效 family_id 即可。
-    实际返回所有 ai_enabled 家庭，不受 family_id 过滤。
+    实际返回所有有激活 AIProviderConfig 的家庭，不受 family_id 过滤。
     """
-    families = db.query(Family).filter(Family.ai_enabled == True).all()
-    return [f.id for f in families]
+    from app.models.ai_provider_config import AIProviderConfig
+
+    rows = (
+        db.query(AIProviderConfig.family_id)
+        .filter(
+            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    return [r.family_id for r in rows]

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.errors.codes import ErrorCode
 from app.errors.exceptions import AppError
 from app.models.asset import Asset, asset_tags
+from app.models.asset_lifecycle_event import AssetLifecycleEvent
 from app.models.tag import Tag
 from app.models.user import User
 from app.schemas.asset import (
@@ -175,10 +176,6 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
         raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
 
     asset.status = 'sold'
-    asset.sell_price = req.sell_price
-    asset.sell_fee = req.sell_fee
-    asset.sell_channel = req.sell_channel
-    asset.sell_date = date.today()
     if req.notes:
         asset.notes = req.notes
 
@@ -190,6 +187,16 @@ def sell_asset(db: Session, user: User, asset_id: str, req) -> dict:
     total_cost = (asset.purchase_price or 0) + total_maintenance
     total_profit_loss = net_recovery - total_cost
     actual_daily_cost = round(total_cost / days_held, 2) if days_held > 0 else 0
+
+    event = AssetLifecycleEvent(
+        asset_id=asset.id,
+        event_type="sold",
+        event_date=date.today(),
+        sell_price=req.sell_price,
+        sell_fee=req.sell_fee or 0,
+        sell_channel=req.sell_channel,
+    )
+    db.add(event)
 
     db.commit()
     db.refresh(asset)
@@ -212,7 +219,14 @@ def retire_asset(db: Session, user: User, asset_id: str) -> Asset:
     if asset.status == 'sold':
         raise AppError(ErrorCode.ASSET_ALREADY_SOLD)
     asset.status = 'retired'
-    asset.retire_date = date.today()
+
+    event = AssetLifecycleEvent(
+        asset_id=asset.id,
+        event_type="retired",
+        event_date=date.today(),
+    )
+    db.add(event)
+
     db.commit()
     db.refresh(asset)
     return asset
@@ -223,7 +237,6 @@ def reactivate_asset(db: Session, user: User, asset_id: str) -> Asset:
     if asset.status not in ('retired', 'idle'):
         raise AppError(ErrorCode.ASSET_FORBIDDEN)
     asset.status = 'in_use'
-    asset.retire_date = None
     db.commit()
     db.refresh(asset)
     return asset

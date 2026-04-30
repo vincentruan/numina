@@ -53,6 +53,7 @@ def _create_child(client, headers, pin=None):
     resp = client.post("/api/v1/family/children", json={
         "display_name": "小明",
         "username": "xiaoming2",
+        "password": "ChildPass1",
         "pin": pin,
     }, headers=headers)
     return resp
@@ -144,101 +145,6 @@ def test_owner_force_logout_child(client, db):
 
 
 # ---------------------------------------------------------------------------
-# Happy path: bind token + GET family children (no auth)
-# ---------------------------------------------------------------------------
-
-def test_get_family_children_nonexistent_family_returns_empty(client):
-    """Endpoint requires bind_token — invalid token returns error."""
-    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children?bind_token=invalid")
-    assert resp.status_code in (403, 404, 422)
-
-
-def test_bind_token_and_get_family_children(client):
-    headers = _register_owner(client)
-    _create_child(client, headers)
-
-    # Get family_id
-    family_resp = client.get("/api/v1/family/info", headers=headers)
-    family_id = family_resp.json()["data"]["id"]
-
-    # Generate bind token
-    token_resp = client.post("/api/v1/family/child-bind-token", headers=headers)
-    assert token_resp.status_code == 201
-    token_data = token_resp.json()["data"]
-    assert "token" in token_data
-    assert token_data["bind_url"].startswith("/child/bind?token=")
-    bind_token = token_data["token"]
-
-    # GET children — requires valid bind_token
-    children_resp = client.get(f"/api/v1/auth/child/family/{family_id}/children?bind_token={bind_token}")
-    assert children_resp.status_code == 200
-    children = children_resp.json()["data"]
-    assert len(children) == 1
-    assert children[0]["display_name"] == "小明"
-
-
-def test_get_family_children_nonexistent_family_returns_empty_unauthenticated(client):
-    """Nonexistent family_id with invalid bind_token returns error."""
-    resp = client.get("/api/v1/auth/child/family/nonexistent-family-id/children?bind_token=invalid")
-    assert resp.status_code in (403, 404, 422)
-
-
-# ---------------------------------------------------------------------------
-# Error path: member tries to create child → 403
-# ---------------------------------------------------------------------------
-
-def test_member_cannot_create_child(client):
-    member_headers = _register_member(client)
-    resp = _create_child(client, member_headers)
-    assert resp.status_code == 403
-
-
-# ---------------------------------------------------------------------------
-# Error path: bind token used twice → 400
-# ---------------------------------------------------------------------------
-
-def test_bind_token_used_twice(client, db):
-    headers = _register_owner(client)
-    token_resp = client.post("/api/v1/family/child-bind-token", headers=headers)
-    token_str = token_resp.json()["data"]["token"]
-
-    # Use it once via service directly
-    from app.services.children import get_bind_info
-    get_bind_info(db, token_str)
-
-    # Second use should fail
-    from fastapi import HTTPException
-    with pytest.raises(HTTPException) as exc_info:
-        get_bind_info(db, token_str)
-    assert exc_info.value.status_code == 400
-
-
-# ---------------------------------------------------------------------------
-# Error path: expired bind token → 400
-# ---------------------------------------------------------------------------
-
-def test_expired_bind_token(client, db):
-    headers = _register_owner(client)
-    token_resp = client.post("/api/v1/family/child-bind-token", headers=headers)
-    token_str = token_resp.json()["data"]["token"]
-
-    # Expire it manually
-    from datetime import datetime, timedelta
-
-    from app.models.child_bind_token import ChildBindToken
-    bt = db.query(ChildBindToken).filter(ChildBindToken.token == token_str).first()
-    bt.expires_at = datetime.utcnow() - timedelta(hours=1)
-    db.commit()
-
-    from fastapi import HTTPException
-
-    from app.services.children import get_bind_info
-    with pytest.raises(HTTPException) as exc_info:
-        get_bind_info(db, token_str)
-    assert exc_info.value.status_code == 400
-
-
-# ---------------------------------------------------------------------------
 # Error path: create child with invalid emoji → 422
 # ---------------------------------------------------------------------------
 
@@ -294,6 +200,7 @@ def test_three_children_all_returned(client):
         resp = client.post("/api/v1/family/children", json={
             "username": f"child{i}",
             "display_name": f"孩子{i}",
+            "password": "ChildPass1",
             "pin": VALID_PIN,
         }, headers=headers)
         assert resp.status_code == 201

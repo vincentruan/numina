@@ -331,6 +331,10 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
     family = db.query(Family).filter(Family.id == parent_user.family_id).first()
     if family is None:
         return []
+
+    from app.models.child_economy_config import ChildEconomyConfig
+    economy = db.query(ChildEconomyConfig).filter_by(family_id=parent_user.family_id).first()
+    auto_approve_hours = economy.auto_approve_hours if economy else 24
     pending = (
         db.query(ChoreInstance)
         .filter(
@@ -346,7 +350,7 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
     for instance in pending:
         if (
             instance.submitted_at
-            and instance.submitted_at + timedelta(hours=family.auto_approve_hours) <= now
+            and instance.submitted_at + timedelta(hours=auto_approve_hours) <= now
         ):
             _auto_approve(db, instance, family)
         else:

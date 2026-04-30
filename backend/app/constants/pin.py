@@ -10,3 +10,7 @@ ALLOWED_EMOJIS_ORDERED: list[str] = [
     "🐱", "🐶", "🐸", "🦊", "🐼", "🐨",
     "🦁", "🐯", "🌟", "🌈", "🍎", "🎈",
 ]
+
+# Numeric PIN constants (for adult second factor)
+NUMERIC_PIN_MIN_LENGTH = 4
+NUMERIC_PIN_MAX_LENGTH = 6

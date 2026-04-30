@@ -7,7 +7,7 @@
 #      - test_empty / TestEmpty123! — 空家庭（无资产）
 #      - test_asset  / TestAsset123!  — 单个实物资产
 #      - test_rich   / TestRich123!   — 完整数据（资产+负债+心愿+儿童）
-#      - test_child  — test_rich 家庭的儿童账号
+#      - test_child  — test_rich 家庭的儿童账号（username: testchild, password: TestChild123!, PIN: 🐱🐶🐸🦊）
 #   2. 完整仿真数据（用于功能演示）
 #      - demouser / DemoPass123 — 19项实物资产 + 11项金融资产 + 负债 + 心愿 + 儿童数据
 #
@@ -459,7 +459,7 @@ else
   log_info "初始化 test_rich_member（test_rich 家庭的 member 角色）..."
 
   # 获取 test_rich 的家庭邀请码
-  FAMILY_INFO=$(curl -sL "$BASE_URL/family/" -H "Authorization: Bearer $TOKEN_RICH")
+  FAMILY_INFO=$(curl -sL "$BASE_URL/family" -H "Authorization: Bearer $TOKEN_RICH")
   INVITE_CODE=$(echo "$FAMILY_INFO" | jq -r '.data.invite_code')
 
   if [ -n "$INVITE_CODE" ] && [ "$INVITE_CODE" != "null" ]; then
@@ -511,7 +511,7 @@ if [ -z "$CHILD_ID" ] || [ "$CHILD_ID" = "null" ]; then
   CREATE_CHILD_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/family/children" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN_RICH" \
-    -d '{"username":"testchild","display_name":"test_child","avatar_color":"#FF6B6B","pin":["🐱","🐶","🐸","🦊"]}')
+    -d '{"username":"testchild","display_name":"test_child","avatar_color":"#FF6B6B","password":"TestChild123!","pin":["🐱","🐶","🐸","🦊"]}')
   CHILD_HTTP=$(echo "$CREATE_CHILD_RESP" | tail -1)
   CHILD_BODY=$(echo "$CREATE_CHILD_RESP" | sed '$d')
   if [ "$CHILD_HTTP" = "200" ] || [ "$CHILD_HTTP" = "201" ]; then
@@ -1581,7 +1581,7 @@ EOF
   log_info "创建儿童数据..."
 
   # 幂等检查：如果已有儿童成员，跳过创建
-  EXISTING_CHILDREN=$(curl -sL "$BASE_URL/family/" -H "Authorization: Bearer $TOKEN" | jq '[.data.members[] | select(.role == "child")] | length')
+  EXISTING_CHILDREN=$(curl -sL "$BASE_URL/family" -H "Authorization: Bearer $TOKEN" | jq '[.data.members[] | select(.role == "child")] | length')
   if [ "${EXISTING_CHILDREN:-0}" -ge 2 ] 2>/dev/null; then
     log_info "已存在 $EXISTING_CHILDREN 个儿童成员，跳过儿童数据创建（幂等保护）"
   else
@@ -1938,7 +1938,7 @@ echo "  - test_empty        (空家庭 + 1 受信任设备)"
 echo "  - test_asset        (5 资产: in_use/idle/retired/USD/已售出 + 1 受信任设备)"
 echo "  - test_rich         (31 资产 + 28 负债 + 29 心愿 + 负债关联 + 心愿多状态 + 1 受信任设备)"
 echo "  - test_rich_member  (test_rich 家庭的 member 角色 + 数据隔离测试)"
-echo "  - test_child        (test_rich 家庭的儿童 + 跨天家务 + 盲盒礼物池 + bonus_draw)"
+echo "  - test_child        (test_rich 家庭的儿童 username:testchild PIN:🐱🐶🐸🦊 + 跨天家务 + 盲盒礼物池 + bonus_draw)"
 
 if [[ "$SKIP_DEMO" == false ]]; then
   echo ""

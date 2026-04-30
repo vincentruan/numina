@@ -12,6 +12,7 @@ import pytest
 def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "password": "ChildPass1",
         "username": "xiaoming4",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
@@ -31,6 +32,7 @@ def child_user(client, auth_headers):
 def child_user2(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小红",
+        "password": "ChildPass1",
         "username": "xiaohong4",
         "avatar_color": "#33FF57",
         "pin": ["🐶", "🌟", "🎈", "🐱"],
@@ -252,6 +254,7 @@ def test_parent_grant_cross_family_rejected(client, auth_headers):
     # Create child in other family
     child_resp = client.post("/api/v1/family/children", headers=other_headers, json={
         "display_name": "外来孩子",
+        "password": "ChildPass1",
         "username": "visitorchild",
         "avatar_color": "#AABBCC",
         "pin": ["🐱", "🌟", "🎈", "🐶"],

@@ -1,11 +1,12 @@
 # backend/app/routers/reminders.py
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.reminder import Reminder
 from app.models.user import User
 from app.schemas.reminder import ReminderResponse, ReminderSummary
@@ -42,7 +43,7 @@ def dismiss_reminder(
 ):
     reminder = db.query(Reminder).filter_by(id=reminder_id, family_id=user.family_id).first()
     if not reminder:
-        raise HTTPException(status_code=404, detail="提醒不存在")
+        raise AppError(ErrorCode.NOT_FOUND)
     reminder.status = "dismissed"
     reminder.dismissed_at = datetime.now()
     db.commit()

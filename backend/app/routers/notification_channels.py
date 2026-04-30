@@ -1,10 +1,13 @@
 # backend/app/routers/notification_channels.py
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
+
+from app.errors import AppError, ErrorCode
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
 from app.database import get_db
 from app.models.notification_channel import NotificationChannel
+from app.models.notification_channel_config import NotificationChannelConfig
 from app.models.notification_subscription import NotificationSubscription
 from app.models.user import User
 from app.schemas.notification_channel import (
@@ -48,17 +51,22 @@ def create_channel(
     user: User = Depends(require_adult),
 ):
     if req.channel_type not in VALID_CHANNEL_TYPES:
-        raise HTTPException(status_code=422, detail="不支持的渠道类型")
+        raise AppError(ErrorCode.VALIDATION_ERROR)
     channel = NotificationChannel(
         id=next_id(),
         family_id=user.family_id,
         channel_type=req.channel_type,
         name=req.name,
-        config=encrypt_config(req.config),
         is_enabled=req.is_enabled,
     )
     db.add(channel)
     db.flush()
+    for key, value in (req.config or {}).items():
+        db.add(NotificationChannelConfig(
+            channel_id=channel.id,
+            key=key,
+            value_encrypted=encrypt_config({key: str(value)}),
+        ))
     for rtype in req.subscriptions:
         if rtype in VALID_REMINDER_TYPES:
             db.add(NotificationSubscription(id=next_id(), channel_id=channel.id, reminder_type=rtype))
@@ -76,11 +84,17 @@ def update_channel(
 ):
     channel = db.query(NotificationChannel).filter_by(id=channel_id, family_id=user.family_id).first()
     if not channel:
-        raise HTTPException(status_code=404, detail="渠道不存在")
+        raise AppError(ErrorCode.NOT_FOUND)
     if req.name is not None:
         channel.name = req.name
     if req.config is not None:
-        channel.config = encrypt_config(req.config)
+        db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).delete()
+        for key, value in req.config.items():
+            db.add(NotificationChannelConfig(
+                channel_id=channel.id,
+                key=key,
+                value_encrypted=encrypt_config({key: str(value)}),
+            ))
     if req.is_enabled is not None:
         channel.is_enabled = req.is_enabled
     if req.subscriptions is not None:
@@ -101,7 +115,7 @@ def delete_channel(
 ):
     channel = db.query(NotificationChannel).filter_by(id=channel_id, family_id=user.family_id).first()
     if not channel:
-        raise HTTPException(status_code=404, detail="渠道不存在")
+        raise AppError(ErrorCode.NOT_FOUND)
     db.query(NotificationSubscription).filter_by(channel_id=channel.id).delete()
     db.delete(channel)
     db.commit()

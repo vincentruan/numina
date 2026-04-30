@@ -18,6 +18,7 @@ def child_user(client, auth_headers):
     """Create a child user and return their info + child auth headers."""
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "password": "ChildPass1",
         "username": "xiaoming8",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
@@ -183,9 +184,9 @@ def test_update_cost_lower_succeeds(client, auth_headers, child_user, sample_wis
     assert resp.status_code == 200
     data = _data(resp)
     assert data["star_coin_cost"] == 80
-    assert len(data["star_coin_cost_history"]) == 1
-    assert data["star_coin_cost_history"][0]["old"] == 100
-    assert data["star_coin_cost_history"][0]["new"] == 80
+    assert len(data["cost_history"]) == 1
+    assert data["cost_history"][0]["old_cost"] == 100
+    assert data["cost_history"][0]["new_cost"] == 80
 
 
 def test_update_cost_higher_fails(client, auth_headers, child_user, sample_wish):

@@ -1,7 +1,6 @@
 from datetime import datetime
 
 from sqlalchemy import (
-    JSON,
     BigInteger,
     CheckConstraint,
     DateTime,
@@ -41,7 +40,6 @@ class ChildWish(Base):
     star_coin_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
-    star_coin_cost_history: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

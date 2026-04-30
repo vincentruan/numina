@@ -1,6 +1,5 @@
 # backend/app/services/notification/dispatcher.py
 import asyncio
-import json
 import logging
 from datetime import date, datetime, timedelta
 
@@ -10,9 +9,11 @@ from sqlalchemy.orm import Session
 from app.models.ai_allocation_target import AIAllocationTarget
 from app.models.asset import Asset
 from app.models.notification_channel import NotificationChannel
+from app.models.notification_channel_config import NotificationChannelConfig
 from app.models.notification_config import NotificationConfig
 from app.models.notification_subscription import NotificationSubscription
 from app.models.reminder import Reminder
+from app.models.reminder_notification import ReminderNotification
 from app.models.user import User
 from app.schemas.reminder import ReminderSummary
 from app.services.notification.rules import (
@@ -208,6 +209,22 @@ def _check_allocation_drift_all(db: Session) -> None:
                 ensure_reminder(db, result)
 
 
+def _get_channel_config(db: Session, channel: NotificationChannel) -> dict:
+    """Read channel config from NotificationChannelConfig table."""
+    rows = db.query(NotificationChannelConfig).filter_by(channel_id=channel.id).all()
+    result = {}
+    for row in rows:
+        try:
+            decrypted = decrypt_config(row.value_encrypted)
+            if decrypted and isinstance(decrypted, dict):
+                result.update(decrypted)
+            else:
+                result[row.key] = row.value_encrypted
+        except Exception:
+            result[row.key] = row.value_encrypted
+    return result
+
+
 def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict) -> None:
     """向订阅了该 reminder_type 的所有启用渠道发送通知（失败静默）。"""
     channels = (
@@ -220,19 +237,24 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
         )
         .all()
     )
-    notified: list[int] = json.loads(reminder.notified_channels)
+    already_sent = {
+        rn.channel_id
+        for rn in db.query(ReminderNotification).filter_by(
+            reminder_id=reminder.id, status="sent"
+        ).all()
+    }
     for channel in channels:
-        if channel.id in notified:
+        if channel.id in already_sent:
             continue
-        config = decrypt_config(channel.config) or {}
-        success = False
+        config = _get_channel_config(db, channel)
         if channel.channel_type == "telegram":
+            # Telegram is async — ReminderNotification is written inside
+            # _send_telegram_async once the actual result is known.
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(
                     _send_telegram_async(channel, reminder, template_vars, db)
                 )
-                success = True
             except RuntimeError:
                 pass
         elif channel.channel_type == "email":
@@ -248,9 +270,12 @@ def _dispatch_notifications(db: Session, reminder: Reminder, template_vars: dict
                 subject=subject,
                 body=body,
             )
-        if success:
-            notified.append(channel.id)
-    reminder.notified_channels = json.dumps(notified)
+            rn = ReminderNotification(
+                reminder_id=reminder.id,
+                channel_id=channel.id,
+                status="sent" if success else "failed",
+            )
+            db.add(rn)
     db.commit()
 
 
@@ -260,34 +285,43 @@ async def _send_telegram_async(
     template_vars: dict,
     db: Session,
 ) -> None:
-    config = decrypt_config(channel.config) or {}
+    config = _get_channel_config(db, channel)
     text = render_template(reminder.reminder_type, "telegram", template_vars)
     success = await NotificationSender.send_telegram(
         bot_token=config.get("bot_token", ""),
         chat_id=config.get("chat_id", ""),
         text=text,
     )
-    if success:
-        notified = json.loads(reminder.notified_channels)
-        if channel.id not in notified:
-            notified.append(channel.id)
-            reminder.notified_channels = json.dumps(notified)
-            db.commit()
+    rn = ReminderNotification(
+        reminder_id=reminder.id,
+        channel_id=channel.id,
+        status="sent" if success else "failed",
+    )
+    db.add(rn)
+    db.commit()
 
 
 def _retry_failed_notifications(db: Session) -> None:
     """重试尚未推送成功且重试次数 < 3 的 active reminders。"""
     MAX_RETRIES = 3
-    pending = (
-        db.query(Reminder)
-        .filter(
-            Reminder.status == "active",
-            Reminder.send_retry_count < MAX_RETRIES,
-        )
-        .all()
-    )
+    pending = db.query(Reminder).filter(Reminder.status == "active").all()
     for reminder in pending:
-        notified = json.loads(reminder.notified_channels)
+        # 查新表：已成功通知的渠道
+        sent_channel_ids = {
+            rn.channel_id
+            for rn in db.query(ReminderNotification).filter_by(
+                reminder_id=reminder.id, status="sent"
+            ).all()
+        }
+        # 查新表：失败次数
+        retry_count = (
+            db.query(ReminderNotification)
+            .filter_by(reminder_id=reminder.id, status="failed")
+            .count()
+        )
+        if retry_count >= MAX_RETRIES:
+            logger.info("提醒 %s 已达最大重试次数，放弃推送", reminder.id)
+            continue
         channels = (
             db.query(NotificationChannel)
             .join(
@@ -301,11 +335,9 @@ def _retry_failed_notifications(db: Session) -> None:
             )
             .all()
         )
-        all_notified = all(c.id in notified for c in channels)
-        if all_notified or not channels:
+        if not channels:
+            continue
+        all_notified = all(c.id in sent_channel_ids for c in channels)
+        if all_notified:
             continue
         _dispatch_notifications(db, reminder, {})
-        reminder.send_retry_count += 1
-        if reminder.send_retry_count >= MAX_RETRIES:
-            logger.info("提醒 %s 已达最大重试次数，放弃推送", reminder.id)
-        db.commit()

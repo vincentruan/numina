@@ -47,11 +47,20 @@ services:
       start_period: 15s
 
   frontend:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/apps/main/Dockerfile
     container_name: numina-frontend
     restart: unless-stopped
     ports:
       - "28080:80"
+
+  frontend-child:
+    build:
+      context: .
+      dockerfile: frontend/apps/child/Dockerfile
+    container_name: numina-frontend-child
+    restart: unless-stopped
 
   nginx:
     image: nginx:alpine
@@ -65,6 +74,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - frontend-child
 
   # 可选 MySQL 服务（使用 --profile mysql 启动）
   mysql:

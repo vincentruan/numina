@@ -1,14 +1,21 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.ai_spending_leak import AISpendingLeak
-from app.models.family import Family
 
 
 def _enable_ai(db, auth_headers, client):
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     family_id = me["data"]["family_id"]
-    family = db.query(Family).filter_by(id=family_id).first()
-    family.ai_enabled = True
+    from app.models.ai_provider_config import AIProviderConfig
+    cfg = AIProviderConfig(
+        family_id=family_id,
+        name="测试配置",
+        provider="anthropic",
+        api_key_encrypted="test_encrypted_key",
+        model_id="claude-3-5-sonnet-20241022",
+        is_active=True,
+    )
+    db.add(cfg)
     db.commit()
     return family_id
 

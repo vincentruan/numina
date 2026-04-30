@@ -6,6 +6,7 @@ import {
   PROTECTED_ROUTES,
   GUEST_ROUTES,
   PUBLIC_ROUTES,
+  CHILD_SPA_ROUTES,
   extractRouteNamesFromSource,
 } from '../lib/routes'
 
@@ -15,7 +16,7 @@ import {
 test('routes.ts covers all route names in frontend/src/router/index.ts', () => {
   const routerPath = path.resolve(
     __dirname,
-    '../../frontend/src/router/index.ts'
+    '../../frontend/apps/main/src/router/index.ts'
   )
   const source = fs.readFileSync(routerPath, 'utf-8')
   const routerNames = extractRouteNamesFromSource(source)
@@ -24,6 +25,7 @@ test('routes.ts covers all route names in frontend/src/router/index.ts', () => {
     ...PROTECTED_ROUTES.map((r) => r.name),
     ...GUEST_ROUTES.map((r) => r.name),
     ...PUBLIC_ROUTES.map((r) => r.name),
+    ...CHILD_SPA_ROUTES.map((r) => r.name),
   ])
 
   const missing = routerNames.filter((name) => !knownNames.has(name))
@@ -40,10 +42,12 @@ test('routes.ts covers all route names in frontend/src/router/index.ts', () => {
 for (const route of PROTECTED_ROUTES) {
   test(`unauthenticated: ${route.name} (${route.path}) → redirects to /login`, async ({ page }) => {
     // Each test gets a fresh page but shares the browser context (and its localStorage).
-    // Navigate to the app origin first so we can clear localStorage via evaluate,
+    // Navigate to the app origin first so we can clear localStorage AND cookies,
     // then navigate to the target route.
     await page.goto('/')
     await page.evaluate(() => localStorage.removeItem('numina_user'))
+    // Also clear httpOnly auth cookies so the router guard sees a clean state
+    await page.context().clearCookies()
     await page.goto(route.path)
     await expect(page).toHaveURL(/\/login/)
   })

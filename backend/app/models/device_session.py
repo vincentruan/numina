@@ -30,6 +30,7 @@ class DeviceSession(Base):
     last_seen_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     is_revoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    browser_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)  # SHA-256 hex
 
     __table_args__ = (
         Index("ix_device_sessions_user_active", "user_id", "is_revoked", "expires_at"),

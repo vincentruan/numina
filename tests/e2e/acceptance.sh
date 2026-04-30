@@ -95,9 +95,8 @@ DETAIL_RESP=$(curl -sL -w "%{http_code}" "$BASE_URL/assets/$ASSET_ID" -H "Author
 HTTP_CODE="${DETAIL_RESP: -3}"
 test_case "资产详情返回200" "200" "$HTTP_CODE"
 
-# 不存在的资产
-echo "2.4 访问不存在的资产..."
-NOT_FOUND=$(curl -sL -w "%{http_code}" "$BASE_URL/assets/nonexistent-id-12345" -H "Authorization: Bearer $TOKEN")
+# 不存在的资产（使用合法的雪花 ID 格式，确保触发 404 而非 422 校验错误）
+NOT_FOUND=$(curl -sL -w "%{http_code}" "$BASE_URL/assets/000000000000000000" -H "Authorization: Bearer $TOKEN")
 HTTP_CODE="${NOT_FOUND: -3}"
 test_case "不存在资产返回404" "404" "$HTTP_CODE"
 

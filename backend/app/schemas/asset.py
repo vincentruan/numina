@@ -1,8 +1,20 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from app.schemas.base import SnowflakeBase
+
+
+class AssetLifecycleEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    event_type: str
+    event_date: date
+    sell_price: float | None = None
+    sell_fee: float | None = None
+    sell_channel: str | None = None
+    notes: str | None = None
+    created_at: datetime
 
 
 class AssetCreate(BaseModel):
@@ -133,6 +145,7 @@ class AssetResponse(SnowflakeBase):
     return_rate: float | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    lifecycle_events: list[AssetLifecycleEventResponse] = []
 
 
 # Batch operation schemas

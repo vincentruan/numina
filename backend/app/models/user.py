@@ -45,6 +45,15 @@ class User(Base):
     token_version: Mapped[int] = mapped_column(
         Integer, default=0, nullable=False
     )  # for force-logout
+
+    # Numeric PIN fields (for adult accounts — optional second factor)
+    numeric_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    numeric_pin_fail_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    numeric_pin_locked_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Second factor configuration
+    second_factor_type: Mapped[str | None] = mapped_column(String(20), nullable=True)  # 'numeric_pin' | 'emoji_pin' | 'totp'
+    second_factor_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # WebAuthn credentials (JSON array of registered passkeys)
     webauthn_credentials: Mapped[str | None] = mapped_column(
         String, nullable=True

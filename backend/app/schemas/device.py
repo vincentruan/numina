@@ -20,3 +20,17 @@ class DeviceSessionResponse(BaseModel):
     last_seen_at: datetime
     expires_at: datetime
     is_current: bool
+
+
+class DeviceCheckRequest(BaseModel):
+    fingerprint: str
+
+
+class DeviceCheckResponse(BaseModel):
+    trusted: bool
+    device_name: str | None = None
+    user_id: str | None = None
+
+
+class DeviceTrustRequest(BaseModel):
+    fingerprint: str | None = None  # optional browser fingerprint

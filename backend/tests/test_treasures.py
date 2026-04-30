@@ -16,6 +16,7 @@ def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "username": "xiaoming",
         "display_name": "小明",
+        "password": "ChildPass1",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -83,6 +84,7 @@ def test_treasures_cross_family_isolation(client, auth_headers, child_user, seco
     # Create a child in the second family
     resp2 = client.post("/api/v1/family/children", headers=second_user_headers, json={
         "display_name": "小花",
+        "password": "ChildPass1",
         "username": "xiaohua",
         "avatar_color": "#AABBCC",
         "pin": ["🐸", "🦊", "🐼", "🐨"],

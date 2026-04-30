@@ -23,7 +23,16 @@ test_case() {
 }
 
 json_value() {
-    echo "$1" | jq -r "$2" 2>/dev/null || echo ""
+    local input="$1"
+    local path="$2"
+    # If response has envelope (.data key), unwrap it first then apply path
+    local has_envelope
+    has_envelope=$(echo "$input" | jq -r 'if has("data") then "yes" else "no" end' 2>/dev/null)
+    if [ "$has_envelope" = "yes" ]; then
+        echo "$input" | jq -r ".data | $path" 2>/dev/null | sed 's/^null$//'
+    else
+        echo "$input" | jq -r "$path" 2>/dev/null | sed 's/^null$//'
+    fi
 }
 
 http_code() {
@@ -132,7 +141,7 @@ test_case "归档资产返回200" "200" "$(http_code "$ARCHIVE_RESP")"
 # 验证归档后不在列表中
 echo "1.8 验证归档资产不在列表中..."
 ASSET_LIST=$(curl -sL "$BASE_URL/assets" -H "Authorization: Bearer $TOKEN")
-ARCHIVED_IN_LIST=$(echo "$ASSET_LIST" | jq -r "[.[] | select(.id == \"$TEST_ASSET_ID\")] | length")
+ARCHIVED_IN_LIST=$(echo "$ASSET_LIST" | jq -r "if (.data | type) == \"object\" then [.data.items[] | select(.id == \"$TEST_ASSET_ID\")] | length elif has(\"data\") then [.data[] | select(.id == \"$TEST_ASSET_ID\")] | length else [.[] | select(.id == \"$TEST_ASSET_ID\")] | length end")
 test_case "归档资产不在列表中" "0" "$ARCHIVED_IN_LIST"
 
 # 清理一致性测试资产
@@ -206,7 +215,7 @@ echo "3.0 创建测试心愿..."
 WISH_CREATE=$(curl -sL -X POST "$BASE_URL/wishes" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d "{\"name\":\"扩展测试心愿_$$\",\"expected_price\":50000,\"priority\":2}")
+    -d "{\"name\":\"扩展测试心愿_$$\",\"expected_price\":50000,\"priority\":\"medium\"}")
 TEST_WISH_ID=$(json_value "$WISH_CREATE" '.id')
 test_case "创建测试心愿" "true" "$([ -n "$TEST_WISH_ID" ] && echo true || echo false)"
 
@@ -221,12 +230,12 @@ echo "3.2 更新心愿信息..."
 WISH_UPDATE=$(curl -sL -X PUT "$BASE_URL/wishes/$TEST_WISH_ID" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN" \
-    -d '{"name":"已更新的心愿名称","priority":5,"expected_price":80000}')
+    -d '{"name":"已更新的心愿名称","priority":"high","expected_price":80000}')
 UPDATED_WISH_NAME=$(json_value "$WISH_UPDATE" '.name')
 test_case "心愿名称更新成功" "已更新的心愿名称" "$UPDATED_WISH_NAME"
 
 UPDATED_PRIORITY=$(json_value "$WISH_UPDATE" '.priority')
-test_case "心愿优先级更新为5" "5" "$UPDATED_PRIORITY"
+test_case "心愿优先级更新为high" "high" "$UPDATED_PRIORITY"
 
 # 删除心愿
 echo "3.3 删除心愿..."
@@ -258,7 +267,7 @@ test_case "创建自定义分类" "true" "$([ -n "$TEST_CAT_ID" ] && echo true |
 # 验证分类在列表中
 echo "4.2 验证自定义分类在列表中..."
 CAT_LIST=$(curl -sL "$BASE_URL/categories" -H "Authorization: Bearer $TOKEN")
-CAT_IN_LIST=$(echo "$CAT_LIST" | jq -r "[.[] | select(.id == \"$TEST_CAT_ID\")] | length")
+CAT_IN_LIST=$(echo "$CAT_LIST" | jq -r "if has(\"data\") then [.data[] | select(.id == \"$TEST_CAT_ID\")] | length else [.[] | select(.id == \"$TEST_CAT_ID\")] | length end")
 test_case "自定义分类在列表中" "1" "$CAT_IN_LIST"
 
 # 更新自定义分类
@@ -302,7 +311,7 @@ test_case "创建标签" "true" "$([ -n "$TEST_TAG_ID" ] && echo true || echo fa
 # 验证标签在列表中
 echo "5.2 验证标签在列表中..."
 TAG_LIST=$(curl -sL "$BASE_URL/tags" -H "Authorization: Bearer $TOKEN")
-TAG_IN_LIST=$(echo "$TAG_LIST" | jq -r "[.[] | select(.id == \"$TEST_TAG_ID\")] | length")
+TAG_IN_LIST=$(echo "$TAG_LIST" | jq -r "if has(\"data\") then [.data[] | select(.id == \"$TEST_TAG_ID\")] | length else [.[] | select(.id == \"$TEST_TAG_ID\")] | length end")
 test_case "标签在列表中" "1" "$TAG_IN_LIST"
 
 # 更新标签
@@ -326,7 +335,7 @@ test_case "删除标签返回200" "200" "$(http_code "$DEL_TAG")"
 # 验证删除后不在列表
 echo "5.5 验证删除后标签不在列表..."
 TAG_LIST_AFTER=$(curl -sL "$BASE_URL/tags" -H "Authorization: Bearer $TOKEN")
-TAG_AFTER=$(echo "$TAG_LIST_AFTER" | jq -r "[.[] | select(.id == \"$TEST_TAG_ID\")] | length")
+TAG_AFTER=$(echo "$TAG_LIST_AFTER" | jq -r "if has(\"data\") then [.data[] | select(.id == \"$TEST_TAG_ID\")] | length else [.[] | select(.id == \"$TEST_TAG_ID\")] | length end")
 test_case "已删除标签不在列表中" "0" "$TAG_AFTER"
 
 # =====================
@@ -338,7 +347,7 @@ echo "=== 家庭成员管理测试 ==="
 # 成员列表
 echo "6.1 获取成员列表..."
 MEMBERS=$(curl -sL "$BASE_URL/family/members" -H "Authorization: Bearer $TOKEN")
-MEMBER_COUNT=$(echo "$MEMBERS" | jq 'length')
+MEMBER_COUNT=$(echo "$MEMBERS" | jq 'if has("data") then .data | length else length end')
 test_case "成员列表非空" "true" "$([ $MEMBER_COUNT -gt 0 ] && echo true || echo false)"
 
 # 获取当前用户ID
@@ -360,7 +369,7 @@ test_case "成员汇总包含total_assets" "true" "$([ -n "$SUMMARY_ASSETS" ] &&
 
 # 不存在的成员
 echo "6.3 访问不存在的成员..."
-INVALID_MEMBER=$(curl -sL -w "%{http_code}" "$BASE_URL/family/members/nonexistent-id/summary" \
+INVALID_MEMBER=$(curl -sL -w "%{http_code}" "$BASE_URL/family/members/00000000000000000/summary" \
     -H "Authorization: Bearer $TOKEN")
 test_case "不存在成员返回404" "404" "$(http_code "$INVALID_MEMBER")"
 
@@ -400,7 +409,7 @@ test_case "快照生成返回detail" "true" "$([ -n "$SNAPSHOT_DETAIL" ] && echo
 # 验证趋势数据有快照
 echo "8.2 验证趋势数据包含快照..."
 TREND_RESP=$(curl -sL "$BASE_URL/dashboard/trend" -H "Authorization: Bearer $TOKEN")
-TREND_LEN=$(echo "$TREND_RESP" | jq 'length' 2>/dev/null || echo "0")
+TREND_LEN=$(echo "$TREND_RESP" | jq 'if has("data") then .data | length else length end' 2>/dev/null || echo "0")
 test_case "趋势数据非空" "true" "$([ "$TREND_LEN" -gt 0 ] && echo true || echo false)"
 
 # =====================
@@ -415,7 +424,7 @@ ACT_RESP=$(curl -sL -w "%{http_code}" "$BASE_URL/activities/recent" \
 test_case "活动日志返回200" "200" "$(http_code "$ACT_RESP")"
 
 ACT_BODY=$(curl -sL "$BASE_URL/activities/recent" -H "Authorization: Bearer $TOKEN")
-ACT_COUNT=$(echo "$ACT_BODY" | jq 'length' 2>/dev/null || echo "0")
+ACT_COUNT=$(echo "$ACT_BODY" | jq 'if has("data") then .data | length else length end' 2>/dev/null || echo "0")
 test_case "活动日志非空" "true" "$([ "$ACT_COUNT" -gt 0 ] && echo true || echo false)"
 
 # 验证活动日志字段
@@ -428,7 +437,7 @@ test_case "活动日志包含entity_type字段" "true" "$([ -n "$FIRST_ACT_ENTIT
 # limit参数
 echo "9.3 活动日志limit参数..."
 ACT_LIMIT=$(curl -sL "$BASE_URL/activities/recent?limit=5" -H "Authorization: Bearer $TOKEN")
-ACT_LIMIT_COUNT=$(echo "$ACT_LIMIT" | jq 'length' 2>/dev/null || echo "0")
+ACT_LIMIT_COUNT=$(echo "$ACT_LIMIT" | jq 'if has("data") then .data | length else length end' 2>/dev/null || echo "0")
 test_case "limit=5时最多返回5条" "true" "$([ "$ACT_LIMIT_COUNT" -le 5 ] && echo true || echo false)"
 
 # =====================
@@ -439,21 +448,21 @@ echo "=== 边界情况测试 ==="
 
 # 不存在的负债
 echo "10.1 访问不存在的负债..."
-INVALID_LIAB=$(curl -sL -w "%{http_code}" "$BASE_URL/liabilities/nonexistent-id-99999" \
+INVALID_LIAB=$(curl -sL -w "%{http_code}" "$BASE_URL/liabilities/00000000000000000" \
     -H "Authorization: Bearer $TOKEN")
 test_case "不存在负债返回404" "404" "$(http_code "$INVALID_LIAB")"
 
 # 不存在的心愿
 echo "10.2 访问不存在的心愿..."
-INVALID_WISH=$(curl -sL -w "%{http_code}" "$BASE_URL/wishes/nonexistent-id-99999" \
+INVALID_WISH=$(curl -sL -w "%{http_code}" "$BASE_URL/wishes/00000000000000000" \
     -H "Authorization: Bearer $TOKEN")
 test_case "不存在心愿返回404" "404" "$(http_code "$INVALID_WISH")"
 
 # 资产筛选（按类型）
 echo "10.3 资产按类型筛选..."
 FILTER_RESP=$(curl -sL "$BASE_URL/assets?asset_type=physical" -H "Authorization: Bearer $TOKEN")
-FILTER_COUNT=$(echo "$FILTER_RESP" | jq 'length' 2>/dev/null || echo "0")
-ALL_PHYSICAL=$(echo "$FILTER_RESP" | jq '[.[] | select(.asset_type == "physical")] | length' 2>/dev/null || echo "0")
+FILTER_COUNT=$(echo "$FILTER_RESP" | jq 'if (.data | type) == "object" then .data.items | length elif has("data") then .data | length else length end' 2>/dev/null || echo "0")
+ALL_PHYSICAL=$(echo "$FILTER_RESP" | jq 'if (.data | type) == "object" then [.data.items[] | select(.asset_type == "physical")] | length elif has("data") then [.data[] | select(.asset_type == "physical")] | length else [.[] | select(.asset_type == "physical")] | length end' 2>/dev/null || echo "0")
 test_case "筛选结果全为physical类型" "$FILTER_COUNT" "$ALL_PHYSICAL"
 
 # 资产搜索（中文需 URL 编码，用 -G + --data-urlencode）
@@ -466,8 +475,8 @@ test_case "搜索接口返回200" "200" "$SEARCH_CODE"
 # 负债按状态筛选
 echo "10.5 负债按活跃状态筛选..."
 ACTIVE_LIAB=$(curl -sL "$BASE_URL/liabilities?is_active=true" -H "Authorization: Bearer $TOKEN")
-ACTIVE_COUNT=$(echo "$ACTIVE_LIAB" | jq 'length' 2>/dev/null || echo "0")
-ALL_ACTIVE=$(echo "$ACTIVE_LIAB" | jq '[.[] | select(.is_active == true)] | length' 2>/dev/null || echo "0")
+ACTIVE_COUNT=$(echo "$ACTIVE_LIAB" | jq 'if has("data") then .data | length else length end' 2>/dev/null || echo "0")
+ALL_ACTIVE=$(echo "$ACTIVE_LIAB" | jq 'if has("data") then [.data[] | select(.is_active == true)] | length else [.[] | select(.is_active == true)] | length end' 2>/dev/null || echo "0")
 test_case "筛选结果全为活跃负债" "$ACTIVE_COUNT" "$ALL_ACTIVE"
 
 # =====================

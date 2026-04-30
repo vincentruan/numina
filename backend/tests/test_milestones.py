@@ -16,6 +16,7 @@ def _data(resp):
 def child_user(client, auth_headers):
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
+        "password": "ChildPass1",
         "username": "xiaoming5",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],

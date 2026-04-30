@@ -93,6 +93,70 @@ certbot certonly --standalone -d numina.example.com
 echo "0 3 * * * certbot renew --quiet" | crontab -
 ```
 
+## 本地开发部署
+
+快速在本地启动完整服务栈（用于开发和测试）。
+
+### 前置条件
+
+- Docker Desktop（macOS/Windows）或 Docker Engine（Linux）
+- `jq`（用于测试脚本）：`brew install jq`
+
+### 启动服务
+
+```bash
+# 复制本地环境配置（已包含开发用默认值）
+cp .env.local .env   # 或直接使用已有的 .env
+
+# 构建并启动所有服务
+docker-compose up -d --build
+
+# 查看服务状态
+docker ps --format "{{.Names}}\t{{.Status}}" | grep numina
+```
+
+服务启动后访问：
+- 成人端：http://localhost/
+- 儿童端：http://localhost/child/
+- API 健康检查：http://localhost/api/health
+
+### 初始化测试数据
+
+```bash
+# 创建所有测试账号（幂等，可重复执行）
+./tests/data/seed-data.sh
+
+# 测试账号说明：
+# demouser / DemoPass123     — 完整演示数据（含儿童：小宝/大宝）
+# test_rich / TestRich123!   — 完整回归数据（含儿童：testchild）
+# test_empty / TestEmpty123! — 空家庭
+```
+
+### 运行验收测试
+
+```bash
+./tests/e2e/acceptance.sh
+```
+
+### 重建单个服务
+
+```bash
+# 重建 agent（依赖变更后需要）
+docker-compose build agent && docker-compose up -d agent
+
+# 重建前端
+docker-compose build frontend frontend-child && docker-compose up -d frontend frontend-child
+```
+
+### Agent 依赖管理
+
+Agent 使用 `uv` 管理依赖，`requirements.txt` 由 `uv.lock` 导出，确保 Docker 构建使用锁定版本：
+
+```bash
+# 更新依赖后重新生成 requirements.txt
+cd agent && uv lock && uv export --no-dev --no-hashes -o requirements.txt
+```
+
 ## 部署步骤
 
 ### 1. 配置环境变量
@@ -267,7 +331,13 @@ docker compose -f docker-compose.production.yml up -d --build
 ```
 ~/data/numina/
 ├── backend/                 # 后端代码
-├── frontend/                # 前端代码
+├── agent/                   # AI Agent 微服务
+├── frontend/                # 前端 monorepo
+│   ├── apps/
+│   │   ├── main/            # 成人端 SPA（原 frontend/）
+│   │   └── child/           # 儿童端 SPA（原 frontend-child/）
+│   └── packages/
+│       └── auth/            # 共享认证包
 ├── data/                    # 数据目录（持久化）
 │   ├── numina.db           # SQLite 数据库
 │   └── uploads/            # 上传文件
@@ -438,6 +508,58 @@ Docker 默认会管理日志轮转，如需自定义：
 
 ---
 
-**文档版本**: 1.0
-**最后更新**: 2026-04-02
+### Q: Agent 容器启动失败 — ImportError: cannot import name 'ExecutionInfo'
+
+**原因**: `langgraph-prebuilt` 版本与 `langgraph` 核心版本不兼容。`langgraph<1.1.0` 的 `runtime` 模块不含 `ExecutionInfo` 符号，但 `langgraph-prebuilt>=1.0.9` 依赖它。
+
+**解决**:
+```bash
+cd agent
+# 放宽 deerflow-harness 中的 langgraph 版本约束（已修复）
+# 重新生成锁定的 requirements.txt
+uv lock && uv export --no-dev --no-hashes -o requirements.txt
+# 重建 agent 镜像
+docker-compose build agent && docker-compose up -d agent
+```
+
+### Q: seed-data.sh 失败 — jq: error: Cannot iterate over null
+
+**原因**: 脚本中 `$BASE_URL/family/` 带尾斜杠，nginx 返回 307 重定向，curl 跟随后 FastAPI 返回 404，导致 jq 解析 null。
+
+**解决**: 已修复脚本，将 `family/` 改为 `family`（无尾斜杠）。如遇类似问题，检查 API 调用是否有多余的尾斜杠。
+
+### Q: nginx 重启后 `/` 返回儿童端页面
+
+**原因**: nginx worker 进程缓存了旧的 upstream DNS 解析结果。当 `frontend-child` 容器重建后，nginx 的 upstream `frontend` 可能短暂解析到错误 IP。
+
+**解决**:
+```bash
+# 重载 nginx 配置（不中断连接）
+docker exec numina-nginx nginx -s reload
+```
+
+**验证**:
+```bash
+curl -s http://localhost/ | grep title
+# 应显示: <title>Numina · 家庭资产管理</title>
+```
+
+### Q: E2E 测试中儿童路由重定向到 `/child/select` 而非 `/login`
+
+**原因**: 儿童路由（`/child/*`）由儿童端 SPA 独立处理，其路由守卫将未认证用户重定向到 `/child/select`（儿童登录页），而非成人端的 `/login`。这是正确行为。
+
+**说明**: `tests/lib/routes.ts` 中的 `CHILD_SPA_ROUTES` 记录了儿童 SPA 路由，不属于成人端 `PROTECTED_ROUTES`。
+
+### Q: 里程碑庆典弹窗不显示
+
+**原因**: `frontend/apps/child/src/api/milestones.ts` 中 `getMyMilestones()` 未正确解包 API 响应信封，返回 `{code, data}` 对象而非数组，导致 `filter()` 静默失败。
+
+**解决**: 已修复为 `return res.data.data ?? []`。修复后需重建儿童端容器：
+```bash
+docker-compose build frontend-child && docker-compose up -d frontend-child
+docker exec numina-nginx nginx -s reload
+```
+
+---
+**最后更新**: 2026-04-29
 **维护者**: Numina Team

@@ -9,12 +9,15 @@ from app.auth.jwt_utils import id_keyed_dict
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.asset import Asset
+from app.models.child_economy_config import ChildEconomyConfig
 from app.models.family import Family
 from app.models.liability import Liability
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.coin import ChildBalanceResponse
 from app.schemas.family import (
+    ChildEconomyConfigResponse,
+    ChildEconomyConfigUpdate,
     FamilyResponse,
     FamilySettingsResponse,
     FamilySettingsUpdate,
@@ -196,22 +199,31 @@ def update_family_settings(
 ):
     if user.role != "owner":
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
-    family = db.query(Family).filter_by(id=user.family_id).first()
+
+    config = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
+    if config is None:
+        config = ChildEconomyConfig(family_id=user.family_id)
+        db.add(config)
+
     if body.auto_approve_hours is not None:
-        family.auto_approve_hours = body.auto_approve_hours
-    if body.ai_enabled is not None:
-        family.ai_enabled = body.ai_enabled
+        config.auto_approve_hours = body.auto_approve_hours
     if body.coin_copper_to_silver is not None:
-        family.coin_copper_to_silver = body.coin_copper_to_silver
+        config.coin_copper_to_silver = body.coin_copper_to_silver
     if body.coin_silver_to_gold is not None:
-        family.coin_silver_to_gold = body.coin_silver_to_gold
+        config.coin_silver_to_gold = body.coin_silver_to_gold
     db.commit()
-    db.refresh(family)
+    db.refresh(config)
+
+    from app.models.ai_provider_config import AIProviderConfig
+    ai_enabled = db.query(AIProviderConfig).filter_by(
+        family_id=user.family_id, is_active=True
+    ).first() is not None
+
     return FamilySettingsResponse(
-        auto_approve_hours=family.auto_approve_hours,
-        ai_enabled=family.ai_enabled,
-        coin_copper_to_silver=family.coin_copper_to_silver,
-        coin_silver_to_gold=family.coin_silver_to_gold,
+        auto_approve_hours=config.auto_approve_hours,
+        ai_enabled=ai_enabled,
+        coin_copper_to_silver=config.coin_copper_to_silver,
+        coin_silver_to_gold=config.coin_silver_to_gold,
     )
 
 
@@ -220,12 +232,23 @@ def get_family_settings(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    family = db.query(Family).filter_by(id=user.family_id).first()
+    config = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
+    if config is None:
+        config = ChildEconomyConfig(family_id=user.family_id)
+        db.add(config)
+        db.commit()
+        db.refresh(config)
+
+    from app.models.ai_provider_config import AIProviderConfig
+    ai_enabled = db.query(AIProviderConfig).filter_by(
+        family_id=user.family_id, is_active=True
+    ).first() is not None
+
     return FamilySettingsResponse(
-        auto_approve_hours=family.auto_approve_hours,
-        ai_enabled=family.ai_enabled,
-        coin_copper_to_silver=family.coin_copper_to_silver,
-        coin_silver_to_gold=family.coin_silver_to_gold,
+        auto_approve_hours=config.auto_approve_hours,
+        ai_enabled=ai_enabled,
+        coin_copper_to_silver=config.coin_copper_to_silver,
+        coin_silver_to_gold=config.coin_silver_to_gold,
     )
 
 
@@ -288,6 +311,50 @@ def get_all_child_balances(
 class ChoreStats(BaseModel):
     completed_this_week: int
     total_this_week: int
+
+
+@router.get("/economy-config", response_model=ChildEconomyConfigResponse)
+def get_economy_config(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+) -> ChildEconomyConfigResponse:
+    """获取子经济配置（所有成员可查看）。"""
+    from app.models.child_economy_config import ChildEconomyConfig
+
+    cfg = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
+    if not cfg:
+        cfg = ChildEconomyConfig(family_id=user.family_id)
+        db.add(cfg)
+        db.commit()
+        db.refresh(cfg)
+    return ChildEconomyConfigResponse.model_validate(cfg)
+
+
+@router.put("/economy-config", response_model=ChildEconomyConfigResponse)
+def update_economy_config(
+    body: ChildEconomyConfigUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+) -> ChildEconomyConfigResponse:
+    """更新子经济配置（仅 owner）。"""
+    if user.role != "owner":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+
+    from app.models.child_economy_config import ChildEconomyConfig
+
+    cfg = db.query(ChildEconomyConfig).filter_by(family_id=user.family_id).first()
+    if not cfg:
+        cfg = ChildEconomyConfig(family_id=user.family_id)
+        db.add(cfg)
+    if body.auto_approve_hours is not None:
+        cfg.auto_approve_hours = body.auto_approve_hours
+    if body.coin_copper_to_silver is not None:
+        cfg.coin_copper_to_silver = body.coin_copper_to_silver
+    if body.coin_silver_to_gold is not None:
+        cfg.coin_silver_to_gold = body.coin_silver_to_gold
+    db.commit()
+    db.refresh(cfg)
+    return ChildEconomyConfigResponse.model_validate(cfg)
 
 
 @router.get("/children/chore-stats", response_model=dict[str, ChoreStats])
