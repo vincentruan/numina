@@ -23,8 +23,9 @@
 
         <div class="form-actions">
           <van-button
-round block type="primary" native-type="submit" :loading="loading"
-            style="background: var(--color-primary); border: none; border-radius: var(--radius-md); height: 44px;">
+            round block type="primary" native-type="submit" :loading="loading"
+            class="btn-next"
+          >
             {{ t('auth.nextStep') }}
           </van-button>
         </div>
@@ -45,7 +46,7 @@ round block type="primary" native-type="submit" :loading="loading"
           round
           size="large"
           :loading="loading"
-          style="background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: var(--radius-md); height: 44px; min-width: 160px;"
+          class="btn-unlock"
           @click="attemptWebAuthn"
         >
           {{ loading ? t('auth.verifying') : t('auth.unlock') }}
@@ -86,8 +87,8 @@ round block type="primary" native-type="submit" :loading="loading"
         </div>
 
         <div class="pin-actions">
-          <button class="pin-action-btn" @click="deleteEmoji">删除</button>
-          <button class="pin-action-btn" @click="clearPin">清除</button>
+          <button class="pin-action-btn" @click="deleteEmoji">{{ t('auth.deleteEmoji') }}</button>
+          <button class="pin-action-btn" @click="clearPin">{{ t('auth.clearPin') }}</button>
         </div>
 
         <button
@@ -143,7 +144,6 @@ onMounted(async () => {
   webAuthnAvailable.value = true
 })
 
-// Step 1: just advance to PIN input — no password needed for child accounts
 function onStep1Submit() {
   if (!form.value.username.trim()) return
   step1Error.value = ''
@@ -259,7 +259,7 @@ watch(
 .app-title {
   font-family: Inter, sans-serif;
   font-size: 28px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--color-ink);
   margin: 0;
   letter-spacing: -0.5px;
@@ -277,6 +277,15 @@ watch(
 }
 .form-actions { padding: 24px 16px 0; }
 
+/* Primary next button */
+.btn-next {
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  height: 44px;
+  color: var(--color-on-primary);
+}
+
 .step1-error {
   font-family: Inter, sans-serif;
   color: var(--color-brand-coral);
@@ -284,8 +293,6 @@ watch(
   text-align: center;
   margin: 8px 16px 0;
 }
-
-.password-field-wrapper :deep(.van-field__right-icon) { cursor: pointer; }
 
 /* ── Step 2 ── */
 .child-avatar {
@@ -297,7 +304,7 @@ watch(
   justify-content: center;
   font-family: Inter, sans-serif;
   font-size: 36px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--color-on-dark);
   margin-bottom: 12px;
 }
@@ -322,6 +329,16 @@ watch(
   margin: 0;
 }
 
+/* Unlock button */
+.btn-unlock {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  height: 44px;
+  min-width: 160px;
+}
+
 .pin-mode {
   display: flex;
   flex-direction: column;
@@ -334,12 +351,12 @@ watch(
   margin-bottom: 20px;
 }
 .pin-slot {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: var(--radius-pill);
   border: 2px solid var(--color-muted-soft);
   background: transparent;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s;
 }
 .pin-slot.filled {
   background: var(--color-ink);
@@ -389,7 +406,7 @@ watch(
 .pin-actions { display: flex; gap: 16px; margin-bottom: 4px; }
 .pin-action-btn {
   min-height: 44px;
-  min-width: 80px;
+  min-width: 88px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md);
   background: var(--color-surface-soft);
@@ -398,26 +415,36 @@ watch(
   font-weight: 500;
   color: var(--color-body);
   cursor: pointer;
+  transition: background 0.15s;
 }
+.pin-action-btn:active { background: var(--color-surface-card); }
 
-/* ── Utility buttons ── */
+/* ── Utility buttons — 44px touch targets ── */
 .switch-btn {
   margin-top: 16px;
   background: transparent;
   border: none;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted);
   cursor: pointer;
   text-decoration: underline;
+  min-height: 44px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
 }
 .back-btn {
   margin-top: 24px;
   background: transparent;
   border: none;
   font-family: Inter, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--color-muted-soft);
   cursor: pointer;
+  min-height: 44px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
 }
 </style>

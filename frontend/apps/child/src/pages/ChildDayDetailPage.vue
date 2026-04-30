@@ -74,7 +74,6 @@ const { t } = useI18n()
 const route = useRoute()
 const rawDate = route.query.date
 const rawChildId = route.query.child_id
-// Safely extract string values — route.query values can be string | string[] | null
 const date = typeof rawDate === 'string' ? rawDate : ''
 const childId = typeof rawChildId === 'string' ? rawChildId : undefined
 
@@ -130,7 +129,7 @@ onMounted(async () => {
 .day-detail-page {
   background: var(--color-canvas);
   min-height: 100vh;
-  padding-bottom: 24px;
+  padding-bottom: var(--space-lg);
 }
 
 .hint {
@@ -141,7 +140,7 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.section { margin: 16px 16px 0; }
+.section { margin: var(--space-md) var(--space-md) 0; }
 
 .section-title {
   font-family: Inter, sans-serif;
@@ -167,9 +166,10 @@ onMounted(async () => {
   border-radius: var(--radius-md);
   padding: 14px;
   border: 1px solid var(--color-hairline);
+  min-height: 56px;
 }
 
-.event-emoji { font-size: 24px; flex-shrink: 0; }
+.event-emoji { font-size: 32px; flex-shrink: 0; }
 
 .event-info { flex: 1; min-width: 0; }
 .event-name {
@@ -206,12 +206,12 @@ onMounted(async () => {
   font-family: Inter, sans-serif;
   font-size: 11px;
   border-radius: var(--radius-pill);
-  padding: 3px 10px;
+  padding: 4px 10px;
   flex-shrink: 0;
   font-weight: 600;
 }
 .status-tag.approved  { background: var(--color-brand-mint); color: var(--color-ink); }
-.status-tag.pending   { background: var(--color-surface-card); color: var(--color-muted); }
+.status-tag.pending   { background: var(--color-brand-peach); color: var(--color-ink); }
 .status-tag.realized  { background: var(--color-brand-ochre); color: var(--color-ink); }
 .status-tag.milestone { background: var(--color-brand-lavender); color: var(--color-ink); }
 </style>

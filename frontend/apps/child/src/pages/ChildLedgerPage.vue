@@ -14,7 +14,8 @@
     <div v-else-if="error" class="error-msg">{{ error }}</div>
 
     <div v-else-if="transactions.length === 0" class="empty">
-      <p>{{ t('ledger.empty') }}</p>
+      <p class="empty-emoji">💫</p>
+      <p class="empty-text">{{ t('ledger.empty') }}</p>
     </div>
 
     <div v-else class="tx-list">
@@ -31,36 +32,38 @@
     </div>
 
     <!-- Gift bottom sheet -->
-    <van-popup v-model:show="showGiftSheet" position="bottom" round style="padding: 24px 16px 40px">
-      <p class="sheet-title">{{ t('ledger.sheetTitle') }}</p>
-      <div class="sibling-list">
-        <div
-          v-for="s in siblings"
-          :key="s.id"
-          class="sibling-item"
-          :class="{ selected: selectedSiblingId === s.id }"
-          @click="selectedSiblingId = s.id"
-        >
-          <span class="sibling-avatar" :style="{ background: s.avatar_color || '#e8b94a' }">
-            {{ s.display_name[0] }}
-          </span>
-          <span class="sibling-name">{{ s.display_name }}</span>
+    <van-popup v-model:show="showGiftSheet" position="bottom" round>
+      <div class="sheet-inner">
+        <p class="sheet-title">{{ t('ledger.sheetTitle') }}</p>
+        <div class="sibling-list">
+          <div
+            v-for="s in siblings"
+            :key="s.id"
+            class="sibling-item"
+            :class="{ selected: selectedSiblingId === s.id }"
+            @click="selectedSiblingId = s.id"
+          >
+            <span class="sibling-avatar" :style="{ background: s.avatar_color || '#e8b94a' }">
+              {{ s.display_name[0] }}
+            </span>
+            <span class="sibling-name">{{ s.display_name }}</span>
+          </div>
         </div>
+        <van-field
+          v-model="giftAmountStr"
+          type="digit"
+          :label="t('ledger.amountLabel')"
+          :placeholder="t('ledger.amountPlaceholder')"
+          class="sheet-field"
+        />
+        <van-button
+          block
+          type="primary"
+          :disabled="!selectedSiblingId || !giftAmountStr"
+          class="btn-confirm"
+          @click="doGift"
+        >{{ t('ledger.confirmGift') }}</van-button>
       </div>
-      <van-field
-        v-model="giftAmountStr"
-        type="digit"
-        :label="t('ledger.amountLabel')"
-        :placeholder="t('ledger.amountPlaceholder')"
-        style="margin-top: 16px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
-      />
-      <van-button
-        block
-        type="primary"
-        :disabled="!selectedSiblingId || !giftAmountStr"
-        style="margin-top: 16px; border-radius: var(--radius-md); background: var(--color-primary); border: none"
-        @click="doGift"
-      >{{ t('ledger.confirmGift') }}</van-button>
     </van-popup>
   </div>
 </template>
@@ -123,7 +126,7 @@ onMounted(load)
 <style scoped>
 /* ── Canvas ── */
 .ledger-page {
-  padding: 16px;
+  padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
 }
@@ -132,9 +135,9 @@ onMounted(load)
 .balance-card {
   background: var(--color-brand-teal);
   border-radius: var(--radius-xl);
-  padding: 28px 24px;
+  padding: 32px 24px;
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-lg);
   color: var(--color-on-dark);
 }
 .balance-label {
@@ -147,30 +150,47 @@ onMounted(load)
   opacity: 0.7;
 }
 .balance-value {
-  font-size: 36px;
-  font-weight: bold;
+  font-size: 32px;
+  font-weight: 500;
   margin: 8px 0 0;
 }
+
+/* Gift button — button-on-color spec: canvas bg, ink text */
 .gift-btn {
   margin-top: 16px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
-  color: var(--color-on-dark);
+  background: var(--color-canvas);
+  border: none;
+  color: var(--color-ink);
   border-radius: var(--radius-md);
-  padding: 8px 20px;
+  padding: 0 20px;
   font-family: Inter, sans-serif;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   height: 44px;
+  transition: opacity 0.15s;
 }
+.gift-btn:active { opacity: 0.8; }
 
-.loading, .empty {
+.loading {
   text-align: center;
   margin-top: 40px;
   color: var(--color-muted-soft);
   font-family: Inter, sans-serif;
   font-size: 15px;
+}
+
+/* Empty state */
+.empty {
+  text-align: center;
+  margin-top: 60px;
+}
+.empty-emoji { font-size: 48px; margin: 0 0 12px; }
+.empty-text {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  color: var(--color-muted-soft);
+  margin: 0;
 }
 
 /* ── Transaction list ── */
@@ -183,6 +203,7 @@ onMounted(load)
   padding: 14px 16px;
   gap: 12px;
   border: 1px solid var(--color-hairline);
+  min-height: 56px;
 }
 .tx-emoji { font-size: 24px; }
 .tx-info { flex: 1; }
@@ -201,12 +222,15 @@ onMounted(load)
 .tx-amount {
   font-family: Inter, sans-serif;
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
 }
 .tx-amount.positive { color: var(--color-brand-ochre); }
 .tx-amount.negative { color: var(--color-brand-coral); }
 
 /* ── Gift sheet ── */
+.sheet-inner {
+  padding: 24px 16px 40px;
+}
 .sheet-title {
   font-family: Inter, sans-serif;
   font-size: 18px;
@@ -226,6 +250,7 @@ onMounted(load)
   border: 2px solid transparent;
   cursor: pointer;
   transition: border-color 0.15s;
+  min-height: 44px;
 }
 .sibling-item.selected {
   border-color: var(--color-ink);
@@ -240,13 +265,25 @@ onMounted(load)
   justify-content: center;
   font-family: Inter, sans-serif;
   font-size: 20px;
-  font-weight: 700;
+  font-weight: 500;
   color: var(--color-on-dark);
 }
 .sibling-name {
   font-family: Inter, sans-serif;
   font-size: 13px;
   color: var(--color-body-strong);
+}
+.sheet-field {
+  margin-top: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+.btn-confirm {
+  margin-top: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  border: none;
+  height: 44px;
 }
 
 .error-msg {

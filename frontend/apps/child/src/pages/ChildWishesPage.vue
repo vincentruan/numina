@@ -132,58 +132,60 @@
 
     <!-- FAB -->
     <button v-if="totalWishes > 0" class="fab" :aria-label="t('wishes.createBtn')" @click="showCreate = true">
-      <van-icon name="plus" size="22" color="#fff" />
+      <van-icon name="plus" size="22" color="var(--color-on-primary)" />
     </button>
 
     <!-- Create wish bottom sheet -->
-    <van-popup v-model:show="showCreate" position="bottom" round style="padding: 24px 16px 40px">
-      <p class="sheet-title">{{ t('wishes.sheetTitle') }}</p>
-      <van-field
-        v-model="form.name"
-        :label="t('wishes.wishNameLabel')"
-        :placeholder="t('wishes.wishNamePlaceholder')"
-        maxlength="50"
-        show-word-limit
-        style="margin-bottom: 8px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
-      />
-      <van-field
-        v-model="form.emoji"
-        :label="t('wishes.emojiLabel')"
-        :placeholder="t('wishes.emojiPlaceholder')"
-        maxlength="4"
-        style="margin-bottom: 8px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
-      />
-      <van-field
-        v-model="form.description"
-        :label="t('wishes.descLabel')"
-        type="textarea"
-        :placeholder="t('wishes.descPlaceholder')"
-        maxlength="200"
-        show-word-limit
-        rows="2"
-        autosize
-        style="margin-bottom: 12px; border-radius: var(--radius-md); background: var(--color-surface-soft)"
-      />
-      <div class="priority-row">
-        <span class="priority-label">{{ t('wishes.priorityLabel') }}</span>
-        <div class="priority-chips">
-          <button
-            v-for="p in priorities"
-            :key="p.value"
-            class="priority-chip"
-            :class="{ active: form.priority === p.value }"
-            @click="form.priority = p.value"
-          >{{ p.label }}</button>
+    <van-popup v-model:show="showCreate" position="bottom" round>
+      <div class="sheet-inner">
+        <p class="sheet-title">{{ t('wishes.sheetTitle') }}</p>
+        <van-field
+          v-model="form.name"
+          :label="t('wishes.wishNameLabel')"
+          :placeholder="t('wishes.wishNamePlaceholder')"
+          maxlength="50"
+          show-word-limit
+          class="sheet-field"
+        />
+        <van-field
+          v-model="form.emoji"
+          :label="t('wishes.emojiLabel')"
+          :placeholder="t('wishes.emojiPlaceholder')"
+          maxlength="4"
+          class="sheet-field"
+        />
+        <van-field
+          v-model="form.description"
+          :label="t('wishes.descLabel')"
+          type="textarea"
+          :placeholder="t('wishes.descPlaceholder')"
+          maxlength="200"
+          show-word-limit
+          rows="2"
+          autosize
+          class="sheet-field sheet-field--last"
+        />
+        <div class="priority-row">
+          <span class="priority-label">{{ t('wishes.priorityLabel') }}</span>
+          <div class="priority-chips">
+            <button
+              v-for="p in priorities"
+              :key="p.value"
+              class="priority-chip"
+              :class="{ active: form.priority === p.value }"
+              @click="form.priority = p.value"
+            >{{ p.label }}</button>
+          </div>
         </div>
+        <van-button
+          block
+          type="primary"
+          :loading="creating"
+          :disabled="!form.name.trim()"
+          class="btn-submit"
+          @click="createWish"
+        >{{ t('wishes.submitBtn') }}</van-button>
       </div>
-      <van-button
-        block
-        type="primary"
-        :loading="creating"
-        :disabled="!form.name.trim()"
-        style="margin-top: 16px; border-radius: var(--radius-md); background: var(--color-primary); border: none"
-        @click="createWish"
-      >{{ t('wishes.submitBtn') }}</van-button>
     </van-popup>
   </div>
 </template>
@@ -333,7 +335,7 @@ onMounted(load)
 .wishes-page {
   background: var(--color-canvas);
   min-height: 100vh;
-  padding: 16px 16px 100px;
+  padding: var(--space-md) var(--space-md) 100px;
 }
 
 /* ── Hero banner — peach feature card ── */
@@ -343,8 +345,8 @@ onMounted(load)
   justify-content: space-around;
   background: var(--color-brand-peach);
   border-radius: var(--radius-xl);
-  padding: 24px 16px;
-  margin-bottom: 24px;
+  padding: 32px 16px;
+  margin-bottom: var(--space-lg);
   color: var(--color-ink);
 }
 .hero-balance {
@@ -356,7 +358,7 @@ onMounted(load)
 .hero-balance-num {
   font-family: Inter, sans-serif;
   font-size: 32px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
 }
 .hero-balance-unit {
@@ -378,7 +380,7 @@ onMounted(load)
 .hero-stat-num {
   font-family: Inter, sans-serif;
   font-size: 24px;
-  font-weight: 700;
+  font-weight: 500;
   line-height: 1;
 }
 .hero-stat-label {
@@ -388,7 +390,7 @@ onMounted(load)
 }
 
 /* ── Sections ── */
-.section { margin-bottom: 24px; }
+.section { margin-bottom: var(--space-lg); }
 .section-title {
   font-family: Inter, sans-serif;
   font-size: 12px;
@@ -403,12 +405,13 @@ onMounted(load)
 .wish-card {
   background: var(--color-surface-soft);
   border-radius: var(--radius-lg);
-  padding: 16px;
+  padding: var(--space-md);
   border: 1px solid var(--color-hairline);
   margin-bottom: 12px;
 }
 .wish-card--active {
   border-left: 4px solid var(--color-brand-ochre);
+  background: color-mix(in srgb, var(--color-brand-ochre) 6%, var(--color-surface-soft));
 }
 .wish-card--simple {
   display: flex;
@@ -450,7 +453,7 @@ onMounted(load)
 .priority-badge {
   font-family: Inter, sans-serif;
   font-size: 11px;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   display: inline-block;
   font-weight: 600;
@@ -491,10 +494,10 @@ onMounted(load)
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  font-size: 10px;
+  font-size: 14px;
   z-index: 1;
   pointer-events: none;
-  opacity: 0.5;
+  opacity: 0.6;
 }
 .progress-footer {
   display: flex;
@@ -504,7 +507,7 @@ onMounted(load)
 .progress-pct {
   font-family: Inter, sans-serif;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--color-muted-soft);
   min-width: 36px;
 }
@@ -519,20 +522,21 @@ onMounted(load)
   margin-bottom: 4px;
 }
 
-/* Redeem button — primary CTA */
+/* Redeem button — ochre celebration CTA */
 .btn-redeem {
   width: 100%;
-  background: var(--color-primary);
-  color: var(--color-on-primary);
+  background: var(--color-brand-ochre);
+  color: var(--color-ink);
   border: none;
   border-radius: var(--radius-md);
-  padding: 12px;
+  padding: 0 12px;
   font-family: Inter, sans-serif;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   cursor: pointer;
-  height: 44px;
+  height: 52px;
   animation: goldShimmer 1.5s ease-in-out infinite;
+  transition: transform 0.1s;
 }
 .btn-redeem:disabled {
   opacity: 0.4;
@@ -545,12 +549,12 @@ onMounted(load)
 .status-badge {
   font-family: Inter, sans-serif;
   font-size: 12px;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border-radius: var(--radius-pill);
   display: inline-block;
   font-weight: 500;
 }
-.status-pending    { background: var(--color-surface-card); color: var(--color-muted); }
+.status-pending    { background: var(--color-brand-peach); color: var(--color-ink); }
 .status-redemption { background: var(--color-brand-mint); color: var(--color-ink); }
 .status-realized   { background: var(--color-brand-mint); color: var(--color-ink); }
 .status-rejected   { background: var(--color-brand-coral); color: var(--color-on-dark); }
@@ -576,7 +580,7 @@ onMounted(load)
   color: var(--color-on-primary);
   border: none;
   border-radius: var(--radius-md);
-  padding: 12px 28px;
+  padding: 0 28px;
   font-family: Inter, sans-serif;
   font-size: 14px;
   font-weight: 600;
@@ -612,6 +616,9 @@ onMounted(load)
 .fab:active { transform: scale(0.92); }
 
 /* Create sheet */
+.sheet-inner {
+  padding: 24px 16px 40px;
+}
 .sheet-title {
   font-family: Inter, sans-serif;
   font-size: 18px;
@@ -620,6 +627,13 @@ onMounted(load)
   text-align: center;
   margin: 0 0 16px;
 }
+.sheet-field {
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+.sheet-field--last { margin-bottom: 12px; }
+
 .priority-row {
   display: flex;
   align-items: center;
@@ -634,7 +648,8 @@ onMounted(load)
 }
 .priority-chips { display: flex; gap: 8px; }
 .priority-chip {
-  padding: 6px 14px;
+  padding: 0 14px;
+  height: 44px;
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-pill);
   background: var(--color-surface-soft);
@@ -643,6 +658,8 @@ onMounted(load)
   cursor: pointer;
   transition: all 0.15s;
   color: var(--color-body);
+  display: flex;
+  align-items: center;
 }
 .priority-chip.active {
   background: var(--color-primary);
@@ -650,12 +667,20 @@ onMounted(load)
   border-color: var(--color-primary);
 }
 
+.btn-submit {
+  margin-top: 16px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary);
+  border: none;
+  height: 44px;
+}
+
 .error-msg {
   background: var(--color-brand-coral);
   color: var(--color-on-primary);
   border-radius: var(--radius-md);
   padding: 12px 16px;
-  margin: 0 16px 16px;
+  margin: 0 0 16px;
   font-family: Inter, sans-serif;
   font-size: 14px;
   text-align: center;

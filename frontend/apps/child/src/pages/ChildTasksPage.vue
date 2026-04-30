@@ -1,7 +1,8 @@
 <template>
   <div class="chores-page">
-    <div class="header">
-      <span class="date-label">{{ todayLabel }}</span>
+    <!-- Date hero band — pink feature card -->
+    <div class="date-hero">
+      <p class="date-label">{{ todayLabel }}</p>
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -18,6 +19,7 @@
         :key="chore.id"
         class="chore-card"
         :class="chore.status"
+        @click="chore.status === 'available' && !submittingId ? complete(chore.id) : undefined"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <div class="chore-info">
@@ -32,7 +34,7 @@
             v-if="chore.status === 'available'"
             class="btn-complete"
             :disabled="submittingId === chore.id"
-            @click="complete(chore.id)"
+            @click.stop="complete(chore.id)"
           >{{ t('chore.complete') }}</button>
           <span v-else-if="chore.status === 'pending_approval'" class="status-badge pending">{{ t('chore.pendingApproval') }}</span>
           <span v-else-if="chore.status === 'approved'" class="status-badge approved">{{ t('chore.approved') }}</span>
@@ -153,20 +155,26 @@ onMounted(async () => {
 <style scoped>
 /* ── Canvas ── */
 .chores-page {
-  padding: 16px;
+  padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
 }
 
-.header {
+/* ── Date hero — pink feature card ── */
+.date-hero {
+  background: var(--color-brand-pink);
+  border-radius: var(--radius-xl);
+  padding: 20px 20px;
   text-align: center;
-  margin-bottom: 16px;
+  margin-bottom: var(--space-lg);
 }
 .date-label {
   font-family: Inter, sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-muted-soft);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-primary);
+  margin: 0;
+  letter-spacing: 0.3px;
 }
 
 .loading, .empty {
@@ -189,8 +197,10 @@ onMounted(async () => {
   gap: 12px;
   border: 1px solid var(--color-hairline);
   transition: transform 0.1s;
+  min-height: 64px;
 }
-.chore-card:active { transform: scale(0.98); }
+.chore-card.available { cursor: pointer; }
+.chore-card.available:active { transform: scale(0.98); }
 .chore-card.approved { opacity: 0.55; }
 .chore-card.rejected { opacity: 0.45; }
 
@@ -229,13 +239,14 @@ onMounted(async () => {
   color: var(--color-on-primary);
   border: none;
   border-radius: var(--radius-md);
-  padding: 8px 18px;
+  padding: 0 18px;
   font-family: Inter, sans-serif;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   height: 44px;
   white-space: nowrap;
+  transition: opacity 0.15s, transform 0.1s;
 }
 .btn-complete:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-complete:active:not(:disabled) { transform: scale(0.96); }
@@ -249,7 +260,7 @@ onMounted(async () => {
   white-space: nowrap;
   font-weight: 500;
 }
-.status-badge.pending  { background: var(--color-surface-card); color: var(--color-muted); }
+.status-badge.pending  { background: var(--color-brand-peach); color: var(--color-ink); }
 .status-badge.approved { background: var(--color-brand-mint); color: var(--color-ink); }
 .status-badge.rejected { background: var(--color-brand-coral); color: var(--color-on-dark); }
 

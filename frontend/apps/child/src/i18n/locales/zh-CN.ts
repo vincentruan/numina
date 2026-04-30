@@ -39,6 +39,8 @@ export default {
     useEmojiPin: '使用图形密码',
     useFaceId: '使用面容/指纹',
     backToLogin: '返回重新登录',
+    deleteEmoji: '删除',
+    clearPin: '清除',
   },
   errors: {
     PIN_ERROR: '❌ PIN错误，请重试',

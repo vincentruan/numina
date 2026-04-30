@@ -1,11 +1,23 @@
 <template>
   <div class="child-blind-box-page">
-    <van-nav-bar :title="t('blindBox.navTitle')" />
+    <!-- Clay-styled header band — lavender feature card -->
+    <div class="page-header">
+      <p class="page-title">{{ t('blindBox.navTitle') }}</p>
+    </div>
 
-    <van-tabs v-model:active="activeTab" sticky>
-      <van-tab :title="t('blindBox.tabDraw')" name="draw" />
-      <van-tab :title="t('blindBox.tabHistory')" name="history" />
-    </van-tabs>
+    <!-- Clay category tabs -->
+    <div class="tab-row">
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'draw' }"
+        @click="activeTab = 'draw'"
+      >{{ t('blindBox.tabDraw') }}</button>
+      <button
+        class="tab-btn"
+        :class="{ active: activeTab === 'history' }"
+        @click="activeTab = 'history'"
+      >{{ t('blindBox.tabHistory') }}</button>
+    </div>
 
     <!-- Draw Tab -->
     <div v-if="activeTab === 'draw'" class="draw-tab">
@@ -17,7 +29,7 @@
       />
 
       <div v-if="bonusDraws.length > 0" class="bonus-section">
-        <van-divider>{{ t('blindBox.bonusDivider', { count: bonusDraws.length }) }}</van-divider>
+        <p class="bonus-divider-label">{{ t('blindBox.bonusDivider', { count: bonusDraws.length }) }}</p>
         <div class="bonus-list" role="list" :aria-label="t('blindBox.bonusListLabel')">
           <div
             v-for="bonus in bonusDraws"
@@ -26,24 +38,22 @@
             role="listitem"
           >
             <span class="bonus-text">{{ t('blindBox.bonusItem', { expiry: formatExpiry(bonus.expires_at) }) }}</span>
-            <van-button
-              size="small"
-              :loading="loading"
+            <button
+              class="btn-use"
               :disabled="loading"
               :aria-label="t('blindBox.bonusItemAriaLabel', { expiry: formatExpiry(bonus.expires_at) })"
-              style="background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: 8px;"
               @click="onUseBonusDraw(bonus.id)"
             >
               {{ t('blindBox.useBtn') }}
-            </van-button>
+            </button>
           </div>
         </div>
       </div>
 
       <div v-if="revealed && lastDraw" class="draw-actions">
-        <van-button block style="background: var(--color-primary); color: var(--color-on-primary); border: none; border-radius: var(--radius-md); height: 44px;" @click="resetDraw">
+        <button class="btn-draw-again" @click="resetDraw">
           {{ t('blindBox.drawAgain') }}
-        </van-button>
+        </button>
       </div>
     </div>
 
@@ -137,6 +147,49 @@ function formatExpiry(dateStr: string) {
   background: var(--color-canvas);
 }
 
+/* ── Page header — lavender feature card ── */
+.page-header {
+  background: var(--color-brand-lavender);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  padding: 24px 20px 20px;
+  text-align: center;
+  margin-bottom: var(--space-md);
+}
+.page-title {
+  font-family: Inter, sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+/* ── Clay category tabs ── */
+.tab-row {
+  display: flex;
+  gap: 8px;
+  padding: 0 var(--space-md);
+  margin-bottom: var(--space-md);
+}
+.tab-btn {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn.active {
+  background: var(--color-surface-card);
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+/* ── Draw tab ── */
 .draw-tab {
   display: flex;
   flex-direction: column;
@@ -145,7 +198,18 @@ function formatExpiry(dateStr: string) {
 
 .bonus-section {
   width: 100%;
-  padding: 0 16px;
+  padding: 0 var(--space-md);
+}
+
+.bonus-divider-label {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  text-align: center;
+  margin: 0 0 12px;
 }
 
 .bonus-list {
@@ -162,6 +226,7 @@ function formatExpiry(dateStr: string) {
   border-radius: var(--radius-md);
   padding: 12px 14px;
   border: 1px solid var(--color-hairline);
+  min-height: 52px;
 }
 
 .bonus-text {
@@ -170,8 +235,41 @@ function formatExpiry(dateStr: string) {
   color: var(--color-body);
 }
 
+/* Use button — 44px touch target */
+.btn-use {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0 16px;
+  height: 44px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+.btn-use:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-use:active:not(:disabled) { opacity: 0.8; }
+
+/* Draw again button */
 .draw-actions {
   width: 100%;
-  padding: 16px;
+  padding: var(--space-md);
 }
+.btn-draw-again {
+  width: 100%;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: var(--radius-md);
+  height: 44px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-draw-again:active { opacity: 0.8; }
 </style>

@@ -3,6 +3,7 @@
     <!-- Header summary — lavender feature card -->
     <div class="summary-card">
       <p class="summary-title">{{ t('treasures.title') }}</p>
+      <p v-if="treasures.length > 0" class="summary-count">{{ treasures.length }}</p>
       <p v-if="treasures.length > 0" class="summary-desc">
         {{ t('treasures.earnedCount', { count: treasures.length }) }}
       </p>
@@ -71,7 +72,7 @@ onMounted(load)
 <style scoped>
 /* ── Canvas ── */
 .treasures-page {
-  padding: 16px;
+  padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
 }
@@ -80,9 +81,9 @@ onMounted(load)
 .summary-card {
   background: var(--color-brand-lavender);
   border-radius: var(--radius-xl);
-  padding: 24px 20px;
+  padding: 32px 20px;
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-lg);
   color: var(--color-ink);
 }
 .summary-title {
@@ -90,6 +91,13 @@ onMounted(load)
   font-size: 18px;
   font-weight: 600;
   margin: 0 0 6px;
+}
+.summary-count {
+  font-family: Inter, sans-serif;
+  font-size: 48px;
+  font-weight: 500;
+  line-height: 1;
+  margin: 4px 0 4px;
 }
 .summary-desc {
   font-family: Inter, sans-serif;
@@ -148,9 +156,11 @@ onMounted(load)
   font-weight: 600;
   color: var(--color-ink);
   margin: 0 0 4px;
-  white-space: nowrap;
+  /* allow 2 lines so names aren't truncated on small screens */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 .card-date {
   font-family: Inter, sans-serif;

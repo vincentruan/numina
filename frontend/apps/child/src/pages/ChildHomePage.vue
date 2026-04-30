@@ -23,7 +23,7 @@
             <p class="chore-name">{{ c.chore_name }}</p>
             <p class="chore-reward">+{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐</p>
           </div>
-          <span class="chore-status-badge">{{ statusLabel(c.status) }}</span>
+          <span class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
         </div>
       </div>
     </div>
@@ -36,7 +36,7 @@
           <p class="wish-preview-name">{{ topWish.name }}</p>
           <p class="wish-preview-sub">{{ t('home.myWishes') }}</p>
         </div>
-        <van-icon name="arrow" color="#9a9a9a" size="16" />
+        <van-icon name="arrow" color="var(--color-muted-soft)" size="16" />
       </div>
       <div v-if="topWish.has_cost_set && topWish.progress !== null" class="wish-preview-bar">
         <div class="wish-preview-fill" :style="{ width: Math.min((topWish.progress ?? 0) * 100, 100) + '%' }" />
@@ -141,7 +141,7 @@ onMounted(async () => {
 <style scoped>
 /* ── Canvas ── */
 .home-page {
-  padding: 16px;
+  padding: var(--space-md);
   background: var(--color-canvas);
   min-height: 100vh;
 }
@@ -150,10 +150,10 @@ onMounted(async () => {
 .hero-card {
   background: var(--color-brand-ochre);
   border-radius: var(--radius-xl);
-  padding: 28px 20px;
+  padding: 32px 20px;
   text-align: center;
   color: var(--color-ink);
-  margin-bottom: 24px;
+  margin-bottom: var(--space-lg);
 }
 .hero-label {
   font-family: Inter, sans-serif;
@@ -165,12 +165,12 @@ onMounted(async () => {
   opacity: 0.7;
 }
 .hero-balance {
-  font-size: 40px;
-  font-weight: bold;
+  font-size: 32px;
+  font-weight: 500;
 }
 
 /* ── Sections ── */
-.section { margin-bottom: 24px; }
+.section { margin-bottom: var(--space-lg); }
 .section-title {
   font-family: Inter, sans-serif;
   font-size: 12px;
@@ -197,6 +197,7 @@ onMounted(async () => {
   padding: 12px 14px;
   gap: 12px;
   border: 1px solid var(--color-hairline);
+  min-height: 56px;
 }
 .chore-card.approved { opacity: 0.55; }
 .chore-emoji { font-size: 24px; }
@@ -215,11 +216,30 @@ onMounted(async () => {
   margin: 2px 0 0;
   font-weight: 500;
 }
+
+/* Status badge — pill with color per state */
 .chore-status-badge {
   font-family: Inter, sans-serif;
   font-size: 12px;
-  color: var(--color-muted);
+  font-weight: 500;
   white-space: nowrap;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-card);
+  color: var(--color-muted);
+}
+.chore-status-badge.available {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+}
+.chore-status-badge.approved {
+  background: var(--color-brand-mint);
+  color: var(--color-ink);
+}
+.chore-status-badge.rejected {
+  background: var(--color-brand-coral);
+  color: var(--color-on-dark);
 }
 
 /* ── Wish preview — cream card ── */
@@ -227,11 +247,13 @@ onMounted(async () => {
   display: block;
   background: var(--color-surface-card);
   border-radius: var(--radius-lg);
-  padding: 16px;
-  margin-bottom: 24px;
+  padding: var(--space-md);
+  margin-bottom: var(--space-lg);
   text-decoration: none;
   border: 1px solid var(--color-hairline);
+  transition: transform 0.15s;
 }
+.wish-preview:active { transform: scale(0.98); }
 .wish-preview-header {
   display: flex;
   align-items: center;
@@ -279,13 +301,13 @@ onMounted(async () => {
 }
 .wish-ready {
   color: var(--color-brand-ochre);
-  font-weight: 700;
+  font-weight: 600;
 }
 
 /* ── Settings section ── */
 .settings-section {
   margin-top: 8px;
-  margin-bottom: 24px;
+  margin-bottom: var(--space-lg);
   background: var(--color-surface-card);
   border-radius: var(--radius-lg);
   border: 1px solid var(--color-hairline);
@@ -304,6 +326,7 @@ onMounted(async () => {
   font-size: 14px;
   font-weight: 600;
   color: var(--color-ink);
+  min-height: 44px;
 }
 .settings-body {
   padding: 0 16px 16px;
@@ -334,6 +357,7 @@ onMounted(async () => {
   color: var(--color-muted);
   cursor: pointer;
   transition: all 0.15s;
+  min-height: 44px;
 }
 .theme-btn.active {
   background: var(--color-brand-ochre);
@@ -341,7 +365,5 @@ onMounted(async () => {
   color: var(--color-ink);
   font-weight: 600;
 }
-.theme-btn:active {
-  transform: scale(0.96);
-}
+.theme-btn:active { transform: scale(0.96); }
 </style>
