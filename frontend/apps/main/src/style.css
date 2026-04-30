@@ -19,7 +19,7 @@
   /* ── Cohere Design System Tokens ── */
 
   /* Brand & Accent */
-  --color-primary: #17171c;
+  --color-primary: #010120;
   --color-ink: #212121;
   --color-deep-green: #003c33;
   --color-dark-navy: #071829;
@@ -32,7 +32,7 @@
 
   /* Surface & Background */
   --color-canvas: #ffffff;
-  --color-soft-stone: #eeece7;
+  --color-soft-stone: #f5f5ff;
   --color-pale-green: #edfce9;
   --color-pale-blue: #f1f5ff;
 
@@ -40,8 +40,8 @@
   --color-muted: #93939f;
   --color-slate: #75758a;
   --color-body-muted: #616161;
-  --color-hairline: #d9d9dd;
-  --color-border-light: #e5e7eb;
+  --color-hairline: rgba(1,1,32,0.08);
+  --color-border-light: rgba(1,1,32,0.08);
   --color-card-border: #f2f2f2;
 
   /* On-color text */
@@ -95,29 +95,38 @@
   /* ── Legacy aliases (kept for Vant compat) ── */
   --theme-primary: var(--color-primary);
   --color-action-primary: var(--color-primary);
+
+  /* ── Together AI 新增 token ── */
+  --color-lavender: #bdbbff;
+  --color-magenta: #ef2cc1;
+  --color-brand-orange: #fc4c02;
+  --shadow-elevated: rgba(1,1,32,0.1) 0px 4px 10px;
+
   --color-action-primary-active: #0d0d10;
 }
 
 [data-theme='dark'] {
-  /* Dark mode — Cohere dark surface hierarchy */
-  --bg-primary: #0d0d10;
-  --bg-secondary: #17171c;
-  --bg-tertiary: #1e1e24;
+  --bg-primary: #010120;
+  --bg-secondary: #0a0a1a;
+  --bg-tertiary: #12122a;
   --text-primary: #f5f5f5;
   --text-secondary: #c8c8d0;
   --text-tertiary: var(--color-muted);
-  --separator: #2a2a32;
-  --card-bg: #1e1e24;
-  --color-canvas: #17171c;
-  --color-soft-stone: #1e1e24;
-  --color-card-border: #2a2a32;
-  --color-hairline: #2a2a32;
+  --separator: rgba(255,255,255,0.08);
+  --card-bg: #12122a;
+  --color-canvas: #0a0a1a;
+  --color-soft-stone: #12122a;
+  --color-card-border: rgba(255,255,255,0.08);
+  --color-hairline: rgba(255,255,255,0.08);
 
-  --van-primary-color: var(--color-coral);
-  --van-button-primary-background: var(--color-coral);
-  --van-button-primary-border-color: var(--color-coral);
-  --van-tabs-bottom-bar-color: var(--color-coral);
-  --van-tab-active-text-color: var(--color-coral);
+  --van-primary-color: #bdbbff;
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  --van-button-primary-color: #010120;
+  --van-tabs-bottom-bar-color: #bdbbff;
+  --van-tab-active-text-color: #bdbbff;
+  --van-checkbox-checked-icon-color: #bdbbff;
+  --van-switch-on-background: #bdbbff;
 }
 
 /* ── Vant Toast / Notify theme ── */
@@ -168,6 +177,10 @@ body {
   line-height: 1.5;
 }
 
+h1, h2, h3, h4, .display-text {
+  letter-spacing: -0.02em;
+}
+
 #app {
   max-width: 100vw;
   min-height: 100vh;
@@ -183,7 +196,7 @@ a {
 
 /* Pill primary buttons */
 .van-button--primary {
-  border-radius: var(--radius-pill) !important;
+  border-radius: 8px !important;
   font-weight: 500;
   letter-spacing: 0;
   min-height: 44px;
@@ -191,13 +204,13 @@ a {
 
 /* Normal/default buttons */
 .van-button--normal {
-  border-radius: var(--radius-sm) !important;
+  border-radius: 4px !important;
   min-height: 44px;
 }
 
 /* Small buttons — still meet 44px touch target via padding */
 .van-button--small {
-  border-radius: var(--radius-pill) !important;
+  border-radius: 4px !important;
   min-height: 36px;
   padding: 0 16px;
   font-size: 14px;
