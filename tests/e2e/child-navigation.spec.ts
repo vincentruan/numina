@@ -32,16 +32,18 @@ test.describe('child navigation guards', () => {
   })
 
   test.describe('adult session blocked from child routes', () => {
-    test('adult → /child redirects to /child/select', async ({ page }) => {
+    test('adult → /child redirects to child SPA (/child/)', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child')
-      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
+      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
+      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
     })
 
-    test('adult → /child/tasks redirects to /child/select', async ({ page }) => {
+    test('adult → /child/tasks redirects to child SPA (/child/)', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child/tasks')
-      await expect(page).toHaveURL(/\/child\/select/, { timeout: 8_000 })
+      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
+      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
     })
   })
 

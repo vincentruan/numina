@@ -19,7 +19,7 @@ from app.auth.revoke_jti import revoke_jti
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.schemas.device import DeviceCheckRequest, DeviceCheckResponse, DeviceSessionResponse, DeviceTrustResponse
+from app.schemas.device import DeviceCheckRequest, DeviceCheckResponse, DeviceSessionResponse, DeviceTrustRequest, DeviceTrustResponse
 from app.services import device as device_service
 
 router = APIRouter(prefix="/auth", tags=["device"])
@@ -89,7 +89,7 @@ def _get_user_payload(
 def trust_device(
     request: Request,
     response: Response,
-    body: "DeviceTrustRequest | None" = None,
+    body: DeviceTrustRequest | None = None,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
     child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
     refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
@@ -100,8 +100,6 @@ def trust_device(
 
     Optionally accepts a browser fingerprint to enable fingerprint-based device detection.
     """
-    from app.schemas.device import DeviceTrustRequest as _DeviceTrustRequest
-
     body_fingerprint: str | None = body.fingerprint if body else None
     payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
     user_id = int(payload["sub"])

@@ -989,25 +989,131 @@
         }
       }
     },
-    "/api/v1/auth/child/bind": {
-      "get": {
+    "/api/v1/auth/login/step1": {
+      "post": {
         "tags": [
           "auth"
         ],
-        "summary": "Get Child Bind Info",
-        "description": "Validate bind token and return family info with children.\n\nUsed by independent child devices to get selectable accounts.\nToken is single-use — marked as used after this call.",
-        "operationId": "get_child_bind_info_api_v1_auth_child_bind_get",
+        "summary": "Login Step1",
+        "description": "Step 1: Verify username + password. Returns temp token if second factor required.",
+        "operationId": "login_step1_api_v1_auth_login_step1_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginStep1Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginStep1Response"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/step2": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login Step2",
+        "description": "Step 2: Verify second factor (PIN). Returns full tokens on success.",
+        "operationId": "login_step2_api_v1_auth_login_step2_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginStep2Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/pin/setup": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Setup Numeric Pin",
+        "description": "Set up numeric PIN for adult second factor.",
+        "operationId": "setup_numeric_pin_api_v1_auth_pin_setup_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "token",
-            "in": "query",
-            "required": true,
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
             "schema": {
-              "type": "string",
-              "title": "Token"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupNumericPinRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -1030,34 +1136,119 @@
         }
       }
     },
-    "/api/v1/auth/child/family/{family_id}/children": {
-      "get": {
+    "/api/v1/auth/pin/change": {
+      "post": {
         "tags": [
           "auth"
         ],
-        "summary": "Get Family Children",
-        "description": "Return active children for a family — requires a valid bind token.\n\nThe bind_token must belong to the requested family_id and must not be\nexpired. It may be used or unused (account-picker is called after binding).\nOnly non-sensitive display fields are exposed via ChildResponse.\nFields NOT exposed: pin_hash, pin_fail_count, pin_locked_until, token_version.",
-        "operationId": "get_family_children_api_v1_auth_child_family__family_id__children_get",
+        "summary": "Change Numeric Pin",
+        "description": "Change numeric PIN — requires old PIN verification.",
+        "operationId": "change_numeric_pin_api_v1_auth_pin_change_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
         "parameters": [
           {
-            "name": "family_id",
-            "in": "path",
-            "required": true,
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
             "schema": {
-              "type": "string",
-              "title": "Family Id"
-            }
-          },
-          {
-            "name": "bind_token",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Bind Token"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeNumericPinRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/child/{child_id}/password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set Child Password",
+        "description": "Set or change a child's password. Allowed for family members (parents) or the child themselves.",
+        "operationId": "set_child_password_api_v1_auth_child__child_id__password_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "child_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Child Id"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChildPasswordRequest"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -4648,6 +4839,124 @@
         }
       }
     },
+    "/api/v1/family/economy-config": {
+      "get": {
+        "tags": [
+          "family"
+        ],
+        "summary": "Get Economy Config",
+        "description": "获取子经济配置（所有成员可查看）。",
+        "operationId": "get_economy_config_api_v1_family_economy_config_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildEconomyConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "family"
+        ],
+        "summary": "Update Economy Config",
+        "description": "更新子经济配置（仅 owner）。",
+        "operationId": "update_economy_config_api_v1_family_economy_config_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChildEconomyConfigUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChildEconomyConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/family/children/chore-stats": {
       "get": {
         "tags": [
@@ -5870,9 +6179,9 @@
         "tags": [
           "ai-config"
         ],
-        "summary": "Get Ai Config",
-        "description": "获取当前家庭 AI 配置（所有成员可查看）。",
-        "operationId": "get_ai_config_api_v1_ai_config_get",
+        "summary": "Get Ai Configs",
+        "description": "获取当前家庭所有 AI 配置（所有成员可查看）。",
+        "operationId": "get_ai_configs_api_v1_ai_config_get",
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -5902,7 +6211,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AIConfigResponse"
+                  "$ref": "#/components/schemas/AIConfigListResponse"
                 }
               }
             }
@@ -5919,19 +6228,93 @@
           }
         }
       },
-      "put": {
+      "post": {
         "tags": [
           "ai-config"
         ],
-        "summary": "Update Ai Config",
-        "description": "更新 AI 配置（仅 owner）。",
-        "operationId": "update_ai_config_api_v1_ai_config_put",
+        "summary": "Create Ai Config",
+        "description": "创建新 AI 配置（仅 owner）。",
+        "operationId": "create_ai_config_api_v1_ai_config_post",
         "security": [
           {
             "OAuth2PasswordBearer": []
           }
         ],
         "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AIConfigCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/config/{config_id}": {
+      "put": {
+        "tags": [
+          "ai-config"
+        ],
+        "summary": "Update Ai Config",
+        "description": "更新 AI 配置（仅 owner）。",
+        "operationId": "update_ai_config_api_v1_ai_config__config_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Config Id"
+            }
+          },
           {
             "name": "access_token",
             "in": "cookie",
@@ -5981,16 +6364,71 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "ai-config"
+        ],
+        "summary": "Delete Ai Config",
+        "description": "删除 AI 配置（仅 owner）。",
+        "operationId": "delete_ai_config_api_v1_ai_config__config_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "config_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Config Id"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
-    "/api/v1/ai/config/test": {
+    "/api/v1/ai/config/{config_id}/test": {
       "post": {
         "tags": [
           "ai-config"
         ],
         "summary": "Test Ai Config",
-        "description": "测试 AI API Key 连通性和模型能力（仅 owner）。\n\n分别测试：\n1. 主模型：连接测试 + 思考能力测试\n2. 图像模型（如果配置了且不同于主模型）：图像理解能力测试\n\n测试结果会持久化到数据库，供前端展示。",
-        "operationId": "test_ai_config_api_v1_ai_config_test_post",
+        "description": "测试指定 AI 配置的连通性和模型能力（仅 owner）。",
+        "operationId": "test_ai_config_api_v1_ai_config__config_id__test_post",
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -5998,225 +6436,14 @@
         ],
         "parameters": [
           {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
+            "name": "config_id",
+            "in": "path",
+            "required": true,
             "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIConfigTestResult"
-                }
-              }
+              "type": "integer",
+              "title": "Config Id"
             }
           },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/config/test/main": {
-      "post": {
-        "tags": [
-          "ai-config"
-        ],
-        "summary": "Test Main Model Only",
-        "description": "仅测试主模型连接。",
-        "operationId": "test_main_model_only_api_v1_ai_config_test_main_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIConfigTestResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/config/test/thinking": {
-      "post": {
-        "tags": [
-          "ai-config"
-        ],
-        "summary": "Test Thinking Only",
-        "description": "仅测试主模型思考能力。",
-        "operationId": "test_thinking_only_api_v1_ai_config_test_thinking_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIConfigTestResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/config/test/vision": {
-      "post": {
-        "tags": [
-          "ai-config"
-        ],
-        "summary": "Test Vision Model Only",
-        "description": "仅测试图像模型。",
-        "operationId": "test_vision_model_only_api_v1_ai_config_test_vision_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AIConfigTestResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/ai/config/test/vision/text": {
-      "post": {
-        "tags": [
-          "ai-config"
-        ],
-        "summary": "Test Vision Text Ocr",
-        "description": "测试图像模型 OCR 文本准确度（仅 owner）。\n\n使用嵌入的测试图片，验证模型能否正确识别文字 \"这是一个测试文本~\"。",
-        "operationId": "test_vision_text_ocr_api_v1_ai_config_test_vision_text_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
           {
             "name": "access_token",
             "in": "cookie",
@@ -6677,7 +6904,7 @@
           "internal-agent"
         ],
         "summary": "Internal Get Enabled Families",
-        "description": "返回所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。\n\n注意：verify_agent_token 要求 X-Family-Id header，定时任务调用时传入任意有效 family_id 即可。\n实际返回所有 ai_enabled 家庭，不受 family_id 过滤。",
+        "description": "返回所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。\n\n注意：verify_agent_token 要求 X-Family-Id header，定时任务调用时传入任意有效 family_id 即可。\n实际返回所有有激活 AIProviderConfig 的家庭，不受 family_id 过滤。",
         "operationId": "internal_get_enabled_families_api_v1_internal_ai_enabled_families_get",
         "parameters": [
           {
@@ -8341,60 +8568,6 @@
             "content": {
               "application/json": {
                 "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/family/child-bind-token": {
-      "post": {
-        "tags": [
-          "children"
-        ],
-        "summary": "Create Bind Token",
-        "operationId": "create_bind_token_api_v1_family_child_bind_token_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "access_token",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Access Token"
-            }
-          }
-        ],
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChildBindTokenResponse"
-                }
               }
             }
           },
@@ -11522,7 +11695,7 @@
           "device"
         ],
         "summary": "Trust Device",
-        "description": "Trust the current device — issue 30-day refresh token and create DeviceSession.",
+        "description": "Trust the current device — issue 30-day refresh token and create DeviceSession.\n\nOptionally accepts a browser fingerprint to enable fingerprint-based device detection.",
         "operationId": "trust_device_api_v1_auth_device_trust_post",
         "parameters": [
           {
@@ -11590,6 +11763,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DeviceTrustRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -11859,6 +12049,48 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/device/check": {
+      "post": {
+        "tags": [
+          "device"
+        ],
+        "summary": "Check Device",
+        "description": "Check if a device fingerprint is trusted. No auth required — used before login.",
+        "operationId": "check_device_api_v1_auth_device_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCheckResponse"
+                }
               }
             }
           },
@@ -12895,13 +13127,17 @@
   },
   "components": {
     "schemas": {
-      "AIConfigResponse": {
+      "AIConfigCreate": {
         "properties": {
-          "ai_enabled": {
-            "type": "boolean",
-            "title": "Ai Enabled"
+          "name": {
+            "type": "string",
+            "title": "Name"
           },
-          "ai_provider": {
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "ai_api_key": {
             "anyOf": [
               {
                 "type": "string"
@@ -12910,7 +13146,81 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Provider"
+            "title": "Ai Api Key"
+          },
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "vision_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision Model Id"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "provider"
+        ],
+        "title": "AIConfigCreate"
+      },
+      "AIConfigListResponse": {
+        "properties": {
+          "configs": {
+            "items": {
+              "$ref": "#/components/schemas/AIConfigResponse"
+            },
+            "type": "array",
+            "title": "Configs",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "AIConfigListResponse"
+      },
+      "AIConfigResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
           },
           "ai_api_key_masked": {
             "anyOf": [
@@ -12923,7 +13233,7 @@
             ],
             "title": "Ai Api Key Masked"
           },
-          "ai_base_url": {
+          "base_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -12932,9 +13242,9 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Base Url"
+            "title": "Base Url"
           },
-          "ai_model_id": {
+          "model_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -12943,9 +13253,9 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Model Id"
+            "title": "Model Id"
           },
-          "ai_vision_model_id": {
+          "vision_model_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -12954,197 +13264,27 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Vision Model Id"
+            "title": "Vision Model Id"
           },
-          "ai_test_connected": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Connected"
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
           },
-          "ai_test_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Message"
-          },
-          "ai_test_latency_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Latency Ms"
-          },
-          "ai_test_timestamp": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Timestamp"
-          },
-          "ai_test_thinking_success": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Thinking Success"
-          },
-          "ai_test_thinking_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Thinking Message"
-          },
-          "ai_test_thinking_latency_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Thinking Latency Ms"
-          },
-          "ai_test_thinking_timestamp": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Test Thinking Timestamp"
-          },
-          "ai_vision_test_success": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Test Success"
-          },
-          "ai_vision_test_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Test Message"
-          },
-          "ai_vision_test_latency_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Test Latency Ms"
-          },
-          "ai_vision_test_timestamp": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Test Timestamp"
-          },
-          "ai_vision_text_test_success": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Text Test Success"
-          },
-          "ai_vision_text_test_message": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Text Test Message"
-          },
-          "ai_vision_text_test_latency_ms": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Text Test Latency Ms"
-          },
-          "ai_vision_text_test_timestamp": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Vision Text Test Timestamp"
+          "test_results": {
+            "items": {
+              "$ref": "#/components/schemas/AIProviderTestResultResponse"
+            },
+            "type": "array",
+            "title": "Test Results",
+            "default": []
           }
         },
         "type": "object",
         "required": [
-          "ai_enabled",
-          "ai_provider",
-          "ai_api_key_masked",
-          "ai_base_url",
-          "ai_model_id",
-          "ai_vision_model_id"
+          "id",
+          "name",
+          "provider",
+          "is_active"
         ],
         "title": "AIConfigResponse"
       },
@@ -13278,18 +13418,7 @@
       },
       "AIConfigUpdate": {
         "properties": {
-          "ai_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ai Enabled"
-          },
-          "ai_provider": {
+          "name": {
             "anyOf": [
               {
                 "type": "string"
@@ -13298,7 +13427,18 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Provider"
+            "title": "Name"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
           },
           "ai_api_key": {
             "anyOf": [
@@ -13311,7 +13451,7 @@
             ],
             "title": "Ai Api Key"
           },
-          "ai_base_url": {
+          "base_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -13320,9 +13460,9 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Base Url"
+            "title": "Base Url"
           },
-          "ai_model_id": {
+          "model_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -13331,9 +13471,9 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Model Id"
+            "title": "Model Id"
           },
-          "ai_vision_model_id": {
+          "vision_model_id": {
             "anyOf": [
               {
                 "type": "string"
@@ -13342,11 +13482,82 @@
                 "type": "null"
               }
             ],
-            "title": "Ai Vision Model Id"
+            "title": "Vision Model Id"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
           }
         },
         "type": "object",
         "title": "AIConfigUpdate"
+      },
+      "AIProviderTestResultResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "test_type": {
+            "type": "string",
+            "title": "Test Type"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "latency_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latency Ms"
+          },
+          "tested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Tested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "test_type",
+          "success",
+          "message",
+          "latency_ms",
+          "tested_at"
+        ],
+        "title": "AIProviderTestResultResponse"
       },
       "AllocationItem": {
         "properties": {
@@ -13650,6 +13861,80 @@
           "asset_type"
         ],
         "title": "AssetCreate"
+      },
+      "AssetLifecycleEventResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type"
+          },
+          "event_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Event Date"
+          },
+          "sell_price": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Price"
+          },
+          "sell_fee": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Fee"
+          },
+          "sell_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sell Channel"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "event_type",
+          "event_date",
+          "created_at"
+        ],
+        "title": "AssetLifecycleEventResponse"
       },
       "AssetResponse": {
         "additionalProperties": true,
@@ -15069,6 +15354,24 @@
         "type": "object",
         "title": "CategoryUpdate"
       },
+      "ChangeNumericPinRequest": {
+        "properties": {
+          "old_pin": {
+            "type": "string",
+            "title": "Old Pin"
+          },
+          "new_pin": {
+            "type": "string",
+            "title": "New Pin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_pin",
+          "new_pin"
+        ],
+        "title": "ChangeNumericPinRequest"
+      },
       "ChangePasswordRequest": {
         "properties": {
           "old_password": {
@@ -15124,28 +15427,67 @@
         ],
         "title": "ChildBalanceResponse"
       },
-      "ChildBindTokenResponse": {
+      "ChildEconomyConfigResponse": {
         "properties": {
-          "token": {
-            "type": "string",
-            "title": "Token"
+          "auto_approve_hours": {
+            "type": "integer",
+            "title": "Auto Approve Hours"
           },
-          "expires_at": {
-            "type": "string",
-            "title": "Expires At"
+          "coin_copper_to_silver": {
+            "type": "integer",
+            "title": "Coin Copper To Silver"
           },
-          "bind_url": {
-            "type": "string",
-            "title": "Bind Url"
+          "coin_silver_to_gold": {
+            "type": "integer",
+            "title": "Coin Silver To Gold"
           }
         },
         "type": "object",
         "required": [
-          "token",
-          "expires_at",
-          "bind_url"
+          "auto_approve_hours",
+          "coin_copper_to_silver",
+          "coin_silver_to_gold"
         ],
-        "title": "ChildBindTokenResponse"
+        "title": "ChildEconomyConfigResponse"
+      },
+      "ChildEconomyConfigUpdate": {
+        "properties": {
+          "auto_approve_hours": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Approve Hours"
+          },
+          "coin_copper_to_silver": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coin Copper To Silver"
+          },
+          "coin_silver_to_gold": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coin Silver To Gold"
+          }
+        },
+        "type": "object",
+        "title": "ChildEconomyConfigUpdate"
       },
       "ChildPinLoginRequest": {
         "properties": {
@@ -15199,6 +15541,47 @@
       "ChildResponse": {
         "additionalProperties": true,
         "type": "object"
+      },
+      "ChildWishCostHistoryItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "old_cost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Old Cost"
+          },
+          "new_cost": {
+            "type": "integer",
+            "title": "New Cost"
+          },
+          "changed_by_user_id": {
+            "type": "integer",
+            "title": "Changed By User Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "old_cost",
+          "new_cost",
+          "changed_by_user_id",
+          "created_at"
+        ],
+        "title": "ChildWishCostHistoryItem"
       },
       "ChildWishCreate": {
         "properties": {
@@ -15603,6 +15986,10 @@
             "type": "string",
             "title": "Display Name"
           },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
           "avatar_color": {
             "type": "string",
             "title": "Avatar Color",
@@ -15620,6 +16007,7 @@
         "required": [
           "username",
           "display_name",
+          "password",
           "pin"
         ],
         "title": "CreateChildRequest"
@@ -15719,6 +16107,71 @@
           "total_cost"
         ],
         "title": "DailyCostItem"
+      },
+      "DeviceCheckRequest": {
+        "properties": {
+          "fingerprint": {
+            "type": "string",
+            "title": "Fingerprint"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fingerprint"
+        ],
+        "title": "DeviceCheckRequest"
+      },
+      "DeviceCheckResponse": {
+        "properties": {
+          "trusted": {
+            "type": "boolean",
+            "title": "Trusted"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trusted"
+        ],
+        "title": "DeviceCheckResponse"
+      },
+      "DeviceTrustRequest": {
+        "properties": {
+          "fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fingerprint"
+          }
+        },
+        "type": "object",
+        "title": "DeviceTrustRequest"
       },
       "DrawRequest": {
         "properties": {
@@ -16537,6 +16990,154 @@
         ],
         "title": "LoginRequest"
       },
+      "LoginStep1Request": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "altcha": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Altcha"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginStep1Request"
+      },
+      "LoginStep1Response": {
+        "properties": {
+          "temp_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temp Token"
+          },
+          "second_factor_required": {
+            "type": "boolean",
+            "title": "Second Factor Required"
+          },
+          "second_factor_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Factor Type"
+          },
+          "access_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "avatar_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Color"
+          }
+        },
+        "type": "object",
+        "required": [
+          "second_factor_required"
+        ],
+        "title": "LoginStep1Response"
+      },
+      "LoginStep2Request": {
+        "properties": {
+          "temp_token": {
+            "type": "string",
+            "title": "Temp Token"
+          },
+          "factor_type": {
+            "type": "string",
+            "title": "Factor Type"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "temp_token",
+          "factor_type",
+          "payload"
+        ],
+        "title": "LoginStep2Request"
+      },
       "LowUsageItem": {
         "properties": {
           "id": {
@@ -17345,6 +17946,32 @@
         "type": "object",
         "title": "ReminderSummary",
         "description": "总览页摘要：各类型 active 数量"
+      },
+      "SetChildPasswordRequest": {
+        "properties": {
+          "new_password": {
+            "type": "string",
+            "title": "New Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "new_password"
+        ],
+        "title": "SetChildPasswordRequest"
+      },
+      "SetupNumericPinRequest": {
+        "properties": {
+          "pin": {
+            "type": "string",
+            "title": "Pin"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pin"
+        ],
+        "title": "SetupNumericPinRequest"
       },
       "SiblingResponse": {
         "additionalProperties": true,
