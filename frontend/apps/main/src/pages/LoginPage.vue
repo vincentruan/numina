@@ -232,7 +232,7 @@ function backToStep1() {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding-top: 15vh;
+  padding-top: min(15vh, 60px);
   position: relative;
   overflow: hidden;
 }
