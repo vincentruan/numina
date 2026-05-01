@@ -29,10 +29,21 @@ services:
       - "8000"
 
   frontend:
-    build: ./frontend/apps/main
+    build:
+      context: .
+      dockerfile: frontend/apps/main/Dockerfile
     container_name: numina-frontend
     restart: unless-stopped
     # Don't expose frontend port externally
+    expose:
+      - "80"
+
+  frontend-child:
+    build:
+      context: .
+      dockerfile: frontend/apps/child/Dockerfile
+    container_name: numina-frontend-child
+    restart: unless-stopped
     expose:
       - "80"
 
@@ -49,3 +60,4 @@ services:
     depends_on:
       - backend
       - frontend
+      - frontend-child
