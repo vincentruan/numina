@@ -85,7 +85,7 @@ const { t } = useI18n()
 const hasTarget = ref(false)
 const editingTarget = ref(false)
 const checking = ref(false)
-const driftResult = ref<any>(null)
+const driftResult = ref<Record<string, unknown> | null>(null)
 
 // Default categories to configure
 const DEFAULT_CATEGORIES = ['实物资产', '金融资产', '其他']
@@ -106,8 +106,9 @@ async function onSaveTarget() {
     hasTarget.value = true
     editingTarget.value = false
     showToast(t('toast.aiTargetSaved'))
-  } catch (e: any) {
-    showToast(e.response?.data?.detail || '保存失败')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    showToast(err.response?.data?.detail || '保存失败')
   }
 }
 

@@ -50,10 +50,10 @@
             />
             <van-field
               :model-value="item.current_value ?? undefined"
-              @update:model-value="(v) => (item.current_value = v === '' ? null : Number(v))"
               :label="t('importReport.currentValue')"
               type="number"
               :placeholder="t('importReport.enterValue')"
+              @update:model-value="(v) => (item.current_value = v === '' ? null : Number(v))"
             />
           </div>
           <div class="item-meta">

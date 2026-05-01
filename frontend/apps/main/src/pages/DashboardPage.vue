@@ -392,7 +392,7 @@ async function handleBatchTag() {
   showToast(t('toast.assetEditTagHint'))
 }
 
-async function onMoreActionSelect(action: any) {
+async function onMoreActionSelect(action: { value: string }) {
   if (selectedIds.value.length === 0) {
     showToast(t('toast.assetSelectFirst'))
     return

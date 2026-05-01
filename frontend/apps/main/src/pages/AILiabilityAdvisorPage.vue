@@ -94,7 +94,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const analyzing = ref(false)
-const data = ref<any>(null)
+const data = ref<Record<string, unknown> | null>(null)
 const activeTab = ref(0)
 
 const STRATEGY_SHORT: Record<string, string> = {
@@ -119,7 +119,7 @@ async function onAnalyze() {
     data.value = res.data
     // Default to recommended strategy tab
     if (data.value?.recommended_strategy) {
-      const idx = (data.value.strategies ?? []).findIndex((s: any) => s.strategy === data.value.recommended_strategy)
+      const idx = (data.value.strategies as { strategy: string }[] ?? []).findIndex((s) => s.strategy === data.value?.recommended_strategy)
       if (idx >= 0) activeTab.value = idx
     }
   } catch {

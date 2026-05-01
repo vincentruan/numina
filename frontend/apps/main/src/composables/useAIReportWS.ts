@@ -6,7 +6,7 @@ export type WSStatus = 'idle' | 'connecting' | 'analyzing' | 'completed' | 'erro
 export function useAIReportWS() {
   const status = ref<WSStatus>('idle')
   const progressMessage = ref('')
-  const report = ref<Record<string, any> | null>(null)
+  const report = ref<Record<string, unknown> | null>(null)
   const generatedAt = ref<string | null>(null)
   const errorMessage = ref('')
 

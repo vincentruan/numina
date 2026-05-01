@@ -109,10 +109,11 @@ async function onSubmit() {
     await authStore.joinFamily(form.value)
     showToast(t('toast.joinSuccess'))
     router.push('/')
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle captcha-related errors
-    const code = error.response?.data?.code || ''
-    const status = error.response?.status
+    const err = error as { response?: { data?: { code?: string }; status?: number } }
+    const code = err.response?.data?.code || ''
+    const status = err.response?.status
 
     if (code.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()

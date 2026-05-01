@@ -278,7 +278,7 @@ const emit = defineEmits<{
   submit: [data: Partial<Asset>]
 }>()
 
-const form = ref<Record<string, any>>({
+const form = ref<Record<string, string | number | boolean | null | undefined>>({
   name: '',
   asset_type: 'physical',
   category_id: '',
@@ -504,28 +504,28 @@ const statusDisplayMap: Record<string, string> = {
 }
 const statusDisplay = computed(() => statusDisplayMap[form.value.status] || '')
 
-function onDateConfirm({ selectedValues }: any) {
+function onDateConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.purchase_date = selectedValues.join('-')
   showDatePicker.value = false
 }
 
-function onMaturityConfirm({ selectedValues }: any) {
+function onMaturityConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.maturity_date = selectedValues.join('-')
   showMaturityPicker.value = false
 }
 
-function onWarrantyConfirm({ selectedValues }: any) {
+function onWarrantyConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.warranty_expiry_date = selectedValues.join('-')
   showWarrantyPicker.value = false
 }
 
-function onStatusConfirm({ selectedOptions }: any) {
+function onStatusConfirm({ selectedOptions }: { selectedOptions: { value: string }[] }) {
   form.value.status = selectedOptions[0].value
   showStatusPicker.value = false
 }
 
 // Image upload handlers
-async function afterRead(file: any) {
+async function afterRead(file: { file: File; status: string; message?: string }) {
   file.status = 'uploading'
   try {
     const res = await uploadImage(file.file)

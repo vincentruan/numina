@@ -61,11 +61,21 @@ import { useI18n } from 'vue-i18n'
 import { getDisposalSuggestions, refreshDisposalSuggestions, dismissDisposalSuggestion } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 
+interface DisposalSuggestion {
+  id: number
+  asset_name: string
+  score: number
+  reason: string
+  resale_range?: string
+  channels?: string[]
+  [key: string]: unknown
+}
+
 const { t } = useI18n()
 
 const loading = ref(false)
 const refreshing = ref(false)
-const suggestions = ref<any[]>([])
+const suggestions = ref<DisposalSuggestion[]>([])
 
 function scoreClass(score: number) {
   if (score >= 70) return 'score-high'

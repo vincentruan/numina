@@ -143,7 +143,7 @@ const { t } = useI18n()
 const aiStore = useAIStore()
 const ws = useAIReportWS()
 
-const currentReport = ref<Record<string, any> | null>(null)
+const currentReport = ref<Record<string, unknown> | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const generating = ref(false)
 

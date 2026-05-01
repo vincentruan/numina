@@ -152,13 +152,14 @@ async function onSubmit() {
     await authStore.register(form.value)
     showToast(t('toast.registerSuccess'))
     router.push('/')
-  } catch (error: any) {
+  } catch (error: unknown) {
     // Handle field-level validation errors (422)
     setErrors(error)
 
     // Handle captcha-related errors
-    const code = error.response?.data?.code || ''
-    const status = error.response?.status
+    const err = error as { response?: { data?: { code?: string }; status?: number } }
+    const code = err.response?.data?.code || ''
+    const status = err.response?.status
 
     if (code.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()

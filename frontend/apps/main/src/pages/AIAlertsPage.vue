@@ -49,11 +49,19 @@ import { useI18n } from 'vue-i18n'
 import { getAssetAlerts, refreshAssetAlerts, dismissAssetAlert } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 
+interface Alert {
+  id: number
+  alert_type: string
+  asset_name: string
+  message: string
+  [key: string]: unknown
+}
+
 const { t } = useI18n()
 
 const loading = ref(false)
 const refreshing = ref(false)
-const alerts = ref<any[]>([])
+const alerts = ref<Alert[]>([])
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
   aging: '即将到期',

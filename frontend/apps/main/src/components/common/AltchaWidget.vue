@@ -130,7 +130,7 @@ function triggerVerification() {
   if (state.value !== 'idle' && state.value !== 'error') return
   // The hidden altcha-widget handles the actual challenge automatically (auto="onload")
   // For manual trigger on click, we reset and let it re-run
-  const widget = document.querySelector('altcha-widget') as any
+  const widget = document.querySelector('altcha-widget') as HTMLElement & { reset?: () => void; verify?: () => void }
   if (widget) {
     if (widget.reset) widget.reset()
     // Trigger the widget's internal verification
@@ -199,7 +199,7 @@ onMounted(async () => {
 defineExpose({
   reset: () => {
     if (captchaEnabled.value) {
-      const widget = document.querySelector('altcha-widget') as any
+      const widget = document.querySelector('altcha-widget') as HTMLElement & { reset?: () => void; verify?: () => void }
       if (widget?.reset) widget.reset()
       emit('update:modelValue', undefined)
       state.value = 'idle'

@@ -134,7 +134,7 @@ const emit = defineEmits<{
   submit: [data: Partial<Liability>]
 }>()
 
-const form = ref<Record<string, any>>({
+const form = ref<Record<string, string | number | boolean | null | undefined>>({
   name: '',
   category: 'mortgage',
   original_amount: '',
@@ -205,17 +205,17 @@ const categoryDisplayMap: Record<string, string> = {
 
 const categoryDisplay = computed(() => categoryDisplayMap[form.value.category] || '')
 
-function onCategoryConfirm({ selectedOptions }: any) {
+function onCategoryConfirm({ selectedOptions }: { selectedOptions: { value: string }[] }) {
   form.value.category = selectedOptions[0].value
   showCategoryPicker.value = false
 }
 
-function onStartConfirm({ selectedValues }: any) {
+function onStartConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.start_date = selectedValues.join('-')
   showStartPicker.value = false
 }
 
-function onEndConfirm({ selectedValues }: any) {
+function onEndConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.value.end_date = selectedValues.join('-')
   showEndPicker.value = false
 }
