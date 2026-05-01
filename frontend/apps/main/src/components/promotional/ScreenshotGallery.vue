@@ -22,7 +22,7 @@
 import { ref } from 'vue'
 
 interface Props {
-  screenshots: string[]
+  screenshots?: string[]
   autoplay?: boolean
   interval?: number
 }

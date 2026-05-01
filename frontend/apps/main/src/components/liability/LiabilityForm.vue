@@ -125,6 +125,7 @@ const props = withDefaults(defineProps<{
   isEdit?: boolean
   loading?: boolean
 }>(), {
+  initialData: undefined,
   isEdit: false,
   loading: false
 })

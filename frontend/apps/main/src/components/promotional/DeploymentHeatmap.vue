@@ -26,7 +26,7 @@ interface DeploymentOption {
 }
 
 interface Props {
-  options: DeploymentOption[]
+  options?: DeploymentOption[]
   columnNum?: number
 }
 
