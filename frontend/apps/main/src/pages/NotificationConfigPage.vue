@@ -100,7 +100,7 @@
     </div>
   </van-popup>
 
-  <van-popup v-model:show="showTypePicker" position="bottom" round>
+  <van-popup v-model:show="showTypePicker" position="bottom" round :teleport="'body'" :z-index="3000">
     <van-picker
       :columns="typePickerColumns"
       @confirm="onTypeConfirm"
