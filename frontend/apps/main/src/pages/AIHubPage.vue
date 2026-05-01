@@ -100,6 +100,7 @@
           :aria-label="feat.title + '：' + feat.desc"
           @click="$router.push(feat.route)"
         >
+          <!-- eslint-disable-next-line vue/no-v-html -- feat.svg is a static local SVG constant -->
           <div class="feature-icon" aria-hidden="true" v-html="feat.svg"></div>
           <span class="feature-title">{{ feat.title }}</span>
           <span class="feature-desc">{{ feat.desc }}</span>

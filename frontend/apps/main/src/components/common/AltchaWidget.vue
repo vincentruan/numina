@@ -86,6 +86,7 @@
       </div>
 
       <!-- Hidden altcha-widget for challenge/payload — never visible, not keyboard-reachable -->
+      <!-- eslint-disable-next-line vue/no-v-html -- widgetHtml is a static template literal, no user input -->
       <div class="altcha-hidden" v-html="widgetHtml"></div>
     </template>
   </div>
@@ -153,7 +154,7 @@ const setupWidgetListeners = (retries = 0) => {
     return
   }
 
-  widget.addEventListener('statechange', ((event: Event) => {
+  widget.addEventListener('statechange', (event: Event) => {
     const customEvent = event as CustomEvent
     const s = customEvent.detail?.state?.toString().toUpperCase()
 
@@ -175,7 +176,7 @@ const setupWidgetListeners = (retries = 0) => {
     } else if (s === 'UNVERIFIED') {
       state.value = 'idle'
     }
-  }) as EventListener)
+  })
 }
 
 onMounted(async () => {

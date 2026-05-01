@@ -111,13 +111,16 @@
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </button>
+                  <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                   <div v-if="msg.thinkOpen" class="think-content" v-html="msg.thinkContent" />
                 </div>
+                <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
                   v-if="msg.role === 'assistant'"
                   class="bubble-text"
                   v-html="msg.renderedContent ?? ''"
                 />
+                <!-- eslint-enable vue/no-v-html -->
                 <div v-else class="bubble-text">{{ msg.content }}</div>
                 <span class="msg-time">{{ msg.displayTime }}</span>
                 <!-- Assistant message actions -->
@@ -432,7 +435,7 @@ async function onSend() {
       messages.value.push(errMsg)
     }
   } finally {
-    if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
+    if (thinkTimer) { clearInterval(thinkTimer) }
     if (asking.value) {
       asking.value = false
       abortController = null
