@@ -25,22 +25,22 @@
           :month-over-month-change="overview?.month_over_month_change"
         />
 
-        <!-- Trend Chart -->
-        <van-cell-group inset class="chart-section">
-          <van-collapse v-model="trendExpanded" @change="toggleTrend">
-            <van-collapse-item title="资产趋势" name="trend">
-              <TrendLineChart v-if="dashboardStore.trend.length" :data="dashboardStore.trend" />
-              <van-empty v-else description="暂无数据" image-size="60" />
-            </van-collapse-item>
-          </van-collapse>
-        </van-cell-group>
-
         <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
         <SmartRemindersCard
           :idle-assets="dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle')"
           :expiring-assets="dashboardStore.expiringSoonAssets"
           @select-status="onStatusSelect"
         />
+
+        <!-- Trend Chart -->
+        <van-cell-group inset class="chart-section">
+          <van-collapse v-model="trendExpanded" @change="toggleTrend">
+            <van-collapse-item title="资产趋势" name="trend">
+              <TrendLineChart v-if="dashboardStore.trend.length" :data="dashboardStore.trend" @period-change="onTrendPeriodChange" />
+              <van-empty v-else description="暂无数据" image-size="60" />
+            </van-collapse-item>
+          </van-collapse>
+        </van-cell-group>
 
         <!-- Allocation Chart -->
         <van-cell-group inset class="chart-section">
@@ -449,6 +449,10 @@ function handleScroll() {
     // Show category nav when overview card is scrolled out of view
     showCategoryNav.value = rect.bottom < 0 && categories.value.length > 1
   }
+}
+
+function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
+  dashboardStore.fetchTrend(period)
 }
 
 function toggleTrend() {

@@ -60,95 +60,184 @@ const changeText = computed(() => {
 </script>
 
 <style scoped>
+/* Light mode: Pastel Cloud Gradient (pink → lavender → soft blue) over white canvas */
 .overview-card {
-  background: var(--color-primary);
+  background:
+    linear-gradient(135deg,
+      rgba(239, 44, 193, 0.10) 0%,
+      rgba(189, 187, 255, 0.18) 45%,
+      rgba(160, 195, 255, 0.14) 100%),
+    #ffffff;
   padding: 20px 16px 16px;
-  color: var(--color-on-primary);
+  color: #000000;
+  position: relative;
+  overflow: hidden;
 }
+
+/* Decorative soft blob — painterly cloud effect */
+.overview-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -30px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.22) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+/* Dark mode: midnight blue surface with subtle lavender gradient overlay */
 [data-theme='dark'] .overview-card {
-  background: #010120;
+  background:
+    linear-gradient(135deg,
+      rgba(189, 187, 255, 0.08) 0%,
+      rgba(189, 187, 255, 0.04) 50%,
+      transparent 100%),
+    #010120;
+  color: #ffffff;
 }
+[data-theme='dark'] .overview-card::before {
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
+}
+
 .ov-main {
   display: flex;
   flex-direction: column;
+  position: relative;
 }
+
+/* Mono label — PP Neue Montreal Mono style: uppercase, tight tracking */
 .ov-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.5px;
-  opacity: 0.65;
+  letter-spacing: 0.055px;
   text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  font-family: 'Georgia', monospace;
 }
+[data-theme='dark'] .ov-label {
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .ov-amount {
   margin: 6px 0 8px;
 }
+
+/* Display number: large, tight negative tracking per design system */
 .ov-amount :deep(.money-display) {
-  color: #fff;
+  color: #000000;
   font-size: clamp(28px, 8vw, 36px);
   font-weight: 500;
   letter-spacing: -0.03em;
+  line-height: 1.05;
 }
+[data-theme='dark'] .ov-amount :deep(.money-display) {
+  color: #ffffff;
+}
+
 .ov-sub-row {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 13px;
-  opacity: 0.85;
 }
+
+/* Badge style: sharp 4px radius, glass-dark on light / glass-light on dark */
 .ov-daily {
-  background: rgba(255, 119, 89, 0.25);
-  color: var(--color-coral-soft);
-  padding: 3px 10px;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  padding: 2px 8px;
   border-radius: 4px;
   font-size: 12px;
   font-weight: 500;
 }
+[data-theme='dark'] .ov-daily {
+  background: rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.70);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
 .ov-count {
   font-size: 13px;
-  opacity: 0.75;
+  color: rgba(0, 0, 0, 0.50);
 }
+[data-theme='dark'] .ov-count {
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .ov-change.positive {
-  color: #6ee7a0;
+  color: #059669;
   font-weight: 500;
+}
+[data-theme='dark'] .ov-change.positive {
+  color: #6ee7a0;
 }
 .ov-change.negative {
-  color: var(--color-coral-soft);
+  color: #dc2626;
   font-weight: 500;
 }
+[data-theme='dark'] .ov-change.negative {
+  color: #fca5a5;
+}
+
+/* Stats row: glass container, sharp 8px radius, dark-blue-tinted shadow */
 .ov-detail {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
   padding: 12px 16px;
   margin-top: 12px;
+  box-shadow: rgba(1, 1, 32, 0.08) 0px 2px 8px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 [data-theme='dark'] .ov-detail {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: rgba(1, 1, 32, 0.4) 0px 2px 8px;
 }
+
 .ov-detail-item {
   flex: 1;
   text-align: center;
 }
+
 .ov-detail-label {
-  font-size: 12px;
-  opacity: 0.6;
-  letter-spacing: 0.3px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.40);
+  font-family: 'Georgia', monospace;
 }
+[data-theme='dark'] .ov-detail-label {
+  color: rgba(255, 255, 255, 0.40);
+}
+
 .ov-detail-value {
   margin-top: 4px;
 }
 .ov-detail-value :deep(.money-display) {
-  color: #fff;
+  color: #000000;
   font-size: 16px;
   font-weight: 500;
+  letter-spacing: -0.16px;
 }
+[data-theme='dark'] .ov-detail-value :deep(.money-display) {
+  color: #ffffff;
+}
+
 .ov-detail-divider {
   width: 1px;
   height: 28px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.10);
+}
+[data-theme='dark'] .ov-detail-divider {
+  background: rgba(255, 255, 255, 0.12);
 }
 </style>
