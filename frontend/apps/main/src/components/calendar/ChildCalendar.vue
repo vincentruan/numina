@@ -103,11 +103,11 @@ function dayTotal(day: CalendarDaySummary): number {
 
 function heatColor(day: CalendarDaySummary): string {
   const total = dayTotal(day)
-  if (total === 0) return '#ffffff'
-  if (total === 1) return '#fff3e0'
-  if (total <= 3) return '#ffe0b2'
-  if (total <= 6) return '#ffb74d'
-  return '#f5a623'
+  if (total === 0) return ''
+  if (total === 1) return 'var(--cal-heat-1)'
+  if (total <= 3) return 'var(--cal-heat-2)'
+  if (total <= 6) return 'var(--cal-heat-3)'
+  return 'var(--cal-heat-4)'
 }
 
 function isDark(day: CalendarDaySummary): boolean {
@@ -197,8 +197,49 @@ onMounted(loadMonth)
 </script>
 
 <style scoped>
+/* ── CSS variables (light defaults) ── */
 .child-calendar {
-  background: #fff;
+  --cal-bg: #fff;
+  --cal-title-color: #1a1a1a;
+  --cal-nav-bg: #f5f5f5;
+  --cal-nav-bg-active: #e8e8e8;
+  --cal-nav-color: #555;
+  --cal-weekday-color: #999;
+  --cal-day-color: #1a1a1a;
+  --cal-legend-border: #f0f0f0;
+  --cal-legend-color: #888;
+  --cal-stats-color: #aaa;
+  --cal-stats-sep: #ddd;
+  --cal-heat-1: #fff3e0;
+  --cal-heat-2: #ffe0b2;
+  --cal-heat-3: #ffb74d;
+  --cal-heat-4: #f5a623;
+  --cal-dot-dark-shadow: #fff;
+}
+
+/* ── Dark mode overrides ── */
+:global([data-theme='dark']) .child-calendar,
+:global(.dark) .child-calendar {
+  --cal-bg: #1a1a2e;
+  --cal-title-color: #f0f0f0;
+  --cal-nav-bg: rgba(255, 255, 255, 0.08);
+  --cal-nav-bg-active: rgba(255, 255, 255, 0.14);
+  --cal-nav-color: #c8c8d0;
+  --cal-weekday-color: rgba(255, 255, 255, 0.45);
+  --cal-day-color: #e8e8f0;
+  --cal-legend-border: rgba(255, 255, 255, 0.08);
+  --cal-legend-color: rgba(255, 255, 255, 0.5);
+  --cal-stats-color: rgba(255, 255, 255, 0.45);
+  --cal-stats-sep: rgba(255, 255, 255, 0.2);
+  --cal-heat-1: rgba(245, 166, 35, 0.15);
+  --cal-heat-2: rgba(245, 166, 35, 0.28);
+  --cal-heat-3: rgba(245, 166, 35, 0.5);
+  --cal-heat-4: rgba(245, 166, 35, 0.75);
+  --cal-dot-dark-shadow: rgba(26, 26, 46, 0.8);
+}
+
+.child-calendar {
+  background: var(--cal-bg);
   border-radius: 12px;
   padding: 12px;
 }
@@ -213,16 +254,16 @@ onMounted(loadMonth)
 .cal-title {
   font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: var(--cal-title-color);
 }
 .nav-btn {
   width: 44px;
   height: 44px;
   border: none;
-  background: #f5f5f5;
+  background: var(--cal-nav-bg);
   border-radius: 10px;
   font-size: 20px;
-  color: #555;
+  color: var(--cal-nav-color);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -230,7 +271,7 @@ onMounted(loadMonth)
   -webkit-tap-highlight-color: transparent;
 }
 .nav-btn:active {
-  background: #e8e8e8;
+  background: var(--cal-nav-bg-active);
 }
 
 /* Weekday row */
@@ -242,7 +283,7 @@ onMounted(loadMonth)
 .cal-weekdays span {
   text-align: center;
   font-size: 11px;
-  color: #999;
+  color: var(--cal-weekday-color);
   padding: 4px 0;
 }
 
@@ -297,7 +338,7 @@ onMounted(loadMonth)
 
 .day-num {
   font-size: 13px;
-  color: #1a1a1a;
+  color: var(--cal-day-color);
   line-height: 1;
   width: 26px;
   height: 26px;
@@ -324,9 +365,9 @@ onMounted(loadMonth)
 .dot-wish  { background: #f5a623; }
 .dot-milestone { background: #9c27b0; }
 
-/* 深色背景时圆点加白描边 */
+/* 深色背景时圆点加描边 */
 .dot-dark .dot {
-  box-shadow: 0 0 0 1px #fff;
+  box-shadow: 0 0 0 1px var(--cal-dot-dark-shadow);
 }
 
 .dot-wrap {
@@ -367,14 +408,14 @@ onMounted(loadMonth)
   justify-content: center;
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--cal-legend-border);
 }
 .legend-item {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: #888;
+  color: var(--cal-legend-color);
 }
 
 /* Stats bar */
@@ -386,9 +427,9 @@ onMounted(loadMonth)
   gap: 4px;
   margin-top: 8px;
   font-size: 11px;
-  color: #aaa;
+  color: var(--cal-stats-color);
 }
-.stats-sep { color: #ddd; }
+.stats-sep { color: var(--cal-stats-sep); }
 .stats-rate { color: #f5a623; font-weight: 600; }
 
 /* Streak connector */
