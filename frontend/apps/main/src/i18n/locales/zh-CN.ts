@@ -36,7 +36,9 @@ export default {
     topAssets: '高价值资产',
     dailyCostRanking: '日均成本排行',
     lowUsage: '低使用率资产',
-    returns: '投资收益'
+    returns: '投资收益',
+    fabAddAsset: '添加资产',
+    fabImportBill: '导入账单'
   },
   asset: {
     title: '资产',
@@ -118,8 +120,6 @@ export default {
     dataManagement: '数据管理',
     categoryManage: '分类管理',
     tagManage: '标签管理',
-    importReport: '导入账单',
-    importReportLabel: '从 PDF 账单智能导入持仓数据',
     userSettings: '用户设置',
     theme: '主题模式',
     themeLight: '浅色模式',

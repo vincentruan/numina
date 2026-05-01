@@ -133,10 +133,49 @@
       <div class="bottom-spacer" />
     </van-pull-refresh>
 
-    <!-- Add Asset FAB -->
-    <div v-if="!selectionMode" class="fab" aria-label="添加资产" @click="$router.push('/assets/new')">
-      <van-icon name="plus" size="22" />
-    </div>
+    <!-- FAB Menu -->
+    <template v-if="!selectionMode">
+      <!-- Backdrop -->
+      <transition name="fab-backdrop">
+        <div v-if="fabMenuOpen" class="fab-backdrop" aria-hidden="true" @click="fabMenuOpen = false" />
+      </transition>
+      <!-- Menu items -->
+      <transition name="fab-menu">
+        <div v-if="fabMenuOpen" class="fab-menu" role="menu" aria-label="快捷操作">
+          <button
+            class="fab-menu-item"
+            role="menuitem"
+            @click="onFabAction('import')"
+          >
+            <span class="fab-menu-label">{{ t('dashboard.fabImportBill') }}</span>
+            <span class="fab-menu-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            </span>
+          </button>
+          <button
+            class="fab-menu-item"
+            role="menuitem"
+            @click="onFabAction('add')"
+          >
+            <span class="fab-menu-label">{{ t('dashboard.fabAddAsset') }}</span>
+            <span class="fab-menu-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>
+            </span>
+          </button>
+        </div>
+      </transition>
+      <!-- FAB button -->
+      <button
+        class="fab"
+        :class="{ 'fab--open': fabMenuOpen }"
+        :aria-label="fabMenuOpen ? t('common.close') : t('dashboard.fabAddAsset')"
+        :aria-expanded="fabMenuOpen"
+        aria-haspopup="menu"
+        @click="fabMenuOpen = !fabMenuOpen"
+      >
+        <van-icon name="plus" size="22" class="fab-icon" />
+      </button>
+    </template>
 
     <!-- More Actions Sheet -->
     <van-action-sheet
@@ -195,6 +234,18 @@ const selectAll = ref(false)
 
 // Toolbar
 const showMoreActions = ref(false)
+
+// FAB menu
+const fabMenuOpen = ref(false)
+
+function onFabAction(action: 'add' | 'import') {
+  fabMenuOpen.value = false
+  if (action === 'add') {
+    router.push('/assets/new')
+  } else {
+    router.push('/settings/import-report')
+  }
+}
 
 const overview = computed(() => dashboardStore.overview)
 const categories = computed(() => categoryStore.categories)
@@ -630,10 +681,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   box-shadow: var(--shadow-elevated);
-  z-index: 10;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  z-index: 20;
   cursor: pointer;
   border: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
 }
 
 .fab:active {
@@ -641,10 +692,110 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(23, 23, 28, 0.25);
 }
 
+.fab-icon {
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.fab--open .fab-icon {
+  transform: rotate(45deg);
+}
+
 [data-theme='dark'] .fab {
   background: var(--color-lavender);
   color: #ffffff;
   box-shadow: 0 4px 20px rgba(189, 187, 255, 0.3);
+}
+
+/* FAB backdrop */
+.fab-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.fab-backdrop-enter-active,
+.fab-backdrop-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.fab-backdrop-enter-from,
+.fab-backdrop-leave-to {
+  opacity: 0;
+}
+
+/* FAB menu */
+.fab-menu {
+  position: fixed;
+  right: 16px;
+  bottom: 132px;
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.fab-menu-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.fab-menu-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.fab-menu-enter-from,
+.fab-menu-leave-to {
+  opacity: 0;
+  transform: translateY(12px) scale(0.92);
+}
+
+.fab-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card-bg, #fff);
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px 10px 16px;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(1, 1, 32, 0.12);
+  min-height: 44px;
+  white-space: nowrap;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.fab-menu-item:active {
+  transform: scale(0.97);
+  box-shadow: 0 1px 6px rgba(1, 1, 32, 0.1);
+}
+
+.fab-menu-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.fab-menu-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12) 0%, rgba(124, 58, 237, 0.12) 100%);
+  color: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .fab-menu-item {
+  background: #1a1a3a;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme='dark'] .fab-menu-icon {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.15) 0%, rgba(124, 58, 237, 0.15) 100%);
+  color: var(--color-lavender);
 }
 
 .chart-section {

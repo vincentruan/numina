@@ -5,13 +5,6 @@
     <van-cell-group inset :title="t('settings.dataManagement')">
       <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
       <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
-      <van-cell
-        :title="t('settings.importReport')"
-        :label="t('settings.importReportLabel')"
-        icon="description"
-        is-link
-        to="/settings/import-report"
-      />
     </van-cell-group>
 
     <van-cell-group inset title="AI 配置" class="section">

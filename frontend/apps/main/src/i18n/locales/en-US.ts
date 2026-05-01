@@ -36,7 +36,9 @@ export default {
     topAssets: 'Top Assets',
     dailyCostRanking: 'Daily Cost Ranking',
     lowUsage: 'Low Usage Assets',
-    returns: 'Investment Returns'
+    returns: 'Investment Returns',
+    fabAddAsset: 'Add Asset',
+    fabImportBill: 'Import Statement'
   },
   asset: {
     title: 'Assets',
@@ -100,8 +102,6 @@ export default {
     dataManagement: 'Data Management',
     categoryManage: 'Category Management',
     tagManage: 'Tag Management',
-    importReport: 'Import Statement',
-    importReportLabel: 'Import holdings from PDF financial statements',
     userSettings: 'User Settings',
     theme: 'Theme',
     themeLight: 'Light',
