@@ -17,6 +17,22 @@
             :placeholder="t('auth.usernamePlaceholder')"
             :rules="[{ required: true, message: t('auth.usernameRequired') }]"
           />
+          <van-field
+            v-model="form.password"
+            :type="showPassword ? 'text' : 'password'"
+            name="password"
+            :label="t('auth.password')"
+            :placeholder="t('auth.passwordPlaceholder')"
+            :rules="[{ required: true, message: t('auth.passwordRequired') }]"
+          >
+            <template #right-icon>
+              <van-icon
+                :name="showPassword ? 'eye-o' : 'closed-eye'"
+                style="cursor:pointer"
+                @click="showPassword = !showPassword"
+              />
+            </template>
+          </van-field>
         </van-cell-group>
 
         <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
@@ -115,7 +131,6 @@ import { useI18n } from 'vue-i18n'
 import { useChildAuthStore } from '@numina/auth'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import { getAuthenticationOptions, authenticateWithPasskey } from '@/api/webauthn'
-import { setUser } from '@numina/auth'
 import axios from 'axios'
 
 const { t } = useI18n()
@@ -129,14 +144,17 @@ const step = ref<1 | 2>(1)
 const loading = ref(false)
 const step1Error = ref('')
 const childInfo = ref({ displayName: '', avatarColor: '', childId: '' })
+// temp_token from step1 — required for step2 PIN verification
+const tempToken = ref('')
 
 const authMode = ref<'webauthn' | 'pin'>('pin')
 const pin = ref<string[]>([])
 const shaking = ref(false)
 const webAuthnAvailable = ref(false)
 const submitting = ref(false)
+const showPassword = ref(false)
 
-const form = ref({ username: '' })
+const form = ref({ username: '', password: '' })
 
 onMounted(async () => {
   const support = checkWebAuthnSupport()
@@ -144,15 +162,27 @@ onMounted(async () => {
   webAuthnAvailable.value = true
 })
 
-function onStep1Submit() {
+async function onStep1Submit() {
   if (!form.value.username.trim()) return
   step1Error.value = ''
-  childInfo.value = {
-    displayName: form.value.username,
-    avatarColor: '#FF6B6B',
-    childId: '',
+  loading.value = true
+  try {
+    const result = await childAuthStore.childLoginStep1(
+      form.value.username.trim(),
+      form.value.password,
+    )
+    childInfo.value = {
+      displayName: result.display_name ?? form.value.username,
+      avatarColor: result.avatar_color ?? '#FF6B6B',
+      childId: result.user_id != null ? String(result.user_id) : '',
+    }
+    tempToken.value = result.temp_token ?? ''
+    step.value = 2
+  } catch {
+    step1Error.value = t('errors.AUTH_INVALID_CREDENTIALS')
+  } finally {
+    loading.value = false
   }
-  step.value = 2
 }
 
 async function attemptWebAuthn() {
@@ -163,13 +193,6 @@ async function attemptWebAuthn() {
 
     const credential = await authenticatePasskey(options)
     await authenticateWithPasskey(childInfo.value.childId, credential, challenge)
-
-    setUser({
-      id: childInfo.value.childId,
-      display_name: childInfo.value.displayName,
-      avatar_color: childInfo.value.avatarColor,
-      role: 'child',
-    })
 
     showToast(t('toast.loginSuccess'))
     router.push('/')
@@ -204,6 +227,7 @@ function clearPin() {
 function backToStep1() {
   step.value = 1
   pin.value = []
+  tempToken.value = ''
   step1Error.value = ''
   childAuthStore.clearLoginError()
 }
@@ -214,10 +238,7 @@ watch(
     if (len === 4 && !submitting.value) {
       submitting.value = true
       try {
-        await childAuthStore.childLogin(
-          { id: '', username: form.value.username, display_name: form.value.username, avatar_color: '#FF6B6B', is_active: true },
-          [...pin.value],
-        )
+        await childAuthStore.childLoginStep2(tempToken.value, [...pin.value])
         showToast(t('toast.loginSuccess'))
         router.push('/')
       } catch {
