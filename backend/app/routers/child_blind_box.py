@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user
+from app.auth.deps import get_current_child_user
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.blind_box_draw import BlindBoxDraw
@@ -21,7 +21,7 @@ router = APIRouter(prefix="/child/blind-box", tags=["child-blind-box"])
 @router.post("/draw", response_model=BlindBoxDrawResponse, status_code=201)
 def child_draw(
     body: DrawRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_child_user),
     db: Session = Depends(get_db),
 ):
     config = _get_or_create_config(current_user.family_id, db)
@@ -90,7 +90,7 @@ def child_draw(
 
 @router.get("/draws", response_model=list[BlindBoxDrawResponse])
 def child_list_draws(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_child_user),
     db: Session = Depends(get_db),
 ):
     draws = (
@@ -104,7 +104,7 @@ def child_list_draws(
 
 @router.get("/bonus-draws", response_model=list[BonusDrawResponse])
 def child_list_bonus_draws(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_child_user),
     db: Session = Depends(get_db),
 ):
     return (
@@ -117,7 +117,7 @@ def child_list_bonus_draws(
 @router.post("/bonus-draws/{bonus_id}/use", response_model=BlindBoxDrawResponse, status_code=201)
 def child_use_bonus_draw(
     bonus_id: int,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_child_user),
     db: Session = Depends(get_db),
 ):
     bonus = db.query(BonusDraw).filter_by(
