@@ -560,6 +560,59 @@ docker-compose build frontend-child && docker-compose up -d frontend-child
 docker exec numina-nginx nginx -s reload
 ```
 
+### Q: 仿真测试中 `/child/me` 返回 404
+
+**原因**: 儿童端 `/child/me` 路由实际注册在 auth 路由器下，完整路径为 `/api/v1/auth/child/me`，而非 `/api/v1/child/me`。
+
+**正确调用**:
+```bash
+curl -H "Authorization: Bearer $CHILD_TOKEN" http://localhost/api/v1/auth/child/me
+```
+
+### Q: 儿童端 `/child/blind-box/*` 返回 403
+
+**原因**: `child_blind_box.py` 路由器中所有端点误用了 `get_current_user`（成人认证），导致儿童 token 被拒绝。
+
+**解决**: 已修复为 `get_current_child_user`（commit `4f289b6`）。修复后需重建后端：
+```bash
+docker-compose up -d --build backend
+```
+
+### Q: wishes-liabilities.sh 重复运行产生重复数据
+
+**原因**: `tests/e2e/wishes-liabilities.sh` 每次运行都向 demouser 账号创建新的心愿和负债，没有清理步骤，导致数据累积。
+
+**说明**: 该脚本设计为功能验证脚本，不是幂等的。如需清理，手动删除 demouser 账号下名称包含"深圳湾一号"、"宝马X5"等测试数据的条目，或重置数据库后重新运行 `seed-data.sh`。
+
 ---
-**最后更新**: 2026-04-29
+
+## 仿真测试
+
+部署完成后，运行双角色仿真测试验证核心功能：
+
+```bash
+# 基础验收测试（23 项）
+bash tests/e2e/acceptance.sh
+
+# 扩展 CRUD 测试（56 项）
+bash tests/e2e/extended.sh
+
+# 心愿/负债功能测试
+bash tests/e2e/wishes-liabilities.sh
+
+# 种子数据（幂等，可重复执行）
+bash tests/data/seed-data.sh
+```
+
+**双角色验证要点**:
+
+| 角色 | 登录端点 | 身份端点 | 权限 |
+|------|---------|---------|------|
+| demouser (owner) | `POST /auth/login` | `GET /auth/me` | 完整资产/负债/家庭管理 |
+| testchild (child) | `POST /auth/child/login` | `GET /auth/child/me` | 仅 `/child/*` 路由 |
+
+儿童账号 (`testchild`) 访问 `/assets`、`/liabilities` 等成人端点应返回 **403**。
+
+---
+**最后更新**: 2026-05-01
 **维护者**: Numina Team
