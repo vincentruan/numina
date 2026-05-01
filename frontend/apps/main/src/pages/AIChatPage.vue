@@ -576,8 +576,11 @@ onUnmounted(() => {
 .ai-chat-page {
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - env(safe-area-inset-bottom));
+  position: fixed;
+  inset: 0;
+  bottom: calc(50px + env(safe-area-inset-bottom));
   background: var(--bg);
+  z-index: 1;
 }
 
 /* ── Header ── */

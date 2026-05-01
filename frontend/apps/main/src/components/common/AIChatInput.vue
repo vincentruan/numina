@@ -283,8 +283,9 @@ onBeforeUnmount(() => {
   --ai-expand-hover-color: rgba(255, 255, 255, 0.6);
 }
 
-/* Light mode overrides */
-:global(.theme-light) .input-shell {
+/* Light mode overrides — matches both AIChatPage's .theme-light class and global data-theme */
+:global(.theme-light) .input-shell,
+:global([data-theme='light']) .input-shell {
   --ai-btn-border: rgba(0, 0, 0, 0.2);
   --ai-btn-color: rgba(0, 0, 0, 0.65);
   --ai-btn-hover-bg: rgba(0, 0, 0, 0.07);
