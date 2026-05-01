@@ -310,7 +310,7 @@ onMounted(async () => {
 .child-tab-balance {
   font-size: 10px;
   line-height: 1.2;
-  opacity: 0.75;
+  color: var(--text-secondary);
   white-space: nowrap;
 }
 
@@ -325,12 +325,17 @@ onMounted(async () => {
 
 [data-theme='dark'] .child-tabs :deep(.van-tab),
 .dark .child-tabs :deep(.van-tab) {
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 [data-theme='dark'] .child-tabs :deep(.van-tab--active),
 .dark .child-tabs :deep(.van-tab--active) {
   color: #fff;
+}
+
+[data-theme='dark'] .child-tab-name,
+.dark .child-tab-name {
+  color: inherit;
 }
 
 .summary-card {

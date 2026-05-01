@@ -203,10 +203,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { useSettingsStore } from '@/stores/settings'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -263,7 +262,6 @@ interface Message {
 const { t } = useI18n()
 const route = useRoute()
 const aiStore = useAIStore()
-const settingsStore = useSettingsStore()
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
@@ -272,12 +270,15 @@ const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 const showHistory = ref(false)
 
-// Follow global theme: light when theme==='light', dark otherwise (dark/system default to dark)
-const isLight = computed(() => settingsStore.theme === 'light')
+// Follow global theme via data-theme attribute set by App.vue
+const dataTheme = ref(document.documentElement.getAttribute('data-theme') ?? 'dark')
+const isLight = computed(() => dataTheme.value === 'light')
+let themeObserver: MutationObserver | null = null
 let abortController: AbortController | null = null
 
 function toggleTheme() {
-  settingsStore.setTheme(isLight.value ? 'dark' : 'light')
+  const next = isLight.value ? 'dark' : 'light'
+  document.documentElement.setAttribute('data-theme', next)
 }
 
 const sessionTitle = computed(() => {
@@ -488,6 +489,12 @@ function onFeedback(id: string, value: 1 | -1) {
 }
 
 onMounted(async () => {
+  // Observe data-theme attribute changes on <html> to stay in sync with global theme
+  themeObserver = new MutationObserver(() => {
+    dataTheme.value = document.documentElement.getAttribute('data-theme') ?? 'dark'
+  })
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
   try {
     const res = await getChatHistory()
     messages.value = res.data.map((m) => ({
@@ -506,6 +513,10 @@ onMounted(async () => {
     aiStore.draftQuery = ''
     await onSend()
   }
+})
+
+onUnmounted(() => {
+  themeObserver?.disconnect()
 })
 </script>
 
@@ -530,6 +541,10 @@ onMounted(async () => {
   --think-bg: rgba(99, 102, 241, 0.08);
   --think-border: rgba(99, 102, 241, 0.25);
   --think-color: rgba(255, 255, 255, 0.55);
+  --skeleton-bg: rgba(255, 255, 255, 0.07);
+  --skeleton-border: rgba(255, 255, 255, 0.08);
+  --skeleton-shimmer-from: rgba(255, 255, 255, 0.06);
+  --skeleton-shimmer-mid: rgba(255, 255, 255, 0.12);
 }
 
 .ai-chat-page.theme-light {
@@ -551,6 +566,10 @@ onMounted(async () => {
   --think-bg: rgba(99, 102, 241, 0.06);
   --think-border: rgba(99, 102, 241, 0.2);
   --think-color: rgba(0, 0, 0, 0.5);
+  --skeleton-bg: rgba(0, 0, 0, 0.05);
+  --skeleton-border: rgba(0, 0, 0, 0.08);
+  --skeleton-shimmer-from: rgba(0, 0, 0, 0.04);
+  --skeleton-shimmer-mid: rgba(0, 0, 0, 0.08);
 }
 
 /* ── Page shell ── */
@@ -998,8 +1017,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 8px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--skeleton-bg);
+  border: 1px solid var(--skeleton-border);
   border-radius: 16px;
   border-bottom-left-radius: 4px;
   min-width: 160px;
@@ -1010,9 +1029,9 @@ onMounted(async () => {
   border-radius: 6px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.12) 50%,
-    rgba(255, 255, 255, 0.06) 100%
+    var(--skeleton-shimmer-from) 0%,
+    var(--skeleton-shimmer-mid) 50%,
+    var(--skeleton-shimmer-from) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
