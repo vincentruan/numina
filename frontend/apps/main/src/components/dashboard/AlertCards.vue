@@ -109,7 +109,7 @@ const props = defineProps<{
   expiringAssets: ExpiringSoonItem[]
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   'select-status': [status: string]
 }>()
 

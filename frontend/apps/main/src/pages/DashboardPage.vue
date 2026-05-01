@@ -157,7 +157,6 @@ import { useCategoryStore } from '@/stores/category'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
-import type { Asset } from '@/types'
 import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
@@ -358,7 +357,7 @@ async function handleBatchDelete() {
       title: '确认删除',
       message: `确定要删除选中的 ${selectedIds.value.length} 项资产吗？此操作不可恢复。`,
     })
-    const loading = showLoadingToast({ message: '删除中...', forbidClick: true, duration: 0 })
+    showLoadingToast({ message: '删除中...', forbidClick: true, duration: 0 })
     try {
       const res = await batchArchiveAssets(selectedIds.value)
       closeToast()
@@ -399,7 +398,7 @@ async function onMoreActionSelect(action: any) {
     return
   }
 
-  const loading = showLoadingToast({ message: '处理中...', forbidClick: true, duration: 0 })
+  showLoadingToast({ message: '处理中...', forbidClick: true, duration: 0 })
   try {
     switch (action.value) {
       case 'retire': {

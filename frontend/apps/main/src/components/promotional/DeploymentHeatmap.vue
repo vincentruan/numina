@@ -17,7 +17,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 
 interface DeploymentOption {
   method: string
@@ -30,7 +29,7 @@ interface Props {
   columnNum?: number
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   options: () => [
     { method: 'Docker Compose', time: '10 分钟', difficulty: 'easy' },
     { method: '手动部署', time: '30 分钟', difficulty: 'medium' },

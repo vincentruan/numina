@@ -4,7 +4,7 @@
  */
 
 import { ref, onMounted, onUnmounted, type Ref } from 'vue'
-import { getTierConfig, getScaledCount, STAR_COLORS, type DeviceTier, type StarLayerConfig } from './starField.config'
+import { getTierConfig, getScaledCount, STAR_COLORS, type StarLayerConfig } from './starField.config'
 import { getTier } from '@/utils/deviceTier'
 
 // Base frame time for animation normalization (60fps = 16.67ms)

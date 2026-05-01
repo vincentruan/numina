@@ -294,7 +294,7 @@ async function executeBatchDelete() {
     showToast(t('toast.assetDeletedCount', { count: selectedAssets.value.length }))
     exitSelectionMode()
     await assetStore.fetchAssets(buildFilters())
-  } catch (error) {
+  } catch {
     showToast(t('toast.deleteFailed'))
   }
 }

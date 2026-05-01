@@ -190,7 +190,7 @@ async function onGenerate() {
       currentReport.value = ws.report.value
       reportGeneratedAt.value = ws.generatedAt.value
     }
-  } catch (e: any) {
+  } catch {
     showToast(ws.errorMessage.value || '生成失败，请重试')
   } finally {
     generating.value = false

@@ -69,7 +69,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } from '@/api/calendar'
-import { getUser } from '@/utils/storage'
 
 const route = useRoute()
 const date = route.query.date as string

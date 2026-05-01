@@ -58,7 +58,7 @@ import { useI18n } from 'vue-i18n'
 import { useCurrencyStore } from '@/stores/currency'
 import type { Currency } from '@/types'
 
-const props = defineProps<{
+defineProps<{
   modelValue: string
   show: boolean
 }>()

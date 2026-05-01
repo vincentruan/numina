@@ -70,7 +70,7 @@ const { getRateInfo } = useExchangeRate()
 const popoverVisible = ref(false)
 const rateInfo = ref<{ rate: number; fetched_at: string } | null>(null)
 const bubbleStyle = ref<Record<string, string>>({})
-const iconElement = ref<HTMLElement | null>(null)
+const _iconElement = ref<HTMLElement | null>(null)
 
 // Fetch rate info when source currency differs from display currency
 watch(

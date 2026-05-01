@@ -140,7 +140,7 @@ function validateConfirmPassword(value: string): boolean {
   return value === form.value.password
 }
 
-function validateField(field: string) {
+function validateField(_field: string) {
   // Trigger real-time validation feedback
   // Vant's van-field handles this via :rules prop
 }

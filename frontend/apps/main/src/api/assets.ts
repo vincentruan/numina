@@ -2,25 +2,6 @@ import http from './index'
 import type { Asset, AssetFilter, AssetSellRequest, AssetSellResponse, AssetValuation } from '@/types'
 
 // Batch operation types
-interface BatchAssetRequest {
-  asset_ids: string[]
-}
-
-interface BatchUpdateCategoryRequest {
-  asset_ids: string[]
-  category_id: string
-}
-
-interface BatchUpdateTagsRequest {
-  asset_ids: string[]
-  tag_ids: string[]
-}
-
-interface BatchUpdateStatusRequest {
-  asset_ids: string[]
-  status: string
-}
-
 interface BatchOperationResponse {
   success_count: number
   failed_count: number

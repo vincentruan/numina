@@ -70,7 +70,6 @@ async function approve(instanceId: string) {
     const result = await approveChore(instanceId)
     pending.value = pending.value.filter(i => i.id !== instanceId)
     if (result.streak_bonus > 0) {
-      const multiplier = result.streak_count >= 14 ? '2x' : result.streak_count >= 7 ? '1.5x' : `${(result.streak_bonus / result.coin_reward + 1).toFixed(1)}x`
       showToast(t('toast.streakReward', { days: result.streak_count, bonus: result.streak_bonus }))
     }
   } catch {

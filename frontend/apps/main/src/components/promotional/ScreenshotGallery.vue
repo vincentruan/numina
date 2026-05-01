@@ -27,7 +27,7 @@ interface Props {
   interval?: number
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   screenshots: () => [],
   autoplay: true,
   interval: 3000

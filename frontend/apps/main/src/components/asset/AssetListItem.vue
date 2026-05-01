@@ -147,13 +147,6 @@ const progressPercent = computed(() => {
   return Math.min(100, (daysUsed.value / targetDays.value) * 100)
 })
 
-function formatPrice(price: number | null | undefined): string {
-  if (price == null) return '-'
-  if (price >= 10000) {
-    return `${(price / 10000).toFixed(1)}万`
-  }
-  return price.toLocaleString('zh-CN', { maximumFractionDigits: 0 })
-}
 
 /**
  * Get the icon ID for a category icon.

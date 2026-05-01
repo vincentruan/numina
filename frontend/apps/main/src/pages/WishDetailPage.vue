@@ -162,7 +162,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useWishStore } from '@/stores/wish'
-import { useAssetStore } from '@/stores/asset'
 import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
 import { realizeWish } from '@/api/wishes'
@@ -173,7 +172,6 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const wishStore = useWishStore()
-const assetStore = useAssetStore()
 const deleting = ref(false)
 const acting = ref(false)
 
