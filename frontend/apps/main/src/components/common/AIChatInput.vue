@@ -286,28 +286,28 @@ onBeforeUnmount(() => {
 /* Light mode overrides — matches both AIChatPage's .theme-light class and global data-theme */
 :global(.theme-light) .input-shell,
 :global([data-theme='light']) .input-shell {
-  --ai-btn-border: rgba(0, 0, 0, 0.2);
-  --ai-btn-color: rgba(0, 0, 0, 0.65);
-  --ai-btn-hover-bg: rgba(0, 0, 0, 0.07);
-  --ai-btn-hover-color: rgba(0, 0, 0, 0.85);
-  --ai-plus-border: rgba(0, 0, 0, 0.22);
-  --ai-plus-bg: rgba(0, 0, 0, 0.05);
-  --ai-plus-color: rgba(0, 0, 0, 0.6);
-  --ai-plus-hover-bg: rgba(0, 0, 0, 0.1);
-  --ai-plus-hover-color: rgba(0, 0, 0, 0.85);
+  --ai-btn-border: rgba(0, 0, 0, 0.4);
+  --ai-btn-color: rgba(0, 0, 0, 0.75);
+  --ai-btn-hover-bg: rgba(0, 0, 0, 0.1);
+  --ai-btn-hover-color: rgba(0, 0, 0, 0.9);
+  --ai-plus-border: rgba(0, 0, 0, 0.45);
+  --ai-plus-bg: rgba(0, 0, 0, 0.06);
+  --ai-plus-color: rgba(0, 0, 0, 0.7);
+  --ai-plus-hover-bg: rgba(0, 0, 0, 0.12);
+  --ai-plus-hover-color: rgba(0, 0, 0, 0.9);
   --ai-panel-bg: #ffffff;
-  --ai-panel-border: rgba(0, 0, 0, 0.12);
-  --ai-panel-item-color: rgba(0, 0, 0, 0.65);
-  --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.06);
-  --ai-panel-item-hover-color: rgba(0, 0, 0, 0.85);
+  --ai-panel-border: rgba(0, 0, 0, 0.25);
+  --ai-panel-item-color: rgba(0, 0, 0, 0.75);
+  --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.08);
+  --ai-panel-item-hover-color: rgba(0, 0, 0, 0.9);
   --ai-input-bg: #ffffff;
-  --ai-input-border: rgba(0, 0, 0, 0.18);
-  --ai-text-color: rgba(0, 0, 0, 0.85);
-  --ai-placeholder-color: rgba(0, 0, 0, 0.38);
-  --ai-scrollbar-thumb: rgba(0, 0, 0, 0.15);
-  --ai-expand-color: rgba(0, 0, 0, 0.35);
-  --ai-expand-hover-bg: rgba(0, 0, 0, 0.07);
-  --ai-expand-hover-color: rgba(0, 0, 0, 0.65);
+  --ai-input-border: rgba(0, 0, 0, 0.35);
+  --ai-text-color: rgba(0, 0, 0, 0.9);
+  --ai-placeholder-color: rgba(0, 0, 0, 0.5);
+  --ai-scrollbar-thumb: rgba(0, 0, 0, 0.25);
+  --ai-expand-color: rgba(0, 0, 0, 0.55);
+  --ai-expand-hover-bg: rgba(0, 0, 0, 0.1);
+  --ai-expand-hover-color: rgba(0, 0, 0, 0.8);
 }
 
 /* ── Toolbar ── */

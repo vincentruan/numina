@@ -550,26 +550,26 @@ onUnmounted(() => {
 .ai-chat-page.theme-light {
   --bg: #f5f5f7;
   --bg-header: rgba(245, 245, 247, 0.95);
-  --border: rgba(0, 0, 0, 0.12);
-  --text-primary: rgba(0, 0, 0, 0.85);
-  --text-secondary: rgba(0, 0, 0, 0.45);
-  --text-muted: rgba(0, 0, 0, 0.3);
+  --border: rgba(0, 0, 0, 0.25);
+  --text-primary: rgba(0, 0, 0, 0.9);
+  --text-secondary: rgba(0, 0, 0, 0.6);
+  --text-muted: rgba(0, 0, 0, 0.45);
   --bubble-user-bg: #010120;
   --bubble-user-color: #fff;
-  --bubble-ai-bg: rgba(189, 187, 255, 0.14);
-  --bubble-ai-color: rgba(0, 0, 0, 0.8);
-  --bubble-ai-border: rgba(0, 0, 0, 0.08);
-  --btn-color: rgba(0, 0, 0, 0.55);
-  --btn-hover-bg: rgba(0, 0, 0, 0.06);
+  --bubble-ai-bg: rgba(189, 187, 255, 0.22);
+  --bubble-ai-color: rgba(0, 0, 0, 0.9);
+  --bubble-ai-border: rgba(0, 0, 0, 0.15);
+  --btn-color: rgba(0, 0, 0, 0.7);
+  --btn-hover-bg: rgba(0, 0, 0, 0.1);
   --suggestion-bg: #fff;
-  --suggestion-border: rgba(0, 0, 0, 0.1);
-  --think-bg: rgba(99, 102, 241, 0.06);
-  --think-border: rgba(99, 102, 241, 0.2);
-  --think-color: rgba(0, 0, 0, 0.5);
-  --skeleton-bg: rgba(0, 0, 0, 0.05);
-  --skeleton-border: rgba(0, 0, 0, 0.08);
-  --skeleton-shimmer-from: rgba(0, 0, 0, 0.04);
-  --skeleton-shimmer-mid: rgba(0, 0, 0, 0.08);
+  --suggestion-border: rgba(0, 0, 0, 0.2);
+  --think-bg: rgba(99, 102, 241, 0.1);
+  --think-border: rgba(99, 102, 241, 0.35);
+  --think-color: rgba(0, 0, 0, 0.7);
+  --skeleton-bg: rgba(0, 0, 0, 0.08);
+  --skeleton-border: rgba(0, 0, 0, 0.15);
+  --skeleton-shimmer-from: rgba(0, 0, 0, 0.06);
+  --skeleton-shimmer-mid: rgba(0, 0, 0, 0.12);
 }
 
 /* ── Page shell ── */
