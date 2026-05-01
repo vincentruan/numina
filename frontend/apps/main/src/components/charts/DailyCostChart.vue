@@ -18,6 +18,7 @@ import { use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, MarkLineComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import type { CallbackDataParams } from 'echarts/types/dist/shared'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, MarkLineComponent])
 
@@ -100,7 +101,7 @@ const chartOption = computed(() => {
     }
   }
 
-  const markLines: any[] = []
+  const markLines: { yAxis: number; label: object; lineStyle: object }[] = []
   if (props.targetDailyCost) {
     markLines.push({
       yAxis: props.targetDailyCost,
@@ -112,8 +113,8 @@ const chartOption = computed(() => {
   return {
     tooltip: {
       trigger: 'axis',
-      formatter: (params: any[]) => {
-        const p = params[0]
+      formatter: (params: CallbackDataParams[]) => {
+        const p = params[0] as CallbackDataParams & { axisValue: string }
         return `${p.axisValue}<br/>日均 ¥${Number(p.value).toFixed(2)}`
       }
     },

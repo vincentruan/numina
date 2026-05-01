@@ -19,6 +19,7 @@ import { use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import type { TrendPoint } from '@/types'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
@@ -40,9 +41,9 @@ function onPeriodChange(period: string) {
 const chartOption = computed(() => ({
   tooltip: {
     trigger: 'axis',
-    formatter: (params: any[]) => {
-      let html = `${params[0].axisValue}<br/>`
-      params.forEach((p: any) => {
+    formatter: (params: CallbackDataParams[]) => {
+      let html = `${(params[0] as CallbackDataParams & { axisValue: string }).axisValue}<br/>`
+      params.forEach((p: CallbackDataParams) => {
         html += `${p.marker} ${p.seriesName}: ¥${Number(p.value).toLocaleString()}<br/>`
       })
       return html

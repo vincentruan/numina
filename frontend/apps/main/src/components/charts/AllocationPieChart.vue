@@ -12,6 +12,7 @@ import { use } from 'echarts/core'
 import { PieChart } from 'echarts/charts'
 import { TooltipComponent, LegendComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
+import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import type { AllocationItem } from '@/types'
 
 use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent])
@@ -23,7 +24,7 @@ const props = defineProps<{
 const chartOption = computed(() => ({
   tooltip: {
     trigger: 'item',
-    formatter: (params: any) => {
+    formatter: (params: CallbackDataParams) => {
       return `${params.name}: ¥${Number(params.value).toLocaleString()} (${params.percent}%)`
     }
   },
