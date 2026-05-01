@@ -191,6 +191,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useCategoryStore } from '@/stores/category'
 import { useAuthStore } from '@/stores/auth'
@@ -206,6 +207,7 @@ import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const dashboardStore = useDashboardStore()
 const categoryStore = useCategoryStore()

@@ -30,8 +30,10 @@ const chartOption = computed(() => ({
   },
   legend: {
     orient: 'horizontal',
-    bottom: 0,
+    bottom: 4,
     left: 'center',
+    itemWidth: 10,
+    itemHeight: 10,
     textStyle: { fontSize: 11 },
     formatter: (name: string) => {
       const item = props.data.find(d => d.category_name === name)
@@ -42,8 +44,8 @@ const chartOption = computed(() => ({
   series: [
     {
       type: 'pie',
-      radius: ['40%', '70%'],
-      center: ['50%', '42%'],
+      radius: ['38%', '65%'],
+      center: ['50%', '38%'],
       avoidLabelOverlap: false,
       label: { show: false },
       emphasis: {
@@ -74,7 +76,7 @@ const chartOption = computed(() => ({
   margin-bottom: 8px;
 }
 .chart {
-  height: 200px;
+  height: 240px;
   width: 100%;
 }
 
