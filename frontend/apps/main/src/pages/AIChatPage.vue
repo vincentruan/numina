@@ -550,19 +550,19 @@ onUnmounted(() => {
 .ai-chat-page.theme-light {
   --bg: #f5f5f7;
   --bg-header: rgba(245, 245, 247, 0.95);
-  --border: rgba(0, 0, 0, 0.08);
+  --border: rgba(0, 0, 0, 0.12);
   --text-primary: rgba(0, 0, 0, 0.85);
   --text-secondary: rgba(0, 0, 0, 0.45);
   --text-muted: rgba(0, 0, 0, 0.3);
   --bubble-user-bg: #010120;
   --bubble-user-color: #fff;
-  --bubble-ai-bg: rgba(189, 187, 255, 0.08);
+  --bubble-ai-bg: rgba(189, 187, 255, 0.14);
   --bubble-ai-color: rgba(0, 0, 0, 0.8);
-  --bubble-ai-border: rgba(255, 255, 255, 0.08);
+  --bubble-ai-border: rgba(0, 0, 0, 0.08);
   --btn-color: rgba(0, 0, 0, 0.55);
   --btn-hover-bg: rgba(0, 0, 0, 0.06);
   --suggestion-bg: #fff;
-  --suggestion-border: rgba(0, 0, 0, 0.08);
+  --suggestion-border: rgba(0, 0, 0, 0.1);
   --think-bg: rgba(99, 102, 241, 0.06);
   --think-border: rgba(99, 102, 241, 0.2);
   --think-color: rgba(0, 0, 0, 0.5);

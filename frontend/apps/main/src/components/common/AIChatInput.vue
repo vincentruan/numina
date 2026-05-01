@@ -285,28 +285,28 @@ onBeforeUnmount(() => {
 
 /* Light mode overrides */
 :global(.theme-light) .input-shell {
-  --ai-btn-border: rgba(0, 0, 0, 0.15);
-  --ai-btn-color: rgba(0, 0, 0, 0.55);
-  --ai-btn-hover-bg: rgba(0, 0, 0, 0.06);
-  --ai-btn-hover-color: rgba(0, 0, 0, 0.8);
-  --ai-plus-border: rgba(0, 0, 0, 0.18);
+  --ai-btn-border: rgba(0, 0, 0, 0.2);
+  --ai-btn-color: rgba(0, 0, 0, 0.65);
+  --ai-btn-hover-bg: rgba(0, 0, 0, 0.07);
+  --ai-btn-hover-color: rgba(0, 0, 0, 0.85);
+  --ai-plus-border: rgba(0, 0, 0, 0.22);
   --ai-plus-bg: rgba(0, 0, 0, 0.05);
-  --ai-plus-color: rgba(0, 0, 0, 0.5);
-  --ai-plus-hover-bg: rgba(0, 0, 0, 0.09);
-  --ai-plus-hover-color: rgba(0, 0, 0, 0.8);
+  --ai-plus-color: rgba(0, 0, 0, 0.6);
+  --ai-plus-hover-bg: rgba(0, 0, 0, 0.1);
+  --ai-plus-hover-color: rgba(0, 0, 0, 0.85);
   --ai-panel-bg: #ffffff;
-  --ai-panel-border: rgba(0, 0, 0, 0.1);
-  --ai-panel-item-color: rgba(0, 0, 0, 0.6);
+  --ai-panel-border: rgba(0, 0, 0, 0.12);
+  --ai-panel-item-color: rgba(0, 0, 0, 0.65);
   --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.06);
   --ai-panel-item-hover-color: rgba(0, 0, 0, 0.85);
-  --ai-input-bg: rgba(0, 0, 0, 0.04);
-  --ai-input-border: rgba(0, 0, 0, 0.15);
+  --ai-input-bg: #ffffff;
+  --ai-input-border: rgba(0, 0, 0, 0.18);
   --ai-text-color: rgba(0, 0, 0, 0.85);
-  --ai-placeholder-color: rgba(0, 0, 0, 0.35);
+  --ai-placeholder-color: rgba(0, 0, 0, 0.38);
   --ai-scrollbar-thumb: rgba(0, 0, 0, 0.15);
-  --ai-expand-color: rgba(0, 0, 0, 0.3);
-  --ai-expand-hover-bg: rgba(0, 0, 0, 0.06);
-  --ai-expand-hover-color: rgba(0, 0, 0, 0.6);
+  --ai-expand-color: rgba(0, 0, 0, 0.35);
+  --ai-expand-hover-bg: rgba(0, 0, 0, 0.07);
+  --ai-expand-hover-color: rgba(0, 0, 0, 0.65);
 }
 
 /* ── Toolbar ── */
