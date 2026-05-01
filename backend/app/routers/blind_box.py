@@ -19,6 +19,7 @@ from app.schemas.blind_box import (
     BlindBoxGiftCreate,
     BlindBoxGiftResponse,
     BlindBoxGiftUpdate,
+    BonusDrawCreate,
     BonusDrawResponse,
 )
 
@@ -187,6 +188,34 @@ def list_bonus_draws(
     db: Session = Depends(get_db),
 ):
     return db.query(BonusDraw).filter_by(family_id=current_user.family_id).all()
+
+
+@router.post("/bonus-draws", response_model=BonusDrawResponse, status_code=201)
+def create_bonus_draw(
+    req: BonusDrawCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Grant a bonus draw to a child in the same family."""
+    child = db.query(User).filter_by(
+        id=req.child_user_id,
+        family_id=current_user.family_id,
+        role="child",
+        is_active=True,
+    ).first()
+    if not child:
+        raise AppError(ErrorCode.CHILD_NOT_FOUND)
+
+    bonus = BonusDraw(
+        family_id=current_user.family_id,
+        child_user_id=req.child_user_id,
+        expires_at=req.expires_at,
+        status="available",
+    )
+    db.add(bonus)
+    db.commit()
+    db.refresh(bonus)
+    return bonus
 
 
 @router.post("/gifts/from-wish/{wish_id}", response_model=BlindBoxGiftResponse, status_code=201)

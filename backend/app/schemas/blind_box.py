@@ -90,6 +90,11 @@ class BlindBoxConfigResponse(BaseModel):
 
 # ── BonusDraw ─────────────────────────────────────────────────────────────────
 
+class BonusDrawCreate(BaseModel):
+    child_user_id: int
+    expires_at: datetime
+
+
 class BonusDrawResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
