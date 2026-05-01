@@ -673,6 +673,25 @@ else
   log_info "test_rich 盲盒礼物池已有 $GIFT_COUNT 个礼物，跳过"
 fi
 
+# 幂等：为 test_child 补充 bonus_draw（无论礼物池是否已存在）
+EXISTING_BONUS=$(curl -sL "$BASE_URL/child/blind-box/bonus-draws" \
+  -H "Authorization: Bearer $CHILD_TOKEN_RICH" \
+  | jq -r 'if has("data") then (.data | length) else (. | length) end' 2>/dev/null || echo "0")
+if [ "$EXISTING_BONUS" = "0" ]; then
+  if date -v+30d >/dev/null 2>&1; then
+    NEXT_MONTH=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ)
+  else
+    NEXT_MONTH=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+  fi
+  curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $TOKEN_RICH" \
+    -d "{\"child_user_id\":\"$CHILD_ID\",\"expires_at\":\"$NEXT_MONTH\"}" > /dev/null 2>&1 || true
+  log_ok "test_rich: 补充 test_child bonus_draw（available）"
+else
+  log_info "test_child 已有 $EXISTING_BONUS 个 bonus_draw，跳过"
+fi
+
 log_ok "========== Part 1: Fixed test accounts complete =========="
 
 # ========================================
