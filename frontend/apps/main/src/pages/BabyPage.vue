@@ -24,8 +24,10 @@
                 <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B' }">
                   {{ (child.display_name ?? '?').charAt(0) }}
                 </div>
-                <span class="child-tab-name">{{ child.display_name }}</span>
-                <span class="child-tab-balance">{{ childBalances[child.id] ?? 0 }}⭐</span>
+                <div class="child-tab-info">
+                  <span class="child-tab-name">{{ child.display_name }}</span>
+                  <span class="child-tab-balance">{{ childBalances[child.id] ?? 0 }}⭐</span>
+                </div>
               </div>
             </template>
           </van-tab>
@@ -267,35 +269,49 @@ onMounted(async () => {
 /* Child tab custom title */
 .child-tab-title {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 3px;
-  padding: 4px 2px;
+  gap: 5px;
+  padding: 2px 4px;
+  max-width: 100%;
 }
 
 .child-tab-avatar {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 700;
   color: #fff;
   flex-shrink: 0;
 }
 
+.child-tab-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  min-width: 0;
+}
+
 .child-tab-name {
   font-size: 12px;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 52px;
 }
 
 .child-tab-balance {
-  font-size: 11px;
-  line-height: 1;
-  opacity: 0.8;
+  font-size: 10px;
+  line-height: 1.2;
+  opacity: 0.75;
+  white-space: nowrap;
 }
 
 /* Fix tab text visibility in dark mode */
