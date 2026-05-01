@@ -214,6 +214,11 @@ const router = createRouter({
           component: () => import('@/pages/AIAllocationPage.vue')
         },
         {
+          path: 'ai/spending-leaks',
+          name: 'AISpendingLeaks',
+          component: () => import('@/pages/SpendingLeaksPage.vue')
+        },
+        {
           path: 'ai',
           name: 'AIHub',
           component: () => import('@/pages/AIHubPage.vue')

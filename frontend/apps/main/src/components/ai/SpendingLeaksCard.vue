@@ -5,7 +5,18 @@
     </div>
 
     <div v-else-if="!leaks.length" class="empty-state">
-      <van-empty image="success" description="暂无资金泄漏" />
+      <van-empty description="暂无资金泄漏">
+        <template #image>
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="40" cy="40" r="36" fill="rgba(99,102,241,0.08)" />
+            <circle cx="40" cy="40" r="28" fill="rgba(99,102,241,0.10)" />
+            <path d="M40 24v16l8 8" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="40" cy="40" r="14" stroke="#6366f1" stroke-width="2.5" fill="none"/>
+            <path d="M32 56l16-32" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="48" cy="24" r="4" fill="#4ade80"/>
+          </svg>
+        </template>
+      </van-empty>
       <div class="actions">
         <van-button plain block :loading="refreshing" @click="onRefresh">重新分析</van-button>
       </div>
@@ -117,8 +128,8 @@ onMounted(loadLeaks)
   justify-content: center;
   padding: 60px;
 }
-.empty-state { padding: 40px 16px; }
-.actions { padding: 0 16px; }
+.empty-state { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.actions { padding: 12px 16px 0; width: 100%; }
 .summary-bar {
   display: flex;
   justify-content: space-between;

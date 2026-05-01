@@ -108,12 +108,6 @@
       </div>
     </div>
 
-    <!-- Spending leaks -->
-    <div class="leaks-section">
-      <h2 class="feature-section-title">资金泄漏检测</h2>
-      <SpendingLeaksCard />
-    </div>
-
     <!-- Chat input -->
     <div class="chat-entry">
       <AIChatInput
@@ -135,7 +129,6 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
-import SpendingLeaksCard from '@/components/ai/SpendingLeaksCard.vue'
 
 const { t } = useI18n()
 
@@ -299,6 +292,12 @@ const features = [
     title: 'AI 问答',
     desc: '自由对话助手',
     svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`,
+  },
+  {
+    route: '/ai/spending-leaks',
+    title: '资金泄漏',
+    desc: '检测资金泄漏',
+    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`,
   },
 ]
 
@@ -560,16 +559,6 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-secondary);
   margin: 0;
-}
-
-/* ── Spending leaks ── */
-.leaks-section {
-  padding: 0 0 4px;
-}
-
-.leaks-section .feature-section-title {
-  padding: 0 16px;
-  margin: 12px 0 0;
 }
 
 /* ── Feature grid ── */
