@@ -239,10 +239,16 @@ def check_device(
     req: DeviceCheckRequest,
     db: Session = Depends(get_db),
 ):
-    """Check if a device fingerprint is trusted. No auth required — used before login."""
+    """Check if a device fingerprint is trusted. No auth required — used before login.
+
+    When trusted, loads the associated user and returns a temp_token so the
+    frontend can skip Step 1 of the two-step login flow entirely.
+    """
     from datetime import datetime
 
+    from app.auth.deps import create_temp_token
     from app.models.device_session import DeviceSession
+    from app.models.user import User
 
     now = datetime.utcnow()
     session = (
@@ -257,9 +263,20 @@ def check_device(
     if not session:
         return DeviceCheckResponse(trusted=False)
 
+    user = db.query(User).filter(
+        User.id == session.user_id,
+        User.is_active.is_(True),
+    ).first()
+    if not user:
+        return DeviceCheckResponse(trusted=False)
+
+    temp_token = create_temp_token(user.id, user.role)
     return DeviceCheckResponse(
         trusted=True,
         device_name=session.device_name,
-        user_id=str(session.user_id),
+        user_id=user.id,
+        temp_token=temp_token,
+        display_name=user.display_name,
+        avatar_color=user.avatar_color,
+        second_factor_type=user.second_factor_type,
     )
-    return None

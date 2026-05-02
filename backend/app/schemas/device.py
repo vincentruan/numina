@@ -29,8 +29,25 @@ class DeviceCheckRequest(BaseModel):
 class DeviceCheckResponse(BaseModel):
     trusted: bool
     device_name: str | None = None
-    user_id: str | None = None
+    user_id: int | None = None
+    temp_token: str | None = None
+    display_name: str | None = None
+    avatar_color: str | None = None
+    second_factor_type: str | None = None
 
 
 class DeviceTrustRequest(BaseModel):
     fingerprint: str | None = None  # optional browser fingerprint
+
+
+class FamilyDeviceResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    display_name: str
+    avatar_color: str
+    device_name: str
+    last_seen_at: datetime
+    created_at: datetime
+    is_current: bool
