@@ -283,9 +283,14 @@ onBeforeUnmount(() => {
   --ai-expand-hover-color: rgba(255, 255, 255, 0.6);
 }
 
-/* Light mode overrides — matches both AIChatPage's .theme-light class and global data-theme */
-:global(.theme-light) .input-shell,
-:global([data-theme='light']) .input-shell {
+/* Light mode overrides.
+ * Must use :global() for the entire selector — Vue scoped CSS only adds the
+ * scoped attribute to the last simple selector outside :global(), so
+ * `:global(.theme-light) .input-shell` compiles to `.theme-light .input-shell`
+ * (no scoped attr) and never matches `.input-shell[data-v-xxx]`.
+ * Wrapping the full selector in :global() bypasses scoping entirely. */
+:global(.theme-light .input-shell),
+:global([data-theme='light'] .input-shell) {
   --ai-btn-border: rgba(0, 0, 0, 0.4);
   --ai-btn-color: rgba(0, 0, 0, 0.75);
   --ai-btn-hover-bg: rgba(0, 0, 0, 0.1);
