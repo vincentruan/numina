@@ -423,6 +423,10 @@ export default {
     sessionExpiredTitle: '登录已过期',
     sessionExpiredMessage: '请重新登录以继续',
     sessionExpiredConfirm: '重新登录',
+    myDevices: '我的设备',
+    childDevices: '儿童设备',
+    noFamilyDevices: '暂无儿童设备',
+    revokeChild: '撤销',
   },
   reminders: {
     title: '智能提醒',

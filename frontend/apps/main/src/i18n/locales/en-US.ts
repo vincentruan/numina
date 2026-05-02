@@ -404,6 +404,10 @@ export default {
     sessionExpiredTitle: 'Session expired',
     sessionExpiredMessage: 'Please sign in again to continue',
     sessionExpiredConfirm: 'Sign in',
+    myDevices: 'My Devices',
+    childDevices: 'Child Devices',
+    noFamilyDevices: 'No child devices',
+    revokeChild: 'Revoke',
   },
   reminders: {
     title: 'Smart Reminders',
