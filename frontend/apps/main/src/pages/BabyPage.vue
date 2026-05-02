@@ -24,10 +24,7 @@
                 <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B' }">
                   {{ (child.display_name ?? '?').charAt(0) }}
                 </div>
-                <div class="child-tab-info">
-                  <span class="child-tab-name">{{ child.display_name }}</span>
-                  <span class="child-tab-balance">{{ childBalances[child.id] ?? 0 }}⭐</span>
-                </div>
+                <span class="child-tab-name">{{ child.display_name }}</span>
               </div>
             </template>
           </van-tab>
@@ -272,8 +269,7 @@ onMounted(async () => {
   flex-direction: row;
   align-items: center;
   gap: 5px;
-  padding: 2px 4px;
-  max-width: 100%;
+  padding: 2px 2px;
 }
 
 .child-tab-avatar {
@@ -289,14 +285,6 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.child-tab-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 1px;
-  min-width: 0;
-}
-
 .child-tab-name {
   font-size: 12px;
   font-weight: 600;
@@ -304,14 +292,7 @@ onMounted(async () => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 52px;
-}
-
-.child-tab-balance {
-  font-size: 10px;
-  line-height: 1.2;
-  color: var(--text-secondary);
-  white-space: nowrap;
+  max-width: 60px;
 }
 
 /* Fix tab text visibility in dark mode */
