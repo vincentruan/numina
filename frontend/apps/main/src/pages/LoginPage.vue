@@ -15,14 +15,14 @@
       </div>
 
       <!-- Step 1: username + password -->
-      <van-form v-if="step === 1" class="login-form" @submit="onStep1Submit">
+      <div v-if="step === 1" class="login-form">
         <van-cell-group inset>
           <van-field
             v-model="form.username"
             name="username"
             label="用户名"
             placeholder="请输入用户名"
-            :rules="[{ required: true, message: '请输入用户名' }]"
+            autocomplete="username"
           />
           <div class="password-field-wrapper">
             <van-field
@@ -31,7 +31,8 @@
               name="password"
               label="密码"
               placeholder="请输入密码"
-              :rules="[{ required: true, message: '请输入密码' }]"
+              autocomplete="current-password"
+              @keyup.enter="onStep1Submit"
             >
               <template #right-icon>
                 <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
@@ -44,11 +45,11 @@
         <AltchaWidget ref="altchaRef" v-model="form.altcha" endpoint="login" />
 
         <div class="form-actions">
-          <van-button round block type="primary" native-type="submit" :loading="loading">
+          <van-button round block type="primary" :loading="loading" @click="onStep1Submit">
             下一步
           </van-button>
         </div>
-      </van-form>
+      </div>
 
       <!-- Step 2: numeric PIN -->
       <div v-else class="pin-step">
@@ -170,6 +171,7 @@ onMounted(async () => {
 })
 
 async function onStep1Submit() {
+  if (!form.value.username.trim() || !form.value.password) return
   loading.value = true
   try {
     const result = await authStore.loginStep1({

@@ -174,6 +174,16 @@ const router = createRouter({
           component: () => import('@/pages/NotificationConfigPage.vue'),
         },
         {
+          path: 'settings/password',
+          name: 'ChangePassword',
+          component: () => import('@/pages/ChangePasswordPage.vue'),
+        },
+        {
+          path: 'settings/second-factor',
+          name: 'ChangeSecondFactor',
+          component: () => import('@/pages/ChangeSecondFactorPage.vue'),
+        },
+        {
           path: 'settings/import-report',
           name: 'ImportReport',
           component: () => import('@/pages/ImportReportPage.vue'),

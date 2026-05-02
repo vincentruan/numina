@@ -152,6 +152,11 @@ class ChangePasswordRequest(BaseModel):
         return validate_password_strength(v)
 
 
+class ResetPasswordRequest(BaseModel):
+    """Reset password via notification channel — no old password required."""
+    pass
+
+
 # ---------------------------------------------------------------------------
 # Child authentication schemas
 # ---------------------------------------------------------------------------

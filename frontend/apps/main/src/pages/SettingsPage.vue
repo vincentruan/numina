@@ -19,6 +19,8 @@
         icon="bell"
         @click="$router.push('/settings/notifications')"
       />
+      <van-cell title="账户密码" icon="lock" is-link to="/settings/password" />
+      <van-cell title="二阶段验证" icon="shield-o" is-link to="/settings/second-factor" />
     </van-cell-group>
 
     <van-cell-group inset :title="t('settings.userSettings')" class="section">

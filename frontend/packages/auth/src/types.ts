@@ -14,6 +14,8 @@ export interface User {
   default_currency: string
   view_mode: string
   created_at: string
+  second_factor_enabled?: boolean
+  second_factor_type?: string | null
 }
 
 export interface ChildUser {

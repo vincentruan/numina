@@ -38,8 +38,8 @@ from app.errors.exceptions import AppError
 from app.middleware.rate_limit import _get_real_client_ip
 from app.models.user import User
 from app.schemas.auth import (
-    ChangePasswordRequest,
     ChangeNumericPinRequest,
+    ChangePasswordRequest,
     ChildPinLoginRequest,
     ChildRefreshResponse,
     JoinFamilyRequest,
@@ -225,6 +225,77 @@ def change_password(
     """修改密码，成功后吊销该用户所有现存 token，需重新登录。"""
     auth_service.change_password(db, user, req.old_password, req.new_password)
     return {"message": "密码已修改，请重新登录"}
+
+
+@router.post("/me/password/reset")
+async def reset_password(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """通过通知渠道发送临时密码重置密码。需要家庭至少配置一个通知渠道。"""
+    import random
+    import string
+
+    from app.models.notification_channel import NotificationChannel
+    from app.models.notification_channel_config import NotificationChannelConfig
+    from app.services.notification.sender import NotificationSender
+
+    # Check notification channels exist
+    channels = (
+        db.query(NotificationChannel)
+        .filter_by(family_id=user.family_id, is_enabled=True)
+        .all()
+    )
+    if not channels:
+        raise AppError(ErrorCode.NOTIFICATION_NO_CHANNEL)
+
+    # Generate temp password
+    alphabet = string.ascii_letters + string.digits
+    temp_password = "".join(random.choices(alphabet, k=12))
+
+    # Hash and save
+    import bcrypt
+
+    from app.auth.revoke_jti import revoke_all_user_tokens
+    from app.config import settings as app_settings
+
+    rounds = getattr(app_settings, "BCRYPT_ROUNDS", 12)
+    user_db = db.query(User).filter(User.id == user.id).first()
+    user_db.password_hash = bcrypt.hashpw(
+        temp_password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
+    ).decode("utf-8")
+    db.commit()
+    revoke_all_user_tokens(user.id)
+
+    # Send via first available channel
+    channel = channels[0]
+    configs = (
+        db.query(NotificationChannelConfig)
+        .filter_by(channel_id=channel.id)
+        .all()
+    )
+    cfg = {c.config_key: c.config_value for c in configs}
+
+    message = f"【Numina】您的临时密码为：{temp_password}\n请登录后立即修改密码。"
+    if channel.channel_type == "telegram":
+        await NotificationSender.send_telegram(
+            cfg.get("bot_token", ""),
+            cfg.get("chat_id", ""),
+            message,
+        )
+    elif channel.channel_type == "email":
+        NotificationSender.send_email(
+            smtp_host=cfg.get("smtp_host", ""),
+            smtp_port=int(cfg.get("smtp_port", 587)),
+            smtp_user=cfg.get("smtp_user", ""),
+            smtp_password=cfg.get("smtp_password", ""),
+            smtp_from=cfg.get("smtp_from", cfg.get("smtp_user", "")),
+            to=cfg.get("to_email", ""),
+            subject="【Numina】临时密码",
+            body=message,
+        )
+
+    return {"message": "临时密码已发送，请重新登录"}
 
 
 # ---------------------------------------------------------------------------
@@ -631,6 +702,22 @@ def change_numeric_pin(
     ).decode("utf-8")
     db.commit()
     return {"message": "数字PIN修改成功"}
+
+
+@router.post("/pin/disable")
+def disable_numeric_pin(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Disable numeric PIN second factor."""
+    user_db = db.query(User).filter(User.id == user.id).first()
+    if not user_db:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+    user_db.numeric_pin_hash = None
+    user_db.second_factor_type = None
+    user_db.second_factor_enabled = False
+    db.commit()
+    return {"message": "二阶段验证已禁用"}
 
 
 @router.post("/child/{child_id}/password")
