@@ -19,7 +19,8 @@ from app.auth.revoke_jti import revoke_jti
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.schemas.device import DeviceCheckRequest, DeviceCheckResponse, DeviceSessionResponse, DeviceTrustRequest, DeviceTrustResponse
+from app.errors import AppError, ErrorCode
+from app.schemas.device import DeviceCheckRequest, DeviceCheckResponse, DeviceSessionResponse, DeviceTrustRequest, DeviceTrustResponse, FamilyDeviceResponse
 from app.services import device as device_service
 
 router = APIRouter(prefix="/auth", tags=["device"])
@@ -280,3 +281,31 @@ def check_device(
         avatar_color=user.avatar_color,
         second_factor_type=user.second_factor_type,
     )
+
+
+@router.get("/devices/family", response_model=list[FamilyDeviceResponse])
+def list_family_devices(
+    request: Request,
+    refresh_token_cookie: str | None = Cookie(None, alias=REFRESH_TOKEN_COOKIE),
+    child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """List active device sessions for all other family members. Owner or admin only."""
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
+    role = payload["role"]
+    if role not in ("owner", "admin"):
+        raise AppError(ErrorCode.FORBIDDEN)
+
+    user_id = int(payload["sub"])
+    family_id = int(payload["fid"])
+    current_jti = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
+
+    rows = device_service.list_family_device_sessions(
+        db,
+        family_id=family_id,
+        current_user_id=user_id,
+        current_refresh_jti=current_jti,
+    )
+    return [FamilyDeviceResponse(**row) for row in rows]

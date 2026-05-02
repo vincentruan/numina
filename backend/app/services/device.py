@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.errors import AppError, ErrorCode
 from app.models.device_session import DeviceSession
+from app.models.user import User
 
 
 def create_device_session(
@@ -124,6 +125,48 @@ def cleanup_expired_device_sessions(db: Session) -> int:
     )
     db.commit()
     return updated
+
+
+def list_family_device_sessions(
+    db: Session,
+    *,
+    family_id: int,
+    current_user_id: int,
+    current_refresh_jti: str | None,
+) -> list[dict]:
+    """Return active device sessions for all family members except the caller.
+
+    Each entry is a dict merging DeviceSession fields with the owning User's
+    display_name and avatar_color, plus an is_current flag.
+    """
+    now = datetime.utcnow()
+    rows = (
+        db.query(DeviceSession, User)
+        .join(User, DeviceSession.user_id == User.id)
+        .filter(
+            DeviceSession.family_id == family_id,
+            DeviceSession.user_id != current_user_id,
+            DeviceSession.is_revoked.is_(False),
+            DeviceSession.expires_at > now,
+        )
+        .order_by(DeviceSession.last_seen_at.desc())
+        .all()
+    )
+    result = []
+    for session, user in rows:
+        result.append(
+            {
+                "id": session.id,
+                "user_id": session.user_id,
+                "display_name": user.display_name,
+                "avatar_color": user.avatar_color,
+                "device_name": session.device_name,
+                "last_seen_at": session.last_seen_at,
+                "created_at": session.created_at,
+                "is_current": session.refresh_jti == current_refresh_jti,
+            }
+        )
+    return result
 
 
 def delete_old_revoked_sessions(db: Session) -> int:
