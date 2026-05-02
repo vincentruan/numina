@@ -15,7 +15,7 @@ export interface NotificationChannelCreate {
   channel_type: 'telegram' | 'email'
   name: string
   config: Record<string, string | number>
-  is_enabled?: boolean
+  is_enabled: boolean
   subscriptions?: string[]
 }
 

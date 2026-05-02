@@ -57,7 +57,7 @@ def create_channel(
         family_id=user.family_id,
         channel_type=req.channel_type,
         name=req.name,
-        is_enabled=req.is_enabled,
+        is_enabled=req.is_enabled if req.is_enabled is not None else True,
     )
     db.add(channel)
     db.flush()

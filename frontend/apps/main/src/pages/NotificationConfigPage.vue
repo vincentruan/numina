@@ -140,7 +140,7 @@ const form = reactive({
   bot_token: '',
   chat_id: '',
   smtp_host: '',
-  smtp_port: '587',
+  smtp_port: 587,
   smtp_user: '',
   smtp_password: '',
   smtp_from: '',
@@ -154,7 +154,7 @@ function resetForm() {
   form.bot_token = ''
   form.chat_id = ''
   form.smtp_host = ''
-  form.smtp_port = '587'
+  form.smtp_port = 587
   form.smtp_user = ''
   form.smtp_password = ''
   form.smtp_from = ''
@@ -194,8 +194,20 @@ function editChannel(channel: NotificationChannelResponse) {
 }
 
 async function saveChannel() {
+  if (!form.name.trim()) {
+    showToast('⚠️ 请输入渠道名称')
+    return
+  }
+  if (form.channel_type === 'telegram' && !form.chat_id.trim()) {
+    showToast('⚠️ 请输入 Chat ID')
+    return
+  }
   if (form.channel_type === 'telegram' && !/^-?\d+$/.test(form.chat_id)) {
     showToast(t('reminders.chatIdInvalid'))
+    return
+  }
+  if (form.channel_type === 'email' && !form.smtp_host.trim()) {
+    showToast('⚠️ 请输入 SMTP 服务器')
     return
   }
   const config: Record<string, string | number> =
@@ -203,7 +215,7 @@ async function saveChannel() {
       ? { bot_token: form.bot_token, chat_id: form.chat_id }
       : {
           smtp_host: form.smtp_host,
-          smtp_port: parseInt(form.smtp_port),
+          smtp_port: typeof form.smtp_port === 'number' ? form.smtp_port : parseInt(form.smtp_port) || 587,
           smtp_user: form.smtp_user,
           smtp_password: form.smtp_password,
           smtp_from: form.smtp_from,
@@ -223,6 +235,7 @@ async function saveChannel() {
       channel_type: form.channel_type,
       name: form.name,
       config,
+      is_enabled: true,
       subscriptions: form.subscriptions,
     })
     channels.value.push(created)
