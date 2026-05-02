@@ -308,7 +308,7 @@ onBeforeUnmount(() => {
   --ai-input-bg: #ffffff;
   --ai-input-border: rgba(0, 0, 0, 0.35);
   --ai-text-color: rgba(0, 0, 0, 0.9);
-  --ai-placeholder-color: rgba(0, 0, 0, 0.5);
+  --ai-placeholder-color: rgba(0, 0, 0, 0.6);
   --ai-scrollbar-thumb: rgba(0, 0, 0, 0.25);
   --ai-expand-color: rgba(0, 0, 0, 0.55);
   --ai-expand-hover-bg: rgba(0, 0, 0, 0.1);

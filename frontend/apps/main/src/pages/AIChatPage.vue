@@ -580,7 +580,7 @@ onUnmounted(() => {
   inset: 0;
   bottom: calc(50px + env(safe-area-inset-bottom));
   background: var(--bg);
-  z-index: 1;
+  z-index: 10;
 }
 
 /* ── Header ── */
