@@ -134,6 +134,7 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIStore } from '@/stores/ai'
 import { getAIReport } from '@/api/ai'
+import type { AIReport } from '@/types'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
@@ -143,7 +144,7 @@ const { t } = useI18n()
 const aiStore = useAIStore()
 const ws = useAIReportWS()
 
-const currentReport = ref<Record<string, unknown> | null>(null)
+const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const generating = ref(false)
 

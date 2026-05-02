@@ -18,9 +18,7 @@ const authStore = useAuthStore()
 const router = useRouter()
 
 const activeTab = ref<'my' | 'family'>('my')
-const isAdminOrOwner = computed(
-  () => authStore.user?.role === 'owner' || authStore.user?.role === 'admin',
-)
+const isAdminOrOwner = computed(() => authStore.user?.role === 'owner')
 
 // My devices
 const devices = ref<DeviceSession[]>([])
