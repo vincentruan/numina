@@ -1,29 +1,27 @@
 import http from './index'
 import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse, ChatMessage } from '@/types'
 
+// Frontend-facing flat config shape (mapped from backend multi-config model)
 export interface AIConfig {
+  id: number | null
   ai_enabled: boolean
   ai_provider: string | null
   ai_api_key_masked: string | null
   ai_base_url: string | null
   ai_model_id: string | null
   ai_vision_model_id: string | null
-  // 主模型连接测试结果（独立）
   ai_test_connected: boolean | null
   ai_test_message: string | null
   ai_test_latency_ms: number | null
   ai_test_timestamp: string | null
-  // 主模型thinking测试结果（独立）
   ai_test_thinking_success: boolean | null
   ai_test_thinking_message: string | null
   ai_test_thinking_latency_ms: number | null
   ai_test_thinking_timestamp: string | null
-  // 图像模型测试结果（独立存储）
   ai_vision_test_success: boolean | null
   ai_vision_test_message: string | null
   ai_vision_test_latency_ms: number | null
   ai_vision_test_timestamp: string | null
-  // 图像模型OCR文本准确度测试结果（独立存储）
   ai_vision_text_test_success: boolean | null
   ai_vision_text_test_message: string | null
   ai_vision_text_test_latency_ms: number | null
@@ -40,28 +38,128 @@ export interface AIConfigUpdate {
 }
 
 export interface AIConfigTestResult {
-  connected: boolean // 连接测试成功与否
+  connected: boolean
   message: string
   latency_ms?: number
-  // 思考能力测试结果（独立）
   thinking_success?: boolean | null
   thinking_message?: string | null
   thinking_latency_ms?: number | null
-  // 图像模型测试结果（独立）
   vision_success?: boolean | null
   vision_message?: string | null
   vision_latency_ms?: number | null
-  // OCR文本准确度测试结果（独立）
   vision_text_success?: boolean | null
   vision_text_message?: string | null
   vision_text_latency_ms?: number | null
 }
 
-export const getAIConfig = () =>
-  http.get<AIConfig>('/ai/config')
+// Backend response shapes
+interface _BackendTestResult {
+  id: number
+  test_type: string
+  success: boolean | null
+  message: string | null
+  latency_ms: number | null
+  tested_at: string
+}
 
-export const updateAIConfig = (data: AIConfigUpdate) =>
-  http.put<AIConfig>('/ai/config', data)
+interface _BackendConfig {
+  id: number
+  name: string
+  provider: string
+  ai_api_key_masked: string | null
+  base_url: string | null
+  model_id: string | null
+  vision_model_id: string | null
+  is_active: boolean
+  test_results: _BackendTestResult[]
+}
+
+function _findTest(results: _BackendTestResult[], type: string) {
+  return results.find((r) => r.test_type === type) ?? null
+}
+
+function _mapConfig(cfg: _BackendConfig): AIConfig {
+  const main = _findTest(cfg.test_results, 'main')
+  const thinking = _findTest(cfg.test_results, 'thinking')
+  const vision = _findTest(cfg.test_results, 'vision')
+  const visionText = _findTest(cfg.test_results, 'vision_text')
+  return {
+    id: cfg.id,
+    ai_enabled: cfg.is_active,
+    ai_provider: cfg.provider,
+    ai_api_key_masked: cfg.ai_api_key_masked,
+    ai_base_url: cfg.base_url,
+    ai_model_id: cfg.model_id,
+    ai_vision_model_id: cfg.vision_model_id,
+    ai_test_connected: main?.success ?? null,
+    ai_test_message: main?.message ?? null,
+    ai_test_latency_ms: main?.latency_ms ?? null,
+    ai_test_timestamp: main?.tested_at ?? null,
+    ai_test_thinking_success: thinking?.success ?? null,
+    ai_test_thinking_message: thinking?.message ?? null,
+    ai_test_thinking_latency_ms: thinking?.latency_ms ?? null,
+    ai_test_thinking_timestamp: thinking?.tested_at ?? null,
+    ai_vision_test_success: vision?.success ?? null,
+    ai_vision_test_message: vision?.message ?? null,
+    ai_vision_test_latency_ms: vision?.latency_ms ?? null,
+    ai_vision_test_timestamp: vision?.tested_at ?? null,
+    ai_vision_text_test_success: visionText?.success ?? null,
+    ai_vision_text_test_message: visionText?.message ?? null,
+    ai_vision_text_test_latency_ms: visionText?.latency_ms ?? null,
+    ai_vision_text_test_timestamp: visionText?.tested_at ?? null,
+  }
+}
+
+function _emptyConfig(): AIConfig {
+  return {
+    id: null, ai_enabled: false, ai_provider: null, ai_api_key_masked: null,
+    ai_base_url: null, ai_model_id: null, ai_vision_model_id: null,
+    ai_test_connected: null, ai_test_message: null, ai_test_latency_ms: null, ai_test_timestamp: null,
+    ai_test_thinking_success: null, ai_test_thinking_message: null, ai_test_thinking_latency_ms: null, ai_test_thinking_timestamp: null,
+    ai_vision_test_success: null, ai_vision_test_message: null, ai_vision_test_latency_ms: null, ai_vision_test_timestamp: null,
+    ai_vision_text_test_success: null, ai_vision_text_test_message: null, ai_vision_text_test_latency_ms: null, ai_vision_text_test_timestamp: null,
+  }
+}
+
+// Cached config id for update calls within the same session
+let _cachedConfigId: number | null = null
+
+export async function getAIConfig(): Promise<{ data: AIConfig }> {
+  const res = await http.get<{ configs: _BackendConfig[] }>('/ai/config')
+  const configs = res.data.configs ?? []
+  const active = configs.find((c) => c.is_active) ?? configs[0] ?? null
+  if (!active) return { data: _emptyConfig() }
+  _cachedConfigId = active.id
+  return { data: _mapConfig(active) }
+}
+
+export async function updateAIConfig(data: AIConfigUpdate): Promise<{ data: AIConfig }> {
+  const backendPayload: Record<string, unknown> = {}
+  if (data.ai_provider !== undefined) backendPayload.provider = data.ai_provider
+  if (data.ai_api_key !== undefined) backendPayload.ai_api_key = data.ai_api_key
+  if (data.ai_base_url !== undefined) backendPayload.base_url = data.ai_base_url
+  if (data.ai_model_id !== undefined) backendPayload.model_id = data.ai_model_id
+  if (data.ai_vision_model_id !== undefined) backendPayload.vision_model_id = data.ai_vision_model_id
+  if (data.ai_enabled !== undefined) backendPayload.is_active = data.ai_enabled
+
+  if (_cachedConfigId !== null) {
+    const res = await http.put<_BackendConfig>(`/ai/config/${_cachedConfigId}`, backendPayload)
+    return { data: _mapConfig(res.data) }
+  }
+
+  // No existing config — create one
+  const res = await http.post<_BackendConfig>('/ai/config', {
+    name: 'default',
+    provider: (data.ai_provider as string) ?? 'openai',
+    ai_api_key: data.ai_api_key ?? undefined,
+    base_url: data.ai_base_url ?? undefined,
+    model_id: data.ai_model_id ?? undefined,
+    vision_model_id: data.ai_vision_model_id ?? undefined,
+    is_active: data.ai_enabled ?? false,
+  })
+  _cachedConfigId = res.data.id
+  return { data: _mapConfig(res.data) }
+}
 
 export const testAIConfig = () =>
   http.post<AIConfigTestResult>('/ai/config/test')

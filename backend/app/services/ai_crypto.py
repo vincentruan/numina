@@ -19,11 +19,11 @@ def _get_fernet():
         return None
 
 
-def encrypt_api_key(api_key: str) -> str:
-    """加密 API Key，返回 base64 密文字符串。AI_ENCRYPTION_KEY 未配置时抛出异常。"""
+def encrypt_api_key(api_key: str) -> str | None:
+    """加密 API Key，返回 base64 密文字符串。AI_ENCRYPTION_KEY 未配置时返回 None。"""
     fernet = _get_fernet()
     if not fernet:
-        raise ValueError("AI_ENCRYPTION_KEY 未配置，无法加密存储 API Key。请在环境变量中设置 AI_ENCRYPTION_KEY。")
+        return None
     return fernet.encrypt(api_key.encode()).decode()
 
 
