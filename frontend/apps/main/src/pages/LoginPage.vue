@@ -97,8 +97,6 @@
         <router-link to="/register">创建家庭</router-link>
         <span class="divider">|</span>
         <router-link to="/join-family">加入家庭</router-link>
-        <span class="divider">|</span>
-        <a href="/child/">儿童登录</a>
       </div>
     </div>
   </div>

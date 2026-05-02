@@ -119,10 +119,6 @@
                   <van-icon name="star-o" size="18" />
                   <span>赠送星星</span>
                 </button>
-                <button class="action-btn action-btn--switch" @click="switchToChildView(child)">
-                  <van-icon name="exchange" size="18" />
-                  <span>切换视角</span>
-                </button>
                 <button class="action-btn action-btn--danger" @click="onForceLogout(child)">
                   <van-icon name="revoke" size="18" />
                   <span>{{ t('family.forceLogout') }}</span>
@@ -257,10 +253,7 @@ import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/a
 import { grantCoins } from '@/api/coins'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
-import { adminSwitchToChild } from '@/api/auth'
-import { setUser, clearAuth } from '@/utils/storage'
 import { createChild, resetChildPin, forceLogoutChild, unlockChildPin } from '@/api/children'
-import type { ChildUser } from '@/types'
 
 const { t } = useI18n()
 
@@ -418,32 +411,6 @@ async function doGrant() {
     const res = await getAllChildBalances()
     childBalances.value = res.data
   } catch { /* non-critical */ }
-}
-
-async function switchToChildView(child: ChildUser) {
-  try {
-    // 调用管理员专用API获取孩子JWT
-    await adminSwitchToChild(child.id)
-
-    // 更新用户状态为孩子
-    setUser({
-      id: child.id,
-      display_name: child.display_name,
-      avatar_color: child.avatar_color,
-      role: 'child',
-    })
-
-    // 标识这是管理员视角切换（用于退出逻辑）— set immediately before navigation
-    // so a mid-sequence throw doesn't leave a stale flag with no child session
-    localStorage.setItem('admin_child_view', '1')
-
-    // 导航到孩子首页（跨 SPA 全页导航）
-    window.location.href = '/child/'
-  } catch {
-    localStorage.removeItem('admin_child_view')
-    clearAuth()
-    showToast(t('toast.switchFailed'))
-  }
 }
 
 async function onRefresh() {
@@ -680,9 +647,6 @@ onMounted(async () => {
   color: #f5a623;
 }
 
-.action-btn--switch {
-  color: var(--color-action-blue);
-}
 
 .sheet-title {
   font-size: 17px;
