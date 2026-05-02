@@ -1,5 +1,9 @@
 // Barrel export for @numina/auth
 
+// Components
+export { default as AuthStep1Form } from './components/AuthStep1Form.vue'
+export { default as TrustedDeviceCard } from './components/TrustedDeviceCard.vue'
+
 // HTTP client configuration — call configureAuthHttp(http) in main.ts before using stores
 export { configureAuthHttp } from './stores/http'
 
