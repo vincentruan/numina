@@ -161,20 +161,16 @@ export async function updateAIConfig(data: AIConfigUpdate): Promise<{ data: AICo
   return { data: _mapConfig(res.data) }
 }
 
-export const testAIConfig = () =>
-  http.post<AIConfigTestResult>('/ai/config/test')
+function _testUrl(): string {
+  if (_cachedConfigId === null) throw new Error('AI config not loaded')
+  return `/ai/config/${_cachedConfigId}/test`
+}
 
-export const testMainModelOnly = () =>
-  http.post<AIConfigTestResult>('/ai/config/test/main')
-
-export const testThinkingOnly = () =>
-  http.post<AIConfigTestResult>('/ai/config/test/thinking')
-
-export const testVisionModelOnly = () =>
-  http.post<AIConfigTestResult>('/ai/config/test/vision')
-
-export const testVisionTextOCR = () =>
-  http.post<AIConfigTestResult>('/ai/config/test/vision/text')
+export const testAIConfig = () => http.post<AIConfigTestResult>(_testUrl())
+export const testMainModelOnly = () => http.post<AIConfigTestResult>(_testUrl())
+export const testThinkingOnly = () => http.post<AIConfigTestResult>(_testUrl())
+export const testVisionModelOnly = () => http.post<AIConfigTestResult>(_testUrl())
+export const testVisionTextOCR = () => http.post<AIConfigTestResult>(_testUrl())
 
 export interface AIReportResponse {
   report: AIReport | null

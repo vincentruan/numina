@@ -19,13 +19,21 @@
     <template v-if="isOwner">
       <van-cell-group inset title="服务商配置" class="section">
         <van-cell title="AI 服务商" :value="providerLabel" is-link @click="showProviderPicker = true" />
+        <!-- API Key: show masked value when not editing; show text input when editing -->
+        <van-cell v-if="!editingApiKey && maskedKey" title="API Key" :value="maskedKey">
+          <template #right-icon>
+            <van-button size="mini" plain @click="editingApiKey = true">修改</van-button>
+          </template>
+        </van-cell>
         <van-field
+          v-else
           v-model="apiKeyInput"
           label="API Key"
-          :placeholder="maskedKey || '请输入 API Key'"
+          :placeholder="'请输入 API Key'"
           :type="showApiKey ? 'text' : 'password'"
           clearable
           :disabled="saving"
+          autocomplete="off"
         >
           <template #right-icon>
             <van-icon
@@ -275,6 +283,7 @@ const showProviderPicker = ref(false)
 const showMainModelPopup = ref(false)
 const showVisionModelPopup = ref(false)
 const apiKeyInput = ref('')
+const editingApiKey = ref(false)
 const baseUrlInput = ref('')
 const modelIdInput = ref('')
 const visionModelIdInput = ref('')
@@ -397,6 +406,8 @@ async function onSave() {
     payload.ai_vision_model_id = visionModelIdInput.value.trim() || null
     await aiStore.updateConfig(payload)
     apiKeyInput.value = ''
+    editingApiKey.value = false
+    showApiKey.value = false
     showToast(t('toast.aiConfigSaved'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
