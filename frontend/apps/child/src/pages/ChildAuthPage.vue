@@ -50,10 +50,22 @@
 
     <!-- Step 2: emoji PIN -->
     <div v-else class="step-container">
-      <div v-if="childInfo.avatarColor" class="child-avatar" :style="{ backgroundColor: childInfo.avatarColor }">
-        {{ (childInfo.displayName ?? '?').charAt(0) }}
-      </div>
-      <p class="child-name">{{ childInfo.displayName }}</p>
+      <!-- Trusted device card — shown when device check identified the user -->
+      <TrustedDeviceCard
+        v-if="trustedUser"
+        :display-name="trustedUser.displayName"
+        :avatar-color="trustedUser.avatarColor"
+        :loading="false"
+        @confirm="() => {}"
+        @switch-account="onSwitchAccount"
+      />
+
+      <template v-else>
+        <div v-if="childInfo.avatarColor" class="child-avatar" :style="{ backgroundColor: childInfo.avatarColor }">
+          {{ (childInfo.displayName ?? '?').charAt(0) }}
+        </div>
+        <p class="child-name">{{ childInfo.displayName }}</p>
+      </template>
 
       <!-- WebAuthn mode -->
       <div v-if="authMode === 'webauthn'" class="webauthn-mode">
@@ -128,9 +140,10 @@ import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { useChildAuthStore } from '@numina/auth'
+import { useChildAuthStore, TrustedDeviceCard, getDeviceFingerprint } from '@numina/auth'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import { getAuthenticationOptions, authenticateWithPasskey } from '@/api/webauthn'
+import { checkDevice } from '@/api/device'
 import axios from 'axios'
 
 const { t } = useI18n()
@@ -156,11 +169,49 @@ const showPassword = ref(false)
 
 const form = ref({ username: '', password: '' })
 
+interface TrustedUser {
+  displayName: string
+  avatarColor: string
+  secondFactorType: 'emoji_pin' | 'webauthn'
+}
+const trustedUser = ref<TrustedUser | null>(null)
+
 onMounted(async () => {
   const support = checkWebAuthnSupport()
-  if (!support.supported) return
-  webAuthnAvailable.value = true
+  if (support.supported) webAuthnAvailable.value = true
+
+  try {
+    const fingerprint = await getDeviceFingerprint()
+    const result = await checkDevice(fingerprint)
+    if (result.trusted && result.temp_token && result.display_name && result.avatar_color && result.second_factor_type) {
+      tempToken.value = result.temp_token
+      childInfo.value = {
+        displayName: result.display_name,
+        avatarColor: result.avatar_color,
+        childId: result.user_id != null ? String(result.user_id) : '',
+      }
+      trustedUser.value = {
+        displayName: result.display_name,
+        avatarColor: result.avatar_color,
+        secondFactorType: result.second_factor_type,
+      }
+      if (result.second_factor_type === 'webauthn') {
+        authMode.value = 'webauthn'
+      }
+      step.value = 2
+    }
+  } catch {
+    // Device check failure is non-fatal — fall through to normal step 1
+  }
 })
+
+function onSwitchAccount() {
+  trustedUser.value = null
+  tempToken.value = ''
+  step.value = 1
+  pin.value = []
+  childAuthStore.clearLoginError()
+}
 
 async function onStep1Submit() {
   if (!form.value.username.trim()) return

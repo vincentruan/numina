@@ -52,6 +52,17 @@
 
       <!-- Step 2: numeric PIN -->
       <div v-else class="pin-step">
+        <!-- Trusted device card — shown when fast-login path was taken -->
+        <TrustedDeviceCard
+          v-if="trustedUser"
+          :display-name="trustedUser.displayName"
+          :avatar-color="trustedUser.avatarColor"
+          :loading="loading"
+          class="trusted-card"
+          @confirm="focusPinHint"
+          @switch-account="switchAccount"
+        />
+
         <p class="pin-hint">请输入数字 PIN 码完成验证</p>
 
         <div class="pin-display" :class="{ shake: shaking }">
@@ -103,13 +114,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
 import { useStarField } from '@/composables/useStarField'
+import { TrustedDeviceCard, getDeviceFingerprint } from '@numina/auth'
+import { checkDevice } from '@/api/device'
 
 const { t } = useI18n()
 
@@ -129,10 +142,31 @@ const pinInput = ref('')
 const shaking = ref(false)
 const pinError = ref('')
 
+interface TrustedUser {
+  displayName: string
+  avatarColor: string
+}
+const trustedUser = ref<TrustedUser | null>(null)
+
 const form = ref({
   username: '',
   password: '',
   altcha: undefined as string | undefined,
+})
+
+onMounted(async () => {
+  try {
+    const fingerprint = await getDeviceFingerprint()
+    const { data } = await checkDevice(fingerprint)
+    if (data.trusted && data.temp_token && data.display_name && data.avatar_color) {
+      tempToken.value = data.temp_token
+      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
+      trustedUser.value = { displayName: data.display_name, avatarColor: data.avatar_color }
+      step.value = 2
+    }
+  } catch {
+    // Device check failure is non-fatal — fall through to normal step 1
+  }
 })
 
 async function onStep1Submit() {
@@ -220,6 +254,15 @@ function backToStep1() {
   pinInput.value = ''
   pinError.value = ''
   tempToken.value = ''
+  trustedUser.value = null
+}
+
+function switchAccount() {
+  backToStep1()
+}
+
+function focusPinHint() {
+  // TrustedDeviceCard confirm — user is already on step 2, nothing extra needed
 }
 </script>
 
@@ -405,5 +448,9 @@ function backToStep1() {
 .pin-confirm-btn {
   max-width: 280px;
   margin-bottom: 16px;
+}
+
+.trusted-card {
+  margin-bottom: 24px;
 }
 </style>
