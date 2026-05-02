@@ -64,6 +64,7 @@
           @switch-account="switchAccount"
         />
 
+        <p class="pin-username">{{ form.username }}</p>
         <p class="pin-hint">请输入数字 PIN 码完成验证</p>
 
         <div class="pin-display" :class="{ shake: shaking }">
@@ -79,11 +80,14 @@
 
         <div class="numpad">
           <button
-            v-for="n in [1,2,3,4,5,6,7,8,9,'',0,'⌫']"
+            v-for="n in [1,2,3,4,5,6,7,8,9,'清空',0,'⌫']"
             :key="n"
             class="numpad-btn"
-            :class="{ 'numpad-empty': n === '' }"
-            :disabled="n === '' || loading"
+            :class="{
+              'numpad-action': n === '清空' || n === '⌫',
+              flash: flashKey === n,
+            }"
+            :disabled="loading"
             @click="onNumpadPress(n)"
           >
             {{ n }}
@@ -100,15 +104,11 @@
           @click="submitPin"
         >确认</van-button>
 
-        <van-button plain size="small" class="back-btn" @click="backToStep1">
-          返回重新登录
-        </van-button>
-      </div>
-
-      <div class="login-links">
-        <router-link to="/register">创建家庭</router-link>
-        <span class="divider">|</span>
-        <router-link to="/join-family">加入家庭</router-link>
+        <div class="form-actions back-actions">
+          <van-button round block type="primary" class="back-btn-primary" @click="backToStep1">
+            返回重新登录
+          </van-button>
+        </div>
       </div>
     </div>
   </div>
@@ -142,6 +142,7 @@ const secondFactorType = ref('')
 const pinInput = ref('')
 const shaking = ref(false)
 const pinError = ref('')
+const flashKey = ref<number | string | null>(null)
 
 interface TrustedUser {
   displayName: string
@@ -201,10 +202,10 @@ async function onStep1Submit() {
 
     const i18nKey = code ? `errors.${code}` : ''
     if (i18nKey && t(i18nKey) !== i18nKey) {
-      showToast({ type: 'fail', message: t(i18nKey) })
+      showToast(t(i18nKey))
     } else {
       const fallback = axiosError.response?.data?.message || axiosError.response?.data?.detail || t('toast.loginFailedGeneric')
-      showToast({ type: 'fail', message: fallback })
+      showToast(fallback)
     }
   } finally {
     loading.value = false
@@ -212,8 +213,16 @@ async function onStep1Submit() {
 }
 
 function onNumpadPress(key: number | string) {
+  flashKey.value = key
+  setTimeout(() => { flashKey.value = null }, 150)
+
   if (key === '⌫') {
     pinInput.value = pinInput.value.slice(0, -1)
+    pinError.value = ''
+    return
+  }
+  if (key === '清空') {
+    pinInput.value = ''
     pinError.value = ''
     return
   }
@@ -327,8 +336,9 @@ function focusPinHint() {
 }
 
 .form-actions :deep(.van-button--primary) {
-  --van-button-primary-background: var(--color-action-primary);
-  --van-button-primary-border-color: var(--color-action-primary);
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  color: #010120;
 }
 
 .login-links {
@@ -437,19 +447,53 @@ function focusPinHint() {
   cursor: not-allowed;
 }
 
-.numpad-empty {
-  background: transparent !important;
-  cursor: default !important;
+.numpad-action {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  background: rgba(189, 187, 255, 0.15) !important;
+  color: #bdbbff !important;
 }
 
-.back-btn {
-  color: rgba(255, 255, 255, 0.8);
-  border-color: rgba(255, 255, 255, 0.4);
+@keyframes flash {
+  0% { background: rgba(255, 255, 255, 0.12); }
+  40% { background: rgba(189, 187, 255, 0.6); }
+  100% { background: rgba(255, 255, 255, 0.12); }
+}
+
+.numpad-btn.flash {
+  animation: flash 0.15s ease-out;
+}
+
+.numpad-action.flash {
+  animation: flash 0.15s ease-out;
+}
+
+.pin-username {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
 }
 
 .pin-confirm-btn {
   max-width: 280px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  --van-button-primary-color: #010120;
+}
+
+.back-actions {
+  padding: 0;
+  width: 100%;
+  max-width: 280px;
+}
+
+.back-btn-primary {
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  --van-button-primary-color: #010120;
 }
 
 .trusted-card {
