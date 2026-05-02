@@ -2,11 +2,11 @@
   <div class="ai-hub-page">
     <!-- Header -->
     <div class="hub-header">
-      <div class="hub-header-bg" aria-hidden="true"></div>
-      <div class="hub-header-content">
+      <div class="hub-header-blob" aria-hidden="true"></div>
+      <div class="hub-header-main">
         <div class="hub-greeting">
+          <span class="hub-greeting-label">AI 智能助手</span>
           <span class="hub-greeting-hi">你好，{{ userName }}</span>
-          <span class="hub-greeting-sub">家庭资产智能助手</span>
         </div>
         <!-- Health score ring -->
         <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="`资产健康评分 ${displayScore} 分`">
@@ -24,24 +24,41 @@
           </div>
         </div>
       </div>
-      <!-- Report freshness -->
-      <div class="hub-meta" aria-live="polite">
-        <template v-if="reportLoading">
-          <van-loading size="12" color="rgba(255,255,255,0.7)" />
-          <span>正在生成报告…</span>
-        </template>
-        <template v-else-if="reportGeneratedAt">
-          <span>报告生成于 {{ reportAge }}</span>
-          <button class="refresh-btn" :disabled="reportLoading" aria-label="刷新报告" @click="() => refreshReport()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-            </svg>
-          </button>
-        </template>
-        <template v-else>
-          <span>暂无报告</span>
-        </template>
+      <!-- Stats row -->
+      <div class="hub-stats">
+        <div class="hub-stat-item">
+          <span class="hub-stat-num">{{ suggestionCount }}</span>
+          <span class="hub-stat-label">项建议</span>
+        </div>
+        <div class="hub-stat-divider" aria-hidden="true"></div>
+        <div class="hub-stat-item">
+          <span class="hub-stat-num warn">{{ alertCount }}</span>
+          <span class="hub-stat-label">项预警</span>
+        </div>
+        <div class="hub-stat-divider" aria-hidden="true"></div>
+        <div class="hub-stat-item">
+          <span class="hub-stat-num">{{ currentReport?.data_completeness_score?.toFixed(0) ?? '-' }}%</span>
+          <span class="hub-stat-label">数据完整度</span>
+        </div>
+        <div class="hub-stat-divider" aria-hidden="true"></div>
+        <div class="hub-stat-meta" aria-live="polite">
+          <template v-if="reportLoading">
+            <van-loading size="10" />
+            <span>生成中…</span>
+          </template>
+          <template v-else-if="reportGeneratedAt">
+            <span>{{ reportAge }}</span>
+            <button class="refresh-btn" :disabled="reportLoading" aria-label="刷新报告" @click="() => refreshReport()">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+          </template>
+          <template v-else>
+            <span>暂无报告</span>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -54,22 +71,6 @@
         最新资产体检报告
       </div>
       <p class="report-summary-text">{{ currentReport.summary }}</p>
-      <div class="report-summary-stats">
-        <div class="report-stat">
-          <span class="report-stat-num">{{ suggestionCount }}</span>
-          <span class="report-stat-label">项建议</span>
-        </div>
-        <div class="report-stat-divider" aria-hidden="true"></div>
-        <div class="report-stat">
-          <span class="report-stat-num warn">{{ alertCount }}</span>
-          <span class="report-stat-label">项预警</span>
-        </div>
-        <div class="report-stat-divider" aria-hidden="true"></div>
-        <div class="report-stat">
-          <span class="report-stat-num">{{ currentReport.data_completeness_score?.toFixed(0) ?? '-' }}%</span>
-          <span class="report-stat-label">数据完整度</span>
-        </div>
-      </div>
       <div class="report-summary-cta">
         查看完整报告
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -314,22 +315,48 @@ onMounted(async () => {
   padding-bottom: 140px;
 }
 
-/* ── Header ── */
+/* ── Header: Pastel Cloud Gradient (mirrors NetWorthCard) ── */
 .hub-header {
   position: relative;
-  padding: 20px 20px 16px;
-  background: #010120;
+  padding: 20px 16px 16px;
+  background:
+    linear-gradient(135deg,
+      rgba(239, 44, 193, 0.10) 0%,
+      rgba(189, 187, 255, 0.18) 45%,
+      rgba(160, 195, 255, 0.14) 100%),
+    #ffffff;
+  color: #000000;
   overflow: hidden;
 }
 
-.hub-header-bg {
+[data-theme='dark'] .hub-header {
+  background:
+    linear-gradient(135deg,
+      rgba(189, 187, 255, 0.08) 0%,
+      rgba(189, 187, 255, 0.04) 50%,
+      transparent 100%),
+    #010120;
+  color: #ffffff;
+}
+
+/* Decorative blob */
+.hub-header-blob {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(189,187,255,0.08) 0%, transparent 100%);
+  top: -40px;
+  right: -30px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.22) 0%, transparent 70%);
   pointer-events: none;
 }
 
-.hub-header-content {
+[data-theme='dark'] .hub-header-blob {
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
+}
+
+/* Main row: greeting + score ring */
+.hub-header-main {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -342,16 +369,31 @@ onMounted(async () => {
   gap: 4px;
 }
 
-.hub-greeting-hi {
-  font-size: 20px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.3px;
+/* Mono label — uppercase, tight tracking */
+.hub-greeting-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  font-family: 'Georgia', monospace;
 }
 
-.hub-greeting-sub {
-  font-size: 13px;
-  color: rgba(255,255,255,0.92);
+[data-theme='dark'] .hub-greeting-label {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Display name: tight negative tracking */
+.hub-greeting-hi {
+  font-size: clamp(20px, 5vw, 24px);
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: #000000;
+}
+
+[data-theme='dark'] .hub-greeting-hi {
+  color: #ffffff;
 }
 
 /* Score ring */
@@ -370,8 +412,12 @@ onMounted(async () => {
 
 .score-track {
   fill: none;
-  stroke: rgba(255,255,255,0.2);
+  stroke: rgba(0, 0, 0, 0.12);
   stroke-width: 4;
+}
+
+[data-theme='dark'] .score-track {
+  stroke: rgba(255, 255, 255, 0.15);
 }
 
 .score-fill {
@@ -381,11 +427,17 @@ onMounted(async () => {
   transition: stroke-dasharray 0.6s ease;
 }
 
-.score-excellent .score-fill { stroke: #4ade80; }
-.score-good      .score-fill { stroke: #60a5fa; }
-.score-fair      .score-fill { stroke: #fbbf24; }
-.score-poor      .score-fill { stroke: #f87171; }
-.score-empty     .score-fill { stroke: rgba(255,255,255,0.3); }
+.score-excellent .score-fill { stroke: #059669; }
+.score-good      .score-fill { stroke: #2563eb; }
+.score-fair      .score-fill { stroke: #d97706; }
+.score-poor      .score-fill { stroke: #dc2626; }
+.score-empty     .score-fill { stroke: rgba(0, 0, 0, 0.15); }
+
+[data-theme='dark'] .score-excellent .score-fill { stroke: #6ee7a0; }
+[data-theme='dark'] .score-good      .score-fill { stroke: #93c5fd; }
+[data-theme='dark'] .score-fair      .score-fill { stroke: #fcd34d; }
+[data-theme='dark'] .score-poor      .score-fill { stroke: #fca5a5; }
+[data-theme='dark'] .score-empty     .score-fill { stroke: rgba(255, 255, 255, 0.15); }
 
 .score-inner {
   position: absolute;
@@ -394,97 +446,55 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 0;
 }
 
 .score-number {
   font-size: 18px;
-  font-weight: 700;
-  color: #fff;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: #000000;
   line-height: 1;
+}
+
+[data-theme='dark'] .score-number {
+  color: #ffffff;
 }
 
 .score-label {
-  font-size: 12px;
-  color: rgba(255,255,255,0.9);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  color: rgba(0, 0, 0, 0.45);
+  font-family: 'Georgia', monospace;
   line-height: 1;
 }
 
-/* Meta row */
-.hub-meta {
+[data-theme='dark'] .score-label {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Stats row: frosted glass, 8px radius, dark-blue-tinted shadow */
+.hub-stats {
   display: flex;
   align-items: center;
-  gap: 6px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 10px 12px;
   margin-top: 12px;
-  font-size: 12px;
-  color: rgba(255,255,255,0.92);
+  box-shadow: rgba(1, 1, 32, 0.08) 0px 2px 8px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   position: relative;
 }
 
-.refresh-btn {
-  background: none;
-  border: none;
-  padding: 10px;
-  min-width: 44px;
-  min-height: 44px;
-  color: rgba(255,255,255,0.92);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  transition: color 0.15s;
+[data-theme='dark'] .hub-stats {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: rgba(1, 1, 32, 0.4) 0px 2px 8px;
 }
 
-.refresh-btn:hover { color: #fff; }
-.refresh-btn:disabled { opacity: 0.4; cursor: default; }
-
-/* ── Report summary card ── */
-.report-summary-card {
-  margin: 12px 16px;
-  background: var(--card-bg);
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  cursor: pointer;
-  transition: box-shadow 0.15s;
-}
-
-.report-summary-card:active {
-  box-shadow: 0 0 0 1px rgba(99,102,241,0.3);
-}
-
-.report-summary-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: 8px;
-}
-
-.report-summary-title svg { color: #6366f1; }
-
-.report-summary-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin: 0 0 12px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.report-summary-stats {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin-bottom: 12px;
-}
-
-.report-stat {
+.hub-stat-item {
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -492,24 +502,137 @@ onMounted(async () => {
   gap: 2px;
 }
 
-.report-stat-num {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--text-primary);
+.hub-stat-num {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.16px;
+  color: #000000;
   line-height: 1;
 }
 
-.report-stat-num.warn { color: #f59e0b; }
-
-.report-stat-label {
-  font-size: 11px;
-  color: var(--text-secondary);
+[data-theme='dark'] .hub-stat-num {
+  color: #ffffff;
 }
 
-.report-stat-divider {
+.hub-stat-num.warn { color: #d97706; }
+[data-theme='dark'] .hub-stat-num.warn { color: #fcd34d; }
+
+.hub-stat-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.40);
+  font-family: 'Georgia', monospace;
+}
+
+[data-theme='dark'] .hub-stat-label {
+  color: rgba(255, 255, 255, 0.40);
+}
+
+.hub-stat-divider {
   width: 1px;
   height: 28px;
-  background: var(--separator);
+  background: rgba(0, 0, 0, 0.10);
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .hub-stat-divider {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Meta (freshness + refresh) — rightmost slot in stats row */
+.hub-stat-meta {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.40);
+  font-family: 'Georgia', monospace;
+  letter-spacing: 0.055px;
+  flex-shrink: 0;
+  padding-left: 8px;
+}
+
+[data-theme='dark'] .hub-stat-meta {
+  color: rgba(255, 255, 255, 0.40);
+}
+
+.refresh-btn {
+  background: none;
+  border: none;
+  padding: 8px;
+  min-width: 32px;
+  min-height: 32px;
+  color: rgba(0, 0, 0, 0.40);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+[data-theme='dark'] .refresh-btn {
+  color: rgba(255, 255, 255, 0.40);
+}
+
+.refresh-btn:hover { color: #000000; }
+[data-theme='dark'] .refresh-btn:hover { color: #ffffff; }
+.refresh-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Report summary card ── */
+.report-summary-card {
+  margin: 12px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 14px 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+}
+
+[data-theme='dark'] .report-summary-card {
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
+}
+
+.report-summary-card:active {
+  box-shadow: rgba(1, 1, 32, 0.12) 0px 4px 12px;
+}
+
+.report-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  font-family: 'Georgia', monospace;
+  margin-bottom: 8px;
+}
+
+[data-theme='dark'] .report-summary-title {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.report-summary-title svg { color: rgba(0, 0, 0, 0.35); }
+[data-theme='dark'] .report-summary-title svg { color: rgba(255, 255, 255, 0.35); }
+
+.report-summary-text {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0 0 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .report-summary-cta {
@@ -518,39 +641,57 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 4px;
   font-size: 12px;
-  color: #6366f1;
   font-weight: 500;
+  letter-spacing: -0.12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme='dark'] .report-summary-cta {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* Empty report card */
 .report-empty-card {
   margin: 12px 16px;
   background: var(--card-bg);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 24px 16px;
   text-align: center;
   cursor: pointer;
-  border: 1.5px dashed rgba(99,102,241,0.3);
+  border: 1px dashed rgba(0, 0, 0, 0.15);
   transition: border-color 0.15s;
 }
 
-.report-empty-card:active { border-color: #6366f1; }
+[data-theme='dark'] .report-empty-card {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.report-empty-card:active { border-color: rgba(0, 0, 0, 0.35); }
+[data-theme='dark'] .report-empty-card:active { border-color: rgba(255, 255, 255, 0.35); }
 
 .report-empty-icon {
   width: 48px;
   height: 48px;
-  border-radius: 50%;
-  background: rgba(99,102,241,0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px;
-  color: #6366f1;
+  color: rgba(0, 0, 0, 0.40);
+}
+
+[data-theme='dark'] .report-empty-icon {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.40);
 }
 
 .report-empty-text {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.14px;
   color: var(--text-primary);
   margin: 0 0 4px;
 }
@@ -559,6 +700,7 @@ onMounted(async () => {
   font-size: 12px;
   color: var(--text-secondary);
   margin: 0;
+  letter-spacing: -0.12px;
 }
 
 /* ── Feature grid ── */
@@ -568,12 +710,17 @@ onMounted(async () => {
 }
 
 .feature-section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  color: rgba(0, 0, 0, 0.40);
+  font-family: 'Georgia', monospace;
+  margin: 0 0 10px;
+}
+
+[data-theme='dark'] .feature-section-title {
+  color: rgba(255, 255, 255, 0.40);
 }
 
 .feature-grid {
@@ -584,44 +731,52 @@ onMounted(async () => {
 
 .feature-card {
   background: var(--card-bg);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 14px 10px 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  border: none;
+  border: 1px solid rgba(0, 0, 0, 0.06);
   cursor: pointer;
   transition: box-shadow 0.15s, transform 0.1s;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  box-shadow: rgba(1, 1, 32, 0.05) 0px 1px 4px;
   min-height: 88px;
+}
+
+[data-theme='dark'] .feature-card {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: rgba(1, 1, 32, 0.3) 0px 1px 4px;
 }
 
 .feature-card:active {
   transform: scale(0.96);
-  box-shadow: 0 0 0 1.5px rgba(99,102,241,0.25);
+  box-shadow: rgba(1, 1, 32, 0.10) 0px 4px 10px;
 }
 
 .feature-icon {
   width: 40px;
   height: 40px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, rgba(99,102,241,0.12) 0%, rgba(124,58,237,0.12) 100%);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6366f1;
+  color: rgba(0, 0, 0, 0.55);
   flex-shrink: 0;
 }
 
 [data-theme='dark'] .feature-icon {
-  background: linear-gradient(135deg, rgba(99,102,241,0.2) 0%, rgba(124,58,237,0.2) 100%);
-  color: #a5b4fc;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.60);
 }
 
 .feature-title {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.12px;
   color: var(--text-primary);
   text-align: center;
   line-height: 1.2;
@@ -632,6 +787,7 @@ onMounted(async () => {
   color: var(--text-secondary);
   text-align: center;
   line-height: 1.3;
+  letter-spacing: -0.11px;
 }
 
 /* ── Chat entry ── */
@@ -643,21 +799,24 @@ onMounted(async () => {
   z-index: 10;
   padding: 8px 16px 12px;
   background: var(--bg-primary, #fff);
-  border-top: 1px solid var(--separator);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 
+[data-theme='dark'] .chat-entry {
+  border-top-color: rgba(255, 255, 255, 0.10);
+}
 
-/* Focus rings for interactive cards */
+/* Focus rings */
 .report-summary-card:focus-visible,
 .report-empty-card:focus-visible,
-.feature-card:focus-visible,
-.chat-send:focus-visible {
-  outline: 2px solid #6366f1;
+.feature-card:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.5);
   outline-offset: 2px;
 }
 
-.report-stat-label {
-  font-size: 12px;
-  color: var(--text-secondary);
+[data-theme='dark'] .report-summary-card:focus-visible,
+[data-theme='dark'] .report-empty-card:focus-visible,
+[data-theme='dark'] .feature-card:focus-visible {
+  outline-color: rgba(255, 255, 255, 0.5);
 }
 </style>
