@@ -19,21 +19,15 @@
     <template v-if="isOwner">
       <van-cell-group inset title="服务商配置" class="section">
         <van-cell title="AI 服务商" :value="providerLabel" is-link @click="showProviderPicker = true" />
-        <!-- API Key: show masked value when not editing; show text input when editing -->
-        <van-cell v-if="!editingApiKey && maskedKey" title="API Key" :value="maskedKey">
-          <template #right-icon>
-            <van-button size="mini" plain @click="editingApiKey = true">修改</van-button>
-          </template>
-        </van-cell>
+        <!-- API Key: shows masked value by default; eye icon toggles plaintext; typing replaces with new key -->
         <van-field
-          v-else
-          v-model="apiKeyInput"
+          v-model="apiKeyDisplay"
           label="API Key"
           :placeholder="'请输入 API Key'"
           :type="showApiKey ? 'text' : 'password'"
-          clearable
           :disabled="saving"
           autocomplete="off"
+          @input="onApiKeyInput"
         >
           <template #right-icon>
             <van-icon
@@ -282,7 +276,8 @@ const testingVisionText = ref(false)
 const showProviderPicker = ref(false)
 const showMainModelPopup = ref(false)
 const showVisionModelPopup = ref(false)
-const apiKeyInput = ref('')
+const apiKeyInput = ref('')       // actual new key typed by user (empty = keep existing)
+const apiKeyDisplay = ref('')     // what the field shows (masked key or new input)
 const editingApiKey = ref(false)
 const baseUrlInput = ref('')
 const modelIdInput = ref('')
@@ -375,7 +370,14 @@ onMounted(async () => {
   baseUrlInput.value = aiStore.config?.ai_base_url ?? ''
   modelIdInput.value = aiStore.config?.ai_model_id ?? ''
   visionModelIdInput.value = aiStore.config?.ai_vision_model_id ?? ''
+  apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
 })
+
+function onApiKeyInput(e: Event) {
+  const val = (e.target as HTMLInputElement).value
+  apiKeyInput.value = val
+  apiKeyDisplay.value = val
+}
 
 async function onToggleAI(val: boolean) {
   saving.value = true
@@ -408,6 +410,7 @@ async function onSave() {
     apiKeyInput.value = ''
     editingApiKey.value = false
     showApiKey.value = false
+    apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
     showToast(t('toast.aiConfigSaved'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
