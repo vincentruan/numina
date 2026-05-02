@@ -12,7 +12,7 @@
     >
       <!-- Loading overlay -->
       <div v-if="loading" class="card-loading-overlay" aria-hidden="true">
-        <van-loading size="28px" color="#fff" />
+        <div class="card-spinner" />
       </div>
 
       <!-- Avatar -->
@@ -101,6 +101,19 @@ const emit = defineEmits<{
   background: rgba(0, 0, 0, 0.45);
   border-radius: 16px;
   z-index: 1;
+}
+
+.card-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: card-spin 0.7s linear infinite;
+}
+
+@keyframes card-spin {
+  to { transform: rotate(360deg); }
 }
 
 /* Avatar */
