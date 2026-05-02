@@ -2,27 +2,20 @@
   <div class="settings-page">
     <PageHeader :title="t('settings.title')" :show-back="false" />
 
-    <van-cell-group inset :title="t('settings.dataManagement')">
-      <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
-      <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
-    </van-cell-group>
-
-    <van-cell-group inset title="AI 配置" class="section">
-      <van-cell title="AI 智能助手" icon="smile-o" is-link to="/settings/ai" />
-    </van-cell-group>
-
-    <van-cell-group inset title="账户安全" class="section">
-      <van-cell :title="t('device.title')" icon="phone-o" is-link to="/settings/devices" />
+    <!-- 账户信息 -->
+    <van-cell-group inset :title="t('settings.accountInfo')">
       <van-cell
-        :title="t('reminders.notificationSettings')"
-        is-link
-        icon="bell"
-        @click="$router.push('/settings/notifications')"
+        :title="t('family.familyName')"
+        :value="familyStore.family?.custom_title || familyStore.family?.name"
+        :is-link="authStore.user?.role === 'owner'"
+        @click="onEditFamilyTitle"
       />
-      <van-cell title="账户密码" icon="lock" is-link to="/settings/password" />
-      <van-cell title="二阶段验证" icon="shield-o" is-link to="/settings/second-factor" />
+      <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name" />
+      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" />
+      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" />
     </van-cell-group>
 
+    <!-- 外观与偏好 -->
     <van-cell-group inset :title="t('settings.userSettings')" class="section">
       <van-cell :title="t('settings.theme')" :value="themeLabel" is-link @click="showThemePicker = true" />
       <van-cell :title="t('settings.themeColor')" is-link @click="showThemeColorPicker = true">
@@ -35,57 +28,67 @@
       <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" is-link @click="showViewModePicker = true" />
     </van-cell-group>
 
+    <!-- 家庭管理 -->
     <van-cell-group
       v-if="authStore.user?.role === 'owner' || authStore.user?.role === 'member'"
       inset
-      title="家庭管理"
+      :title="t('settings.familyManagement')"
       class="section"
     >
-      <van-cell title="家庭成员管理" icon="friends-o" is-link to="/family" />
-    </van-cell-group>
-
-    <!-- Coin rate settings (owner only) -->
-    <van-cell-group v-if="authStore.user?.role === 'owner'" inset class="section">
+      <van-cell :title="t('settings.familyMembers')" icon="friends-o" is-link to="/family" />
       <van-cell
-        title="⭐ 星星币兑换比例"
-        :value="coinRatesExpanded ? '' : `铜→银 ${copperToSilverStr}，银→金 ${silverToGoldStr}`"
+        v-if="authStore.user?.role === 'owner'"
+        :title="t('settings.coinRate')"
+        :value="coinRatesExpanded ? '' : t('settings.coinRateValue', { c2s: copperToSilverStr, s2g: silverToGoldStr })"
         is-link
         :arrow-direction="coinRatesExpanded ? 'up' : 'down'"
         @click="coinRatesExpanded = !coinRatesExpanded"
       />
-      <template v-if="coinRatesExpanded">
+      <template v-if="coinRatesExpanded && authStore.user?.role === 'owner'">
         <van-field
           v-model="copperToSilverStr"
-          label="铜→银"
+          :label="t('settings.coinCopperToSilver')"
           type="digit"
-          placeholder="默认 10"
+          :placeholder="t('settings.coinRateDefault', { n: 10 })"
         />
         <van-field
           v-model="silverToGoldStr"
-          label="银→金"
+          :label="t('settings.coinSilverToGold')"
           type="digit"
-          placeholder="默认 10"
+          :placeholder="t('settings.coinRateDefault', { n: 10 })"
         />
         <van-cell>
           <template #title>
             <van-button size="small" type="primary" :loading="savingRates" @click="saveCoinRates">
-              保存
+              {{ t('common.save') }}
             </van-button>
           </template>
         </van-cell>
       </template>
     </van-cell-group>
 
-    <van-cell-group inset :title="t('settings.accountInfo')" class="section">
+    <!-- 账户安全 -->
+    <van-cell-group inset :title="t('settings.accountSecurity')" class="section">
+      <van-cell :title="t('settings.accountPassword')" icon="lock" is-link to="/settings/password" />
+      <van-cell :title="t('secondFactor.title')" icon="shield-o" is-link to="/settings/second-factor" />
+      <van-cell :title="t('device.title')" icon="phone-o" is-link to="/settings/devices" />
+    </van-cell-group>
+
+    <!-- 通知与 AI -->
+    <van-cell-group inset :title="t('settings.notificationsAndAI')" class="section">
       <van-cell
-        :title="t('family.familyName')"
-        :value="familyStore.family?.custom_title || familyStore.family?.name"
-        :is-link="authStore.user?.role === 'owner'"
-        @click="onEditFamilyTitle"
+        :title="t('reminders.notificationSettings')"
+        is-link
+        icon="bell"
+        @click="$router.push('/settings/notifications')"
       />
-      <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name" />
-      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" />
-      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" />
+      <van-cell :title="t('settings.aiAssistant')" icon="smile-o" is-link to="/settings/ai" />
+    </van-cell-group>
+
+    <!-- 数据管理 -->
+    <van-cell-group inset :title="t('settings.dataManagement')" class="section">
+      <van-cell :title="t('settings.categoryManage')" icon="apps-o" is-link to="/settings/categories" />
+      <van-cell :title="t('settings.tagManage')" icon="label-o" is-link to="/settings/tags" />
     </van-cell-group>
 
     <div class="actions">

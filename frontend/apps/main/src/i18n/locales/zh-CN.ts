@@ -161,7 +161,18 @@ export default {
     logout: '退出登录',
     logoutConfirm: '⚠️ 确定要退出登录吗？',
     settingsSaved: '设置已保存',
-    saveFailed: '保存失败'
+    saveFailed: '保存失败',
+    accountSecurity: '账户安全',
+    familyManagement: '家庭管理',
+    familyMembers: '家庭成员管理',
+    notificationsAndAI: '通知与 AI',
+    aiAssistant: 'AI 智能助手',
+    coinRate: '⭐ 星星币兑换比例',
+    coinRateValue: '铜→银 {c2s}，银→金 {s2g}',
+    coinCopperToSilver: '铜→银',
+    coinSilverToGold: '银→金',
+    coinRateDefault: '默认 {n}',
+    accountPassword: '账户密码'
   },
   auth: {
     login: '登录',

@@ -143,7 +143,18 @@ export default {
     logout: 'Logout',
     logoutConfirm: '⚠️ Are you sure you want to logout?',
     settingsSaved: 'Settings saved',
-    saveFailed: 'Save failed'
+    saveFailed: 'Save failed',
+    accountSecurity: 'Account Security',
+    familyManagement: 'Family Management',
+    familyMembers: 'Family Members',
+    notificationsAndAI: 'Notifications & AI',
+    aiAssistant: 'AI Assistant',
+    coinRate: '⭐ Star Coin Exchange Rate',
+    coinRateValue: 'Bronze→Silver {c2s}, Silver→Gold {s2g}',
+    coinCopperToSilver: 'Bronze→Silver',
+    coinSilverToGold: 'Silver→Gold',
+    coinRateDefault: 'Default {n}',
+    accountPassword: 'Account Password'
   },
   auth: {
     login: 'Login',

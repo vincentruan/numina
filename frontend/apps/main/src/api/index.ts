@@ -18,6 +18,9 @@ import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
 
+const MAX_RETRIES = 2
+const RETRY_BASE_DELAY_MS = 800
+
 // Helper: resolve error code to local i18n message, fallback to backend message
 function resolveErrorMsg(code: string | undefined, fallback: string): string {
   if (code) {
@@ -38,6 +41,8 @@ interface ApiEnvelope<T = unknown> {
   request_id?: string
   details?: Array<{ field: string; code: string; msg: string }>
 }
+
+type RetryableConfig = AxiosRequestConfig & { _retry?: boolean; _retryCount?: number }
 
 const http = axios.create({
   baseURL: '/api/v1',
@@ -102,7 +107,7 @@ http.interceptors.response.use(
     return response
   },
   async (error) => {
-    const originalRequest = error.config as AxiosRequestConfig & { _retry?: boolean }
+    const originalRequest = error.config as RetryableConfig
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Don't try to refresh for login/register/refresh endpoints
@@ -162,6 +167,18 @@ http.interceptors.response.use(
       } finally {
         isRefreshing = false
       }
+    }
+
+    // Retry GET requests on network error or timeout (not on HTTP error responses)
+    const isRetryable =
+      !error.response &&
+      originalRequest.method?.toUpperCase() === 'GET' &&
+      (originalRequest._retryCount ?? 0) < MAX_RETRIES
+    if (isRetryable) {
+      originalRequest._retryCount = (originalRequest._retryCount ?? 0) + 1
+      const delay = RETRY_BASE_DELAY_MS * 2 ** (originalRequest._retryCount - 1)
+      await new Promise((r) => setTimeout(r, delay))
+      return http(originalRequest)
     }
 
     // Handle other errors
