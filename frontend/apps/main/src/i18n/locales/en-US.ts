@@ -97,6 +97,27 @@ export default {
     memberCount: 'members',
     inviteCodeCopied: 'Invite code copied'
   },
+  secondFactor: {
+    title: 'Two-Factor Authentication',
+    currentStatus: 'Current Status',
+    digitalPin: 'Numeric PIN',
+    statusEnabled: 'Enabled',
+    statusNotSet: 'Not Set',
+    pinEnabledLabel: 'A 6-digit PIN is required at login',
+    pinDisabledLabel: 'After setup, a PIN will be required to verify your identity at login',
+    changePin: 'Change PIN',
+    setupPin: 'Set Up PIN',
+    enablePin: 'Enable PIN',
+    currentPinLabel: 'Current PIN',
+    currentPinPlaceholder: 'Enter your current 6-digit PIN',
+    newPinLabel: 'New PIN',
+    newPinPlaceholder: 'Enter a 6-digit number',
+    confirmPinLabel: 'Confirm PIN',
+    confirmPinPlaceholder: 'Re-enter the 6-digit number',
+    dangerZone: 'Danger Zone',
+    disableTitle: 'Disable Two-Factor Authentication',
+    disableLabel: 'Login will no longer require PIN verification after disabling',
+  },
   settings: {
     title: 'Settings',
     dataManagement: 'Data Management',
@@ -238,6 +259,13 @@ export default {
     RATE_LIMITED: '⚠️ Too many requests, please try again later',
   },
   toast: {
+    // Second factor PIN
+    pinMismatch: '⚠️ PINs do not match',
+    pinChanged: '✅ PIN updated',
+    pinEnabled: '✅ PIN enabled',
+    pinCurrentIncorrect: '❌ Current PIN is incorrect',
+    pinDisabled: '🗑️ Two-factor authentication disabled',
+    pinDisableConfirm: '⚠️ Login will no longer require PIN verification. Continue?',
     // Auth
     loginSuccess: '🔐 Logged in',
     registerSuccess: '🎉 Account created',

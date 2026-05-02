@@ -1,30 +1,29 @@
 <template>
   <div class="change-second-factor-page">
-    <PageHeader title="二阶段验证" />
+    <PageHeader :title="t('secondFactor.title')" />
 
     <!-- Current status -->
-    <van-cell-group inset title="当前状态" class="section">
+    <van-cell-group inset :title="t('secondFactor.currentStatus')" class="section">
       <van-cell
-        title="数字 PIN"
-        :value="hasPinEnabled ? '已启用' : '未设置'"
-        :label="hasPinEnabled ? '登录时需要输入 6 位数字 PIN' : '设置后登录时需要输入 PIN 验证身份'"
+        :title="t('secondFactor.digitalPin')"
+        :label="hasPinEnabled ? t('secondFactor.pinEnabledLabel') : t('secondFactor.pinDisabledLabel')"
       >
         <template #right-icon>
           <van-tag :type="hasPinEnabled ? 'success' : 'default'">
-            {{ hasPinEnabled ? '已启用' : '未设置' }}
+            {{ hasPinEnabled ? t('secondFactor.statusEnabled') : t('secondFactor.statusNotSet') }}
           </van-tag>
         </template>
       </van-cell>
     </van-cell-group>
 
     <!-- Setup / Change PIN -->
-    <van-cell-group inset :title="hasPinEnabled ? '修改 PIN' : '设置 PIN'" class="section">
+    <van-cell-group inset :title="hasPinEnabled ? t('secondFactor.changePin') : t('secondFactor.setupPin')" class="section">
       <template v-if="hasPinEnabled">
         <van-field
           v-model="form.oldPin"
           type="password"
-          label="当前 PIN"
-          placeholder="请输入当前 6 位 PIN"
+          :label="t('secondFactor.currentPinLabel')"
+          :placeholder="t('secondFactor.currentPinPlaceholder')"
           maxlength="6"
           inputmode="numeric"
         />
@@ -32,16 +31,16 @@
       <van-field
         v-model="form.newPin"
         type="password"
-        label="新 PIN"
-        placeholder="请输入 6 位数字"
+        :label="t('secondFactor.newPinLabel')"
+        :placeholder="t('secondFactor.newPinPlaceholder')"
         maxlength="6"
         inputmode="numeric"
       />
       <van-field
         v-model="form.confirmPin"
         type="password"
-        label="确认 PIN"
-        placeholder="再次输入 6 位数字"
+        :label="t('secondFactor.confirmPinLabel')"
+        :placeholder="t('secondFactor.confirmPinPlaceholder')"
         maxlength="6"
         inputmode="numeric"
       />
@@ -56,15 +55,15 @@
         :disabled="!canSave"
         @click="onSave"
       >
-        {{ hasPinEnabled ? '修改 PIN' : '启用 PIN' }}
+        {{ hasPinEnabled ? t('secondFactor.changePin') : t('secondFactor.enablePin') }}
       </van-button>
     </div>
 
     <!-- Disable PIN -->
-    <van-cell-group v-if="hasPinEnabled" inset title="危险操作" class="section">
+    <van-cell-group v-if="hasPinEnabled" inset :title="t('secondFactor.dangerZone')" class="section">
       <van-cell
-        title="禁用二阶段验证"
-        label="禁用后登录将不再需要 PIN 验证"
+        :title="t('secondFactor.disableTitle')"
+        :label="t('secondFactor.disableLabel')"
         is-link
         class="danger-cell"
         @click="onDisablePin"
@@ -75,11 +74,13 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { showToast, showConfirmDialog } from 'vant'
 import http from '@/api/index'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 
 const hasPinEnabled = computed(() => authStore.user?.second_factor_enabled === true)
@@ -97,7 +98,7 @@ const canSave = computed(() => {
 
 async function onSave() {
   if (form.value.newPin !== form.value.confirmPin) {
-    showToast({ type: 'fail', message: '两次输入的 PIN 不一致' })
+    showToast({ type: 'fail', message: t('toast.pinMismatch') })
     return
   }
   saving.value = true
@@ -107,10 +108,10 @@ async function onSave() {
         old_pin: form.value.oldPin,
         new_pin: form.value.newPin,
       })
-      showToast({ type: 'success', message: 'PIN 已修改' })
+      showToast({ type: 'success', message: t('toast.pinChanged') })
     } else {
       await http.post('/auth/pin/setup', { pin: form.value.newPin })
-      showToast({ type: 'success', message: 'PIN 已启用' })
+      showToast({ type: 'success', message: t('toast.pinEnabled') })
       await authStore.fetchMe()
     }
     form.value = { oldPin: '', newPin: '', confirmPin: '' }
@@ -118,9 +119,9 @@ async function onSave() {
     const err = e as { response?: { data?: { code?: string; message?: string } } }
     const code = err.response?.data?.code
     if (code === 'AUTH_INVALID_CREDENTIALS' || code === 'AUTH_PASSWORD_INCORRECT') {
-      showToast({ type: 'fail', message: '当前 PIN 错误' })
+      showToast({ type: 'fail', message: t('toast.pinCurrentIncorrect') })
     } else {
-      showToast({ type: 'fail', message: err.response?.data?.message || '操作失败，请重试' })
+      showToast({ type: 'fail', message: t('toast.operationFailed2') })
     }
   } finally {
     saving.value = false
@@ -129,18 +130,17 @@ async function onSave() {
 
 async function onDisablePin() {
   try {
-    await showConfirmDialog({ message: '禁用后登录将不再需要 PIN 验证，确认继续？' })
+    await showConfirmDialog({ message: t('toast.pinDisableConfirm') })
   } catch {
     return
   }
   saving.value = true
   try {
     await http.post('/auth/pin/disable')
-    showToast({ type: 'success', message: '二阶段验证已禁用' })
+    showToast({ type: 'success', message: t('toast.pinDisabled') })
     await authStore.fetchMe()
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { message?: string } } }
-    showToast({ type: 'fail', message: err.response?.data?.message || '操作失败，请重试' })
+  } catch {
+    showToast({ type: 'fail', message: t('toast.operationFailed2') })
   } finally {
     saving.value = false
   }
