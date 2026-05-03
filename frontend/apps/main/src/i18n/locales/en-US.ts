@@ -95,7 +95,11 @@ export default {
     member: 'Member',
     memberManagement: 'Member Management',
     memberCount: 'members',
-    inviteCodeCopied: 'Invite code copied'
+    inviteCodeCopied: 'Invite code copied',
+    confirmResetPassword: 'Confirm Reset Password',
+    confirmNewPassword: 'Confirm New Password',
+    confirmNewPasswordPlaceholder: 'Re-enter new password',
+    passwordMismatch: '⚠️ Passwords do not match',
   },
   secondFactor: {
     title: 'Two-Factor Authentication',

@@ -23,13 +23,27 @@
               />
             </template>
           </van-field>
+          <van-field
+            v-model="confirmPassword"
+            :type="showConfirmPassword ? 'text' : 'password'"
+            :label="t('family.confirmNewPassword')"
+            :placeholder="t('family.confirmNewPasswordPlaceholder')"
+          >
+            <template #right-icon>
+              <van-icon
+                :name="showConfirmPassword ? 'eye-o' : 'closed-eye'"
+                style="cursor: pointer"
+                @click="showConfirmPassword = !showConfirmPassword"
+              />
+            </template>
+          </van-field>
         </van-cell-group>
         <div class="action-area">
           <van-button
             block
             type="primary"
             :loading="savingPassword"
-            :disabled="!newPassword.trim()"
+            :disabled="!newPassword.trim() || newPassword !== confirmPassword"
             @click="doResetPassword"
           >{{ t('family.confirmResetPassword') }}</van-button>
         </div>
@@ -66,14 +80,13 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { resetChildPin, resetChildPassword } from '@/api/children'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const childId = route.params.childId as string
 const childName = route.query.name as string ?? ''
@@ -81,7 +94,9 @@ const childName = route.query.name as string ?? ''
 const activeTab = ref<'password' | 'pin'>('password')
 
 const newPassword = ref('')
+const confirmPassword = ref('')
 const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 const savingPassword = ref(false)
 
 const CHILD_EMOJIS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🦁', '🐯', '🌟', '🌈', '🍎', '🎈']
@@ -99,13 +114,18 @@ function toggleNewPin(emoji: string) {
 
 async function doResetPassword() {
   if (!newPassword.value.trim()) return
+  if (newPassword.value !== confirmPassword.value) {
+    showToast(t('family.passwordMismatch'))
+    return
+  }
   savingPassword.value = true
   try {
     await resetChildPassword(childId, newPassword.value)
     showToast(t('toast.childPasswordReset'))
-    router.back()
+    newPassword.value = ''
+    confirmPassword.value = ''
   } catch {
-    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+    showToast(t('toast.operationFailed2'))
   } finally {
     savingPassword.value = false
   }
@@ -117,9 +137,9 @@ async function doResetPin() {
   try {
     await resetChildPin(childId, [...newPin.value])
     showToast(t('toast.childPinReset'))
-    router.back()
+    newPin.value = []
   } catch {
-    showToast({ type: 'fail', message: t('toast.operationFailed2') })
+    showToast(t('toast.operationFailed2'))
   } finally {
     savingPin.value = false
   }

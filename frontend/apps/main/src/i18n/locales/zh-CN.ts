@@ -122,6 +122,9 @@ export default {
     newPasswordLabel: '新密码',
     newPasswordPlaceholder: '请输入新密码',
     confirmResetPassword: '确认重置密码',
+    confirmNewPassword: '确认新密码',
+    confirmNewPasswordPlaceholder: '再次输入新密码',
+    passwordMismatch: '⚠️ 两次输入的密码不一致',
   },
   secondFactor: {
     title: '二阶段验证',
