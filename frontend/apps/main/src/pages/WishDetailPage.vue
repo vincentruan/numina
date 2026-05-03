@@ -3,43 +3,50 @@
     <PageHeader title="心愿详情" />
 
     <template v-if="wish">
-      <!-- Status Banner -->
-      <div class="status-banner" :class="wish.status">
-        <div class="status-icon">
-          <van-icon v-if="wish.status === 'realized'" name="success" size="32" />
-          <van-icon v-else-if="wish.status === 'cancelled'" name="cross" size="32" />
-          <van-icon v-else name="star" size="32" />
-        </div>
-        <div class="status-text">{{ statusText }}</div>
-        <div v-if="wish.realized_asset_id" class="realized-info">
-          已转化为资产
-        </div>
-      </div>
+      <!-- Hero Card: Pastel Cloud Gradient -->
+      <div class="hero-card" :class="wish.status">
+        <!-- Decorative blob (handled via ::before in CSS) -->
 
-      <!-- Main Card -->
-      <div class="main-card">
-        <div class="wish-header">
-          <div class="wish-name">{{ wish.name }}</div>
-          <van-tag v-if="wish.category" type="primary" size="medium">
-            {{ wish.category.icon }} {{ wish.category.name }}
-          </van-tag>
-        </div>
-
-        <div class="wish-meta">
-          <div class="meta-item">
-            <van-icon name="gold-coin-o" />
-            <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
-            <span v-else class="unset">未设置</span>
+        <div class="hero-top">
+          <!-- Status icon -->
+          <div class="hero-status-icon">
+            <van-icon v-if="wish.status === 'realized'" name="success" size="28" />
+            <van-icon v-else-if="wish.status === 'cancelled'" name="cross" size="28" />
+            <van-icon v-else name="star" size="28" />
           </div>
-          <div class="meta-item">
-            <van-icon name="clock-o" />
-            <span>优先级：{{ priorityText }}</span>
+          <div class="hero-info">
+            <div class="hero-name">{{ wish.name }}</div>
+            <div class="hero-category">
+              <template v-if="wish.category">{{ wish.category.icon }} {{ wish.category.name }}</template>
+              <template v-else>未分类</template>
+            </div>
+          </div>
+          <!-- Status badge -->
+          <van-tag :type="statusType" size="medium" class="hero-status-tag">{{ statusText }}</van-tag>
+        </div>
+
+        <!-- Stats row -->
+        <div class="hero-values">
+          <div class="hero-value-item">
+            <div class="hero-value-label">预期价格</div>
+            <div class="hero-value-num">
+              <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
+              <span v-else class="hero-value-unset">未设置</span>
+            </div>
+          </div>
+          <div class="hero-value-item">
+            <div class="hero-value-label">优先级</div>
+            <div class="hero-value-num">{{ priorityText }}</div>
+          </div>
+          <div class="hero-value-item">
+            <div class="hero-value-label">状态</div>
+            <div class="hero-value-num">{{ statusText }}</div>
           </div>
         </div>
 
-        <div v-if="wish.description" class="wish-description">
-          {{ wish.description }}
-        </div>
+        <div v-if="wish.realized_asset_id" class="hero-realized-info">已转化为资产</div>
+
+        <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
 
       <!-- Detail Info -->
@@ -308,102 +315,274 @@ onMounted(async () => {
   min-height: 100vh;
   padding-bottom: 20px;
 }
-.status-banner {
-  padding: 24px 16px;
-  text-align: center;
-  color: #fff;
-}
-.status-banner.pending {
-  background: var(--color-primary);
-}
-.status-banner.realized {
-  background: linear-gradient(135deg, #07c160 0%, #06ad56 100%);
-}
-.status-banner.cancelled {
-  background: linear-gradient(135deg, #969799 0%, #7d7e80 100%);
-}
-.status-icon {
-  margin-bottom: 8px;
-}
-.status-text {
-  font-size: 18px;
-  font-weight: 600;
-}
-.realized-info {
-  font-size: 13px;
-  opacity: 0.85;
-  margin-top: 4px;
-}
-.main-card {
-  background: var(--card-bg);
-  margin: -16px 12px 12px;
-  border-radius: 12px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+
+/* ── Hero Card: Pastel Cloud Gradient (light mode) ── */
+.hero-card {
+  background:
+    linear-gradient(135deg,
+      rgba(239, 44, 193, 0.10) 0%,
+      rgba(189, 187, 255, 0.18) 45%,
+      rgba(160, 195, 255, 0.14) 100%),
+    #ffffff;
+  padding: 20px 16px 16px;
+  color: #000000;
+  position: relative;
+  overflow: hidden;
 }
 
-[data-theme='dark'] .main-card {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+/* Decorative soft blob */
+.hero-card::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -30px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.22) 0%, transparent 70%);
+  pointer-events: none;
 }
 
-.wish-header {
+/* Dark mode */
+[data-theme='dark'] .hero-card {
+  background:
+    linear-gradient(135deg,
+      rgba(189, 187, 255, 0.08) 0%,
+      rgba(189, 187, 255, 0.04) 50%,
+      transparent 100%),
+    #010120;
+  color: #ffffff;
+}
+[data-theme='dark'] .hero-card::before {
+  background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
+}
+
+/* Realized: soft green tint over gradient base */
+.hero-card.realized {
+  background:
+    linear-gradient(135deg,
+      rgba(5, 150, 105, 0.10) 0%,
+      rgba(189, 187, 255, 0.12) 50%,
+      rgba(160, 195, 255, 0.10) 100%),
+    #ffffff;
+}
+[data-theme='dark'] .hero-card.realized {
+  background:
+    linear-gradient(135deg,
+      rgba(5, 150, 105, 0.12) 0%,
+      rgba(189, 187, 255, 0.06) 100%),
+    #010120;
+}
+
+/* Cancelled: muted overlay */
+.hero-card.cancelled {
+  background:
+    linear-gradient(135deg,
+      rgba(0, 0, 0, 0.04) 0%,
+      rgba(0, 0, 0, 0.02) 100%),
+    #f5f5f5;
+  color: rgba(0, 0, 0, 0.55);
+}
+[data-theme='dark'] .hero-card.cancelled {
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, 0.03) 0%,
+      rgba(255, 255, 255, 0.01) 100%),
+    #0d0d1a;
+  color: rgba(255, 255, 255, 0.50);
+}
+
+.hero-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 14px;
+  margin-bottom: 16px;
+  position: relative;
 }
-.wish-name {
-  font-size: 18px;
-  font-weight: 600;
+
+/* Status icon container: glass badge */
+.hero-status-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.65);
+}
+[data-theme='dark'] .hero-status-icon {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.75);
+}
+.hero-card.realized .hero-status-icon {
+  background: rgba(5, 150, 105, 0.10);
+  border-color: rgba(5, 150, 105, 0.20);
+  color: #059669;
+}
+[data-theme='dark'] .hero-card.realized .hero-status-icon {
+  color: #6ee7a0;
+}
+
+.hero-info {
   flex: 1;
-  margin-right: 8px;
-  color: var(--text-primary);
+  min-width: 0;
 }
-.wish-meta {
+
+/* Wish name: display-level, tight negative tracking */
+.hero-name {
+  font-size: clamp(18px, 5vw, 22px);
+  font-weight: 500;
+  letter-spacing: -0.22px;
+  line-height: 1.15;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #000000;
+}
+[data-theme='dark'] .hero-name {
+  color: #ffffff;
+}
+.hero-card.cancelled .hero-name {
+  color: rgba(0, 0, 0, 0.50);
+}
+[data-theme='dark'] .hero-card.cancelled .hero-name {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Mono label for category */
+.hero-category {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.45);
+  font-family: 'Georgia', monospace;
+}
+[data-theme='dark'] .hero-category {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.hero-status-tag {
+  flex-shrink: 0;
+}
+
+/* Stats row: glass container, 8px radius, dark-blue-tinted shadow */
+.hero-values {
   display: flex;
-  gap: 16px;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  padding: 12px 0;
   margin-bottom: 8px;
+  box-shadow: rgba(1, 1, 32, 0.08) 0px 2px 8px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
-.meta-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+[data-theme='dark'] .hero-values {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: rgba(1, 1, 32, 0.40) 0px 2px 8px;
+}
+
+.hero-value-item {
+  flex: 1;
+  text-align: center;
+  border-right: 1px solid rgba(0, 0, 0, 0.08);
+}
+[data-theme='dark'] .hero-value-item {
+  border-right-color: rgba(255, 255, 255, 0.12);
+}
+.hero-value-item:last-child {
+  border-right: none;
+}
+
+/* Mono label for value headers */
+.hero-value-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.055px;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.40);
+  font-family: 'Georgia', monospace;
+  margin-bottom: 4px;
+}
+[data-theme='dark'] .hero-value-label {
+  color: rgba(255, 255, 255, 0.40);
+}
+
+.hero-value-num {
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.16px;
+  color: #000000;
+}
+[data-theme='dark'] .hero-value-num {
+  color: #ffffff;
+}
+
+.hero-value-unset {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.35);
+}
+[data-theme='dark'] .hero-value-unset {
+  color: rgba(255, 255, 255, 0.30);
+}
+
+.hero-realized-info {
+  font-size: 12px;
+  font-weight: 500;
+  color: #059669;
+  text-align: center;
+  margin-bottom: 4px;
+}
+[data-theme='dark'] .hero-realized-info {
+  color: #6ee7a0;
+}
+
+.hero-description {
   font-size: 14px;
-  color: var(--text-secondary);
-}
-.meta-item .van-icon {
-  color: var(--text-tertiary);
-}
-.unset {
-  color: var(--text-tertiary);
-}
-.wish-description {
-  font-size: 14px;
-  color: var(--text-secondary);
+  color: rgba(0, 0, 0, 0.55);
   line-height: 1.5;
   padding-top: 8px;
-  border-top: 1px solid var(--separator);
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin-top: 4px;
 }
+[data-theme='dark'] .hero-description {
+  color: rgba(255, 255, 255, 0.50);
+  border-top-color: rgba(255, 255, 255, 0.10);
+}
+
 .actions {
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
+
 .delete-btn {
   margin-top: 4px;
 }
+
 .page-loading {
   display: flex;
   justify-content: center;
   padding-top: 40vh;
 }
+
 .realize-dialog {
   padding: 16px;
 }
+
 .dialog-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -0.16px;
   text-align: center;
   margin-bottom: 16px;
   color: var(--text-primary);
