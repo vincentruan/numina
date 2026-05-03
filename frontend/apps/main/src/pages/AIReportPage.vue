@@ -192,7 +192,7 @@ async function onGenerate() {
       reportGeneratedAt.value = ws.generatedAt.value
     }
   } catch {
-    showToast(ws.errorMessage.value || '生成失败，请重试')
+    showToast(ws.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
     generating.value = false
   }

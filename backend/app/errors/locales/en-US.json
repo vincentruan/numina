@@ -46,6 +46,7 @@
   "STORAGE_CONNECTION_ERROR": "Storage service connection failed",
   "STORAGE_AUTH_ERROR": "Storage service authentication failed",
   "STORAGE_ERROR": "Storage service error",
+  "AI_NOT_ENABLED": "AI assistant is not enabled. Please ask the family owner to configure and enable it in Settings",
   "AI_SERVICE_UNAVAILABLE": "AI service is temporarily unavailable, please try again later",
   "AI_SERVICE_TIMEOUT": "AI service timed out, please try again later",
   "AI_CONFIG_MISSING_API_KEY": "An API Key is required to enable AI features",

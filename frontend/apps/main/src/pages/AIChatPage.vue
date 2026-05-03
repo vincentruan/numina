@@ -425,8 +425,8 @@ async function onSend() {
     const errMsg: Message = {
       id: Date.now().toString(),
       role: 'assistant',
-      content: '抱歉，AI 服务暂时不可用，请稍后再试。',
-      renderedContent: '<p>抱歉，AI 服务暂时不可用，请稍后再试。</p>',
+      content: t('toast.aiChatError'),
+      renderedContent: `<p>${t('toast.aiChatError')}</p>`,
       created_at: new Date().toISOString(),
       displayTime: formatTime(new Date().toISOString()),
     }

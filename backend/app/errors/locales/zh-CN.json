@@ -46,6 +46,7 @@
   "STORAGE_CONNECTION_ERROR": "存储服务连接失败",
   "STORAGE_AUTH_ERROR": "存储服务认证失败",
   "STORAGE_ERROR": "存储服务异常",
+  "AI_NOT_ENABLED": "AI 功能未开启，请联系家庭管理员在设置中配置并启用 AI 助手",
   "AI_SERVICE_UNAVAILABLE": "AI 服务暂时不可用，请稍后再试",
   "AI_SERVICE_TIMEOUT": "AI 服务响应超时，请稍后再试",
   "AI_CONFIG_MISSING_API_KEY": "启用 AI 功能需要配置 API Key",

@@ -253,8 +253,8 @@ export default {
     // AI
     AI_SERVICE_UNAVAILABLE: '🤖 AI 服务暂时不可用，请稍后再试',
     AI_SERVICE_TIMEOUT: '🤖 AI 服务响应超时，请稍后再试',
-    AI_NOT_CONFIGURED: '🤖 AI 服务未配置',
-    AI_NOT_ENABLED: '🤖 AI 功能未启用',
+    AI_NOT_CONFIGURED: '🤖 AI 服务未配置，请联系家庭管理员在设置中配置 AI 助手',
+    AI_NOT_ENABLED: '🤖 AI 功能未开启，请联系家庭管理员在设置中配置并启用 AI 助手',
     AI_QUOTA_EXCEEDED: '🤖 AI 服务配额已用尽',
     AI_INVALID_RESPONSE: '🤖 AI 返回结果异常',
     // Wish
@@ -398,6 +398,7 @@ export default {
     aiDetectFailed: '❌ 检测失败，请检查 AI 配置',
     aiTargetSaved: '✅ 目标已保存',
     aiGenerateFailed: '❌ 生成失败，请重试',
+    aiChatError: '❌ AI 服务暂时不可用，请稍后再试',
     // Network
     networkTimeout: '📡 请求超时，请检查网络后重试',
     networkError: '📡 无法连接服务器，请检查网络',

@@ -235,8 +235,8 @@ export default {
     // AI
     AI_SERVICE_UNAVAILABLE: '🤖 AI service temporarily unavailable',
     AI_SERVICE_TIMEOUT: '🤖 AI service timed out, please try again',
-    AI_NOT_CONFIGURED: '🤖 AI service not configured',
-    AI_NOT_ENABLED: '🤖 AI feature not enabled',
+    AI_NOT_CONFIGURED: '🤖 AI service not configured. Please ask the family owner to configure it in Settings',
+    AI_NOT_ENABLED: '🤖 AI assistant is not enabled. Please ask the family owner to configure and enable it in Settings',
     AI_QUOTA_EXCEEDED: '🤖 AI service quota exceeded',
     AI_INVALID_RESPONSE: '🤖 AI returned an unexpected response',
     // Wish
@@ -379,6 +379,7 @@ export default {
     aiDetectFailed: '❌ Detection failed, please check AI configuration',
     aiTargetSaved: '✅ Target saved',
     aiGenerateFailed: '❌ Generation failed, please try again',
+    aiChatError: '❌ AI service temporarily unavailable, please try again later',
     // Network
     networkTimeout: '📡 Request timed out, please check your connection',
     networkError: '📡 Cannot connect to server, please check your network',

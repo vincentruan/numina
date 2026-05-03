@@ -43,10 +43,7 @@ def require_ai_enabled(
         .first()
     )
     if not active_config:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "ai_disabled", "message": "AI 功能未开启，请联系家庭管理员在设置中开启"},
-        )
+        raise AppError(ErrorCode.AI_NOT_ENABLED)
     return current_user
 
 
@@ -82,7 +79,10 @@ def verify_agent_token(
     Sets request.state.agent_id from JWT 'agt' claim when available.
     """
     if not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid agent token",
+        )
 
     token = authorization[7:]
 
@@ -92,10 +92,16 @@ def verify_agent_token(
         if payload.get("type") == "agent":
             jwt_family_id = payload.get("fid")
             if not jwt_family_id:
-                raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing family_id in agent token")
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Missing family_id in agent token",
+                )
             # Validate X-Family-Id matches JWT claim (defense in depth)
             if jwt_family_id != x_family_id:
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="family_id mismatch")
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="family_id mismatch",
+                )
             # Inject agent identity into request state for audit logging
             request.state.agent_id = payload.get("agt", "unknown")
             _validate_family_exists(db, jwt_family_id)
@@ -110,11 +116,17 @@ def verify_agent_token(
 
     # Legacy: static HMAC token
     if not settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Agent internal token not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent internal token not configured",
+        )
 
     expected = settings.AGENT_INTERNAL_TOKEN
     if not hmac.compare_digest(token, expected):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid agent token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid agent token",
+        )
 
     request.state.agent_id = "legacy"
     _validate_family_exists(db, x_family_id)
@@ -124,4 +136,7 @@ def verify_agent_token(
 def _validate_family_exists(db: Session, family_id: str) -> None:
     family = db.query(Family).filter(Family.id == family_id).first()
     if not family:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Family not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Family not found",
+        )
