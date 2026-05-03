@@ -370,8 +370,10 @@ const validationError = computed(() => {
   if (aiEnabled.value && !selectedProvider.value) return '请选择 AI Provider'
   if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return '请填写 API Key'
   if (aiEnabled.value && selectedProvider.value && !modelIdInput.value.trim()) return '请填写模型 ID'
-  const timeout = parseInt(timeoutInput.value)
-  if (isNaN(timeout) || timeout < 10 || timeout > 600) return t('toast.aiTimeoutInvalid')
+  if (aiEnabled.value) {
+    const timeout = parseInt(timeoutInput.value)
+    if (isNaN(timeout) || timeout < 10 || timeout > 600) return t('toast.aiTimeoutInvalid')
+  }
   return null
 })
 
