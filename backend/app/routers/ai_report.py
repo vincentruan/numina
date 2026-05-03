@@ -126,8 +126,14 @@ async def report_ws(
     """
     await websocket.accept()
 
-    # Validate one-time ticket
-    ws_ticket = db.query(AIWsTicket).filter(AIWsTicket.id == ticket).first()
+    # Validate one-time ticket (ticket param is str from query, id column is BigInteger)
+    try:
+        ticket_id = int(ticket)
+    except (ValueError, TypeError):
+        await websocket.send_json({"type": "error", "message": "鉴权失败或 ticket 已过期"})
+        await websocket.close(code=4001)
+        return
+    ws_ticket = db.query(AIWsTicket).filter(AIWsTicket.id == ticket_id).first()
     if not ws_ticket or ws_ticket.used or ws_ticket.expires_at < datetime.utcnow():
         await websocket.send_json({"type": "error", "message": "鉴权失败或 ticket 已过期"})
         await websocket.close(code=4001)
