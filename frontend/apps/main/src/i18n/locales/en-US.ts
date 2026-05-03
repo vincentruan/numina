@@ -358,6 +358,8 @@ export default {
     confirmSettleBatch: '⚠️ Mark {count} selected liabilities as settled?',
     confirmDeleteBatch: '⚠️ Delete {count} selected liabilities?',
     // Wish
+    wishConvertsToAsset: 'Creates a physical asset',
+    wishConvertsToAssetHint: "Turn off for experiences like travel that don't produce a physical asset",
     wishSaved: '✅ Saved',
     wishAdded: '✅ Added',
     wishCancelled: '✅ Cancelled',

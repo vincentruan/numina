@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -20,6 +20,7 @@ class Wish(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending/realized/cancelled
     category_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("categories.id"), nullable=True)
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
+    converts_to_asset: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

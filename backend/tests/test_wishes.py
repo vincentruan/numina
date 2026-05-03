@@ -109,3 +109,43 @@ def test_cross_family_isolation(client, auth_headers, second_user_headers, sampl
     wish_id = sample_wish["id"]
     response = client.get(f"/api/v1/wishes/{wish_id}", headers=second_user_headers)
     assert response.status_code == 404
+
+
+def test_create_wish_converts_to_asset_default_true(client, auth_headers):
+    response = client.post("/api/v1/wishes", headers=auth_headers, json={"name": "买相机"})
+    assert response.status_code == 201
+    assert response.json()["data"]["converts_to_asset"] is True
+
+
+def test_create_wish_converts_to_asset_false(client, auth_headers):
+    response = client.post("/api/v1/wishes", headers=auth_headers, json={
+        "name": "出国旅游",
+        "converts_to_asset": False,
+    })
+    assert response.status_code == 201
+    assert response.json()["data"]["converts_to_asset"] is False
+
+
+def test_realize_wish_blocked_when_converts_to_asset_false(client, auth_headers, category_id):
+    create_resp = client.post("/api/v1/wishes", headers=auth_headers, json={
+        "name": "出国旅游",
+        "converts_to_asset": False,
+    })
+    assert create_resp.status_code == 201
+    wish_id = create_resp.json()["data"]["id"]
+
+    realize_resp = client.post(f"/api/v1/wishes/{wish_id}/realize", headers=auth_headers, json={
+        "purchase_price": 50000,
+        "purchase_date": "2026-03-01",
+        "category_id": category_id,
+    })
+    assert realize_resp.status_code == 422
+
+
+def test_update_wish_converts_to_asset(client, auth_headers, sample_wish):
+    wish_id = sample_wish["id"]
+    response = client.put(f"/api/v1/wishes/{wish_id}", headers=auth_headers, json={
+        "converts_to_asset": False,
+    })
+    assert response.status_code == 200
+    assert response.json()["data"]["converts_to_asset"] is False

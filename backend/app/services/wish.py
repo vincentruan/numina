@@ -39,6 +39,7 @@ def create_wish(db: Session, user: User, req: WishCreate) -> Wish:
         expected_price=req.expected_price,
         priority=req.priority,
         category_id=req.category_id,
+        converts_to_asset=req.converts_to_asset,
     )
     db.add(wish)
     db.commit()
@@ -71,6 +72,9 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
     wish = get_wish(db, user, wish_id)
 
     if wish.status == "realized":
+        raise AppError(ErrorCode.VALIDATION_ERROR)
+
+    if not wish.converts_to_asset:
         raise AppError(ErrorCode.VALIDATION_ERROR)
 
     # Determine category_id

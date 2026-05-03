@@ -181,8 +181,8 @@ test_wish_creation() {
 
     check_response "$wish2" 201 "创建心愿 2"
 
-    # 测试用例 3: 中等优先级心愿
-    log_info "创建心愿 3: 出国旅游（中等优先级）"
+    # 测试用例 3: 中等优先级心愿（不产生资产 - 旅游体验类）
+    log_info "创建心愿 3: 出国旅游（不产生资产）"
     local wish3=$(curl -sL -X POST "$BASE_URL/wishes" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $TOKEN" \
@@ -190,14 +190,30 @@ test_wish_creation() {
             "name": "出国旅游",
             "description": "去欧洲旅游两周，游览法国、意大利、瑞士",
             "expected_price": 50000,
-            "priority": "medium"
+            "priority": "medium",
+            "converts_to_asset": false
         }')
 
     check_response "$wish3" 201 "创建心愿 3"
 
-    # 测试用例 4: 低优先级心愿
-    log_info "创建心愿 4: 买相机（低优先级）"
+    # 测试用例 4: 低优先级心愿（不产生资产 - 体验类）
+    log_info "创建心愿 4: 音乐会（不产生资产）"
     local wish4=$(curl -sL -X POST "$BASE_URL/wishes" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        -d '{
+            "name": "看演唱会",
+            "description": "周杰伦世界巡回演唱会",
+            "expected_price": 2000,
+            "priority": "low",
+            "converts_to_asset": false
+        }')
+
+    check_response "$wish4" 201 "创建心愿 4"
+
+    # 测试用例 5: 买相机（产生资产）
+    log_info "创建心愿 5: 买相机（低优先级，产生资产）"
+    local wish5=$(curl -sL -X POST "$BASE_URL/wishes" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $TOKEN" \
         -d '{
@@ -207,11 +223,11 @@ test_wish_creation() {
             "priority": "low"
         }')
 
-    check_response "$wish4" 201 "创建心愿 4"
+    check_response "$wish5" 201 "创建心愿 5"
 
-    # 测试用例 5: 买新车
-    log_info "创建心愿 5: 买新车"
-    local wish5=$(curl -sL -X POST "$BASE_URL/wishes" \
+    # 测试用例 6: 买新车
+    log_info "创建心愿 6: 买新车"
+    local wish6=$(curl -sL -X POST "$BASE_URL/wishes" \
         -H "Content-Type: application/json" \
         -H "Authorization: Bearer $TOKEN" \
         -d '{
@@ -221,7 +237,7 @@ test_wish_creation() {
             "priority": "high"
         }')
 
-    check_response "$wish5" 201 "创建心愿 5"
+    check_response "$wish6" 201 "创建心愿 6"
 
     log_success "心愿录入测试完成"
     echo "$wish1_id"

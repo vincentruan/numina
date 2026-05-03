@@ -55,6 +55,14 @@
           readonly
           @click="showCategoryPicker = true"
         />
+        <van-field :label="t('toast.wishConvertsToAsset')" name="converts_to_asset">
+          <template #input>
+            <van-switch v-model="form.converts_to_asset" size="20" />
+          </template>
+          <template #extra>
+            <span v-if="!form.converts_to_asset" class="field-hint">{{ t('toast.wishConvertsToAssetHint') }}</span>
+          </template>
+        </van-field>
       </van-cell-group>
 
       <div style="margin: 16px">
@@ -102,6 +110,7 @@ const form = ref({
   currency: authStore.user?.default_currency || 'CNY',
   priority: 'medium',
   category_id: undefined as string | undefined,
+  converts_to_asset: true,
 })
 const priceStr = ref('')
 const submitting = ref(false)
@@ -166,8 +175,17 @@ onMounted(async () => {
       currency: w.currency || authStore.user?.default_currency || 'CNY',
       priority: w.priority,
       category_id: w.category_id,
+      converts_to_asset: w.converts_to_asset,
     }
     priceStr.value = w.expected_price != null ? String(w.expected_price) : ''
   }
 })
 </script>
+
+<style scoped>
+.field-hint {
+  font-size: 12px;
+  color: var(--van-text-color-3, rgba(0, 0, 0, 0.4));
+  margin-top: 4px;
+}
+</style>

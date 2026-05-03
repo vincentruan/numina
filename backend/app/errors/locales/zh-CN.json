@@ -81,5 +81,6 @@
   "BLIND_BOX_WISH_CONFLICT": "该心愿已转入礼物池",
   "CALENDAR_DATE_INVALID": "日期格式无效，请使用 YYYY-MM-DD",
   "CHILD_NOT_FOUND": "孩子不存在",
-  "AI_SPENDING_LEAK_NOT_FOUND": "消费漏洞记录不存在"
+  "AI_SPENDING_LEAK_NOT_FOUND": "消费漏洞记录不存在",
+  "NOTIFICATION_NO_CHANNEL": "未配置通知渠道"
 }

@@ -76,7 +76,7 @@
       <!-- Actions -->
       <div class="actions">
         <template v-if="wish.status === 'pending'">
-          <van-button block type="primary" @click="showRealizeDialog = true">
+          <van-button v-if="wish.converts_to_asset" block type="primary" @click="showRealizeDialog = true">
             转化为资产
           </van-button>
           <van-button block type="default" plain @click="$router.push(`/wishes/${wish.id}/edit`)">

@@ -384,6 +384,8 @@ export default {
     confirmSettleBatch: '⚠️ 确定要将选中的 {count} 笔负债标记为已结清吗？',
     confirmDeleteBatch: '⚠️ 确定要删除选中的 {count} 笔负债吗？',
     // Wish
+    wishConvertsToAsset: '会产生实物资产',
+    wishConvertsToAssetHint: '关闭后此心愿实现时不会创建资产（如旅游、体验类消费）',
     wishSaved: '✅ 已保存',
     wishAdded: '✅ 已添加',
     wishCancelled: '✅ 已取消',

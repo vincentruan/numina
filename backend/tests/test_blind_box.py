@@ -159,16 +159,53 @@ def test_child_draw(client, auth_headers, second_user_headers):
         headers=auth_headers,
     )
     # 孩子抽奖（空列表 chore_instance_ids 应返回 400 或 422）
+    # Create a child user first
+    child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "display_name": "小明",
+        "password": "ChildPass1",
+        "username": "xiaoming_bb",
+        "avatar_color": "#FF5733",
+        "pin": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert child_resp.status_code == 201
+    child = child_resp.json()["data"]
+    login_resp = client.post("/api/v1/auth/child/login", json={
+        "child_id": child["id"],
+        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert login_resp.status_code == 200
+    child_token = login_resp.json()["data"]["access_token"]
+    client.cookies.delete("access_token")
+    child_headers = {"Authorization": f"Bearer {child_token}"}
+
     resp = client.post(
         "/api/v1/child/blind-box/draw",
         json={"chore_instance_ids": []},
-        headers=auth_headers,
+        headers=child_headers,
     )
     assert resp.status_code in (400, 422)
 
 
 def test_child_list_draws(client, auth_headers):
-    resp = client.get("/api/v1/child/blind-box/draws", headers=auth_headers)
+    child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "display_name": "小红",
+        "password": "ChildPass2",
+        "username": "xiaohong_bb",
+        "avatar_color": "#FF0000",
+        "pin": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert child_resp.status_code == 201
+    child = child_resp.json()["data"]
+    login_resp = client.post("/api/v1/auth/child/login", json={
+        "child_id": child["id"],
+        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert login_resp.status_code == 200
+    child_token = login_resp.json()["data"]["access_token"]
+    client.cookies.delete("access_token")
+    child_headers = {"Authorization": f"Bearer {child_token}"}
+
+    resp = client.get("/api/v1/child/blind-box/draws", headers=child_headers)
     assert resp.status_code == 200
     data = resp.json().get("data", resp.json())
     assert isinstance(data, list)
@@ -192,16 +229,52 @@ def test_create_bonus_draw(db):
 
 
 def test_child_list_bonus_draws(client, auth_headers):
-    resp = client.get("/api/v1/child/blind-box/bonus-draws", headers=auth_headers)
+    child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "display_name": "小蓝",
+        "password": "ChildPass3",
+        "username": "xiaolan_bb",
+        "avatar_color": "#0000FF",
+        "pin": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert child_resp.status_code == 201
+    child = child_resp.json()["data"]
+    login_resp = client.post("/api/v1/auth/child/login", json={
+        "child_id": child["id"],
+        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert login_resp.status_code == 200
+    child_token = login_resp.json()["data"]["access_token"]
+    client.cookies.delete("access_token")
+    child_headers = {"Authorization": f"Bearer {child_token}"}
+
+    resp = client.get("/api/v1/child/blind-box/bonus-draws", headers=child_headers)
     assert resp.status_code == 200
     data = resp.json().get("data", resp.json())
     assert isinstance(data, list)
 
 
 def test_child_use_bonus_draw_not_found(client, auth_headers):
+    child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "display_name": "小绿",
+        "password": "ChildPass4",
+        "username": "xiaolv_bb",
+        "avatar_color": "#00FF00",
+        "pin": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert child_resp.status_code == 201
+    child = child_resp.json()["data"]
+    login_resp = client.post("/api/v1/auth/child/login", json={
+        "child_id": child["id"],
+        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert login_resp.status_code == 200
+    child_token = login_resp.json()["data"]["access_token"]
+    client.cookies.delete("access_token")
+    child_headers = {"Authorization": f"Bearer {child_token}"}
+
     resp = client.post(
         "/api/v1/child/blind-box/bonus-draws/99999/use",
-        headers=auth_headers,
+        headers=child_headers,
     )
     assert resp.status_code == 404
 
@@ -231,10 +304,28 @@ def test_create_gift_duplicate_warning(client, auth_headers):
 
 
 def test_draw_requires_chore_instance_ids(client, auth_headers):
+    child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "display_name": "小紫",
+        "password": "ChildPass5",
+        "username": "xiaozi_bb",
+        "avatar_color": "#800080",
+        "pin": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert child_resp.status_code == 201
+    child = child_resp.json()["data"]
+    login_resp = client.post("/api/v1/auth/child/login", json={
+        "child_id": child["id"],
+        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
+    })
+    assert login_resp.status_code == 200
+    child_token = login_resp.json()["data"]["access_token"]
+    client.cookies.delete("access_token")
+    child_headers = {"Authorization": f"Bearer {child_token}"}
+
     resp = client.post(
         "/api/v1/child/blind-box/draw",
         json={"chore_instance_ids": []},
-        headers=auth_headers,
+        headers=child_headers,
     )
     assert resp.status_code in (400, 422)
 

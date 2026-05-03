@@ -12,6 +12,7 @@ class WishCreate(BaseModel):
     priority: str = "medium"
     category_id: int | None = None
     currency: str = "CNY"
+    converts_to_asset: bool = True
 
 
 class WishUpdate(BaseModel):
@@ -22,6 +23,7 @@ class WishUpdate(BaseModel):
     status: str | None = None
     category_id: int | None = None
     currency: str | None = None
+    converts_to_asset: bool | None = None
 
 
 class WishRealizeRequest(BaseModel):
@@ -49,6 +51,7 @@ class WishResponse(SnowflakeBase):
     category_id: int | None
     category: CategoryInfo | None
     currency: str = "CNY"
+    converts_to_asset: bool
     realized_asset_id: int | None
     created_at: datetime
     updated_at: datetime

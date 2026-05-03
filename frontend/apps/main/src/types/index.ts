@@ -280,6 +280,7 @@ export interface Wish {
   status: string
   category_id?: string
   category?: CategoryInfo
+  converts_to_asset: boolean
   realized_asset_id?: string
   created_at: string
   updated_at: string
