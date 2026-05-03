@@ -127,9 +127,9 @@
                   <van-icon name="lock" size="18" />
                   <span>{{ t('family.unlockPin') }}</span>
                 </button>
-                <button class="action-btn" @click="openResetPinSheet(child)">
+                <button class="action-btn" @click="$router.push({ name: 'ChildReset', params: { childId: child.id }, query: { name: child.display_name } })">
                   <van-icon name="edit" size="18" />
-                  <span>{{ t('family.resetPin') }}</span>
+                  <span>{{ t('family.resetCredentials') }}</span>
                 </button>
               </div>
             </div>
@@ -211,30 +211,7 @@
           >{{ t('family.createAccount') }}</van-button>
         </van-popup>
 
-        <!-- Reset PIN bottom sheet -->
-        <van-popup v-model:show="showResetPinSheet" position="bottom" round style="padding: 24px 16px 40px">
-          <p class="sheet-title">{{ t('family.resetPinTitle', { name: resetPinTarget?.display_name }) }}</p>
-          <p class="sheet-label">{{ t('family.selectNewPinEmojis') }}</p>
-          <div class="emoji-picker">
-            <button
-              v-for="emoji in CHILD_EMOJIS"
-              :key="emoji"
-              class="emoji-pick-btn"
-              :class="{ selected: newPin.includes(emoji) }"
-              :disabled="newPin.length >= 4 && !newPin.includes(emoji)"
-              @click="toggleNewPin(emoji)"
-            >{{ emoji }}</button>
-          </div>
-          <p class="pin-preview">{{ newPin.length ? t('family.pinSelected', { emojis: newPin.join(' ') }) : t('family.pinSelectedEmpty') }}</p>
-          <van-button
-            block
-            type="primary"
-            :loading="resettingPin"
-            :disabled="newPin.length !== 4"
-            style="margin-top: 16px; border-radius: 12px"
-            @click="doResetPin"
-          >{{ t('family.confirmResetPin') }}</van-button>
-        </van-popup>
+
       </template>
 
       <van-loading v-else class="page-loading" />
@@ -253,7 +230,7 @@ import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/a
 import { grantCoins } from '@/api/coins'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
-import { createChild, resetChildPin, forceLogoutChild, unlockChildPin } from '@/api/children'
+import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
 
 const { t } = useI18n()
 
@@ -291,11 +268,6 @@ const showAddChildSheet = ref(false)
 const addingChild = ref(false)
 const newChild = ref({ display_name: '', username: '', password: '', pin: [] as string[] })
 
-// Reset PIN sheet
-const showResetPinSheet = ref(false)
-const resettingPin = ref(false)
-const resetPinTarget = ref<{ id: string; display_name: string } | null>(null)
-const newPin = ref<string[]>([])
 
 function copyInviteCode() {
   const code = familyStore.family?.invite_code
@@ -428,15 +400,6 @@ function togglePinEmoji(emoji: string) {
   }
 }
 
-function toggleNewPin(emoji: string) {
-  const idx = newPin.value.indexOf(emoji)
-  if (idx >= 0) {
-    newPin.value.splice(idx, 1)
-  } else if (newPin.value.length < 4) {
-    newPin.value.push(emoji)
-  }
-}
-
 async function doAddChild() {
   addingChild.value = true
   try {
@@ -456,26 +419,6 @@ async function doAddChild() {
     showToast({ type: 'fail', message: i18nKey && t(i18nKey) !== i18nKey ? t(i18nKey) : t('toast.operationFailed2') })
   } finally {
     addingChild.value = false
-  }
-}
-
-function openResetPinSheet(child: { id: string; display_name: string }) {
-  resetPinTarget.value = child
-  newPin.value = []
-  showResetPinSheet.value = true
-}
-
-async function doResetPin() {
-  if (!resetPinTarget.value || newPin.value.length !== 4) return
-  resettingPin.value = true
-  try {
-    await resetChildPin(resetPinTarget.value.id, [...newPin.value])
-    showToast(t('toast.childPinReset'))
-    showResetPinSheet.value = false
-  } catch {
-    showToast({ type: 'fail', message: t('toast.operationFailed2') })
-  } finally {
-    resettingPin.value = false
   }
 }
 

@@ -1617,6 +1617,7 @@ EOF
         "username": "xiaobao",
         "display_name": "小宝",
         "avatar_color": "#FF6B6B",
+        "password": "XiaoBao123!",
         "pin": ["🐱", "🌟", "🎈", "🐶"]
       }')
     CHILD1_ID=$(echo "$CHILD1_RESP" | jq -r '.data.id // .id')
@@ -1631,6 +1632,7 @@ EOF
         "username": "dabao",
         "display_name": "大宝",
         "avatar_color": "#4ECDC4",
+        "password": "DaBao123!",
         "pin": ["🌈", "🍎", "🐸", "🦁"]
       }')
     CHILD2_ID=$(echo "$CHILD2_RESP" | jq -r '.data.id // .id')
@@ -1962,7 +1964,7 @@ echo "  - test_empty        (空家庭 + 1 受信任设备)"
 echo "  - test_asset        (5 资产: in_use/idle/retired/USD/已售出 + 1 受信任设备)"
 echo "  - test_rich         (31 资产 + 28 负债 + 29 心愿 + 负债关联 + 心愿多状态 + 1 受信任设备)"
 echo "  - test_rich_member  (test_rich 家庭的 member 角色 + 数据隔离测试)"
-echo "  - test_child        (test_rich 家庭的儿童 username:testchild PIN:🐱🐶🐸🦊 + 跨天家务 + 盲盒礼物池 + bonus_draw)"
+echo "  - test_child        (test_rich 家庭的儿童 username:testchild password:TestChild123! PIN:🐱🐶🐸🦊 + 跨天家务 + 盲盒礼物池 + bonus_draw)"
 
 if [[ "$SKIP_DEMO" == false ]]; then
   echo ""

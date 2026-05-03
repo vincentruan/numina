@@ -140,6 +140,11 @@ const router = createRouter({
           component: () => import('@/pages/FamilyPage.vue')
         },
         {
+          path: 'family/children/:childId/reset',
+          name: 'ChildReset',
+          component: () => import('@/pages/ChildResetPage.vue')
+        },
+        {
           path: 'baby',
           name: 'Baby',
           component: () => import('@/pages/BabyPage.vue')
