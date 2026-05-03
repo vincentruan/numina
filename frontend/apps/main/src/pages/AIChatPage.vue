@@ -9,17 +9,6 @@
       </button>
       <h1 class="header-title">{{ sessionTitle }}</h1>
       <div class="header-actions">
-        <button class="header-btn" aria-label="切换主题" @click="toggleTheme">
-          <svg v-if="isLight" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-          </svg>
-          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-            <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-          </svg>
-        </button>
         <button class="header-btn" aria-label="新对话" @click="onNewChat">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -276,10 +265,6 @@ const isLight = computed(() => dataTheme.value === 'light')
 let themeObserver: MutationObserver | null = null
 let abortController: AbortController | null = null
 
-function toggleTheme() {
-  const next = isLight.value ? 'dark' : 'light'
-  document.documentElement.setAttribute('data-theme', next)
-}
 
 const sessionTitle = computed(() => {
   const firstUser = messages.value.find((m) => m.role === 'user')
