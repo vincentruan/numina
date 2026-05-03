@@ -1,14 +1,14 @@
 <template>
   <div class="change-password-page">
-    <PageHeader title="账户密码" />
+    <PageHeader :title="t('changePassword.title')" />
 
     <!-- Change password -->
-    <van-cell-group inset title="修改密码" class="section">
+    <van-cell-group inset :title="t('changePassword.sectionTitle')" class="section">
       <van-field
         v-model="form.oldPassword"
         :type="showOld ? 'text' : 'password'"
-        label="当前密码"
-        placeholder="请输入当前密码"
+        :label="t('changePassword.currentPassword')"
+        :placeholder="t('changePassword.currentPasswordPlaceholder')"
         autocomplete="current-password"
       >
         <template #right-icon>
@@ -18,8 +18,8 @@
       <van-field
         v-model="form.newPassword"
         :type="showNew ? 'text' : 'password'"
-        label="新密码"
-        placeholder="至少 8 位，含字母和数字"
+        :label="t('changePassword.newPassword')"
+        :placeholder="t('changePassword.newPasswordPlaceholder')"
         autocomplete="new-password"
       >
         <template #right-icon>
@@ -29,8 +29,8 @@
       <van-field
         v-model="form.confirmPassword"
         :type="showConfirm ? 'text' : 'password'"
-        label="确认新密码"
-        placeholder="再次输入新密码"
+        :label="t('changePassword.confirmPassword')"
+        :placeholder="t('changePassword.confirmPasswordPlaceholder')"
         autocomplete="new-password"
       >
         <template #right-icon>
@@ -48,15 +48,15 @@
         :disabled="!canChangePassword"
         @click="onChangePassword"
       >
-        确认修改
+        {{ t('changePassword.submit') }}
       </van-button>
     </div>
 
     <!-- Reset password via notification -->
-    <van-cell-group inset title="忘记密码" class="section">
+    <van-cell-group inset :title="t('changePassword.forgotSection')" class="section">
       <van-cell
-        title="通过通知渠道重置密码"
-        label="系统将生成临时密码并发送到已配置的通知渠道"
+        :title="t('changePassword.resetViaNotification')"
+        :label="t('changePassword.resetViaNotificationDesc')"
         is-link
         @click="onResetPassword"
       />
@@ -67,11 +67,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { showToast, showConfirmDialog } from 'vant'
 import http from '@/api/index'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAuthStore } from '@/stores/auth'
 
+const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -90,11 +92,11 @@ const canChangePassword = computed(() =>
 
 async function onChangePassword() {
   if (form.value.newPassword !== form.value.confirmPassword) {
-    showToast({ type: 'fail', message: '两次输入的密码不一致' })
+    showToast(t('changePassword.passwordMismatch'))
     return
   }
   try {
-    await showConfirmDialog({ message: '修改密码后需要重新登录，确认继续？' })
+    await showConfirmDialog({ message: t('changePassword.confirmChange') })
   } catch {
     return
   }
@@ -104,15 +106,15 @@ async function onChangePassword() {
       old_password: form.value.oldPassword,
       new_password: form.value.newPassword,
     })
-    showToast({ type: 'success', message: '密码已修改，请重新登录' })
+    showToast(t('changePassword.changeSuccess'))
     authStore.logout({ onLogout: () => router.push('/login') })
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { code?: string; message?: string } } }
+    const err = e as { response?: { data?: { code?: string } } }
     const code = err.response?.data?.code
-    if (code === 'AUTH_PASSWORD_INCORRECT') {
-      showToast({ type: 'fail', message: '当前密码错误' })
+    if (code && t(`errors.${code}`) !== `errors.${code}`) {
+      showToast(t(`errors.${code}`))
     } else {
-      showToast({ type: 'fail', message: err.response?.data?.message || '修改失败，请重试' })
+      showToast(t('changePassword.changeFailed'))
     }
   } finally {
     changingPassword.value = false
@@ -121,24 +123,24 @@ async function onChangePassword() {
 
 async function onResetPassword() {
   try {
-    await showConfirmDialog({
-      message: '系统将生成临时密码并通过通知渠道发送，当前密码将失效，确认继续？',
-    })
+    await showConfirmDialog({ message: t('changePassword.confirmReset') })
   } catch {
     return
   }
   resettingPassword.value = true
   try {
     await http.post('/auth/me/password/reset')
-    showToast({ type: 'success', message: '临时密码已发送，请重新登录' })
+    showToast(t('changePassword.resetSuccess'))
     authStore.logout({ onLogout: () => router.push('/login') })
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { code?: string; message?: string } } }
+    const err = e as { response?: { data?: { code?: string } } }
     const code = err.response?.data?.code
     if (code === 'NOTIFICATION_NO_CHANNEL') {
-      showToast({ type: 'fail', message: '未配置通知渠道，请先在设置中添加通知渠道' })
+      showToast(t('changePassword.noNotificationChannel'))
+    } else if (code && t(`errors.${code}`) !== `errors.${code}`) {
+      showToast(t(`errors.${code}`))
     } else {
-      showToast({ type: 'fail', message: err.response?.data?.message || '重置失败，请重试' })
+      showToast(t('changePassword.resetFailed'))
     }
   } finally {
     resettingPassword.value = false
