@@ -44,7 +44,19 @@
     <!-- Results -->
     <template v-if="driftResult">
       <div v-if="!driftResult.has_significant_drift" class="no-drift">
-        <van-empty image="success" description="配置在目标范围内，无需再平衡" />
+        <van-empty description="配置在目标范围内，无需再平衡">
+          <template #image>
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="40" cy="40" r="36" fill="rgba(74,222,128,0.08)" />
+              <circle cx="40" cy="40" r="28" fill="rgba(74,222,128,0.10)" />
+              <path d="M24 40h32" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="32" cy="40" r="4" fill="#4ade80"/>
+              <circle cx="48" cy="40" r="4" fill="#4ade80"/>
+              <path d="M32 32v-4M48 32v-4M32 52v-4M48 52v-4" stroke="#4ade80" stroke-width="2" stroke-linecap="round" opacity="0.5"/>
+              <circle cx="40" cy="40" r="14" stroke="#4ade80" stroke-width="2" fill="none" opacity="0.3"/>
+            </svg>
+          </template>
+        </van-empty>
       </div>
       <template v-else>
         <div v-if="driftResult.narrative" class="narrative-card">
@@ -169,7 +181,7 @@ onMounted(async () => {
   padding-top: 8px;
 }
 .check-section { padding: 12px 16px; }
-.no-drift { padding: 40px 16px; }
+.no-drift { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .narrative-card {
   background: var(--bg-primary);
   margin: 12px 16px;

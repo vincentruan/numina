@@ -120,7 +120,7 @@ export default {
     resetPasswordTitle: '重置 {name} 的密码',
     resetPinTitle2: '重置 {name} 的PIN码',
     newPasswordLabel: '新密码',
-    newPasswordPlaceholder: '请输入新密码',
+    newPasswordPlaceholder: '至少 8 位，含大小写字母和数字',
     confirmResetPassword: '确认重置密码',
     confirmNewPassword: '确认新密码',
     confirmNewPasswordPlaceholder: '再次输入新密码',

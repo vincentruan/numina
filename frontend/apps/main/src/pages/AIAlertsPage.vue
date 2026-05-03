@@ -7,7 +7,20 @@
     </div>
 
     <div v-else-if="!alerts.length" class="empty-state">
-      <van-empty image="success" description="暂无资产预警" />
+      <van-empty description="暂无资产预警">
+        <template #image>
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="40" cy="40" r="36" fill="rgba(99,102,241,0.08)" />
+            <circle cx="40" cy="40" r="28" fill="rgba(99,102,241,0.10)" />
+            <path d="M40 20v22" stroke="#6366f1" stroke-width="3" stroke-linecap="round"/>
+            <circle cx="40" cy="52" r="3" fill="#6366f1"/>
+            <path d="M24 56h32" stroke="#6366f1" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+            <path d="M28 36l-8 20h40l-8-20" stroke="#6366f1" stroke-width="2.5" stroke-linejoin="round" fill="none"/>
+            <circle cx="56" cy="28" r="6" fill="#4ade80"/>
+            <path d="M53 28l2 2 4-4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </template>
+      </van-empty>
       <div class="actions">
         <van-button plain block :loading="refreshing" @click="onRefresh">扫描资产状态</van-button>
       </div>
@@ -121,8 +134,8 @@ onMounted(loadAlerts)
   justify-content: center;
   padding: 60px;
 }
-.empty-state { padding: 40px 16px; }
-.actions { padding: 0 16px; }
+.empty-state { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.actions { padding: 12px 16px 0; width: 100%; }
 .summary-bar {
   display: flex;
   justify-content: space-between;

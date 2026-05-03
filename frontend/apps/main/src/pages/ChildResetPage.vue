@@ -125,7 +125,7 @@ async function doResetPassword() {
     newPassword.value = ''
     confirmPassword.value = ''
   } catch {
-    showToast(t('toast.operationFailed2'))
+    // 422 validation errors are already shown by the global response interceptor
   } finally {
     savingPassword.value = false
   }

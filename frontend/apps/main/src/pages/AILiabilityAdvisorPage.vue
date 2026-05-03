@@ -7,7 +7,18 @@
     </div>
 
     <div v-else-if="!data" class="empty-state">
-      <van-empty image="search" description="点击分析负债状况" />
+      <van-empty description="点击分析负债状况">
+        <template #image>
+          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <circle cx="40" cy="40" r="36" fill="rgba(99,102,241,0.08)" />
+            <circle cx="40" cy="40" r="28" fill="rgba(99,102,241,0.10)" />
+            <path d="M28 50l8-20 8 20" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <path d="M31 44h10" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="52" cy="34" r="8" stroke="#6366f1" stroke-width="2.5" fill="none"/>
+            <path d="M52 31v6M49 34h6" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </template>
+      </van-empty>
       <div class="actions">
         <van-button type="primary" block :loading="analyzing" @click="onAnalyze">开始分析</van-button>
       </div>
@@ -16,7 +27,16 @@
     <template v-else>
       <!-- No liabilities -->
       <div v-if="!data.has_liabilities" class="no-liability">
-        <van-empty image="success" description="当前无活跃负债，财务状况良好" />
+        <van-empty description="当前无活跃负债，财务状况良好">
+          <template #image>
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <circle cx="40" cy="40" r="36" fill="rgba(74,222,128,0.08)" />
+              <circle cx="40" cy="40" r="28" fill="rgba(74,222,128,0.10)" />
+              <circle cx="40" cy="40" r="14" stroke="#4ade80" stroke-width="2.5" fill="none"/>
+              <path d="M33 40l5 5 9-10" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </template>
+        </van-empty>
       </div>
 
       <template v-else>
@@ -149,8 +169,8 @@ onMounted(async () => {
   padding-bottom: 24px;
 }
 .loading-state { display: flex; justify-content: center; padding: 60px; }
-.empty-state, .no-liability { padding: 40px 16px; }
-.actions { padding: 0 16px; }
+.empty-state, .no-liability { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.actions { padding: 12px 16px 0; width: 100%; }
 .summary-card {
   background: var(--bg-primary);
   margin: 12px 16px;

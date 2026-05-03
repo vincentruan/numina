@@ -103,7 +103,7 @@ def test_value_error_invalid_value(test_client):
     details = resp.json()["details"]
     pw_err = next(d for d in details if d["field"] == "password")
     assert pw_err["code"] == "INVALID_VALUE"
-    assert pw_err["msg"] == "输入值无效"
+    assert pw_err["msg"] == "too short"
 
 
 def test_unknown_pydantic_type_fallback(test_client):

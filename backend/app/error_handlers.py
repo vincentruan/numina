@@ -100,6 +100,10 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
         elif code == "TOO_LONG" and "max_length" in ctx:
             template = _get_message("VALIDATION_TOO_LONG", lang)
             msg = template.format(max_length=ctx["max_length"])
+        elif pydantic_type == "value_error":
+            # Use the ValueError message directly (e.g. "密码必须包含大写字母")
+            raw = error.get("msg", "")
+            msg = raw.removeprefix("Value error, ") if raw else _get_message("VALIDATION_INVALID_VALUE", lang)
         else:
             locale_key = f"VALIDATION_{code}"
             locale_msg = _get_message(locale_key, lang)
