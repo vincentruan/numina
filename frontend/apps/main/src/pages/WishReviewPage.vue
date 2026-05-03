@@ -1,8 +1,6 @@
 <template>
   <div class="review-page">
-    <div class="page-header">
-      <h2>心愿审核</h2>
-    </div>
+    <PageHeader title="心愿审核" />
 
     <div v-if="loading" class="loading">加载中...</div>
     <div v-if="error" class="error-msg">{{ error }}</div>
@@ -105,6 +103,7 @@ import {
   listParentChildWishes, approveChildWish, rejectChildWish, realizeChildWish, deferChildWish,
   type ParentWish
 } from '@/api/childWishes'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const wishes = ref<ParentWish[]>([])
 const loading = ref(true)
@@ -217,12 +216,10 @@ onMounted(load)
 
 <style scoped>
 .review-page {
-  padding: 16px;
   background: #f8f9fa;
   min-height: 100vh;
+  padding: 16px 16px 80px;
 }
-.page-header { margin-bottom: 16px; }
-.page-header h2 { font-size: 20px; font-weight: bold; color: #333; margin: 0; }
 .loading, .empty {
   text-align: center;
   margin-top: 60px;

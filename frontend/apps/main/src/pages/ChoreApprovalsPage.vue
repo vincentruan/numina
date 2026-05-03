@@ -1,8 +1,6 @@
 <template>
   <div class="approvals-page">
-    <div class="page-header">
-      <h2>家务审批</h2>
-    </div>
+    <PageHeader title="家务审批" />
 
     <div v-if="toastMsg" class="bonus-toast">{{ toastMsg }}</div>
 
@@ -37,6 +35,7 @@
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getPendingApprovals, approveChore, rejectChore, type PendingApprovalInstance } from '@/api/chores'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t } = useI18n()
 const pending = ref<PendingApprovalInstance[]>([])
@@ -96,18 +95,9 @@ onMounted(load)
 
 <style scoped>
 .approvals-page {
-  padding: 16px;
   background: #f8f9fa;
   min-height: 100vh;
-}
-.page-header {
-  margin-bottom: 16px;
-}
-.page-header h2 {
-  font-size: 20px;
-  font-weight: bold;
-  color: #333;
-  margin: 0;
+  padding: 16px 16px 80px;
 }
 .loading, .empty {
   text-align: center;

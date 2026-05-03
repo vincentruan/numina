@@ -470,7 +470,7 @@ async function doResetPin() {
   resettingPin.value = true
   try {
     await resetChildPin(resetPinTarget.value.id, [...newPin.value])
-    showToast(t('toast.saveSuccess'))
+    showToast(t('toast.childPinReset'))
     showResetPinSheet.value = false
   } catch {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
@@ -485,7 +485,7 @@ async function onForceLogout(child: { id: string; display_name: string }) {
   } catch { return }
   try {
     await forceLogoutChild(child.id)
-    showToast(t('toast.saveSuccess'))
+    showToast(t('toast.childForceLoggedOut'))
   } catch {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
   }
@@ -494,7 +494,7 @@ async function onForceLogout(child: { id: string; display_name: string }) {
 async function onUnlockPin(child: { id: string; display_name: string }) {
   try {
     await unlockChildPin(child.id)
-    showToast(t('toast.saveSuccess'))
+    showToast(t('toast.childPinUnlocked'))
   } catch {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
   }
