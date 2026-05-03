@@ -163,7 +163,7 @@ def test_child_draw(client, auth_headers, second_user_headers):
     child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
         "password": "ChildPass1",
-        "username": "xiaoming_bb",
+        "username": "xiaomingbb",
         "avatar_color": "#FF5733",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -190,7 +190,7 @@ def test_child_list_draws(client, auth_headers):
     child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小红",
         "password": "ChildPass2",
-        "username": "xiaohong_bb",
+        "username": "xiaohongbb",
         "avatar_color": "#FF0000",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -232,7 +232,7 @@ def test_child_list_bonus_draws(client, auth_headers):
     child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小蓝",
         "password": "ChildPass3",
-        "username": "xiaolan_bb",
+        "username": "xiaolanbb",
         "avatar_color": "#0000FF",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -257,7 +257,7 @@ def test_child_use_bonus_draw_not_found(client, auth_headers):
     child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小绿",
         "password": "ChildPass4",
-        "username": "xiaolv_bb",
+        "username": "xiaolvbb",
         "avatar_color": "#00FF00",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
@@ -307,7 +307,7 @@ def test_draw_requires_chore_instance_ids(client, auth_headers):
     child_resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小紫",
         "password": "ChildPass5",
-        "username": "xiaozi_bb",
+        "username": "xiaozibb",
         "avatar_color": "#800080",
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
