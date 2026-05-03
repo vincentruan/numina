@@ -17,7 +17,15 @@
           <div class="hero-info">
             <div class="hero-name">{{ wish.name }}</div>
             <div class="hero-category">
-              <template v-if="wish.category">{{ wish.category.icon }} {{ wish.category.name }}</template>
+              <template v-if="wish.category">
+                <template v-if="wish.category.icon && wish.category.icon.startsWith('icon-')">
+                  <svg class="icon-svg" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em">
+                    <use :href="`#${getIconId(wish.category.icon)}`" />
+                  </svg>
+                </template>
+                <span v-else-if="wish.category.icon">{{ wish.category.icon }}</span>
+                {{ wish.category.name }}
+              </template>
               <template v-else>未分类</template>
             </div>
           </div>
@@ -173,6 +181,7 @@ import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
 import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 
