@@ -1,8 +1,8 @@
 import http from './index'
 
 export interface SpendingLeakItem {
-  id: number
-  asset_id: number
+  id: string
+  asset_id: string
   asset_name: string
   leak_type: 'high_idle_cost' | 'redundant' | 'high_maintenance'
   severity: 'low' | 'medium' | 'high'
@@ -17,5 +17,5 @@ export const getSpendingLeaks = (): Promise<SpendingLeakItem[]> =>
 export const refreshSpendingLeaks = (): Promise<{ refreshed: number }> =>
   http.post('/ai/spending-leaks/refresh')
 
-export const dismissSpendingLeak = (id: number): Promise<{ ok: boolean }> =>
+export const dismissSpendingLeak = (id: string): Promise<{ ok: boolean }> =>
   http.post(`/ai/spending-leaks/${id}/dismiss`)

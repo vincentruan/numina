@@ -35,7 +35,7 @@ def get_disposal_suggestions(
     )
     return [
         {
-            "id": s.id,
+            "id": str(s.id),
             "asset_id": s.asset_id,
             "asset_name": s.asset_name,
             "category_name": s.category_name,
@@ -104,12 +104,12 @@ async def refresh_disposal_suggestions(
 
 @router.post("/{suggestion_id}/dismiss")
 def dismiss_suggestion(
-    suggestion_id: int,
+    suggestion_id: str,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     s = db.query(AIDisposalSuggestion).filter(
-        AIDisposalSuggestion.id == suggestion_id,
+        AIDisposalSuggestion.id == int(suggestion_id),
         AIDisposalSuggestion.family_id == current_user.family_id,
     ).first()
     if not s:

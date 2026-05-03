@@ -35,7 +35,7 @@ def get_leaks(
     )
     return [
         {
-            "id": l.id,
+            "id": str(l.id),
             "asset_id": l.asset_id,
             "asset_name": l.asset_name,
             "leak_type": l.leak_type,
@@ -99,12 +99,12 @@ async def refresh_leaks(
 
 @router.post("/{leak_id}/dismiss")
 def dismiss_leak(
-    leak_id: int,
+    leak_id: str,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     leak = db.query(AISpendingLeak).filter(
-        AISpendingLeak.id == leak_id,
+        AISpendingLeak.id == int(leak_id),
         AISpendingLeak.family_id == current_user.family_id,
     ).first()
     if not leak:

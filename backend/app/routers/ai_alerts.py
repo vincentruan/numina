@@ -35,7 +35,7 @@ def get_alerts(
     )
     return [
         {
-            "id": a.id,
+            "id": str(a.id),
             "asset_id": a.asset_id,
             "asset_name": a.asset_name,
             "alert_type": a.alert_type,
@@ -102,12 +102,12 @@ async def refresh_alerts(
 
 @router.post("/{alert_id}/dismiss")
 def dismiss_alert(
-    alert_id: int,
+    alert_id: str,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
     alert = db.query(AIAssetAlert).filter(
-        AIAssetAlert.id == alert_id,
+        AIAssetAlert.id == int(alert_id),
         AIAssetAlert.family_id == current_user.family_id,
     ).first()
     if not alert:
