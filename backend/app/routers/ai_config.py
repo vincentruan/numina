@@ -52,6 +52,7 @@ def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: 
         base_url=cfg.base_url,
         model_id=cfg.model_id,
         vision_model_id=cfg.vision_model_id,
+        timeout_seconds=cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
         is_active=cfg.is_active,
         test_results=[AIProviderTestResultResponse.model_validate(r) for r in test_results],
     )
@@ -111,6 +112,7 @@ def create_ai_config(
         base_url=payload.base_url,
         model_id=payload.model_id,
         vision_model_id=payload.vision_model_id,
+        timeout_seconds=payload.timeout_seconds if payload.timeout_seconds is not None else 60,
         is_active=payload.is_active,
     )
     db.add(cfg)
@@ -162,6 +164,8 @@ def update_ai_config(
         cfg.model_id = payload.model_id
     if payload.vision_model_id is not None:
         cfg.vision_model_id = payload.vision_model_id
+    if payload.timeout_seconds is not None:
+        cfg.timeout_seconds = payload.timeout_seconds
     if payload.is_active is not None:
         cfg.is_active = payload.is_active
     if payload.ai_api_key is not None:

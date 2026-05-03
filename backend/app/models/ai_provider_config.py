@@ -18,6 +18,7 @@ class AIProviderConfig(Base):
     base_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     vision_model_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    timeout_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True, default=60)
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

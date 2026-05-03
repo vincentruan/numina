@@ -16,6 +16,7 @@ class LLMClient:
         model_id: str,
         vision_model_id: str | None = None,
         base_url: str | None = None,
+        timeout: float = 60.0,
     ) -> None:
         self.provider = provider
         self.model_id = model_id
@@ -24,13 +25,13 @@ class LLMClient:
         self._openai_client = None
         if provider == "anthropic":
             import anthropic
-            kwargs: dict[str, Any] = {"api_key": api_key, "timeout": 30.0}
+            kwargs: dict[str, Any] = {"api_key": api_key, "timeout": timeout}
             if base_url:
                 kwargs["base_url"] = base_url
             self._anthropic_client = anthropic.AsyncAnthropic(**kwargs)
         elif provider == "openai":
             from openai import AsyncOpenAI
-            kwargs = {"api_key": api_key, "timeout": 30.0}
+            kwargs = {"api_key": api_key, "timeout": timeout}
             if base_url:
                 kwargs["base_url"] = base_url
             self._openai_client = AsyncOpenAI(**kwargs)
@@ -119,6 +120,7 @@ def get_llm_client(
     model_id: str,
     vision_model_id: str | None = None,
     base_url: str | None = None,
+    timeout: float = 60.0,
 ) -> LLMClient:
     """工厂函数，创建 LLM 客户端实例。"""
-    return LLMClient(provider=provider, api_key=api_key, model_id=model_id, vision_model_id=vision_model_id, base_url=base_url)
+    return LLMClient(provider=provider, api_key=api_key, model_id=model_id, vision_model_id=vision_model_id, base_url=base_url, timeout=timeout)

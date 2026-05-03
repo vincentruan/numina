@@ -424,6 +424,7 @@ export default {
     aiEnabled: '🤖 AI 助手已启用',
     aiDisabled: '🤖 AI 助手已关闭',
     aiConfigSaved: '✅ 配置已保存',
+    aiTimeoutInvalid: '⚠️ 超时时间须为 10-600 秒之间的整数',
     aiTestFailed: '❌ 测试失败，请检查配置',
     aiNotEnabled: '⚠️ 请先在设置中启用 AI 功能',
     aiScanComplete: '✅ 扫描完成',

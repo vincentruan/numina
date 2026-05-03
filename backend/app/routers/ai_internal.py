@@ -147,6 +147,7 @@ def internal_get_ai_config(
         "ai_base_url": cfg.base_url,
         "ai_model_id": cfg.model_id,
         "ai_vision_model_id": cfg.vision_model_id,
+        "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
     }
 
 

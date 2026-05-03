@@ -22,7 +22,9 @@ from schemas.context import FamilyContext
 from schemas.policy import CapabilityPolicy
 from schemas.response import AgentResponse
 from services.audit_logger import AuditEntry, audit_logger
-from services.deerflow_adapter.adapter import create_family_adapter as _create_family_adapter
+from services.deerflow_adapter.adapter import (
+    create_family_adapter as _create_family_adapter,
+)
 from services.fallback_engine import fallback_engine
 from services.output_mapper import output_mapper
 from services.pii_redactor import pii_redactor
@@ -100,6 +102,7 @@ class Orchestrator:
                 model_id=ai_config.get("ai_model_id", ""),
                 vision_model_id=ai_config.get("ai_vision_model_id"),
                 base_url=ai_config.get("ai_base_url"),
+                timeout=float(ai_config.get("timeout_seconds", 60)),
             )
 
             # ── 6. Dispatch: DeerFlow or legacy ────────────────────────────

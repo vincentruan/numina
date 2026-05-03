@@ -24,6 +24,7 @@ class AIConfigResponse(BaseModel):
     base_url: str | None = None
     model_id: str | None = None
     vision_model_id: str | None = None
+    timeout_seconds: int | None = 60
     is_active: bool
     test_results: list[AIProviderTestResultResponse] = []
 
@@ -39,6 +40,7 @@ class AIConfigCreate(BaseModel):
     base_url: str | None = None
     model_id: str | None = None
     vision_model_id: str | None = None
+    timeout_seconds: int | None = 60
     is_active: bool = False
 
     @field_validator("provider")
@@ -56,6 +58,7 @@ class AIConfigUpdate(BaseModel):
     base_url: str | None = None
     model_id: str | None = None
     vision_model_id: str | None = None
+    timeout_seconds: int | None = None
     is_active: bool | None = None
 
     @field_validator("provider")

@@ -73,6 +73,13 @@
             </div>
           </template>
         </van-field>
+        <van-field
+          v-model="timeoutInput"
+          label="API 超时（秒）"
+          placeholder="默认 60 秒，建议 60-300"
+          type="digit"
+          :disabled="saving"
+        />
       </van-cell-group>
 
       <div class="actions">
@@ -121,6 +128,10 @@
           v-if="aiStore.config?.ai_vision_model_id"
           title="图像模型 ID"
           :value="aiStore.config.ai_vision_model_id"
+        />
+        <van-cell
+          title="API 超时"
+          :value="`${aiStore.config?.ai_timeout_seconds ?? 60} 秒`"
         />
       </van-cell-group>
       <div class="tip">
@@ -282,6 +293,7 @@ const editingApiKey = ref(false)
 const baseUrlInput = ref('')
 const modelIdInput = ref('')
 const visionModelIdInput = ref('')
+const timeoutInput = ref('60')
 const selectedProvider = ref<string>('anthropic')
 const aiEnabled = ref(false)
 const showApiKey = ref(false)
@@ -358,6 +370,8 @@ const validationError = computed(() => {
   if (aiEnabled.value && !selectedProvider.value) return '请选择 AI Provider'
   if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return '请填写 API Key'
   if (aiEnabled.value && selectedProvider.value && !modelIdInput.value.trim()) return '请填写模型 ID'
+  const timeout = parseInt(timeoutInput.value)
+  if (isNaN(timeout) || timeout < 10 || timeout > 600) return t('toast.aiTimeoutInvalid')
   return null
 })
 
@@ -370,6 +384,7 @@ onMounted(async () => {
   baseUrlInput.value = aiStore.config?.ai_base_url ?? ''
   modelIdInput.value = aiStore.config?.ai_model_id ?? ''
   visionModelIdInput.value = aiStore.config?.ai_vision_model_id ?? ''
+  timeoutInput.value = String(aiStore.config?.ai_timeout_seconds ?? 60)
   apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
 })
 
@@ -400,12 +415,13 @@ function onProviderConfirm({ selectedOptions }: { selectedOptions: Array<{ text:
 async function onSave() {
   saving.value = true
   try {
-    const payload: { ai_provider?: string; ai_api_key?: string; ai_base_url?: string | null; ai_model_id?: string | null; ai_vision_model_id?: string | null } = {}
+    const payload: { ai_provider?: string; ai_api_key?: string; ai_base_url?: string | null; ai_model_id?: string | null; ai_vision_model_id?: string | null; ai_timeout_seconds?: number } = {}
     payload.ai_provider = selectedProvider.value
     if (apiKeyInput.value.trim()) payload.ai_api_key = apiKeyInput.value.trim()
     payload.ai_base_url = baseUrlInput.value.trim() || null
     payload.ai_model_id = modelIdInput.value.trim() || null
     payload.ai_vision_model_id = visionModelIdInput.value.trim() || null
+    payload.ai_timeout_seconds = parseInt(timeoutInput.value) || 60
     await aiStore.updateConfig(payload)
     apiKeyInput.value = ''
     editingApiKey.value = false

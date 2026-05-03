@@ -10,6 +10,7 @@ export interface AIConfig {
   ai_base_url: string | null
   ai_model_id: string | null
   ai_vision_model_id: string | null
+  ai_timeout_seconds: number
   ai_test_connected: boolean | null
   ai_test_message: string | null
   ai_test_latency_ms: number | null
@@ -35,6 +36,7 @@ export interface AIConfigUpdate {
   ai_base_url?: string | null
   ai_model_id?: string | null
   ai_vision_model_id?: string | null
+  ai_timeout_seconds?: number | null
 }
 
 export interface AIConfigTestResult {
@@ -70,6 +72,7 @@ interface _BackendConfig {
   base_url: string | null
   model_id: string | null
   vision_model_id: string | null
+  timeout_seconds: number | null
   is_active: boolean
   test_results: _BackendTestResult[]
 }
@@ -91,6 +94,7 @@ function _mapConfig(cfg: _BackendConfig): AIConfig {
     ai_base_url: cfg.base_url,
     ai_model_id: cfg.model_id,
     ai_vision_model_id: cfg.vision_model_id,
+    ai_timeout_seconds: cfg.timeout_seconds ?? 60,
     ai_test_connected: main?.success ?? null,
     ai_test_message: main?.message ?? null,
     ai_test_latency_ms: main?.latency_ms ?? null,
@@ -113,7 +117,7 @@ function _mapConfig(cfg: _BackendConfig): AIConfig {
 function _emptyConfig(): AIConfig {
   return {
     id: null, ai_enabled: false, ai_provider: null, ai_api_key_masked: null,
-    ai_base_url: null, ai_model_id: null, ai_vision_model_id: null,
+    ai_base_url: null, ai_model_id: null, ai_vision_model_id: null, ai_timeout_seconds: 60,
     ai_test_connected: null, ai_test_message: null, ai_test_latency_ms: null, ai_test_timestamp: null,
     ai_test_thinking_success: null, ai_test_thinking_message: null, ai_test_thinking_latency_ms: null, ai_test_thinking_timestamp: null,
     ai_vision_test_success: null, ai_vision_test_message: null, ai_vision_test_latency_ms: null, ai_vision_test_timestamp: null,
@@ -140,6 +144,7 @@ export async function updateAIConfig(data: AIConfigUpdate): Promise<{ data: AICo
   if (data.ai_base_url !== undefined) backendPayload.base_url = data.ai_base_url
   if (data.ai_model_id !== undefined) backendPayload.model_id = data.ai_model_id
   if (data.ai_vision_model_id !== undefined) backendPayload.vision_model_id = data.ai_vision_model_id
+  if (data.ai_timeout_seconds !== undefined) backendPayload.timeout_seconds = data.ai_timeout_seconds
   if (data.ai_enabled !== undefined) backendPayload.is_active = data.ai_enabled
 
   if (_cachedConfigId !== null) {
@@ -155,6 +160,7 @@ export async function updateAIConfig(data: AIConfigUpdate): Promise<{ data: AICo
     base_url: data.ai_base_url ?? undefined,
     model_id: data.ai_model_id ?? undefined,
     vision_model_id: data.ai_vision_model_id ?? undefined,
+    timeout_seconds: data.ai_timeout_seconds ?? 60,
     is_active: data.ai_enabled ?? false,
   })
   _cachedConfigId = res.data.id
