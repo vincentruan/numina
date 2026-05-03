@@ -515,7 +515,7 @@ export default {
     channelNamePlaceholder: '如：家庭群',
     channelTypeLabel: '渠道类型',
     botTokenLabel: 'Bot Token',
-    botTokenPlaceholder: '从 @BotFather 获取',
+    botTokenPlaceholder: '从 BotFather 获取',
     chatIdLabel: 'Chat ID',
     chatIdPlaceholder: '数字 ID',
     smtpHostLabel: 'SMTP 服务器',
