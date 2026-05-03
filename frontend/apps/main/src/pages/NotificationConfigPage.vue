@@ -6,26 +6,6 @@
   />
 
   <div class="page-content">
-    <van-cell-group inset :title="t('reminders.thresholdGroupTitle')" class="section">
-      <van-field
-        v-model="fixedThreshold"
-        :label="t('reminders.thresholdFixed')"
-        type="number"
-        placeholder="如 5000"
-        clearable
-      />
-      <van-field
-        v-model="multiplierThreshold"
-        :label="t('reminders.thresholdMultiplier')"
-        type="number"
-        placeholder="如 2"
-        clearable
-      />
-      <van-cell>
-        <van-button type="primary" size="small" block @click="saveConfig">{{ t('reminders.saveThreshold') }}</van-button>
-      </van-cell>
-    </van-cell-group>
-
     <van-cell-group inset :title="t('reminders.channelGroupTitle')" class="section">
       <van-swipe-cell v-for="channel in channels" :key="channel.id">
         <van-cell
@@ -49,7 +29,7 @@
     </van-cell-group>
   </div>
 
-  <van-popup v-model:show="showSheet" position="bottom" round :style="{ height: '75%' }">
+  <van-popup v-model:show="showSheet" position="bottom" round teleport="body" :style="{ height: '75%' }">
     <div class="popup-content">
       <van-nav-bar :title="editingChannel ? t('reminders.editChannelTitle') : t('reminders.addChannelTitle')">
         <template #right>
@@ -121,8 +101,6 @@ import {
 const { t } = useI18n()
 
 const channels = ref<NotificationChannelResponse[]>([])
-const fixedThreshold = ref('')
-const multiplierThreshold = ref('')
 const showSheet = ref(false)
 const showTypePicker = ref(false)
 const editingChannel = ref<NotificationChannelResponse | null>(null)
@@ -164,20 +142,7 @@ function resetForm() {
 
 onMounted(async () => {
   channels.value = await notificationChannelsApi.list()
-  const config = await notificationChannelsApi.getConfig()
-  fixedThreshold.value = config.large_purchase_threshold_fixed?.toString() ?? ''
-  multiplierThreshold.value = config.large_purchase_threshold_multiplier?.toString() ?? ''
 })
-
-async function saveConfig() {
-  await notificationChannelsApi.updateConfig({
-    large_purchase_threshold_fixed: fixedThreshold.value ? parseFloat(fixedThreshold.value) : null,
-    large_purchase_threshold_multiplier: multiplierThreshold.value
-      ? parseFloat(multiplierThreshold.value)
-      : null,
-  })
-  showToast(t('toast.configSaved'))
-}
 
 function openAdd() {
   editingChannel.value = null

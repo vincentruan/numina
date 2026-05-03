@@ -76,6 +76,7 @@
 
     <!-- 通知与 AI -->
     <van-cell-group inset :title="t('settings.notificationsAndAI')" class="section">
+      <van-cell :title="t('reminders.thresholdSettings')" icon="gold-coin-o" is-link to="/settings/notifications/threshold" />
       <van-cell
         :title="t('reminders.notificationSettings')"
         is-link

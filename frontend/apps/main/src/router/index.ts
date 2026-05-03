@@ -174,6 +174,10 @@ const router = createRouter({
           component: () => import('@/pages/NotificationConfigPage.vue'),
         },
         {
+          path: 'settings/notifications/threshold',
+          component: () => import('@/pages/NotificationThresholdPage.vue'),
+        },
+        {
           path: 'settings/password',
           name: 'ChangePassword',
           component: () => import('@/pages/ChangePasswordPage.vue'),
