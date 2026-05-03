@@ -1,142 +1,149 @@
 <template>
-  <div class="auth-page">
-    <!-- Step 1: username only -->
-    <div v-if="step === 1" class="step-container">
-      <div class="auth-hero">
-        <div class="app-logo">🌟</div>
-        <h1 class="app-title">Numina</h1>
-        <p class="app-subtitle">{{ t('auth.childLogin') }}</p>
+  <div class="auth-page" role="main" :aria-label="t('auth.childLogin')">
+    <!-- Cosmic star background canvas -->
+    <canvas ref="canvasRef" class="cosmic-canvas" aria-hidden="true"></canvas>
+
+    <div class="auth-content">
+      <!-- Step 1: username + password -->
+      <div v-if="step === 1" class="step-container">
+        <div class="auth-header">
+          <h1 class="app-title">Numina</h1>
+          <p class="app-subtitle">{{ t('auth.childLogin') }}</p>
+        </div>
+
+        <van-form class="login-form" @submit="onStep1Submit">
+          <van-cell-group inset>
+            <van-field
+              v-model="form.username"
+              name="username"
+              :label="t('auth.username')"
+              :placeholder="t('auth.usernamePlaceholder')"
+              autocomplete="username"
+              :rules="[{ required: true, message: t('auth.usernameRequired') }]"
+            />
+            <van-field
+              v-model="form.password"
+              :type="showPassword ? 'text' : 'password'"
+              name="password"
+              :label="t('auth.password')"
+              :placeholder="t('auth.passwordPlaceholder')"
+              autocomplete="current-password"
+              :rules="[{ required: true, message: t('auth.passwordRequired') }]"
+              @keyup.enter="onStep1Submit"
+            >
+              <template #right-icon>
+                <van-icon
+                  :name="showPassword ? 'eye-o' : 'closed-eye'"
+                  style="cursor: pointer"
+                  @click="showPassword = !showPassword"
+                />
+              </template>
+            </van-field>
+          </van-cell-group>
+
+          <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
+
+          <div class="form-actions">
+            <van-button round block type="primary" native-type="submit" :loading="loading" class="btn-next">
+              {{ t('auth.nextStep') }}
+            </van-button>
+          </div>
+        </van-form>
       </div>
 
-      <van-form class="login-form" @submit="onStep1Submit">
-        <van-cell-group inset>
-          <van-field
-            v-model="form.username"
-            name="username"
-            :label="t('auth.username')"
-            :placeholder="t('auth.usernamePlaceholder')"
-            :rules="[{ required: true, message: t('auth.usernameRequired') }]"
-          />
-          <van-field
-            v-model="form.password"
-            :type="showPassword ? 'text' : 'password'"
-            name="password"
-            :label="t('auth.password')"
-            :placeholder="t('auth.passwordPlaceholder')"
-            :rules="[{ required: true, message: t('auth.passwordRequired') }]"
+      <!-- Step 2: emoji PIN / WebAuthn -->
+      <div v-else class="step-container pin-step">
+        <!-- Trusted device card -->
+        <TrustedDeviceCard
+          v-if="trustedUser"
+          :display-name="trustedUser.displayName"
+          :avatar-color="trustedUser.avatarColor"
+          :loading="false"
+          class="trusted-card"
+          @confirm="() => {}"
+          @switch-account="onSwitchAccount"
+        />
+
+        <template v-else>
+          <div
+            v-if="childInfo.avatarColor"
+            class="child-avatar"
+            :style="{ backgroundColor: childInfo.avatarColor }"
           >
-            <template #right-icon>
-              <van-icon
-                :name="showPassword ? 'eye-o' : 'closed-eye'"
-                style="cursor:pointer"
-                @click="showPassword = !showPassword"
-              />
-            </template>
-          </van-field>
-        </van-cell-group>
+            {{ (childInfo.displayName ?? '?').charAt(0) }}
+          </div>
+          <p class="child-name">{{ childInfo.displayName }}</p>
+        </template>
 
-        <p v-if="step1Error" class="step1-error">{{ step1Error }}</p>
-
-        <div class="form-actions">
+        <!-- WebAuthn mode -->
+        <div v-if="authMode === 'webauthn'" class="webauthn-mode">
+          <p class="pin-hint">{{ t('auth.useFingerprint') }}</p>
           <van-button
-            round block type="primary" native-type="submit" :loading="loading"
-            class="btn-next"
+            round
+            size="large"
+            :loading="loading"
+            class="btn-unlock"
+            @click="attemptWebAuthn"
           >
-            {{ t('auth.nextStep') }}
+            {{ loading ? t('auth.verifying') : t('auth.unlock') }}
           </van-button>
-        </div>
-      </van-form>
-    </div>
-
-    <!-- Step 2: emoji PIN -->
-    <div v-else class="step-container">
-      <!-- Trusted device card — shown when device check identified the user -->
-      <TrustedDeviceCard
-        v-if="trustedUser"
-        :display-name="trustedUser.displayName"
-        :avatar-color="trustedUser.avatarColor"
-        :loading="false"
-        @confirm="() => {}"
-        @switch-account="onSwitchAccount"
-      />
-
-      <template v-else>
-        <div v-if="childInfo.avatarColor" class="child-avatar" :style="{ backgroundColor: childInfo.avatarColor }">
-          {{ (childInfo.displayName ?? '?').charAt(0) }}
-        </div>
-        <p class="child-name">{{ childInfo.displayName }}</p>
-      </template>
-
-      <!-- WebAuthn mode -->
-      <div v-if="authMode === 'webauthn'" class="webauthn-mode">
-        <p class="instruction">{{ t('auth.useFingerprint') }}</p>
-        <van-button
-          round
-          size="large"
-          :loading="loading"
-          class="btn-unlock"
-          @click="attemptWebAuthn"
-        >
-          {{ loading ? t('auth.verifying') : t('auth.unlock') }}
-        </van-button>
-        <button class="switch-btn" @click="switchToPin">
-          {{ t('auth.useEmojiPin') }}
-        </button>
-      </div>
-
-      <!-- PIN mode -->
-      <div v-else class="pin-mode">
-        <div class="pin-display" :class="{ shake: shaking }">
-          <span
-            v-for="i in 4"
-            :key="i"
-            class="pin-slot"
-            :class="{ filled: pin.length >= i }"
-          ></span>
-        </div>
-
-        <p v-if="childAuthStore.isLocked" class="lock-message">
-          {{ childAuthStore.lockMessage ? t(`errors.${childAuthStore.lockMessage}`) : '' }}
-        </p>
-        <p v-else-if="childAuthStore.loginError" class="error-message">
-          {{ childAuthStore.loginError ? t(`errors.${childAuthStore.loginError}`) : '' }}
-        </p>
-
-        <div class="emoji-grid">
-          <button
-            v-for="emoji in EMOJIS"
-            :key="emoji"
-            class="emoji-btn"
-            :disabled="childAuthStore.isLocked || pin.length >= 4"
-            @click="addEmoji(emoji)"
-          >
-            {{ emoji }}
+          <button class="switch-btn" @click="switchToPin">
+            {{ t('auth.useEmojiPin') }}
           </button>
         </div>
 
-        <div class="pin-actions">
-          <button class="pin-action-btn" @click="deleteEmoji">{{ t('auth.deleteEmoji') }}</button>
-          <button class="pin-action-btn" @click="clearPin">{{ t('auth.clearPin') }}</button>
+        <!-- Emoji PIN mode -->
+        <div v-else class="pin-mode">
+          <p class="pin-hint">{{ t('auth.enterPin') }}</p>
+
+          <div class="pin-display" :class="{ shake: shaking }">
+            <span
+              v-for="i in 4"
+              :key="i"
+              class="pin-slot"
+              :class="{ filled: pin.length >= i }"
+            ></span>
+          </div>
+
+          <p v-if="childAuthStore.isLocked" class="pin-error">
+            {{ childAuthStore.lockMessage ? t(`errors.${childAuthStore.lockMessage}`) : '' }}
+          </p>
+          <p v-else-if="childAuthStore.loginError" class="pin-error">
+            {{ childAuthStore.loginError ? t(`errors.${childAuthStore.loginError}`) : '' }}
+          </p>
+
+          <div class="emoji-grid">
+            <button
+              v-for="emoji in EMOJIS"
+              :key="emoji"
+              class="emoji-btn"
+              :disabled="childAuthStore.isLocked || pin.length >= 4"
+              @click="addEmoji(emoji)"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+
+          <div class="pin-actions">
+            <button class="pin-action-btn" @click="deleteEmoji">{{ t('auth.deleteEmoji') }}</button>
+            <button class="pin-action-btn" @click="clearPin">{{ t('auth.clearPin') }}</button>
+          </div>
+
+          <button v-if="webAuthnAvailable" class="switch-btn" @click="switchToWebAuthn">
+            {{ t('auth.useFaceId') }}
+          </button>
         </div>
 
-        <button
-          v-if="webAuthnAvailable"
-          class="switch-btn"
-          @click="switchToWebAuthn"
-        >
-          {{ t('auth.useFaceId') }}
+        <button class="back-btn" @click="backToStep1">
+          {{ t('auth.backToLogin') }}
         </button>
       </div>
-
-      <button class="back-btn" @click="backToStep1">
-        {{ t('auth.backToLogin') }}
-      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -157,16 +164,13 @@ const step = ref<1 | 2>(1)
 const loading = ref(false)
 const step1Error = ref('')
 const childInfo = ref({ displayName: '', avatarColor: '', childId: '' })
-// temp_token from step1 — required for step2 PIN verification
 const tempToken = ref('')
-
 const authMode = ref<'webauthn' | 'pin'>('pin')
 const pin = ref<string[]>([])
 const shaking = ref(false)
 const webAuthnAvailable = ref(false)
 const submitting = ref(false)
 const showPassword = ref(false)
-
 const form = ref({ username: '', password: '' })
 
 interface TrustedUser {
@@ -176,7 +180,49 @@ interface TrustedUser {
 }
 const trustedUser = ref<TrustedUser | null>(null)
 
+// ── Star canvas ──────────────────────────────────────────────────────────────
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+let rafId: number | null = null
+
+function initStars() {
+  const canvas = canvasRef.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+
+  const stars = Array.from({ length: 120 }, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.5 + 0.3,
+    alpha: Math.random() * 0.6 + 0.2,
+    speed: Math.random() * 0.15 + 0.05,
+  }))
+
+  function draw() {
+    if (!ctx || !canvas) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    for (const s of stars) {
+      ctx.beginPath()
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2)
+      ctx.fillStyle = `rgba(255,255,255,${s.alpha})`
+      ctx.fill()
+      s.y += s.speed
+      if (s.y > canvas.height) {
+        s.y = 0
+        s.x = Math.random() * canvas.width
+      }
+    }
+    rafId = requestAnimationFrame(draw)
+  }
+  draw()
+}
+
 onMounted(async () => {
+  initStars()
+
   const support = checkWebAuthnSupport()
   if (support.supported) webAuthnAvailable.value = true
 
@@ -203,6 +249,10 @@ onMounted(async () => {
   } catch {
     // Device check failure is non-fatal — fall through to normal step 1
   }
+})
+
+onUnmounted(() => {
+  if (rafId !== null) cancelAnimationFrame(rafId)
 })
 
 function onSwitchAccount() {
@@ -241,10 +291,8 @@ async function attemptWebAuthn() {
   try {
     const optionsResponse = await getAuthenticationOptions(childInfo.value.childId)
     const { options, challenge } = optionsResponse
-
     const credential = await authenticatePasskey(options)
     await authenticateWithPasskey(childInfo.value.childId, credential, challenge)
-
     showToast(t('toast.loginSuccess'))
     router.push('/')
   } catch (err: unknown) {
@@ -305,139 +353,149 @@ watch(
 </script>
 
 <style scoped>
-/* ── Canvas ── */
+/* ── Page shell ── */
 .auth-page {
   min-height: 100vh;
+  background: linear-gradient(160deg, #010120 0%, #000010 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: var(--color-canvas);
+  position: relative;
+  overflow: hidden;
 }
 
+.cosmic-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.auth-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  padding-top: min(15vh, 60px);
+}
+
+/* ── Step containers ── */
 .step-container {
   display: flex;
   flex-direction: column;
   align-items: center;
   width: 100%;
-  padding: 48px 16px 24px;
 }
 
-/* ── Step 1 hero — peach feature card ── */
-.auth-hero {
-  width: 100%;
-  background: var(--color-brand-peach);
-  border-radius: var(--radius-xl);
-  padding: 32px 20px;
+/* ── Step 1 header ── */
+.auth-header {
   text-align: center;
-  margin-bottom: 32px;
-}
-.app-logo { font-size: 48px; margin-bottom: 8px; }
-.app-title {
-  font-family: Inter, sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--color-ink);
-  margin: 0;
-  letter-spacing: -0.5px;
-}
-.app-subtitle {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  color: var(--color-ink);
-  opacity: 0.7;
-  margin-top: 4px;
+  margin-bottom: 40px;
 }
 
+.app-title {
+  font-size: 36px;
+  font-weight: 500;
+  color: #fff;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.app-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 8px;
+}
+
+/* ── Login form ── */
 .login-form {
   width: 100%;
   max-width: 400px;
 }
-.form-actions { padding: 24px 16px 0; }
 
-/* Primary next button */
+.form-actions {
+  padding: 24px 16px 0;
+}
+
+.form-actions :deep(.van-button--primary) {
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  color: #010120;
+}
+
 .btn-next {
-  background: var(--color-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  height: 44px;
-  color: var(--color-on-primary);
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  color: #010120;
 }
 
 .step1-error {
-  font-family: Inter, sans-serif;
-  color: var(--color-brand-coral);
+  color: #ffcdd2;
   font-size: 14px;
   text-align: center;
   margin: 8px 16px 0;
 }
 
 /* ── Step 2 ── */
+.pin-step {
+  padding: 0 16px;
+  max-width: 360px;
+}
+
+.trusted-card {
+  margin-bottom: 24px;
+}
+
 .child-avatar {
   width: 80px;
   height: 80px;
-  border-radius: var(--radius-pill);
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: Inter, sans-serif;
   font-size: 36px;
   font-weight: 500;
-  color: var(--color-on-dark);
+  color: #fff;
   margin-bottom: 12px;
 }
+
 .child-name {
-  font-family: Inter, sans-serif;
   font-size: 20px;
   font-weight: 600;
   margin: 0 0 24px;
-  color: var(--color-ink);
+  color: #fff;
 }
 
-.webauthn-mode {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-}
-.instruction {
-  font-family: Inter, sans-serif;
+.pin-hint {
+  color: rgba(255, 255, 255, 0.9);
   font-size: 16px;
-  color: var(--color-muted);
-  margin: 0;
+  margin: 0 0 24px;
+  text-align: center;
 }
 
-/* Unlock button */
-.btn-unlock {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  height: 44px;
-  min-width: 160px;
-}
-
-.pin-mode {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
+/* ── PIN dots ── */
 .pin-display {
   display: flex;
   gap: 16px;
   margin-bottom: 20px;
 }
+
 .pin-slot {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-pill);
-  border: 2px solid var(--color-muted-soft);
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.5);
   background: transparent;
   transition: background 0.15s, border-color 0.15s;
 }
+
 .pin-slot.filled {
-  background: var(--color-ink);
-  border-color: var(--color-ink);
+  background: #fff;
+  border-color: #fff;
 }
 
 @keyframes shake {
@@ -447,67 +505,86 @@ watch(
   60% { transform: translateX(-6px); }
   80% { transform: translateX(6px); }
 }
+
 .shake { animation: shake 0.5s ease; }
 
-.lock-message,
-.error-message {
-  font-family: Inter, sans-serif;
-  color: var(--color-brand-coral);
+.pin-error {
+  color: #ffcdd2;
   font-size: 14px;
   margin: 0 0 16px;
+  text-align: center;
 }
 
 /* ── Emoji grid ── */
 .emoji-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
+  margin-bottom: 16px;
   width: 100%;
   max-width: 320px;
 }
+
 .emoji-btn {
   font-size: 28px;
   min-height: 56px;
   min-width: 56px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-soft);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  transition: transform 0.1s, opacity 0.1s;
-}
-.emoji-btn:active { transform: scale(0.92); }
-.emoji-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.emoji-btn:focus-visible {
-  outline: 3px solid var(--color-brand-ochre);
-  outline-offset: 2px;
+  transition: background 0.1s, transform 0.1s;
 }
 
+.emoji-btn:active { transform: scale(0.92); background: rgba(255, 255, 255, 0.2); }
+.emoji-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.emoji-btn:focus-visible { outline: 3px solid #bdbbff; outline-offset: 2px; }
+
 /* ── PIN action buttons ── */
-.pin-actions { display: flex; gap: 16px; margin-bottom: 4px; }
+.pin-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
 .pin-action-btn {
   min-height: 44px;
   min-width: 88px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-soft);
-  font-family: Inter, sans-serif;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
   font-size: 14px;
   font-weight: 500;
-  color: var(--color-body);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
   transition: background 0.15s;
 }
-.pin-action-btn:active { background: var(--color-surface-card); }
 
-/* ── Utility buttons — 44px touch targets ── */
+.pin-action-btn:active { background: rgba(255, 255, 255, 0.18); }
+
+/* ── WebAuthn mode ── */
+.webauthn-mode {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.btn-unlock {
+  --van-button-primary-background: #bdbbff;
+  --van-button-primary-border-color: #bdbbff;
+  --van-button-primary-color: #010120;
+  min-width: 160px;
+}
+
+/* ── Utility buttons ── */
 .switch-btn {
-  margin-top: 16px;
+  margin-top: 8px;
   background: transparent;
   border: none;
-  font-family: Inter, sans-serif;
   font-size: 14px;
-  color: var(--color-muted);
+  color: rgba(255, 255, 255, 0.55);
   cursor: pointer;
   text-decoration: underline;
   min-height: 44px;
@@ -515,13 +592,13 @@ watch(
   display: flex;
   align-items: center;
 }
+
 .back-btn {
-  margin-top: 24px;
+  margin-top: 20px;
   background: transparent;
   border: none;
-  font-family: Inter, sans-serif;
   font-size: 14px;
-  color: var(--color-muted-soft);
+  color: rgba(255, 255, 255, 0.4);
   cursor: pointer;
   min-height: 44px;
   padding: 0 8px;
