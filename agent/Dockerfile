@@ -2,7 +2,9 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# 安装 uv
+# 安装 uv 和时区数据
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+ENV TZ=Asia/Shanghai
 RUN pip install uv --no-cache-dir
 
 # 安装 DeerFlow harness（vendor 目录由 scripts/vendor-harness.sh 预先填充）

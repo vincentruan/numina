@@ -16,6 +16,7 @@ services:
     env_file:
       - .env.production
     environment:
+      - TZ=Asia/Shanghai
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
       - UPLOAD_DIR=/app/data/uploads
     healthcheck:

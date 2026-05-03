@@ -8,6 +8,7 @@ services:
     env_file:
       - .env
     environment:
+      - TZ=Asia/Shanghai
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
@@ -31,6 +32,7 @@ services:
       - ./data:/app/data
       - agent_logs:/app/logs  # OD-7: persist audit logs across container restarts
     environment:
+      - TZ=Asia/Shanghai
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
@@ -82,6 +84,7 @@ services:
     container_name: numina-mysql
     restart: unless-stopped
     environment:
+      - TZ=Asia/Shanghai
       - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-rootpass}
       - MYSQL_DATABASE=${MYSQL_DATABASE:-numina}
       - MYSQL_USER=${MYSQL_USER:-numina}
@@ -102,6 +105,7 @@ services:
     container_name: numina-postgres
     restart: unless-stopped
     environment:
+      - TZ=Asia/Shanghai
       - POSTGRES_DB=${POSTGRES_DB:-numina}
       - POSTGRES_USER=${POSTGRES_USER:-numina}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-numinapass}
