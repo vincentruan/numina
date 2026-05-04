@@ -114,6 +114,7 @@ def create_asset(db: Session, user: User, req: AssetCreate) -> Asset:
         usage_frequency=req.usage_frequency,
         properties=req.properties,
         notes=req.notes,
+        image_url=req.image_url,
     )
     if req.tag_ids:
         tags = db.query(Tag).filter(Tag.id.in_(req.tag_ids), Tag.family_id == user.family_id).all()

@@ -746,9 +746,13 @@ def set_child_password(
     if user.role == "child" and user.id != child_id:
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
 
+    from app.auth.revoke_jti import revoke_all_user_tokens
+
     rounds = getattr(app_settings, "BCRYPT_ROUNDS", 12)
     child.password_hash = bcrypt.hashpw(
         req.new_password.encode("utf-8"), bcrypt.gensalt(rounds=rounds)
     ).decode("utf-8")
+    child.token_version = (child.token_version or 0) + 1
     db.commit()
+    revoke_all_user_tokens(child.id)
     return {"message": "儿童密码设置成功"}
