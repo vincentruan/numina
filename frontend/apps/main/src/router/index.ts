@@ -170,6 +170,16 @@ const router = createRouter({
           component: () => import('@/pages/AIConfigPage.vue')
         },
         {
+          path: 'settings/ai/mcp',
+          name: 'MCPManage',
+          component: () => import('@/pages/MCPManagePage.vue')
+        },
+        {
+          path: 'settings/ai/skills',
+          name: 'SkillsManage',
+          component: () => import('@/pages/SkillsManagePage.vue')
+        },
+        {
           path: 'settings/devices',
           name: 'Devices',
           component: () => import('@/pages/DevicesPage.vue')

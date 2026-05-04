@@ -297,3 +297,56 @@ export function startAIStream(
     return res.body!.getReader()
   })
 }
+
+// ── MCP Server Management ─────────────────────────────────────────────────────
+
+export interface MCPServer {
+  id: number
+  name: string
+  url: string
+  transport: 'sse' | 'stdio'
+  env_vars: Record<string, string> | null
+  is_enabled: boolean
+}
+
+export interface MCPServerCreate {
+  name: string
+  url: string
+  transport: 'sse' | 'stdio'
+  env_vars?: Record<string, string> | null
+  is_enabled?: boolean
+}
+
+export interface MCPServerUpdate {
+  name?: string
+  url?: string
+  transport?: 'sse' | 'stdio'
+  env_vars?: Record<string, string> | null
+  is_enabled?: boolean
+}
+
+export const getMCPServers = () => http.get<MCPServer[]>('/ai/mcp')
+export const createMCPServer = (data: MCPServerCreate) => http.post<MCPServer>('/ai/mcp', data)
+export const updateMCPServer = (id: number, data: MCPServerUpdate) =>
+  http.put<MCPServer>(`/ai/mcp/${id}`, data)
+export const deleteMCPServer = (id: number) => http.delete(`/ai/mcp/${id}`)
+
+// ── Skill Config Management ───────────────────────────────────────────────────
+
+export interface SkillConfig {
+  capability: string
+  is_enabled: boolean
+  custom_prompt: string | null
+  default_prompt: string | null
+}
+
+export interface SkillConfigUpdate {
+  is_enabled?: boolean
+  custom_prompt?: string | null
+}
+
+export const getSkills = () => http.get<SkillConfig[]>('/ai/skills')
+export const updateSkill = (capability: string, data: SkillConfigUpdate) =>
+  http.put<SkillConfig>(`/ai/skills/${capability}`, data)
+export const resetSkillPrompt = (capability: string) =>
+  http.delete<SkillConfig>(`/ai/skills/${capability}/prompt`)

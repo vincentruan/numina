@@ -78,6 +78,8 @@ from app.routers import ai_liability as ai_liability_router
 from app.routers import ai_report as ai_report_router
 from app.routers import ai_spending_leaks as ai_spending_leaks_router
 from app.routers import ai_suggest as ai_suggest_router
+from app.routers import ai_mcp as ai_mcp_router
+from app.routers import ai_skills as ai_skills_router
 from app.routers import ai_tasks as ai_tasks_router
 from app.routers import ai_time_machine as ai_time_machine_router
 from app.routers import (
@@ -413,6 +415,8 @@ app.include_router(ai_time_machine_router.router, prefix="/api/v1")
 app.include_router(notification_channels_router.router, prefix="/api/v1")
 app.include_router(notification_config_router.router, prefix="/api/v1")
 app.include_router(reminders_router.router, prefix="/api/v1")
+app.include_router(ai_mcp_router.router, prefix="/api/v1")
+app.include_router(ai_skills_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))

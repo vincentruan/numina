@@ -10,9 +10,9 @@ from sqlalchemy.orm import Session
 from app.auth.ai_deps import verify_agent_token
 from app.database import get_db
 from app.errors import AppError, ErrorCode
+from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
 from app.models.user import User
 from app.services import dashboard as dashboard_service
-from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
 from app.services.ai_crypto import decrypt_api_key
 
 router = APIRouter(prefix="/internal", tags=["internal-agent"])
@@ -181,3 +181,72 @@ def internal_get_enabled_families(
         .all()
     )
     return [r.family_id for r in rows]
+
+
+@router.get("/ai/skills/{capability}")
+def internal_get_skill_config(
+    capability: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """返回家庭技能配置（custom_prompt + is_enabled + updated_at），供 agent skill_loader 缓存。"""
+    from app.models.family_skill_config import FamilySkillConfig
+
+    row = (
+        db.query(FamilySkillConfig)
+        .filter(
+            FamilySkillConfig.family_id == family_id,
+            FamilySkillConfig.capability == capability,
+        )
+        .first()
+    )
+    if not row:
+        # No override configured — return defaults
+        return {"capability": capability, "is_enabled": True, "custom_prompt": None, "updated_at": None}
+
+    return {
+        "capability": row.capability,
+        "is_enabled": row.is_enabled,
+        "custom_prompt": row.custom_prompt,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+@router.get("/ai/mcp-servers")
+def internal_get_mcp_servers(
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """返回家庭已启用的 MCP server 列表（含解密 env_vars），供 agent 注入 DeerFlow。"""
+    import json
+
+    from app.models.family_mcp_server import FamilyMCPServer
+    from app.services.ai_crypto import decrypt_api_key
+
+    servers = (
+        db.query(FamilyMCPServer)
+        .filter(
+            FamilyMCPServer.family_id == family_id,
+            FamilyMCPServer.is_enabled.is_(True),
+        )
+        .all()
+    )
+
+    result = []
+    for s in servers:
+        env_vars: dict = {}
+        if s.env_vars_encrypted:
+            raw = decrypt_api_key(s.env_vars_encrypted)
+            if raw:
+                try:
+                    env_vars = json.loads(raw)
+                except Exception:
+                    env_vars = {}
+        result.append({
+            "id": s.id,
+            "name": s.name,
+            "url": s.url,
+            "transport": s.transport,
+            "env_vars": env_vars,
+        })
+    return result

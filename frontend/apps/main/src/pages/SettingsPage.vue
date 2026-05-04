@@ -84,6 +84,8 @@
         @click="$router.push('/settings/notifications')"
       />
       <van-cell :title="t('settings.aiAssistant')" icon="smile-o" is-link to="/settings/ai" />
+      <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
+      <van-cell :title="t('settings.skillsManage')" icon="star-o" is-link to="/settings/ai/skills" />
     </van-cell-group>
 
     <!-- 数据管理 -->

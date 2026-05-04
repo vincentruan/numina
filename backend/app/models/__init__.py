@@ -5,3 +5,5 @@ from app.models.asset_lifecycle_event import AssetLifecycleEvent  # noqa: F401
 from app.models.reminder_notification import ReminderNotification  # noqa: F401
 from app.models.child_wish_cost_history import ChildWishCostHistory  # noqa: F401
 from app.models.notification_channel_config import NotificationChannelConfig  # noqa: F401
+from app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
+from app.models.family_skill_config import FamilySkillConfig  # noqa: F401
