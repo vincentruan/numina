@@ -355,7 +355,7 @@ function selectCategory(id: string) {
 }
 
 // Image upload state
-const fileList = ref<{ url: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
+const fileList = ref<{ url: string; content?: string; status?: 'uploading' | 'done' | 'failed'; message?: string }[]>([])
 
 // Tags state
 const availableTags = ref<Tag[]>([])
@@ -469,8 +469,8 @@ watch(() => props.initialData, (data) => {
     // Image preview
     const imageUrl = getAssetField<string>(data, 'image_url')
     if (imageUrl) {
-      const fullUrl = imageUrl.startsWith('/') ? `/api/v1${imageUrl}` : imageUrl
-      fileList.value = [{ url: fullUrl }]
+      const fullUrl = imageUrl.startsWith('/api/v1') ? imageUrl : `/api/v1${imageUrl}`
+      fileList.value = [{ url: fullUrl, content: fullUrl, status: 'done' }]
     }
   }
 }, { immediate: true })
@@ -525,12 +525,14 @@ function onStatusConfirm({ selectedOptions }: { selectedOptions: { value: string
 }
 
 // Image upload handlers
-async function afterRead(file: { file: File; status: string; message?: string }) {
+async function afterRead(file: { file: File; url?: string; content?: string; status: string; message?: string }) {
   file.status = 'uploading'
   try {
     const res = await uploadImage(file.file)
     file.status = 'done'
-    file.url = `/api/v1${res.data.url}`
+    const fullUrl = `/api/v1${res.data.url}`
+    file.url = fullUrl
+    file.content = fullUrl
     form.value.image_url = res.data.url
   } catch {
     file.status = 'failed'
@@ -640,9 +642,11 @@ function onSubmit() {
   margin-left: 4px;
 }
 .same-price-btn {
-  height: 24px;
-  padding: 0 8px;
-  font-size: 11px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  align-self: center;
 }
 .form-actions {
   padding: 16px;

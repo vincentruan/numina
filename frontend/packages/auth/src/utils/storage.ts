@@ -14,6 +14,7 @@ export interface StoredUser {
   theme?: string
   language?: string
   default_currency?: string
+  view_mode?: string
 }
 
 export function getUser(): StoredUser | null {
@@ -36,6 +37,7 @@ export function setUser<T extends StoredUser = StoredUser>(user: T): void {
     theme: user.theme,
     language: user.language,
     default_currency: user.default_currency,
+    view_mode: user.view_mode,
   }
   localStorage.setItem(USER_KEY, JSON.stringify(safeUser))
 }

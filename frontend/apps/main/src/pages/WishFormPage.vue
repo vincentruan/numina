@@ -48,19 +48,31 @@
           </template>
         </van-field>
         <van-field
-          v-model="selectedCategoryName"
           name="category"
           label="分类"
           placeholder="可选，点击选择"
           readonly
           @click="showCategoryPicker = true"
-        />
-        <van-field :label="t('toast.wishConvertsToAsset')" name="converts_to_asset">
+        >
           <template #input>
-            <van-switch v-model="form.converts_to_asset" size="20" />
+            <div v-if="selectedCategory" class="category-display">
+              <svg class="cat-icon-sm" aria-hidden="true">
+                <use :href="`#${getIconId(selectedCategory.icon)}`" />
+              </svg>
+              <span>{{ selectedCategory.name }}</span>
+            </div>
+            <span v-else class="category-placeholder">可选，点击选择</span>
           </template>
-          <template #extra>
-            <span v-if="!form.converts_to_asset" class="field-hint">{{ t('toast.wishConvertsToAssetHint') }}</span>
+        </van-field>
+        <van-field name="converts_to_asset" class="converts-field">
+          <template #label>
+            <span class="converts-label">{{ t('toast.wishConvertsToAsset') }}</span>
+          </template>
+          <template #input>
+            <div class="converts-row">
+              <van-switch v-model="form.converts_to_asset" size="20" />
+              <span v-if="!form.converts_to_asset" class="field-hint">{{ t('toast.wishConvertsToAssetHint') }}</span>
+            </div>
           </template>
         </van-field>
       </van-cell-group>
@@ -93,6 +105,7 @@ import { getCategories } from '@/api/categories'
 import type { Category } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import { useAuthStore } from '@/stores/auth'
+import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 
@@ -118,14 +131,12 @@ const showCategoryPicker = ref(false)
 const categories = ref<Category[]>([])
 
 const categoryColumns = computed(() => {
-  return categories.value.map(c => ({ text: `${c.icon} ${c.name}`, value: c.id }))
+  return categories.value.map(c => ({ text: c.name, value: c.id }))
 })
 
-const selectedCategoryName = computed(() => {
-  if (!form.value.category_id) return ''
-  const cat = categories.value.find(c => c.id === form.value.category_id)
-  return cat ? `${cat.icon} ${cat.name}` : ''
-})
+const selectedCategory = computed(() =>
+  categories.value.find(c => c.id === form.value.category_id) ?? null
+)
 
 function onCategoryConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
   form.value.category_id = selectedOptions[0].value
@@ -183,9 +194,35 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.category-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cat-icon-sm {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  fill: currentColor;
+}
+.category-placeholder {
+  color: var(--van-field-placeholder-text-color);
+  font-size: 14px;
+}
+.converts-label {
+  font-size: 14px;
+  color: var(--van-field-label-color);
+}
+.converts-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
 .field-hint {
   font-size: 12px;
   color: var(--van-text-color-3, rgba(0, 0, 0, 0.4));
-  margin-top: 4px;
+  white-space: normal;
+  line-height: 1.4;
 }
 </style>
