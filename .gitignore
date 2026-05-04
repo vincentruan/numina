@@ -122,7 +122,7 @@ docker-compose.override.yml
 data/*.csv
 data/*.json
 !data/.gitkeep
-backend/data/uploads/
+backend/data/
 
 # Storage backend config (contains credentials)
 backend/config/storage_backends.yaml
