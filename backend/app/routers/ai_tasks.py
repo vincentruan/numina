@@ -1,0 +1,59 @@
+"""AI 任务状态查询端点。
+
+- GET /ai/tasks/{capability}         — 查询当前 capability 的任务状态
+- GET /ai/tasks/{capability}/session — 获取关联的 session_id（用于前端接续）
+"""
+
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.auth.deps import require_adult
+from app.database import get_db
+from app.models.user import User
+from app.services.ai_task_service import AITaskService
+
+router = APIRouter(prefix="/ai/tasks", tags=["ai-tasks"])
+
+VALID_CAPABILITIES = {
+    "report", "alerts", "disposal", "allocation",
+    "spending_leak", "liability", "time_machine",
+}
+
+
+@router.get("/{capability}")
+def get_task_status(
+    capability: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """查询当前 capability 的任务状态。"""
+    if capability not in VALID_CAPABILITIES:
+        return {"status": "idle"}
+
+    task = AITaskService.get_running_task(current_user.family_id, capability, db)
+    if task is None:
+        return {"status": "idle"}
+
+    return {
+        "status": task.status,
+        "task_id": task.id,
+        "session_id": task.session_id,
+        "started_at": task.started_at.isoformat(),
+    }
+
+
+@router.get("/{capability}/session")
+def get_task_session(
+    capability: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """获取当前 running 任务关联的 session_id（用于前端接续历史消息）。"""
+    if capability not in VALID_CAPABILITIES:
+        return {"session_id": None}
+
+    task = AITaskService.get_running_task(current_user.family_id, capability, db)
+    if task is None:
+        return {"session_id": None}
+
+    return {"session_id": task.session_id, "task_id": task.id}

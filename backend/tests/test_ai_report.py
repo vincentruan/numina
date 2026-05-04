@@ -13,7 +13,6 @@ def _enable_ai(db, auth_headers, client):
     family_id = me["data"]["family_id"]
     family = db.query(Family).filter_by(id=family_id).first()
     family.ai_enabled = True
-    # Also set role to owner for report generation
     from app.models.ai_provider_config import AIProviderConfig
     from app.models.user import User
     user = db.query(User).filter_by(id=me["data"]["id"]).first()
@@ -31,23 +30,33 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
-def _mock_agent_report_response(report_data: dict | None = None):
-    """Create a mock httpx response from the agent for report generation."""
-    if report_data is None:
-        report_data = {
-            "overall_score": 75,
-            "data_completeness_score": 80,
-            "summary": "资产状况良好",
-            "suggestions": ["建议增加金融资产配置"],
-        }
+def _make_streaming_mock(chunks: list[str] | None = None):
+    """Build a mock httpx.AsyncClient that supports async streaming via client.stream()."""
+    if chunks is None:
+        chunks = ["报告生成完成。"]
+
+    async def _aiter_text():
+        for chunk in chunks:
+            yield chunk
+
+    # The innermost object: the response returned by `async with client.stream(...) as resp`
     mock_resp = MagicMock()
-    mock_resp.raise_for_status = MagicMock()
-    mock_resp.json.return_value = report_data
-    mock_client = AsyncMock()
+    mock_resp.aiter_text = _aiter_text
+
+    # The context manager returned by client.stream(...)
+    mock_stream_cm = MagicMock()
+    mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
+
+    # The client returned by `async with httpx.AsyncClient(...) as client`
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(return_value=mock_stream_cm)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(return_value=mock_resp)
-    return mock_client
+
+    # The class itself: httpx.AsyncClient(...)
+    mock_cls = MagicMock(return_value=mock_client)
+    return mock_cls
 
 
 # ── GET /ai/report ──────────────────────────────────────────────────────────────
@@ -65,7 +74,6 @@ def test_get_report_returns_latest_completed_report(client, auth_headers, db):
     """GET /ai/report returns the most recent completed report."""
     family_id = _enable_ai(db, auth_headers, client)
 
-    # Create two reports, one pending, one completed
     from datetime import datetime, timedelta
     pending = AIReport(
         family_id=family_id,
@@ -118,26 +126,24 @@ def test_get_report_requires_auth(client):
 # ── POST /ai/report/generate ─────────────────────────────────────────────────────
 
 def test_generate_report_creates_pending_then_completes(client, auth_headers, db):
-    """POST /ai/report/generate creates pending report, calls agent, saves result."""
+    """POST /ai/report/generate streams response and creates a completed AITask."""
+    from app.models.ai_task import AITask
+
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("httpx.AsyncClient", return_value=_mock_agent_report_response()):
+    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
         resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
 
     assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["report"]["overall_score"] == 75
-    assert "generated_at" in data
+    assert resp.headers["content-type"].startswith("text/plain")
 
-    # Verify report saved to DB
-    report = db.query(AIReport).filter_by(family_id=family_id, status="completed").first()
-    assert report is not None
-    assert report.overall_score == 75
+    task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
+    assert task is not None
+    assert task.status == "completed"
 
 
 def test_generate_report_requires_ai_enabled(client, auth_headers, db):
     """POST /ai/report/generate returns 403 if AI not enabled for family."""
-    # Don't enable AI
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     family_id = me["data"]["family_id"]
     family = db.query(Family).filter_by(id=family_id).first()
@@ -150,40 +156,71 @@ def test_generate_report_requires_ai_enabled(client, auth_headers, db):
 
 def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate requires owner role (embedded in JWT)."""
-    # Note: JWT embeds role, so DB changes don't affect auth. This test verifies
-    # the endpoint structure. Owner role is set by default in _enable_ai().
     family_id = _enable_ai(db, auth_headers, client)
 
-    # With owner role in JWT (from _enable_ai), request should succeed with mock
-    with patch("httpx.AsyncClient", return_value=_mock_agent_report_response()):
+    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
         resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
 
     assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["report"]["overall_score"] == 75
+    assert resp.headers["content-type"].startswith("text/plain")
+
+
+def test_generate_report_409_when_task_in_progress(client, auth_headers, db):
+    """POST /ai/report/generate returns 409 if a task is already running."""
+    from datetime import datetime
+
+    from app.models.ai_task import AITask
+
+    family_id = _enable_ai(db, auth_headers, client)
+
+    task = AITask(
+        id="test-task-id",
+        family_id=family_id,
+        capability="report",
+        status="running",
+        started_at=datetime.utcnow(),
+    )
+    db.add(task)
+    db.commit()
+
+    resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
+    assert resp.status_code == 409
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
-    """If agent call fails, report status is set to 'error'."""
+    """If agent streaming fails, AITask is marked as failed."""
+    import pytest
+    from app.models.ai_task import AITask
+
     family_id = _enable_ai(db, auth_headers, client)
 
-    mock_resp = MagicMock()
-    mock_resp.raise_for_status = MagicMock(side_effect=Exception("Agent error"))
+    async def _aiter_raises():
+        raise Exception("Agent error")
+        yield  # make it an async generator
 
-    mock_client = AsyncMock()
+    mock_resp = MagicMock()
+    mock_resp.aiter_text = _aiter_raises
+
+    mock_stream_cm = MagicMock()
+    mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(return_value=mock_stream_cm)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("httpx.AsyncClient", return_value=mock_client):
-        resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
+    mock_cls = MagicMock(return_value=mock_client)
 
-    # AI_SERVICE_UNAVAILABLE returns 503
-    assert resp.status_code == 503
+    with patch("httpx.AsyncClient", new=mock_cls):
+        # Starlette re-raises streaming errors through the test client
+        with pytest.raises(Exception):
+            client.post("/api/v1/ai/report/generate", headers=auth_headers)
 
-    # Pending report should be marked as error
-    report = db.query(AIReport).filter_by(family_id=family_id, status="error").first()
-    assert report is not None
+    # The task should be marked failed in DB despite the exception
+    task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
+    assert task is not None
+    assert task.status == "failed"
 
 
 # ── POST /ai/report/ws-ticket ───────────────────────────────────────────────────
@@ -204,7 +241,6 @@ def test_ws_ticket_creates_one_time_ticket(client, auth_headers, db):
 
 def test_ws_ticket_requires_ai_enabled(client, auth_headers, db):
     """POST /ai/report/ws-ticket returns 403 if AI not enabled."""
-    # Don't enable AI
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     family_id = me["data"]["family_id"]
     family = db.query(Family).filter_by(id=family_id).first()
@@ -217,7 +253,6 @@ def test_ws_ticket_requires_ai_enabled(client, auth_headers, db):
 
 def test_ws_ticket_requires_owner(client, auth_headers, db):
     """POST /ai/report/ws-ticket requires owner role (embedded in JWT)."""
-    # Note: JWT embeds role. With owner role from _enable_ai, request succeeds.
     _enable_ai(db, auth_headers, client)
 
     resp = client.post("/api/v1/ai/report/ws-ticket", headers=auth_headers)
@@ -230,7 +265,6 @@ def test_ws_ticket_requires_owner(client, auth_headers, db):
 def test_cross_family_report_isolation(client, auth_headers, second_user_headers, db):
     """Family B cannot see Family A's reports."""
     family_a_id = _enable_ai(db, auth_headers, client)
-    # Enable AI for second user but DON't make them owner
     me2 = client.get("/api/v1/auth/me", headers=second_user_headers).json()
     family_b_id = me2["data"]["family_id"]
     family_b = db.query(Family).filter_by(id=family_b_id).first()
@@ -246,7 +280,6 @@ def test_cross_family_report_isolation(client, auth_headers, second_user_headers
     ))
     db.commit()
 
-    # Create report for Family A
     from datetime import datetime
     report = AIReport(
         family_id=family_a_id,
@@ -258,7 +291,6 @@ def test_cross_family_report_isolation(client, auth_headers, second_user_headers
     db.add(report)
     db.commit()
 
-    # Family B should see no report
     resp = client.get("/api/v1/ai/report", headers=second_user_headers)
     assert resp.status_code == 200
     assert resp.json()["data"]["report"] is None

@@ -20,6 +20,35 @@ def _enable_ai(db, auth_headers, client):
     return family_id
 
 
+def _mock_streaming_client(chunks: list[str] | None = None):
+    """Create a mock httpx client that supports async streaming."""
+    if chunks is None:
+        chunks = ["分析完成。"]
+
+    async def _aiter_text():
+        for chunk in chunks:
+            yield chunk
+
+    mock_resp = AsyncMock()
+    mock_resp.aiter_text = _aiter_text
+    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_resp.__aexit__ = AsyncMock(return_value=False)
+
+    mock_stream_ctx = AsyncMock()
+    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+
+    mock_client = AsyncMock()
+    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+
+    mock_cls = MagicMock(return_value=mock_client)
+    mock_cls.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_cls.__aexit__ = AsyncMock(return_value=False)
+    return mock_cls
+
+
 def test_get_spending_leaks_empty(client, auth_headers, db):
     resp = client.get("/api/v1/ai/spending-leaks", headers=auth_headers)
     assert resp.status_code == 200
@@ -85,39 +114,40 @@ def test_dismiss_nonexistent_leak_returns_404(client, auth_headers, db):
     assert resp.status_code == 404
 
 
-def _mock_agent_response(leaks: list):
-    mock_resp = MagicMock()
-    mock_resp.raise_for_status = MagicMock()
-    mock_resp.json.return_value = {"leaks": leaks}
-    mock_client = AsyncMock()
-    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_client.__aexit__ = AsyncMock(return_value=False)
-    mock_client.post = AsyncMock(return_value=mock_resp)
-    return mock_client
-
-
 def test_refresh_spending_leaks(client, auth_headers, db):
+    """POST /refresh streams response and creates a completed AITask."""
+    from app.models.ai_task import AITask
+
     family_id = _enable_ai(db, auth_headers, client)
 
-    from app.models.asset import Asset
-    asset = db.query(Asset).filter_by(family_id=family_id).first()
-    asset_id = asset.id if asset else 1
-
-    fake_leaks = [{
-        "asset_id": asset_id,
-        "asset_name": "跑步机",
-        "leak_type": "high_idle_cost",
-        "severity": "high",
-        "estimated_annual_waste": 2400.0,
-        "suggestion": "建议出售",
-    }]
-
-    with patch("httpx.AsyncClient", return_value=_mock_agent_response(fake_leaks)):
+    with patch("httpx.AsyncClient", new_callable=lambda: lambda **kw: _mock_streaming_client()()):
         resp = client.post("/api/v1/ai/spending-leaks/refresh", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.json()["data"]["refreshed"] == 1
+    assert resp.headers["content-type"].startswith("text/plain")
 
-    leaks = db.query(AISpendingLeak).filter_by(family_id=family_id, is_dismissed=False).all()
-    assert len(leaks) == 1
-    assert leaks[0].asset_name == "跑步机"
+    task = db.query(AITask).filter_by(family_id=family_id, capability="spending_leak").first()
+    assert task is not None
+    assert task.status == "completed"
+
+
+def test_refresh_spending_leaks_409_when_in_progress(client, auth_headers, db):
+    """POST /refresh returns 409 if a task is already running."""
+    from datetime import datetime
+
+    from app.models.ai_task import AITask
+
+    family_id = _enable_ai(db, auth_headers, client)
+
+    task = AITask(
+        id="test-leak-task",
+        family_id=family_id,
+        capability="spending_leak",
+        status="running",
+        started_at=datetime.utcnow(),
+    )
+    db.add(task)
+    db.commit()
+
+    resp = client.post("/api/v1/ai/spending-leaks/refresh", headers=auth_headers)
+    assert resp.status_code == 409

@@ -38,7 +38,13 @@
 
     <!-- Drift check -->
     <div v-if="hasTarget" class="check-section">
-      <van-button block type="primary" :loading="checking" @click="onCheck">检测配置漂移</van-button>
+      <TaskConsole
+        :status="taskStatus"
+        :chunks="taskChunks"
+        :elapsed-seconds="taskElapsed"
+        v-model="isConsoleOpen"
+      />
+      <van-button block type="primary" :loading="taskStatus === 'running'" @click="onCheck">检测配置漂移</van-button>
     </div>
 
     <!-- Results -->
@@ -90,13 +96,22 @@ import { ref, computed, onMounted, reactive } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getAllocationTarget, setAllocationTarget, checkAllocationDrift } from '@/api/ai'
+import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
+import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
 
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+} = useAITask('allocation', '/ai/allocation-target/check/stream')
+
 const hasTarget = ref(false)
 const editingTarget = ref(false)
-const checking = ref(false)
 const driftResult = ref<Record<string, unknown> | null>(null)
 
 // Default categories to configure
@@ -125,14 +140,12 @@ async function onSaveTarget() {
 }
 
 async function onCheck() {
-  checking.value = true
+  await startStream()
   try {
     const res = await checkAllocationDrift()
     driftResult.value = res.data
   } catch {
     showToast(t('toast.aiDetectFailed'))
-  } finally {
-    checking.value = false
   }
 }
 

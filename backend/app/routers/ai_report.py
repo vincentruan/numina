@@ -13,16 +13,19 @@ from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled, require_owner
 from app.auth.deps import require_adult
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_report import AIReport
 from app.models.ai_ws_ticket import AIWsTicket
 from app.models.user import User
+from app.services.ai_task_service import AITaskService
+from app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
 logger = logging.getLogger(__name__)
@@ -56,43 +59,69 @@ async def trigger_generate(
     _owner: None = Depends(require_owner),
     db: Session = Depends(get_db),
 ):
-    """触发体检报告生成（同步等待，最长 60s）。"""
-    # Create pending record
-    pending = AIReport(
-        family_id=current_user.family_id,
-        report_json={},
-        status="pending",
-        generated_at=datetime.utcnow(),
+    """触发体检报告生成（streaming，任务状态追踪）。"""
+    # 1. 检查在途任务
+    existing = AITaskService.get_running_task(current_user.family_id, "report", db)
+    if existing:
+        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS, "⏳ 报告生成中，请稍后")
+
+    # 2. 创建 AIChatSession
+    session = await ChatSessionService.create_session(
+        family_id=str(current_user.family_id),
+        user_id=str(current_user.id),
+        db=db,
     )
-    db.add(pending)
-    db.commit()
-    db.refresh(pending)
 
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/report/generate",
-                headers={
-                    "X-Family-Id": str(current_user.family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                },
-            )
-            resp.raise_for_status()
-            report_data = resp.json()
-    except Exception as e:
-        pending.status = "error"
-        db.commit()
-        logger.error(f"调用 agent 生成报告失败: {e}")
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
+    # 3. 创建 AITask
+    task = AITaskService.create_task(
+        family_id=current_user.family_id,
+        capability="report",
+        session_id=session.id,
+        db=db,
+    )
 
-    pending.report_json = report_data
-    pending.overall_score = report_data.get("overall_score")
-    pending.data_completeness_score = report_data.get("data_completeness_score")
-    pending.status = "completed"
-    pending.generated_at = datetime.utcnow()
-    db.commit()
+    # 4. 透传 agent streaming
+    async def proxy_stream():
+        buffer: list[str] = []
+        with SessionLocal() as stream_db:
+            try:
+                async with (
+                    httpx.AsyncClient(timeout=None) as client,
+                    client.stream(
+                        "POST",
+                        f"{settings.AGENT_BASE_URL}/report/generate/stream",
+                        headers={
+                            "X-Family-Id": str(current_user.family_id),
+                            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                            "X-Task-Id": task.id,
+                            "X-Thread-Id": session.id,
+                        },
+                        timeout=None,
+                    ) as resp,
+                ):
+                        async for chunk in resp.aiter_text():
+                            buffer.append(chunk)
+                            yield chunk.encode("utf-8")
+                            if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
+                                await ChatSessionService.append_message(
+                                    session, "assistant", "".join(buffer), current_user, stream_db
+                                )
+                                buffer.clear()
+                if buffer:
+                    await ChatSessionService.append_message(
+                        session, "assistant", "".join(buffer), current_user, stream_db
+                    )
+                AITaskService.complete_task(task.id, stream_db)
+            except Exception as e:
+                logger.error(f"[ai_report] proxy_stream failed: {e}")
+                if buffer:
+                    await ChatSessionService.append_message(
+                        session, "assistant", "".join(buffer), current_user, stream_db
+                    )
+                AITaskService.fail_task(task.id, "agent_stream_error", stream_db)
+                raise
 
-    return {"report": report_data, "generated_at": pending.generated_at.isoformat()}
+    return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/ws-ticket")

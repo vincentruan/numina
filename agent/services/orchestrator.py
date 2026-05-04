@@ -14,6 +14,7 @@ All exceptions are caught here; callers always receive an AgentResponse.
 import logging
 import time
 import uuid
+from collections.abc import AsyncGenerator
 
 from app.config import settings
 from core.backend_client import BackendClient
@@ -25,6 +26,7 @@ from services.audit_logger import AuditEntry, audit_logger
 from services.deerflow_adapter.adapter import (
     create_family_adapter as _create_family_adapter,
 )
+from services.deerflow_adapter.skill_loader import skill_loader
 from services.fallback_engine import fallback_engine
 from services.output_mapper import output_mapper
 from services.pii_redactor import pii_redactor
@@ -164,6 +166,108 @@ class Orchestrator:
             ))
 
         return response
+
+    async def stream_dispatch(
+        self,
+        capability: str,
+        family_id: str,
+        task_id: str,
+        user_id: str | None = None,
+        thread_id: str | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """流式 dispatch — yield text chunks. Never raises after first yield."""
+        audit_id = str(uuid.uuid4())
+        effective_thread_id = thread_id if thread_id is not None else audit_id
+        start_ms = int(time.monotonic() * 1000)
+
+        # ── 1. Fetch AI config & build policy ──────────────────────────
+        client = BackendClient(family_id=family_id)
+        try:
+            ai_config = await client.get_family_ai_config()
+        except Exception as e:
+            logger.error(f"[orchestrator] stream_dispatch fetch ai_config failed: {e}")
+            yield "暂时无法完成分析，请稍后重试。"
+            return
+
+        policy = CapabilityPolicy(
+            ai_enabled=ai_config.get("ai_enabled", False),
+            allowed_capabilities=ai_config.get("allowed_capabilities", []),
+            admin_only_capabilities=ai_config.get("admin_only_capabilities", []),
+            member_role=ai_config.get("member_role", "member"),
+        )
+
+        # ── 2. Policy check ────────────────────────────────────────────
+        decision = policy_guard.check(policy, capability)
+        if not decision.allowed:
+            yield decision.reason
+            return
+
+        # ── 3. Fetch context ───────────────────────────────────────────
+        context = await self._build_context(client, family_id, free_text=None)
+
+        # ── 4. Redact PII ──────────────────────────────────────────────
+        redacted_context = pii_redactor.redact(context)
+
+        # ── 5. Load skill config + thinking flag ───────────────────────
+        skill_config = skill_loader.load(capability)
+        thinking_supported = ai_config.get("thinking_supported", False)
+        enable_thinking = skill_config.thinking and thinking_supported
+
+        # ── 6. Stream dispatch ─────────────────────────────────────────
+        if settings.USE_DEERFLOW:
+            try:
+                adapter = _create_family_adapter(family_id, ai_config)
+                async for chunk in adapter.stream_dispatch(
+                    capability,
+                    redacted_context,
+                    effective_thread_id,
+                    enable_thinking=enable_thinking,
+                ):
+                    yield chunk
+                audit_logger.log_call(
+                    AuditEntry(
+                        audit_id=audit_id,
+                        capability=capability,
+                        family_id=family_id,
+                        user_id=user_id,
+                        success=True,
+                        deerflow_attempted=True,
+                        duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    )
+                )
+                return
+            except Exception as e:
+                logger.warning(f"[orchestrator] stream_dispatch DeerFlow failed: {e}")
+
+        # ── 7. Fallback (non-streaming) ────────────────────────────────
+        try:
+            llm = LLMClient(
+                provider=ai_config.get("ai_provider", ""),
+                api_key=ai_config.get("api_key", ""),
+                model_id=ai_config.get("ai_model_id", ""),
+                vision_model_id=ai_config.get("ai_vision_model_id"),
+                base_url=ai_config.get("ai_base_url"),
+                timeout=float(ai_config.get("timeout_seconds", 60)),
+            )
+            raw_output = await fallback_engine.run(
+                capability, redacted_context, llm, audit_id, is_deerflow_fallback=False
+            )
+            yield raw_output.summary or "分析完成。"
+        except Exception as e:
+            logger.error(f"[orchestrator] stream_dispatch fallback failed: {e}")
+            yield "暂时无法完成分析，请稍后重试。"
+
+        audit_logger.log_call(
+            AuditEntry(
+                audit_id=audit_id,
+                capability=capability,
+                family_id=family_id,
+                user_id=user_id,
+                success=True,
+                fallback_used=True,
+                duration_ms=int(time.monotonic() * 1000) - start_ms,
+            )
+        )
 
     async def _build_context(
         self,

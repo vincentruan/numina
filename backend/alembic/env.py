@@ -7,6 +7,7 @@ from app.config import settings
 from app.database import Base
 from app.db import get_engine
 from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult  # noqa: F401
+from app.models.ai_task import AITask  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from app.models.asset import Asset  # noqa: F401
 from app.models.asset_lifecycle_event import AssetLifecycleEvent  # noqa: F401

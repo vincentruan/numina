@@ -5,15 +5,18 @@ from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import require_adult
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_spending_leak import AISpendingLeak
 from app.models.user import User
+from app.services.ai_task_service import AITaskService
+from app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/spending-leaks", tags=["ai-spending-leaks"])
 logger = logging.getLogger(__name__)
@@ -54,47 +57,69 @@ async def refresh_leaks(
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
-    """触发 agent 扫描并刷新消费漏洞（清除旧记录，写入新记录）。"""
-    try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/spending-leak",
-                headers={
-                    "X-Family-Id": str(current_user.family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-    except Exception as e:
-        logger.error(f"调用 agent spending-leak 失败: {e}")
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+    """触发 agent 扫描并刷新消费漏洞（streaming，任务状态追踪）。"""
+    # 1. 检查在途任务
+    existing = AITaskService.get_running_task(current_user.family_id, "spending_leak", db)
+    if existing:
+        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS, "⏳ 消费漏洞分析中，请稍后")
 
-    raw_leaks = data.get("leaks", [])
+    # 2. 创建 AIChatSession
+    session = await ChatSessionService.create_session(
+        family_id=str(current_user.family_id),
+        user_id=str(current_user.id),
+        db=db,
+    )
 
-    try:
-        db.query(AISpendingLeak).filter(
-            AISpendingLeak.family_id == current_user.family_id,
-            AISpendingLeak.is_dismissed == False,
-        ).delete()
+    # 3. 创建 AITask
+    task = AITaskService.create_task(
+        family_id=current_user.family_id,
+        capability="spending_leak",
+        session_id=session.id,
+        db=db,
+    )
 
-        for leak in raw_leaks:
-            db.add(AISpendingLeak(
-                family_id=current_user.family_id,
-                asset_id=leak["asset_id"],
-                asset_name=leak["asset_name"],
-                leak_type=leak["leak_type"],
-                severity=leak["severity"],
-                estimated_annual_waste=leak.get("estimated_annual_waste"),
-                suggestion=leak.get("suggestion"),
-            ))
-        db.commit()
-    except Exception as e:
-        db.rollback()
-        logger.error(f"写入消费漏洞数据失败: {e}")
-        raise AppError(ErrorCode.AI_DATA_WRITE_FAILED)
+    # 4. 透传 agent streaming
+    async def proxy_stream():
+        buffer: list[str] = []
+        with SessionLocal() as stream_db:
+            try:
+                async with (
+                    httpx.AsyncClient(timeout=None) as client,
+                    client.stream(
+                        "POST",
+                        f"{settings.AGENT_BASE_URL}/spending-leak/stream",
+                        headers={
+                            "X-Family-Id": str(current_user.family_id),
+                            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                            "X-Task-Id": task.id,
+                            "X-Thread-Id": session.id,
+                        },
+                        timeout=None,
+                    ) as resp,
+                ):
+                        async for chunk in resp.aiter_text():
+                            buffer.append(chunk)
+                            yield chunk.encode("utf-8")
+                            if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
+                                await ChatSessionService.append_message(
+                                    session, "assistant", "".join(buffer), current_user, stream_db
+                                )
+                                buffer.clear()
+                if buffer:
+                    await ChatSessionService.append_message(
+                        session, "assistant", "".join(buffer), current_user, stream_db
+                    )
+                AITaskService.complete_task(task.id, stream_db)
+            except Exception as e:
+                logger.error(f"[ai_spending_leaks] proxy_stream failed: {e}")
+                if buffer:
+                    await ChatSessionService.append_message(
+                        session, "assistant", "".join(buffer), current_user, stream_db
+                    )
+                AITaskService.fail_task(task.id, "agent_stream_error", stream_db)
+                raise
 
-    return {"refreshed": len(raw_leaks)}
+    return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/{leak_id}/dismiss")

@@ -20,7 +20,13 @@
         </template>
       </van-empty>
       <div class="actions">
-        <van-button type="primary" block :loading="analyzing" @click="onAnalyze">开始分析</van-button>
+        <TaskConsole
+          :status="taskStatus"
+          :chunks="taskChunks"
+          :elapsed-seconds="taskElapsed"
+          v-model="isConsoleOpen"
+        />
+        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onAnalyze">开始分析</van-button>
       </div>
     </div>
 
@@ -96,7 +102,7 @@
         </van-tabs>
 
         <div class="reanalyze">
-          <van-button plain block :loading="analyzing" @click="onAnalyze">重新分析</van-button>
+          <van-button plain block :loading="taskStatus === 'running'" @click="onAnalyze">重新分析</van-button>
         </div>
       </template>
     </template>
@@ -108,12 +114,21 @@ import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getLiabilityAdvice } from '@/api/ai'
+import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
+import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
 
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+} = useAITask('liability', '/ai/liability-advice/stream')
+
 const loading = ref(false)
-const analyzing = ref(false)
 const data = ref<Record<string, unknown> | null>(null)
 const activeTab = ref(0)
 
@@ -132,34 +147,42 @@ function formatMoney(val: number | null | undefined) {
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(val)
 }
 
-async function onAnalyze() {
-  analyzing.value = true
-  try {
-    const res = await getLiabilityAdvice()
-    data.value = res.data
-    // Default to recommended strategy tab
-    if (data.value?.recommended_strategy) {
-      const idx = (data.value.strategies as { strategy: string }[] ?? []).findIndex((s) => s.strategy === data.value?.recommended_strategy)
-      if (idx >= 0) activeTab.value = idx
-    }
-  } catch {
-    showToast(t('toast.aiAnalyzeFailed'))
-  } finally {
-    analyzing.value = false
-  }
-}
-
-onMounted(async () => {
+async function loadData() {
   loading.value = true
   try {
     const res = await getLiabilityAdvice()
     data.value = res.data
+    if (data.value?.recommended_strategy) {
+      const idx = (data.value.strategies as { strategy: string }[] ?? []).findIndex(
+        (s) => s.strategy === data.value?.recommended_strategy,
+      )
+      if (idx >= 0) activeTab.value = idx
+    }
   } catch {
     // no data yet, show empty state
   } finally {
     loading.value = false
   }
-})
+}
+
+async function onAnalyze() {
+  await startStream()
+  // Reload advice data after streaming completes
+  try {
+    const res = await getLiabilityAdvice()
+    data.value = res.data
+    if (data.value?.recommended_strategy) {
+      const idx = (data.value.strategies as { strategy: string }[] ?? []).findIndex(
+        (s) => s.strategy === data.value?.recommended_strategy,
+      )
+      if (idx >= 0) activeTab.value = idx
+    }
+  } catch {
+    showToast(t('toast.aiAnalyzeFailed'))
+  }
+}
+
+onMounted(loadData)
 </script>
 
 <style scoped>

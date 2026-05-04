@@ -460,6 +460,18 @@ export default {
     channelDeleted: '🗑️ 渠道已删除',
     configSaved: '✅ 通知配置已保存',
   },
+  aiTask: {
+    status: {
+      running: '分析中',
+      completed: '已完成',
+      failed: '分析失败',
+      timeout: '任务超时',
+    },
+    inProgress: '⏳ 任务进行中，请稍后',
+    startBtn: '立即生成',
+    regenBtn: '重新生成',
+    resuming: '正在接续上次分析...',
+  },
   timeMachine: {
     title: '资产时光机',
     whatif: 'What-if 模拟',

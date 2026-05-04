@@ -255,3 +255,45 @@ export const markChatRead = () =>
 
 export const createWsTicket = () =>
   http.post<{ ticket: string }>('/ai/report/ws-ticket')
+
+// ── AI Task Status ──────────────────────────────────────────────────────────
+
+export interface AITaskStatus {
+  status: 'idle' | 'running' | 'completed' | 'failed' | 'timeout'
+  task_id?: string
+  session_id?: string
+  started_at?: string
+}
+
+export async function getAITask(capability: string): Promise<AITaskStatus> {
+  const res = await http.get<AITaskStatus>(`/ai/tasks/${capability}`)
+  return res.data
+}
+
+export async function getAITaskSession(
+  capability: string,
+): Promise<{ session_id: string | null; task_id: string | null }> {
+  const res = await http.get<{ session_id: string | null; task_id: string | null }>(
+    `/ai/tasks/${capability}/session`,
+  )
+  return res.data
+}
+
+// Streaming fetch helper — returns a ReadableStream reader.
+// Auth uses httpOnly cookies (withCredentials), no Bearer token needed.
+export function startAIStream(
+  endpoint: string,
+  signal?: AbortSignal,
+): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  return fetch(`/api/v1${endpoint}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    credentials: 'include',
+    signal,
+  }).then((res) => {
+    if (!res.ok) throw new Error(`${res.status}`)
+    return res.body!.getReader()
+  })
+}

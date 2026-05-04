@@ -107,11 +107,76 @@ class DeerFlowAdapter:
                 raise DeerFlowError(f"DeerFlow error in skill '{skill_name}': {e}") from e
 
     async def stream_dispatch(
-        self, skill_name: str, context: RedactedContext, thread_id: str
+        self,
+        skill_name: str,
+        context: RedactedContext,
+        thread_id: str,
+        enable_thinking: bool = False,
     ) -> AsyncGenerator[str, None]:
-        """Yield text deltas for future streaming use."""
-        result = await self.dispatch(skill_name, context, thread_id)
-        yield result
+        """Dispatch a skill call and yield text chunks as they arrive.
+
+        enable_thinking: if True and the model supports it, extended thinking is enabled.
+        Note: thinking flag is passed via context metadata; DeerFlow harness reads it.
+
+        _CHECKPOINTER_LOCK is NOT held across the stream — only dispatch() needs it
+        for synchronous SQLite checkpoint writes. Streaming reads do not write to the
+        checkpointer, so holding the lock here would serialize all concurrent streams.
+        """
+        async with _SEMAPHORE:
+            async for chunk in self._async_stream_chunks(
+                skill_name, context, thread_id, enable_thinking
+            ):
+                yield chunk
+
+    async def _async_stream_chunks(
+        self,
+        skill_name: str,
+        context: RedactedContext,
+        thread_id: str,
+        enable_thinking: bool,
+    ) -> AsyncGenerator[str, None]:
+        """Wrap synchronous DeerFlowClient.stream() to yield chunks asynchronously."""
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+        def _produce() -> None:
+            """Run in thread pool — puts chunks into queue, None signals end."""
+            try:
+                message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
+                for event in self._client.stream(message, thread_id=thread_id):
+                    if hasattr(event, "data") and isinstance(event.data, str):
+                        chunk = event.data
+                    elif isinstance(event, str):
+                        chunk = event
+                    else:
+                        chunk = None
+                    if chunk:
+                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+            except Exception as e:
+                logger.error(f"[deerflow] stream_chunks failed: {e}")
+                raise
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        future = loop.run_in_executor(_EXECUTOR, _produce)
+        try:
+            while True:
+                chunk = await asyncio.wait_for(queue.get(), timeout=self._timeout)
+                if chunk is None:
+                    break
+                yield chunk
+        except asyncio.TimeoutError as e:
+            raise DeerFlowTimeoutError(
+                f"DeerFlow stream_dispatch timeout after {self._timeout}s"
+            ) from e
+        finally:
+            # Wait for the producer thread to finish so it doesn't leak a thread-pool
+            # slot. asyncio.shield prevents an outer cancellation from abandoning the
+            # wait, but we still need to await the shielded coroutine to actually block.
+            try:
+                await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                pass
 
     def _sync_dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
         """Synchronous DeerFlow call — runs in thread pool executor."""
@@ -137,6 +202,19 @@ class DeerFlowAdapter:
         """Build a skill-dispatch prompt from the redacted context."""
         ctx_dict = context.model_dump(exclude={"redaction_log"})
         return f"[SKILL:{skill_name}]\n{json.dumps(ctx_dict, ensure_ascii=False, indent=2)}"
+
+    def _build_message(self, skill_name: str, context: RedactedContext, enable_thinking: bool = False) -> str:
+        """Build the message to send to DeerFlow for stream_dispatch.
+
+        Encodes skill name, context, and thinking flag as JSON.
+        DeerFlow harness reads the 'thinking' field to enable extended thinking.
+        """
+        context_dict = context.model_dump()
+        return json.dumps({
+            "skill": skill_name,
+            "context": context_dict,
+            "thinking": enable_thinking,
+        })
 
 
 def _make_adapter() -> DeerFlowAdapter | None:

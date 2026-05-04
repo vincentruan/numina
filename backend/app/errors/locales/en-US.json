@@ -55,6 +55,7 @@
   "AI_ALERT_NOT_FOUND": "Alert not found",
   "AI_DATA_WRITE_FAILED": "Failed to write data",
   "AI_QUESTION_EMPTY": "Question cannot be empty",
+  "AI_TASK_IN_PROGRESS": "A task of this type is already in progress, please wait for it to complete",
   "IMPORT_PDF_UNREADABLE": "Cannot read this PDF, please ensure the file is not a scanned image",
   "IMPORT_NO_ASSETS_FOUND": "No asset information found in the document, please check if the file is a financial statement",
   "IMPORT_AGENT_TIMEOUT": "Parsing timed out, please try again later",

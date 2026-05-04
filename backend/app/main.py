@@ -78,6 +78,7 @@ from app.routers import ai_liability as ai_liability_router
 from app.routers import ai_report as ai_report_router
 from app.routers import ai_spending_leaks as ai_spending_leaks_router
 from app.routers import ai_suggest as ai_suggest_router
+from app.routers import ai_tasks as ai_tasks_router
 from app.routers import ai_time_machine as ai_time_machine_router
 from app.routers import (
     assets,
@@ -407,6 +408,7 @@ app.include_router(blind_box_router.router, prefix="/api/v1")
 app.include_router(child_blind_box_router.router, prefix="/api/v1")
 app.include_router(device_router.router, prefix="/api/v1")
 app.include_router(assets_analysis_router.router, prefix="/api/v1")
+app.include_router(ai_tasks_router.router, prefix="/api/v1")
 app.include_router(ai_time_machine_router.router, prefix="/api/v1")
 app.include_router(notification_channels_router.router, prefix="/api/v1")
 app.include_router(notification_config_router.router, prefix="/api/v1")

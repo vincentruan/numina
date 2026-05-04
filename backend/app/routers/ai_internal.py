@@ -12,6 +12,7 @@ from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.user import User
 from app.services import dashboard as dashboard_service
+from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
 from app.services.ai_crypto import decrypt_api_key
 
 router = APIRouter(prefix="/internal", tags=["internal-agent"])
@@ -125,8 +126,6 @@ def internal_get_ai_config(
     db: Session = Depends(get_db),
 ):
     """返回家庭 AI 配置，包含解密后的 API Key（仅供 agent 内部使用）。"""
-    from app.models.ai_provider_config import AIProviderConfig
-
     cfg = (
         db.query(AIProviderConfig)
         .filter(
@@ -140,6 +139,14 @@ def internal_get_ai_config(
 
     api_key = decrypt_api_key(cfg.api_key_encrypted)
 
+    # 查询最新 thinking 测试结果
+    thinking_result = (
+        db.query(AIProviderTestResult)
+        .filter_by(config_id=cfg.id, test_type="thinking")
+        .order_by(AIProviderTestResult.tested_at.desc())
+        .first()
+    )
+
     return {
         "ai_enabled": True,
         "ai_provider": cfg.provider,
@@ -148,6 +155,7 @@ def internal_get_ai_config(
         "ai_model_id": cfg.model_id,
         "ai_vision_model_id": cfg.vision_model_id,
         "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
+        "thinking_supported": bool(thinking_result and thinking_result.success),
     }
 
 

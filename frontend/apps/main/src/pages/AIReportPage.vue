@@ -2,31 +2,29 @@
   <div class="ai-report-page">
     <PageHeader title="家庭资产体检" />
 
-    <!-- Loading / Generating state -->
-    <div v-if="ws.status.value === 'connecting' || ws.status.value === 'analyzing'" class="generating-state">
-      <van-loading size="40" type="spinner" color="var(--van-primary-color)" />
-      <p class="generating-msg">{{ ws.progressMessage.value }}</p>
-    </div>
-
-    <!-- Error state -->
-    <div v-else-if="ws.status.value === 'error'" class="error-state">
-      <van-empty image="error" :description="ws.errorMessage.value || '生成失败，请重试'" />
-      <van-button type="primary" block @click="onGenerate">重新生成</van-button>
+    <!-- Task console (streaming progress) -->
+    <div class="console-wrap">
+      <TaskConsole
+        :status="taskStatus"
+        :chunks="taskChunks"
+        :elapsed-seconds="taskElapsed"
+        v-model="isConsoleOpen"
+      />
     </div>
 
     <!-- No report yet -->
-    <div v-else-if="!currentReport" class="empty-state">
+    <div v-if="!currentReport && taskStatus === 'idle'" class="empty-state">
       <van-empty image="search" description="暂无体检报告" />
       <div class="empty-actions">
-        <van-button type="primary" block :loading="generating" @click="onGenerate">
-          立即生成体检报告
+        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onGenerate">
+          {{ t('aiTask.startBtn') }}
         </van-button>
         <p class="empty-tip">AI 将综合分析您的资产配置、负债压力和资产效率</p>
       </div>
     </div>
 
     <!-- Report content -->
-    <template v-else>
+    <template v-else-if="currentReport">
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">
@@ -122,31 +120,40 @@
 
       <!-- Regenerate -->
       <div class="regen-section">
-        <van-button plain block :loading="generating" @click="onGenerate">重新生成报告</van-button>
+        <van-button plain block :loading="taskStatus === 'running'" @click="onGenerate">
+          {{ t('aiTask.regenBtn') }}
+        </van-button>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIStore } from '@/stores/ai'
 import { getAIReport } from '@/api/ai'
 import type { AIReport } from '@/types'
-import { useAIReportWS } from '@/composables/useAIReportWS'
+import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
+import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
 
 const aiStore = useAIStore()
-const ws = useAIReportWS()
+
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+} = useAITask('report', '/ai/report/generate')
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
-const generating = ref(false)
 
 const overallScoreClass = computed(() => {
   const s = currentReport.value?.overall_score ?? 0
@@ -183,28 +190,14 @@ async function onGenerate() {
     showToast(t('toast.aiNotEnabled'))
     return
   }
-  generating.value = true
-  ws.reset()
-  try {
-    await ws.connect()
-    if (ws.report.value) {
-      currentReport.value = ws.report.value
-      reportGeneratedAt.value = ws.generatedAt.value
-    }
-  } catch {
-    showToast(ws.errorMessage.value || t('toast.aiGenerateFailed'))
-  } finally {
-    generating.value = false
-  }
+  await startStream()
+  // Reload report data after streaming completes
+  await loadExistingReport()
 }
 
 onMounted(async () => {
   await aiStore.fetchConfig()
   await loadExistingReport()
-})
-
-onUnmounted(() => {
-  ws.disconnect()
 })
 </script>
 
@@ -214,18 +207,10 @@ onUnmounted(() => {
   min-height: 100vh;
   padding-bottom: 24px;
 }
-.generating-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 60px 24px;
-  gap: 16px;
+.console-wrap {
+  padding: 0 16px;
 }
-.generating-msg {
-  color: var(--text-secondary);
-  font-size: 14px;
-}
-.error-state, .empty-state {
+.empty-state {
   padding: 40px 16px;
 }
 .empty-actions {

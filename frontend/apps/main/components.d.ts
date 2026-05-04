@@ -58,6 +58,7 @@ declare module 'vue' {
     SpendingLeaksCard: typeof import('./src/components/ai/SpendingLeaksCard.vue')['default']
     StatusSummaryGrid: typeof import('./src/components/dashboard/StatusSummaryGrid.vue')['default']
     TagSelector: typeof import('./src/components/asset/TagSelector.vue')['default']
+    TaskConsole: typeof import('./src/components/ai/TaskConsole.vue')['default']
     TrendLineChart: typeof import('./src/components/charts/TrendLineChart.vue')['default']
     UsageFreqSelector: typeof import('./src/components/asset/UsageFreqSelector.vue')['default']
     VanActionSheet: typeof import('vant/es')['ActionSheet']

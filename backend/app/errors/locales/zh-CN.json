@@ -55,6 +55,7 @@
   "AI_ALERT_NOT_FOUND": "预警不存在",
   "AI_DATA_WRITE_FAILED": "数据写入失败",
   "AI_QUESTION_EMPTY": "问题不能为空",
+  "AI_TASK_IN_PROGRESS": "该类型任务正在进行中，请等待完成后再试",
   "IMPORT_PDF_UNREADABLE": "无法读取此 PDF，请确认文件非扫描件",
   "IMPORT_NO_ASSETS_FOUND": "未能从文档中识别出资产信息，请检查文件是否为金融账单",
   "IMPORT_AGENT_TIMEOUT": "解析超时，请稍后重试",

@@ -21,14 +21,20 @@
         </template>
       </van-empty>
       <div class="actions">
-        <van-button plain block :loading="refreshing" @click="onRefresh">扫描闲置资产</van-button>
+        <TaskConsole
+          :status="taskStatus"
+          :chunks="taskChunks"
+          :elapsed-seconds="taskElapsed"
+          v-model="isConsoleOpen"
+        />
+        <van-button plain block :loading="taskStatus === 'running'" @click="onRefresh">扫描闲置资产</van-button>
       </div>
     </div>
 
     <template v-else>
       <div class="summary-bar">
         <span>{{ suggestions.length }} 项待处置资产</span>
-        <van-button size="mini" plain :loading="refreshing" @click="onRefresh">重新扫描</van-button>
+        <van-button size="mini" plain :loading="taskStatus === 'running'" @click="onRefresh">重新扫描</van-button>
       </div>
 
       <van-swipe-cell v-for="s in suggestions" :key="s.id" class="suggestion-item">
@@ -70,8 +76,10 @@
 import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { getDisposalSuggestions, refreshDisposalSuggestions, dismissDisposalSuggestion } from '@/api/ai'
+import { getDisposalSuggestions, dismissDisposalSuggestion } from '@/api/ai'
+import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
+import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 interface DisposalSuggestion {
   id: number
@@ -85,8 +93,15 @@ interface DisposalSuggestion {
 
 const { t } = useI18n()
 
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+} = useAITask('disposal', '/ai/disposal-suggestions/refresh')
+
 const loading = ref(false)
-const refreshing = ref(false)
 const suggestions = ref<DisposalSuggestion[]>([])
 
 function scoreClass(score: number) {
@@ -108,16 +123,9 @@ async function loadSuggestions() {
 }
 
 async function onRefresh() {
-  refreshing.value = true
-  try {
-    await refreshDisposalSuggestions()
-    await loadSuggestions()
-    showToast(t('toast.aiScanComplete'))
-  } catch {
-    showToast(t('toast.aiScanFailed'))
-  } finally {
-    refreshing.value = false
-  }
+  await startStream()
+  await loadSuggestions()
+  showToast(t('toast.aiScanComplete'))
 }
 
 async function onDismiss(id: string) {

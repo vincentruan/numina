@@ -22,14 +22,20 @@
         </template>
       </van-empty>
       <div class="actions">
-        <van-button plain block :loading="refreshing" @click="onRefresh">扫描资产状态</van-button>
+        <TaskConsole
+          :status="taskStatus"
+          :chunks="taskChunks"
+          :elapsed-seconds="taskElapsed"
+          v-model="isConsoleOpen"
+        />
+        <van-button plain block :loading="taskStatus === 'running'" @click="onRefresh">扫描资产状态</van-button>
       </div>
     </div>
 
     <template v-else>
       <div class="summary-bar">
         <span>共 {{ alerts.length }} 条预警</span>
-        <van-button size="mini" plain :loading="refreshing" @click="onRefresh">重新扫描</van-button>
+        <van-button size="mini" plain :loading="taskStatus === 'running'" @click="onRefresh">重新扫描</van-button>
       </div>
 
       <van-swipe-cell v-for="alert in alerts" :key="alert.id" class="alert-item">
@@ -59,8 +65,10 @@
 import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { getAssetAlerts, refreshAssetAlerts, dismissAssetAlert } from '@/api/ai'
+import { getAssetAlerts, dismissAssetAlert } from '@/api/ai'
+import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
+import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 interface Alert {
   id: number
@@ -72,8 +80,15 @@ interface Alert {
 
 const { t } = useI18n()
 
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+} = useAITask('alerts', '/ai/asset-alerts/refresh')
+
 const loading = ref(false)
-const refreshing = ref(false)
 const alerts = ref<Alert[]>([])
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
@@ -99,16 +114,9 @@ async function loadAlerts() {
 }
 
 async function onRefresh() {
-  refreshing.value = true
-  try {
-    await refreshAssetAlerts()
-    await loadAlerts()
-    showToast(t('toast.aiScanComplete'))
-  } catch {
-    showToast(t('toast.aiScanFailed'))
-  } finally {
-    refreshing.value = false
-  }
+  await startStream()
+  await loadAlerts()
+  showToast(t('toast.aiScanComplete'))
 }
 
 async function onDismiss(id: string) {

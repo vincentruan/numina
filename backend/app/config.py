@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     AI_ENCRYPTION_KEY: str = (
         ""  # Fernet key，生产环境必填（用 Fernet.generate_key() 生成）
     )
-    AGENT_INTERNAL_TOKEN: str = ""  # agent ↔ backend service-to-service token
+    AGENT_INTERNAL_TOKEN: str  # agent ↔ backend service-to-service token (required)
     AGENT_BASE_URL: str = "http://agent:8001"  # agent 服务内部地址
 
     # Snowflake ID generator

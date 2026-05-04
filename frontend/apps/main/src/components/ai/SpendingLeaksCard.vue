@@ -18,14 +18,20 @@
         </template>
       </van-empty>
       <div class="actions">
-        <van-button plain block :loading="refreshing" @click="onRefresh">重新分析</van-button>
+        <TaskConsole
+          :status="taskStatus"
+          :chunks="taskChunks"
+          :elapsed-seconds="taskElapsed"
+          v-model="isConsoleOpen"
+        />
+        <van-button plain block :loading="taskStatus === 'running'" @click="onRefresh">重新分析</van-button>
       </div>
     </div>
 
     <template v-else>
       <div class="summary-bar">
         <span>共 {{ leaks.length }} 条泄漏</span>
-        <van-button size="mini" plain :loading="refreshing" @click="onRefresh">重新分析</van-button>
+        <van-button size="mini" plain :loading="taskStatus === 'running'" @click="onRefresh">重新分析</van-button>
       </div>
 
       <van-swipe-cell v-for="leak in leaks" :key="leak.id" class="leak-item">
@@ -52,13 +58,22 @@
 import { ref, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { getSpendingLeaks, refreshSpendingLeaks, dismissSpendingLeak } from '@/api/aiSpendingLeaks'
+import { getSpendingLeaks, dismissSpendingLeak } from '@/api/aiSpendingLeaks'
 import type { SpendingLeakItem } from '@/api/aiSpendingLeaks'
+import { useAITask } from '@/composables/useAITask'
+import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
 
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+} = useAITask('spending_leak', '/ai/spending-leaks/refresh')
+
 const loading = ref(false)
-const refreshing = ref(false)
 const leaks = ref<SpendingLeakItem[]>([])
 
 const LEAK_TYPE_LABELS: Record<string, string> = {
@@ -95,16 +110,9 @@ async function loadLeaks() {
 }
 
 async function onRefresh() {
-  refreshing.value = true
-  try {
-    await refreshSpendingLeaks()
-    await loadLeaks()
-    showToast(t('toast.aiScanComplete'))
-  } catch {
-    showToast(t('toast.aiScanFailed'))
-  } finally {
-    refreshing.value = false
-  }
+  await startStream()
+  await loadLeaks()
+  showToast(t('toast.aiScanComplete'))
 }
 
 async function onDismiss(id: number) {
