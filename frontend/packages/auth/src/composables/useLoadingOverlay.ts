@@ -1,33 +1,50 @@
 import { ref, computed } from 'vue'
 
-// Global singleton — shared across all axios interceptors in the same app
-const pendingCount = ref(0)
-const isVisible = ref(false)
-let hideTimer: ReturnType<typeof setTimeout> | null = null
+// Module-level singleton — intentional for SPA use.
+// This project is Vite SPA-only (no SSR), so cross-request state leakage is not a concern.
+// HMR resilience: preserve state across hot reloads so in-flight requests don't orphan the counter.
+function createState() {
+  return {
+    pendingCount: ref(0),
+    isVisible: ref(false),
+    hideTimer: null as ReturnType<typeof setTimeout> | null,
+  }
+}
+
+// In dev with HMR, reuse state stored on import.meta.hot.data so that a module
+// re-evaluation doesn't reset an in-flight counter to 0.
+// In production (no import.meta.hot), create a plain module-level singleton.
+const state: ReturnType<typeof createState> = (() => {
+  if (import.meta.hot) {
+    import.meta.hot.data.loadingState ??= createState()
+    return import.meta.hot.data.loadingState as ReturnType<typeof createState>
+  }
+  return createState()
+})()
 
 // Minimum display time (ms) — prevents flash for very fast requests
 const MIN_DISPLAY_MS = 400
 
 export function useLoadingOverlay() {
-  const isLoading = computed(() => isVisible.value)
+  const isLoading = computed(() => state.isVisible.value)
 
   function increment() {
-    if (hideTimer !== null) {
-      clearTimeout(hideTimer)
-      hideTimer = null
+    if (state.hideTimer !== null) {
+      clearTimeout(state.hideTimer)
+      state.hideTimer = null
     }
-    pendingCount.value++
-    isVisible.value = true
+    state.pendingCount.value++
+    state.isVisible.value = true
   }
 
   function decrement() {
-    pendingCount.value = Math.max(0, pendingCount.value - 1)
-    if (pendingCount.value === 0) {
+    state.pendingCount.value = Math.max(0, state.pendingCount.value - 1)
+    if (state.pendingCount.value === 0) {
       // Delay hide so the exit animation has time to play and fast sequential
       // requests don't cause a flicker (show → hide → show)
-      hideTimer = setTimeout(() => {
-        isVisible.value = false
-        hideTimer = null
+      state.hideTimer = setTimeout(() => {
+        state.isVisible.value = false
+        state.hideTimer = null
       }, MIN_DISPLAY_MS)
     }
   }
