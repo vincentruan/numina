@@ -73,6 +73,8 @@ DATABASE_URL=sqlite:////app/data/numina.db   # 数据库路径
 SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-1023，多实例部署时设置）
 ```
 
+完整配置参考（文件存储架构、所有环境变量、Docker 卷挂载、Git 备份）：[docs/configuration.md](docs/configuration.md)
+
 ### 本地开发
 
 各模块的本地开发说明见对应模块的 README：[后端](./backend/README.md) · [前端](./frontend/README.md) · [Agent](./agent/README.md)

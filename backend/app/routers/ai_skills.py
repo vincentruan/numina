@@ -13,6 +13,7 @@ from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.family_skill_config import FamilySkillConfig
 from app.models.user import User
+from app.services import workspace
 
 router = APIRouter(prefix="/ai/skills", tags=["ai-skills"])
 logger = logging.getLogger(__name__)
@@ -39,13 +40,16 @@ _SKILLS_DIR: Path = (
 )
 
 
-def _read_default_prompt(capability: str) -> str | None:
-    """Read the prompt body (after YAML frontmatter) from agent/skills/{capability}.md."""
+def _read_default_prompt(capability: str, family_id: str | None = None) -> str | None:
+    """Read skill prompt: workspace override first, then agent/skills/{capability}.md."""
+    if family_id is not None:
+        ws_prompt = workspace.get_skill_prompt(family_id, capability)
+        if ws_prompt is not None:
+            return ws_prompt.strip()
     skill_file = _SKILLS_DIR / f"{capability}.md"
     if not skill_file.exists():
         return None
     content = skill_file.read_text(encoding="utf-8")
-    # Strip YAML frontmatter (--- ... ---)
     if content.startswith("---"):
         end = content.find("---", 3)
         if end != -1:
@@ -86,7 +90,7 @@ def list_skills(
     result = []
     for cap in BUILTIN_CAPABILITIES:
         row = rows.get(cap)
-        default_prompt = _read_default_prompt(cap)
+        default_prompt = _read_default_prompt(cap, current_user.family_id)
         result.append(
             SkillConfigResponse(
                 capability=cap,
@@ -132,7 +136,7 @@ def update_skill(
     db.commit()
     db.refresh(row)
 
-    default_prompt = _read_default_prompt(capability)
+    default_prompt = _read_default_prompt(capability, current_user.family_id)
     return SkillConfigResponse(
         capability=row.capability,
         is_enabled=row.is_enabled,
@@ -161,7 +165,7 @@ def reset_skill_prompt(
         db.commit()
         db.refresh(row)
 
-    default_prompt = _read_default_prompt(capability)
+    default_prompt = _read_default_prompt(capability, current_user.family_id)
     return SkillConfigResponse(
         capability=capability,
         is_enabled=row.is_enabled if row else True,

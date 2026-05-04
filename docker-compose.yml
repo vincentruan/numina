@@ -17,6 +17,7 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
+      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s

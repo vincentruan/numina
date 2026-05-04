@@ -49,7 +49,12 @@ class Settings(BaseSettings):
     ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
 
     # File storage configuration
+    # UPLOAD_DIR: root for asset image uploads, served as static files at /uploads/
     UPLOAD_DIR: str = "./data/uploads"
+    # WORKSPACE_ROOT: per-family workspace root, subdirs: {family_id}/{images,skills,prompts,exports}/
+    # - skills/{capability}.md overrides agent/skills/{capability}.md for that family
+    # - safe to Git-track (exclude images/ if large); see docs/configuration.md
+    WORKSPACE_ROOT: str = "./data/workspace"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
     # Dedicated encryption key for storage backend credentials.
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
@@ -66,7 +71,7 @@ class Settings(BaseSettings):
     AI_ENCRYPTION_KEY: str = (
         ""  # Fernet key，生产环境必填（用 Fernet.generate_key() 生成）
     )
-    AGENT_INTERNAL_TOKEN: str  # agent ↔ backend service-to-service token (required)
+    AGENT_INTERNAL_TOKEN: str = ""  # agent ↔ backend service-to-service token (required in production)
     AGENT_BASE_URL: str = "http://agent:8001"  # agent 服务内部地址
 
     # Snowflake ID generator
