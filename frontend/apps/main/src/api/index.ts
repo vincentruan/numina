@@ -115,7 +115,6 @@ http.interceptors.response.use(
     return response
   },
   async (error) => {
-    loadingDecrement()
     const originalRequest = error.config as RetryableConfig
 
     if (error.response?.status === 401 && !originalRequest._retry) {
@@ -123,12 +122,14 @@ http.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/login') ||
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/family/join')) {
+        loadingDecrement()
         showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
         return Promise.reject(error)
       }
 
       // Refresh endpoint failure = session expired
       if (originalRequest.url?.includes('/auth/refresh')) {
+        loadingDecrement()
         clearAuth()
         showDialog({
           title: t('device.sessionExpiredTitle'),
@@ -141,6 +142,9 @@ http.interceptors.response.use(
       }
 
       // For other 401 errors, try to refresh token
+      // Don't decrement here — the retry will go through the request interceptor
+      // (increment) and response interceptor (decrement), keeping the counter balanced
+      // without a transient drop to 0 that would cause the overlay to flicker.
       if (isRefreshing) {
         // Queue this request until refresh completes
         return new Promise((resolve, reject) => {
@@ -167,6 +171,7 @@ http.interceptors.response.use(
         onRefreshed()
         return http(originalRequest)
       } catch (refreshError) {
+        loadingDecrement()
         onRefreshFailed(refreshError)
         clearAuth()
         router.push('/login')
@@ -178,7 +183,8 @@ http.interceptors.response.use(
       }
     }
 
-    // Retry GET requests on network error or timeout (not on HTTP error responses)
+    // Retry GET requests on network error or timeout — don't decrement, the retry
+    // will go through the full interceptor lifecycle (increment + decrement).
     const isRetryable =
       !error.response &&
       originalRequest.method?.toUpperCase() === 'GET' &&
@@ -190,7 +196,8 @@ http.interceptors.response.use(
       return http(originalRequest)
     }
 
-    // Handle other errors
+    // Terminal error path — decrement now
+    loadingDecrement()
     if (error.response) {
       const { status, data } = error.response
       if (status === 403) {

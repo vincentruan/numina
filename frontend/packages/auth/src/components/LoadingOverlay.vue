@@ -40,12 +40,13 @@ const rings = [
   { id: 5, r: 54, color: '#fbbf24', width: 2,   dash: '85 254', offset: 10, style: { animationDelay: '0.1s',  animationDuration: '1.5s' } },
 ]
 
-// Trigger burst animation before the overlay hides
+// Set burst mode when hiding; reset on re-entry (new request mid-leave) or after leave completes
 watch(isLoading, (val) => {
   if (!val) {
     isLeaving.value = true
-    // Reset after burst animation completes (matches CSS duration)
-    setTimeout(() => { isLeaving.value = false }, 500)
+  } else {
+    // New request arrived while leave transition was in progress — cancel burst
+    isLeaving.value = false
   }
 })
 
