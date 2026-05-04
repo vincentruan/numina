@@ -17,6 +17,7 @@ import { showToast, showDialog } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
+import { useLoadingOverlay } from '@numina/auth'
 
 const MAX_RETRIES = 2
 const RETRY_BASE_DELAY_MS = 800
@@ -55,15 +56,21 @@ const http = axios.create({
   withCredentials: true,
 })
 
+const { increment: loadingIncrement, decrement: loadingDecrement } = useLoadingOverlay()
+
 // Request interceptor - no manual Authorization header
 // Cookie is automatically sent by browser
 http.interceptors.request.use(
   (config) => {
     // AI endpoints need a longer timeout for LLM response latency
     config.timeout = config.url?.includes('/ai/') ? 120000 : 15000
+    loadingIncrement()
     return config
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    loadingDecrement()
+    return Promise.reject(error)
+  }
 )
 
 // Token refresh state
@@ -86,6 +93,7 @@ function onRefreshFailed(error: unknown) {
 // Response interceptor - handle 401 with automatic refresh
 http.interceptors.response.use(
   (response) => {
+    loadingDecrement()
     const url = response.config.url ?? ''
     // Unwrap most endpoints; keep login/register/refresh/family-join wrapped (they return tokens directly)
     // /auth/devices and /auth/me should be unwrapped like regular endpoints
@@ -107,6 +115,7 @@ http.interceptors.response.use(
     return response
   },
   async (error) => {
+    loadingDecrement()
     const originalRequest = error.config as RetryableConfig
 
     if (error.response?.status === 401 && !originalRequest._retry) {

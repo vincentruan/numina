@@ -1,11 +1,5 @@
-/**
- * Axios HTTP client for frontend-child.
- * Minimal version — no Vant/router coupling.
- * Error handling is done at the component/store level.
- */
-
 import axios from 'axios'
-import { clearAuth } from '@numina/auth'
+import { clearAuth, useLoadingOverlay } from '@numina/auth'
 
 const http = axios.create({
   baseURL: '/api/v1',
@@ -16,25 +10,33 @@ const http = axios.create({
   withCredentials: true,
 })
 
+const { increment: loadingIncrement, decrement: loadingDecrement } = useLoadingOverlay()
+
 // Request interceptor — Cookie sent automatically by browser
 http.interceptors.request.use(
   (config) => {
     config.timeout = config.url?.includes('/ai/') ? 120000 : 15000
+    loadingIncrement()
     return config
   },
-  (error) => Promise.reject(error),
+  (error) => {
+    loadingDecrement()
+    return Promise.reject(error)
+  },
 )
 
 // Response interceptor — unwrap {code, data} envelope so callers get res.data directly
 // On 401, clear stale localStorage session and redirect to login
 http.interceptors.response.use(
   (response) => {
+    loadingDecrement()
     if (response.data && typeof response.data === 'object' && 'code' in response.data && 'data' in response.data) {
       response.data = response.data.data
     }
     return response
   },
   (error) => {
+    loadingDecrement()
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       const url = error.config?.url ?? ''
       // Don't redirect on auth endpoints themselves (login, refresh)

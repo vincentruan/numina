@@ -13,6 +13,8 @@
     @confirm="authStore.trustDevice({ onSuccess: () => showToast(t('toast.deviceTrustSuccess')), onError: () => showToast(t('toast.deviceTrustFailed')) })"
     @cancel="authStore.dismissTrustPrompt()"
   />
+
+  <LoadingOverlay />
 </template>
 
 <script setup lang="ts">
@@ -21,6 +23,7 @@ import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
+import { LoadingOverlay } from '@numina/auth'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()

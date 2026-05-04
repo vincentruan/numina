@@ -3,6 +3,10 @@
 // Components
 export { default as AuthStep1Form } from './components/AuthStep1Form.vue'
 export { default as TrustedDeviceCard } from './components/TrustedDeviceCard.vue'
+export { default as LoadingOverlay } from './components/LoadingOverlay.vue'
+
+// Composables
+export { useLoadingOverlay } from './composables/useLoadingOverlay'
 
 // HTTP client configuration — call configureAuthHttp(http) in main.ts before using stores
 export { configureAuthHttp } from './stores/http'
