@@ -153,6 +153,10 @@ class SkillLoader:
         data = resp.json()
 
         updated_at_raw = data.get("updated_at")
+        # When updated_at is None the family has no custom config; use datetime.min
+        # as a stable sentinel so the cache entry is reused across calls (no churn).
+        # The entry will be replaced as soon as the family saves a custom prompt and
+        # updated_at becomes a real timestamp.
         updated_at = (
             datetime.fromisoformat(updated_at_raw) if updated_at_raw else datetime.min
         )

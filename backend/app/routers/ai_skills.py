@@ -1,6 +1,7 @@
 """技能配置管理路由（per-family）。"""
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
@@ -28,7 +29,14 @@ BUILTIN_CAPABILITIES = [
     "time_machine",
 ]
 
-_SKILLS_DIR = Path(__file__).parent.parent.parent.parent.parent / "agent" / "skills"
+# Resolve skills directory: prefer AGENT_SKILLS_DIR env var (set in docker-compose /
+# production), fall back to the sibling agent/skills/ path for local dev.
+_env_skills_dir = os.environ.get("AGENT_SKILLS_DIR")
+_SKILLS_DIR: Path = (
+    Path(_env_skills_dir)
+    if _env_skills_dir
+    else Path(__file__).parent.parent.parent.parent.parent / "agent" / "skills"
+)
 
 
 def _read_default_prompt(capability: str) -> str | None:

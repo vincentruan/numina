@@ -305,7 +305,7 @@ export interface MCPServer {
   name: string
   url: string
   transport: 'sse' | 'stdio'
-  env_vars: Record<string, string> | null
+  env_vars: Record<string, string>  // empty object when not set or caller lacks permission
   is_enabled: boolean
 }
 

@@ -125,7 +125,9 @@ function onEdit(server: MCPServer) {
     name: server.name,
     url: server.url,
     transport: server.transport,
-    envVarsText: server.env_vars ? JSON.stringify(server.env_vars, null, 2) : '',
+    envVarsText: server.env_vars && Object.keys(server.env_vars).length > 0
+        ? JSON.stringify(server.env_vars, null, 2)
+        : '',
   }
   showDialog.value = true
 }
@@ -140,6 +142,7 @@ async function onDelete(server: MCPServer) {
 async function onToggle(server: MCPServer, enabled: boolean) {
   await updateMCPServer(server.id, { is_enabled: enabled })
   server.is_enabled = enabled
+  showToast(enabled ? t('toast.enabled') : t('toast.disabled'))
 }
 
 function onTransportConfirm({ selectedValues }: { selectedValues: string[] }) {

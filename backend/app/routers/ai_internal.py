@@ -4,6 +4,8 @@
 并以 X-Family-Id header 中的 family_id 为边界过滤数据。
 """
 
+import json
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -11,6 +13,8 @@ from app.auth.ai_deps import verify_agent_token
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
+from app.models.family_mcp_server import FamilyMCPServer
+from app.models.family_skill_config import FamilySkillConfig
 from app.models.user import User
 from app.services import dashboard as dashboard_service
 from app.services.ai_crypto import decrypt_api_key
@@ -190,8 +194,6 @@ def internal_get_skill_config(
     db: Session = Depends(get_db),
 ):
     """返回家庭技能配置（custom_prompt + is_enabled + updated_at），供 agent skill_loader 缓存。"""
-    from app.models.family_skill_config import FamilySkillConfig
-
     row = (
         db.query(FamilySkillConfig)
         .filter(
@@ -218,11 +220,6 @@ def internal_get_mcp_servers(
     db: Session = Depends(get_db),
 ):
     """返回家庭已启用的 MCP server 列表（含解密 env_vars），供 agent 注入 DeerFlow。"""
-    import json
-
-    from app.models.family_mcp_server import FamilyMCPServer
-    from app.services.ai_crypto import decrypt_api_key
-
     servers = (
         db.query(FamilyMCPServer)
         .filter(

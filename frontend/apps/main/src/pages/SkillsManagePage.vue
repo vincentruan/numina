@@ -101,6 +101,7 @@ function onEditSkill(skill: SkillConfig) {
 async function onToggle(skill: SkillConfig, enabled: boolean) {
   await updateSkill(skill.capability, { is_enabled: enabled })
   skill.is_enabled = enabled
+  showToast(enabled ? t('toast.enabled') : t('toast.disabled'))
 }
 
 async function onSavePrompt() {

@@ -45,22 +45,23 @@ class MCPServerResponse(BaseModel):
     name: str
     url: str
     transport: str
-    env_vars: dict[str, str] | None  # decrypted for owner, None for non-owner
+    env_vars: dict[str, str]  # empty dict when not set or caller lacks permission
     is_enabled: bool
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _decrypt_env_vars(server: FamilyMCPServer) -> dict[str, str] | None:
+def _decrypt_env_vars(server: FamilyMCPServer) -> dict[str, str]:
+    """Decrypt env_vars JSON; returns empty dict if not set or decryption fails."""
     if not server.env_vars_encrypted:
-        return None
+        return {}
     raw = decrypt_api_key(server.env_vars_encrypted)
     if not raw:
-        return None
+        return {}
     try:
         return json.loads(raw)
     except Exception:
-        return None
+        return {}
 
 
 def _to_response(server: FamilyMCPServer, include_env: bool = False) -> MCPServerResponse:
@@ -69,7 +70,7 @@ def _to_response(server: FamilyMCPServer, include_env: bool = False) -> MCPServe
         name=server.name,
         url=server.url,
         transport=server.transport,
-        env_vars=_decrypt_env_vars(server) if include_env else None,
+        env_vars=_decrypt_env_vars(server) if include_env else {},
         is_enabled=server.is_enabled,
     )
 
