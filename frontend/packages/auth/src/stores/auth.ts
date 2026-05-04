@@ -32,8 +32,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function loginStep1(data: LoginStep1Request): Promise<LoginStep1Response> {
-    const res = await getHttp().post<{ data: LoginStep1Response }>('/auth/login/step1', data)
-    return res.data.data
+    const res = await getHttp().post<LoginStep1Response>('/auth/login/step1', data)
+    return res.data
   }
 
   async function loginStep2(data: LoginStep2Request): Promise<void> {

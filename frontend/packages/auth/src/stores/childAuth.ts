@@ -45,11 +45,11 @@ export const useChildAuthStore = defineStore('childAuth', () => {
     isLocked.value = false
     lockMessage.value = null
     try {
-      const res = await getHttp().post<{ data: ChildLoginStep1Result }>('/auth/login/step1', {
+      const res = await getHttp().post<ChildLoginStep1Result>('/auth/login/step1', {
         username,
         password,
       })
-      return res.data.data
+      return res.data
     } catch (err: unknown) {
       if (axios.isAxiosError(err) && err.response?.status === 423) {
         isLocked.value = true
