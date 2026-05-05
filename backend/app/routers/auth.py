@@ -430,7 +430,7 @@ def child_webauthn_register(
             expected_challenge=expected_challenge,
         )
     except Exception as e:
-        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e))
+        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)) from e
 
     existing_creds = json.loads(child.webauthn_credentials or "[]")
     existing_creds.append(verified_cred)
@@ -438,9 +438,9 @@ def child_webauthn_register(
 
     try:
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to store credential")
+        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to store credential") from e
 
     return {"message": "passkey registered"}
 
@@ -506,16 +506,16 @@ def child_webauthn_login(
             credential_current_sign_count=stored_cred["sign_count"],
         )
     except Exception as e:
-        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e))
+        raise AppError(ErrorCode.AUTH_WEBAUTHN_VERIFICATION_FAILED, details=str(e)) from e
 
     stored_cred["sign_count"] = verification["new_sign_count"]
     child.webauthn_credentials = json.dumps(credentials)
 
     try:
         db.commit()
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to update credential")
+        raise AppError(ErrorCode.INTERNAL_ERROR, details="Failed to update credential") from e
 
     from app.auth.deps import create_access_token, create_refresh_token
     from app.auth.jwt_utils import user_claims
@@ -574,22 +574,25 @@ def login_step1(
         User.is_active.is_(True),
     ).first()
 
-    # Timing attack protection
-    # Allow child users without password_hash but with pin_hash to proceed to step 2
-    is_child_with_pin_only = user and user.role == "child" and not user.password_hash and user.pin_hash
-    if not user or (not user.password_hash and not is_child_with_pin_only):
+    # Timing attack protection — always run bcrypt even on failure
+    if not user or not user.password_hash:
         dummy = auth_service._get_dummy_hash()
         bcrypt.checkpw(b"dummy", dummy.encode("utf-8"))
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    # For child users with PIN-only (no password), skip password check and go to step 2
-    if not is_child_with_pin_only:
-        if not bcrypt.checkpw(req.password.encode("utf-8"), user.password_hash.encode("utf-8")):
-            raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+    if not bcrypt.checkpw(req.password.encode("utf-8"), user.password_hash.encode("utf-8")):
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    # If no second factor configured and not a PIN-only child, issue tokens directly
-    # PIN-only children always go to step 2 for PIN verification
-    if not is_child_with_pin_only and (not user.second_factor_enabled or not user.second_factor_type):
+    # Determine second factor: children with pin_hash use emoji_pin; adults use their configured type
+    if user.role == "child" and user.pin_hash:
+        second_factor_type = "emoji_pin"
+    elif user.second_factor_enabled and user.second_factor_type:
+        second_factor_type = user.second_factor_type
+    else:
+        second_factor_type = None
+
+    # No second factor — issue tokens directly
+    if second_factor_type is None:
         from app.auth.deps import create_access_token, create_refresh_token
         access_token = create_access_token(user_claims(user))
         refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
@@ -608,12 +611,10 @@ def login_step1(
 
     # Issue temp token for step 2
     temp_token = create_temp_token(user.id, user.role)
-    # For PIN-only children, use 'emoji_pin' as the second factor type
-    factor_type = user.second_factor_type if not is_child_with_pin_only else "emoji_pin"
     return LoginStep1Response(
         temp_token=temp_token,
         second_factor_required=True,
-        second_factor_type=factor_type,
+        second_factor_type=second_factor_type,
         user_id=user.id,
         display_name=user.display_name,
         avatar_color=user.avatar_color,
