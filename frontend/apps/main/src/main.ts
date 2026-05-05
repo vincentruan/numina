@@ -9,12 +9,19 @@ import i18n from './i18n'
 import { useCurrencyStore } from './stores/currency'
 import http from './api/index'
 import { configureAuthHttp } from '@numina/auth'
+import { setupLoadingGuards } from './router/guards/loading'
+import { setupLoadingInterceptor } from './plugins/loading'
 
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
 app.use(router)
 app.use(i18n)
+
+setupLoadingGuards(router)
+
+// Setup axios loading interceptor
+setupLoadingInterceptor(http)
 
 // Wire up shared auth package with this app's HTTP client
 configureAuthHttp(http)
