@@ -608,10 +608,12 @@ def login_step1(
 
     # Issue temp token for step 2
     temp_token = create_temp_token(user.id, user.role)
+    # For PIN-only children, use 'emoji_pin' as the second factor type
+    factor_type = user.second_factor_type if not is_child_with_pin_only else "emoji_pin"
     return LoginStep1Response(
         temp_token=temp_token,
         second_factor_required=True,
-        second_factor_type=user.second_factor_type,
+        second_factor_type=factor_type,
         user_id=user.id,
         display_name=user.display_name,
         avatar_color=user.avatar_color,
