@@ -1,6 +1,6 @@
 import re
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from app.constants.pin import ALLOWED_EMOJIS
 from app.schemas.base import SnowflakeBase
@@ -227,6 +227,8 @@ class LoginStep1Response(BaseModel):
 
 
 class LoginStep2Request(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+
     temp_token: str
     factor_type: str   # 'numeric_pin' | 'emoji_pin'
     payload: dict      # e.g. {"pin": "1234"} or {"pin_sequence": ["🐱", ...]}
