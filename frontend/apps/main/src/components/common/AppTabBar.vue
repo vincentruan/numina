@@ -40,6 +40,7 @@ const activeTab = computed(() => {
   const path = route.path
   if (path.startsWith('/ai')) return 'ai'
   if (path.startsWith('/settings')) return 'settings'
+  if (path.startsWith('/family')) return 'settings'
   return routeToTab[path] ?? 'dashboard'
 })
 

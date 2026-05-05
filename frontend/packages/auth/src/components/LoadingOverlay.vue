@@ -1,6 +1,12 @@
 <template>
   <Transition name="overlay" @after-leave="onAfterLeave">
-    <div v-if="isLoading" class="loading-overlay" aria-live="polite" aria-label="加载中">
+    <div
+      v-if="isLoading"
+      class="loading-overlay"
+      :class="{ 'is-dismissing': isDismissing }"
+      aria-live="polite"
+      aria-label="加载中"
+    >
       <div class="loading-rings" :class="{ 'is-leaving': isLeaving }">
         <svg viewBox="0 0 120 120" class="rings-svg" aria-hidden="true">
           <!-- 5 concentric arcs, each with independent animation phase -->
@@ -28,7 +34,7 @@
 import { ref, watch } from 'vue'
 import { useLoadingOverlay } from '../composables/useLoadingOverlay'
 
-const { isLoading } = useLoadingOverlay()
+const { isLoading, isDismissing } = useLoadingOverlay()
 const isLeaving = ref(false)
 
 // Ring definitions — 5 arcs at increasing radii with offset phases
@@ -66,6 +72,7 @@ function onAfterLeave() {
   background: rgba(1, 1, 32, 0.55);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
+  pointer-events: none; /* never block taps — overlay is purely visual */
 }
 
 .loading-rings {
@@ -119,6 +126,12 @@ function onAfterLeave() {
 .ring-burst:nth-child(3) { animation-delay: 0.08s; }
 .ring-burst:nth-child(4) { animation-delay: 0.12s; }
 .ring-burst:nth-child(5) { animation-delay: 0.16s; }
+
+.loading-overlay.is-dismissing {
+  /* Immediately drop below Vant toast (z-index ~2000) so toasts fired on
+     response completion are visible during the overlay's exit animation. */
+  z-index: 1999;
+}
 
 /* ── Overlay fade transition ── */
 .overlay-enter-active {

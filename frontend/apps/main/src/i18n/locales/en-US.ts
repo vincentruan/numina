@@ -11,7 +11,8 @@ export default {
     noData: 'No Data',
     success: 'Success',
     failed: 'Failed',
-    back: 'Back'
+    back: 'Back',
+    next: 'Next'
   },
   nav: {
     dashboard: 'Dashboard',

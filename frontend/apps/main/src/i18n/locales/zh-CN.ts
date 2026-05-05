@@ -11,7 +11,8 @@ export default {
     noData: '暂无数据',
     success: '操作成功',
     failed: '操作失败',
-    back: '返回'
+    back: '返回',
+    next: '下一步'
   },
   nav: {
     dashboard: '总览',

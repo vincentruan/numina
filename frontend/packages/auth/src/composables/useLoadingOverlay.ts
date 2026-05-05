@@ -7,6 +7,7 @@ function createState() {
   return {
     pendingCount: ref(0),
     isVisible: ref(false),
+    isDismissing: ref(false), // true from decrement-to-zero until overlay is hidden
     hideTimer: null as ReturnType<typeof setTimeout> | null,
   }
 }
@@ -27,6 +28,7 @@ const MIN_DISPLAY_MS = 400
 
 export function useLoadingOverlay() {
   const isLoading = computed(() => state.isVisible.value)
+  const isDismissing = computed(() => state.isDismissing.value)
 
   function increment() {
     if (state.hideTimer !== null) {
@@ -35,19 +37,24 @@ export function useLoadingOverlay() {
     }
     state.pendingCount.value++
     state.isVisible.value = true
+    state.isDismissing.value = false
   }
 
   function decrement() {
     state.pendingCount.value = Math.max(0, state.pendingCount.value - 1)
     if (state.pendingCount.value === 0) {
+      // Mark as dismissing immediately so z-index drops and toasts become visible
+      // before the overlay finishes its exit animation.
+      state.isDismissing.value = true
       // Delay hide so the exit animation has time to play and fast sequential
       // requests don't cause a flicker (show → hide → show)
       state.hideTimer = setTimeout(() => {
         state.isVisible.value = false
+        state.isDismissing.value = false
         state.hideTimer = null
       }, MIN_DISPLAY_MS)
     }
   }
 
-  return { isLoading, increment, decrement }
+  return { isLoading, isDismissing, increment, decrement }
 }
