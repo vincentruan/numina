@@ -575,16 +575,21 @@ def login_step1(
     ).first()
 
     # Timing attack protection
-    if not user or not user.password_hash:
+    # Allow child users without password_hash but with pin_hash to proceed to step 2
+    is_child_with_pin_only = user and user.role == "child" and not user.password_hash and user.pin_hash
+    if not user or (not user.password_hash and not is_child_with_pin_only):
         dummy = auth_service._get_dummy_hash()
         bcrypt.checkpw(b"dummy", dummy.encode("utf-8"))
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    if not bcrypt.checkpw(req.password.encode("utf-8"), user.password_hash.encode("utf-8")):
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+    # For child users with PIN-only (no password), skip password check and go to step 2
+    if not is_child_with_pin_only:
+        if not bcrypt.checkpw(req.password.encode("utf-8"), user.password_hash.encode("utf-8")):
+            raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
-    # If no second factor configured, issue tokens directly
-    if not user.second_factor_enabled or not user.second_factor_type:
+    # If no second factor configured and not a PIN-only child, issue tokens directly
+    # PIN-only children always go to step 2 for PIN verification
+    if not is_child_with_pin_only and (not user.second_factor_enabled or not user.second_factor_type):
         from app.auth.deps import create_access_token, create_refresh_token
         access_token = create_access_token(user_claims(user))
         refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
