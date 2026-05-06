@@ -287,11 +287,17 @@ async def test_ai_config(
     if cfg.vision_model_id and cfg.vision_model_id != model:
         vision_test_result = await _test_vision_model(proxy, api_key, cfg.vision_model_id)
 
+    vision_text_result = None
+    vision_model_for_ocr = cfg.vision_model_id or model
+    vision_text_result = await _test_vision_text_ocr(proxy, api_key, vision_model_for_ocr)
+
     _upsert_test("main", connection_result["connected"], connection_result["message"], connection_result["latency_ms"])
     if thinking_result:
         _upsert_test("thinking", thinking_result["success"], thinking_result["message"], thinking_result["latency_ms"])
     if vision_test_result:
         _upsert_test("vision", vision_test_result["success"], vision_test_result["message"], vision_test_result["latency_ms"])
+    if vision_text_result:
+        _upsert_test("vision_text", vision_text_result["success"], vision_text_result["message"], vision_text_result["latency_ms"])
 
     return AIConfigTestResult(
         connected=connection_result["connected"],
@@ -303,6 +309,9 @@ async def test_ai_config(
         vision_success=vision_test_result["success"] if vision_test_result else None,
         vision_message=vision_test_result["message"] if vision_test_result else None,
         vision_latency_ms=vision_test_result["latency_ms"] if vision_test_result else None,
+        vision_text_success=vision_text_result["success"] if vision_text_result else None,
+        vision_text_message=vision_text_result["message"] if vision_text_result else None,
+        vision_text_latency_ms=vision_text_result["latency_ms"] if vision_text_result else None,
     )
 
 
