@@ -29,7 +29,6 @@ interface Ripple {
   id: number
   birth: number        // creation time (ms)
   baseRadius: number   // initial radius
-  maxRadius: number    // maximum radius before fade
   amplitude: number    // initial wave amplitude
   frequency: number    // angular frequency (waves around circle)
   speed: number        // expansion speed (px per second)
@@ -88,7 +87,7 @@ let globalTime = 0
 
 // Dismiss state
 let dismissProgress = 0
-let dismissStart = 0
+let dismissStart: number | null = null
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
 
@@ -102,10 +101,10 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
 
   // Update dismiss progress
   if (props.dismissing) {
-    if (dismissStart === 0) dismissStart = now
+    if (dismissStart === null) dismissStart = now
     dismissProgress = Math.min(1, (now - dismissStart) / 400)
   } else {
-    dismissStart = 0
+    dismissStart = null
     dismissProgress = 0
   }
 
@@ -119,7 +118,6 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
       id: nextRippleId++,
       birth: now,
       baseRadius: 20 * DPR,  // start from center
-      maxRadius: Math.min(W, H) * 0.45,
       amplitude: config.amplitude * DPR,
       frequency: config.frequency,
       speed: config.speed * DPR,
@@ -138,7 +136,7 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
   // Update and draw each ripple
   const POINTS = LOW_END ? 60 : 90
 
-  ripples.forEach((ripple, index) => {
+  ripples.forEach((ripple) => {
     const age = (now - ripple.birth) / 1000 // seconds
     const lifeProgress = age / (WAVE_LIFETIME / 1000)
 
@@ -210,7 +208,7 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
 
   // Clean up expired ripples
   ripples = ripples.filter(r => {
-    const lifeProgress = (now - r.birth) / WAVE_LIFETIME
+    const lifeProgress = (now - r.birth) / 1000 / (WAVE_LIFETIME / 1000)
     return lifeProgress < 1 && !(props.dismissing && dismissProgress > 0.8)
   })
 }
@@ -247,6 +245,11 @@ function resize() {
 let ro: ResizeObserver | null = null
 
 onMounted(() => {
+  // Reset animation state on each mount so remounts start clean (M1)
+  lastFrameTime = 0
+  globalTime = 0
+  ripples = []
+  lastSpawn = 0
   resize()
   ro = new ResizeObserver(resize)
   if (canvasEl.value?.parentElement) ro.observe(canvasEl.value.parentElement)
@@ -261,8 +264,8 @@ onUnmounted(() => {
 watch(() => props.dismissing, (val) => {
   if (!val) {
     dismissProgress = 0
-    dismissStart = 0
-    ripples = [] // Clear ripples on reset
+    dismissStart = null
+    ripples = []
     lastSpawn = 0
   }
 })
