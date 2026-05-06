@@ -41,6 +41,10 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'CategoryManage', path: '/settings/categories' },
   { name: 'TagManage', path: '/settings/tags' },
   { name: 'AIConfig', path: '/settings/ai' },
+  { name: 'MCPManage', path: '/settings/ai/mcp' },
+  { name: 'SkillsManage', path: '/settings/ai/skills' },
+  { name: 'ChangePassword', path: '/settings/password' },
+  { name: 'ChangeSecondFactor', path: '/settings/second-factor' },
   { name: 'ImportReport', path: '/settings/import-report' },
   { name: 'AIReport', path: '/ai/report' },
   { name: 'AIAlerts', path: '/ai/alerts' },
@@ -52,8 +56,10 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'AIHub', path: '/ai' },
   { name: 'DataStats', path: '/stats' },
   // Family — chore & wish management
+  { name: 'ChildReset', path: '/family/children/1/reset' },
   { name: 'ChoreApprovals', path: '/chore-approvals' },
   { name: 'WishReview', path: '/wish-review' },
+  { name: 'AISpendingLeaks', path: '/ai/spending-leaks' },
   { name: 'BabyDayDetail', path: '/baby/calendar/day' },
 ]
 

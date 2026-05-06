@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field
+
+from app.schemas.base import SnowflakeBase
 
 # ── Gift ──────────────────────────────────────────────────────────────────────
 
@@ -20,8 +22,7 @@ class BlindBoxGiftUpdate(BaseModel):
     is_active: bool | None = None
 
 
-class BlindBoxGiftResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class BlindBoxGiftResponse(SnowflakeBase):
 
     id: int
     family_id: int
@@ -43,8 +44,7 @@ class DrawRequest(BaseModel):
     chore_instance_ids: list[int] = Field(..., min_length=1, description="已批准的 ChoreInstance ID 列表")
 
 
-class BlindBoxDrawResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class BlindBoxDrawResponse(SnowflakeBase):
 
     id: int
     family_id: int
@@ -73,8 +73,7 @@ class BlindBoxConfigUpdate(BaseModel):
     surprise_prob_sibling_bday: float | None = Field(None, ge=0.0, le=1.0)
 
 
-class BlindBoxConfigResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class BlindBoxConfigResponse(SnowflakeBase):
 
     id: int
     family_id: int
@@ -95,8 +94,7 @@ class BonusDrawCreate(BaseModel):
     expires_at: datetime
 
 
-class BonusDrawResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class BonusDrawResponse(SnowflakeBase):
 
     id: int
     family_id: int

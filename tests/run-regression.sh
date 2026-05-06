@@ -113,7 +113,7 @@ fi
 
 # 4. 初始化测试账号
 log_info "初始化测试账号..."
-bash "$SCRIPT_DIR/seed-accounts.sh"
+bash "$SCRIPT_DIR/data/seed-data.sh" --skip-demo
 
 # 5. 安装 Playwright 依赖
 log_info "安装测试依赖..."

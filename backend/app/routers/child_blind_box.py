@@ -128,7 +128,7 @@ def child_use_bonus_draw(
     ).first()
     if not bonus:
         raise AppError(ErrorCode.BLIND_BOX_DRAW_NOT_FOUND)
-    if bonus.expires_at < datetime.now(UTC):
+    if bonus.expires_at < datetime.now():
         bonus.status = "expired"
         db.commit()
         raise AppError(ErrorCode.BLIND_BOX_BONUS_EXPIRED)

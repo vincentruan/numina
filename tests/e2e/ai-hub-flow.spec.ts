@@ -22,10 +22,10 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     // Hub subtitle is always present
-    await expect(page.getByText('家庭资产智能助手')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('AI 智能助手')).toBeVisible({ timeout: 10_000 })
 
     // Health score image with aria-label
     await expect(page.locator('[aria-label*="资产健康评分"]')).toBeVisible({ timeout: 8_000 })
@@ -40,7 +40,7 @@ test.describe('AI hub and features', () => {
   test('AI hub shows report summary or empty state', async ({ page }) => {
     await richFamily(page)
     await page.goto('/ai')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     // The hub always shows either a report card or the empty state button
     await expect(
@@ -56,7 +56,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/report')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     // Page title in nav bar
@@ -88,7 +88,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/alerts')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByText('老化预警')).toBeVisible({ timeout: 10_000 })
@@ -107,7 +107,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/disposal')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByRole('button', { name: /扫描闲置/ })).toBeVisible({ timeout: 10_000 })
@@ -126,7 +126,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/liability')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByText('负债优化')).toBeVisible({ timeout: 10_000 })
@@ -145,7 +145,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/allocation')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByText('配置漂移')).toBeVisible({ timeout: 10_000 })
@@ -164,7 +164,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/ai/chat')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByText('新对话')).toBeVisible({ timeout: 10_000 })
@@ -183,7 +183,7 @@ test.describe('AI hub and features', () => {
 
     await richFamily(page)
     await page.goto('/settings/ai')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
     await expect(page.getByRole('button', { name: /AI 服务商/ })).toBeVisible({ timeout: 10_000 })
@@ -197,7 +197,7 @@ test.describe('AI hub and features', () => {
   test('AI hub navigates to sub-pages', async ({ page }) => {
     await richFamily(page)
     await page.goto('/ai')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     // Click the first feature list item (资产体检 → /ai/report)
     await page.getByRole('listitem', { name: /资产体检/ }).click()
@@ -212,10 +212,10 @@ test.describe('AI hub and features', () => {
 
     await emptyFamily(page)
     await page.goto('/ai')
-    await page.waitForLoadState('networkidle')
+    await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(page.getByText('家庭资产智能助手')).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText('AI 智能助手')).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')

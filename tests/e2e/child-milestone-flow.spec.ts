@@ -81,8 +81,8 @@ test.describe('child milestone flow', () => {
       }
 
       // ── UI assertion: clear seen_milestones and navigate to /child/tasks ──
-      // Navigate to child select page first (same SPA origin) to clear localStorage
-      await pageChild.goto('/child/select')
+      // Navigate to child home first (same SPA origin at /child/) to access localStorage
+      await pageChild.goto('/child/')
       await pageChild.evaluate(() => {
         localStorage.removeItem('seen_milestones')
       })

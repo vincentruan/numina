@@ -602,7 +602,7 @@ if [ -z "$TEMPLATE_ID" ] || [ "$TEMPLATE_ID" = "null" ]; then
   TPL_BODY=$(echo "$CREATE_TPL_RESP" | sed '$d')
   if [ "$TPL_HTTP" = "200" ] || [ "$TPL_HTTP" = "201" ]; then
     TEMPLATE_ID=$(echo "$TPL_BODY" | jq -r '.id // .data.id')
-    log_ok "Test chore template created（id: $TEMPLATE_ID）"
+    log_ok "Test chore template created（id: ${TEMPLATE_ID}）"
   else
     log_err "Creating test chore template... HTTP $TPL_HTTP — $TPL_BODY"
     exit 1
@@ -730,24 +730,19 @@ else
   log_info "test_rich 盲盒礼物池已有 $GIFT_COUNT 个礼物，跳过"
 fi
 
-# 幂等：为 test_child 补充 bonus_draw（无论礼物池是否已存在）
-EXISTING_BONUS=$(curl -sL "$BASE_URL/child/blind-box/bonus-draws" \
-  -H "Authorization: Bearer $CHILD_TOKEN_RICH" \
-  | jq -r 'if has("data") then (.data | length) else (. | length) end' 2>/dev/null || echo "0")
-if [ "$EXISTING_BONUS" = "0" ]; then
-  if date -v+30d >/dev/null 2>&1; then
-    NEXT_MONTH=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ)
-  else
-    NEXT_MONTH=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
-  fi
+# 始终为 test_child 创建新的 bonus_draw（确保有未过期的可用抽奖，创建5个以应对多次测试运行）
+if date -v+30d >/dev/null 2>&1; then
+  NEXT_MONTH=$(date -v+30d +%Y-%m-%dT%H:%M:%SZ)
+else
+  NEXT_MONTH=$(date -d "+30 days" +%Y-%m-%dT%H:%M:%SZ)
+fi
+for _i in 1 2 3 4 5; do
   curl -sL -X POST "$BASE_URL/blind-box/bonus-draws" \
     -H "Content-Type: application/json" \
     -H "Authorization: Bearer $TOKEN_RICH" \
     -d "{\"child_user_id\":\"$CHILD_ID\",\"expires_at\":\"$NEXT_MONTH\"}" > /dev/null 2>&1 || true
-  log_ok "test_rich: 补充 test_child bonus_draw（available）"
-else
-  log_info "test_child 已有 $EXISTING_BONUS 个 bonus_draw，跳过"
-fi
+done
+log_ok "test_rich: 为 test_child 创建 5 个新 bonus_draw（expires: ${NEXT_MONTH}）"
 
 log_ok "========== Part 1: Fixed test accounts complete =========="
 
@@ -1687,7 +1682,7 @@ EOF
       -H "Content-Type: application/json" \
       -d '{"username":"dabao","pin_sequence":["🌈","🍎","🐸","🦁"]}' \
       | jq -r '.data.access_token // .access_token')
-    log_ok "已有儿童数据就绪（小宝 id=$CHILD1_ID，大宝 id=$CHILD2_ID）"
+    log_ok "已有儿童数据就绪（小宝 id=${CHILD1_ID}，大宝 id=${CHILD2_ID}）"
   else
     # 创建幼儿（6岁）
     CHILD1_RESP=$(curl -sL -X POST "$BASE_URL/family/children" \
