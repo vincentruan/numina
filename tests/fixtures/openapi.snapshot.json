@@ -492,6 +492,59 @@
         }
       }
     },
+    "/api/v1/auth/me/password/reset": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Reset Password",
+        "description": "通过通知渠道发送临时密码重置密码。需要家庭至少配置一个通知渠道。",
+        "operationId": "reset_password_api_v1_auth_me_password_reset_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/child/login": {
       "post": {
         "tags": [
@@ -1177,6 +1230,59 @@
             }
           }
         },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/pin/disable": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Disable Numeric Pin",
+        "description": "Disable numeric PIN second factor.",
+        "operationId": "disable_numeric_pin_api_v1_auth_pin_disable_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -6948,6 +7054,115 @@
         }
       }
     },
+    "/api/v1/internal/ai/skills/{capability}": {
+      "get": {
+        "tags": [
+          "internal-agent"
+        ],
+        "summary": "Internal Get Skill Config",
+        "description": "返回家庭技能配置（custom_prompt + is_enabled + updated_at），供 agent skill_loader 缓存。",
+        "operationId": "internal_get_skill_config_api_v1_internal_ai_skills__capability__get",
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
+            }
+          },
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "X-Family-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Family-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/internal/ai/mcp-servers": {
+      "get": {
+        "tags": [
+          "internal-agent"
+        ],
+        "summary": "Internal Get Mcp Servers",
+        "description": "返回家庭已启用的 MCP server 列表（含解密 env_vars），供 agent 注入 DeerFlow。",
+        "operationId": "internal_get_mcp_servers_api_v1_internal_ai_mcp_servers_get",
+        "parameters": [
+          {
+            "name": "Authorization",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Authorization"
+            }
+          },
+          {
+            "name": "X-Family-Id",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "X-Family-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/report": {
       "get": {
         "tags": [
@@ -7007,7 +7222,7 @@
           "ai-report"
         ],
         "summary": "Trigger Generate",
-        "description": "触发体检报告生成（同步等待，最长 60s）。",
+        "description": "触发体检报告生成（streaming，任务状态追踪）。",
         "operationId": "trigger_generate_api_v1_ai_report_generate_post",
         "security": [
           {
@@ -7228,7 +7443,7 @@
           "ai-alerts"
         ],
         "summary": "Refresh Alerts",
-        "description": "触发 agent 扫描并刷新预警（清除旧预警，写入新预警）。",
+        "description": "触发 agent 扫描并刷新预警（streaming，任务状态追踪）。",
         "operationId": "refresh_alerts_api_v1_ai_asset_alerts_refresh_post",
         "security": [
           {
@@ -7293,7 +7508,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
+              "type": "string",
               "title": "Alert Id"
             }
           },
@@ -7394,7 +7609,7 @@
           "ai-spending-leaks"
         ],
         "summary": "Refresh Leaks",
-        "description": "触发 agent 扫描并刷新消费漏洞（清除旧记录，写入新记录）。",
+        "description": "触发 agent 扫描并刷新消费漏洞（streaming，任务状态追踪）。",
         "operationId": "refresh_leaks_api_v1_ai_spending_leaks_refresh_post",
         "security": [
           {
@@ -7459,7 +7674,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
+              "type": "string",
               "title": "Leak Id"
             }
           },
@@ -7560,7 +7775,7 @@
           "ai-disposal"
         ],
         "summary": "Refresh Disposal Suggestions",
-        "description": "触发 agent 扫描并刷新处置建议。",
+        "description": "触发 agent 扫描并刷新处置建议（streaming，任务状态追踪）。",
         "operationId": "refresh_disposal_suggestions_api_v1_ai_disposal_suggestions_refresh_post",
         "security": [
           {
@@ -7625,7 +7840,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
+              "type": "string",
               "title": "Suggestion Id"
             }
           },
@@ -7676,6 +7891,59 @@
         "summary": "Get Liability Advice",
         "description": "获取负债优化建议（实时调用 agent）。",
         "operationId": "get_liability_advice_api_v1_ai_liability_advice_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/liability-advice/stream": {
+      "post": {
+        "tags": [
+          "ai-liability"
+        ],
+        "summary": "Stream Liability Advice",
+        "description": "获取负债优化建议（streaming，任务状态追踪）。",
+        "operationId": "stream_liability_advice_api_v1_ai_liability_advice_stream_post",
         "security": [
           {
             "OAuth2PasswordBearer": []
@@ -7886,6 +8154,59 @@
         }
       }
     },
+    "/api/v1/ai/allocation-target/check/stream": {
+      "post": {
+        "tags": [
+          "ai-allocation"
+        ],
+        "summary": "Stream Check Drift",
+        "description": "检测当前配置与目标的漂移（streaming，任务状态追踪）。",
+        "operationId": "stream_check_drift_api_v1_ai_allocation_target_check_stream_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/ai/chat": {
       "post": {
         "tags": [
@@ -7923,6 +8244,69 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/chat/stream": {
+      "post": {
+        "tags": [
+          "ai-chat"
+        ],
+        "summary": "Chat Stream",
+        "description": "流式问答，支持 deep_think 模式。透传 agent 的 [THINK]/[TEXT] 前缀流。",
+        "operationId": "chat_stream_api_v1_ai_chat_stream_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatStreamRequest"
               }
             }
           }
@@ -11381,6 +11765,69 @@
             }
           }
         }
+      },
+      "post": {
+        "tags": [
+          "blind-box"
+        ],
+        "summary": "Create Bonus Draw",
+        "description": "Grant a bonus draw to a child in the same family.",
+        "operationId": "create_bonus_draw_api_v1_blind_box_bonus_draws_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BonusDrawCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BonusDrawResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/blind-box/gifts/from-wish/{wish_id}": {
@@ -11460,7 +11907,7 @@
         ],
         "parameters": [
           {
-            "name": "access_token",
+            "name": "child_access_token",
             "in": "cookie",
             "required": false,
             "schema": {
@@ -11472,7 +11919,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Access Token"
+              "title": "Child Access Token"
             }
           }
         ],
@@ -11524,7 +11971,7 @@
         ],
         "parameters": [
           {
-            "name": "access_token",
+            "name": "child_access_token",
             "in": "cookie",
             "required": false,
             "schema": {
@@ -11536,7 +11983,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Access Token"
+              "title": "Child Access Token"
             }
           }
         ],
@@ -11582,7 +12029,7 @@
         ],
         "parameters": [
           {
-            "name": "access_token",
+            "name": "child_access_token",
             "in": "cookie",
             "required": false,
             "schema": {
@@ -11594,7 +12041,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Access Token"
+              "title": "Child Access Token"
             }
           }
         ],
@@ -11649,7 +12096,7 @@
             }
           },
           {
-            "name": "access_token",
+            "name": "child_access_token",
             "in": "cookie",
             "required": false,
             "schema": {
@@ -11661,7 +12108,7 @@
                   "type": "null"
                 }
               ],
-              "title": "Access Token"
+              "title": "Child Access Token"
             }
           }
         ],
@@ -12071,7 +12518,7 @@
           "device"
         ],
         "summary": "Check Device",
-        "description": "Check if a device fingerprint is trusted. No auth required — used before login.",
+        "description": "Check if a device fingerprint is trusted. No auth required — used before login.\n\nWhen trusted, loads the associated user and returns a temp_token so the\nfrontend can skip Step 1 of the two-step login flow entirely.",
         "operationId": "check_device_api_v1_auth_device_check_post",
         "requestBody": {
           "content": {
@@ -12090,6 +12537,108 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DeviceCheckResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/devices/family": {
+      "get": {
+        "tags": [
+          "device"
+        ],
+        "summary": "List Family Devices",
+        "description": "List active device sessions for all other family members. Owner or admin only.",
+        "operationId": "list_family_devices_api_v1_auth_devices_family_get",
+        "parameters": [
+          {
+            "name": "refresh_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Refresh Token"
+            }
+          },
+          {
+            "name": "child_refresh_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Child Refresh Token"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          },
+          {
+            "name": "child_access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Child Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FamilyDeviceResponse"
+                  },
+                  "title": "Response List Family Devices Api V1 Auth Devices Family Get"
                 }
               }
             }
@@ -12287,6 +12836,130 @@
             "schema": {
               "type": "integer",
               "title": "Asset Id"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/tasks/{capability}": {
+      "get": {
+        "tags": [
+          "ai-tasks"
+        ],
+        "summary": "Get Task Status",
+        "description": "查询当前 capability 的任务状态。",
+        "operationId": "get_task_status_api_v1_ai_tasks__capability__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/tasks/{capability}/session": {
+      "get": {
+        "tags": [
+          "ai-tasks"
+        ],
+        "summary": "Get Task Session",
+        "description": "获取当前 running 任务关联的 session_id（用于前端接续历史消息）。",
+        "operationId": "get_task_session_api_v1_ai_tasks__capability__session_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
             }
           },
           {
@@ -13108,6 +13781,454 @@
         }
       }
     },
+    "/api/v1/ai/mcp": {
+      "get": {
+        "tags": [
+          "ai-mcp"
+        ],
+        "summary": "List Mcp Servers",
+        "description": "列出当前家庭所有 MCP server（env_vars 仅 owner 可见）。",
+        "operationId": "list_mcp_servers_api_v1_ai_mcp_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MCPServerResponse"
+                  },
+                  "title": "Response List Mcp Servers Api V1 Ai Mcp Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "ai-mcp"
+        ],
+        "summary": "Create Mcp Server",
+        "description": "创建 MCP server（仅 owner）。",
+        "operationId": "create_mcp_server_api_v1_ai_mcp_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPServerCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPServerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/mcp/{server_id}": {
+      "put": {
+        "tags": [
+          "ai-mcp"
+        ],
+        "summary": "Update Mcp Server",
+        "description": "更新 MCP server（仅 owner）。",
+        "operationId": "update_mcp_server_api_v1_ai_mcp__server_id__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Server Id"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPServerUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPServerResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ai-mcp"
+        ],
+        "summary": "Delete Mcp Server",
+        "description": "删除 MCP server（仅 owner）。",
+        "operationId": "delete_mcp_server_api_v1_ai_mcp__server_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "server_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Server Id"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/skills": {
+      "get": {
+        "tags": [
+          "ai-skills"
+        ],
+        "summary": "List Skills",
+        "description": "列出所有内置技能及当前家庭的配置状态。",
+        "operationId": "list_skills_api_v1_ai_skills_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SkillConfigResponse"
+                  },
+                  "title": "Response List Skills Api V1 Ai Skills Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/skills/{capability}": {
+      "put": {
+        "tags": [
+          "ai-skills"
+        ],
+        "summary": "Update Skill",
+        "description": "更新技能配置（仅 owner）。空字符串 custom_prompt 表示清除自定义提示词。",
+        "operationId": "update_skill_api_v1_ai_skills__capability__put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SkillConfigUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/skills/{capability}/prompt": {
+      "delete": {
+        "tags": [
+          "ai-skills"
+        ],
+        "summary": "Reset Skill Prompt",
+        "description": "重置技能提示词为默认值（仅 owner）。",
+        "operationId": "reset_skill_prompt_api_v1_ai_skills__capability__prompt_delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "capability",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Capability"
+            }
+          },
+          {
+            "name": "access_token",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Access Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillConfigResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/health": {
       "get": {
         "summary": "Health",
@@ -13181,6 +14302,18 @@
             ],
             "title": "Vision Model Id"
           },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds",
+            "default": 60
+          },
           "is_active": {
             "type": "boolean",
             "title": "Is Active",
@@ -13211,7 +14344,7 @@
       "AIConfigResponse": {
         "properties": {
           "id": {
-            "type": "integer",
+            "type": "string",
             "title": "Id"
           },
           "name": {
@@ -13265,6 +14398,18 @@
               }
             ],
             "title": "Vision Model Id"
+          },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds",
+            "default": 60
           },
           "is_active": {
             "type": "boolean",
@@ -13484,6 +14629,17 @@
             ],
             "title": "Vision Model Id"
           },
+          "timeout_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Seconds"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -13502,7 +14658,7 @@
       "AIProviderTestResultResponse": {
         "properties": {
           "id": {
-            "type": "integer",
+            "type": "string",
             "title": "Id"
           },
           "test_type": {
@@ -14425,62 +15581,8 @@
         "title": "BatchUpdateTagsRequest"
       },
       "BlindBoxConfigResponse": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "family_id": {
-            "type": "integer",
-            "title": "Family Id"
-          },
-          "enabled": {
-            "type": "boolean",
-            "title": "Enabled"
-          },
-          "base_draw_prob": {
-            "type": "number",
-            "title": "Base Draw Prob"
-          },
-          "special_day_prob": {
-            "type": "number",
-            "title": "Special Day Prob"
-          },
-          "weight_scale": {
-            "type": "number",
-            "title": "Weight Scale"
-          },
-          "surprise_threshold_coins": {
-            "type": "integer",
-            "title": "Surprise Threshold Coins"
-          },
-          "surprise_prob_normal": {
-            "type": "number",
-            "title": "Surprise Prob Normal"
-          },
-          "surprise_prob_parent_bday": {
-            "type": "number",
-            "title": "Surprise Prob Parent Bday"
-          },
-          "surprise_prob_sibling_bday": {
-            "type": "number",
-            "title": "Surprise Prob Sibling Bday"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "family_id",
-          "enabled",
-          "base_draw_prob",
-          "special_day_prob",
-          "weight_scale",
-          "surprise_threshold_coins",
-          "surprise_prob_normal",
-          "surprise_prob_parent_bday",
-          "surprise_prob_sibling_bday"
-        ],
-        "title": "BlindBoxConfigResponse"
+        "additionalProperties": true,
+        "type": "object"
       },
       "BlindBoxConfigUpdate": {
         "properties": {
@@ -14590,88 +15692,8 @@
         "title": "BlindBoxConfigUpdate"
       },
       "BlindBoxDrawResponse": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "family_id": {
-            "type": "integer",
-            "title": "Family Id"
-          },
-          "child_user_id": {
-            "type": "integer",
-            "title": "Child User Id"
-          },
-          "coins_spent": {
-            "type": "integer",
-            "title": "Coins Spent"
-          },
-          "gift_id": {
-            "type": "integer",
-            "title": "Gift Id"
-          },
-          "gift_name": {
-            "type": "string",
-            "title": "Gift Name"
-          },
-          "gift_emoji": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Gift Emoji"
-          },
-          "is_surprise": {
-            "type": "boolean",
-            "title": "Is Surprise"
-          },
-          "is_bonus": {
-            "type": "boolean",
-            "title": "Is Bonus"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
-          },
-          "draw_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Draw At"
-          },
-          "fulfilled_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fulfilled At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "family_id",
-          "child_user_id",
-          "coins_spent",
-          "gift_id",
-          "gift_name",
-          "gift_emoji",
-          "is_surprise",
-          "is_bonus",
-          "status",
-          "draw_at",
-          "fulfilled_at"
-        ],
-        "title": "BlindBoxDrawResponse"
+        "additionalProperties": true,
+        "type": "object"
       },
       "BlindBoxGiftCreate": {
         "properties": {
@@ -14730,101 +15752,8 @@
         "title": "BlindBoxGiftCreate"
       },
       "BlindBoxGiftResponse": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "family_id": {
-            "type": "integer",
-            "title": "Family Id"
-          },
-          "name": {
-            "type": "string",
-            "title": "Name"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "emoji": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Emoji"
-          },
-          "value_score": {
-            "type": "integer",
-            "title": "Value Score"
-          },
-          "source_wish_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Wish Id"
-          },
-          "is_active": {
-            "type": "boolean",
-            "title": "Is Active"
-          },
-          "created_by": {
-            "type": "integer",
-            "title": "Created By"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Updated At"
-          },
-          "warning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Warning"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "family_id",
-          "name",
-          "description",
-          "emoji",
-          "value_score",
-          "source_wish_id",
-          "is_active",
-          "created_by",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "BlindBoxGiftResponse"
+        "additionalProperties": true,
+        "type": "object"
       },
       "BlindBoxGiftUpdate": {
         "properties": {
@@ -14920,69 +15849,28 @@
         ],
         "title": "Body_upload_image_api_v1_upload_image_post"
       },
-      "BonusDrawResponse": {
+      "BonusDrawCreate": {
         "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "family_id": {
-            "type": "integer",
-            "title": "Family Id"
-          },
           "child_user_id": {
             "type": "integer",
             "title": "Child User Id"
-          },
-          "source_wish_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Wish Id"
-          },
-          "status": {
-            "type": "string",
-            "title": "Status"
           },
           "expires_at": {
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
-          },
-          "used_draw_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Used Draw Id"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
           }
         },
         "type": "object",
         "required": [
-          "id",
-          "family_id",
           "child_user_id",
-          "source_wish_id",
-          "status",
-          "expires_at",
-          "used_draw_id",
-          "created_at"
+          "expires_at"
         ],
-        "title": "BonusDrawResponse"
+        "title": "BonusDrawCreate"
+      },
+      "BonusDrawResponse": {
+        "additionalProperties": true,
+        "type": "object"
       },
       "BuyVsRentRequest": {
         "properties": {
@@ -15413,6 +16301,35 @@
           "question"
         ],
         "title": "ChatRequest"
+      },
+      "ChatStreamRequest": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          },
+          "deep_think": {
+            "type": "boolean",
+            "title": "Deep Think",
+            "default": false
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "ChatStreamRequest"
       },
       "ChildBalanceResponse": {
         "properties": {
@@ -16141,13 +17058,57 @@
           "user_id": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "integer"
               },
               {
                 "type": "null"
               }
             ],
             "title": "User Id"
+          },
+          "temp_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temp Token"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "avatar_color": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Color"
+          },
+          "second_factor_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Second Factor Type"
           }
         },
         "type": "object",
@@ -16272,6 +17233,56 @@
         ],
         "title": "ExpiringSoonItem",
         "description": "Asset approaching end of expected lifespan."
+      },
+      "FamilyDeviceResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "avatar_color": {
+            "type": "string",
+            "title": "Avatar Color"
+          },
+          "device_name": {
+            "type": "string",
+            "title": "Device Name"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "is_current": {
+            "type": "boolean",
+            "title": "Is Current"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "user_id",
+          "display_name",
+          "avatar_color",
+          "device_name",
+          "last_seen_at",
+          "created_at",
+          "is_current"
+        ],
+        "title": "FamilyDeviceResponse"
       },
       "FamilyResponse": {
         "additionalProperties": true,
@@ -17130,6 +18141,7 @@
             "title": "Payload"
           }
         },
+        "additionalProperties": true,
         "type": "object",
         "required": [
           "temp_token",
@@ -17196,6 +18208,153 @@
           "usage_frequency"
         ],
         "title": "LowUsageItem"
+      },
+      "MCPServerCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "transport": {
+            "type": "string",
+            "title": "Transport",
+            "default": "sse"
+          },
+          "env_vars": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env Vars"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "title": "MCPServerCreate"
+      },
+      "MCPServerResponse": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "transport": {
+            "type": "string",
+            "title": "Transport"
+          },
+          "env_vars": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Env Vars"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "url",
+          "transport",
+          "env_vars",
+          "is_enabled"
+        ],
+        "title": "MCPServerResponse"
+      },
+      "MCPServerUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "transport": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transport"
+          },
+          "env_vars": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Env Vars"
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          }
+        },
+        "type": "object",
+        "title": "MCPServerUpdate"
       },
       "MemberSummary": {
         "properties": {
@@ -17977,6 +19136,76 @@
         "additionalProperties": true,
         "type": "object"
       },
+      "SkillConfigResponse": {
+        "properties": {
+          "capability": {
+            "type": "string",
+            "title": "Capability"
+          },
+          "is_enabled": {
+            "type": "boolean",
+            "title": "Is Enabled"
+          },
+          "custom_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Prompt"
+          },
+          "default_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Prompt"
+          }
+        },
+        "type": "object",
+        "required": [
+          "capability",
+          "is_enabled",
+          "custom_prompt",
+          "default_prompt"
+        ],
+        "title": "SkillConfigResponse"
+      },
+      "SkillConfigUpdate": {
+        "properties": {
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
+          "custom_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Custom Prompt"
+          }
+        },
+        "type": "object",
+        "title": "SkillConfigUpdate"
+      },
       "TagBrief": {
         "additionalProperties": true,
         "type": "object"
@@ -18703,6 +19932,11 @@
             "type": "string",
             "title": "Currency",
             "default": "CNY"
+          },
+          "converts_to_asset": {
+            "type": "boolean",
+            "title": "Converts To Asset",
+            "default": true
           }
         },
         "type": "object",
@@ -18823,6 +20057,17 @@
               }
             ],
             "title": "Currency"
+          },
+          "converts_to_asset": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Converts To Asset"
           }
         },
         "type": "object",
