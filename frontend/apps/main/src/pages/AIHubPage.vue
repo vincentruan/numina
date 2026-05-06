@@ -79,7 +79,14 @@
       </div>
     </div>
 
-    <div v-else-if="!reportLoading" class="report-empty-card" role="button" tabindex="0" aria-label="立即生成资产体检报告" @click="generateReport">
+    <!-- Generating in progress -->
+    <div v-else-if="reportLoading" class="report-generating-card" aria-live="polite" aria-label="正在生成报告">
+      <van-loading size="28" color="var(--color-primary)" />
+      <p class="report-generating-text">{{ ws.progressMessage || '正在生成报告…' }}</p>
+      <p class="report-generating-sub">AI 正在综合分析，请稍候</p>
+    </div>
+
+    <div v-else class="report-empty-card" role="button" tabindex="0" aria-label="立即生成资产体检报告" @click="generateReport">
       <div class="report-empty-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -648,6 +655,39 @@ onMounted(async () => {
 
 [data-theme='dark'] .report-summary-cta {
   color: rgba(255, 255, 255, 0.55);
+}
+
+/* Generating report card */
+.report-generating-card {
+  margin: 12px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 28px 16px;
+  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-theme='dark'] .report-generating-card {
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+.report-generating-text {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.14px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.report-generating-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+  letter-spacing: -0.12px;
 }
 
 /* Empty report card */
