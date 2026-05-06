@@ -23,58 +23,71 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2)
 const TARGET_FPS = LOW_END ? 30 : 60
 const FRAME_INTERVAL = 1000 / TARGET_FPS
 
-// ── Wave layer definitions ────────────────────────────────────────────────────
+// ── Ripple wave definition ────────────────────────────────────────────────────
 
-interface WaveLayer {
-  amplitude: number      // base amplitude in px
-  frequency: number      // angular frequency (radians per unit arc)
-  phase: number          // initial phase offset
-  speed: number          // phase advance per frame
+interface Ripple {
+  id: number
+  birth: number        // creation time (ms)
+  baseRadius: number   // initial radius
+  maxRadius: number    // maximum radius before fade
+  amplitude: number    // initial wave amplitude
+  frequency: number    // angular frequency (waves around circle)
+  speed: number        // expansion speed (px per second)
   color: string
   lineWidth: number
-  noiseScale: number     // how much pseudo-noise perturbs the amplitude
-  noiseSpeed: number     // how fast the noise evolves
+  noiseSeed: number    // unique seed for irregularity
 }
 
-const LAYERS: WaveLayer[] = LOW_END
-  ? [
-      { amplitude: 18, frequency: 5.5, phase: 0,    speed: 0.028, color: '#bdbbff', lineWidth: 1.5, noiseScale: 0.35, noiseSpeed: 0.018 },
-      { amplitude: 12, frequency: 8,   phase: 1.2,  speed: 0.022, color: '#a78bfa', lineWidth: 1.2, noiseScale: 0.5,  noiseSpeed: 0.024 },
-      { amplitude: 8,  frequency: 11,  phase: 2.5,  speed: 0.035, color: '#818cf8', lineWidth: 1.0, noiseScale: 0.6,  noiseSpeed: 0.030 },
-    ]
-  : [
-      { amplitude: 22, frequency: 5,   phase: 0,    speed: 0.025, color: '#bdbbff', lineWidth: 1.8, noiseScale: 0.30, noiseSpeed: 0.015 },
-      { amplitude: 16, frequency: 7.5, phase: 1.1,  speed: 0.020, color: '#a78bfa', lineWidth: 1.5, noiseScale: 0.45, noiseSpeed: 0.022 },
-      { amplitude: 11, frequency: 10,  phase: 2.3,  speed: 0.032, color: '#818cf8', lineWidth: 1.2, noiseScale: 0.55, noiseSpeed: 0.028 },
-      { amplitude: 7,  frequency: 14,  phase: 3.7,  speed: 0.040, color: '#c084fc', lineWidth: 1.0, noiseScale: 0.65, noiseSpeed: 0.035 },
-    ]
+// Configuration
+const MAX_RIPPLES = LOW_END ? 5 : 8
+const SPAWN_INTERVAL = LOW_END ? 600 : 400  // ms between new ripples
+const WAVE_LIFETIME = 3000  // ms for a wave to fully expand and fade
 
-// ── Lightweight pseudo-noise (value noise, no deps) ───────────────────────────
+const LAYER_CONFIGS = [
+  { amplitude: 12, frequency: 6,  speed: 40,  color: '#bdbbff', lineWidth: 2.0 },
+  { amplitude: 10, frequency: 8,  speed: 50,  color: '#a78bfa', lineWidth: 1.6 },
+  { amplitude: 8,  frequency: 10, speed: 60,  color: '#818cf8', lineWidth: 1.3 },
+  { amplitude: 6,  frequency: 12, speed: 70,  color: '#c084fc', lineWidth: 1.0 },
+]
+
+// ── Lightweight pseudo-noise ─────────────────────────────────────────────────
 
 function hash(n: number): number {
-  // Simple integer hash → [0,1)
-  const x = Math.sin(n) * 43758.5453123
+  const x = Math.sin(n * 12.9898) * 43758.5453
   return x - Math.floor(x)
 }
 
 function smoothNoise(t: number): number {
   const i = Math.floor(t)
   const f = t - i
-  const u = f * f * (3 - 2 * f) // smoothstep
+  const u = f * f * (3 - 2 * f)
   return hash(i) * (1 - u) + hash(i + 1) * u
+}
+
+// Multi-octave noise for more organic irregularity
+function fractalNoise(t: number, octaves: number = 3): number {
+  let val = 0
+  let amp = 1
+  let freq = 1
+  for (let o = 0; o < octaves; o++) {
+    val += smoothNoise(t * freq) * amp
+    amp *= 0.5
+    freq *= 2
+  }
+  return val / (2 - Math.pow(0.5, octaves)) // normalize to ~[0,1]
 }
 
 // ── Animation state ───────────────────────────────────────────────────────────
 
 let rafId = 0
 let lastFrameTime = 0
-let time = 0
+let ripples: Ripple[] = []
+let nextRippleId = 0
+let lastSpawn = 0
+let globalTime = 0
 
-// Per-layer noise offsets (evolve independently)
-const noiseOffsets = LAYERS.map((_, i) => i * 17.3)
-
-// Dismiss state: expand radius + fade
-let dismissProgress = 0   // 0 → 1 over ~500ms
+// Dismiss state
+let dismissProgress = 0
 let dismissStart = 0
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
@@ -90,53 +103,115 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
   // Update dismiss progress
   if (props.dismissing) {
     if (dismissStart === 0) dismissStart = now
-    dismissProgress = Math.min(1, (now - dismissStart) / 500)
+    dismissProgress = Math.min(1, (now - dismissStart) / 400)
   } else {
     dismissStart = 0
     dismissProgress = 0
   }
 
-  const baseRadius = Math.min(W, H) * 0.28
-  const POINTS = LOW_END ? 80 : 120
+  const deltaTime = (now - lastFrameTime) / 1000 // seconds
+  globalTime += deltaTime
 
-  LAYERS.forEach((layer, li) => {
-    // Evolve noise offset
-    noiseOffsets[li] += layer.noiseSpeed
+  // Spawn new ripples
+  if (!props.dismissing && now - lastSpawn > SPAWN_INTERVAL) {
+    const config = LAYER_CONFIGS[nextRippleId % LAYER_CONFIGS.length]
+    ripples.push({
+      id: nextRippleId++,
+      birth: now,
+      baseRadius: 20 * DPR,  // start from center
+      maxRadius: Math.min(W, H) * 0.45,
+      amplitude: config.amplitude * DPR,
+      frequency: config.frequency,
+      speed: config.speed * DPR,
+      color: config.color,
+      lineWidth: config.lineWidth * DPR,
+      noiseSeed: Math.random() * 1000,
+    })
+    lastSpawn = now
 
-    // Dynamic amplitude: base * (1 + noise perturbation) * dismiss decay
-    const noiseVal = smoothNoise(noiseOffsets[li])  // [0,1]
-    const noiseMod = 1 + (noiseVal - 0.5) * 2 * layer.noiseScale
-    const dismissDecay = props.dismissing ? Math.max(0, 1 - dismissProgress * 1.4) : 1
-    const amp = layer.amplitude * noiseMod * dismissDecay * DPR
+    // Remove oldest if too many
+    if (ripples.length > MAX_RIPPLES) {
+      ripples.shift()
+    }
+  }
 
-    // Radius expands outward during dismiss
-    const radiusBoost = props.dismissing ? dismissProgress * baseRadius * 0.6 : 0
-    const r = (baseRadius + li * 18 * DPR) + radiusBoost * DPR
+  // Update and draw each ripple
+  const POINTS = LOW_END ? 60 : 90
 
-    // Opacity fades during dismiss
-    const alpha = props.dismissing
-      ? Math.max(0, 1 - dismissProgress * 1.2)
-      : 0.75 + noiseVal * 0.25
+  ripples.forEach((ripple, index) => {
+    const age = (now - ripple.birth) / 1000 // seconds
+    const lifeProgress = age / (WAVE_LIFETIME / 1000)
+
+    // Remove expired ripples
+    if (lifeProgress >= 1 || (props.dismissing && dismissProgress > 0.8)) {
+      return
+    }
+
+    // Calculate current radius (expands outward)
+    const currentRadius = ripple.baseRadius + ripple.speed * age
+
+    // Life-based fade: starts at 0, peaks at ~20%, fades to 0 at 100%
+    let lifeAlpha: number
+    if (lifeProgress < 0.15) {
+      // Fade in (0 → 1)
+      lifeAlpha = lifeProgress / 0.15
+    } else if (lifeProgress > 0.6) {
+      // Fade out (1 → 0)
+      lifeAlpha = 1 - (lifeProgress - 0.6) / 0.4
+    } else {
+      lifeAlpha = 1
+    }
+
+    // Dismiss fade
+    const dismissAlpha = props.dismissing ? Math.max(0, 1 - dismissProgress * 1.5) : 1
+
+    const alpha = lifeAlpha * dismissAlpha * 0.85
+
+    // Amplitude decays as ripple expands
+    const expansionDecay = Math.max(0.3, 1 - lifeProgress * 0.7)
+    const currentAmp = ripple.amplitude * expansionDecay * (props.dismissing ? (1 - dismissProgress) : 1)
+
+    // Dynamic noise for irregular movement
+    const noiseTime = globalTime * 1.5 + ripple.noiseSeed
+    const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * DPR * (1 - lifeProgress * 0.5)
+    const angleNoise = fractalNoise(noiseTime * 0.5 + 100, 3) * 0.3
 
     ctx.beginPath()
-    ctx.strokeStyle = layer.color
+    ctx.strokeStyle = ripple.color
     ctx.globalAlpha = alpha
-    ctx.lineWidth = layer.lineWidth * DPR
+    ctx.lineWidth = ripple.lineWidth * (1 - lifeProgress * 0.5) // line gets thinner
 
     for (let i = 0; i <= POINTS; i++) {
-      const angle = (i / POINTS) * Math.PI * 2
-      // sin wave along the arc + phase + time
-      const waveOffset = amp * Math.sin(angle * layer.frequency + layer.phase + time * layer.speed * 60)
-      const pr = r + waveOffset
-      const x = cx + pr * Math.cos(angle)
-      const y = cy + pr * Math.sin(angle)
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
+      const angle = (i / POINTS) * Math.PI * 2 + angleNoise
+
+      // Wave perturbation along the circumference (creates the wavy edge)
+      const wavePhase = age * 3 + ripple.noiseSeed * 0.1
+      const waveNoise = fractalNoise(angle * ripple.frequency / (2 * Math.PI) + wavePhase, 2)
+      const waveOffset = currentAmp * Math.sin(angle * ripple.frequency + wavePhase) * (0.5 + waveNoise * 0.5)
+
+      // Radius varies with noise + wave
+      const r = currentRadius + radiusNoise + waveOffset
+
+      const x = cx + r * Math.cos(angle)
+      const y = cy + r * Math.sin(angle)
+
+      if (i === 0) {
+        ctx.moveTo(x, y)
+      } else {
+        ctx.lineTo(x, y)
+      }
     }
 
     ctx.closePath()
     ctx.stroke()
-    ctx.globalAlpha = 1
+  })
+
+  ctx.globalAlpha = 1
+
+  // Clean up expired ripples
+  ripples = ripples.filter(r => {
+    const lifeProgress = (now - r.birth) / WAVE_LIFETIME
+    return lifeProgress < 1 && !(props.dismissing && dismissProgress > 0.8)
   })
 }
 
@@ -146,8 +221,6 @@ function loop(now: number) {
   rafId = requestAnimationFrame(loop)
 
   if (now - lastFrameTime < FRAME_INTERVAL) return
-  lastFrameTime = now
-  time += 1 / TARGET_FPS
 
   const canvas = canvasEl.value
   if (!canvas) return
@@ -155,6 +228,7 @@ function loop(now: number) {
   if (!ctx) return
 
   drawFrame(canvas, ctx, now)
+  lastFrameTime = now
 }
 
 // ── Resize ────────────────────────────────────────────────────────────────────
@@ -184,11 +258,12 @@ onUnmounted(() => {
   ro?.disconnect()
 })
 
-// Stop RAF when dismiss animation completes (dismissProgress reaches 1)
 watch(() => props.dismissing, (val) => {
   if (!val) {
     dismissProgress = 0
     dismissStart = 0
+    ripples = [] // Clear ripples on reset
+    lastSpawn = 0
   }
 })
 </script>
