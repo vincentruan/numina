@@ -96,11 +96,13 @@ http.interceptors.response.use(
     loadingDecrement()
     const url = response.config.url ?? ''
     // Unwrap most endpoints; keep login/register/refresh/family-join wrapped (they return tokens directly)
-    // /auth/devices and /auth/me should be unwrapped like regular endpoints
+    // /auth/devices, /auth/me, /auth/login/step1, /auth/login/step2 should be unwrapped like regular endpoints
     const isAuthEndpoint =
       url.includes('/auth/') &&
       !url.includes('/auth/me') &&
-      !url.includes('/auth/devices')
+      !url.includes('/auth/devices') &&
+      !url.includes('/auth/login/step1') &&
+      !url.includes('/auth/login/step2')
 
     // If response has envelope format, unwrap for non-auth endpoints (and /auth/me)
     if (
