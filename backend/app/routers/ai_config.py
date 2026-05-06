@@ -427,49 +427,61 @@ async def _test_thinking(family: object, api_key: str, model: str) -> dict:
             )
 
             async with httpx.AsyncClient(timeout=120.0) as client:
-                request_body = {
-                    "model": model,
-                    "max_completion_tokens": 1,
-                    "reasoning_effort": "low",
-                    "messages": [{"role": "user", "content": "think"}],
+                headers = {
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
                 }
 
-                resp = await client.post(
-                    endpoint,
-                    headers={
-                        "Authorization": f"Bearer {api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=request_body,
-                )
-
-                if resp.status_code == 200:
+                # Try a small streaming request and check for reasoning_content or <think> tags
+                # This detects DeepSeek-R1, Qwen3, and similar models without special API flags
+                stream_body = {
+                    "model": model,
+                    "max_tokens": 50,
+                    "messages": [{"role": "user", "content": "1+1=?"}],
+                    "stream": True,
+                }
+                try:
+                    async with client.stream("POST", endpoint, headers=headers, json=stream_body) as resp:
+                        if resp.status_code == 200:
+                            latency = int((time.monotonic() - start) * 1000)
+                            has_reasoning = False
+                            has_think_tag = False
+                            content_buf = ""
+                            async for line in resp.aiter_lines():
+                                if not line.startswith("data:"):
+                                    continue
+                                data = line[5:].strip()
+                                if data == "[DONE]":
+                                    break
+                                try:
+                                    import json as _json
+                                    chunk = _json.loads(data)
+                                    delta = chunk.get("choices", [{}])[0].get("delta", {})
+                                    if delta.get("reasoning_content"):
+                                        has_reasoning = True
+                                        break
+                                    content = delta.get("content") or ""
+                                    content_buf += content
+                                    if "<think>" in content_buf:
+                                        has_think_tag = True
+                                        break
+                                except Exception:
+                                    continue
+                            if has_reasoning:
+                                return {"success": True, "message": "支持思考模式 (reasoning_content)", "latency_ms": latency}
+                            elif has_think_tag:
+                                return {"success": True, "message": "支持思考模式 (<think> 标签)", "latency_ms": latency}
+                            else:
+                                return {"success": True, "message": "模型可用（未检测到思考输出）", "latency_ms": latency}
+                        elif resp.status_code in (400, 404):
+                            latency = int((time.monotonic() - start) * 1000)
+                            return {"success": False, "message": f"测试失败: HTTP {resp.status_code}", "latency_ms": latency}
+                        else:
+                            latency = int((time.monotonic() - start) * 1000)
+                            return {"success": False, "message": f"测试失败: HTTP {resp.status_code}", "latency_ms": latency}
+                except Exception as e:
                     latency = int((time.monotonic() - start) * 1000)
-                    return {"success": True, "message": "支持推理能力 (reasoning_effort)", "latency_ms": latency}
-                elif resp.status_code in (400, 404):
-                    request_body2 = {
-                        "model": model,
-                        "max_tokens": 1,
-                        "messages": [{"role": "user", "content": "think"}],
-                    }
-
-                    resp2 = await client.post(
-                        endpoint,
-                        headers={
-                            "Authorization": f"Bearer {api_key}",
-                            "Content-Type": "application/json",
-                        },
-                        json=request_body2,
-                    )
-
-                    latency = int((time.monotonic() - start) * 1000)
-                    if resp2.status_code == 200:
-                        return {"success": True, "message": "模型可用（不支持 reasoning_effort）", "latency_ms": latency}
-                    else:
-                        return {"success": False, "message": f"测试失败: HTTP {resp2.status_code}", "latency_ms": latency}
-                else:
-                    latency = int((time.monotonic() - start) * 1000)
-                    return {"success": False, "message": f"测试失败: HTTP {resp.status_code}", "latency_ms": latency}
+                    return {"success": False, "message": f"测试失败: {str(e)}", "latency_ms": latency}
 
     except httpx.TimeoutException:
         return {"success": False, "message": "思考能力测试超时（120秒）", "latency_ms": None}

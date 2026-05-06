@@ -6,13 +6,14 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import require_adult
 from app.config import settings
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_chat_session import AIChatSession
 from app.models.cached_file import CachedFile
@@ -26,6 +27,22 @@ logger = logging.getLogger(__name__)
 
 class ChatRequest(BaseModel):
     question: str
+    session_id: str | None = None
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("问题不能为空")
+        if len(v) > 500:
+            raise ValueError("问题不能超过500字")
+        return v
+
+
+class ChatStreamRequest(BaseModel):
+    question: str
+    deep_think: bool = False
     session_id: str | None = None
 
     @field_validator("question")
@@ -119,6 +136,72 @@ async def chat(
         "message_id": session.id,
         "session_id": session.id,
     }
+
+
+@router.post("/stream")
+async def chat_stream(
+    body: ChatStreamRequest,
+    current_user: User = Depends(require_adult),
+    _ai: None = Depends(require_ai_enabled),
+    db: Session = Depends(get_db),
+):
+    """流式问答，支持 deep_think 模式。透传 agent 的 [THINK]/[TEXT] 前缀流。"""
+    if body.session_id is not None:
+        session = _get_session_for_family(body.session_id, current_user.family_id, db)
+        if session is None:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        session = _get_latest_session(current_user.family_id, db)
+        if session is None:
+            session = await ChatSessionService.create_session(
+                current_user.family_id, current_user.id, db
+            )
+
+    await ChatSessionService.append_message(session, "user", body.question, current_user, db)
+    db.refresh(session)
+
+    session_id = session.id
+
+    async def proxy_stream():
+        answer_chunks: list[str] = []
+        try:
+            async with (
+                httpx.AsyncClient(timeout=None) as client,
+                client.stream(
+                    "POST",
+                    f"{settings.AGENT_BASE_URL}/chat/ask/stream",
+                    json={"question": body.question, "deep_think": body.deep_think},
+                    headers={
+                        "X-Family-Id": str(current_user.family_id),
+                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                        "X-Thread-Id": str(session_id),
+                    },
+                    timeout=None,
+                ) as resp,
+            ):
+                async for chunk in resp.aiter_text():
+                    # Collect answer chunks for persistence (strip [TEXT] prefix)
+                    if chunk.startswith("[TEXT]"):
+                        answer_chunks.append(chunk[6:])
+                    yield chunk.encode("utf-8")
+
+        except Exception as e:
+            logger.error("chat_stream proxy failed: %s", type(e).__name__)
+            yield "[TEXT]抱歉，AI 服务暂时不可用。".encode()
+        finally:
+            # Persist the full answer after stream completes
+            if answer_chunks:
+                with SessionLocal() as persist_db:
+                    try:
+                        persist_session = _get_session_for_family(session_id, current_user.family_id, persist_db)
+                        if persist_session:
+                            await ChatSessionService.append_message(
+                                persist_session, "assistant", "".join(answer_chunks), current_user, persist_db
+                            )
+                    except Exception as e:
+                        logger.error("chat_stream persist failed: %s", type(e).__name__)
+
+    return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 
 
 @router.get("/sessions")

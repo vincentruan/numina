@@ -244,6 +244,24 @@ export const checkAllocationDrift = () =>
 export const sendChatMessage = (question: string, signal?: AbortSignal) =>
   http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question }, { signal })
 
+export function sendChatMessageStream(
+  question: string,
+  deepThink: boolean,
+  signal?: AbortSignal,
+): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  return fetch('/api/v1/ai/chat/stream', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ question, deep_think: deepThink }),
+    signal,
+  }).then((res) => {
+    if (!res.ok) throw new Error(`${res.status}`)
+    if (!res.body) throw new Error('streaming_not_supported')
+    return res.body.getReader()
+  })
+}
+
 export const getChatHistory = () =>
   http.get<ChatMessage[]>('/ai/chat/history')
 

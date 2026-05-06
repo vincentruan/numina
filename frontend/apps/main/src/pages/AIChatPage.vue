@@ -198,7 +198,7 @@ import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { sendChatMessage, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
+import { sendChatMessageStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 
@@ -314,100 +314,152 @@ async function onSend() {
   abortController = new AbortController()
   await scrollToBottom()
 
-  // Deep think: start timer and add placeholder think block
-  let thinkTimer: ReturnType<typeof setInterval> | null = null
-  let thinkStart = 0
-  let thinkMsgIdx = -1
+  // Add assistant message placeholder (with think block if deep_think)
+  const thinkStart = deepThink.value ? Date.now() : 0
+  const assistantMsg: Message = {
+    id: `pending-${Date.now()}`,
+    role: 'assistant',
+    content: '',
+    renderedContent: '',
+    created_at: new Date().toISOString(),
+    displayTime: formatTime(new Date().toISOString()),
+    thinkContent: deepThink.value ? '' : undefined,
+    thinkOpen: deepThink.value ? true : undefined,
+    thinkDone: deepThink.value ? false : undefined,
+    thinkSeconds: deepThink.value ? 0 : undefined,
+  }
+  messages.value.push(assistantMsg)
+  const msgIdx = messages.value.length - 1
+  await scrollToBottom()
 
+  let thinkTimer: ReturnType<typeof setInterval> | null = null
   if (deepThink.value) {
-    thinkStart = Date.now()
-    const thinkMsg: Message = {
-      id: `think-${Date.now()}`,
-      role: 'assistant',
-      content: '',
-      renderedContent: '',
-      created_at: new Date().toISOString(),
-      displayTime: formatTime(new Date().toISOString()),
-      thinkContent: '<p>正在深度分析您的问题…</p>',
-      thinkOpen: true,
-      thinkDone: false,
-      thinkSeconds: 0,
-    }
-    messages.value.push(thinkMsg)
-    thinkMsgIdx = messages.value.length - 1
     thinkTimer = setInterval(() => {
-      if (thinkMsgIdx >= 0) {
-        messages.value[thinkMsgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+      if (!messages.value[msgIdx].thinkDone) {
+        messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
       }
     }, 1000)
-    await scrollToBottom()
   }
 
+  const decoder = new TextDecoder()
+  // Buffer for partial chunk boundaries (prefix is 7 chars: "[THINK]" or "[TEXT]")
+  let chunkBuf = ''
+  let thinkRaw = ''
+  let textRaw = ''
+  let thinkingDone = false
+
   try {
-    const res = await sendChatMessage(q, abortController.signal)
-    const fullText = res.data.answer
+    const reader = await sendChatMessageStream(q, deepThink.value, abortController.signal)
 
-    // Finish deep think block
-    if (thinkTimer) {
-      clearInterval(thinkTimer)
-      thinkTimer = null
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      chunkBuf += decoder.decode(value, { stream: true })
+
+      // Process all complete prefixed segments in the buffer
+      let processed = true
+      while (processed) {
+        processed = false
+        const thinkIdx = chunkBuf.indexOf('[THINK]')
+        const textIdx = chunkBuf.indexOf('[TEXT]')
+
+        if (thinkIdx === -1 && textIdx === -1) {
+          // No prefix found yet — keep buffering (could be mid-prefix)
+          break
+        }
+
+        const firstIdx = thinkIdx === -1 ? textIdx : textIdx === -1 ? thinkIdx : Math.min(thinkIdx, textIdx)
+        const isThink = firstIdx === thinkIdx && (textIdx === -1 || thinkIdx < textIdx)
+
+        // Find the next prefix after this one to know where this segment ends
+        const prefixLen = isThink ? 7 : 6 // "[THINK]" = 7, "[TEXT]" = 6
+        const afterPrefix = firstIdx + prefixLen
+        const nextThink = chunkBuf.indexOf('[THINK]', afterPrefix)
+        const nextText = chunkBuf.indexOf('[TEXT]', afterPrefix)
+        const nextBoundary = nextThink === -1 && nextText === -1
+          ? -1
+          : nextThink === -1 ? nextText : nextText === -1 ? nextThink : Math.min(nextThink, nextText)
+
+        const segmentEnd = nextBoundary === -1 ? chunkBuf.length : nextBoundary
+        // If no next boundary, keep last 7 chars buffered (could be start of next prefix)
+        const safeEnd = nextBoundary === -1 ? Math.max(afterPrefix, segmentEnd - 7) : segmentEnd
+
+        if (safeEnd <= afterPrefix) break
+
+        const segment = chunkBuf.slice(afterPrefix, safeEnd)
+        chunkBuf = chunkBuf.slice(safeEnd)
+        processed = true
+
+        if (isThink) {
+          thinkRaw += segment
+          messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+          scrollToBottom()
+        } else {
+          // First [TEXT] chunk signals thinking is done
+          if (!thinkingDone && deepThink.value) {
+            thinkingDone = true
+            if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
+            messages.value[msgIdx].thinkDone = true
+            messages.value[msgIdx].thinkOpen = false
+            messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+          }
+          textRaw += segment
+          messages.value[msgIdx].content = textRaw
+          messages.value[msgIdx].renderedContent = renderMarkdown(textRaw)
+          scrollToBottom()
+        }
+      }
     }
 
-    let msg: Message
-    if (thinkMsgIdx >= 0) {
-      // Reuse the think placeholder message, mark done and collapse
-      messages.value[thinkMsgIdx].thinkDone = true
-      messages.value[thinkMsgIdx].thinkOpen = false
-      messages.value[thinkMsgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-      messages.value[thinkMsgIdx].id = res.data.message_id
-      msg = messages.value[thinkMsgIdx]
-    } else {
-      msg = {
-        id: res.data.message_id,
-        role: 'assistant',
-        content: '',
-        renderedContent: '',
-        created_at: new Date().toISOString(),
-        displayTime: formatTime(new Date().toISOString()),
+    // Final flush: process any remaining buffer with no held-back guard
+    if (chunkBuf) {
+      const thinkIdx = chunkBuf.indexOf('[THINK]')
+      const textIdx = chunkBuf.indexOf('[TEXT]')
+      // Emit any leading content before the first prefix
+      const firstIdx = thinkIdx === -1 ? textIdx : textIdx === -1 ? thinkIdx : Math.min(thinkIdx, textIdx)
+      if (firstIdx > 0) {
+        // Content before any prefix — belongs to current block type
+        const leading = chunkBuf.slice(0, firstIdx)
+        if (thinkingDone || !deepThink.value) {
+          textRaw += leading
+        } else {
+          thinkRaw += leading
+          messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+        }
+        chunkBuf = chunkBuf.slice(firstIdx)
       }
-      messages.value.push(msg)
-      thinkMsgIdx = messages.value.length - 1
-    }
-
-    const idx = thinkMsgIdx
-    let i = 0
-    let cancelled = false
-    abortController.signal.addEventListener('abort', () => { cancelled = true })
-
-    const tick = () => {
-      if (cancelled) {
-        asking.value = false
-        abortController = null
-        return
+      if (chunkBuf.startsWith('[THINK]')) {
+        thinkRaw += chunkBuf.slice(7)
+        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+      } else if (chunkBuf.startsWith('[TEXT]')) {
+        textRaw += chunkBuf.slice(6)
       }
-      const chunk = fullText.slice(0, i + 1)
-      messages.value[idx].content = chunk
-      if (i % 20 === 0 || i === fullText.length - 1) {
-        messages.value[idx].renderedContent = renderMarkdown(chunk)
-      }
-      i++
-      if (i < fullText.length) {
-        setTimeout(tick, 18)
-        scrollToBottom()
-      } else {
-        messages.value[idx].renderedContent = renderMarkdown(fullText)
-        asking.value = false
-        abortController = null
-        scrollToBottom()
+      if (textRaw) {
+        messages.value[msgIdx].content = textRaw
+        messages.value[msgIdx].renderedContent = renderMarkdown(textRaw)
       }
     }
-    tick()
-    return
+
+    // Finalize think block if no text came (e.g. error from agent)
+    if (deepThink.value && !thinkingDone) {
+      if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
+      messages.value[msgIdx].thinkDone = true
+      messages.value[msgIdx].thinkOpen = false
+      messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+    }
+
+    asking.value = false
+    abortController = null
+    await scrollToBottom()
   } catch (err: unknown) {
     if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
-    if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) return
-    // Replace think placeholder or push new error message
-    const errMsg: Message = {
+    if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
+      asking.value = false
+      abortController = null
+      return
+    }
+    messages.value[msgIdx] = {
       id: Date.now().toString(),
       role: 'assistant',
       content: t('toast.aiChatError'),
@@ -415,18 +467,9 @@ async function onSend() {
       created_at: new Date().toISOString(),
       displayTime: formatTime(new Date().toISOString()),
     }
-    if (thinkMsgIdx >= 0) {
-      messages.value[thinkMsgIdx] = errMsg
-    } else {
-      messages.value.push(errMsg)
-    }
-  } finally {
-    if (thinkTimer) { clearInterval(thinkTimer) }
-    if (asking.value) {
-      asking.value = false
-      abortController = null
-      await scrollToBottom()
-    }
+    asking.value = false
+    abortController = null
+    await scrollToBottom()
   }
 }
 
