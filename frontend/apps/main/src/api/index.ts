@@ -185,13 +185,15 @@ http.interceptors.response.use(
       }
     }
 
-    // Retry GET requests on network error or timeout — don't decrement, the retry
-    // will go through the full interceptor lifecycle (increment + decrement).
+    // Retry GET requests on network error or timeout.
+    // Decrement before retrying so the counter stays balanced: the retry's
+    // request interceptor will increment again, keeping pendingCount correct.
     const isRetryable =
       !error.response &&
       originalRequest.method?.toUpperCase() === 'GET' &&
       (originalRequest._retryCount ?? 0) < MAX_RETRIES
     if (isRetryable) {
+      loadingDecrement()
       originalRequest._retryCount = (originalRequest._retryCount ?? 0) + 1
       const delay = RETRY_BASE_DELAY_MS * 2 ** (originalRequest._retryCount - 1)
       await new Promise((r) => setTimeout(r, delay))

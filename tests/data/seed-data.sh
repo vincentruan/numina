@@ -12,14 +12,16 @@
 #      - demouser / DemoPass123 — 19项实物资产 + 11项金融资产 + 负债 + 心愿 + 儿童数据
 #
 # 用法：
-#   ./tests/data/seed-data.sh [--skip-demo]
+#   ./tests/data/seed-data.sh [--skip-demo] [--reset-passwords] [--invite-codes CODE1,CODE2,...]
 #
 # 参数：
-#   --skip-demo  跳过 demouser 完整数据生成（仅创建固定测试账号）
+#   --skip-demo        跳过 demouser 完整数据生成（仅创建固定测试账号）
+#   --reset-passwords  登录失败时自动通过 Docker 容器重置密码（需要 numina-backend 容器可访问）
+#   --invite-codes     逗号分隔的邀请码列表（也可通过 FAMILY_INVITATION_CODES 环境变量传入）
 #
 # 幂等性：
 #   账号已存在（409）时自动登录
-#   资产数量已达标时跳过创建
+#   资产/心愿/负债数量已达标时跳过创建
 
 set -euo pipefail
 
@@ -39,11 +41,13 @@ log_err()  { echo -e "${RED}✗ $1${NC}" >&2; }
 # 参数解析
 # ========================================
 SKIP_DEMO=false
+RESET_PASSWORDS=false
 INVITE_CODES=()
 
 while [[ $# -gt 0 ]]; do
   case $1 in
     --skip-demo) SKIP_DEMO=true; shift ;;
+    --reset-passwords) RESET_PASSWORDS=true; shift ;;
     --invite-codes) IFS=',' read -ra INVITE_CODES <<< "$2"; shift 2 ;;
     *) log_err "未知参数: $1"; exit 1 ;;
   esac
@@ -79,6 +83,27 @@ trap 'rm -rf "$_COOKIE_DIR" "$_INVITE_INDEX_FILE"' EXIT
 # 返回指定账号的 cookie jar 路径
 cookie_jar() { echo "$_COOKIE_DIR/$1.jar"; }
 
+# 重置账号密码（需要 Docker 容器可访问）
+# 用法: reset_password_in_db <username> <new_password>
+reset_password_in_db() {
+  local username="$1"
+  local password="$2"
+  if docker exec numina-backend uv run python -c "
+import bcrypt
+from app.database import engine
+from sqlalchemy import text
+hashed = bcrypt.hashpw('$password'.encode(), bcrypt.gensalt(rounds=12)).decode()
+with engine.begin() as conn:
+    conn.execute(text('UPDATE users SET password_hash=:h WHERE username=:u'), {'h': hashed, 'u': '$username'})
+" 2>/dev/null; then
+    log_info "$username: 密码已重置"
+    return 0
+  else
+    log_warn "$username: 密码重置失败（容器不可访问），跳过"
+    return 1
+  fi
+}
+
 # 注册账号，返回 access_token（已存在则登录）
 # 副作用：将 set-cookie 写入 cookie jar，供后续 device/trust 使用
 register_or_login() {
@@ -100,6 +125,25 @@ register_or_login() {
     log_info "账号 $username 已存在，直接登录"
     echo "$login_token"
     return 0
+  fi
+
+  # Login failed — if --reset-passwords is set, try resetting the password
+  local login_code
+  login_code=$(echo "$login_resp" | jq -r '.code // empty')
+  if [[ "$RESET_PASSWORDS" == true ]] && [[ "$login_code" == "AUTH_INVALID_CREDENTIALS" ]]; then
+    log_warn "$username: 密码不匹配，尝试重置..."
+    if reset_password_in_db "$username" "$password"; then
+      # Retry login with new password
+      login_resp=$(curl -sL -c "$jar" -X POST "$BASE_URL/auth/login" \
+        -H "Content-Type: application/json" \
+        -d "{\"username\":\"$username\",\"password\":\"$password\"}")
+      login_token=$(echo "$login_resp" | jq -r '.access_token // .data.access_token')
+      if [ -n "$login_token" ] && [ "$login_token" != "null" ]; then
+        log_info "账号 $username 密码重置后登录成功"
+        echo "$login_token"
+        return 0
+      fi
+    fi
   fi
 
   # User doesn't exist — register with a fresh invite code
@@ -714,11 +758,21 @@ else
   log_ok "demouser login successful"
   trust_device_for_user "demouser" "$TOKEN"
 
+  # 禁用 demouser 二阶段验证（确保测试环境可直接登录）
+  _2FA_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/pin/disable" \
+    -H "Authorization: Bearer $TOKEN")
+  _2FA_CODE=$(echo "$_2FA_RESP" | tail -1)
+  if [ "$_2FA_CODE" = "200" ]; then
+    log_info "demouser: 二阶段验证已禁用"
+  fi
+
   # ──────────────────────────────────────────────
   # 2.2 幂等检查
   # ──────────────────────────────────────────────
   DEMO_ASSET_COUNT=$(get_asset_count "$TOKEN") || DEMO_ASSET_COUNT="0"
-  if [ "$DEMO_ASSET_COUNT" -ge 30 ] 2>/dev/null; then
+  DEMO_WISH_COUNT=$(curl -sL "$BASE_URL/wishes" -H "Authorization: Bearer $TOKEN" | jq '[.data[] // .[]] | length' 2>/dev/null || echo "0")
+  DEMO_LIABILITY_COUNT=$(curl -sL "$BASE_URL/liabilities" -H "Authorization: Bearer $TOKEN" | jq '[.data[] // .[]] | length' 2>/dev/null || echo "0")
+  if [ "$DEMO_ASSET_COUNT" -ge 30 ] && [ "$DEMO_WISH_COUNT" -ge 9 ] && [ "$DEMO_LIABILITY_COUNT" -ge 7 ] 2>/dev/null; then
     log_info "demouser 已有 $DEMO_ASSET_COUNT 件资产，跳过资产/负债/心愿创建（幂等保护）"
   else
     # ═══════════════════════════════════════════
