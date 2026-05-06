@@ -167,7 +167,8 @@ async function onConfirm() {
 
   saving.value = true
   try {
-    if (hasPinEnabled.value) {
+    const wasEnabled = hasPinEnabled.value
+    if (wasEnabled) {
       await http.post('/auth/pin/change', {
         old_pin: oldPin.value,
         new_pin: newPin.value,
@@ -176,13 +177,13 @@ async function onConfirm() {
     } else {
       await http.post('/auth/pin/setup', { pin: newPin.value })
       showToast({ type: 'success', message: t('toast.pinEnabled') })
-      await authStore.fetchMe()
     }
+    await authStore.fetchMe()
     // Reset
     oldPin.value = ''
     newPin.value = ''
     confirmPin.value = ''
-    step.value = hasPinEnabled.value ? 'old' : 'new'
+    step.value = wasEnabled ? 'old' : 'new'
   } catch (e: unknown) {
     const err = e as { response?: { data?: { code?: string } } }
     const code = err.response?.data?.code
