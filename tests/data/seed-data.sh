@@ -496,18 +496,40 @@ else
   done
 
   log_ok "test_rich 就绪（31 资产 + 28 负债 + 29 心愿 + 多状态覆盖）"
+fi
 
-  # ──────────────────────────────────────────────
-  # 1.3.1 test_rich_member — test_rich 家庭的普通成员（测试角色权限）
-  # ──────────────────────────────────────────────
-  log_info "初始化 test_rich_member（test_rich 家庭的 member 角色）..."
+# ──────────────────────────────────────────────
+# 1.3.1 test_rich_member — test_rich 家庭的普通成员（测试角色权限）
+# 独立于 test_rich 数据创建，确保每次运行都能幂等处理
+# ──────────────────────────────────────────────
+log_info "初始化 test_rich_member（test_rich 家庭的 member 角色）..."
 
-  # 获取 test_rich 的家庭邀请码
+# 先尝试直接登录（最常见的幂等路径）
+MEMBER_LOGIN_RESP=$(curl -sL -X POST "$BASE_URL/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username":"test_rich_member","password":"TestMember123!"}')
+MEMBER_TOKEN=$(echo "$MEMBER_LOGIN_RESP" | jq -r '.access_token // .data.access_token')
+
+if [ -n "$MEMBER_TOKEN" ] && [ "$MEMBER_TOKEN" != "null" ]; then
+  log_info "test_rich_member 已存在，直接登录"
+  # 检查是否已有资产，没有则补充
+  MEMBER_ASSET_COUNT=$(get_asset_count "$MEMBER_TOKEN") || MEMBER_ASSET_COUNT="0"
+  if [ "$MEMBER_ASSET_COUNT" = "0" ]; then
+    CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "电子设备" "physical")
+    if [ -n "$CAT_DIGITAL_M" ] && [ "$CAT_DIGITAL_M" != "null" ]; then
+      create_physical_asset "$MEMBER_TOKEN" "{\"name\":\"成员手机\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_DIGITAL_M\",\"purchase_price\":5000,\"current_value\":4000,\"currency\":\"CNY\",\"purchase_date\":\"2023-06-01\",\"status\":\"in_use\"}"
+      log_ok "test_rich_member 补充 1 个资产（member 数据隔离测试）"
+    fi
+  else
+    log_info "test_rich_member 已有 $MEMBER_ASSET_COUNT 个资产，跳过"
+  fi
+  log_ok "test_rich_member 就绪（member 角色）"
+else
+  # 账号不存在，通过 test_rich 家庭邀请码注册
   FAMILY_INFO=$(curl -sL "$BASE_URL/family" -H "Authorization: Bearer $TOKEN_RICH")
   INVITE_CODE=$(echo "$FAMILY_INFO" | jq -r '.data.invite_code')
 
   if [ -n "$INVITE_CODE" ] && [ "$INVITE_CODE" != "null" ]; then
-    # 注册新用户并加入家庭（角色为 member）
     MEMBER_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
       -H "Content-Type: application/json" \
       -d "{\"username\":\"test_rich_member\",\"display_name\":\"测试成员\",\"password\":\"TestMember123!\",\"family_invitation_code\":\"$INVITE_CODE\"}")
@@ -517,20 +539,11 @@ else
     if [ "$MEMBER_HTTP" = "200" ] || [ "$MEMBER_HTTP" = "201" ]; then
       MEMBER_TOKEN=$(echo "$MEMBER_BODY" | jq -r '.access_token // .data.access_token')
       log_ok "test_rich_member 创建成功（member 角色）"
-
-      # 为 member 创建少量资产（测试数据隔离）
       CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "电子设备" "physical")
       if [ -n "$CAT_DIGITAL_M" ] && [ "$CAT_DIGITAL_M" != "null" ]; then
         create_physical_asset "$MEMBER_TOKEN" "{\"name\":\"成员手机\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_DIGITAL_M\",\"purchase_price\":5000,\"current_value\":4000,\"currency\":\"CNY\",\"purchase_date\":\"2023-06-01\",\"status\":\"in_use\"}"
         log_ok "test_rich_member 创建 1 个资产（member 数据隔离测试）"
       fi
-    elif [ "$MEMBER_HTTP" = "409" ] || [ "$MEMBER_HTTP" = "400" ]; then
-      log_info "test_rich_member 已存在，直接登录"
-      MEMBER_LOGIN=$(curl -sL -X POST "$BASE_URL/auth/login" \
-        -H "Content-Type: application/json" \
-        -d '{"username":"test_rich_member","password":"TestMember123!"}')
-      MEMBER_TOKEN=$(echo "$MEMBER_LOGIN" | jq -r '.access_token // .data.access_token')
-      log_ok "test_rich_member 就绪（member 角色）"
     else
       log_warn "test_rich_member 创建失败: HTTP $MEMBER_HTTP — 跳过"
     fi
@@ -1658,10 +1671,23 @@ EOF
   # ═══════════════════════════════════════════
   log_info "创建儿童数据..."
 
-  # 幂等检查：如果已有儿童成员，跳过创建
-  EXISTING_CHILDREN=$(curl -sL "$BASE_URL/family" -H "Authorization: Bearer $TOKEN" | jq '[.data.members[] | select(.role == "child")] | length')
+  # 幂等检查：如果已有儿童成员，直接获取已有 ID 和 token
+  FAMILY_MEMBERS_RESP=$(curl -sL "$BASE_URL/family" -H "Authorization: Bearer $TOKEN")
+  EXISTING_CHILDREN=$(echo "$FAMILY_MEMBERS_RESP" | jq '[.data.members[] | select(.role == "child")] | length')
+  CHILD1_ID="" CHILD2_ID="" CHILD1_TOKEN="" CHILD2_TOKEN=""
   if [ "${EXISTING_CHILDREN:-0}" -ge 2 ] 2>/dev/null; then
-    log_info "已存在 $EXISTING_CHILDREN 个儿童成员，跳过儿童数据创建（幂等保护）"
+    log_info "已存在 $EXISTING_CHILDREN 个儿童成员，跳过创建，获取已有 ID..."
+    CHILD1_ID=$(echo "$FAMILY_MEMBERS_RESP" | jq -r '[.data.members[] | select(.role == "child")] | .[0].id // empty')
+    CHILD2_ID=$(echo "$FAMILY_MEMBERS_RESP" | jq -r '[.data.members[] | select(.role == "child")] | .[1].id // empty')
+    CHILD1_TOKEN=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
+      -H "Content-Type: application/json" \
+      -d '{"username":"xiaobao","pin_sequence":["🐱","🌟","🎈","🐶"]}' \
+      | jq -r '.data.access_token // .access_token')
+    CHILD2_TOKEN=$(curl -sL -X POST "$BASE_URL/auth/child/login" \
+      -H "Content-Type: application/json" \
+      -d '{"username":"dabao","pin_sequence":["🌈","🍎","🐸","🦁"]}' \
+      | jq -r '.data.access_token // .access_token')
+    log_ok "已有儿童数据就绪（小宝 id=$CHILD1_ID，大宝 id=$CHILD2_ID）"
   else
     # 创建幼儿（6岁）
     CHILD1_RESP=$(curl -sL -X POST "$BASE_URL/family/children" \
