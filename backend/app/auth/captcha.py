@@ -38,6 +38,10 @@ async def verify_captcha(
     if settings.ENVIRONMENT != "production":
         return
 
+    # Allow seed/test scripts to bypass captcha with a pre-shared secret
+    if settings.SEED_SECRET and request.headers.get("X-Seed-Secret") == settings.SEED_SECRET:
+        return
+
     # Extract altcha field from request body
     # Note: We read the body here since schemas may have altcha as optional
     try:

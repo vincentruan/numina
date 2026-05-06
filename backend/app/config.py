@@ -47,6 +47,7 @@ class Settings(BaseSettings):
     CHILD_REFRESH_TOKEN_EXPIRE_DAYS: int = 30  # 30 days, same as trusted adult sessions
     ENABLE_SECURITY_LOGGING: bool = True
     ALTCHA_HMAC_KEY: str = ""  # Required in production for captcha
+    SEED_SECRET: str = ""  # If set, requests with X-Seed-Secret header bypass captcha
 
     # File storage configuration
     # UPLOAD_DIR: root for asset image uploads, served as static files at /uploads/
