@@ -4,8 +4,6 @@ import { getUser, useLoadingOverlay } from '@numina/auth'
 // Guest routes — accessible without child session
 const GUEST_ROUTES = ['/auth']
 
-const { show: loadingShow, hide: loadingHide } = useLoadingOverlay()
-
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -62,7 +60,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  loadingShow()
+  useLoadingOverlay().show()
   const user = getUser()
   const isChildSession = user?.role === 'child'
   const isGuest = GUEST_ROUTES.includes(to.path) || to.meta?.guest
@@ -91,7 +89,7 @@ router.beforeEach((to, _from, next) => {
 })
 
 router.afterEach(() => {
-  loadingHide()
+  useLoadingOverlay().hide()
 })
 
 export default router

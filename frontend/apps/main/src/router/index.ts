@@ -2,8 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { useLoadingOverlay } from '@numina/auth'
 
-const { show: loadingShow, hide: loadingHide } = useLoadingOverlay()
-
 const router = createRouter({
   history: createWebHistory('/'),
   routes: [
@@ -290,7 +288,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  loadingShow()
+  useLoadingOverlay().show()
   const user = getUser()
   const isLoggedIn = !!user
   const isChild = user?.role === 'child'
@@ -322,7 +320,7 @@ router.beforeEach((to, _from, next) => {
 })
 
 router.afterEach(() => {
-  loadingHide()
+  useLoadingOverlay().hide()
 })
 
 export default router
