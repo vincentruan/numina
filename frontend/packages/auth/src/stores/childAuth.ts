@@ -74,7 +74,7 @@ export const useChildAuthStore = defineStore('childAuth', () => {
         },
       )
       // Fetch user info after successful login
-      const meRes = await getHttp().get<{ id: string; display_name: string; avatar_color: string; username: string }>('/auth/me')
+      const meRes = await getHttp().get<{ id: string; display_name: string; avatar_color: string; username: string }>('/auth/child/me')
       const me = meRes.data
       const child: ChildUser = {
         id: String(me.id),
