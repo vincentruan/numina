@@ -32,22 +32,37 @@ interface Ripple {
   amplitude: number    // initial wave amplitude
   frequency: number    // angular frequency (waves around circle)
   speed: number        // expansion speed (px per second)
-  color: string
+  color: string        // neon stroke color
+  glowColor: string    // neon glow/shadow color
   lineWidth: number
   noiseSeed: number    // unique seed for irregularity
 }
 
 // Configuration
 const MAX_RIPPLES = LOW_END ? 5 : 8
-const SPAWN_INTERVAL = LOW_END ? 600 : 400  // ms between new ripples
-const WAVE_LIFETIME = 3000  // ms for a wave to fully expand and fade
+const WAVE_LIFETIME = 3200  // ms for a wave to fully expand and fade
+
+// Neon cyberpunk palette: [strokeColor, glowColor]
+const NEON_COLORS: Array<[string, string]> = [
+  ['#00d4ff', 'rgba(0,212,255,0.6)'],    // cyan
+  ['#b967ff', 'rgba(185,103,255,0.6)'],  // violet
+  ['#ff2a6d', 'rgba(255,42,109,0.6)'],   // hot pink
+  ['#05ffa1', 'rgba(5,255,161,0.6)'],    // mint green
+]
 
 const LAYER_CONFIGS = [
-  { amplitude: 12, frequency: 6,  speed: 40,  color: '#bdbbff', lineWidth: 2.0 },
-  { amplitude: 10, frequency: 8,  speed: 50,  color: '#a78bfa', lineWidth: 1.6 },
-  { amplitude: 8,  frequency: 10, speed: 60,  color: '#818cf8', lineWidth: 1.3 },
-  { amplitude: 6,  frequency: 12, speed: 70,  color: '#c084fc', lineWidth: 1.0 },
+  { amplitude: 14, frequency: 6,  speed: 38,  lineWidth: 2.5 },
+  { amplitude: 11, frequency: 8,  speed: 50,  lineWidth: 2.0 },
+  { amplitude: 8,  frequency: 10, speed: 62,  lineWidth: 1.4 },
+  { amplitude: 6,  frequency: 13, speed: 76,  lineWidth: 0.9 },
 ]
+
+// Breathing rhythm: spawn interval pulses between fast and slow
+function spawnInterval(globalTime: number): number {
+  const base = LOW_END ? 550 : 360
+  const pulse = Math.sin(globalTime * 0.8) * (LOW_END ? 80 : 120)
+  return base + pulse
+}
 
 // ── Lightweight pseudo-noise ─────────────────────────────────────────────────
 
@@ -112,8 +127,10 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
   globalTime += deltaTime
 
   // Spawn new ripples
-  if (!props.dismissing && now - lastSpawn > SPAWN_INTERVAL) {
-    const config = LAYER_CONFIGS[nextRippleId % LAYER_CONFIGS.length]
+  if (!props.dismissing && now - lastSpawn > spawnInterval(globalTime)) {
+    const configIdx = nextRippleId % LAYER_CONFIGS.length
+    const config = LAYER_CONFIGS[configIdx]
+    const [color, glowColor] = NEON_COLORS[nextRippleId % NEON_COLORS.length]
     ripples.push({
       id: nextRippleId++,
       birth: now,
@@ -121,7 +138,8 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
       amplitude: config.amplitude * DPR,
       frequency: config.frequency,
       speed: config.speed * DPR,
-      color: config.color,
+      color,
+      glowColor,
       lineWidth: config.lineWidth * DPR,
       noiseSeed: Math.random() * 1000,
     })
@@ -163,7 +181,7 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
     // Dismiss fade
     const dismissAlpha = props.dismissing ? Math.max(0, 1 - dismissProgress * 1.5) : 1
 
-    const alpha = lifeAlpha * dismissAlpha * 0.85
+    const alpha = lifeAlpha * dismissAlpha * 0.9
 
     // Amplitude decays as ripple expands
     const expansionDecay = Math.max(0.3, 1 - lifeProgress * 0.7)
@@ -174,37 +192,57 @@ function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now
     const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * DPR * (1 - lifeProgress * 0.5)
     const angleNoise = fractalNoise(noiseTime * 0.5 + 100, 3) * 0.3
 
-    ctx.beginPath()
-    ctx.strokeStyle = ripple.color
-    ctx.globalAlpha = alpha
-    ctx.lineWidth = ripple.lineWidth * (1 - lifeProgress * 0.5) // line gets thinner
+    // Line thins as it expands (inner=thick, outer=thin)
+    const currentLineWidth = ripple.lineWidth * Math.max(0.3, 1 - lifeProgress * 0.65)
 
+    // Build the path points once, reuse for glow + core passes
+    const pts: Array<[number, number]> = []
     for (let i = 0; i <= POINTS; i++) {
       const angle = (i / POINTS) * Math.PI * 2 + angleNoise
-
-      // Wave perturbation along the circumference (creates the wavy edge)
       const wavePhase = age * 3 + ripple.noiseSeed * 0.1
       const waveNoise = fractalNoise(angle * ripple.frequency / (2 * Math.PI) + wavePhase, 2)
       const waveOffset = currentAmp * Math.sin(angle * ripple.frequency + wavePhase) * (0.5 + waveNoise * 0.5)
-
-      // Radius varies with noise + wave
       const r = currentRadius + radiusNoise + waveOffset
-
-      const x = cx + r * Math.cos(angle)
-      const y = cy + r * Math.sin(angle)
-
-      if (i === 0) {
-        ctx.moveTo(x, y)
-      } else {
-        ctx.lineTo(x, y)
-      }
+      pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)])
     }
 
-    ctx.closePath()
-    ctx.stroke()
-  })
+    function tracePath() {
+      ctx.beginPath()
+      ctx.moveTo(pts[0][0], pts[0][1])
+      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+      ctx.closePath()
+    }
 
-  ctx.globalAlpha = 1
+    // Radial gradient: bright at center, dims toward canvas edge
+    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.5)
+    grad.addColorStop(0, ripple.color)
+    grad.addColorStop(0.65, ripple.color)
+    grad.addColorStop(1, ripple.glowColor.replace('0.6)', '0.0)'))
+
+    // Pass 1: wide glow halo (blurred, low opacity)
+    if (!LOW_END) {
+      ctx.save()
+      ctx.globalAlpha = alpha * 0.45
+      ctx.shadowBlur = 18 * DPR
+      ctx.shadowColor = ripple.glowColor
+      ctx.strokeStyle = grad
+      ctx.lineWidth = currentLineWidth * 2.5
+      tracePath()
+      ctx.stroke()
+      ctx.restore()
+    }
+
+    // Pass 2: sharp neon core line
+    ctx.save()
+    ctx.globalAlpha = alpha
+    ctx.shadowBlur = LOW_END ? 0 : 8 * DPR
+    ctx.shadowColor = ripple.glowColor
+    ctx.strokeStyle = grad
+    ctx.lineWidth = currentLineWidth
+    tracePath()
+    ctx.stroke()
+    ctx.restore()
+  })
 
   // Clean up expired ripples
   ripples = ripples.filter(r => {
