@@ -113,5 +113,35 @@ export function useLoadingOverlay() {
     }, remaining)
   }
 
-  return { isLoading, isDismissing, increment, decrement }
+  // Direct router control — show/hide without touching the counter
+  function show() {
+    if (state.hideTimer !== null) {
+      clearTimeout(state.hideTimer)
+      state.hideTimer = null
+    }
+    if (state.showTimer !== null) {
+      clearTimeout(state.showTimer)
+      state.showTimer = null
+    }
+    state.isDismissing.value = false
+    state.isVisible.value = true
+    state.shownAt = Date.now()
+    armWatchdog()
+  }
+
+  function hide() {
+    disarmWatchdog()
+    if (!state.isVisible.value) return
+    const elapsed = state.shownAt !== null ? Date.now() - state.shownAt : MIN_DISPLAY_MS
+    const remaining = Math.max(0, MIN_DISPLAY_MS - elapsed)
+    state.isDismissing.value = true
+    state.hideTimer = setTimeout(() => {
+      state.isVisible.value = false
+      state.isDismissing.value = false
+      state.shownAt = null
+      state.hideTimer = null
+    }, remaining)
+  }
+
+  return { isLoading, isDismissing, increment, decrement, show, hide }
 }

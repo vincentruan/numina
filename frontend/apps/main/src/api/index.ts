@@ -17,7 +17,6 @@ import { showToast, showDialog } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
-import { useLoadingOverlay } from '@numina/auth'
 
 const MAX_RETRIES = 2
 const RETRY_BASE_DELAY_MS = 800
@@ -51,12 +50,8 @@ const http = axios.create({
   headers: {
     'Content-Type': 'application/json'
   },
-  // Ensure cookies are sent with cross-origin requests (if needed)
-  // For same-origin, this is automatic
   withCredentials: true,
 })
-
-const { increment: loadingIncrement, decrement: loadingDecrement } = useLoadingOverlay()
 
 // Request interceptor - no manual Authorization header
 // Cookie is automatically sent by browser
@@ -64,13 +59,9 @@ http.interceptors.request.use(
   (config) => {
     // AI endpoints need a longer timeout for LLM response latency
     config.timeout = config.url?.includes('/ai/') ? 120000 : 15000
-    loadingIncrement()
     return config
   },
-  (error) => {
-    loadingDecrement()
-    return Promise.reject(error)
-  }
+  (error) => Promise.reject(error)
 )
 
 // Token refresh state
@@ -93,7 +84,6 @@ function onRefreshFailed(error: unknown) {
 // Response interceptor - handle 401 with automatic refresh
 http.interceptors.response.use(
   (response) => {
-    loadingDecrement()
     const url = response.config.url ?? ''
     // Unwrap most endpoints; keep login/register/refresh/family-join wrapped (they return tokens directly)
     // /auth/devices, /auth/me, /auth/login/step1, /auth/login/step2 should be unwrapped like regular endpoints
@@ -124,14 +114,12 @@ http.interceptors.response.use(
       if (originalRequest.url?.includes('/auth/login') ||
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/family/join')) {
-        loadingDecrement()
         showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
         return Promise.reject(error)
       }
 
       // Refresh endpoint failure = session expired
       if (originalRequest.url?.includes('/auth/refresh')) {
-        loadingDecrement()
         clearAuth()
         showDialog({
           title: t('device.sessionExpiredTitle'),
@@ -143,12 +131,7 @@ http.interceptors.response.use(
         return Promise.reject(error)
       }
 
-      // For other 401 errors, try to refresh token
-      // Don't decrement here — the retry will go through the request interceptor
-      // (increment) and response interceptor (decrement), keeping the counter balanced
-      // without a transient drop to 0 that would cause the overlay to flicker.
       if (isRefreshing) {
-        // Queue this request until refresh completes
         return new Promise((resolve, reject) => {
           pendingRequests.push({
             resolve: () => {
@@ -164,16 +147,13 @@ http.interceptors.response.use(
       originalRequest._retry = true
 
       try {
-        // Refresh token - Cookie is sent automatically, no body needed
         // IMPORTANT: Send null (not {}) to avoid 422 from Pydantic validation
         await axios.post('/api/v1/auth/refresh', null, {
           withCredentials: true,
         })
-        // Cookie is automatically updated by server response
         onRefreshed()
         return http(originalRequest)
       } catch (refreshError) {
-        loadingDecrement()
         onRefreshFailed(refreshError)
         clearAuth()
         router.push('/login')
@@ -185,34 +165,27 @@ http.interceptors.response.use(
       }
     }
 
-    // Retry GET requests on network error or timeout.
-    // Decrement before retrying so the counter stays balanced: the retry's
-    // request interceptor will increment again, keeping pendingCount correct.
+    // Retry GET requests on network error or timeout
     const isRetryable =
       !error.response &&
       originalRequest.method?.toUpperCase() === 'GET' &&
       (originalRequest._retryCount ?? 0) < MAX_RETRIES
     if (isRetryable) {
-      loadingDecrement()
       originalRequest._retryCount = (originalRequest._retryCount ?? 0) + 1
       const delay = RETRY_BASE_DELAY_MS * 2 ** (originalRequest._retryCount - 1)
       await new Promise((r) => setTimeout(r, delay))
       return http(originalRequest)
     }
 
-    // Terminal error path — decrement now
-    loadingDecrement()
     if (error.response) {
       const { status, data } = error.response
       if (status === 403) {
         showToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('errors.FORBIDDEN')))
       } else if (status === 422) {
         if (data?.details && Array.isArray(data.details)) {
-          // New envelope format: details array with field-level errors
           const msg = data.details.map((e: { msg: string }) => e.msg).join('; ')
           showToast(msg || data.message || t('errors.VALIDATION_ERROR'))
         } else if (data?.detail) {
-          // Old format fallback
           const msg = Array.isArray(data.detail)
             ? data.detail.map((e: { msg: string }) => e.msg).join('; ')
             : data.detail
@@ -224,13 +197,10 @@ http.interceptors.response.use(
         showToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('toast.requestFailed')))
       }
     } else if (error.code === 'ECONNABORTED') {
-      // Request timeout
       showToast(t('toast.networkTimeout'))
     } else if (error.message?.includes('Network Error')) {
-      // True network error (no connection to server)
       showToast(t('toast.networkError'))
     } else {
-      // Other errors (CORS, cancelled request, etc.)
       const errMessage = error.message || '未知错误'
       console.error('[API Error]', errMessage, error)
       showToast(errMessage.includes('CORS') ? t('toast.corsError') : t('toast.requestFailed'))

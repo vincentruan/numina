@@ -1,8 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getUser } from '@numina/auth'
+import { getUser, useLoadingOverlay } from '@numina/auth'
 
 // Guest routes — accessible without child session
 const GUEST_ROUTES = ['/auth']
+
+const { show: loadingShow, hide: loadingHide } = useLoadingOverlay()
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -60,6 +62,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
+  loadingShow()
   const user = getUser()
   const isChildSession = user?.role === 'child'
   const isGuest = GUEST_ROUTES.includes(to.path) || to.meta?.guest
@@ -85,6 +88,10 @@ router.beforeEach((to, _from, next) => {
       next()
     }
   }
+})
+
+router.afterEach(() => {
+  loadingHide()
 })
 
 export default router
