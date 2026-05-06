@@ -92,186 +92,157 @@ function fractalNoise(t: number, octaves: number = 3): number {
 }
 
 // ── Animation state ───────────────────────────────────────────────────────────
-
-let rafId = 0
-let lastFrameTime = 0
-let ripples: Ripple[] = []
-let nextRippleId = 0
-let lastSpawn = 0
-let globalTime = 0
-
-// Dismiss state
-let dismissProgress = 0
-let dismissStart: number | null = null
+// All state is declared inside setup() (see below) so each component instance
+// owns isolated state. Module-scope state caused multiple RAF loops to share
+// the same rafId, making cancelAnimationFrame cancel the wrong loop on unmount.
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
 
-function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now: number) {
-  const W = canvas.width
-  const H = canvas.height
-  const cx = W / 2
-  const cy = H / 2
-
-  ctx.clearRect(0, 0, W, H)
-
-  // Update dismiss progress
-  if (props.dismissing) {
-    if (dismissStart === null) dismissStart = now
-    dismissProgress = Math.min(1, (now - dismissStart) / 400)
-  } else {
-    dismissStart = null
-    dismissProgress = 0
+function makeDrawFrame(
+  state: {
+    ripples: Ripple[]
+    nextRippleId: number
+    lastSpawn: number
+    globalTime: number
+    lastFrameTime: number
+    dismissProgress: number
+    dismissStart: number | null
   }
+) {
+  return function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now: number) {
+    const W = canvas.width
+    const H = canvas.height
+    const cx = W / 2
+    const cy = H / 2
 
-  const deltaTime = (now - lastFrameTime) / 1000 // seconds
-  globalTime += deltaTime
+    ctx.clearRect(0, 0, W, H)
 
-  // Spawn new ripples
-  if (!props.dismissing && now - lastSpawn > spawnInterval(globalTime)) {
-    const configIdx = nextRippleId % LAYER_CONFIGS.length
-    const config = LAYER_CONFIGS[configIdx]
-    const [color, glowColor] = NEON_COLORS[nextRippleId % NEON_COLORS.length]
-    ripples.push({
-      id: nextRippleId++,
-      birth: now,
-      baseRadius: 20 * DPR,  // start from center
-      amplitude: config.amplitude * DPR,
-      frequency: config.frequency,
-      speed: config.speed * DPR,
-      color,
-      glowColor,
-      lineWidth: config.lineWidth * DPR,
-      noiseSeed: Math.random() * 1000,
-    })
-    lastSpawn = now
-
-    // Remove oldest if too many
-    if (ripples.length > MAX_RIPPLES) {
-      ripples.shift()
-    }
-  }
-
-  // Update and draw each ripple
-  const POINTS = LOW_END ? 60 : 90
-
-  ripples.forEach((ripple) => {
-    const age = (now - ripple.birth) / 1000 // seconds
-    const lifeProgress = age / (WAVE_LIFETIME / 1000)
-
-    // Remove expired ripples
-    if (lifeProgress >= 1 || (props.dismissing && dismissProgress > 0.8)) {
-      return
-    }
-
-    // Calculate current radius (expands outward)
-    const currentRadius = ripple.baseRadius + ripple.speed * age
-
-    // Life-based fade: starts at 0, peaks at ~20%, fades to 0 at 100%
-    let lifeAlpha: number
-    if (lifeProgress < 0.15) {
-      // Fade in (0 → 1)
-      lifeAlpha = lifeProgress / 0.15
-    } else if (lifeProgress > 0.6) {
-      // Fade out (1 → 0)
-      lifeAlpha = 1 - (lifeProgress - 0.6) / 0.4
+    // Update dismiss progress
+    if (props.dismissing) {
+      if (state.dismissStart === null) state.dismissStart = now
+      state.dismissProgress = Math.min(1, (now - state.dismissStart) / 400)
     } else {
-      lifeAlpha = 1
+      state.dismissStart = null
+      state.dismissProgress = 0
     }
 
-    // Dismiss fade
-    const dismissAlpha = props.dismissing ? Math.max(0, 1 - dismissProgress * 1.5) : 1
+    const deltaTime = (now - state.lastFrameTime) / 1000 // seconds
+    state.globalTime += deltaTime
 
-    const alpha = lifeAlpha * dismissAlpha * 0.9
+    // Spawn new ripples
+    if (!props.dismissing && now - state.lastSpawn > spawnInterval(state.globalTime)) {
+      const configIdx = state.nextRippleId % LAYER_CONFIGS.length
+      const config = LAYER_CONFIGS[configIdx]
+      const [color, glowColor] = NEON_COLORS[state.nextRippleId % NEON_COLORS.length]
+      state.ripples.push({
+        id: state.nextRippleId++,
+        birth: now,
+        baseRadius: 20 * DPR,
+        amplitude: config.amplitude * DPR,
+        frequency: config.frequency,
+        speed: config.speed * DPR,
+        color,
+        glowColor,
+        lineWidth: config.lineWidth * DPR,
+        noiseSeed: Math.random() * 1000,
+      })
+      state.lastSpawn = now
 
-    // Amplitude decays as ripple expands
-    const expansionDecay = Math.max(0.3, 1 - lifeProgress * 0.7)
-    const currentAmp = ripple.amplitude * expansionDecay * (props.dismissing ? (1 - dismissProgress) : 1)
-
-    // Dynamic noise for irregular movement
-    const noiseTime = globalTime * 1.5 + ripple.noiseSeed
-    const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * DPR * (1 - lifeProgress * 0.5)
-    const angleNoise = fractalNoise(noiseTime * 0.5 + 100, 3) * 0.3
-
-    // Line thins as it expands (inner=thick, outer=thin)
-    const currentLineWidth = ripple.lineWidth * Math.max(0.3, 1 - lifeProgress * 0.65)
-
-    // Build the path points once, reuse for glow + core passes
-    const pts: Array<[number, number]> = []
-    for (let i = 0; i <= POINTS; i++) {
-      const angle = (i / POINTS) * Math.PI * 2 + angleNoise
-      const wavePhase = age * 3 + ripple.noiseSeed * 0.1
-      const waveNoise = fractalNoise(angle * ripple.frequency / (2 * Math.PI) + wavePhase, 2)
-      const waveOffset = currentAmp * Math.sin(angle * ripple.frequency + wavePhase) * (0.5 + waveNoise * 0.5)
-      const r = currentRadius + radiusNoise + waveOffset
-      pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)])
+      if (state.ripples.length > MAX_RIPPLES) {
+        state.ripples.shift()
+      }
     }
 
-    function tracePath() {
-      ctx.beginPath()
-      ctx.moveTo(pts[0][0], pts[0][1])
-      for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
-      ctx.closePath()
-    }
+    // Update and draw each ripple
+    const POINTS = LOW_END ? 60 : 90
 
-    // Radial gradient: bright at center, dims toward canvas edge
-    const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.5)
-    grad.addColorStop(0, ripple.color)
-    grad.addColorStop(0.65, ripple.color)
-    grad.addColorStop(1, ripple.glowColor.replace('0.6)', '0.0)'))
+    state.ripples.forEach((ripple) => {
+      const age = (now - ripple.birth) / 1000 // seconds
+      const lifeProgress = age / (WAVE_LIFETIME / 1000)
 
-    // Pass 1: wide glow halo (blurred, low opacity)
-    if (!LOW_END) {
+      if (lifeProgress >= 1 || (props.dismissing && state.dismissProgress > 0.8)) {
+        return
+      }
+
+      const currentRadius = ripple.baseRadius + ripple.speed * age
+
+      let lifeAlpha: number
+      if (lifeProgress < 0.15) {
+        lifeAlpha = lifeProgress / 0.15
+      } else if (lifeProgress > 0.6) {
+        lifeAlpha = 1 - (lifeProgress - 0.6) / 0.4
+      } else {
+        lifeAlpha = 1
+      }
+
+      const dismissAlpha = props.dismissing ? Math.max(0, 1 - state.dismissProgress * 1.5) : 1
+      const alpha = lifeAlpha * dismissAlpha * 0.9
+
+      const expansionDecay = Math.max(0.3, 1 - lifeProgress * 0.7)
+      const currentAmp = ripple.amplitude * expansionDecay * (props.dismissing ? (1 - state.dismissProgress) : 1)
+
+      const noiseTime = state.globalTime * 1.5 + ripple.noiseSeed
+      const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * DPR * (1 - lifeProgress * 0.5)
+      const angleNoise = fractalNoise(noiseTime * 0.5 + 100, 3) * 0.3
+
+      const currentLineWidth = ripple.lineWidth * Math.max(0.3, 1 - lifeProgress * 0.65)
+
+      const pts: Array<[number, number]> = []
+      for (let i = 0; i <= POINTS; i++) {
+        const angle = (i / POINTS) * Math.PI * 2 + angleNoise
+        const wavePhase = age * 3 + ripple.noiseSeed * 0.1
+        const waveNoise = fractalNoise(angle * ripple.frequency / (2 * Math.PI) + wavePhase, 2)
+        const waveOffset = currentAmp * Math.sin(angle * ripple.frequency + wavePhase) * (0.5 + waveNoise * 0.5)
+        const r = currentRadius + radiusNoise + waveOffset
+        pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)])
+      }
+
+      function tracePath() {
+        ctx.beginPath()
+        ctx.moveTo(pts[0][0], pts[0][1])
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+        ctx.closePath()
+      }
+
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.5)
+      grad.addColorStop(0, ripple.color)
+      grad.addColorStop(0.65, ripple.color)
+      grad.addColorStop(1, ripple.glowColor.replace('0.6)', '0.0)'))
+
+      if (!LOW_END) {
+        ctx.save()
+        ctx.globalAlpha = alpha * 0.45
+        ctx.shadowBlur = 18 * DPR
+        ctx.shadowColor = ripple.glowColor
+        ctx.strokeStyle = grad
+        ctx.lineWidth = currentLineWidth * 2.5
+        tracePath()
+        ctx.stroke()
+        ctx.restore()
+      }
+
       ctx.save()
-      ctx.globalAlpha = alpha * 0.45
-      ctx.shadowBlur = 18 * DPR
+      ctx.globalAlpha = alpha
+      ctx.shadowBlur = LOW_END ? 0 : 8 * DPR
       ctx.shadowColor = ripple.glowColor
       ctx.strokeStyle = grad
-      ctx.lineWidth = currentLineWidth * 2.5
+      ctx.lineWidth = currentLineWidth
       tracePath()
       ctx.stroke()
       ctx.restore()
-    }
+    })
 
-    // Pass 2: sharp neon core line
-    ctx.save()
-    ctx.globalAlpha = alpha
-    ctx.shadowBlur = LOW_END ? 0 : 8 * DPR
-    ctx.shadowColor = ripple.glowColor
-    ctx.strokeStyle = grad
-    ctx.lineWidth = currentLineWidth
-    tracePath()
-    ctx.stroke()
-    ctx.restore()
-  })
-
-  // Clean up expired ripples
-  ripples = ripples.filter(r => {
-    const lifeProgress = (now - r.birth) / 1000 / (WAVE_LIFETIME / 1000)
-    return lifeProgress < 1 && !(props.dismissing && dismissProgress > 0.8)
-  })
-}
-
-// ── RAF loop ──────────────────────────────────────────────────────────────────
-
-function loop(now: number) {
-  rafId = requestAnimationFrame(loop)
-
-  if (now - lastFrameTime < FRAME_INTERVAL) return
-
-  const canvas = canvasEl.value
-  if (!canvas) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-
-  drawFrame(canvas, ctx, now)
-  lastFrameTime = now
+    // Clean up expired ripples
+    state.ripples = state.ripples.filter(r => {
+      const lifeProgress = (now - r.birth) / 1000 / (WAVE_LIFETIME / 1000)
+      return lifeProgress < 1 && !(props.dismissing && state.dismissProgress > 0.8)
+    })
+  }
 }
 
 // ── Resize ────────────────────────────────────────────────────────────────────
 
-function resize() {
-  const canvas = canvasEl.value
-  if (!canvas) return
+function resize(canvas: HTMLCanvasElement) {
   const parent = canvas.parentElement
   if (!parent) return
   canvas.width = parent.clientWidth * DPR
@@ -282,29 +253,66 @@ function resize() {
 
 let ro: ResizeObserver | null = null
 
+// Use a box so onUnmounted can cancel the correct RAF id even though
+// the id is assigned inside onMounted's closure.
+const rafBox = { id: 0 }
+
+// Instance-local animation state — created once at module eval time but
+// reset on every mount, so remounts always start clean.
+const state = {
+  ripples: [] as Ripple[],
+  nextRippleId: 0,
+  lastSpawn: 0,
+  globalTime: 0,
+  lastFrameTime: 0,
+  dismissProgress: 0,
+  dismissStart: null as number | null,
+}
+
+const drawFrame = makeDrawFrame(state)
+
+function loop(now: number) {
+  rafBox.id = requestAnimationFrame(loop)
+  if (now - state.lastFrameTime < FRAME_INTERVAL) return
+  const canvas = canvasEl.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  drawFrame(canvas, ctx, now)
+  state.lastFrameTime = now
+}
+
 onMounted(() => {
-  // Reset animation state on each mount so remounts start clean (M1)
-  lastFrameTime = 0
-  globalTime = 0
-  ripples = []
-  lastSpawn = 0
-  resize()
-  ro = new ResizeObserver(resize)
-  if (canvasEl.value?.parentElement) ro.observe(canvasEl.value.parentElement)
-  rafId = requestAnimationFrame(loop)
+  const canvas = canvasEl.value
+  if (!canvas) return
+
+  // Reset state so every mount starts clean (handles remounts)
+  state.ripples = []
+  state.nextRippleId = 0
+  state.lastSpawn = 0
+  state.globalTime = 0
+  state.lastFrameTime = 0
+  state.dismissProgress = 0
+  state.dismissStart = null
+
+  resize(canvas)
+  ro = new ResizeObserver(() => resize(canvas))
+  ro.observe(canvas.parentElement ?? canvas)
+  rafBox.id = requestAnimationFrame(loop)
 })
 
 onUnmounted(() => {
-  cancelAnimationFrame(rafId)
+  cancelAnimationFrame(rafBox.id)
   ro?.disconnect()
+  ro = null
 })
 
 watch(() => props.dismissing, (val) => {
   if (!val) {
-    dismissProgress = 0
-    dismissStart = null
-    ripples = []
-    lastSpawn = 0
+    state.dismissProgress = 0
+    state.dismissStart = null
+    state.ripples = []
+    state.lastSpawn = 0
   }
 })
 </script>
