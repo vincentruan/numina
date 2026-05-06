@@ -114,6 +114,8 @@ class UserResponse(SnowflakeBase):
     language: str = "zh-CN"
     default_currency: str = "CNY"
     view_mode: str = "card"
+    second_factor_enabled: bool = False
+    second_factor_type: str | None = None
 
     @field_validator("avatar_color", mode="before")
     @classmethod
