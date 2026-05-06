@@ -7,17 +7,22 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 class AIProviderTestResultResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: int
+    id: str
     test_type: str
     success: bool | None
     message: str | None
     latency_ms: int | None
     tested_at: datetime
 
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_id(cls, v: object) -> str:
+        return str(v)
+
 
 class AIConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
-    id: int
+    id: str
     name: str
     provider: str
     ai_api_key_masked: str | None = None

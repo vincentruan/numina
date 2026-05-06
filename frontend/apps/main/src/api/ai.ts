@@ -3,7 +3,7 @@ import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse,
 
 // Frontend-facing flat config shape (mapped from backend multi-config model)
 export interface AIConfig {
-  id: number | null
+  id: string | null
   ai_enabled: boolean
   ai_provider: string | null
   ai_api_key_masked: string | null
@@ -56,7 +56,7 @@ export interface AIConfigTestResult {
 
 // Backend response shapes
 interface _BackendTestResult {
-  id: number
+  id: string
   test_type: string
   success: boolean | null
   message: string | null
@@ -65,7 +65,7 @@ interface _BackendTestResult {
 }
 
 interface _BackendConfig {
-  id: number
+  id: string
   name: string
   provider: string
   ai_api_key_masked: string | null
@@ -126,7 +126,7 @@ function _emptyConfig(): AIConfig {
 }
 
 // Cached config id for update calls within the same session
-let _cachedConfigId: number | null = null
+let _cachedConfigId: string | null = null
 
 export async function getAIConfig(): Promise<{ data: AIConfig }> {
   const res = await http.get<{ configs: _BackendConfig[] }>('/ai/config')
@@ -301,7 +301,7 @@ export function startAIStream(
 // ── MCP Server Management ─────────────────────────────────────────────────────
 
 export interface MCPServer {
-  id: number
+  id: string
   name: string
   url: string
   transport: 'sse' | 'stdio'
@@ -327,9 +327,9 @@ export interface MCPServerUpdate {
 
 export const getMCPServers = () => http.get<MCPServer[]>('/ai/mcp')
 export const createMCPServer = (data: MCPServerCreate) => http.post<MCPServer>('/ai/mcp', data)
-export const updateMCPServer = (id: number, data: MCPServerUpdate) =>
+export const updateMCPServer = (id: string, data: MCPServerUpdate) =>
   http.put<MCPServer>(`/ai/mcp/${id}`, data)
-export const deleteMCPServer = (id: number) => http.delete(`/ai/mcp/${id}`)
+export const deleteMCPServer = (id: string) => http.delete(`/ai/mcp/${id}`)
 
 // ── Skill Config Management ───────────────────────────────────────────────────
 

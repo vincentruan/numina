@@ -18,7 +18,7 @@ export interface BuyVsRentResult {
 }
 
 export interface CostEquivalenceResult {
-  asset_id: number
+  asset_id: string
   asset_name: string
   held_days: number | null
   total_held_cost: number | null

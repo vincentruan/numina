@@ -1,8 +1,8 @@
 import http from './index'
 
 export interface NotificationChannelResponse {
-  id: number
-  family_id: number
+  id: string
+  family_id: string
   channel_type: 'telegram' | 'email'
   name: string
   is_enabled: boolean
@@ -27,8 +27,8 @@ export interface NotificationChannelUpdate {
 }
 
 export interface NotificationConfig {
-  id: number
-  family_id: number
+  id: string
+  family_id: string
   large_purchase_threshold_fixed: number | null
   large_purchase_threshold_multiplier: number | null
   updated_at: string
@@ -41,12 +41,12 @@ export const notificationChannelsApi = {
   create(data: NotificationChannelCreate): Promise<NotificationChannelResponse> {
     return http.post<NotificationChannelResponse>('/notification-channels', data).then((r) => r.data)
   },
-  update(id: number, data: NotificationChannelUpdate): Promise<NotificationChannelResponse> {
+  update(id: string, data: NotificationChannelUpdate): Promise<NotificationChannelResponse> {
     return http
       .put<NotificationChannelResponse>(`/notification-channels/${id}`, data)
       .then((r) => r.data)
   },
-  remove(id: number): Promise<void> {
+  remove(id: string): Promise<void> {
     return http.delete(`/notification-channels/${id}`).then(() => undefined)
   },
   getConfig(): Promise<NotificationConfig> {

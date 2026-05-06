@@ -16,15 +16,15 @@ export const blindBoxApi = {
   // 礼物池
   listGifts: () => http.get<BlindBoxGift[]>('/blind-box/gifts'),
   createGift: (data: BlindBoxGiftCreate) => http.post<BlindBoxGift>('/blind-box/gifts', data),
-  updateGift: (id: number, data: BlindBoxGiftUpdate) =>
+  updateGift: (id: string, data: BlindBoxGiftUpdate) =>
     http.put<BlindBoxGift>(`/blind-box/gifts/${id}`, data),
-  deleteGift: (id: number) => http.delete(`/blind-box/gifts/${id}`),
-  createGiftFromWish: (wishId: number) =>
+  deleteGift: (id: string) => http.delete(`/blind-box/gifts/${id}`),
+  createGiftFromWish: (wishId: string) =>
     http.post<BlindBoxGift>(`/blind-box/gifts/from-wish/${wishId}`),
 
   // 抽奖记录
   listDraws: () => http.get<BlindBoxDraw[]>('/blind-box/draws'),
-  fulfillDraw: (id: number) => http.put<BlindBoxDraw>(`/blind-box/draws/${id}/fulfill`),
+  fulfillDraw: (id: string) => http.put<BlindBoxDraw>(`/blind-box/draws/${id}/fulfill`),
 
   // 配置
   getConfig: () => http.get<BlindBoxConfig>('/blind-box/config'),
@@ -44,6 +44,6 @@ export const childBlindBoxApi = {
 
   // Bonus draws
   listBonusDraws: () => http.get<BonusDraw[]>('/child/blind-box/bonus-draws'),
-  useBonusDraw: (bonusId: number) =>
+  useBonusDraw: (bonusId: string) =>
     http.post<BlindBoxDraw>(`/child/blind-box/bonus-draws/${bonusId}/use`),
 }

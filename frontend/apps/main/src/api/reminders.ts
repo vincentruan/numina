@@ -1,13 +1,13 @@
 import http from './index'
 
 export interface ReminderResponse {
-  id: number
-  family_id: number
+  id: string
+  family_id: string
   reminder_type: 'large_purchase' | 'allocation_drift' | 'expiring_soon' | 'maturity'
   title: string
   body: string
   severity: 'info' | 'warning' | 'critical'
-  asset_id: number | null
+  asset_id: string | null
   status: 'active' | 'dismissed' | 'resolved'
   dismissed_at: string | null
   resolved_at: string | null
@@ -29,7 +29,7 @@ export const remindersApi = {
   list(status = 'active'): Promise<ReminderResponse[]> {
     return http.get<ReminderResponse[]>('/reminders', { params: { status } }).then((r) => r.data)
   },
-  dismiss(id: number): Promise<ReminderResponse> {
+  dismiss(id: string): Promise<ReminderResponse> {
     return http.patch<ReminderResponse>(`/reminders/${id}/dismiss`).then((r) => r.data)
   },
 }

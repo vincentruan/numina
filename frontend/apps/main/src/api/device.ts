@@ -6,7 +6,7 @@ export interface DeviceCheckResponse {
   display_name?: string
   avatar_color?: string
   second_factor_type?: string
-  user_id?: number
+  user_id?: string
 }
 
 export function checkDevice(fingerprint: string) {
@@ -45,8 +45,8 @@ export function revokeAllDevices() {
 }
 
 export interface FamilyDevice {
-  id: number
-  user_id: number
+  id: string
+  user_id: string
   display_name: string
   avatar_color: string
   device_name: string

@@ -10,7 +10,7 @@
     :confirm-button-text="t('device.trustConfirm')"
     :cancel-button-text="t('device.trustCancel')"
     show-cancel-button
-    @confirm="authStore.trustDevice({ onSuccess: () => showToast(t('toast.deviceTrustSuccess')), onError: () => showToast(t('toast.deviceTrustFailed')) })"
+    @confirm="authStore.trustDevice({ onSuccess: () => showToast(t('toast.deviceTrustSuccess')) })"
     @cancel="authStore.dismissTrustPrompt()"
   />
 

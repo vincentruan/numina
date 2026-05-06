@@ -11,6 +11,7 @@ import {
   type FamilyDevice,
 } from '@/api/device'
 import { useAuthStore } from '@/stores/auth'
+import { clearAuth } from '@numina/auth'
 import { useRouter } from 'vue-router'
 
 const { t } = useI18n()
@@ -58,7 +59,10 @@ async function handleRevokeAll() {
   }
   await revokeAllDevices()
   showToast(t('toast.deviceRevokeAllSuccess'))
-  authStore.logout({ onLogout: () => router.push('/login') })
+  // Backend already cleared auth cookies; just clean local state and redirect
+  authStore.user = null
+  clearAuth()
+  router.push('/login')
 }
 
 // Family devices

@@ -6,7 +6,7 @@ export interface DeviceCheckResponse {
   display_name?: string
   avatar_color?: string
   second_factor_type?: 'emoji_pin' | 'webauthn'
-  user_id?: number
+  user_id?: string
 }
 
 export async function checkDevice(fingerprint: string): Promise<DeviceCheckResponse> {

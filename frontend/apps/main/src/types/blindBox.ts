@@ -1,13 +1,13 @@
 export interface BlindBoxGift {
-  id: number
-  family_id: number
+  id: string
+  family_id: string
   name: string
   description: string | null
   emoji: string | null
   value_score: number
-  source_wish_id: number | null
+  source_wish_id: string | null
   is_active: boolean
-  created_by: number
+  created_by: string
   created_at: string
   updated_at: string
   warning?: string | null
@@ -30,11 +30,11 @@ export interface BlindBoxGiftUpdate {
 }
 
 export interface BlindBoxDraw {
-  id: number
-  family_id: number
-  child_user_id: number
+  id: string
+  family_id: string
+  child_user_id: string
   coins_spent: number
-  gift_id: number
+  gift_id: string
   gift_name: string
   gift_emoji: string | null
   is_surprise: boolean
@@ -49,8 +49,8 @@ export interface DrawRequest {
 }
 
 export interface BlindBoxConfig {
-  id: number
-  family_id: number
+  id: string
+  family_id: string
   enabled: boolean
   base_draw_prob: number
   special_day_prob: number
@@ -73,12 +73,12 @@ export interface BlindBoxConfigUpdate {
 }
 
 export interface BonusDraw {
-  id: number
-  family_id: number
-  child_user_id: number
-  source_wish_id: number | null
+  id: string
+  family_id: string
+  child_user_id: string
+  source_wish_id: string | null
   status: 'available' | 'used' | 'expired'
   expires_at: string
-  used_draw_id: number | null
+  used_draw_id: string | null
   created_at: string
 }
