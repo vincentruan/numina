@@ -23,6 +23,11 @@ class AIProviderTestResultResponse(BaseModel):
 class AIConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: str
+
+    @field_validator("id", mode="before")
+    @classmethod
+    def coerce_id(cls, v: object) -> str:
+        return str(v)
     name: str
     provider: str
     ai_api_key_masked: str | None = None
