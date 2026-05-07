@@ -146,7 +146,16 @@
           @switch-account="switchAccount"
         />
 
-        <p class="pin-username">{{ form.username }}</p>
+        <!-- User identity card — shown when step1 returned display_name/avatar_color -->
+        <div v-else-if="step2User" class="pin-user-card">
+          <div
+            class="pin-avatar"
+            :style="{ background: step2User.avatarColor }"
+          >{{ step2User.displayName.charAt(0).toUpperCase() }}</div>
+          <p class="pin-display-name">{{ step2User.displayName }}</p>
+          <p class="pin-username-sub">{{ form.username }}</p>
+        </div>
+        <p v-else class="pin-username">{{ form.username }}</p>
         <p class="pin-hint">请输入数字 PIN 码完成验证</p>
 
         <div class="pin-display" :class="{ shake: shaking }">
@@ -232,6 +241,9 @@ interface TrustedUser {
 }
 const trustedUser = ref<TrustedUser | null>(null)
 
+// User info from step1 response — shown in step2 header
+const step2User = ref<{ displayName: string; avatarColor: string } | null>(null)
+
 const form = ref({
   username: '',
   password: '',
@@ -266,6 +278,9 @@ async function onStep1Submit() {
     if (result.second_factor_required && result.temp_token) {
       tempToken.value = result.temp_token
       secondFactorType.value = result.second_factor_type ?? 'numeric_pin'
+      if (result.display_name && result.avatar_color) {
+        step2User.value = { displayName: result.display_name, avatarColor: result.avatar_color }
+      }
       step.value = 2
     } else {
       // No second factor — login complete; populate user store before navigating
@@ -348,6 +363,7 @@ function backToStep1() {
   pinError.value = ''
   tempToken.value = ''
   trustedUser.value = null
+  step2User.value = null
 }
 
 function switchAccount() {
@@ -579,5 +595,40 @@ function focusPinHint() {
 
 .trusted-card {
   margin-bottom: 24px;
+}
+
+.pin-user-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.pin-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 12px rgba(1, 1, 32, 0.35);
+}
+
+.pin-display-name {
+  color: #fff;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 2px;
+  letter-spacing: -0.01em;
+}
+
+.pin-username-sub {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13px;
+  margin: 0 0 16px;
 }
 </style>
