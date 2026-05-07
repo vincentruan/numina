@@ -199,6 +199,39 @@ def update_ai_config(
     return _cfg_to_response(cfg, test_results, api_key_masked)
 
 
+@router.get("/config/{config_id}/reveal-key")
+def reveal_ai_config_key(
+    config_id: int,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict:
+    """返回 AI 配置的明文 API Key（仅 owner）。"""
+    cfg = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == current_user.family_id,
+        )
+        .first()
+    )
+    if not cfg:
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
+    if not cfg.api_key_encrypted:
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+    decrypted = decrypt_api_key(cfg.api_key_encrypted)
+    if not decrypted:
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+
+    _log_security_event(
+        "ai_key_revealed",
+        user_id=current_user.id,
+        family_id=current_user.family_id,
+        provider=cfg.provider,
+    )
+
+    return {"api_key": decrypted}
+
+
 @router.delete("/config/{config_id}", status_code=204)
 def delete_ai_config(
     config_id: int,

@@ -61,6 +61,8 @@ export default {
     retired: '已退役',
     daysUsed: '已使用 {days} 天',
     dailyCostLabel: '日均成本',
+    progressTarget: '目标：{days}天',
+    progressRemaining: '还剩{days}天',
     sortByValue: '按价值',
     sortByDate: '按日期',
     sortByName: '按名称',
@@ -675,6 +677,9 @@ export default {
     enterPrompt: '输入自定义提示词…',
     resetToDefault: '恢复默认提示词',
     promptReset: '✅ 已恢复默认提示词',
+    viewDefault: '查看默认提示词',
+    hideDefault: '收起默认提示词',
+    defaultPromptLabel: '系统默认提示词（仅供参考）',
     capability: {
       report: '📊 资产体检报告',
       chat: '💬 AI 对话助手',

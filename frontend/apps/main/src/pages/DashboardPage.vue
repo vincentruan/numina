@@ -90,12 +90,22 @@
               @load="onLoadMore"
             >
               <div class="asset-list">
-                <AssetCard
-                  v-for="asset in filteredByCategoryAssets"
-                  :key="asset.id"
-                  :asset="asset"
-                  @click="$router.push(`/assets/${asset.id}`)"
-                />
+                <template v-if="viewMode === 'list'">
+                  <AssetListItem
+                    v-for="asset in filteredByCategoryAssets"
+                    :key="asset.id"
+                    :asset="asset"
+                    @click="$router.push(`/assets/${asset.id}`)"
+                  />
+                </template>
+                <template v-else>
+                  <AssetCard
+                    v-for="asset in filteredByCategoryAssets"
+                    :key="asset.id"
+                    :asset="asset"
+                    @click="$router.push(`/assets/${asset.id}`)"
+                  />
+                </template>
               </div>
             </van-list>
           </template>
@@ -111,14 +121,26 @@
             <van-button type="primary" size="small" @click="exitSelectionMode">完成</van-button>
           </div>
           <div class="selection-list-cards">
-            <AssetCard
-              v-for="asset in dashboardStore.displayedAssets"
-              :key="asset.id"
-              :asset="asset"
-              :selectable="true"
-              :selected="selectedIds.includes(asset.id)"
-              @click="toggleSelection(asset.id)"
-            />
+            <template v-if="viewMode === 'list'">
+              <AssetListItem
+                v-for="asset in dashboardStore.displayedAssets"
+                :key="asset.id"
+                :asset="asset"
+                :selectable="true"
+                :selected="selectedIds.includes(asset.id)"
+                @click="toggleSelection(asset.id)"
+              />
+            </template>
+            <template v-else>
+              <AssetCard
+                v-for="asset in dashboardStore.displayedAssets"
+                :key="asset.id"
+                :asset="asset"
+                :selectable="true"
+                :selected="selectedIds.includes(asset.id)"
+                @click="toggleSelection(asset.id)"
+              />
+            </template>
           </div>
           <div class="selection-actions">
             <van-button icon="share-o" @click="handleBatchShare">分享</van-button>
@@ -201,6 +223,7 @@ import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/s
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
+import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
@@ -213,6 +236,7 @@ const dashboardStore = useDashboardStore()
 const categoryStore = useCategoryStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
+const viewMode = computed(() => authStore.user?.view_mode || 'card')
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 const overviewCardRef = ref()

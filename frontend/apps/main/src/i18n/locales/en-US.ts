@@ -61,6 +61,8 @@ export default {
     retired: 'Retired',
     daysUsed: '{days} days used',
     dailyCostLabel: 'Daily Cost',
+    progressTarget: 'Target: {days}d',
+    progressRemaining: '{days}d left',
     sortByValue: 'By Value',
     sortByDate: 'By Date',
     sortByName: 'By Name',
@@ -526,5 +528,9 @@ export default {
     parseFailed: 'Parsing failed, please check if the file is a financial statement',
     importSuccess: 'Import complete: updated {update}, created {create}',
     importFailed: 'Import failed, please try again later',
+  },
+  aiConfig: {
+    hideApiKey: 'Hide API Key',
+    showApiKey: 'Show API Key',
   },
 }

@@ -19,21 +19,29 @@
     <template v-if="isOwner">
       <van-cell-group inset title="服务商配置" class="section">
         <van-cell title="AI 服务商" :value="providerLabel" is-link @click="showProviderPicker = true" />
-        <!-- API Key: shows masked value by default; eye icon toggles plaintext; typing replaces with new key -->
+        <!-- API Key: shows masked value by default; eye icon toggles plaintext while typing new key -->
         <van-field
           v-model="apiKeyDisplay"
           label="API Key"
           :placeholder="'请输入 API Key'"
-          :type="showApiKey ? 'text' : 'password'"
+          :type="editingApiKey && !showApiKey ? 'password' : 'text'"
           :disabled="saving"
           autocomplete="off"
           @input="onApiKeyInput"
         >
           <template #right-icon>
             <van-icon
+              v-if="maskedKey && !editingApiKey"
               :name="showApiKey ? 'eye-o' : 'closed-eye'"
               style="cursor: pointer"
-              :aria-label="showApiKey ? '隐藏 API Key' : '显示 API Key'"
+              :aria-label="showApiKey ? t('aiConfig.hideApiKey') : t('aiConfig.showApiKey')"
+              @click="onToggleRevealApiKey"
+            />
+            <van-icon
+              v-else-if="editingApiKey"
+              :name="showApiKey ? 'eye-o' : 'closed-eye'"
+              style="cursor: pointer"
+              :aria-label="showApiKey ? t('aiConfig.hideApiKey') : t('aiConfig.showApiKey')"
               @click="showApiKey = !showApiKey"
             />
           </template>
@@ -272,6 +280,7 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAIStore } from '@/stores/ai'
+import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t } = useI18n()
@@ -284,6 +293,7 @@ const testingConnection = ref(false)
 const testingThinking = ref(false)
 const testingVision = ref(false)
 const testingVisionText = ref(false)
+const revealingApiKey = ref(false)
 const showProviderPicker = ref(false)
 const showMainModelPopup = ref(false)
 const showVisionModelPopup = ref(false)
@@ -394,6 +404,27 @@ function onApiKeyInput(e: Event) {
   const val = (e.target as HTMLInputElement).value
   apiKeyInput.value = val
   apiKeyDisplay.value = val
+  editingApiKey.value = true
+}
+
+async function onToggleRevealApiKey() {
+  if (showApiKey.value) {
+    // Hide: restore masked display
+    apiKeyDisplay.value = maskedKey.value ?? ''
+    showApiKey.value = false
+    return
+  }
+  if (!aiStore.config?.id) return
+  revealingApiKey.value = true
+  try {
+    const res = await aiApi.revealAIKey(aiStore.config.id)
+    apiKeyDisplay.value = res.data.api_key
+    showApiKey.value = true
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  } finally {
+    revealingApiKey.value = false
+  }
 }
 
 async function onToggleAI(val: boolean) {
@@ -428,8 +459,7 @@ async function onSave() {
     apiKeyInput.value = ''
     editingApiKey.value = false
     showApiKey.value = false
-    apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
-    showToast(t('toast.aiConfigSaved'))
+    apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''    showToast(t('toast.aiConfigSaved'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
     showToast(msg.includes('API Key') ? msg : t('toast.saveFailedGeneric'))

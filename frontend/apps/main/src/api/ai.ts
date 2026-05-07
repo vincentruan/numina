@@ -172,6 +172,9 @@ function _testUrl(): string {
   return `/ai/config/${_cachedConfigId}/test`
 }
 
+export const revealAIKey = (configId: string) =>
+  http.get<{ api_key: string }>(`/ai/config/${configId}/reveal-key`)
+
 export const testAIConfig = () => http.post<AIConfigTestResult>(_testUrl())
 export const testMainModelOnly = () => http.post<AIConfigTestResult>(_testUrl())
 export const testThinkingOnly = () => http.post<AIConfigTestResult>(_testUrl())

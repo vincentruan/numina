@@ -49,8 +49,8 @@
             </div>
           </div>
           <div class="progress-info">
-            <span class="progress-target">目标：{{ targetDays }}天</span>
-            <span class="progress-remaining">还剩{{ remainingDays }}天</span>
+            <span class="progress-target">{{ t('asset.progressTarget', { days: targetDays }) }}</span>
+            <span class="progress-remaining">{{ t('asset.progressRemaining', { days: remainingDays }) }}</span>
           </div>
         </div>
       </div>
@@ -60,6 +60,7 @@
 
 <script setup lang="ts">
 import { computed, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
 
@@ -76,6 +77,7 @@ const emit = defineEmits<{
 }>()
 
 const currency = useCurrency()
+const { t } = useI18n()
 
 // Long press detection
 let longPressTimer: ReturnType<typeof setTimeout> | null = null
@@ -120,10 +122,10 @@ const statusType = computed(() => {
 
 const statusText = computed(() => {
   switch (props.asset.status) {
-    case 'in_use': return '服役中'
-    case 'idle': return '闲置'
-    case 'sold': return '已出售'
-    case 'retired': return '已退役'
+    case 'in_use': return t('asset.inUse')
+    case 'idle': return t('asset.idle')
+    case 'sold': return t('asset.sold')
+    case 'retired': return t('asset.retired')
     default: return props.asset.status
   }
 })
