@@ -459,7 +459,8 @@ async function onSave() {
     apiKeyInput.value = ''
     editingApiKey.value = false
     showApiKey.value = false
-    apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''    showToast(t('toast.aiConfigSaved'))
+    apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
+    showToast(t('toast.aiConfigSaved'))
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
     showToast(msg.includes('API Key') ? msg : t('toast.saveFailedGeneric'))
