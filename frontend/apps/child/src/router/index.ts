@@ -45,6 +45,10 @@ const router = createRouter({
           component: () => import('@/pages/ChildTreasuresPage.vue'),
         },
         {
+          path: 'blind-box',
+          redirect: '/treasures',
+        },
+        {
           path: 'calendar/day',
           name: 'ChildDayDetail',
           component: () => import('@/pages/ChildDayDetailPage.vue'),

@@ -123,7 +123,7 @@ register_or_login() {
   # Try login first — only consume an invite code if we need to register
   local login_resp
   login_resp=$(curl -sL -c "$jar" -X POST "$BASE_URL/auth/login" \
-    "${SEED_HEADER[@]}" \
+    ${SEED_HEADER[@]+"${SEED_HEADER[@]}"} \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$username\",\"password\":\"$password\"}")
   local login_token
@@ -142,7 +142,7 @@ register_or_login() {
     if reset_password_in_db "$username" "$password"; then
       # Retry login with new password
       login_resp=$(curl -sL -c "$jar" -X POST "$BASE_URL/auth/login" \
-        "${SEED_HEADER[@]}" \
+        ${SEED_HEADER[@]+"${SEED_HEADER[@]}"} \
         -H "Content-Type: application/json" \
         -d "{\"username\":\"$username\",\"password\":\"$password\"}")
       login_token=$(echo "$login_resp" | jq -r '.access_token // .data.access_token')
@@ -158,7 +158,7 @@ register_or_login() {
   local invite_code="${5:-$(next_invite_code)}"
   local resp
   resp=$(curl -sL -c "$jar" -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
-    "${SEED_HEADER[@]}" \
+    ${SEED_HEADER[@]+"${SEED_HEADER[@]}"} \
     -H "Content-Type: application/json" \
     -d "{\"username\":\"$username\",\"display_name\":\"$display_name\",\"password\":\"$password\",\"family_name\":\"$family_name\",\"family_invitation_code\":\"$invite_code\"}")
 
@@ -515,7 +515,7 @@ log_info "初始化 test_rich_member（test_rich 家庭的 member 角色）..."
 
 # 先尝试直接登录（最常见的幂等路径）
 MEMBER_LOGIN_RESP=$(curl -sL -X POST "$BASE_URL/auth/login" \
-  "${SEED_HEADER[@]}" \
+  ${SEED_HEADER[@]+"${SEED_HEADER[@]}"} \
   -H "Content-Type: application/json" \
   -d '{"username":"test_rich_member","password":"TestMember123!"}')
 MEMBER_TOKEN=$(echo "$MEMBER_LOGIN_RESP" | jq -r '.access_token // .data.access_token')
@@ -541,7 +541,7 @@ else
 
   if [ -n "$INVITE_CODE" ] && [ "$INVITE_CODE" != "null" ]; then
     MEMBER_RESP=$(curl -sL -w "\n%{http_code}" -X POST "$BASE_URL/auth/register" \
-      "${SEED_HEADER[@]}" \
+      ${SEED_HEADER[@]+"${SEED_HEADER[@]}"} \
       -H "Content-Type: application/json" \
       -d "{\"username\":\"test_rich_member\",\"display_name\":\"测试成员\",\"password\":\"TestMember123!\",\"family_invitation_code\":\"$INVITE_CODE\"}")
     MEMBER_HTTP=$(echo "$MEMBER_RESP" | tail -1)

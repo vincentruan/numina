@@ -54,6 +54,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
@@ -72,7 +73,7 @@ const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 const todayLabel = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })
 
-const SEEN_KEY = 'seen_milestones'
+const SEEN_KEY = `seen_milestones_${getUser()?.id ?? 'anon'}`
 
 function getSeenIds(): Set<string> {
   try {
