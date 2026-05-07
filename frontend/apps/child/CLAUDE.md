@@ -10,6 +10,7 @@ npm run lint          # ESLint — check for errors and warnings
 npm run lint:fix      # ESLint — auto-fix where possible
 npm run typecheck     # vue-tsc --noEmit — type check without building
 npm run build         # full production build
+npm run test:run      # vitest run — run tests once (no watch)
 ```
 
 ## Tooling

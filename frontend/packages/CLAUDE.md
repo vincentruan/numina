@@ -2,9 +2,13 @@
 
 Shared packages under `frontend/packages/`. All conventions from [`frontend/apps/main/CLAUDE.md`](../apps/main/CLAUDE.md) apply here unless noted otherwise.
 
-## Scope
+## Packages
 
-Packages in this directory are consumed by `frontend/apps/main` and `frontend/apps/child`. Code changes here affect both apps.
+| Package | Purpose |
+|---------|---------|
+| `auth` | Shared authentication utilities (token storage, refresh logic) |
+
+Code changes here affect both `frontend/apps/main` and `frontend/apps/child`.
 
 ## Key Invariants (inherited)
 
@@ -19,6 +23,7 @@ Packages in this directory are consumed by `frontend/apps/main` and `frontend/ap
 Run from `frontend/`:
 
 ```bash
+npm run lint          # ESLint across all workspaces
 npm run typecheck     # type-check all workspaces including packages
 ```
 

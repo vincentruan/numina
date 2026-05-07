@@ -27,6 +27,37 @@ These must hold in every code path — never bypass them:
 2. **Policy guard:** All agent requests must pass through `policy_guard`. Never skip or short-circuit it.
 3. **Audit logging:** Every agent decision must emit an audit event via `audit_logger`. This includes both success and error paths.
 
+## Directory Structure
+
+```
+agent/
+├── app/
+│   ├── config.py      # Settings (USE_DEERFLOW, AGENT_INTERNAL_TOKEN, etc.)
+│   ├── main.py        # FastAPI app entry point
+│   └── routers/       # Route handlers (chat, report, suggest, disposal, …)
+├── routers/           # Top-level router registrations
+├── services/          # Business logic
+│   ├── orchestrator.py        # Routes requests to deerflow_adapter or fallback_engine
+│   ├── deerflow_adapter/      # DeerFlow harness integration
+│   ├── fallback_engine.py     # Direct LLM calls (Anthropic/OpenAI)
+│   ├── pii_redactor.py        # PII scrubbing (must run before any tool call)
+│   ├── policy_guard.py        # Request policy enforcement
+│   └── audit_logger.py        # Audit event emission
+├── schemas/           # Pydantic request/response models
+├── skills/            # Agent skill definitions
+├── tests/             # pytest test suite
+└── vendor/            # Vendored dependencies (DeerFlow)
+```
+
+## Key Environment Variables
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `USE_DEERFLOW` | `false` | Route through DeerFlow harness vs direct LLM |
+| `AGENT_INTERNAL_TOKEN` | — | Shared service-to-service token with backend (required) |
+| `ANTHROPIC_API_KEY` | — | Required when `USE_DEERFLOW=false` |
+| `OPENAI_API_KEY` | — | Optional alternative LLM provider |
+
 ## Patterns
 
 ### DeerFlow Toggle
@@ -42,9 +73,7 @@ Both paths must produce equivalent `AgentResponse` output. When changing orchest
 
 ### Implementation Priority
 
-Agent功能实现上优先复用 DeerFlow Harness 已有能力，仅在明确确认能力突破了 DeerFlow 边界后才考虑新增方案。
-
-这是为了避免重复造轮子，确保架构一致性。
+Prefer reusing existing DeerFlow Harness capabilities. Only introduce a new solution after confirming the requirement genuinely exceeds DeerFlow's boundaries — avoids duplication and keeps the architecture consistent.
 
 ### Pydantic v2
 

@@ -96,7 +96,7 @@ Applies to every router with root-path endpoints. Frontend calls must also omit 
 - **Error messages in Chinese** — backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
-- **Past solutions** — `docs/solutions/` contains documented fixes for recurring problems. Check before debugging known issue categories.
+- **Past solutions** — `docs/solutions/` contains documented fixes for recurring problems. Check before debugging known issue categories. Subdirectories: `best-practices/` (e.g. Redis fail-fast strategy, cache key granularity, Pydantic validation), `integration-issues/` (e.g. DeerFlow silent fallback), `ui-bugs/`, `developer-experience/`.
 
 ## Module Documentation
 

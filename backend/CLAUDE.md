@@ -22,6 +22,10 @@ uv run alembic upgrade head                                # apply migrations
 - **mypy:** type checker. Config in `pyproject.toml` under `[tool.mypy]`. Starts lenient (`ignore_missing_imports = true`) — ratchet strictness over time by adding `disallow_untyped_defs = true` per module.
 - **pytest:** test runner. Tests in `backend/tests/`. Each test gets a fresh in-memory SQLite DB.
 
+## Cache Backend
+
+Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to enable Redis. When using Redis, also set `REDIS_URL` (e.g. `redis://localhost:6379/0`). The in-memory backend is suitable for single-instance dev; Redis is required for multi-worker or multi-instance deployments.
+
 ## Key Invariants
 
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
