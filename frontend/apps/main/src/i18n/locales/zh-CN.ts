@@ -86,7 +86,10 @@ export default {
     carLoan: '车贷',
     creditCard: '信用卡',
     personalLoan: '个人贷款',
-    other: '其他'
+    other: '其他',
+    noLiabilityDesc: '当前无活跃负债，财务状况良好 ✅',
+    analyzePrompt: '点击分析负债状况',
+    startAnalyze: '开始分析'
   },
   family: {
     title: '家庭',

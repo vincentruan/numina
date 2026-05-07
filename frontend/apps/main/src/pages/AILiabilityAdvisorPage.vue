@@ -7,15 +7,15 @@
     </div>
 
     <div v-else-if="!data" class="empty-state">
-      <van-empty description="点击分析负债状况">
+      <van-empty :description="t('liability.analyzePrompt')">
         <template #image>
           <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="40" cy="40" r="36" fill="rgba(99,102,241,0.08)" />
-            <circle cx="40" cy="40" r="28" fill="rgba(99,102,241,0.10)" />
-            <path d="M28 50l8-20 8 20" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <path d="M31 44h10" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="52" cy="34" r="8" stroke="#6366f1" stroke-width="2.5" fill="none"/>
-            <path d="M52 31v6M49 34h6" stroke="#6366f1" stroke-width="2" stroke-linecap="round"/>
+            <rect x="8" y="8" width="64" height="64" rx="8" fill="rgba(189,187,255,0.10)" />
+            <rect x="20" y="20" width="40" height="40" rx="4" stroke="#bdbbff" stroke-width="1.5" fill="rgba(189,187,255,0.08)" />
+            <path d="M32 44l6-14 6 14" stroke="#bdbbff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <path d="M34.5 39.5h7" stroke="#bdbbff" stroke-width="2" stroke-linecap="round"/>
+            <rect x="44" y="26" width="12" height="12" rx="4" stroke="#bdbbff" stroke-width="1.5" fill="none"/>
+            <path d="M50 29v6M47 32h6" stroke="#bdbbff" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </template>
       </van-empty>
@@ -26,20 +26,19 @@
           :elapsed-seconds="taskElapsed"
           v-model="isConsoleOpen"
         />
-        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onAnalyze">开始分析</van-button>
+        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onAnalyze">{{ t('liability.startAnalyze') }}</van-button>
       </div>
     </div>
 
     <template v-else>
       <!-- No liabilities -->
       <div v-if="!data.has_liabilities" class="no-liability">
-        <van-empty description="当前无活跃负债，财务状况良好">
+        <van-empty :description="t('liability.noLiabilityDesc')">
           <template #image>
             <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <circle cx="40" cy="40" r="36" fill="rgba(74,222,128,0.08)" />
-              <circle cx="40" cy="40" r="28" fill="rgba(74,222,128,0.10)" />
-              <circle cx="40" cy="40" r="14" stroke="#4ade80" stroke-width="2.5" fill="none"/>
-              <path d="M33 40l5 5 9-10" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <rect x="8" y="8" width="64" height="64" rx="8" fill="rgba(189,187,255,0.10)" />
+              <rect x="20" y="20" width="40" height="40" rx="4" stroke="#bdbbff" stroke-width="1.5" fill="rgba(189,187,255,0.08)" />
+              <path d="M30 40l7 7 13-14" stroke="#bdbbff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </template>
         </van-empty>
