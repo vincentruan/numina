@@ -65,14 +65,19 @@
         />
 
         <template v-else>
-          <div
-            v-if="childInfo.avatarColor"
-            class="child-avatar"
-            :style="{ backgroundColor: childInfo.avatarColor }"
-          >
-            {{ (childInfo.displayName ?? '?').charAt(0) }}
+          <div class="child-user-card">
+            <div
+              v-if="childInfo.avatarColor"
+              class="child-avatar"
+              :style="{ backgroundColor: childInfo.avatarColor }"
+            >
+              {{ (childInfo.displayName ?? '?').charAt(0) }}
+            </div>
+            <div class="child-user-info">
+              <p class="child-display-name">{{ childInfo.displayName }}</p>
+              <p class="child-username-sub">{{ form.username }}</p>
+            </div>
           </div>
-          <p class="child-name">{{ childInfo.displayName }}</p>
         </template>
 
         <!-- WebAuthn mode -->
@@ -450,24 +455,46 @@ watch(
   margin-bottom: 24px;
 }
 
+.child-user-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .child-avatar {
-  width: 80px;
-  height: 80px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 36px;
+  font-size: 20px;
   font-weight: 500;
   color: #fff;
-  margin-bottom: 12px;
+  box-shadow: 0 2px 12px rgba(1, 1, 32, 0.35);
 }
 
-.child-name {
-  font-size: 20px;
+.child-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.child-display-name {
+  font-size: 16px;
   font-weight: 600;
-  margin: 0 0 24px;
+  margin: 0;
   color: #fff;
+  letter-spacing: -0.01em;
+}
+
+.child-username-sub {
+  font-size: 12px;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .pin-hint {

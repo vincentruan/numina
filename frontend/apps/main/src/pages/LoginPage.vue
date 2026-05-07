@@ -10,89 +10,6 @@
     <!-- Login content (above canvas) -->
     <div class="login-content">
       <div class="login-header">
-        <!-- Numina SVG logo — cursive script, family+finance motif -->
-        <svg
-          class="numina-logo"
-          viewBox="-10 -15 300 95"
-          xmlns="http://www.w3.org/2000/svg"
-          aria-label="Numina"
-          role="img"
-        >
-          <defs>
-            <linearGradient id="flourishGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stop-color="#bdbbff" stop-opacity="0.7" />
-              <stop offset="45%" stop-color="#e8e4ff" stop-opacity="1" />
-              <stop offset="100%" stop-color="#ffd6a5" stop-opacity="0.8" />
-            </linearGradient>
-            <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="#ffffff" />
-              <stop offset="100%" stop-color="rgba(255,255,255,0.85)" />
-            </linearGradient>
-            <filter id="logoGlow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="2" result="b" />
-              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-            <filter id="logoSoftglow" x="-15%" y="-15%" width="130%" height="130%">
-              <feGaussianBlur stdDeviation="1" result="b" />
-              <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-            </filter>
-          </defs>
-
-          <!-- N: left stem + diagonal + right stem -->
-          <path d="M 4,56 C 4,50 4,30 5,18 C 5.5,14 7,12 9,13 C 11,14 13,17 15,22 C 22,36 28,48 31,54 C 32,57 33,58 34,57 C 35,56 36,40 36,18 C 36,14 37,12 39,12"
-            fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#logoSoftglow)" />
-          <path d="M 39,12 C 41,11 44,14 45,20" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
-
-          <!-- u -->
-          <path d="M 45,20 C 45,20 44,46 44,52 C 44,57 46,60 49,59 C 52,58 55,54 57,49 C 58,46 58,20 58,20"
-            fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#logoSoftglow)" />
-          <path d="M 58,20 C 60,19 63,20 64,22" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
-
-          <!-- m: left stem + two arches -->
-          <path d="M 64,22 C 64,22 63,56 63,58" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-          <path d="M 63,30 C 65,23 69,19 73,20 C 77,21 79,25 79,30 C 79,30 79,58 79,58" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-          <path d="M 79,30 C 81,23 85,19 89,20 C 93,21 95,25 95,30 C 95,30 95,58 95,58" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-          <path d="M 95,58 C 97,59 100,58 101,56 C 102,54 102,40 102,30" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
-
-          <!-- i: stem -->
-          <path d="M 102,30 C 102,30 102,56 102,58" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-          <!-- i dot → house icon -->
-          <g transform="translate(96.5, 14)" filter="url(#logoGlow)">
-            <polyline points="5.5,8 0,4 5.5,0 11,4 5.5,8" fill="none" stroke="url(#flourishGrad)" stroke-width="1.5" stroke-linejoin="round" />
-            <rect x="1.5" y="8" width="8" height="6" fill="none" stroke="url(#flourishGrad)" stroke-width="1.5" />
-            <rect x="3.5" y="10.5" width="4" height="3.5" fill="none" stroke="url(#flourishGrad)" stroke-width="1.2" />
-          </g>
-          <path d="M 102,58 C 104,59 107,58 108,56 C 109,54 109,40 109,30" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
-
-          <!-- n: stem + arch -->
-          <path d="M 109,30 C 109,30 108,56 108,58" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-          <path d="M 108,38 C 110,31 114,27 118,28 C 122,29 124,33 124,38 C 124,38 124,58 124,58" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-          <path d="M 124,58 C 126,59 129,58 130,56 C 131,54 131,44 131,38" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
-
-          <!-- a: bowl + right stem + exit -->
-          <path d="M 148,32 C 146,26 142,23 138,24 C 134,25 131,29 131,36 C 131,44 134,56 140,58 C 144,59 148,56 148,52 C 148,48 148,32 148,32"
-            fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#logoSoftglow)" />
-          <path d="M 148,32 C 148,32 148,58 149,60 C 150,62 153,63 156,61" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
-
-          <!-- Decorative flourish: sweeping arc from N top, over word, curling back -->
-          <path d="M 39,12 C 55,0 90,-4 130,-1 C 170,2 205,-2 225,10 C 240,18 244,34 238,46 C 232,56 220,62 208,58 C 196,54 193,44 198,36 C 201,30 208,27 214,30"
-            fill="none" stroke="url(#flourishGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.85" filter="url(#logoGlow)" />
-
-          <!-- Trend line from a's exit -->
-          <path d="M 156,61 C 170,64 190,58 205,50" fill="none" stroke="url(#flourishGrad)" stroke-width="1.3" stroke-linecap="round" opacity="0.65" />
-
-          <!-- Growth arrow at flourish end -->
-          <g transform="translate(208, 22)" filter="url(#logoGlow)">
-            <polyline points="0,14 5,6 10,14" fill="none" stroke="url(#flourishGrad)" stroke-width="1.5" stroke-linejoin="round" opacity="0.95" />
-            <line x1="5" y1="6" x2="5" y2="20" stroke="url(#flourishGrad)" stroke-width="1.5" opacity="0.95" />
-          </g>
-
-          <!-- Three dots on flourish arc — family members connected -->
-          <circle cx="80" cy="-2" r="2" fill="url(#flourishGrad)" opacity="0.6" filter="url(#logoGlow)" />
-          <circle cx="130" cy="-1" r="2" fill="url(#flourishGrad)" opacity="0.6" filter="url(#logoGlow)" />
-          <circle cx="178" cy="2" r="2" fill="url(#flourishGrad)" opacity="0.6" filter="url(#logoGlow)" />
-        </svg>
-
         <p class="app-subtitle">家庭资产可视化管理</p>
       </div>
 
@@ -152,8 +69,10 @@
             class="pin-avatar"
             :style="{ background: step2User.avatarColor }"
           >{{ step2User.displayName.charAt(0).toUpperCase() }}</div>
-          <p class="pin-display-name">{{ step2User.displayName }}</p>
-          <p class="pin-username-sub">{{ form.username }}</p>
+          <div class="pin-user-info">
+            <p class="pin-display-name">{{ step2User.displayName }}</p>
+            <p class="pin-username-sub">{{ form.username }}</p>
+          </div>
         </div>
         <p v-else class="pin-username">{{ form.username }}</p>
         <p class="pin-hint">请输入数字 PIN 码完成验证</p>
@@ -410,13 +329,6 @@ function focusPinHint() {
   margin-bottom: 40px;
 }
 
-.numina-logo {
-  width: 220px;
-  height: auto;
-  display: block;
-  margin: 0 auto;
-}
-
 .app-subtitle {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.8);
@@ -599,36 +511,43 @@ function focusPinHint() {
 
 .pin-user-card {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  margin-bottom: 4px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
 .pin-avatar {
-  width: 64px;
-  height: 64px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
   color: #fff;
-  margin-bottom: 10px;
   box-shadow: 0 2px 12px rgba(1, 1, 32, 0.35);
+}
+
+.pin-user-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .pin-display-name {
   color: #fff;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  margin: 0 0 2px;
+  margin: 0;
   letter-spacing: -0.01em;
 }
 
 .pin-username-sub {
   color: rgba(255, 255, 255, 0.55);
-  font-size: 13px;
-  margin: 0 0 16px;
+  font-size: 12px;
+  margin: 0;
 }
 </style>
