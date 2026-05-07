@@ -163,12 +163,14 @@ onMounted(load)
           :label="`${t('device.lastSeen')}: ${formatRelativeTime(device.last_seen_at)}`"
         >
           <template #right-icon>
-            <van-tag v-if="device.is_current" type="primary" style="margin-right: 8px">
-              {{ t('device.currentDevice') }}
-            </van-tag>
-            <van-button size="small" type="danger" plain @click="handleRevoke(device)">
-              {{ device.is_current ? t('device.revokeThis') : t('device.revoke') }}
-            </van-button>
+            <div style="display: flex; align-items: center; gap: 8px">
+              <van-tag v-if="device.is_current" type="primary">
+                {{ t('device.currentDevice') }}
+              </van-tag>
+              <van-button size="small" type="danger" plain @click="handleRevoke(device)">
+                {{ device.is_current ? t('device.revokeThis') : t('device.revoke') }}
+              </van-button>
+            </div>
           </template>
         </van-cell>
       </van-list>
