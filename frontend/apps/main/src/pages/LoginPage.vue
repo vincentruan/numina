@@ -134,7 +134,7 @@
         </div>
       </div>
 
-      <!-- Step 2: numeric PIN -->
+      <!-- Step 2: PIN verification (numeric or emoji based on secondFactorType) -->
       <div v-else class="pin-step">
         <!-- Trusted device card — shown when fast-login path was taken -->
         <TrustedDeviceCard
@@ -159,9 +159,10 @@
           </div>
         </div>
         <p v-else class="pin-username">{{ form.username }}</p>
-        <p class="pin-hint">请输入数字 PIN 码完成验证</p>
+        <p class="pin-hint">{{ secondFactorType === 'emoji_pin' ? '请输入图形密码完成验证' : '请输入数字 PIN 码完成验证' }}</p>
 
-        <div class="pin-display" :class="{ shake: shaking }">
+        <!-- Numeric PIN mode -->
+        <div v-if="secondFactorType !== 'emoji_pin'" class="pin-display" :class="{ shake: shaking }">
           <span
             v-for="i in 6"
             :key="i"
@@ -172,7 +173,8 @@
 
         <p v-if="pinError" class="pin-error">{{ pinError }}</p>
 
-        <div class="numpad">
+        <!-- Numeric keypad -->
+        <div v-if="secondFactorType !== 'emoji_pin'" class="numpad">
           <button
             v-for="n in [1,2,3,4,5,6,7,8,9,'清空',0,'⌫']"
             :key="n"
@@ -188,7 +190,40 @@
           </button>
         </div>
 
+        <!-- Emoji PIN mode -->
+        <div v-else class="emoji-pin-section">
+          <div class="emoji-pin-display" :class="{ shake: shaking }">
+            <span
+              v-for="i in 4"
+              :key="i"
+              class="emoji-pin-slot"
+              :class="{ filled: emojiPin.length >= i }"
+            >
+              {{ emojiPin[i - 1] || '' }}
+            </span>
+          </div>
+
+          <div class="emoji-grid">
+            <button
+              v-for="emoji in EMOJIS"
+              :key="emoji"
+              class="emoji-btn"
+              :disabled="loading || emojiPin.length >= 4"
+              :class="{ flash: flashKey === emoji }"
+              @click="addEmoji(emoji)"
+            >
+              {{ emoji }}
+            </button>
+          </div>
+
+          <div class="emoji-actions">
+            <button class="emoji-action-btn" @click="deleteEmoji">删除</button>
+            <button class="emoji-action-btn" @click="clearEmojiPin">清除</button>
+          </div>
+        </div>
+
         <van-button
+          v-if="secondFactorType !== 'emoji_pin'"
           round
           block
           type="primary"
@@ -209,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -237,6 +272,11 @@ const pinInput = ref('')
 const shaking = ref(false)
 const pinError = ref('')
 const flashKey = ref<number | string | null>(null)
+
+// Emoji PIN support
+const EMOJIS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🦁', '🐯', '🌟', '🌈', '🍎', '🎈']
+const emojiPin = ref<string[]>([])
+const submitting = ref(false)
 
 interface TrustedUser {
   displayName: string
@@ -363,6 +403,7 @@ async function submitPin() {
 function backToStep1() {
   step.value = 1
   pinInput.value = ''
+  emojiPin.value = []
   pinError.value = ''
   tempToken.value = ''
   trustedUser.value = null
@@ -376,6 +417,61 @@ function switchAccount() {
 function focusPinHint() {
   // TrustedDeviceCard confirm — user is already on step 2, nothing extra needed
 }
+
+// Emoji PIN functions
+function addEmoji(emoji: string) {
+  flashKey.value = emoji
+  setTimeout(() => { flashKey.value = null }, 150)
+  if (emojiPin.value.length < 4) {
+    emojiPin.value.push(emoji)
+  }
+}
+
+function deleteEmoji() {
+  emojiPin.value.pop()
+}
+
+function clearEmojiPin() {
+  emojiPin.value = []
+  pinError.value = ''
+}
+
+// Auto-submit emoji PIN when 4 emojis selected
+watch(
+  () => emojiPin.value.length,
+  async (len) => {
+    if (len === 4 && !submitting.value) {
+      submitting.value = true
+      loading.value = true
+      pinError.value = ''
+      try {
+        await authStore.loginStep2({
+          temp_token: tempToken.value,
+          factor_type: 'emoji_pin',
+          payload: { pin_sequence: emojiPin.value },
+        })
+        showToast(t('toast.loginSuccess'))
+        router.push('/')
+      } catch (error: unknown) {
+        shaking.value = true
+        emojiPin.value = []
+        setTimeout(() => { shaking.value = false }, 600)
+
+        const axiosError = error as { response?: { data?: { code?: string; message?: string } } }
+        const code = axiosError.response?.data?.code
+        const i18nKey = code ? `errors.${code}` : ''
+        if (i18nKey && t(i18nKey) !== i18nKey) {
+          pinError.value = t(i18nKey)
+        } else {
+          pinError.value = axiosError.response?.data?.message || t('toast.loginFailedGeneric')
+        }
+      } finally {
+        loading.value = false
+        submitting.value = false
+      }
+    }
+  },
+)
 </script>
 
 <style scoped>
@@ -640,5 +736,94 @@ function focusPinHint() {
   color: rgba(255, 255, 255, 0.55);
   font-size: 12px;
   margin: 0;
+}
+
+/* Emoji PIN styles */
+.emoji-pin-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.emoji-pin-display {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.emoji-pin-slot {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.emoji-pin-slot.filled {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.8);
+}
+
+.emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.emoji-btn {
+  font-size: 28px;
+  min-height: 56px;
+  min-width: 56px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  transition: background 0.1s, transform 0.1s;
+}
+
+.emoji-btn:active {
+  transform: scale(0.92);
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.emoji-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.emoji-btn.flash {
+  animation: flash 0.15s ease-out;
+}
+
+.emoji-actions {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.emoji-action-btn {
+  min-height: 44px;
+  min-width: 88px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.emoji-action-btn:active {
+  background: rgba(255, 255, 255, 0.18);
 }
 </style>
