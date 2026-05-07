@@ -19,6 +19,28 @@ memory:
   max_facts: 50
   fact_confidence_threshold: 0.8
 
+# 对话历史自动压缩（超过阈值时触发）
+summarization:
+  enabled: true
+  trigger:
+    - type: messages
+      value: 40  # 超过20轮（40条消息）时触发压缩
+    - type: tokens
+      value: 6000  # 或超过6000 tokens时触发（接近8k模型上限）
+  keep:
+    type: messages
+    value: 8  # 压缩后保留最后4轮（8条消息）
+  trim_tokens_to_summarize: null  # 不截断，保留完整历史生成摘要
+  summary_prompt: |
+    请将以下对话历史压缩成简洁的摘要，保留关键信息和上下文要点。
+    摘要应该：
+    1. 用不超过200字概括讨论的主要内容
+    2. 保留重要的数字、决策和结论
+    3. 保持时间顺序的逻辑关系
+    对话历史：
+    {messages}
+    请直接输出摘要，不要有任何前言或解释：
+
 # 沙盒安全设置
 sandbox:
   use: deerflow.sandbox.local:LocalSandboxProvider

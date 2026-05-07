@@ -87,15 +87,20 @@
                 <div
                   v-if="msg.role === 'assistant' && msg.thinkContent"
                   class="think-block"
-                  :class="{ 'think-block--open': msg.thinkOpen }"
+                  :class="{ 'think-block--open': msg.thinkOpen, 'think-block--done': msg.thinkDone }"
                 >
                   <button class="think-toggle" @click="msg.thinkOpen = !msg.thinkOpen">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
-                      <path d="M9 21h6"/>
-                    </svg>
-                    <span v-if="msg.thinkDone">已深度思考 {{ msg.thinkSeconds }}s</span>
-                    <span v-else class="think-ing">深度思考中…</span>
+                    <div class="think-icon-wrapper">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+                        <path d="M9 21h6"/>
+                      </svg>
+                    </div>
+                    <span v-if="msg.thinkDone" class="think-status">已深度思考</span>
+                    <span v-else class="think-status think-status--active">
+                      <span class="think-text-animated">正在思考</span>
+                    </span>
+                    <span v-if="msg.thinkDone" class="think-duration">{{ msg.thinkSeconds }}s</span>
                     <svg class="think-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
@@ -156,20 +161,38 @@
           </div>
         </transition-group>
 
-        <!-- Skeleton loading state -->
-        <transition name="msg">
-          <div v-if="asking" class="message-row assistant">
-            <div class="bubble assistant">
-              <div class="bubble-body">
-                <div class="skeleton-bubble" aria-label="AI 正在思考">
-                  <div class="skeleton-line skeleton-line--long" />
-                  <div class="skeleton-line skeleton-line--medium" />
-                  <div class="skeleton-line skeleton-line--short" />
-                </div>
+        <!-- Connecting state: wave dots animation -->
+    <transition name="msg">
+      <div v-if="connecting" class="message-row assistant">
+        <div class="bubble assistant">
+          <div class="bubble-body">
+            <div class="connecting-indicator" aria-label="正在连接 AI">
+              <div class="wave-dots">
+                <span class="dot" />
+                <span class="dot" />
+                <span class="dot" />
               </div>
+              <span class="connecting-text">正在连接</span>
             </div>
           </div>
-        </transition>
+        </div>
+      </div>
+    </transition>
+
+    <!-- Skeleton loading state (after connection established) -->
+    <transition name="msg">
+      <div v-if="asking && !connecting" class="message-row assistant">
+        <div class="bubble assistant">
+          <div class="bubble-body">
+            <div class="skeleton-bubble" aria-label="AI 正在思考">
+              <div class="skeleton-line skeleton-line--long" />
+              <div class="skeleton-line skeleton-line--medium" />
+              <div class="skeleton-line skeleton-line--short" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
       </template>
     </div>
 
@@ -180,7 +203,7 @@
         v-model:deep-think="deepThink"
         v-model:web-search="webSearch"
         :disabled="asking"
-        :loading="asking"
+        :loading="asking || connecting"
         :show-clear="messages.length > 0"
         placeholder="请输入您的问题…"
         @submit="onSend"
@@ -254,6 +277,7 @@ const aiStore = useAIStore()
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
+const connecting = ref(false)
 const deepThink = ref(false)
 const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
@@ -311,6 +335,7 @@ async function onSend() {
   })
   inputText.value = ''
   asking.value = true
+  connecting.value = true  // Show connecting animation first
   abortController = new AbortController()
   await scrollToBottom()
 
@@ -350,6 +375,10 @@ async function onSend() {
 
   try {
     const reader = await sendChatMessageStream(q, deepThink.value, abortController.signal)
+
+    // Connection established, hide connecting animation
+    connecting.value = false
+    await scrollToBottom()
 
     while (true) {
       const { done, value } = await reader.read()
@@ -450,12 +479,14 @@ async function onSend() {
     }
 
     asking.value = false
+    connecting.value = false
     abortController = null
     await scrollToBottom()
   } catch (err: unknown) {
-    if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
+    if (thinkTimer) clearInterval(thinkTimer)
     if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
       asking.value = false
+      connecting.value = false
       abortController = null
       return
     }
@@ -468,6 +499,7 @@ async function onSend() {
       displayTime: formatTime(new Date().toISOString()),
     }
     asking.value = false
+    connecting.value = false
     abortController = null
     await scrollToBottom()
   }
@@ -476,6 +508,7 @@ async function onSend() {
 function onAbort() {
   abortController?.abort()
   asking.value = false
+  connecting.value = false
   abortController = null
 }
 
@@ -865,6 +898,47 @@ onUnmounted(() => {
   align-items: flex-end;
 }
 
+/* ── Connecting indicator ── */
+.connecting-indicator {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--bubble-ai-bg);
+  border: 1px solid var(--bubble-ai-border);
+  border-radius: 16px;
+  border-bottom-left-radius: 4px;
+}
+
+.wave-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.wave-dots .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #818cf8;
+  animation: wave-dot 1.4s ease-in-out infinite;
+}
+
+.wave-dots .dot:nth-child(1) { animation-delay: 0s; }
+.wave-dots .dot:nth-child(2) { animation-delay: 0.2s; }
+.wave-dots .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes wave-dot {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50% { transform: translateY(-8px); opacity: 1; }
+}
+
+.connecting-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
+}
+
 /* ── Deep think block ── */
 .think-block {
   background: var(--think-bg);
@@ -877,33 +951,86 @@ onUnmounted(() => {
 .think-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 14px;
   background: transparent;
   border: none;
   color: #818cf8;
   font-size: 12px;
   cursor: pointer;
   text-align: left;
+  position: relative;
 }
 
 .think-toggle:hover {
   background: rgba(99, 102, 241, 0.08);
 }
 
-.think-ing {
-  animation: blink 1.2s ease-in-out infinite;
+.think-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.15);
+  flex-shrink: 0;
 }
 
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+.think-block:not(.think-block--done) .think-icon-wrapper {
+  animation: pulse-icon 2s ease-in-out infinite;
+}
+
+@keyframes pulse-icon {
+  0%, 100% { background: rgba(99, 102, 241, 0.15); }
+  50% { background: rgba(99, 102, 241, 0.25); }
+}
+
+.think-status {
+  font-weight: 500;
+  position: relative;
+}
+
+.think-status--active {
+  overflow: hidden;
+  position: relative;
+}
+
+.think-text-animated {
+  display: inline-block;
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    rgba(129, 140, 248, 0.7) 0%,
+    #818cf8 50%,
+    rgba(129, 140, 248, 0.7) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-text 2s linear infinite;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@keyframes shimmer-text {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.think-duration {
+  font-size: 11px;
+  color: rgba(129, 140, 248, 0.7);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 2px;
 }
 
 .think-chevron {
   margin-left: auto;
   transition: transform 0.2s;
+  flex-shrink: 0;
 }
 
 .think-block--open .think-chevron {
@@ -1097,7 +1224,10 @@ onUnmounted(() => {
   .hero-glow,
   .suggestion-card,
   .msg-enter-active,
-  .skeleton-line {
+  .skeleton-line,
+  .wave-dots .dot,
+  .think-icon-wrapper,
+  .think-text-animated {
     animation: none;
     transition: none;
   }
