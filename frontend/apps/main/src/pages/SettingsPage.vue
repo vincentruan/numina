@@ -74,8 +74,8 @@
       <van-cell :title="t('device.title')" icon="phone-o" is-link to="/settings/devices" />
     </van-cell-group>
 
-    <!-- 通知与 AI -->
-    <van-cell-group inset :title="t('settings.notificationsAndAI')" class="section">
+    <!-- 通知设置 -->
+    <van-cell-group inset :title="t('settings.notificationSettings')" class="section">
       <van-cell :title="t('reminders.thresholdSettings')" icon="gold-coin-o" is-link to="/settings/notifications/threshold" />
       <van-cell
         :title="t('reminders.notificationSettings')"
@@ -83,6 +83,10 @@
         icon="bell"
         @click="$router.push('/settings/notifications')"
       />
+    </van-cell-group>
+
+    <!-- AI 助手设置 -->
+    <van-cell-group inset :title="t('settings.aiSettings')" class="section">
       <van-cell :title="t('settings.aiAssistant')" icon="smile-o" is-link to="/settings/ai" />
       <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
       <van-cell :title="t('settings.skillsManage')" icon="star-o" is-link to="/settings/ai/skills" />

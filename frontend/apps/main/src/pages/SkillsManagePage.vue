@@ -29,7 +29,7 @@
       v-model:show="showEditor"
       position="bottom"
       round
-      :style="{ height: '80%' }"
+      :style="{ height: '80%', display: 'flex', flexDirection: 'column' }"
     >
       <div class="editor-header">
         <span class="editor-title">{{ editingSkill ? t(`skills.capability.${editingSkill.capability}`) : '' }}</span>
@@ -47,6 +47,16 @@
           :autosize="{ minHeight: 200 }"
           class="prompt-field"
         />
+        <div v-if="editingSkill?.default_prompt" class="default-prompt-section">
+          <button type="button" class="default-prompt-toggle" @click="showDefaultPrompt = !showDefaultPrompt">
+            <van-icon :name="showDefaultPrompt ? 'arrow-up' : 'arrow-down'" size="12" />
+            {{ showDefaultPrompt ? t('skills.hideDefault') : t('skills.viewDefault') }}
+          </button>
+          <div v-if="showDefaultPrompt" class="default-prompt-box">
+            <p class="default-prompt-label">{{ t('skills.defaultPromptLabel') }}</p>
+            <pre class="default-prompt-content">{{ editingSkill.default_prompt }}</pre>
+          </div>
+        </div>
         <van-button
           v-if="editingSkill?.custom_prompt"
           size="small"
@@ -78,6 +88,7 @@ const showEditor = ref(false)
 const editingSkill = ref<SkillConfig | null>(null)
 const promptDraft = ref('')
 const saving = ref(false)
+const showDefaultPrompt = ref(false)
 
 const activePlaceholder = computed(() => {
   if (!editingSkill.value) return ''
@@ -85,8 +96,12 @@ const activePlaceholder = computed(() => {
 })
 
 async function load() {
-  const res = await getSkills()
-  skills.value = res.data
+  try {
+    const res = await getSkills()
+    skills.value = res.data
+  } catch {
+    showToast(t('toast.loadFailed'))
+  }
 }
 
 onMounted(load)
@@ -95,13 +110,20 @@ function onEditSkill(skill: SkillConfig) {
   if (!isOwner.value) return
   editingSkill.value = skill
   promptDraft.value = skill.custom_prompt ?? ''
+  showDefaultPrompt.value = false
   showEditor.value = true
 }
 
 async function onToggle(skill: SkillConfig, enabled: boolean) {
-  await updateSkill(skill.capability, { is_enabled: enabled })
+  const prev = skill.is_enabled
   skill.is_enabled = enabled
-  showToast(enabled ? t('toast.enabled') : t('toast.disabled'))
+  try {
+    await updateSkill(skill.capability, { is_enabled: enabled })
+    showToast(enabled ? t('toast.enabled') : t('toast.disabled'))
+  } catch {
+    skill.is_enabled = prev
+    showToast(t('toast.operationFailed'))
+  }
 }
 
 async function onSavePrompt() {
@@ -151,6 +173,7 @@ async function onResetPrompt() {
   justify-content: space-between;
   padding: 16px;
   border-bottom: 1px solid var(--van-border-color);
+  flex-shrink: 0;
 }
 .editor-title {
   font-size: 16px;
@@ -159,7 +182,7 @@ async function onResetPrompt() {
 .editor-body {
   padding: 12px 16px;
   overflow-y: auto;
-  height: calc(100% - 60px);
+  flex: 1;
 }
 .editor-hint {
   font-size: 12px;
@@ -172,5 +195,45 @@ async function onResetPrompt() {
 }
 .reset-btn {
   margin-top: 12px;
+}
+.default-prompt-section {
+  margin-top: 12px;
+}
+.default-prompt-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  color: var(--van-primary-color);
+  cursor: pointer;
+}
+.default-prompt-box {
+  margin-top: 8px;
+  border: 1px solid var(--van-border-color);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.default-prompt-label {
+  font-size: 11px;
+  color: var(--van-text-color-3);
+  background: var(--van-background);
+  padding: 6px 10px;
+  margin: 0;
+  border-bottom: 1px solid var(--van-border-color);
+}
+.default-prompt-content {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--van-text-color-2);
+  background: var(--van-background);
+  padding: 10px;
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
 }
 </style>

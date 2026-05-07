@@ -65,7 +65,7 @@ class SkillConfigResponse(BaseModel):
     capability: str
     is_enabled: bool
     custom_prompt: str | None
-    default_prompt: str | None  # populated from skills/*.md when no custom_prompt
+    default_prompt: str | None  # always populated from workspace override or skills/*.md
 
 
 class SkillConfigUpdate(BaseModel):
@@ -96,7 +96,7 @@ def list_skills(
                 capability=cap,
                 is_enabled=row.is_enabled if row else True,
                 custom_prompt=row.custom_prompt if row else None,
-                default_prompt=default_prompt if not (row and row.custom_prompt) else None,
+                default_prompt=default_prompt,
             )
         )
     return result
@@ -141,7 +141,7 @@ def update_skill(
         capability=row.capability,
         is_enabled=row.is_enabled,
         custom_prompt=row.custom_prompt,
-        default_prompt=default_prompt if not row.custom_prompt else None,
+        default_prompt=default_prompt,
     )
 
 
