@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"  # development / production
 
     # Cache configuration
-    CACHE_BACKEND: str = "memory"  # "memory" only — "redis" is not yet implemented (see backend/app/services/cache/redis.py)
+    CACHE_BACKEND: str = "memory"  # "memory" or "redis"
     REDIS_URL: str = "redis://localhost:6379/0"
     # Granular Redis config (for production security)
     REDIS_HOST: str = "localhost"

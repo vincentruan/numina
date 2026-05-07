@@ -25,6 +25,7 @@ dependencies = [
     "lunardate>=0.2.2",
     "user-agents>=2.2.0",
     "pdfplumber>=0.11",
+    "redis>=5.0.0",
 ]
 
 [dependency-groups]
@@ -36,6 +37,7 @@ dev = [
     "docker>=7.0.0",
     "ruff>=0.9.0",
     "mypy>=1.13.0",
+    "fakeredis>=2.0.0",
 ]
 
 [tool.pytest.ini_options]

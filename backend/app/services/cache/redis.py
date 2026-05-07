@@ -1,6 +1,9 @@
-"""Redis cache backend implementation (placeholder for future use)."""
+"""Redis cache backend implementation."""
 
-from typing import Any
+import json
+from typing import Any, cast
+
+import redis as redis_lib
 
 from app.services.cache.base import CacheBackend
 
@@ -8,36 +11,41 @@ from app.services.cache.base import CacheBackend
 class RedisCacheBackend(CacheBackend):
     """Redis cache backend for distributed deployments.
 
-    This class is a placeholder. Instantiation succeeds, but all cache
-    operations raise NotImplementedError until the backend is implemented.
-
-    To implement: add redis-py as a dependency and replace the method stubs
-    below with real Redis calls using self._redis_url.
+    Suitable for multi-worker deployments where shared rate-limit state is required.
+    Configure via CACHE_BACKEND=redis and REDIS_URL in settings.
     """
 
     def __init__(self, redis_url: str):
-        """Initialize Redis backend placeholder.
-
-        Args:
-            redis_url: Redis connection URL (e.g., redis://localhost:6379/0)
-        """
-        # Placeholder: self._client = redis.from_url(redis_url)
-        self._redis_url = redis_url
+        self._client: redis_lib.Redis = cast(
+            redis_lib.Redis,
+            redis_lib.from_url(redis_url, decode_responses=True),
+        )
 
     def get(self, key: str) -> Any | None:
-        raise NotImplementedError("Redis backend not yet implemented")
+        val = cast(str | None, self._client.get(key))
+        return json.loads(val) if val is not None else None
 
     def set(self, key: str, value: Any, ttl_seconds: int | None = None) -> None:
-        raise NotImplementedError("Redis backend not yet implemented")
+        serialized = json.dumps(value)
+        if ttl_seconds is not None:
+            self._client.setex(key, ttl_seconds, serialized)
+        else:
+            self._client.set(key, serialized)
 
     def delete(self, key: str) -> None:
-        raise NotImplementedError("Redis backend not yet implemented")
+        self._client.delete(key)
 
     def increment(self, key: str, delta: int = 1) -> int:
-        raise NotImplementedError("Redis backend not yet implemented")
+        # Callers follow the pattern: increment(), then set(..., ttl) if count==1
+        # so TTL is managed by the caller via set(); no need to handle it here.
+        return cast(int, self._client.incrby(key, delta))
 
     def get_ttl(self, key: str) -> int | None:
-        raise NotImplementedError("Redis backend not yet implemented")
+        ttl = cast(int, self._client.ttl(key))
+        # ttl() returns -1 (no TTL) or -2 (key missing) — both map to None
+        if ttl < 0:
+            return None
+        return ttl
 
     def clear(self) -> None:
-        raise NotImplementedError("Redis backend not yet implemented")
+        self._client.flushdb()
