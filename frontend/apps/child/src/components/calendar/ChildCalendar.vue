@@ -335,7 +335,7 @@ onMounted(loadMonth)
   display: inline-block;
   flex-shrink: 0;
 }
-.dot-chore { background: #4caf50; }
+.dot-chore { background: var(--color-success); }
 .dot-wish  { background: var(--color-brand-ochre); }
 .dot-milestone { background: var(--color-brand-lavender); }
 
@@ -362,7 +362,7 @@ onMounted(loadMonth)
   padding: 0 1px;
 }
 
-.dot-count-chore    { color: #2e7d32; }
+.dot-count-chore    { color: var(--color-success); }
 .dot-count-wish     { color: var(--color-brand-ochre); }
 .dot-count-milestone { color: var(--color-brand-lavender); }
 

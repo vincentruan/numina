@@ -50,13 +50,7 @@ const tiers = computed(() => splitCoinTiers(props.amount, props.copperToSilver, 
   font-size: 0.9em;
   margin-right: 4px;
 }
-.coin-count.gold {
-  color: #b8860b;
-}
-.coin-count.silver {
-  color: #808080;
-}
-.coin-count.copper {
-  color: #8b4513;
-}
+.coin-count.gold   { color: var(--color-coin-gold-text); }
+.coin-count.silver { color: var(--color-coin-silver-text); }
+.coin-count.copper { color: var(--color-coin-copper-text); }
 </style>

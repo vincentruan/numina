@@ -56,11 +56,11 @@ function formatDate(dateStr: string) {
   border-left: 4px solid var(--van-primary-color);
 }
 .gift-card.surprise {
-  border-left-color: #f5576c;
-  background: linear-gradient(135deg, #fff5f5, var(--van-background-2));
+  border-left-color: var(--color-badge-surprise-border);
+  background: linear-gradient(135deg, var(--color-badge-surprise-bg), var(--van-background-2));
 }
 .gift-card.bonus {
-  border-left-color: #4facfe;
+  border-left-color: var(--color-badge-bonus-border);
 }
 .gift-emoji {
   font-size: 32px;
@@ -90,12 +90,12 @@ function formatDate(dateStr: string) {
   border-radius: 10px;
 }
 .surprise-badge {
-  background: #ffeef0;
-  color: #f5576c;
+  background: var(--color-badge-surprise-bg);
+  color: var(--color-badge-surprise-text);
 }
 .bonus-badge {
-  background: #e8f7ff;
-  color: #4facfe;
+  background: var(--color-badge-bonus-bg);
+  color: var(--color-badge-bonus-text);
 }
 .gift-card-date {
   font-size: 11px;
