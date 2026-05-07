@@ -26,11 +26,11 @@
         <!-- Deep think toggle -->
         <button
           class="toggle-btn"
-          :class="{ 'toggle-btn--active': deepThink }"
-          :aria-pressed="deepThink"
+          :class="{ 'toggle-btn--active': deepThinkInternal }"
+          :aria-pressed="deepThinkInternal"
           aria-label="深度思考"
           title="深度思考"
-          @click="deepThink = !deepThink"
+          @click="deepThinkInternal = !deepThinkInternal"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
@@ -147,6 +147,7 @@ const props = defineProps<{
   disabled?: boolean
   loading?: boolean
   showClear?: boolean
+  deepThink?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -162,7 +163,7 @@ const internalValue = ref(props.modelValue)
 const expanded = ref(false)
 const focused = ref(false)
 const panelOpen = ref(false)
-const deepThink = ref(false)
+const deepThinkInternal = ref(props.deepThink ?? false)
 const webSearch = ref(false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 
@@ -200,8 +201,10 @@ watch(
 )
 
 watch(internalValue, (val) => emit('update:modelValue', val))
-watch(deepThink, (val) => emit('update:deepThink', val))
+watch(deepThinkInternal, (val) => emit('update:deepThink', val))
 watch(webSearch, (val) => emit('update:webSearch', val))
+// Sync parent-pushed value (e.g. auto-enable after async config fetch)
+watch(() => props.deepThink, (val) => { if (val !== undefined) deepThinkInternal.value = val })
 
 function onInput() {
   adjustHeight()

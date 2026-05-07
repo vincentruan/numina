@@ -523,6 +523,12 @@ onMounted(async () => {
   })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
+  // Default deep think on if the primary model has passed the thinking capability test
+  if (!aiStore.config) await aiStore.fetchConfig()
+  if (aiStore.config?.ai_test_thinking_success === true) {
+    deepThink.value = true
+  }
+
   try {
     const res = await getChatHistory()
     messages.value = res.data.map((m) => ({
