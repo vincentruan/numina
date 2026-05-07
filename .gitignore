@@ -85,7 +85,8 @@ lerna-debug.log*
 *.swp
 *.swo
 *~
-
+*.bak
+*.orig
 # ===========================
 # Claude Code / Antigravity
 # ===========================
