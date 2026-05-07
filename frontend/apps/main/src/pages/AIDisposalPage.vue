@@ -7,19 +7,23 @@
     </div>
 
     <div v-else-if="!suggestions.length" class="empty-state">
-      <van-empty description="暂无处置建议">
-        <template #image>
-          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="40" cy="40" r="36" fill="rgba(99,102,241,0.08)" />
-            <circle cx="40" cy="40" r="28" fill="rgba(99,102,241,0.10)" />
-            <rect x="24" y="28" width="32" height="24" rx="4" stroke="#6366f1" stroke-width="2.5" fill="none"/>
-            <path d="M32 28v-4a8 8 0 0116 0v4" stroke="#6366f1" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-            <circle cx="40" cy="40" r="4" fill="#6366f1" opacity="0.6"/>
-            <circle cx="56" cy="28" r="6" fill="#4ade80"/>
-            <path d="M53 28l2 2 4-4" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </template>
-      </van-empty>
+      <div class="empty-illustration" aria-hidden="true">
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="60" cy="60" r="56" fill="var(--empty-bg-outer)" />
+          <circle cx="60" cy="60" r="42" fill="var(--empty-bg-inner)" />
+          <!-- Box body -->
+          <rect x="32" y="46" width="56" height="40" rx="4" fill="var(--empty-icon-fill)" />
+          <!-- Box lid -->
+          <path d="M28 46h64M44 46V36h32v10" stroke="var(--empty-icon-stroke)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <!-- Arrow up (export) -->
+          <path d="M60 58v18M52 64l8-8 8 8" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Checkmark badge -->
+          <circle cx="84" cy="36" r="10" fill="var(--empty-badge-bg)" />
+          <path d="M79 36l3.5 3.5 6-6" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <p class="empty-title">{{ t('aiTask.emptyDisposal') }}</p>
+      <p class="empty-desc">{{ t('aiTask.emptyDisposalDesc') }}</p>
       <div class="actions">
         <TaskConsole
           :status="taskStatus"
@@ -27,7 +31,9 @@
           :elapsed-seconds="taskElapsed"
           v-model="isConsoleOpen"
         />
-        <van-button plain block :loading="taskStatus === 'running'" @click="onRefresh">扫描闲置资产</van-button>
+        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onRefresh">
+          {{ t('aiTask.emptyDisposalBtn') }}
+        </van-button>
       </div>
     </div>
 
@@ -147,8 +153,37 @@ onMounted(loadSuggestions)
   padding-bottom: 24px;
 }
 .loading-state { display: flex; justify-content: center; padding: 60px; }
-.empty-state { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.actions { padding: 12px 16px 0; width: 100%; }
+.empty-state {
+  padding: 48px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  --empty-bg-outer: rgba(25, 137, 250, 0.08);
+  --empty-bg-inner: rgba(25, 137, 250, 0.12);
+  --empty-icon-fill: var(--van-primary-color, #1989fa);
+  --empty-icon-stroke: var(--van-primary-color, #1989fa);
+  --empty-badge-bg: #34c759;
+}
+.empty-illustration {
+  margin-bottom: 20px;
+  filter: drop-shadow(0 4px 12px rgba(1, 1, 32, 0.1));
+}
+.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.2px;
+}
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 24px;
+  max-width: 260px;
+}
+.actions { padding: 0; width: 100%; }
 .summary-bar {
   display: flex;
   justify-content: space-between;

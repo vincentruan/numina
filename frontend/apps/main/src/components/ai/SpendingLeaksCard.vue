@@ -5,18 +5,28 @@
     </div>
 
     <div v-else-if="!leaks.length" class="empty-state">
-      <van-empty description="暂无资金泄漏">
-        <template #image>
-          <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-            <circle cx="40" cy="40" r="36" fill="rgba(99,102,241,0.08)" />
-            <circle cx="40" cy="40" r="28" fill="rgba(99,102,241,0.10)" />
-            <path d="M40 24v16l8 8" stroke="#6366f1" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="40" cy="40" r="14" stroke="#6366f1" stroke-width="2.5" fill="none"/>
-            <path d="M32 56l16-32" stroke="#4ade80" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="48" cy="24" r="4" fill="#4ade80"/>
-          </svg>
-        </template>
-      </van-empty>
+      <div class="empty-illustration" aria-hidden="true">
+        <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="60" cy="60" r="56" fill="var(--empty-bg-outer)" />
+          <circle cx="60" cy="60" r="42" fill="var(--empty-bg-inner)" />
+          <!-- Wallet body -->
+          <rect x="28" y="42" width="64" height="44" rx="6" fill="var(--empty-icon-fill)" />
+          <!-- Wallet flap -->
+          <path d="M28 54h64" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>
+          <!-- Coin slot -->
+          <rect x="76" y="56" width="16" height="12" rx="6" fill="rgba(255,255,255,0.25)" />
+          <circle cx="84" cy="62" r="3" fill="rgba(255,255,255,0.6)" />
+          <!-- Drip / leak -->
+          <path d="M52 86c0 0-4-6-4-10a4 4 0 018 0c0 4-4 10-4 10z" fill="var(--empty-badge-bg)" />
+          <path d="M68 90c0 0-3-5-3-8a3 3 0 016 0c0 3-3 8-3 8z" fill="var(--empty-badge-bg)" opacity="0.7"/>
+          <!-- Warning badge -->
+          <circle cx="84" cy="36" r="10" fill="#ff9500" />
+          <rect x="82.5" y="30" width="3" height="7" rx="1.5" fill="#fff" />
+          <circle cx="84" cy="40" r="1.5" fill="#fff" />
+        </svg>
+      </div>
+      <p class="empty-title">{{ t('aiTask.emptyLeaks') }}</p>
+      <p class="empty-desc">{{ t('aiTask.emptyLeaksDesc') }}</p>
       <div class="actions">
         <TaskConsole
           :status="taskStatus"
@@ -24,7 +34,9 @@
           :elapsed-seconds="taskElapsed"
           v-model="isConsoleOpen"
         />
-        <van-button plain block :loading="taskStatus === 'running'" @click="onRefresh">重新分析</van-button>
+        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onRefresh">
+          {{ t('aiTask.emptyLeaksBtn') }}
+        </van-button>
       </div>
     </div>
 
@@ -136,8 +148,36 @@ onMounted(loadLeaks)
   justify-content: center;
   padding: 60px;
 }
-.empty-state { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.actions { padding: 12px 16px 0; width: 100%; }
+.empty-state {
+  padding: 48px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  --empty-bg-outer: rgba(25, 137, 250, 0.08);
+  --empty-bg-inner: rgba(25, 137, 250, 0.12);
+  --empty-icon-fill: var(--van-primary-color, #1989fa);
+  --empty-badge-bg: #34c759;
+}
+.empty-illustration {
+  margin-bottom: 20px;
+  filter: drop-shadow(0 4px 12px rgba(1, 1, 32, 0.1));
+}
+.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.2px;
+}
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 24px;
+  max-width: 260px;
+}
+.actions { padding: 0; width: 100%; }
 .summary-bar {
   display: flex;
   justify-content: space-between;
