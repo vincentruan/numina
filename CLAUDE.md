@@ -39,7 +39,11 @@ Transform tasks into verifiable goals before starting:
 - "Add validation" → write tests for invalid inputs, then make them pass.
 - "Refactor X" → ensure tests pass before and after.
 
-For multi-step tasks, state a brief plan with explicit verify steps before coding.
+For multi-step tasks, state a brief plan with explicit verify steps **before coding**.
+
+### 5. Verify Before Claiming Done
+
+Run the module's quality commands and confirm they pass. Do not report a task complete without evidence. "Looks right" is not verification.
 
 ## Project Overview
 
@@ -56,9 +60,13 @@ Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visu
 
 ## Known Pitfalls
 
+### Never Run Dev Servers from Automated Agents
+
+Do NOT run `uvicorn`, `npm run dev`, or any long-running process from an agent. These block indefinitely. Use `pytest` and `typecheck` for verification instead.
+
 ### URL Style — No Trailing Slash, No Redirects
 
-All API endpoints must respond with 200 directly. No 307 redirects. This keeps frontend/backend URL style consistent and avoids Mixed Content errors in HTTPS deployments.
+All API endpoints must respond with 200 directly — no 307 redirects.
 
 **Rule:** `redirect_slashes=False` is set in `app/main.py`. All router root-path decorators must use `""` not `"/"`:
 ```python
@@ -73,16 +81,21 @@ All API endpoints must respond with 200 directly. No 307 redirects. This keeps f
 
 Applies to every router with root-path endpoints. Frontend calls must also omit trailing slashes.
 
-## Cross-Cutting Conventions
+### API Return Code Conventions
 
-These apply to all modules. Module-specific conventions live in each module's `CLAUDE.md`.
+- **Auth endpoints return 200** — `register`, `login`, `join-family` all return `TokenResponse` with status 200, not 201.
+- **Asset/Liability POST endpoints return 201** — explicit `status_code=201` on router decorators.
+- **`TokenResponse` does not include `user`** — frontend must call `/auth/me` after login to get user info.
+- **Dashboard allocation** returns `{ items: [...], total: float }`, not a flat list.
+- **Dashboard trend** returns `{ points: [...] }`, not a flat list.
+
+## Cross-Cutting Conventions
 
 - **i18n required for all UI strings** — every user-facing string (toasts, dialogs, labels, status text) must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings directly in `.vue` files or `.ts` logic — not even in template ternaries. Applies to both `frontend/apps/main` and `frontend/apps/child`.
 - **Emoji convention** — all toast/error strings must include an emoji prefix. See `frontend/apps/main/CLAUDE.md` for the full table.
 - **Error messages in Chinese** — backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
-- **Python: Pydantic v2 only** — use `ConfigDict`, `model_validate`, `field_validator`. Never v1 style (`class Config`, `parse_obj`, `validator`).
 - **Past solutions** — `docs/solutions/` contains documented fixes for recurring problems. Check before debugging known issue categories.
 
 ## Module Documentation
@@ -108,17 +121,3 @@ docker-compose up -d --build  # Rebuild after code changes
 docker-compose down           # Stop all services
 # Access at http://localhost:8080
 ```
-
-### Quick Reference
-
-```bash
-# Backend
-cd backend && uv run pytest tests/ -v
-
-# Frontend
-cd frontend && npm run typecheck
-
-# Agent
-cd agent && uv run pytest tests/ -v
-```
-
