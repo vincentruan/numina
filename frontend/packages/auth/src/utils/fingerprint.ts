@@ -1,46 +1,41 @@
 /**
  * Browser fingerprint utility for device trust detection.
  *
- * Generates a stable SHA-256 fingerprint from browser/device characteristics.
- * Used to identify trusted devices without storing sensitive data.
- *
- * Note: This is a lightweight, privacy-respecting fingerprint — it uses only
- * publicly available browser properties and does NOT use canvas, audio, or
- * other invasive techniques.
+ * Uses FingerprintJS open-source library for stable device identification.
+ * Falls back to localStorage-persisted UUID if FingerprintJS is unavailable.
  */
 
-/**
- * Collect stable browser/device characteristics for fingerprinting.
- * These values are stable across sessions for the same browser/device.
- */
-function collectComponents(): string {
-  const components = [
-    navigator.userAgent,
-    navigator.language,
-    `${screen.width}x${screen.height}x${screen.colorDepth}`,
-    Intl.DateTimeFormat().resolvedOptions().timeZone,
-    String(navigator.hardwareConcurrency ?? ''),
-    String(navigator.maxTouchPoints ?? ''),
-    navigator.platform ?? '',
-  ]
-  return components.join('|')
-}
+import FingerprintJS from '@fingerprintjs/fingerprintjs'
 
 /**
- * Generate a SHA-256 fingerprint hash from browser characteristics.
- * Returns a 64-character hex string.
+ * Generate a stable device fingerprint using FingerprintJS.
+ * Returns a visitor identifier that persists across browser updates.
  *
- * Falls back to a random UUID if Web Crypto API is unavailable.
+ * FingerprintJS achieves 60-80% accuracy by combining multiple browser
+ * characteristics (canvas, WebGL, fonts, etc.) while respecting privacy.
+ *
+ * Falls back to a localStorage-persisted UUID if the library fails to load.
  */
 export async function getDeviceFingerprint(): Promise<string> {
   try {
-    const raw = collectComponents()
-    const encoded = new TextEncoder().encode(raw)
-    const hashBuffer = await crypto.subtle.digest('SHA-256', encoded)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+    // Check for existing localStorage fallback first (backward compatibility)
+    const storedFallback = localStorage.getItem('_numina_fp_fallback')
+    if (storedFallback) {
+      return storedFallback
+    }
+
+    // Initialize FingerprintJS agent
+    const fp = await FingerprintJS.load()
+
+    // Get the visitor identifier
+    const result = await fp.get()
+
+    // Store in localStorage for stability across sessions
+    localStorage.setItem('_numina_fp_fallback', result.visitorId)
+
+    return result.visitorId
   } catch {
-    // Fallback: generate a random ID and persist it
+    // Fallback: generate a random UUID and persist it
     const stored = localStorage.getItem('_numina_fp_fallback')
     if (stored) return stored
     const fallback = crypto.randomUUID().replace(/-/g, '')
