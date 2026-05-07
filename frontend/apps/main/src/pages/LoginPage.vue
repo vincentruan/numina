@@ -94,7 +94,7 @@
           <circle cx="178" cy="2" r="2" fill="url(#flourishGrad)" opacity="0.6" filter="url(#logoGlow)" />
         </svg>
 
-        <p class="app-subtitle">家庭资产可视化管理</p>
+        <p v-if="step === 1" class="app-subtitle">家庭资产可视化管理</p>
       </div>
 
       <!-- Step 1: username + password -->
