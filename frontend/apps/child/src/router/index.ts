@@ -40,6 +40,11 @@ const router = createRouter({
           component: () => import('@/pages/ChildWishesPage.vue'),
         },
         {
+          path: 'wishes/new',
+          name: 'ChildWishCreate',
+          component: () => import('@/pages/ChildWishCreatePage.vue'),
+        },
+        {
           path: 'treasures',
           name: 'ChildTreasures',
           component: () => import('@/pages/ChildTreasuresPage.vue'),

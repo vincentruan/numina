@@ -126,67 +126,14 @@
       <div v-if="!loading && totalWishes === 0" class="empty-state">
         <p class="empty-icon">🌠</p>
         <p class="empty-text">{{ t('wishes.emptyText') }}</p>
-        <button class="btn-create-inline" @click="showCreate = true">{{ t('wishes.createBtn') }}</button>
+        <button class="btn-create-inline" @click="router.push({ name: 'ChildWishCreate' })">{{ t('wishes.createBtn') }}</button>
       </div>
     </van-pull-refresh>
 
     <!-- FAB -->
-    <button v-if="totalWishes > 0" class="fab" :aria-label="t('wishes.createBtn')" @click="showCreate = true">
+    <button v-if="totalWishes > 0" class="fab" :aria-label="t('wishes.createBtn')" @click="router.push({ name: 'ChildWishCreate' })">
       <van-icon name="plus" size="22" color="var(--color-on-primary)" />
     </button>
-
-    <!-- Create wish bottom sheet -->
-    <van-popup v-model:show="showCreate" position="bottom" round>
-      <div class="sheet-inner">
-        <p class="sheet-title">{{ t('wishes.sheetTitle') }}</p>
-        <van-field
-          v-model="form.name"
-          :label="t('wishes.wishNameLabel')"
-          :placeholder="t('wishes.wishNamePlaceholder')"
-          maxlength="50"
-          show-word-limit
-          class="sheet-field"
-        />
-        <van-field
-          v-model="form.emoji"
-          :label="t('wishes.emojiLabel')"
-          :placeholder="t('wishes.emojiPlaceholder')"
-          maxlength="4"
-          class="sheet-field"
-        />
-        <van-field
-          v-model="form.description"
-          :label="t('wishes.descLabel')"
-          type="textarea"
-          :placeholder="t('wishes.descPlaceholder')"
-          maxlength="200"
-          show-word-limit
-          rows="2"
-          autosize
-          class="sheet-field sheet-field--last"
-        />
-        <div class="priority-row">
-          <span class="priority-label">{{ t('wishes.priorityLabel') }}</span>
-          <div class="priority-chips">
-            <button
-              v-for="p in priorities"
-              :key="p.value"
-              class="priority-chip"
-              :class="{ active: form.priority === p.value }"
-              @click="form.priority = p.value"
-            >{{ p.label }}</button>
-          </div>
-        </div>
-        <van-button
-          block
-          type="primary"
-          :loading="creating"
-          :disabled="!form.name.trim()"
-          class="btn-submit"
-          @click="createWish"
-        >{{ t('wishes.submitBtn') }}</van-button>
-      </div>
-    </van-popup>
   </div>
 </template>
 
@@ -194,13 +141,15 @@
 import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import {
-  listChildWishes, getChildWishStats, createChildWish, requestRedemption,
+  listChildWishes, getChildWishStats, requestRedemption,
   type ChildWishList, type ChildWishStats
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const wishList = ref<ChildWishList | null>(null)
 const stats = ref<ChildWishStats | null>(null)
@@ -209,16 +158,6 @@ const loading = ref(true)
 const error = ref('')
 const refreshing = ref(false)
 const actioningId = ref<string | null>(null)
-
-const showCreate = ref(false)
-const creating = ref(false)
-const form = ref({ name: '', emoji: '', description: '', priority: 'medium' as 'high' | 'medium' | 'low' })
-
-const priorities = computed(() => [
-  { value: 'high' as const, label: t('wishes.priorityHigh') },
-  { value: 'medium' as const, label: t('wishes.priorityMedium') },
-  { value: 'low' as const, label: t('wishes.priorityLow') },
-])
 
 const activeWishes = computed(() => wishList.value?.active ?? [])
 const pendingWishes = computed(() => wishList.value?.pending_review ?? [])
@@ -309,26 +248,6 @@ async function redeem(wishId: string) {
     showToast(t('toast.submitFailed'))
   } finally {
     actioningId.value = null
-  }
-}
-
-async function createWish() {
-  if (!form.value.name.trim()) return
-  creating.value = true
-  try {
-    await createChildWish({
-      name: form.value.name.trim(),
-      emoji: form.value.emoji || undefined,
-      description: form.value.description || undefined,
-      priority: form.value.priority,
-    })
-    showCreate.value = false
-    form.value = { name: '', emoji: '', description: '', priority: 'medium' }
-    await load()
-  } catch {
-    showToast(t('toast.submitFailed'))
-  } finally {
-    creating.value = false
   }
 }
 
@@ -621,65 +540,6 @@ onMounted(load)
 }
 .fab:active { transform: scale(0.92); }
 
-/* Create sheet */
-.sheet-inner {
-  padding: 24px 16px 40px;
-}
-.sheet-title {
-  font-family: Inter, sans-serif;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-ink);
-  text-align: center;
-  margin: 0 0 16px;
-}
-.sheet-field {
-  margin-bottom: 8px;
-  border-radius: var(--radius-md);
-  background: var(--color-surface-soft);
-}
-.sheet-field--last { margin-bottom: 12px; }
-
-.priority-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-}
-.priority-label {
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  color: var(--color-muted);
-  white-space: nowrap;
-}
-.priority-chips { display: flex; gap: 8px; }
-.priority-chip {
-  padding: 0 14px;
-  height: 44px;
-  border: 1px solid var(--color-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--color-surface-soft);
-  font-family: Inter, sans-serif;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.15s;
-  color: var(--color-body);
-  display: flex;
-  align-items: center;
-}
-.priority-chip.active {
-  background: var(--color-primary);
-  color: var(--color-on-primary);
-  border-color: var(--color-primary);
-}
-
-.btn-submit {
-  margin-top: 16px;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  border: none;
-  height: 44px;
-}
 
 .error-msg {
   background: var(--color-brand-coral);

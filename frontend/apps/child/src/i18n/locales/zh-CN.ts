@@ -150,6 +150,11 @@ export default {
     priorityLabelHigh: '高优先级 🔥',
     priorityLabelMedium: '中优先级 ⭐',
     priorityLabelLow: '低优先级 💤',
+    createPageTitle: '许个愿 🌟',
+    submitSuccess: '✅ 心愿已提交！',
+    continueCreate: '继续许愿',
+    backToList: '返回心愿列表',
+    emojiPickerTitle: '选择表情',
   },
   treasures: {
     title: '🏆 我的宝贝',
