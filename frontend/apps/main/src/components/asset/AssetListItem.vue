@@ -305,12 +305,30 @@ function getIconId(icon: string | undefined): string {
   left: 0;
   top: 0;
   height: 100%;
-  background: var(--color-primary);
+  background: linear-gradient(
+    90deg,
+    #ff6b6b 0%,
+    #ffa94d 18%,
+    #ffe066 36%,
+    #69db7c 54%,
+    #4dabf7 72%,
+    #748ffc 88%,
+    #da77f2 100%
+  );
   border-radius: 3px;
   transition: width 0.3s ease;
 }
 [data-theme='dark'] .progress-fill {
-  background: var(--color-coral);
+  background: linear-gradient(
+    90deg,
+    #c92a2a 0%,
+    #d9480f 18%,
+    #e67700 36%,
+    #2f9e44 54%,
+    #1971c2 72%,
+    #3b5bdb 88%,
+    #9c36b5 100%
+  );
 }
 
 .progress-marker {
@@ -319,15 +337,15 @@ function getIconId(icon: string | undefined): string {
   transform: translate(-50%, -50%);
   width: 12px;
   height: 12px;
-  background: var(--color-primary);
+  background: #fff;
   border: 2px solid var(--card-bg);
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(23, 23, 28, 0.25);
   transition: left 0.3s ease;
 }
 [data-theme='dark'] .progress-marker {
-  background: var(--color-coral);
-  box-shadow: 0 2px 4px rgba(255, 119, 89, 0.3);
+  background: #e9ecef;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
 }
 
 .progress-info {
