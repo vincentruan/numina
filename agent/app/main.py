@@ -12,12 +12,19 @@ setup_logging()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup
     settings.validate_required()
-    from app.scheduler import setup_schedules, scheduler
+    from app.scheduler import scheduler, setup_schedules
+    from core.backend_client import close_shared_client
+
     setup_schedules()
     scheduler.start()
+
     yield
+
+    # Shutdown
     scheduler.shutdown(wait=False)
+    await close_shared_client()  # Close shared backend connection pool
 
 
 app = FastAPI(
@@ -30,17 +37,17 @@ app = FastAPI(
 )
 
 
-from routers import report as report_router
-from routers import suggest as suggest_router
+from app.routers import cache as cache_router
 from routers import alerts as alerts_router
-from routers import disposal as disposal_router
-from routers import liability as liability_router
 from routers import allocation as allocation_router
 from routers import chat as chat_router
-from routers import spending_leak as spending_leak_router
-from routers import time_machine as time_machine_router
-from app.routers import cache as cache_router
+from routers import disposal as disposal_router
 from routers import import_parse as import_parse_router
+from routers import liability as liability_router
+from routers import report as report_router
+from routers import spending_leak as spending_leak_router
+from routers import suggest as suggest_router
+from routers import time_machine as time_machine_router
 
 app.include_router(report_router.router)
 app.include_router(suggest_router.router)

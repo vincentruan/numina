@@ -2,7 +2,8 @@
 
 环境变量层级（优先级从高到低）：
 1. 系统环境变量（os.environ）— 最高优先级
-2. DeerFlow 动态注入（family_adapter_cache 设置 DEER_FLOW_CONFIG_PATH、AI_MODEL、AI_API_KEY）
+2. DeerFlow 动态注入（family_adapter_cache 设置 DEER_FLOW_CONFIG_PATH、
+   AI_MODEL、AI_API_KEY）
 3. .env 文件中的值
 4. 类中的默认值
 
@@ -36,8 +37,7 @@ class AgentSettings(BaseSettings):
         """启动时校验必填配置，缺失则快速失败。"""
         if not self.AGENT_INTERNAL_TOKEN:
             raise ValueError(
-                "AGENT_INTERNAL_TOKEN 未配置。"
-                "请在环境变量或 .env 文件中设置此值。"
+                "AGENT_INTERNAL_TOKEN 未配置。请在环境变量或 .env 文件中设置此值。"
             )
 
 
