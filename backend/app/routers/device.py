@@ -272,6 +272,16 @@ def check_device(
         return DeviceCheckResponse(trusted=False)
 
     temp_token = create_temp_token(user.id, user.role)
+
+    # Determine second factor type correctly for children (who use pin_hash)
+    # vs adults (who use configured second_factor_type)
+    if user.role == "child" and user.pin_hash:
+        second_factor_type = "emoji_pin"
+    elif user.second_factor_enabled and user.second_factor_type:
+        second_factor_type = user.second_factor_type
+    else:
+        second_factor_type = None
+
     return DeviceCheckResponse(
         trusted=True,
         device_name=session.device_name,
@@ -279,7 +289,7 @@ def check_device(
         temp_token=temp_token,
         display_name=user.display_name,
         avatar_color=user.avatar_color,
-        second_factor_type=user.second_factor_type,
+        second_factor_type=second_factor_type,
     )
 
 
