@@ -58,7 +58,6 @@ class TestAuditEntry:
 class TestAuditLogger:
     def test_log_call_writes_entry(self, tmp_path):
         import services.audit_logger as al
-        al._audit_logger = None
         messages = []
 
         class CapturingHandler:
@@ -67,29 +66,30 @@ class TestAuditLogger:
             def handle(self, record): messages.append(record.getMessage())
             def emit(self, record): messages.append(record.getMessage())
 
-        with patch("services.audit_logger.TimedRotatingFileHandler", return_value=CapturingHandler()), \
-             patch("os.makedirs"):
-            logger = al._get_audit_logger()
-            entry = AuditEntry(family_id="f1", capability="report", success=True)
-            al.AuditLogger().log_call(entry)
-        assert logger is not None
+        # Clear existing handlers and add test handler
+        for h in al._audit_logger.handlers[:]:
+            al._audit_logger.removeHandler(h)
+        al._audit_logger.addHandler(CapturingHandler())
+
+        entry = AuditEntry(family_id="f1", capability="report", success=True)
+        al.AuditLogger().log_call(entry)
+        assert len(messages) > 0
+        assert al._audit_logger is not None
 
     def test_log_call_does_not_raise_on_failure(self):
         """Audit failure must never propagate."""
         import services.audit_logger as al
-        al._audit_logger = None
 
-        logger_instance = al._get_audit_logger()
-        # Force all handlers to raise
-        for h in logger_instance.handlers[:]:
-            logger_instance.removeHandler(h)
+        # Clear existing handlers
+        for h in al._audit_logger.handlers[:]:
+            al._audit_logger.removeHandler(h)
 
         class BrokenHandler:
             level = 0
             def handle(self, record): raise RuntimeError("disk full")
             def emit(self, record): raise RuntimeError("disk full")
 
-        logger_instance.addHandler(BrokenHandler())  # type: ignore
+        al._audit_logger.addHandler(BrokenHandler())
 
         entry = AuditEntry(family_id="f1", capability="report", success=True)
         # Must not raise
@@ -97,7 +97,6 @@ class TestAuditLogger:
 
     def test_success_entry_contains_family_id(self, tmp_path, capsys):
         import services.audit_logger as al
-        al._audit_logger = None
         messages = []
 
         class CapturingHandler:
@@ -106,11 +105,9 @@ class TestAuditLogger:
             def handle(self, record): messages.append(record.getMessage())
             def emit(self, record): messages.append(record.getMessage())
 
-        with patch("os.makedirs"):
-            logger = al._get_audit_logger()
-            for h in logger.handlers[:]:
-                logger.removeHandler(h)
-            logger.addHandler(CapturingHandler())  # type: ignore
+        for h in al._audit_logger.handlers[:]:
+            al._audit_logger.removeHandler(h)
+        al._audit_logger.addHandler(CapturingHandler())
 
         entry = AuditEntry(family_id="fam-123", capability="report", success=True)
         al.AuditLogger().log_call(entry)
@@ -118,7 +115,6 @@ class TestAuditLogger:
 
     def test_user_id_included_in_log(self, tmp_path):
         import services.audit_logger as al
-        al._audit_logger = None
         messages = []
 
         class CapturingHandler:
@@ -126,11 +122,9 @@ class TestAuditLogger:
             def handle(self, record): messages.append(record.getMessage())
             def emit(self, record): messages.append(record.getMessage())
 
-        with patch("os.makedirs"):
-            logger = al._get_audit_logger()
-            for h in logger.handlers[:]:
-                logger.removeHandler(h)
-            logger.addHandler(CapturingHandler())  # type: ignore
+        for h in al._audit_logger.handlers[:]:
+            al._audit_logger.removeHandler(h)
+        al._audit_logger.addHandler(CapturingHandler())
 
         entry = AuditEntry(family_id="f1", capability="chat", success=True, user_id="user-42")
         al.AuditLogger().log_call(entry)

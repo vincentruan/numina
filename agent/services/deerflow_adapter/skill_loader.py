@@ -85,7 +85,7 @@ class SkillLoader:
 
     # ── Per-family loading ────────────────────────────────────────────────────
 
-    def load_for_family(
+    async def load_for_family(
         self,
         capability: str,
         family_id: str,
@@ -101,7 +101,7 @@ class SkillLoader:
         base = self.load(capability)
 
         try:
-            entry = self._fetch_family_entry(
+            entry = await self._fetch_family_entry(
                 capability, family_id, backend_base_url, internal_token
             )
         except Exception as exc:
@@ -130,7 +130,7 @@ class SkillLoader:
             is_enabled=True,
         )
 
-    def _fetch_family_entry(
+    async def _fetch_family_entry(
         self,
         capability: str,
         family_id: str,
@@ -142,15 +142,14 @@ class SkillLoader:
         Cache key includes updated_at so stale entries are replaced automatically
         when the family updates their prompt.
         """
-        # First, get the current updated_at from backend to check staleness
         url = f"{backend_base_url.rstrip('/')}/api/v1/ai/skills/{capability}"
-        resp = httpx.get(
-            url,
-            headers={"X-Internal-Token": internal_token, "X-Family-Id": family_id},
-            timeout=5.0,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                url,
+                headers={"X-Internal-Token": internal_token, "X-Family-Id": family_id},
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
         updated_at_raw = data.get("updated_at")
         # When updated_at is None the family has no custom config; use datetime.min

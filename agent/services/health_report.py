@@ -13,8 +13,9 @@ import re
 from datetime import datetime
 
 from core.backend_client import BackendClient
-from core.desensitize import desensitize_assets, desensitize_liabilities
+from core.desensitize import desensitize_liabilities
 from core.llm import LLMClient
+from schemas.context import RedactedContext
 
 logger = logging.getLogger(__name__)
 
@@ -155,30 +156,12 @@ async def generate_health_report(
         report_data = json.loads(json_str)
     except Exception as e:
         logger.error(f"[health_report] LLM 解析失败 family={family_id}: {e}")
-        raise ValueError(f"LLM 响应解析失败: {e}")
+        raise ValueError(f"LLM 响应解析失败: {e}") from e
 
     report_data["generated_at"] = datetime.utcnow().isoformat()
     report_data["data_completeness_score"] = data_completeness
 
-    # Attach raw data for frontend display
-    report_data["net_worth_health"]["data"] = {
-        "net_worth": overview.get("net_worth", 0),
-        "total_assets": overview.get("total_assets", 0),
-        "total_liabilities": overview.get("total_liabilities", 0),
-        "mom_change_pct": overview.get("mom_change_pct", 0),
-    }
-    report_data["allocation_analysis"]["data"] = {
-        "items": allocation.get("items", [])[:5]
-    }
-    report_data["liability_pressure"]["data"] = {
-        "count": len(liabilities),
-        "total_liabilities": overview.get("total_liabilities", 0),
-        "total_assets": overview.get("total_assets", 0),
-    }
-    report_data["asset_efficiency"]["data"] = {
-        "low_usage_count": len(low_usage),
-        "asset_count": overview.get("asset_count", 0),
-        "total_daily_cost": overview.get("total_daily_cost", 0),
-    }
+    # Note: Raw PII data intentionally NOT attached to response per security invariant.
+    # Frontend should fetch aggregate data separately via backend APIs if needed.
 
     return report_data

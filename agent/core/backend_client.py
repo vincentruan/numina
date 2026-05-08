@@ -16,7 +16,10 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 # 超时配置
+# 数据密集型操作（dashboard、资产列表）使用标准超时
 _TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=10.0, pool=5.0)
+# 配置查询类操作使用快速超时（AI config、enabled families）
+_CONFIG_TIMEOUT = httpx.Timeout(connect=2.0, read=5.0, write=2.0, pool=2.0)
 
 
 class BackendClient:
@@ -150,7 +153,7 @@ async def get_assets_expiring_soon(family_id: str, days_threshold: int = 180) ->
 
 async def get_family_ai_config(family_id: str) -> dict:
     """获取家庭 AI 配置（provider + 解密后的 api_key）。"""
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_CONFIG_TIMEOUT) as client:
         resp = await client.get(
             f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/config",
             headers=_make_headers(family_id),
@@ -159,16 +162,22 @@ async def get_family_ai_config(family_id: str) -> dict:
         return _unwrap(resp)
 
 
-async def get_ai_enabled_families(any_family_id: str) -> list[str]:
+async def get_ai_enabled_families() -> list[str]:
     """获取所有已开启 AI 功能的家庭 ID 列表（定时任务使用）。
 
-    backend 的 verify_agent_token 要求 X-Family-Id header，
-    定时任务调用时传入任意一个有效 family_id 即可（结果不受其过滤）。
+    注意：此函数目前存在设计缺陷，需要重构。
+    正确做法：定时任务应按家庭维度分别启动，每个家庭使用自己的 AI 配置。
+    当前实现：使用 backend 的 admin endpoint 获取列表（无需 X-Family-Id）。
+
+    TODO: 重构为按家庭维度调度，避免租户隔离违反。
     """
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=_CONFIG_TIMEOUT) as client:
         resp = await client.get(
-            f"{settings.BACKEND_BASE_URL}/api/v1/internal/ai/enabled-families",
-            headers=_make_headers(any_family_id),
+            f"{settings.BACKEND_BASE_URL}/api/v1/admin/ai/enabled-families",
+            headers={
+                "Authorization": f"Bearer {settings.AGENT_INTERNAL_TOKEN}",
+                "Content-Type": "application/json",
+            },
         )
         resp.raise_for_status()
         return _unwrap(resp)

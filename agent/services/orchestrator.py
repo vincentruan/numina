@@ -252,7 +252,10 @@ class Orchestrator:
             raw_output = await fallback_engine.run(
                 capability, redacted_context, llm, audit_id, is_deerflow_fallback=False
             )
-            yield raw_output.summary or "分析完成。"
+            # PII redaction before yielding to stream
+            raw_summary = raw_output.summary or "分析完成。"
+            redacted_summary, _ = pii_redactor.redact_text(raw_summary)
+            yield redacted_summary
         except Exception as e:
             logger.error(f"[orchestrator] stream_dispatch fallback failed: {e}")
             yield "暂时无法完成分析，请稍后重试。"

@@ -1,4 +1,15 @@
-"""Agent 服务配置。"""
+"""Agent 服务配置。
+
+环境变量层级（优先级从高到低）：
+1. 系统环境变量（os.environ）— 最高优先级
+2. DeerFlow 动态注入（family_adapter_cache 设置 DEER_FLOW_CONFIG_PATH、AI_MODEL、AI_API_KEY）
+3. .env 文件中的值
+4. 类中的默认值
+
+注意：
+- DeerFlow 集成时，family_adapter_cache 会动态设置环境变量覆盖 AI_MODEL/AI_API_KEY
+- USE_DEERFLOW 控制是否使用 DeerFlow harness（默认 false = 使用 fallback_engine）
+"""
 
 from pydantic_settings import BaseSettings
 

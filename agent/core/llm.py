@@ -129,6 +129,7 @@ class LLMClient:
         # Track whether we're inside a <think> tag for tag-based fallback
         in_think_tag = False
         tag_buffer = ""  # accumulates partial tag text to detect opening/closing
+        MAX_BUFFER_SIZE = 10000  # prevent unbounded growth from malformed tags
 
         async for chunk in stream:
             delta = chunk.choices[0].delta if chunk.choices else None
@@ -151,6 +152,11 @@ class LLMClient:
 
             # Parse <think>...</think> tags embedded in content stream
             tag_buffer += text
+            # Safety limit: if buffer grows beyond MAX, emit as text to prevent memory bloat
+            if len(tag_buffer) > MAX_BUFFER_SIZE:
+                yield ("text", tag_buffer[:MAX_BUFFER_SIZE])
+                tag_buffer = tag_buffer[MAX_BUFFER_SIZE:]
+                in_think_tag = False  # reset state on overflow
             while tag_buffer:
                 if not in_think_tag:
                     think_start = tag_buffer.find("<think>")

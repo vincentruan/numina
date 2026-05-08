@@ -4,23 +4,16 @@
 日志轮转：每天午夜，保留 30 天。
 """
 
-import json
 import logging
 import os
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from logging.handlers import TimedRotatingFileHandler
-from typing import Optional
-
-_audit_logger: Optional[logging.Logger] = None
 
 
-def _get_audit_logger() -> logging.Logger:
-    global _audit_logger
-    if _audit_logger is not None:
-        return _audit_logger
-
+def _init_audit_logger() -> logging.Logger:
+    """Initialize audit logger at module import to avoid async race conditions."""
     os.makedirs("logs", exist_ok=True)
     logger = logging.getLogger("agent.audit")
     logger.setLevel(logging.INFO)
@@ -36,8 +29,11 @@ def _get_audit_logger() -> logging.Logger:
         handler.setFormatter(logging.Formatter("%(message)s"))
         logger.addHandler(handler)
 
-    _audit_logger = logger
     return logger
+
+
+# Initialize at module import — prevents race in async context
+_audit_logger: logging.Logger = _init_audit_logger()
 
 
 @dataclass
@@ -46,14 +42,14 @@ class AuditEntry:
     capability: str
     success: bool
     audit_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-    user_id: Optional[str] = None
-    skill_triggered: Optional[str] = None
+    timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    user_id: str | None = None
+    skill_triggered: str | None = None
     fallback_used: bool = False
     deerflow_attempted: bool = False
-    duration_ms: Optional[int] = None
-    error_type: Optional[str] = None
-    output_summary: Optional[str] = None
+    duration_ms: int | None = None
+    error_type: str | None = None
+    output_summary: str | None = None
 
     def __post_init__(self) -> None:
         if self.output_summary and len(self.output_summary) > 200:
@@ -66,14 +62,13 @@ class AuditLogger:
     def log_call(self, entry: AuditEntry) -> None:
         """写入一条审计日志。失败时静默吞掉，不影响主流程。"""
         try:
-            logger = _get_audit_logger()
             level = logging.INFO if entry.success else logging.WARNING
             event_type = "AGENT_CALL"
             data = asdict(entry)
             # Format: <timestamp> - <level> - [AGENT_CALL] key=value | key=value
             kv = " | ".join(f"{k}={v}" for k, v in data.items() if v is not None)
             msg = f"{entry.timestamp} - {'INFO' if level == logging.INFO else 'WARNING'} - [{event_type}] {kv}"
-            logger.log(level, msg)
+            _audit_logger.log(level, msg)
         except Exception:
             pass  # Audit must never break the main path
 
