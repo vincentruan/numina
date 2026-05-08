@@ -473,6 +473,95 @@ def get_child_refresh_token_from_cookie(
     return child_refresh_token_cookie
 
 
+def get_current_user_or_child(
+    request: Request,
+    token: str | None = Depends(oauth2_scheme),
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+) -> User:
+    """Get current user from Bearer token or Cookie (adult OR child).
+
+    This is used for endpoints like /auth/me that should work for both adults and children.
+    Priority: Bearer token → adult cookie → child cookie.
+
+    SECURITY: Bearer token takes precedence to prevent session hijacking.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="无法验证凭据",
+    )
+
+    payload = None
+
+    # SECURITY: Bearer token takes precedence
+    if token:
+        payload = _verify_token(token, "access")
+
+    # Fallback: try adult cookie first, then child cookie
+    if payload is None and access_token_cookie:
+        payload = _verify_token(access_token_cookie, "access")
+
+    if payload is None and child_access_token_cookie:
+        payload = _verify_token(child_access_token_cookie, "access")
+
+    if payload is None:
+        raise credentials_exception
+
+    user_id = payload["sub"]
+    payload_fid = payload["fid"]
+    payload_role = payload["role"]
+
+    # Minimal existence check + family_id verification
+    result = db.query(
+        User.family_id,
+        User.username,
+        User.display_name,
+        User.avatar_color,
+        User.theme,
+        User.language,
+        User.default_currency,
+        User.view_mode,
+    ).filter(
+        User.id == int(user_id), User.is_active.is_(True)
+    ).first()
+
+    if result is None:
+        raise credentials_exception
+
+    (
+        db_family_id,
+        username,
+        display_name,
+        avatar_color,
+        theme,
+        language,
+        default_currency,
+        view_mode,
+    ) = result
+
+    # SECURITY: Verify payload fid matches current DB family_id
+    if int(payload_fid) != db_family_id:
+        raise credentials_exception
+
+    # Return User object (role can be adult or child)
+    user = User(
+        id=int(user_id),
+        family_id=int(payload_fid),
+        username=username,
+        display_name=display_name,
+        avatar_color=avatar_color,
+        role=payload_role,
+        is_active=True,
+        theme=theme,
+        language=language,
+        default_currency=default_currency,
+        view_mode=view_mode,
+    )
+    merged_user = db.merge(user)
+    return merged_user
+
+
 def require_adult(user: User = Depends(get_current_user)) -> User:
     """Require the current user to be an adult (owner or member).
 

@@ -28,6 +28,7 @@ from app.auth.deps import (
     get_current_child_user,
     get_current_user,
     get_current_user_from_cookie,
+    get_current_user_or_child,
     get_refresh_token_from_cookie,
     require_owner,
     verify_temp_token,
@@ -181,8 +182,8 @@ def logout(
 
 
 @router.get("/me", response_model=UserResponse)
-def get_me(user: User = Depends(get_current_user)):
-    """Get current user profile."""
+def get_me(user: User = Depends(get_current_user_or_child)):
+    """Get current user profile. Works for both adults and children."""
     return user
 
 
@@ -190,9 +191,9 @@ def get_me(user: User = Depends(get_current_user)):
 def update_me(
     req: UpdateProfileRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_child),
 ):
-    """Update user profile."""
+    """Update user profile. Works for both adults and children."""
     return auth_service.update_profile(db, user, req)
 
 
@@ -200,9 +201,9 @@ def update_me(
 def update_settings(
     req: UpdateSettingsRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(get_current_user_or_child),
 ):
-    """更新用户设置（主题、语言、币种、视图模式）"""
+    """更新用户设置（主题、语言、币种、视图模式）。适用于成人及儿童账户。"""
     if req.theme is not None:
         user.theme = req.theme
     if req.language is not None:
