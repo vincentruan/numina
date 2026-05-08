@@ -1,14 +1,24 @@
 # AGENTS.md
 
-> **This file is a reference pointer. All content is in [`CLAUDE.md`](./CLAUDE.md).**
+Codex execution entry for this repository.
 
-For AI coding agents (Cursor, Windsurf, Codex, Aider, OpenCode, etc.): Read `CLAUDE.md` for complete project guidance including:
+## Source of Truth
 
-- Project overview & tech stack
-- Development commands (build, test, migrations)
-- Architecture & data model
-- Code style (Python, TypeScript/Vue)
-- Testing patterns
-- Conventions & common pitfalls
+- Primary rules: [`CLAUDE.md`](./CLAUDE.md)
+- Module rules:
+  - [`backend/CLAUDE.md`](./backend/CLAUDE.md)
+  - [`frontend/apps/main/CLAUDE.md`](./frontend/apps/main/CLAUDE.md)
+  - [`frontend/apps/child/CLAUDE.md`](./frontend/apps/child/CLAUDE.md)
+  - [`agent/CLAUDE.md`](./agent/CLAUDE.md)
+  - [`site/CLAUDE.md`](./site/CLAUDE.md)
 
-`CLAUDE.md` is the single source of truth for this repository.
+If any instruction conflicts, follow the closest module `CLAUDE.md`, then root `CLAUDE.md`.
+
+## Codex Workflow Contract (No Duplication)
+
+1. Read this file, then load the relevant `CLAUDE.md` files before editing.
+2. Keep changes minimal and scoped; do not refactor unrelated code.
+3. Verify only with commands defined in the relevant `CLAUDE.md` (module scope first).
+4. In reports, state: changed files, verification commands run, and unresolved risks.
+
+Do not copy conventions into this file; update `CLAUDE.md` instead.
