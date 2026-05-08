@@ -521,6 +521,13 @@ watch(
   }
 }
 
+/* Respect user preference for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .deer-canvas {
+    display: none;
+  }
+}
+
 .login-content {
   position: relative;
   z-index: 2;
@@ -553,14 +560,42 @@ watch(
   max-width: 400px;
 }
 
+/* Dark theme overrides for Vant components in login form */
+.login-form :deep(.van-cell-group) {
+  background: transparent;
+}
+
+.login-form :deep(.van-cell) {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.login-form :deep(.van-field__label) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.login-form :deep(.van-field__control) {
+  color: #fff;
+}
+
+.login-form :deep(.van-field__placeholder) {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.login-form :deep(.van-field__right-icon) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
 .form-actions {
   padding: 24px 16px 0;
 }
 
 .form-actions :deep(.van-button--primary) {
-  --van-button-primary-background: #bdbbff;
-  --van-button-primary-border-color: #bdbbff;
-  color: #010120;
+  --van-button-primary-background: rgba(189, 187, 255, 0.15);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.3);
+  --van-button-primary-color: #fff;
 }
 
 .login-links {
@@ -577,11 +612,6 @@ watch(
 .divider {
   color: rgba(255, 255, 255, 0.5);
   margin: 0 12px;
-}
-
-.password-field-wrapper :deep(.van-field__right-icon) {
-  cursor: pointer;
-  color: var(--van-field-right-icon-color);
 }
 
 /* PIN step */
