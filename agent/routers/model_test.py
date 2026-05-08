@@ -1,5 +1,6 @@
 """POST /test/model — stateless model capability test endpoint."""
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Header, HTTPException
@@ -24,27 +25,31 @@ async def run_model_test(
 ) -> ModelTestResult:
     """Run model capability tests with provided credentials (called by backend)."""
     if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+        logger.warning("model-test: auth rejected")
         raise HTTPException(status_code=401, detail="invalid token")
 
     vision_model = req.vision_model_id or req.model_id
 
+    # connection always runs first — it gates the thinking test
     conn = await test_connection(req.provider, req.api_key, req.model_id, req.base_url)
 
-    think = None
-    if "thinking" in req.test_types and conn["connected"]:
-        think = await test_thinking(req.provider, req.api_key, req.model_id, req.base_url)
+    # remaining tests run in parallel
+    async def _thinking():
+        if "thinking" in req.test_types and conn["connected"]:
+            return await test_thinking(req.provider, req.api_key, req.model_id, req.base_url)
+        return None
 
-    vis = None
-    if (
-        "vision" in req.test_types
-        and req.vision_model_id
-        and req.vision_model_id != req.model_id
-    ):
-        vis = await test_vision(req.provider, req.api_key, req.vision_model_id, req.base_url)
+    async def _vision():
+        if "vision" in req.test_types:
+            return await test_vision(req.provider, req.api_key, vision_model, req.base_url)
+        return None
 
-    ocr = None
-    if "vision_ocr" in req.test_types:
-        ocr = await test_vision_ocr(req.provider, req.api_key, vision_model, req.base_url)
+    async def _ocr():
+        if "vision_ocr" in req.test_types:
+            return await test_vision_ocr(req.provider, req.api_key, vision_model, req.base_url)
+        return None
+
+    think, vis, ocr = await asyncio.gather(_thinking(), _vision(), _ocr())
 
     return ModelTestResult(
         connected=conn["connected"],

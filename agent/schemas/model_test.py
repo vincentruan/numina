@@ -11,7 +11,7 @@ class ModelTestRequest(BaseModel):
     model_id: str
     base_url: str | None = None
     vision_model_id: str | None = None
-    test_types: list[str]               # subset of ["connection","thinking","vision","vision_ocr"]
+    test_types: list[Literal["connection", "thinking", "vision", "vision_ocr"]]  # "connection" always runs as prerequisite
 
 
 class ModelTestResult(BaseModel):
