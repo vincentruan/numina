@@ -1,7 +1,7 @@
 """AI 配置管理路由。"""
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends
@@ -295,8 +295,9 @@ async def test_ai_config(
                 connected=False,
                 message=f"Agent 服务返回错误: HTTP {e.response.status_code}",
             )
-        except Exception as e:
-            return AIConfigTestResult(connected=False, message=f"无法连接 Agent 服务: {e}")
+        except Exception:
+            logger.exception("agent model-test call failed")
+            return AIConfigTestResult(connected=False, message="无法连接 Agent 服务，请检查 Agent 服务状态")
 
     def _upsert_test(test_type: str, success: bool | None, message: str, latency_ms: int | None) -> None:
         existing = db.query(AIProviderTestResult).filter_by(config_id=cfg.id, test_type=test_type).first()
@@ -304,7 +305,7 @@ async def test_ai_config(
             existing.success = success
             existing.message = message
             existing.latency_ms = latency_ms
-            existing.tested_at = datetime.utcnow()
+            existing.tested_at = datetime.now(UTC).replace(tzinfo=None)
         else:
             db.add(AIProviderTestResult(
                 config_id=cfg.id,
@@ -313,19 +314,19 @@ async def test_ai_config(
                 message=message,
                 latency_ms=latency_ms,
             ))
-        db.commit()
 
-    _upsert_test("main", data["connected"], data["message"], data.get("latency_ms"))
+    _upsert_test("main", data.get("connected", False), data.get("message", ""), data.get("latency_ms"))
     if data.get("thinking_success") is not None:
         _upsert_test("thinking", data["thinking_success"], data.get("thinking_message", ""), data.get("thinking_latency_ms"))
     if data.get("vision_success") is not None:
         _upsert_test("vision", data["vision_success"], data.get("vision_message", ""), data.get("vision_latency_ms"))
     if data.get("vision_text_success") is not None:
         _upsert_test("vision_text", data["vision_text_success"], data.get("vision_text_message", ""), data.get("vision_text_latency_ms"))
+    db.commit()
 
     return AIConfigTestResult(
-        connected=data["connected"],
-        message=data["message"],
+        connected=data.get("connected", False),
+        message=data.get("message", "测试完成"),
         latency_ms=data.get("latency_ms"),
         thinking_success=data.get("thinking_success"),
         thinking_message=data.get("thinking_message"),
