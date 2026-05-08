@@ -1,0 +1,62 @@
+"""POST /test/model — stateless model capability test endpoint."""
+
+import logging
+
+from fastapi import APIRouter, Header, HTTPException
+
+from app.config import settings
+from schemas.model_test import ModelTestRequest, ModelTestResult
+from services.model_tester import (
+    test_connection,
+    test_thinking,
+    test_vision,
+    test_vision_ocr,
+)
+
+router = APIRouter(prefix="/test", tags=["model-test"])
+logger = logging.getLogger(__name__)
+
+
+@router.post("/model", response_model=ModelTestResult)
+async def run_model_test(
+    req: ModelTestRequest,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> ModelTestResult:
+    """Run model capability tests with provided credentials (called by backend)."""
+    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+    vision_model = req.vision_model_id or req.model_id
+
+    conn = await test_connection(req.provider, req.api_key, req.model_id, req.base_url)
+
+    think = None
+    if "thinking" in req.test_types and conn["connected"]:
+        think = await test_thinking(req.provider, req.api_key, req.model_id, req.base_url)
+
+    vis = None
+    if (
+        "vision" in req.test_types
+        and req.vision_model_id
+        and req.vision_model_id != req.model_id
+    ):
+        vis = await test_vision(req.provider, req.api_key, req.vision_model_id, req.base_url)
+
+    ocr = None
+    if "vision_ocr" in req.test_types:
+        ocr = await test_vision_ocr(req.provider, req.api_key, vision_model, req.base_url)
+
+    return ModelTestResult(
+        connected=conn["connected"],
+        message=conn["message"],
+        latency_ms=conn.get("latency_ms"),
+        thinking_success=think["success"] if think else None,
+        thinking_message=think["message"] if think else None,
+        thinking_latency_ms=think.get("latency_ms") if think else None,
+        vision_success=vis["success"] if vis else None,
+        vision_message=vis["message"] if vis else None,
+        vision_latency_ms=vis.get("latency_ms") if vis else None,
+        vision_text_success=ocr["success"] if ocr else None,
+        vision_text_message=ocr["message"] if ocr else None,
+        vision_text_latency_ms=ocr.get("latency_ms") if ocr else None,
+    )

@@ -47,6 +47,7 @@ from routers import liability as liability_router
 from routers import report as report_router
 from routers import spending_leak as spending_leak_router
 from routers import suggest as suggest_router
+from routers import model_test as model_test_router
 from routers import time_machine as time_machine_router
 
 app.include_router(report_router.router)
@@ -60,6 +61,7 @@ app.include_router(spending_leak_router.router)
 app.include_router(time_machine_router.router)
 app.include_router(cache_router.router)
 app.include_router(import_parse_router.router)
+app.include_router(model_test_router.router)
 
 
 @app.get("/health")
