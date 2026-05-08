@@ -217,8 +217,14 @@
           </div>
 
           <div class="emoji-actions">
-            <button class="emoji-action-btn" @click="deleteEmoji">删除</button>
-            <button class="emoji-action-btn" @click="clearEmojiPin">清除</button>
+            <button class="emoji-action-btn" :disabled="loading" @click="deleteEmoji">删除</button>
+            <button class="emoji-action-btn" :disabled="loading" @click="clearEmojiPin">清除</button>
+          </div>
+
+          <!-- Loading indicator for emoji PIN verification -->
+          <div v-if="loading && emojiPin.length === 4" class="emoji-loading">
+            <van-loading size="24px" color="#bdbbff" />
+            <span>验证中…</span>
           </div>
         </div>
 
@@ -234,7 +240,7 @@
         >确认</van-button>
 
         <div class="form-actions back-actions">
-          <van-button round block type="primary" class="back-btn-primary" @click="backToStep1">
+          <van-button round block type="primary" class="back-btn-primary" :disabled="loading" @click="backToStep1">
             返回重新登录
           </van-button>
         </div>
@@ -825,5 +831,19 @@ watch(
 
 .emoji-action-btn:active {
   background: rgba(255, 255, 255, 0.18);
+}
+
+.emoji-action-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.emoji-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
 }
 </style>
