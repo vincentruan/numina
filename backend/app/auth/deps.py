@@ -502,7 +502,7 @@ def require_owner(user: User = Depends(get_current_user)) -> User:
 # Temporary token for two-step login
 # ---------------------------------------------------------------------------
 
-_TEMP_TOKEN_EXPIRE_MINUTES = 5
+_TEMP_TOKEN_EXPIRE_MINUTES = 15  # Extended for child emoji PIN selection
 
 
 def create_temp_token(user_id: int, role: str) -> str:
