@@ -19,7 +19,6 @@ export default {
   auth: {
     selectChild: 'Select Child',
     enterPin: 'Enter PIN',
-    returnToAdult: 'Return to Adult Mode',
     enterParentPassword: 'Enter Parent Password',
     bindTitle: 'Bind Account',
   },

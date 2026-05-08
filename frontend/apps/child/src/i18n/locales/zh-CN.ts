@@ -22,7 +22,6 @@ export default {
   auth: {
     selectChild: '选择小朋友',
     enterPin: '输入密码',
-    returnToAdult: '返回大人模式',
     enterParentPassword: '请输入家长密码',
     bindTitle: '绑定账号',
     childLogin: '儿童登录',
