@@ -23,7 +23,13 @@
             <p class="chore-name">{{ c.chore_name }}</p>
             <p class="chore-reward">+{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐</p>
           </div>
-          <span class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
+          <button
+            v-if="c.status === 'available'"
+            class="btn-complete"
+            :disabled="submittingId === c.id"
+            @click="complete(c.id)"
+          >{{ t('chore.complete') }}</button>
+          <span v-else class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
         </div>
       </div>
     </div>
@@ -87,7 +93,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { getCoinBalance } from '@/api/coins'
-import { getMyChores, type ChoreInstance } from '@/api/chores'
+import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
@@ -105,6 +111,7 @@ const childAuthStore = useChildAuthStore()
 const balance = ref(0)
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
+const submittingId = ref<string | null>(null)
 const topWish = ref<ChildWish | null>(null)
 const settingsExpanded = ref(false)
 
@@ -121,6 +128,21 @@ function statusLabel(status: ChoreInstance['status']): string {
     case 'approved': return t('chore.approved')
     case 'rejected': return t('chore.rejected')
     default: return ''
+  }
+}
+
+async function complete(instanceId: string) {
+  submittingId.value = instanceId
+  try {
+    const updated = await markChoreComplete(instanceId)
+    const idx = todayChores.value.findIndex(c => c.id === instanceId)
+    if (idx !== -1) todayChores.value[idx] = updated
+    // Refresh balance after completing a chore
+    balance.value = await getCoinBalance()
+  } catch {
+    showToast(t('toast.submitFailed'))
+  } finally {
+    submittingId.value = null
   }
 }
 
@@ -237,6 +259,24 @@ onMounted(async () => {
   margin: 2px 0 0;
   font-weight: 500;
 }
+
+/* Complete button */
+.btn-complete {
+  background: var(--color-brand-pink);
+  color: var(--color-on-dark);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  height: 36px;
+  white-space: nowrap;
+  transition: opacity 0.15s, transform 0.1s;
+}
+.btn-complete:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-complete:active:not(:disabled) { transform: scale(0.96); }
 
 /* Status badge — pill with color per state */
 .chore-status-badge {
