@@ -41,6 +41,12 @@ export default {
     fabAddAsset: 'Add Asset',
     fabImportBill: 'Import Statement'
   },
+  aiChat: {
+    connecting: 'Connecting model',
+    thinking: 'Thinking',
+    answering: 'Writing answer',
+    thinkingSeconds: '{seconds}s'
+  },
   asset: {
     title: 'Assets',
     all: 'All',

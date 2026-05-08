@@ -18,8 +18,9 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-# family_id 格式验证正则：fam-前缀 + 8-36位字符
-_FAMILY_ID_PATTERN = re.compile(r"^fam-[a-z0-9-]{8,36}$")
+# Backend uses numeric Snowflake family IDs. Older agent tests and golden fixtures
+# still use fam-* IDs, so accept both formats while rejecting path/control input.
+_FAMILY_ID_PATTERN = re.compile(r"^(?:\d{8,20}|fam-[a-z0-9-]{8,36})$")
 
 
 def _validate_family_id(family_id: str) -> str:
@@ -37,7 +38,7 @@ def _validate_family_id(family_id: str) -> str:
     if not _FAMILY_ID_PATTERN.match(family_id):
         raise ValueError(
             f"Invalid family_id format: '{family_id}'. "
-            "Expected format: fam-{8-36 alphanumeric chars}"
+            "Expected numeric Snowflake ID or fam-{8-36 alphanumeric chars}"
         )
     return family_id
 

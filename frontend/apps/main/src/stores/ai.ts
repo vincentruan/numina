@@ -8,6 +8,7 @@ export const useAIStore = defineStore('ai', () => {
   const loading = ref(false)
   const draftQuery = ref('')
   const deepThinkEnabled = ref(false)
+  const webSearchEnabled = ref(false)
 
   const aiEnabled = computed(() => config.value?.ai_enabled ?? false)
   const aiProvider = computed(() => config.value?.ai_provider ?? null)
@@ -57,6 +58,7 @@ export const useAIStore = defineStore('ai', () => {
     loading,
     draftQuery,
     deepThinkEnabled,
+    webSearchEnabled,
     aiEnabled,
     aiProvider,
     fetchConfig,

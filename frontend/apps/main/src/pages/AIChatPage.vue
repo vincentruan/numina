@@ -83,6 +83,18 @@
           >
             <div class="bubble" :class="msg.role">
               <div class="bubble-body">
+                <div
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error'"
+                  class="phase-strip"
+                  :class="`phase-strip--${msg.phase}`"
+                  aria-live="polite"
+                >
+                  <span class="phase-pulse" aria-hidden="true" />
+                  <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
+                  <span v-if="msg.phase === 'thinking' && msg.thinkSeconds !== undefined" class="phase-meta">
+                    {{ t('aiChat.thinkingSeconds', { seconds: msg.thinkSeconds }) }}
+                  </span>
+                </div>
                 <!-- Deep think block (assistant only) -->
                 <div
                   v-if="msg.role === 'assistant' && msg.thinkContent"
@@ -161,38 +173,6 @@
           </div>
         </transition-group>
 
-        <!-- Connecting state: wave dots animation -->
-    <transition name="msg">
-      <div v-if="connecting" class="message-row assistant">
-        <div class="bubble assistant">
-          <div class="bubble-body">
-            <div class="connecting-indicator" aria-label="正在连接 AI">
-              <div class="wave-dots">
-                <span class="dot" />
-                <span class="dot" />
-                <span class="dot" />
-              </div>
-              <span class="connecting-text">正在连接</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
-
-    <!-- Skeleton loading state (after connection established, when no assistant message content yet) -->
-    <transition name="msg">
-      <div v-if="asking && !connecting && !hasPendingAssistantContent" class="message-row assistant">
-        <div class="bubble assistant">
-          <div class="bubble-body">
-            <div class="skeleton-bubble" aria-label="AI 正在思考">
-              <div class="skeleton-line skeleton-line--long" />
-              <div class="skeleton-line skeleton-line--medium" />
-              <div class="skeleton-line skeleton-line--short" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </transition>
       </template>
     </div>
 
@@ -259,6 +239,7 @@ function formatTime(iso: string) {
 interface Message {
   id: string
   role: 'user' | 'assistant'
+  phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error'
   content: string
   renderedContent?: string
   created_at: string
@@ -288,11 +269,6 @@ const dataTheme = ref(document.documentElement.getAttribute('data-theme') ?? 'da
 const isLight = computed(() => dataTheme.value === 'light')
 let themeObserver: MutationObserver | null = null
 
-// Check if there's an assistant message that is still being filled (used to hide skeleton)
-const hasPendingAssistantContent = computed(() => {
-  const lastMsg = messages.value[messages.value.length - 1]
-  return lastMsg?.role === 'assistant' && (lastMsg.content || lastMsg.thinkContent)
-})
 let abortController: AbortController | null = null
 
 
@@ -315,6 +291,13 @@ async function scrollToBottom() {
 function onChipClick(text: string) {
   inputText.value = text
   onSend()
+}
+
+function phaseLabel(phase: NonNullable<Message['phase']>) {
+  if (phase === 'connecting') return t('aiChat.connecting')
+  if (phase === 'thinking') return t('aiChat.thinking')
+  if (phase === 'answering') return t('aiChat.answering')
+  return ''
 }
 
 async function onNewChat() {
@@ -350,6 +333,7 @@ async function onSend() {
   const assistantMsg: Message = {
     id: `pending-${Date.now()}`,
     role: 'assistant',
+    phase: 'connecting',
     content: '',
     renderedContent: '',
     created_at: new Date().toISOString(),
@@ -384,6 +368,7 @@ async function onSend() {
 
     // Connection established, hide connecting animation
     connecting.value = false
+    messages.value[msgIdx].phase = deepThink.value ? 'thinking' : 'answering'
     await scrollToBottom()
 
     while (true) {
@@ -438,6 +423,7 @@ async function onSend() {
             messages.value[msgIdx].thinkDone = true
             messages.value[msgIdx].thinkOpen = false
             messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+            messages.value[msgIdx].phase = 'answering'
           }
           textRaw += segment
           messages.value[msgIdx].content = textRaw
@@ -484,6 +470,7 @@ async function onSend() {
       messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
     }
 
+    messages.value[msgIdx].phase = textRaw ? 'done' : 'error'
     asking.value = false
     connecting.value = false
     abortController = null
@@ -499,6 +486,7 @@ async function onSend() {
     messages.value[msgIdx] = {
       id: Date.now().toString(),
       role: 'assistant',
+      phase: 'error',
       content: t('toast.aiChatError'),
       renderedContent: `<p>${t('toast.aiChatError')}</p>`,
       created_at: new Date().toISOString(),
@@ -565,9 +553,16 @@ onMounted(async () => {
   // Default deep think on if the primary model has passed the thinking capability test
   // or if it was enabled from AIHubPage
   if (!aiStore.config) await aiStore.fetchConfig()
-  if (aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true) {
+  const routeDeepThink = route.query.deepThink === '1'
+  const routeWebSearch = route.query.webSearch === '1'
+
+  if (routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true) {
     deepThink.value = true
     aiStore.deepThinkEnabled = false // Reset after using
+  }
+  if (routeWebSearch || aiStore.webSearchEnabled) {
+    webSearch.value = true
+    aiStore.webSearchEnabled = false
   }
 
   try {
@@ -616,10 +611,6 @@ onUnmounted(() => {
   --think-bg: rgba(99, 102, 241, 0.08);
   --think-border: rgba(99, 102, 241, 0.25);
   --think-color: rgba(255, 255, 255, 0.55);
-  --skeleton-bg: rgba(255, 255, 255, 0.07);
-  --skeleton-border: rgba(255, 255, 255, 0.08);
-  --skeleton-shimmer-from: rgba(255, 255, 255, 0.06);
-  --skeleton-shimmer-mid: rgba(255, 255, 255, 0.12);
 }
 
 .ai-chat-page.theme-light {
@@ -641,10 +632,6 @@ onUnmounted(() => {
   --think-bg: rgba(99, 102, 241, 0.1);
   --think-border: rgba(99, 102, 241, 0.35);
   --think-color: rgba(0, 0, 0, 0.7);
-  --skeleton-bg: rgba(0, 0, 0, 0.08);
-  --skeleton-border: rgba(0, 0, 0, 0.15);
-  --skeleton-shimmer-from: rgba(0, 0, 0, 0.06);
-  --skeleton-shimmer-mid: rgba(0, 0, 0, 0.12);
 }
 
 /* ── Page shell ── */
@@ -906,45 +893,52 @@ onUnmounted(() => {
   align-items: flex-end;
 }
 
-/* ── Connecting indicator ── */
-.connecting-indicator {
+/* ── Assistant phase strip ── */
+.phase-strip {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  background: var(--bubble-ai-bg);
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 8px 12px;
+  background: rgba(189, 187, 255, 0.1);
   border: 1px solid var(--bubble-ai-border);
-  border-radius: 16px;
-  border-bottom-left-radius: 4px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.2;
+  box-shadow: rgba(1, 1, 32, 0.08) 0 4px 10px;
 }
 
-.wave-dots {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-
-.wave-dots .dot {
+.phase-pulse {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   background: #818cf8;
-  animation: wave-dot 1.4s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.5);
+  animation: phase-pulse 1.4s ease-out infinite;
+  flex-shrink: 0;
 }
 
-.wave-dots .dot:nth-child(1) { animation-delay: 0s; }
-.wave-dots .dot:nth-child(2) { animation-delay: 0.2s; }
-.wave-dots .dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes wave-dot {
-  0%, 100% { transform: translateY(0); opacity: 0.4; }
-  50% { transform: translateY(-8px); opacity: 1; }
+.phase-strip--answering .phase-pulse {
+  background: #6ee7a0;
+  box-shadow: 0 0 0 0 rgba(110, 231, 160, 0.45);
 }
 
-.connecting-text {
-  font-size: 13px;
+.phase-label {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.phase-meta {
   color: var(--text-secondary);
-  letter-spacing: 0.02em;
+  font-family: 'Georgia', monospace;
+}
+
+@keyframes phase-pulse {
+  0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  70% { box-shadow: 0 0 0 7px transparent; opacity: 0.7; }
+  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
 }
 
 /* ── Deep think block ── */
@@ -1183,41 +1177,6 @@ onUnmounted(() => {
   }
 }
 
-/* ── Skeleton loading ── */
-.skeleton-bubble {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  background: var(--skeleton-bg);
-  border: 1px solid var(--skeleton-border);
-  border-radius: 16px;
-  border-bottom-left-radius: 4px;
-  min-width: 160px;
-}
-
-.skeleton-line {
-  height: 12px;
-  border-radius: 6px;
-  background: linear-gradient(
-    90deg,
-    var(--skeleton-shimmer-from) 0%,
-    var(--skeleton-shimmer-mid) 50%,
-    var(--skeleton-shimmer-from) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.4s ease-in-out infinite;
-}
-
-.skeleton-line--long  { width: 85%; }
-.skeleton-line--medium { width: 65%; }
-.skeleton-line--short  { width: 45%; }
-
-@keyframes shimmer {
-  0%   { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
 /* ── Input bar ── */
 .input-bar {
   padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
@@ -1232,8 +1191,7 @@ onUnmounted(() => {
   .hero-glow,
   .suggestion-card,
   .msg-enter-active,
-  .skeleton-line,
-  .wave-dots .dot,
+  .phase-pulse,
   .think-icon-wrapper,
   .think-text-animated {
     animation: none;

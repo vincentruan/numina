@@ -54,6 +54,7 @@ services:
       start_period: 15s
 
   frontend:
+    build: !reset null
     image: node:20-alpine
     container_name: numina-frontend
     restart: unless-stopped
@@ -65,13 +66,19 @@ services:
     environment:
       - VITE_API_BASE_URL=http://localhost/api
     command: >
-      sh -c "cp package.json /tmp/package.json.orig &&
+      sh -c "cd /app/frontend/packages/auth &&
+             npm install &&
+             cd /app/frontend/apps/main &&
+             cp package.json /tmp/package.json.orig &&
+             trap 'cp /tmp/package.json.orig package.json' EXIT &&
              sed -i 's|\"workspace:\\*\"|\"file:../../packages/auth\"|g' package.json &&
              npm install &&
              cp /tmp/package.json.orig package.json &&
+             trap - EXIT &&
              npx vite --host 0.0.0.0 --port 5173"
 
   frontend-child:
+    build: !reset null
     image: node:20-alpine
     container_name: numina-frontend-child
     restart: unless-stopped
@@ -83,10 +90,15 @@ services:
     environment:
       - VITE_API_BASE_URL=http://localhost/api
     command: >
-      sh -c "cp package.json /tmp/package.json.orig &&
+      sh -c "cd /app/frontend/packages/auth &&
+             npm install &&
+             cd /app/frontend/apps/child &&
+             cp package.json /tmp/package.json.orig &&
+             trap 'cp /tmp/package.json.orig package.json' EXIT &&
              sed -i 's|\"workspace:\\*\"|\"file:../../packages/auth\"|g' package.json &&
              npm install &&
              cp /tmp/package.json.orig package.json &&
+             trap - EXIT &&
              npx vite --host 0.0.0.0 --port 5174"
 
   nginx:

@@ -260,7 +260,15 @@ function startChat(q: string) {
   if (!q) return
   aiStore.draftQuery = q
   aiStore.deepThinkEnabled = deepThink.value
-  router.push({ path: '/ai/chat' })
+  aiStore.webSearchEnabled = webSearch.value
+  router.push({
+    path: '/ai/chat',
+    query: {
+      q,
+      deepThink: deepThink.value ? '1' : undefined,
+      webSearch: webSearch.value ? '1' : undefined,
+    },
+  })
 }
 
 const features = [

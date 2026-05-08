@@ -41,6 +41,12 @@ export default {
     fabAddAsset: '添加资产',
     fabImportBill: '导入账单'
   },
+  aiChat: {
+    connecting: '正在连接模型',
+    thinking: '思考中',
+    answering: '正在生成正文',
+    thinkingSeconds: '{seconds}s'
+  },
   asset: {
     title: '资产',
     all: '全部',

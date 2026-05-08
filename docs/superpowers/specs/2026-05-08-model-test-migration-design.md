@@ -113,9 +113,11 @@ class ModelTestResult(BaseModel):
 
 Agent 端点设计为无状态——"给我凭证，我帮你测"。若接收 config_id，agent 需反向调用 backend 拉取配置，引入循环依赖。明文 api_key 在 backend→agent 的 service-to-service 通信中传输，与现有其他内部调用的安全模型一致（均通过 `AGENT_INTERNAL_TOKEN` 保护）。
 
-### 为什么不复用 `core/llm.py` 的 `LLMClient` 单例
+### 如何复用 `core/llm.py` 的 `LLMClient`
 
-`LLMClient` 当前是按 family 配置初始化的单例，绑定了特定的 api_key 和 model。测试端点需要用**任意传入的凭证**临时构造客户端，不应污染单例状态。`model_tester.py` 将直接实例化 Anthropic/OpenAI SDK 客户端（与 `core/llm.py` 相同的方式），不复用单例。
+`LLMClient` 当前是按 family 配置初始化的单例，绑定了特定的 api_key 和 model。测试端点传入的是任意凭证，不属于任何 family，不能复用单例实例。
+
+做法：**复用 `LLMClient` 类，不复用单例**。`model_tester.py` 直接 `LLMClient(provider, api_key, model_id)` 实例化一个临时客户端，用完即丢。这样复用了 `LLMClient` 封装的 SDK 调用逻辑、错误处理和 thinking 解析，同时不污染任何 family 的单例状态，也不需要修改 `LLMClient` 本身。
 
 ### 持久化保留在 backend
 

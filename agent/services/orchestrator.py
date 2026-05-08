@@ -11,6 +11,7 @@ Pipeline per request:
 All exceptions are caught here; callers always receive an AgentResponse.
 """
 
+import json
 import logging
 import time
 import uuid
@@ -174,6 +175,8 @@ class Orchestrator:
         task_id: str,
         user_id: str | None = None,
         thread_id: str | None = None,
+        free_text: str | None = None,
+        enable_thinking_override: bool | None = None,
     ) -> AsyncGenerator[str, None]:
         """流式 dispatch — yield text chunks. Never raises after first yield."""
         audit_id = str(uuid.uuid4())
@@ -203,7 +206,7 @@ class Orchestrator:
             return
 
         # ── 3. Fetch context ───────────────────────────────────────────
-        context = await self._build_context(client, family_id, free_text=None)
+        context = await self._build_context(client, family_id, free_text=free_text)
 
         # ── 4. Redact PII ──────────────────────────────────────────────
         redacted_context = pii_redactor.redact(context)
@@ -211,7 +214,11 @@ class Orchestrator:
         # ── 5. Load skill config + thinking flag ───────────────────────
         skill_config = skill_loader.load(capability)
         thinking_supported = ai_config.get("thinking_supported", False)
-        enable_thinking = skill_config.thinking and thinking_supported
+        enable_thinking = (
+            bool(enable_thinking_override) and thinking_supported
+            if enable_thinking_override is not None
+            else skill_config.thinking and thinking_supported
+        )
 
         # ── 6. Stream dispatch ─────────────────────────────────────────
         if settings.USE_DEERFLOW:
@@ -240,6 +247,7 @@ class Orchestrator:
                 logger.warning(f"[orchestrator] stream_dispatch DeerFlow failed: {e}")
 
         # ── 7. Fallback (non-streaming) ────────────────────────────────
+        fallback_used = False
         try:
             llm = LLMClient(
                 provider=ai_config.get("ai_provider", ""),
@@ -249,16 +257,28 @@ class Orchestrator:
                 base_url=ai_config.get("ai_base_url"),
                 timeout=float(ai_config.get("timeout_seconds", 60)),
             )
+            if capability == "chat" and redacted_context.free_text:
+                async for chunk in self._stream_chat_fallback(
+                    redacted_context.free_text,
+                    client,
+                    llm,
+                    enable_thinking,
+                ):
+                    yield chunk
+                fallback_used = True
             raw_output = await fallback_engine.run(
-                capability, redacted_context, llm, audit_id, is_deerflow_fallback=False
-            )
-            # PII redaction before yielding to stream
-            raw_summary = raw_output.summary or "分析完成。"
-            redacted_summary, _ = pii_redactor.redact_text(raw_summary)
-            yield redacted_summary
+                capability, redacted_context, llm, audit_id, is_deerflow_fallback=settings.USE_DEERFLOW
+            ) if not fallback_used else None
+            if raw_output is not None:
+                # PII redaction before yielding to stream
+                raw_summary = raw_output.summary or "分析完成。"
+                redacted_summary, _ = pii_redactor.redact_text(raw_summary)
+                yield redacted_summary
+                fallback_used = True
         except Exception as e:
             logger.error(f"[orchestrator] stream_dispatch fallback failed: {e}")
             yield "暂时无法完成分析，请稍后重试。"
+            fallback_used = True
 
         audit_logger.log_call(
             AuditEntry(
@@ -267,10 +287,54 @@ class Orchestrator:
                 family_id=family_id,
                 user_id=user_id,
                 success=True,
-                fallback_used=True,
+                fallback_used=fallback_used,
+                deerflow_attempted=settings.USE_DEERFLOW,
                 duration_ms=int(time.monotonic() * 1000) - start_ms,
             )
         )
+
+    async def _stream_chat_fallback(
+        self,
+        question: str,
+        client: BackendClient,
+        llm: LLMClient,
+        enable_thinking: bool,
+    ) -> AsyncGenerator[str, None]:
+        """Stream chat answers on the direct LLM path using the shared pipeline config."""
+        from services.chat import (
+            ANSWER_PROMPT,
+            _classify_intent,
+            _fetch_data_for_intent,
+        )
+
+        intent = await _classify_intent(question, llm)
+        if intent == "unknown":
+            yield "抱歉，我目前只能回答关于净资产、资产配置、负债、趋势、日均成本、低效资产和到期资产的问题。"
+            return
+
+        try:
+            data = await _fetch_data_for_intent(intent, client)
+        except Exception as e:
+            logger.error(f"[chat] stream data fetch failed: {e}")
+            data = {}
+
+        prompt = ANSWER_PROMPT.format(
+            question=question,
+            data=json.dumps(data, ensure_ascii=False, default=str),
+        )
+
+        if enable_thinking:
+            async for block_type, chunk in llm.stream_with_thinking(
+                prompt,
+                max_tokens=8000,
+                thinking_budget=5000,
+            ):
+                prefix = "[THINK]" if block_type == "thinking" else "[TEXT]"
+                yield f"{prefix}{chunk}"
+            return
+
+        async for chunk in llm.stream_text(prompt, max_tokens=1024):
+            yield f"[TEXT]{chunk}"
 
     async def _build_context(
         self,

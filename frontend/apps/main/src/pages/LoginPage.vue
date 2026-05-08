@@ -1,11 +1,9 @@
 <template>
   <div class="login-page" role="main" aria-label="登录">
-    <!-- Cosmic star background canvas -->
-    <canvas
-      ref="canvasRef"
-      class="cosmic-canvas"
-      aria-hidden="true"
-    ></canvas>
+    <!-- Background particle canvas (full field, dim) -->
+    <canvas ref="bgCanvasRef" class="deer-canvas deer-canvas--bg" aria-hidden="true"></canvas>
+    <!-- Deer-masked particle canvas (bright particles clipped to deer silhouette) -->
+    <canvas ref="deerCanvasRef" class="deer-canvas deer-canvas--deer" aria-hidden="true"></canvas>
 
     <!-- Login content (above canvas) -->
     <div class="login-content">
@@ -256,7 +254,7 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
-import { useStarField } from '@/composables/useStarField'
+import { useDeerField } from '@/composables/useDeerField'
 import { TrustedDeviceCard, getDeviceFingerprint } from '@numina/auth'
 import { checkDevice } from '@/api/device'
 
@@ -268,8 +266,9 @@ const loading = ref(false)
 const altchaRef = ref()
 const showPassword = ref(false)
 
-const canvasRef = ref<HTMLCanvasElement | null>(null)
-useStarField(canvasRef)
+const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
+const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
+useDeerField(bgCanvasRef, deerCanvasRef)
 
 const step = ref<1 | 2>(1)
 const tempToken = ref('')
@@ -483,7 +482,7 @@ watch(
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: linear-gradient(160deg, #010120 0%, #000010 100%);
+  background: #0a0a0a;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -492,18 +491,39 @@ watch(
   overflow: hidden;
 }
 
-.cosmic-canvas {
+.deer-canvas {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
   pointer-events: none;
+}
+
+.deer-canvas--bg {
+  z-index: 0;
+}
+
+/* The deer canvas is masked to the deer SVG silhouette */
+.deer-canvas--deer {
+  z-index: 1;
+  mask-image: url('/images/deer.svg');
+  mask-repeat: no-repeat;
+  mask-position: center center;
+  mask-size: 100vw;
+  -webkit-mask-image: url('/images/deer.svg');
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center center;
+  -webkit-mask-size: 100vw;
+}
+
+@media (min-width: 768px) {
+  .deer-canvas--deer {
+    mask-size: 72vh;
+    -webkit-mask-size: 72vh;
+  }
 }
 
 .login-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   align-items: center;

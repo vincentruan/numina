@@ -8,10 +8,9 @@ and DeerFlow clients. Verifies that each endpoint:
 """
 
 import json
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
-import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from schemas.response import AgentResponse
@@ -73,9 +72,9 @@ def client():
     with (
         patch("app.config.AgentSettings.validate_required", return_value=None),
         patch("services.orchestrator.settings.AGENT_INTERNAL_TOKEN", _TOKEN, create=True),
+        TestClient(app, raise_server_exceptions=True) as c,
     ):
-        with TestClient(app, raise_server_exceptions=True) as c:
-            yield c
+        yield c
 
 
 class TestReportEndpoint:
@@ -192,6 +191,41 @@ class TestChatEndpoint:
                 headers={"X-Family-Id": _FAMILY_ID, "X-Agent-Token": _TOKEN},
             )
         assert captured.get("free_text") == "我的负债压力大吗？"
+
+    def test_ask_stream_uses_orchestrator_stream_with_question(self, client):
+        """Verify streaming chat goes through orchestrator and keeps question text."""
+        captured = {}
+
+        async def _capture_stream(
+            capability,
+            family_id,
+            task_id,
+            user_id=None,
+            thread_id=None,
+            free_text=None,
+            enable_thinking_override=None,
+        ):
+            captured["capability"] = capability
+            captured["family_id"] = family_id
+            captured["free_text"] = free_text
+            captured["enable_thinking_override"] = enable_thinking_override
+            yield "测试流式回答"
+
+        with patch("services.orchestrator.Orchestrator.stream_dispatch", side_effect=_capture_stream):
+            resp = client.post(
+                "/chat/ask/stream",
+                json={"question": "我的净资产是多少？"},
+                headers={"X-Family-Id": _FAMILY_ID, "X-Agent-Token": _TOKEN},
+            )
+
+        assert resp.status_code == 200
+        assert resp.text == "[TEXT]测试流式回答"
+        assert captured == {
+            "capability": "chat",
+            "family_id": _FAMILY_ID,
+            "free_text": "我的净资产是多少？",
+            "enable_thinking_override": False,
+        }
 
 
 class TestAllocationEndpoint:
