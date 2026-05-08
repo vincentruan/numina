@@ -192,11 +192,11 @@ class TestChatEndpoint:
             )
         assert captured.get("free_text") == "我的负债压力大吗？"
 
-    def test_ask_stream_uses_orchestrator_stream_with_question(self, client):
-        """Verify streaming chat goes through orchestrator and keeps question text."""
+    def test_ask_stream_uses_orchestrator_event_stream_with_question(self, client):
+        """Verify streaming chat emits NDJSON events and keeps question text."""
         captured = {}
 
-        async def _capture_stream(
+        async def _capture_stream_events(
             capability,
             family_id,
             task_id,
@@ -209,9 +209,17 @@ class TestChatEndpoint:
             captured["family_id"] = family_id
             captured["free_text"] = free_text
             captured["enable_thinking_override"] = enable_thinking_override
-            yield "测试流式回答"
+            from services.stream_events import EventStreamBuilder
 
-        with patch("services.orchestrator.Orchestrator.stream_dispatch", side_effect=_capture_stream):
+            builder = EventStreamBuilder(capability_id=capability, task_id=task_id)
+            yield builder.phase("connecting").to_ndjson()
+            yield builder.token("测试流式回答", is_thinking=False).to_ndjson()
+            yield builder.end("测试流式回答").to_ndjson()
+
+        with patch(
+            "services.orchestrator.Orchestrator.stream_dispatch_events",
+            side_effect=_capture_stream_events,
+        ):
             resp = client.post(
                 "/chat/ask/stream",
                 json={"question": "我的净资产是多少？"},
@@ -219,7 +227,13 @@ class TestChatEndpoint:
             )
 
         assert resp.status_code == 200
-        assert resp.text == "[TEXT]测试流式回答"
+        lines = [json.loads(line) for line in resp.text.splitlines()]
+        assert [line["type"] for line in lines] == [
+            "phase.connecting",
+            "token.stream",
+            "capability.end",
+        ]
+        assert lines[1]["token"] == "测试流式回答"
         assert captured == {
             "capability": "chat",
             "family_id": _FAMILY_ID,
