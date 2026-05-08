@@ -1,10 +1,12 @@
 """Schemas for POST /test/model endpoint."""
 
+from typing import Literal
+
 from pydantic import BaseModel
 
 
 class ModelTestRequest(BaseModel):
-    provider: str                       # "anthropic" | "openai"
+    provider: Literal["anthropic", "openai"]
     api_key: str                        # plaintext, decrypted by backend before sending
     model_id: str
     base_url: str | None = None

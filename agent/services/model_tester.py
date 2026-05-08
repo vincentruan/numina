@@ -1,5 +1,6 @@
 """Stateless model capability tests for POST /test/model."""
 
+import base64
 import time
 
 from core.llm import get_llm_client
@@ -39,12 +40,18 @@ async def test_thinking(provider, api_key, model_id, base_url=None):
         client = _make_client(provider, api_key, model_id, base_url, None, 120.0)
         if provider == "anthropic":
             try:
-                async for block_type, chunk in client.stream_with_thinking(
+                has_thinking_block = False
+                async for block_type, _chunk in client.stream_with_thinking(
                     "think", max_tokens=1024, thinking_budget=100
                 ):
-                    pass
+                    if block_type == "thinking":
+                        has_thinking_block = True
+                        break
                 latency = int((time.monotonic() - start) * 1000)
-                return {"success": True, "message": "支持思考能力", "latency_ms": latency}
+                if has_thinking_block:
+                    return {"success": True, "message": "支持思考能力", "latency_ms": latency}
+                else:
+                    return {"success": True, "message": "主模型可调用（未检测到思考块）", "latency_ms": latency}
             except Exception as inner:
                 latency = int((time.monotonic() - start) * 1000)
                 msg = str(inner)
@@ -79,7 +86,6 @@ async def test_thinking(provider, api_key, model_id, base_url=None):
 
 async def test_vision(provider, api_key, vision_model_id, base_url=None):
     """Test vision model connectivity (120s timeout)."""
-    import base64
     start = time.monotonic()
     tiny_png = base64.b64encode(
         bytes.fromhex(
@@ -127,7 +133,7 @@ async def test_vision_ocr(provider, api_key, vision_model_id, base_url=None):
     start = time.monotonic()
     test_image_url = get_test_image_data_url()
     expected_text = get_expected_ocr_text()
-    image_data = test_image_url.replace("data:image/png;base64,", "")
+    image_data = test_image_url.split(",", 1)[-1]
     try:
         client = _make_client(provider, api_key, vision_model_id, base_url, vision_model_id, 120.0)
         recognized = await client.complete_vision("请识别图片中的文字内容", image_data, max_tokens=100)
