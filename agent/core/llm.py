@@ -37,6 +37,8 @@ class ThinkingTagParser:
     """
 
     MAX_BUFFER_SIZE = 10000  # ~10KB, prevents malformed tag memory bloat
+    _OPEN_TAG = "<think>"
+    _CLOSE_TAG = "</think>"
 
     def __init__(self):
         self.buffer = ""
@@ -56,7 +58,7 @@ class ThinkingTagParser:
         # Safety limit: if buffer grows beyond MAX, emit as text
         if len(self.buffer) > self.MAX_BUFFER_SIZE:
             # Find last complete tag boundary if possible
-            safe_boundary = self.buffer.rfind("")
+            safe_boundary = self.buffer.rfind(self._CLOSE_TAG)
             if safe_boundary > self.MAX_BUFFER_SIZE - 100:
                 # Emit up to boundary, preserve tag structure
                 yield ("thinking", self.buffer[:safe_boundary])
@@ -73,11 +75,11 @@ class ThinkingTagParser:
 
         while self.buffer:
             if not self.in_think_tag:
-                think_start = self.buffer.find("")
+                think_start = self.buffer.find(self._OPEN_TAG)
                 if think_start == -1:
                     # No opening tag — check if we might be mid-tag at the end
-                    # Emit everything except the last 6 chars (len("") - 1)
-                    safe_end = max(0, len(self.buffer) - 6)
+                    # Emit everything except the last len(_OPEN_TAG)-1 chars
+                    safe_end = max(0, len(self.buffer) - (len(self._OPEN_TAG) - 1))
                     if safe_end > 0:
                         yield ("text", self.buffer[:safe_end])
                         self.buffer = self.buffer[safe_end:]
@@ -85,13 +87,13 @@ class ThinkingTagParser:
                 else:
                     if think_start > 0:
                         yield ("text", self.buffer[:think_start])
-                    self.buffer = self.buffer[think_start + len("") :]
+                    self.buffer = self.buffer[think_start + len(self._OPEN_TAG) :]
                     self.in_think_tag = True
             else:
-                think_end = self.buffer.find("")
+                think_end = self.buffer.find(self._CLOSE_TAG)
                 if think_end == -1:
-                    # Still inside think block — emit all but last 8 chars
-                    safe_end = max(0, len(self.buffer) - 8)
+                    # Still inside think block — emit all but last len(_CLOSE_TAG)-1 chars
+                    safe_end = max(0, len(self.buffer) - (len(self._CLOSE_TAG) - 1))
                     if safe_end > 0:
                         yield ("thinking", self.buffer[:safe_end])
                         self.buffer = self.buffer[safe_end:]
@@ -99,7 +101,7 @@ class ThinkingTagParser:
                 else:
                     if think_end > 0:
                         yield ("thinking", self.buffer[:think_end])
-                    self.buffer = self.buffer[think_end + len("") :]
+                    self.buffer = self.buffer[think_end + len(self._CLOSE_TAG) :]
                     self.in_think_tag = False
 
     def flush(self) -> tuple[str, str] | None:

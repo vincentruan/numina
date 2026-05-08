@@ -126,6 +126,7 @@ def test_refresh_spending_leaks(client, auth_headers, db):
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
 
+    db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="spending_leak").first()
     assert task is not None
     assert task.status == "completed"

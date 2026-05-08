@@ -13,21 +13,21 @@ class TestLLMClientSingleton:
     def test_anthropic_client_created_at_init(self):
         with patch("anthropic.AsyncAnthropic") as mock_cls:
             mock_cls.return_value = MagicMock()
-            client = LLMClient("anthropic", "test-key")
-            mock_cls.assert_called_once_with(api_key="test-key", timeout=30.0)
+            client = LLMClient("anthropic", "test-key", "claude-3-5-sonnet-20241022")
+            mock_cls.assert_called_once_with(api_key="test-key", timeout=60.0)
             assert client._anthropic_client is not None
 
     def test_openai_client_created_at_init(self):
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
-            client = LLMClient("openai", "test-key")
-            mock_cls.assert_called_once_with(api_key="test-key", timeout=30.0)
+            client = LLMClient("openai", "test-key", "gpt-4o")
+            mock_cls.assert_called_once_with(api_key="test-key", timeout=60.0)
             assert client._openai_client is not None
 
     def test_anthropic_client_reused_across_calls(self):
         with patch("anthropic.AsyncAnthropic") as mock_cls:
             mock_cls.return_value = MagicMock()
-            client = LLMClient("anthropic", "test-key")
+            client = LLMClient("anthropic", "test-key", "claude-3-5-sonnet-20241022")
             first = client._anthropic_client
             second = client._anthropic_client
             assert first is second
@@ -37,20 +37,20 @@ class TestLLMClientSingleton:
     def test_openai_client_reused_across_calls(self):
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
-            client = LLMClient("openai", "test-key")
+            client = LLMClient("openai", "test-key", "gpt-4o")
             assert mock_cls.call_count == 1
 
     def test_unsupported_provider_raises(self):
         import pytest
         with pytest.raises(ValueError, match="不支持的 LLM Provider"):
-            client = LLMClient("gemini", "test-key")
+            client = LLMClient("gemini", "test-key", "gemini-pro")
             import asyncio
             asyncio.run(client.complete("hello"))
 
     def test_get_llm_client_factory(self):
         with patch("anthropic.AsyncAnthropic") as mock_cls:
             mock_cls.return_value = MagicMock()
-            client = get_llm_client("anthropic", "key")
+            client = get_llm_client("anthropic", "key", "claude-3-5-sonnet-20241022")
             assert isinstance(client, LLMClient)
             assert client.provider == "anthropic"
 

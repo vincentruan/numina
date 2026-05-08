@@ -137,6 +137,7 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
 
+    db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
     assert task.status == "completed"
@@ -218,6 +219,7 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
             client.post("/api/v1/ai/report/generate", headers=auth_headers)
 
     # The task should be marked failed in DB despite the exception
+    db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
     assert task.status == "failed"
