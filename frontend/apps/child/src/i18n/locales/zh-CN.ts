@@ -97,6 +97,8 @@ export default {
     themeSystem: '🌓 跟随系统',
     themeLight: '☀️ 日间模式',
     themeDark: '🌙 夜间模式',
+    logout: '👋 退出登录',
+    logoutConfirm: '⚠️ 确定要退出登录吗？',
   },
   ledger: {
     myStars: '我的星星币',

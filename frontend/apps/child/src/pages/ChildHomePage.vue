@@ -73,6 +73,9 @@
             {{ opt.label }}
           </button>
         </div>
+        <button class="logout-btn" @click="handleLogout">
+          {{ t('home.logout') }}
+        </button>
       </div>
     </div>
   </div>
@@ -81,6 +84,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
+import { showConfirmDialog, showToast } from 'vant'
 import { getCoinBalance } from '@/api/coins'
 import { getMyChores, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
@@ -89,10 +94,13 @@ import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useDarkMode } from '@/utils/darkMode'
+import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
+const router = useRouter()
 const familyStore = useFamilyStore()
 const { themeMode, setMode } = useDarkMode()
+const childAuthStore = useChildAuthStore()
 
 const balance = ref(0)
 const todayChores = ref<ChoreInstance[]>([])
@@ -113,6 +121,22 @@ function statusLabel(status: ChoreInstance['status']): string {
     case 'approved': return t('chore.approved')
     case 'rejected': return t('chore.rejected')
     default: return ''
+  }
+}
+
+async function handleLogout() {
+  try {
+    await showConfirmDialog({
+      title: t('common.confirm'),
+      message: t('home.logoutConfirm'),
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel'),
+    })
+    await childAuthStore.childLogout()
+    showToast(t('toast.logoutSuccess'))
+    router.replace('/auth')
+  } catch {
+    // User cancelled or logout failed
   }
 }
 
@@ -363,4 +387,20 @@ onMounted(async () => {
   font-weight: 600;
 }
 .theme-btn:active { transform: scale(0.96); }
+.logout-btn {
+  width: 100%;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-hairline);
+  background: var(--color-surface-soft);
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  min-height: 44px;
+}
+.logout-btn:active { transform: scale(0.96); }
 </style>

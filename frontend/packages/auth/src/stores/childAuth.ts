@@ -144,6 +144,16 @@ export const useChildAuthStore = defineStore('childAuth', () => {
     }
   }
 
+  async function childLogout() {
+    try {
+      await getHttp().post('/auth/child/logout')
+    } catch {
+      // Ignore logout API errors (Cookie might already be invalid)
+    }
+    childUser.value = null
+    removeUser()
+  }
+
   function clearChildSession() {
     childUser.value = null
   }
@@ -161,6 +171,7 @@ export const useChildAuthStore = defineStore('childAuth', () => {
     childLoginStep1,
     childLoginStep2,
     childLogin,
+    childLogout,
     returnToAdult,
     clearChildSession,
     clearLoginError,
