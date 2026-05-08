@@ -7,6 +7,7 @@ Codex execution entry for this repository.
 - Primary rules: [`CLAUDE.md`](./CLAUDE.md)
 - Module rules:
   - [`backend/CLAUDE.md`](./backend/CLAUDE.md)
+  - [`frontend/packages/CLAUDE.md`](./frontend/packages/CLAUDE.md)
   - [`frontend/apps/main/CLAUDE.md`](./frontend/apps/main/CLAUDE.md)
   - [`frontend/apps/child/CLAUDE.md`](./frontend/apps/child/CLAUDE.md)
   - [`agent/CLAUDE.md`](./agent/CLAUDE.md)
