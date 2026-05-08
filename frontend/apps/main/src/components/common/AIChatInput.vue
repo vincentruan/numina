@@ -148,6 +148,7 @@ const props = defineProps<{
   loading?: boolean
   showClear?: boolean
   deepThink?: boolean
+  webSearch?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -164,7 +165,7 @@ const expanded = ref(false)
 const focused = ref(false)
 const panelOpen = ref(false)
 const deepThinkInternal = ref(props.deepThink ?? false)
-const webSearch = ref(false)
+const webSearch = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 
 const panelItems = [
@@ -203,8 +204,9 @@ watch(
 watch(internalValue, (val) => emit('update:modelValue', val))
 watch(deepThinkInternal, (val) => emit('update:deepThink', val))
 watch(webSearch, (val) => emit('update:webSearch', val))
-// Sync parent-pushed value (e.g. auto-enable after async config fetch)
+// Sync parent-pushed values (e.g. auto-enable after async config fetch)
 watch(() => props.deepThink, (val) => { if (val !== undefined) deepThinkInternal.value = val })
+watch(() => props.webSearch, (val) => { if (val !== undefined) webSearch.value = val })
 
 function onInput() {
   adjustHeight()

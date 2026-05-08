@@ -179,9 +179,9 @@
       </div>
     </transition>
 
-    <!-- Skeleton loading state (after connection established) -->
+    <!-- Skeleton loading state (after connection established, when no assistant message content yet) -->
     <transition name="msg">
-      <div v-if="asking && !connecting" class="message-row assistant">
+      <div v-if="asking && !connecting && !hasPendingAssistantContent" class="message-row assistant">
         <div class="bubble assistant">
           <div class="bubble-body">
             <div class="skeleton-bubble" aria-label="AI 正在思考">
@@ -287,6 +287,12 @@ const showHistory = ref(false)
 const dataTheme = ref(document.documentElement.getAttribute('data-theme') ?? 'dark')
 const isLight = computed(() => dataTheme.value === 'light')
 let themeObserver: MutationObserver | null = null
+
+// Check if there's an assistant message that is still being filled (used to hide skeleton)
+const hasPendingAssistantContent = computed(() => {
+  const lastMsg = messages.value[messages.value.length - 1]
+  return lastMsg?.role === 'assistant' && (lastMsg.content || lastMsg.thinkContent)
+})
 let abortController: AbortController | null = null
 
 
@@ -557,9 +563,11 @@ onMounted(async () => {
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
   // Default deep think on if the primary model has passed the thinking capability test
+  // or if it was enabled from AIHubPage
   if (!aiStore.config) await aiStore.fetchConfig()
-  if (aiStore.config?.ai_test_thinking_success === true) {
+  if (aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true) {
     deepThink.value = true
+    aiStore.deepThinkEnabled = false // Reset after using
   }
 
   try {

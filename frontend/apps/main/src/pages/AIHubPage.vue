@@ -120,6 +120,8 @@
     <div class="chat-entry">
       <AIChatInput
         v-model="chatInput"
+        v-model:deep-think="deepThink"
+        v-model:web-search="webSearch"
         placeholder="问我任何关于家庭资产的问题…"
         @submit="startChat"
       />
@@ -148,6 +150,8 @@ const currentReport = ref<Record<string, unknown> | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const chatInput = ref('')
+const deepThink = ref(false)
+const webSearch = ref(false)
 
 const userName = computed(() => getUser()?.display_name || '用户')
 
@@ -255,6 +259,7 @@ async function refreshReport(silent?: boolean) {
 function startChat(q: string) {
   if (!q) return
   aiStore.draftQuery = q
+  aiStore.deepThinkEnabled = deepThink.value
   router.push({ path: '/ai/chat' })
 }
 
