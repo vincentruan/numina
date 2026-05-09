@@ -24,7 +24,7 @@ DEFAULT_DIFFICULTY = 50000  # Backward compatible default
 def get_captcha_config():
     """Return whether captcha is enabled for the current environment."""
     try:
-        return {"captcha_enabled": settings.ENVIRONMENT == "production"}
+        return {"captcha_enabled": settings.ENVIRONMENT == "production" and not settings.DISABLE_CAPTCHA}
     except Exception as e:
         import logging
         logging.exception(f"get_captcha_config error: {e}")

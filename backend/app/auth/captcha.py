@@ -34,8 +34,8 @@ async def verify_captcha(
         AppError: CAPTCHA_REPLAY if captcha payload was already used
         AppError: CAPTCHA_SERVICE_UNAVAILABLE if captcha cache is unavailable
     """
-    # Skip verification in development mode
-    if settings.ENVIRONMENT != "production":
+    # Skip verification in development mode or when explicitly disabled
+    if settings.ENVIRONMENT != "production" or settings.DISABLE_CAPTCHA:
         return
 
     # Allow seed/test scripts to bypass captcha with a pre-shared secret
