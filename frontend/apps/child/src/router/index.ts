@@ -1,19 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getUser, useLoadingOverlay } from '@numina/auth'
 
-// Guest routes — accessible without child session
-const GUEST_ROUTES = ['/auth']
+// Child routes — all require authentication, redirect to unified login if not authenticated
+const GUEST_ROUTES: string[] = []
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // Guest routes (child auth flow)
-    {
-      path: '/auth',
-      name: 'ChildAuth',
-      component: () => import('@/pages/ChildAuthPage.vue'),
-      meta: { guest: true },
-    },
     // Authenticated child routes
     {
       path: '/',
@@ -72,29 +65,18 @@ router.beforeEach((to, _from, next) => {
   useLoadingOverlay().show()
   const user = getUser()
   const isChildSession = user?.role === 'child'
-  const isGuest = GUEST_ROUTES.includes(to.path) || to.meta?.guest
 
-  if (isGuest) {
-    // Guest routes: redirect to home if already authenticated
-    if (isChildSession) {
-      next('/')
-    } else {
-      next()
-    }
-  } else {
-    // Protected routes: redirect to adult app if admin_child_view flag is stale (no active child session)
-    if (!isChildSession) {
-      if (localStorage.getItem('admin_child_view') !== null) {
-        localStorage.removeItem('admin_child_view')
-        window.location.replace('/')
-        next(false)
-        return
-      }
-      next('/auth')
-    } else {
-      next()
-    }
+  // All routes in child app require authentication
+  // Redirect unauthenticated users to unified login on main site
+  if (!isChildSession) {
+    // Build redirect URL preserving the original path
+    const redirectPath = to.path !== '/' ? `/child${to.path}` : '/child/'
+    window.location.href = `https://numina.xiaoshutiao.space/login?redirect=${encodeURIComponent(redirectPath)}`
+    next(false)
+    return
   }
+
+  next()
 })
 
 router.afterEach(() => {

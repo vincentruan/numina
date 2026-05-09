@@ -251,12 +251,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
-import AltchaWidget from '@/components/common/AltchaWidget.vue'
+import type { LoginStep2Request } from '@/types'
+import { loginStep1, loginStep2 as apiLoginStep2 } from '@/api/auth'
 import { useDeerField } from '@/composables/useDeerField'
 import { TrustedDeviceCard, getDeviceFingerprint } from '@numina/auth'
 import { checkDevice } from '@/api/device'
@@ -264,6 +264,7 @@ import { checkDevice } from '@/api/device'
 const { t } = useI18n()
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const loading = ref(false)
 const altchaRef = ref()
@@ -336,14 +337,20 @@ async function onStep1Submit() {
     } else {
       // No second factor — login complete; populate user store before navigating
       await authStore.fetchMe()
+      const user = authStore.user
+      if (user?.role === 'child') {
+        // Child users should use the child app
+        // Check for redirect parameter to return to specific child page
+        const redirect = route.query.redirect as string
+        if (redirect && redirect.startsWith('/child/')) {
+          window.location.href = `https://numina.xiaoshutiao.space${redirect}`
+        } else {
+          window.location.href = 'https://numina.xiaoshutiao.space/child/'
+        }
+        return
+      }
       showToast(t('toast.loginSuccess'))
       router.push('/')
-    }
-  } catch (error: unknown) {
-    const axiosError = error as { response?: { status?: number; data?: { code?: string; message?: string; detail?: string } } }
-    const code = axiosError.response?.data?.code
-    const status = axiosError.response?.status
-
     if (code?.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()
     }
@@ -459,6 +466,17 @@ watch(
           payload: { pin_sequence: emojiPin.value },
         })
         showToast(t('toast.loginSuccess'))
+        // Child users with emoji PIN should redirect to child app
+        const user = authStore.user
+        if (user?.role === 'child') {
+          const redirect = route.query.redirect as string
+          if (redirect && redirect.startsWith('/child/')) {
+            window.location.href = `https://numina.xiaoshutiao.space${redirect}`
+          } else {
+            window.location.href = 'https://numina.xiaoshutiao.space/child/'
+          }
+          return
+        }
         router.push('/')
       } catch (error: unknown) {
         shaking.value = true
