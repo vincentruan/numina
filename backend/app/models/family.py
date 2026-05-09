@@ -22,6 +22,9 @@ class Family(Base):
     invite_code: Mapped[str] = mapped_column(String(6), unique=True, default=generate_invite_code)
     created_by: Mapped[int] = mapped_column(BigInteger, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )
 
     members = relationship("User", back_populates="family")
     categories = relationship("Category", back_populates="family")
