@@ -182,13 +182,12 @@
             class="numpad-btn"
             :class="{
               'numpad-action': n === '清空' || n === '⌫',
+              'numpad-action--delete': n === '⌫',
               flash: flashKey === n,
             }"
             :disabled="loading"
             @click="onNumpadPress(n)"
-          >
-            {{ n }}
-          </button>
+          >{{ n }}</button>
         </div>
 
         <!-- Emoji PIN mode -->
@@ -218,8 +217,8 @@
           </div>
 
           <div class="emoji-actions">
-            <button class="emoji-action-btn" :disabled="loading" @click="deleteEmoji">删除</button>
-            <button class="emoji-action-btn" :disabled="loading" @click="clearEmojiPin">清除</button>
+            <button class="emoji-action-btn" :disabled="loading" @click="clearEmojiPin">清空</button>
+            <button class="emoji-action-btn emoji-action-btn--delete" :disabled="loading" @click="deleteEmoji">⌫</button>
           </div>
 
           <!-- Loading indicator for emoji PIN verification -->
@@ -609,6 +608,7 @@ watch(
 .login-form {
   width: 100%;
   max-width: 400px;
+  padding: 0 16px;
 }
 
 /* Strip Vant inset group card styling */
@@ -617,6 +617,8 @@ watch(
   border-radius: 0;
   box-shadow: none;
   background: transparent;
+  /* Allow backdrop-filter and focus glow to escape the group boundary */
+  overflow: visible;
 }
 
 /* Dark theme overrides for Vant components in login form */
@@ -624,19 +626,34 @@ watch(
   background: transparent;
 }
 
+/* Glass morphism input fields */
 .login-form :deep(.van-cell) {
-  background: rgba(189, 187, 255, 0.07);
-  border: 1px solid rgba(189, 187, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid rgba(189, 187, 255, 0.35);
   border-radius: 8px;
-  margin-bottom: 12px;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  box-shadow: 0 0 0 0 rgba(189, 187, 255, 0);
+  margin-bottom: 14px;
+  transition: border-color 0.25s, box-shadow 0.25s, background 0.25s;
+  box-shadow:
+    0 4px 16px rgba(1, 1, 32, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Hide Vant's default bottom hairline divider */
+.login-form :deep(.van-cell)::after {
+  display: none;
 }
 
 .login-form :deep(.van-cell):focus-within {
-  border-color: rgba(189, 187, 255, 0.85);
-  box-shadow: 0 0 12px rgba(189, 187, 255, 0.25);
-  background: rgba(189, 187, 255, 0.12);
+  border-color: #bdbbff;
+  background: rgba(189, 187, 255, 0.1);
+  /* Multi-layer glow: ring + mid spread + outer halo — visible on mobile */
+  box-shadow:
+    0 0 0 3px rgba(189, 187, 255, 0.3),
+    0 0 18px rgba(189, 187, 255, 0.55),
+    0 0 40px rgba(189, 187, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .login-form :deep(.van-field__label) {
@@ -658,22 +675,31 @@ watch(
 }
 
 .form-actions {
-  padding: 24px 16px 0;
+  padding: 20px 0 0;
 }
 
+/* Glass morphism button — background uses white glass token per DESIGN.md */
 .form-actions :deep(.van-button--primary) {
-  --van-button-primary-background: rgba(189, 187, 255, 0.18);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
+  --van-button-primary-background: rgba(255, 255, 255, 0.12);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.6);
   --van-button-primary-color: #fff;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  transition: box-shadow 0.2s, background 0.2s;
-  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
+  letter-spacing: 0.06em;
+  transition: box-shadow 0.25s, background 0.25s, border-color 0.25s;
+  box-shadow:
+    0 0 0 1px rgba(189, 187, 255, 0.15),
+    0 0 20px rgba(189, 187, 255, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .form-actions :deep(.van-button--primary:active) {
-  --van-button-primary-background: rgba(189, 187, 255, 0.35);
-  box-shadow: 0 0 24px rgba(189, 187, 255, 0.4);
+  --van-button-primary-background: rgba(255, 255, 255, 0.2);
+  --van-button-primary-border-color: #bdbbff;
+  box-shadow:
+    0 0 0 3px rgba(189, 187, 255, 0.35),
+    0 0 28px rgba(189, 187, 255, 0.55),
+    0 0 56px rgba(189, 187, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .login-links {
@@ -787,10 +813,19 @@ watch(
 
 .numpad-action {
   font-size: 14px !important;
-  font-weight: 500 !important;
-  background: rgba(189, 187, 255, 0.12) !important;
-  border-color: rgba(189, 187, 255, 0.35) !important;
-  color: #bdbbff !important;
+  font-weight: 600 !important;
+  background: rgba(189, 187, 255, 0.14) !important;
+  border-color: rgba(189, 187, 255, 0.5) !important;
+  color: #fff !important;
+}
+
+.numpad-action--delete {
+  font-size: 28px !important;
+}
+
+.emoji-action-btn--delete {
+  font-size: 22px !important;
+  font-weight: 700 !important;
 }
 
 @keyframes flash {
