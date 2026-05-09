@@ -32,7 +32,7 @@ ANSWER_PROMPT = """你是家庭资产管理助手。根据以下数据回答用�
 用户问题：{question}
 相关数据：{data}
 
-直接回答，不要重复问题，不要说"根据数据"等前缀。"""
+只输出最终答案。不要输出分析过程、思考步骤、草稿、自检清单、Markdown 标题或 JSON。不要重复问题，不要说"根据数据"等前缀。"""
 
 
 async def answer_question(question: str, family_id: str, llm: LLMClient) -> str:
@@ -98,8 +98,14 @@ async def _fetch_data_for_intent(intent: str, client: BackendClient) -> dict:
         liabilities = await client.get_liabilities()
         return {
             "count": len(liabilities),
-            "total": sum(l.get("remaining_amount", 0) for l in liabilities),
-            "items": [{"category": l.get("category"), "remaining": l.get("remaining_amount")} for l in liabilities[:5]],
+            "total": sum(item.get("remaining_amount", 0) for item in liabilities),
+            "items": [
+                {
+                    "category": item.get("category"),
+                    "remaining": item.get("remaining_amount"),
+                }
+                for item in liabilities[:5]
+            ],
         }
     elif intent == "allocation_query":
         data = await client.get_dashboard_allocation()

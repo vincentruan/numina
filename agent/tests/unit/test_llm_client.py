@@ -1,8 +1,8 @@
 """Unit tests for core/llm.py — Bug fix: SDK client singleton."""
 
-import sys
 import os
-from unittest.mock import patch, MagicMock
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -37,7 +37,7 @@ class TestLLMClientSingleton:
     def test_openai_client_reused_across_calls(self):
         with patch("openai.AsyncOpenAI") as mock_cls:
             mock_cls.return_value = MagicMock()
-            client = LLMClient("openai", "test-key", "gpt-4o")
+            LLMClient("openai", "test-key", "gpt-4o")
             assert mock_cls.call_count == 1
 
     def test_unsupported_provider_raises(self):
@@ -53,6 +53,33 @@ class TestLLMClientSingleton:
             client = get_llm_client("anthropic", "key", "claude-3-5-sonnet-20241022")
             assert isinstance(client, LLMClient)
             assert client.provider == "anthropic"
+
+
+class TestOpenAICompatibleThinkingControl:
+    async def test_stream_text_disables_provider_thinking(self):
+        class FakeDelta:
+            content = "answer"
+
+        class FakeChoice:
+            delta = FakeDelta()
+
+        class FakeChunk:
+            choices = [FakeChoice()]
+
+        async def fake_stream():
+            yield FakeChunk()
+
+        with patch("openai.AsyncOpenAI") as mock_cls:
+            mock_client = MagicMock()
+            mock_client.chat.completions.create = AsyncMock(return_value=fake_stream())
+            mock_cls.return_value = mock_client
+            client = LLMClient("openai", "test-key", "glm-5")
+
+            chunks = [chunk async for chunk in client.stream_text("hello")]
+
+        assert chunks == ["answer"]
+        call_kwargs = mock_client.chat.completions.create.call_args.kwargs
+        assert call_kwargs["extra_body"]["enable_thinking"] is False
 
 
 class TestJSONFenceStripping:

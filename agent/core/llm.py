@@ -259,9 +259,8 @@ class LLMClient:
             "max_tokens": max_tokens,
             "messages": messages,
             "stream": True,
+            "extra_body": {"enable_thinking": enable_thinking},
         }
-        if enable_thinking:
-            kwargs["extra_body"] = {"enable_thinking": True}
 
         stream = await self._openai_client.chat.completions.create(**kwargs)
 
