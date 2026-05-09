@@ -71,7 +71,8 @@ router.beforeEach((to, _from, next) => {
   if (!isChildSession) {
     // Build redirect URL preserving the original path
     const redirectPath = to.path !== '/' ? `/child${to.path}` : '/child/'
-    window.location.href = `https://numina.xiaoshutiao.space/login?redirect=${encodeURIComponent(redirectPath)}`
+    const baseUrl = import.meta.env.VITE_MAIN_APP_URL || 'https://numina.xiaoshutiao.space'
+    window.location.href = `${baseUrl}/login?redirect=${encodeURIComponent(redirectPath)}`
     next(false)
     return
   }

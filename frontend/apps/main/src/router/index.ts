@@ -294,7 +294,10 @@ router.beforeEach((to, _from, next) => {
   const isChild = user?.role === 'child'
 
   // Guest routes (login, register, join-family) — allow even for stale child sessions
-  // Child users with stale sessions need to reach login page to re-authenticate
+  // Child users with stale localStorage need to reach /login for re-authentication.
+  // Note: Child users can also see /register and /join-family, but backend will
+  // reject their submissions (role validation). This is safe because auth state
+  // is determined by httpOnly cookies, not localStorage.
   if (to.meta.guest) {
     if (isLoggedIn && !isChild) {
       // Logged-in adult user accessing guest route → redirect to dashboard
