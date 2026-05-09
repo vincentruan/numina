@@ -276,6 +276,7 @@ function startChat(q: string) {
     path: '/ai/chat',
     query: {
       q,
+      newSession: '1', // Signal fresh session from hub
       deepThink: deepThink.value ? '1' : undefined,
       webSearch: webSearch.value ? '1' : undefined,
     },
@@ -302,6 +303,10 @@ function startCapability(cap: { id: string; ui?: { route?: string | null } }) {
 
 onMounted(async () => {
   await aiStore.fetchConfig()
+  // Enable deep-think by default if model supports thinking capability
+  if (aiStore.config?.ai_test_thinking_success === true) {
+    deepThink.value = true
+  }
   await loadCapabilities()
   await loadReport()
 })

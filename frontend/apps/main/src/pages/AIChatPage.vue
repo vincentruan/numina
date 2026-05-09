@@ -657,6 +657,7 @@ onMounted(async () => {
   if (!aiStore.config) await aiStore.fetchConfig()
   const routeDeepThink = route.query.deepThink === '1'
   const routeWebSearch = route.query.webSearch === '1'
+  const isNewSession = route.query.newSession === '1'
 
   if (routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true) {
     deepThink.value = true
@@ -667,18 +668,31 @@ onMounted(async () => {
     aiStore.webSearchEnabled = false
   }
 
-  try {
-    const res = await getChatHistory()
-    messages.value = res.data.map((m) => ({
-      ...m,
-      displayTime: formatTime(m.created_at),
-      renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,
-    }))
-    await markChatRead()
-    await scrollToBottom()
-  } catch {
-    // no history
+  // Clear history if navigating from hub with newSession flag
+  if (isNewSession) {
+    messages.value = []
+    try {
+      await clearChatHistory()
+    } catch {
+      // ignore
+    }
+  } else {
+    // Load existing history (normal navigation)
+    try {
+      const res = await getChatHistory()
+      messages.value = res.data.map((m) => ({
+        ...m,
+        displayTime: formatTime(m.created_at),
+        renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,
+      }))
+      await markChatRead()
+      await scrollToBottom()
+    } catch {
+      // no history
+    }
   }
+
+  // Send user's question from hub or route query
   const q = aiStore.draftQuery || route.query.q
   if (typeof q === 'string' && q.trim()) {
     inputText.value = q.trim()
