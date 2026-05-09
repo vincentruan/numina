@@ -48,7 +48,11 @@ export default {
     thinkingSeconds: '{seconds}s',
     toolRunning: 'Running',
     toolDone: 'Done',
-    toolFailed: 'Failed'
+    toolFailed: 'Failed',
+    deepThinking: 'Deep thinking…',
+    retry: 'Retry',
+    retrying: 'Regenerating',
+    errorRetry: 'Request failed, please retry',
   },
   asset: {
     title: 'Assets',

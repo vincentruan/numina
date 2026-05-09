@@ -81,11 +81,20 @@
             class="message-row"
             :class="msg.role"
           >
-            <div class="bubble" :class="msg.role">
+            <div class="bubble" :class="[msg.role, { 'assistant--thinking': msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' }]">
               <div class="bubble-body">
+                <!-- Thinking halo placeholder (shown when phase is thinking/connecting/answering and no content yet) -->
+                <div
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && !msg.content"
+                  class="thinking-placeholder"
+                  aria-live="polite"
+                >
+                  <span class="thinking-halo" aria-hidden="true" />
+                  <span class="thinking-label">{{ t('aiChat.deepThinking') }}</span>
+                </div>
                 <!-- Unified phase indicator: integrated into think block when deep thinking, standalone otherwise -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink"
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink && msg.content"
                   class="phase-strip standalone"
                   :class="`phase-strip--${msg.phase}`"
                   aria-live="polite"
@@ -141,12 +150,24 @@
                 </div>
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
-                  v-if="msg.role === 'assistant'"
+                  v-if="msg.role === 'assistant' && msg.phase !== 'error'"
                   class="bubble-text"
+                  :class="{ 'bubble-text--appearing': msg.content && msg.phase === 'answering' && !msg.renderedContent }"
                   v-html="msg.renderedContent ?? ''"
                 />
+                <!-- Error state with retry button -->
+                <div v-if="msg.role === 'assistant' && msg.phase === 'error'" class="error-state">
+                  <p class="error-msg">{{ t('aiChat.errorRetry') }}</p>
+                  <button class="error-retry-btn" :disabled="asking" @click="onRetryError(idx)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="1 4 1 10 7 10"/>
+                      <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
+                    </svg>
+                    <span>{{ t('aiChat.retry') }}</span>
+                  </button>
+                </div>
                 <!-- eslint-enable vue/no-v-html -->
-                <div v-else class="bubble-text">{{ msg.content }}</div>
+                <div v-if="msg.role === 'user'" class="bubble-text">{{ msg.content }}</div>
                 <span class="msg-time">{{ msg.displayTime }}</span>
                 <!-- User message actions: copy + edit -->
                 <div v-if="msg.role === 'user'" class="msg-actions msg-actions--user">
@@ -677,6 +698,18 @@ function onFeedback(id: string, value: 1 | -1) {
   const msg = messages.value.find((m) => m.id === id)
   if (!msg) return
   msg.feedback = msg.feedback === value ? 0 : value
+}
+
+async function onRetryError(idx: number) {
+  if (asking.value) return
+  // Find the preceding user message
+  const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
+  if (!prevUser) return
+  // Remove the error assistant message
+  messages.value.splice(idx, 1)
+  // Re-send the user's question
+  inputText.value = prevUser.content
+  await onSend()
 }
 
 onMounted(async () => {
@@ -1456,9 +1489,122 @@ onUnmounted(() => {
   .msg-enter-active,
   .phase-pulse,
   .think-icon-wrapper,
-  .think-text-animated {
+  .think-text-animated,
+  .thinking-halo,
+  .bubble-text--appearing {
     animation: none;
     transition: none;
   }
+}
+
+/* ── Thinking halo effect ── */
+.bubble.assistant--thinking {
+  position: relative;
+  overflow: visible;
+}
+
+.thinking-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 20px;
+  min-height: 48px;
+}
+
+.thinking-halo {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    rgba(189, 187, 255, 0.2),
+    rgba(129, 140, 248, 0.6),
+    rgba(189, 187, 255, 0.2),
+    rgba(129, 140, 248, 0.6),
+    rgba(189, 187, 255, 0.2)
+  );
+  animation: halo-spin 1.5s linear infinite;
+  position: relative;
+}
+
+.thinking-halo::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+@keyframes halo-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.thinking-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* ── Bubble content fade-in ── */
+.bubble-text--appearing {
+  animation: content-fade-in 0.2s ease-out;
+}
+
+@keyframes content-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ── Error state ── */
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+}
+
+.error-msg {
+  font-size: 13px;
+  color: #f87171;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.error-retry-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.error-retry-btn:hover {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.45);
+}
+
+.error-retry-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Light mode error adjustments */
+.ai-chat-page.theme-light .error-retry-btn {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.ai-chat-page.theme-light .error-retry-btn:hover {
+  background: rgba(248, 113, 113, 0.22);
 }
 </style>

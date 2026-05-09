@@ -48,7 +48,11 @@ export default {
     thinkingSeconds: '{seconds}s',
     toolRunning: '调用中',
     toolDone: '已完成',
-    toolFailed: '调用失败'
+    toolFailed: '调用失败',
+    deepThinking: '深度思考中…',
+    retry: '重试',
+    retrying: '重新生成中',
+    errorRetry: '请求失败，请重试',
   },
   asset: {
     title: '资产',
