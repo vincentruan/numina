@@ -195,6 +195,7 @@ onMounted(async () => {
 }
 .check-section { padding: 12px 16px; }
 .no-drift { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.no-drift :deep(.van-empty__image) { display: flex; align-items: center; justify-content: center; }
 .narrative-card {
   background: var(--bg-primary);
   margin: 12px 16px;
