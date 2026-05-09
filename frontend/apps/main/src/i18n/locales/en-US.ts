@@ -308,6 +308,9 @@ export default {
     RATE_LIMITED: '⚠️ Too many requests, please try again later',
   },
   toast: {
+    // Copy
+    copied: '✅ Copied',
+    copyFailed: '❌ Copy failed',
     // Second factor PIN
     pinMismatch: '⚠️ PINs do not match',
     pinChanged: '✅ PIN updated',

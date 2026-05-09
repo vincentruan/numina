@@ -340,6 +340,9 @@ export default {
     RATE_LIMITED: '⚠️ 请求过于频繁，请稍后再试',
   },
   toast: {
+    // Copy
+    copied: '✅ 已复制',
+    copyFailed: '❌ 复制失败',
     // Second factor PIN
     pinMismatch: '⚠️ 两次输入的 PIN 不一致',
     pinChanged: '✅ PIN 已修改',

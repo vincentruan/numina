@@ -101,7 +101,7 @@
                 >
                   <button class="think-toggle" @click="msg.thinkOpen = !msg.thinkOpen">
                     <div class="think-icon-wrapper">
-                      <span class="phase-pulse-small" v-if="msg.phase && msg.phase !== 'done' && msg.phase !== 'error'" aria-hidden="true" />
+                      <span v-if="msg.phase && msg.phase !== 'done' && msg.phase !== 'error'" class="phase-pulse-small" aria-hidden="true" />
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
                         <path d="M9 21h6"/>
@@ -148,6 +148,21 @@
                 <!-- eslint-enable vue/no-v-html -->
                 <div v-else class="bubble-text">{{ msg.content }}</div>
                 <span class="msg-time">{{ msg.displayTime }}</span>
+                <!-- User message actions: copy + edit -->
+                <div v-if="msg.role === 'user'" class="msg-actions msg-actions--user">
+                  <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                    </svg>
+                  </button>
+                  <button class="msg-action-btn" aria-label="修改" title="修改" @click="onEditUserMessage(idx)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                </div>
                 <!-- Assistant message actions -->
                 <div v-if="msg.role === 'assistant'" class="msg-actions">
                   <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
@@ -625,17 +640,36 @@ async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | '
 async function onCopy(content: string) {
   try {
     await navigator.clipboard.writeText(content)
-    showToast('✅ 已复制')
+    showToast(t('toast.copied'))
   } catch {
-    showToast('❌ 复制失败')
+    showToast(t('toast.copyFailed'))
   }
+}
+
+function onEditUserMessage(idx: number) {
+  const msg = messages.value[idx]
+  if (!msg || msg.role !== 'user') return
+  // Remove all messages from this user message onwards
+  messages.value.splice(idx)
+  // Put the content back into input for editing
+  inputText.value = msg.content
 }
 
 async function onRegenerate(idx: number) {
   const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
   if (!prevUser || asking.value) return
-  messages.value.splice(idx, 1)
-  inputText.value = prevUser.content
+
+  // Check if this is the last user message - don't duplicate
+  const lastUserMsg = [...messages.value].reverse().find((m) => m.role === 'user')
+  if (lastUserMsg && lastUserMsg.id === prevUser.id) {
+    // It's the last user question - just regenerate without adding duplicate
+    // Remove the assistant response and re-send
+    messages.value.splice(idx, 1)
+  } else {
+    // It's a previous user question - remove the response and add question back
+    messages.value.splice(idx, 1)
+    inputText.value = prevUser.content
+  }
   await onSend()
 }
 
@@ -1335,10 +1369,22 @@ onUnmounted(() => {
   transition: opacity 0.15s;
 }
 
+/* User message actions - positioned on right */
+.msg-actions--user {
+  justify-content: flex-end;
+}
+
 .message-row:hover .msg-actions,
 .message-row:focus-within .msg-actions,
 .message-row:active .msg-actions {
   opacity: 1;
+}
+
+/* Mobile: always show actions for touch */
+@media (max-width: 768px) {
+  .msg-actions {
+    opacity: 1;
+  }
 }
 
 /* List reorder animation */
