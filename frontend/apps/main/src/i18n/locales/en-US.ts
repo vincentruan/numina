@@ -53,6 +53,7 @@ export default {
     retry: 'Retry',
     retrying: 'Regenerating',
     errorRetry: 'Request failed, please retry',
+    historyTitle: 'Chat History',
   },
   asset: {
     title: 'Assets',

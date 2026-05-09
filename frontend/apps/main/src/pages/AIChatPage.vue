@@ -21,10 +21,12 @@
     <van-popup v-model:show="showHistory" position="left" :style="{ width: '80%', height: '100%' }">
       <div class="history-panel">
         <div class="history-header">
-          <span class="history-title">会话历史</span>
-          <button class="header-btn" @click="showHistory = false">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <button class="header-btn" aria-label="返回" @click="showHistory = false">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
           </button>
+          <span class="history-title">{{ t('aiChat.historyTitle') }}</span>
         </div>
         <div class="history-empty">
           <p>暂无历史会话</p>
@@ -892,7 +894,7 @@ onUnmounted(() => {
 .history-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 4px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }

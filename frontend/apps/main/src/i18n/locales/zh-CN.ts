@@ -53,6 +53,7 @@ export default {
     retry: '重试',
     retrying: '重新生成中',
     errorRetry: '请求失败，请重试',
+    historyTitle: '会话历史',
   },
   asset: {
     title: '资产',
