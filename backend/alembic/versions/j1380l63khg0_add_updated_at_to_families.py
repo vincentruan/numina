@@ -19,15 +19,17 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # SQLite cannot ADD COLUMN NOT NULL with a non-constant default in one step.
+    # Add nullable first, backfill, then the ORM onupdate handles future writes.
     op.add_column(
         'families',
         sa.Column(
             'updated_at',
             sa.DateTime(),
-            server_default=sa.text('CURRENT_TIMESTAMP'),
-            nullable=False,
+            nullable=True,
         ),
     )
+    op.execute("UPDATE families SET updated_at = CURRENT_TIMESTAMP WHERE updated_at IS NULL")
 
 
 def downgrade() -> None:
