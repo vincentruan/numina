@@ -19,7 +19,7 @@ services:
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
       - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
@@ -61,18 +61,22 @@ services:
     working_dir: /app/frontend/apps/main
     volumes:
       - ./frontend:/app/frontend
-      - ./frontend/apps/main/node_modules:/app/frontend/apps/main/node_modules
+      - frontend_root_node_modules:/app/frontend/node_modules
+      - frontend_main_node_modules:/app/frontend/apps/main/node_modules
+      - frontend_auth_node_modules:/app/frontend/packages/auth/node_modules
       - ./frontend/packages:/app/frontend/packages
     environment:
       - VITE_API_BASE_URL=http://localhost/api
+      - HUSKY=0
     command: >
-      sh -c "cd /app/frontend/packages/auth &&
-             npm install &&
+      sh -c "npm install -g husky &&
+             cd /app/frontend/packages/auth &&
+             npm install --ignore-scripts &&
              cd /app/frontend/apps/main &&
              cp package.json /tmp/package.json.orig &&
              trap 'cp /tmp/package.json.orig package.json' EXIT &&
              sed -i 's|\"workspace:\\*\"|\"file:../../packages/auth\"|g' package.json &&
-             npm install &&
+             npm install --ignore-scripts &&
              cp /tmp/package.json.orig package.json &&
              trap - EXIT &&
              npx vite --host 0.0.0.0 --port 5173"
@@ -85,18 +89,22 @@ services:
     working_dir: /app/frontend/apps/child
     volumes:
       - ./frontend:/app/frontend
-      - ./frontend/apps/child/node_modules:/app/frontend/apps/child/node_modules
+      - frontend_root_node_modules:/app/frontend/node_modules
+      - frontend_child_node_modules:/app/frontend/apps/child/node_modules
+      - frontend_auth_node_modules:/app/frontend/packages/auth/node_modules
       - ./frontend/packages:/app/frontend/packages
     environment:
       - VITE_API_BASE_URL=http://localhost/api
+      - HUSKY=0
     command: >
-      sh -c "cd /app/frontend/packages/auth &&
-             npm install &&
+      sh -c "npm install -g husky &&
+             cd /app/frontend/packages/auth &&
+             npm install --ignore-scripts &&
              cd /app/frontend/apps/child &&
              cp package.json /tmp/package.json.orig &&
              trap 'cp /tmp/package.json.orig package.json' EXIT &&
              sed -i 's|\"workspace:\\*\"|\"file:../../packages/auth\"|g' package.json &&
-             npm install &&
+             npm install --ignore-scripts &&
              cp /tmp/package.json.orig package.json &&
              trap - EXIT &&
              npx vite --host 0.0.0.0 --port 5174"
@@ -117,3 +125,7 @@ services:
 
 volumes:
   agent_logs:
+  frontend_root_node_modules:
+  frontend_main_node_modules:
+  frontend_child_node_modules:
+  frontend_auth_node_modules:

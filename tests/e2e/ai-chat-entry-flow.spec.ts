@@ -35,4 +35,20 @@ test.describe('AI chat entry flow', () => {
     )
     expect(realErrors, `Console errors: ${realErrors.join(', ')}`).toHaveLength(0)
   })
+
+  test('demouser sees phase feedback and final answer without leaked reasoning', async ({ page }) => {
+    await loginAs(page, 'demouser', 'DemoPass123')
+    await page.request.delete('/api/v1/ai/chat/history')
+    await page.goto('/ai/chat')
+    await page.waitForLoadState('domcontentloaded')
+
+    await page.getByLabel('向 AI 提问').fill('我们家净资产是多少？')
+    await page.getByRole('button', { name: '发送' }).click()
+
+    await expect(page.getByText(/正在连接模型|组织回答中/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.locator('.bubble.assistant').last()).toContainText(/净资产.*28,649,021\.74/, {
+      timeout: 30_000,
+    })
+    await expect(page.locator('.bubble.assistant').last()).not.toContainText(/分析请求|检查限制|最终润色/)
+  })
 })
