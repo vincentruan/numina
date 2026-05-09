@@ -8,15 +8,14 @@ ENV TZ=Asia/Shanghai
 RUN pip install uv --no-cache-dir
 
 # 安装 DeerFlow harness（vendor 目录由 scripts/vendor-harness.sh 预先填充）
-COPY vendor/deerflow-harness /opt/deerflow-harness
 # 同时复制到 vendor/ 目录以满足 pyproject.toml workspace 配置
 COPY vendor/deerflow-harness /app/vendor/deerflow-harness
 
-COPY pyproject.toml requirements.txt ./
-RUN uv pip install --system --no-cache -r requirements.txt
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY . .
 
 EXPOSE 8001
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
