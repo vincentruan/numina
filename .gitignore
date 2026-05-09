@@ -167,3 +167,6 @@ tests/screenshot/screenshots/live-*.png
 tests/screenshot/screenshots/*-after-*.png
 .gstack/
 .worktrees
+
+# Runtime chat data (user-generated, not source code)
+data/chat/
