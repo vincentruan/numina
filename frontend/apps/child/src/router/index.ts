@@ -53,10 +53,11 @@ const router = createRouter({
         },
       ],
     },
-    // Catch-all redirect
+    // Catch-all redirect — must stay within child app
+    // Redirect to child home, which will trigger auth check if needed
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/',
+      redirect: '/child/',
     },
   ],
 })

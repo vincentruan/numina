@@ -20,7 +20,7 @@ http.interceptors.request.use(
 )
 
 // Response interceptor — unwrap {code, data} envelope so callers get res.data directly
-// On 401, clear stale localStorage session and redirect to login
+// On 401, clear stale localStorage session and redirect to main login
 http.interceptors.response.use(
   (response) => {
     if (response.data && typeof response.data === 'object' && 'code' in response.data && 'data' in response.data) {
@@ -31,9 +31,13 @@ http.interceptors.response.use(
   (error) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
       const url = error.config?.url ?? ''
+      // Don't redirect for auth endpoints (login should handle its own errors)
       if (!url.includes('/auth/')) {
         clearAuth()
-        window.location.replace('/child/auth')
+        // Redirect to main login (child app has no auth pages)
+        // Use full URL to ensure it goes through nginx to main frontend
+        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || 'https://numina.xiaoshutiao.space'
+        window.location.replace(`${baseUrl}/login?redirect=/child/`)
       }
     }
     return Promise.reject(error)
