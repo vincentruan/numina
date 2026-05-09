@@ -293,29 +293,32 @@ router.beforeEach((to, _from, next) => {
   const isLoggedIn = !!user
   const isChild = user?.role === 'child'
 
-  // Stale child session — redirect to child app via full navigation
-  if (isChild) {
-    window.location.replace('/child/')
-    return
-  }
-
-  // Guest routes (login, register, join-family)
+  // Guest routes (login, register, join-family) — allow even for stale child sessions
+  // Child users with stale sessions need to reach login page to re-authenticate
   if (to.meta.guest) {
-    if (isLoggedIn) {
+    if (isLoggedIn && !isChild) {
+      // Logged-in adult user accessing guest route → redirect to dashboard
       next('/')
     } else {
+      // Not logged in, or child user (possibly stale session) → allow guest route
       next()
     }
     return
   }
 
-  // Not logged in — redirect to login
+  // Stale child session accessing protected route — redirect to child app
+  if (isChild) {
+    window.location.replace('/child/')
+    return
+  }
+
+  // Not logged in accessing protected route — redirect to login
   if (!isLoggedIn) {
     next('/login')
     return
   }
 
-  // Adult user — allow
+  // Adult user accessing protected route — allow
   next()
 })
 
