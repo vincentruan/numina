@@ -276,3 +276,32 @@ def setup_reminder_schedule() -> None:
         coalesce=True,
     )
     logger.info("智能提醒定时任务已配置（每日 09:20）")
+
+
+def snapshot_job() -> None:
+    """APScheduler job: generate daily snapshots for all families."""
+    from app.services.snapshot import auto_generate_daily_snapshots
+
+    db = SessionLocal()
+    try:
+        auto_generate_daily_snapshots(db)
+        logger.info("每日快照生成完成")
+    except Exception as e:
+        logger.exception(f"每日快照生成失败: {e}")
+    finally:
+        db.close()
+
+
+def setup_snapshot_schedule() -> None:
+    """Schedule daily snapshot generation at 00:05."""
+    scheduler.add_job(
+        snapshot_job,
+        trigger="cron",
+        hour=0,
+        minute=5,
+        id="snapshot_daily",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("快照定时任务已配置（每日 00:05）")
