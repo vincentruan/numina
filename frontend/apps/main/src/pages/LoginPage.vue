@@ -325,7 +325,7 @@ async function onStep1Submit() {
       altcha: form.value.altcha,
     })
 
-    if (result.second_factor_required && result.temp_token) {
+    if (result.temp_token) {
       tempToken.value = result.temp_token
       secondFactorType.value = result.second_factor_type ?? 'numeric_pin'
       if (result.display_name && result.avatar_color) {
@@ -333,22 +333,8 @@ async function onStep1Submit() {
       }
       step.value = 2
     } else {
-      // No second factor — login complete; populate user store before navigating
-      await authStore.fetchMe()
-      const user = authStore.user
-      if (user?.role === 'child') {
-        // Child users should use the child app
-        // Check for redirect parameter to return to specific child page
-        const redirect = route.query.redirect as string
-        if (redirect && redirect.startsWith('/child/')) {
-          window.location.href = `https://numina.xiaoshutiao.space${redirect}`
-        } else {
-          window.location.href = 'https://numina.xiaoshutiao.space/child/'
-        }
-        return
-      }
-      showToast(t('toast.loginSuccess'))
-      router.push('/')
+      // No temp_token — this shouldn't happen per normal flow
+      showToast(t('toast.loginFailedGeneric'))
     }
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: { code?: string; message?: string; detail?: string }; status?: number } }
@@ -399,6 +385,17 @@ async function submitPin() {
       payload: { pin: pinInput.value },
     })
     showToast(t('toast.loginSuccess'))
+    // Redirect based on user role
+    const user = authStore.user
+    if (user?.role === 'child') {
+      const redirect = route.query.redirect as string
+      if (redirect && redirect.startsWith('/child/')) {
+        window.location.href = `https://numina.xiaoshutiao.space${redirect}`
+      } else {
+        window.location.href = 'https://numina.xiaoshutiao.space/child/'
+      }
+      return
+    }
     router.push('/')
   } catch (error: unknown) {
     shaking.value = true
