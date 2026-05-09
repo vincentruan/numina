@@ -1,6 +1,7 @@
 """Tests for session-based AI chat API (JSONL storage)."""
 
 import json
+from contextlib import nullcontext
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.models.ai_chat_session import AIChatSession
@@ -40,6 +41,25 @@ def _mock_agent_response(answer: str = "Test answer"):
     return mock_client
 
 
+def _mock_agent_stream(ndjson_lines: list[str]):
+    """Create a mock httpx streaming response that yields NDJSON lines."""
+    async def _aiter_text():
+        for line in ndjson_lines:
+            yield line
+
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status = MagicMock()
+    mock_resp.aiter_text = _aiter_text
+    mock_stream = AsyncMock()
+    mock_stream.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream.__aexit__ = AsyncMock(return_value=False)
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.stream = MagicMock(return_value=mock_stream)
+    return mock_client
+
+
 # ── Session lifecycle ──────────────────────────────────────────────────────────
 
 def test_chat_creates_session_when_none_exists(client, auth_headers, db, tmp_path):
@@ -67,7 +87,7 @@ def test_chat_creates_session_when_none_exists(client, auth_headers, db, tmp_pat
 
 def test_chat_reuses_existing_session(client, auth_headers, db, tmp_path):
     """POST /ai/chat with session_id appends to existing session."""
-    family_id = _enable_ai(db, auth_headers, client)
+    _enable_ai(db, auth_headers, client)
 
     with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
@@ -240,10 +260,10 @@ def test_get_sessions_returns_list(client, auth_headers, db, tmp_path):
 
     with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
         # Create two sessions directly via service
-        session1 = asyncio.get_event_loop().run_until_complete(
+        asyncio.get_event_loop().run_until_complete(
             ChatSessionService.create_session(family_id, user_id, db)
         )
-        session2 = asyncio.get_event_loop().run_until_complete(
+        asyncio.get_event_loop().run_until_complete(
             ChatSessionService.create_session(family_id, user_id, db)
         )
 
@@ -256,6 +276,42 @@ def test_get_sessions_returns_list(client, auth_headers, db, tmp_path):
         assert "session_id" in s
         assert "created_at" in s
         assert "message_count" in s
+
+
+def test_chat_stream_persists_only_non_thinking_tokens(client, auth_headers, db, tmp_path):
+    family_id = _enable_ai(db, auth_headers, client)
+
+    ndjson_lines = [
+        '{"type":"phase.connecting","phase":"connecting"}\n',
+        '{"type":"token.stream","token":"内部思考","is_thinking":true}\n',
+        '{"type":"phase.answering","phase":"answering"}\n',
+        '{"type":"token.stream","token":"最终回答","is_thinking":false}\n',
+        '{"type":"capability.end","result":{"summary":"最终回答"}}\n',
+    ]
+
+    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+         patch("app.routers.ai_chat.SessionLocal", side_effect=lambda: nullcontext(db)), \
+         patch("httpx.AsyncClient", return_value=_mock_agent_stream(ndjson_lines)):
+        resp = client.post(
+            "/api/v1/ai/chat/stream",
+            json={"question": "My question"},
+            headers=auth_headers,
+        )
+
+    assert resp.status_code == 200
+    assert "capability.end" in resp.text
+
+    session = db.query(AIChatSession).filter_by(family_id=family_id).first()
+    assert session is not None
+
+    messages = [
+        json.loads(line)
+        for line in (tmp_path / family_id / f"{session.id}.jsonl").read_text().splitlines()
+    ]
+    assert messages[0]["role"] == "user"
+    assert messages[0]["content"] == "My question"
+    assert messages[1]["role"] == "assistant"
+    assert messages[1]["content"] == "最终回答"
 
 
 def test_get_sessions_empty_when_no_sessions(client, auth_headers, db):
@@ -416,7 +472,7 @@ def test_cached_file_created_on_first_message(client, auth_headers, db, tmp_path
 
 def test_remote_sync_queued_when_enabled(client, auth_headers, db, tmp_path):
     """When CHAT_ENABLE_REMOTE_SYNC=True and default backend exists, FileRemoteLocation is created."""
-    family_id = _enable_ai(db, auth_headers, client)
+    _enable_ai(db, auth_headers, client)
 
     # Create a default storage backend
     backend = StorageBackend(

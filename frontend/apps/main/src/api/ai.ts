@@ -292,6 +292,8 @@ export function sendChatMessageStream(
   })
 }
 
+export const sendChatEventStream = sendChatMessageStream
+
 export const getChatHistory = () =>
   http.get<ChatMessage[]>('/ai/chat/history')
 

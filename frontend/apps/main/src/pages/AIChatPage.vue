@@ -120,6 +120,26 @@
                   <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                   <div v-if="msg.thinkOpen" class="think-content" v-html="msg.thinkContent" />
                 </div>
+                <div v-if="msg.role === 'assistant' && msg.toolTimeline?.length" class="tool-timeline">
+                  <div
+                    v-for="tool in msg.toolTimeline"
+                    :key="tool.id"
+                    class="tool-card"
+                    :class="{ 'tool-card--done': tool.result, 'tool-card--error': tool.result && !tool.result.success }"
+                  >
+                    <div class="tool-card-main">
+                      <span class="tool-card-icon" aria-hidden="true">{{ toolIcon(tool.icon) }}</span>
+                      <div class="tool-card-copy">
+                        <span class="tool-card-title">{{ tool.displayName }}</span>
+                        <span class="tool-card-meta">{{ toolStatus(tool) }}</span>
+                      </div>
+                    </div>
+                    <div v-if="tool.argumentsText" class="tool-card-args">{{ tool.argumentsText }}</div>
+                    <div v-if="tool.result" class="tool-result">
+                      {{ toolResultText(tool.result) }}
+                    </div>
+                  </div>
+                </div>
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
                   v-if="msg.role === 'assistant'"
@@ -201,9 +221,11 @@ import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { sendChatMessageStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
+import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import { createAgentEventParser } from '@/composables/useAgentEventStream'
+import type { AgentEvent } from '@/types/agent-stream'
 
 // Configure marked
 marked.use({ breaks: true })
@@ -250,6 +272,22 @@ interface Message {
   thinkOpen?: boolean
   thinkDone?: boolean
   thinkSeconds?: number
+  toolTimeline?: ToolTimelineItem[]
+}
+
+interface ToolTimelineItem {
+  id: string
+  name: string
+  displayName: string
+  icon: string
+  argumentsText: string
+  result?: {
+    success?: boolean
+    summary?: string
+    data?: unknown
+    error?: string
+    execution_time_ms?: number
+  }
 }
 
 const { t } = useI18n()
@@ -342,6 +380,7 @@ async function onSend() {
     thinkOpen: deepThink.value ? true : undefined,
     thinkDone: deepThink.value ? false : undefined,
     thinkSeconds: deepThink.value ? 0 : undefined,
+    toolTimeline: [],
   }
   messages.value.push(assistantMsg)
   const msgIdx = messages.value.length - 1
@@ -357,110 +396,101 @@ async function onSend() {
   }
 
   const decoder = new TextDecoder()
-  // Buffer for partial chunk boundaries (prefix is 7 chars: "[THINK]" or "[TEXT]")
-  let chunkBuf = ''
   let thinkRaw = ''
   let textRaw = ''
   let thinkingDone = false
 
   try {
-    const reader = await sendChatMessageStream(q, deepThink.value, abortController.signal)
+    const reader = await sendChatEventStream(q, deepThink.value, abortController.signal)
+    const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation
     connecting.value = false
     messages.value[msgIdx].phase = deepThink.value ? 'thinking' : 'answering'
     await scrollToBottom()
 
+    function handleEvent(event: AgentEvent) {
+      if (event.type === 'phase.connecting') {
+        messages.value[msgIdx].phase = 'connecting'
+        return
+      }
+      if (event.type === 'phase.thinking') {
+        messages.value[msgIdx].phase = 'thinking'
+        return
+      }
+      if (event.type === 'phase.answering') {
+        messages.value[msgIdx].phase = 'answering'
+        return
+      }
+      if (event.type === 'token.stream' && event.is_thinking) {
+        thinkRaw += event.token ?? ''
+        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+        return
+      }
+      if (event.type === 'token.stream') {
+        if (!thinkingDone && deepThink.value) {
+          thinkingDone = true
+          if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
+          messages.value[msgIdx].thinkDone = true
+          messages.value[msgIdx].thinkOpen = false
+          messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+        }
+        textRaw += event.token ?? ''
+        messages.value[msgIdx].content = textRaw
+        messages.value[msgIdx].renderedContent = renderMarkdown(textRaw)
+        return
+      }
+      if (event.type === 'tool.call' && event.tool) {
+        messages.value[msgIdx].toolTimeline ??= []
+        messages.value[msgIdx].toolTimeline.push({
+          id: event.tool.id,
+          name: event.tool.name,
+          displayName: event.tool.display_name,
+          icon: event.tool.icon,
+          argumentsText: formatToolArguments(event.tool.arguments),
+        })
+        return
+      }
+      if (event.type === 'tool.result' && event.tool_id) {
+        messages.value[msgIdx].toolTimeline ??= []
+        const tool = messages.value[msgIdx].toolTimeline.find((item) => item.id === event.tool_id)
+        const result = event.result
+          ? {
+              success: event.result.success,
+              summary: event.result.summary,
+              data: event.result.data,
+              error: event.result.error,
+              execution_time_ms: event.result.execution_time_ms,
+            }
+          : undefined
+        if (tool) {
+          tool.result = result
+        } else {
+          messages.value[msgIdx].toolTimeline.push({
+            id: event.tool_id,
+            name: event.tool_id,
+            displayName: event.tool_id,
+            icon: 'tool',
+            argumentsText: '',
+            result,
+          })
+        }
+        return
+      }
+      if (event.type === 'capability.error') {
+        messages.value[msgIdx].phase = 'error'
+        messages.value[msgIdx].content = event.error?.message ?? t('toast.aiChatError')
+        messages.value[msgIdx].renderedContent = renderMarkdown(messages.value[msgIdx].content)
+      }
+    }
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
-
-      chunkBuf += decoder.decode(value, { stream: true })
-
-      // Process all complete prefixed segments in the buffer
-      let processed = true
-      while (processed) {
-        processed = false
-        const thinkIdx = chunkBuf.indexOf('[THINK]')
-        const textIdx = chunkBuf.indexOf('[TEXT]')
-
-        if (thinkIdx === -1 && textIdx === -1) {
-          // No prefix found yet — keep buffering (could be mid-prefix)
-          break
-        }
-
-        const firstIdx = thinkIdx === -1 ? textIdx : textIdx === -1 ? thinkIdx : Math.min(thinkIdx, textIdx)
-        const isThink = firstIdx === thinkIdx && (textIdx === -1 || thinkIdx < textIdx)
-
-        // Find the next prefix after this one to know where this segment ends
-        const prefixLen = isThink ? 7 : 6 // "[THINK]" = 7, "[TEXT]" = 6
-        const afterPrefix = firstIdx + prefixLen
-        const nextThink = chunkBuf.indexOf('[THINK]', afterPrefix)
-        const nextText = chunkBuf.indexOf('[TEXT]', afterPrefix)
-        const nextBoundary = nextThink === -1 && nextText === -1
-          ? -1
-          : nextThink === -1 ? nextText : nextText === -1 ? nextThink : Math.min(nextThink, nextText)
-
-        const segmentEnd = nextBoundary === -1 ? chunkBuf.length : nextBoundary
-        // If no next boundary, keep last 7 chars buffered (could be start of next prefix)
-        const safeEnd = nextBoundary === -1 ? Math.max(afterPrefix, segmentEnd - 7) : segmentEnd
-
-        if (safeEnd <= afterPrefix) break
-
-        const segment = chunkBuf.slice(afterPrefix, safeEnd)
-        chunkBuf = chunkBuf.slice(safeEnd)
-        processed = true
-
-        if (isThink) {
-          thinkRaw += segment
-          messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-          scrollToBottom()
-        } else {
-          // First [TEXT] chunk signals thinking is done
-          if (!thinkingDone && deepThink.value) {
-            thinkingDone = true
-            if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
-            messages.value[msgIdx].thinkDone = true
-            messages.value[msgIdx].thinkOpen = false
-            messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-            messages.value[msgIdx].phase = 'answering'
-          }
-          textRaw += segment
-          messages.value[msgIdx].content = textRaw
-          messages.value[msgIdx].renderedContent = renderMarkdown(textRaw)
-          scrollToBottom()
-        }
-      }
+      parser.push(decoder.decode(value, { stream: true }))
+      await scrollToBottom()
     }
-
-    // Final flush: process any remaining buffer with no held-back guard
-    if (chunkBuf) {
-      const thinkIdx = chunkBuf.indexOf('[THINK]')
-      const textIdx = chunkBuf.indexOf('[TEXT]')
-      // Emit any leading content before the first prefix
-      const firstIdx = thinkIdx === -1 ? textIdx : textIdx === -1 ? thinkIdx : Math.min(thinkIdx, textIdx)
-      if (firstIdx > 0) {
-        // Content before any prefix — belongs to current block type
-        const leading = chunkBuf.slice(0, firstIdx)
-        if (thinkingDone || !deepThink.value) {
-          textRaw += leading
-        } else {
-          thinkRaw += leading
-          messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-        }
-        chunkBuf = chunkBuf.slice(firstIdx)
-      }
-      if (chunkBuf.startsWith('[THINK]')) {
-        thinkRaw += chunkBuf.slice(7)
-        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-      } else if (chunkBuf.startsWith('[TEXT]')) {
-        textRaw += chunkBuf.slice(6)
-      }
-      if (textRaw) {
-        messages.value[msgIdx].content = textRaw
-        messages.value[msgIdx].renderedContent = renderMarkdown(textRaw)
-      }
-    }
+    parser.flush()
 
     // Finalize think block if no text came (e.g. error from agent)
     if (deepThink.value && !thinkingDone) {
@@ -497,6 +527,34 @@ async function onSend() {
     abortController = null
     await scrollToBottom()
   }
+}
+
+function formatToolArguments(args: Record<string, unknown>) {
+  return Object.entries(args)
+    .map(([key, value]) => `${key}: ${String(value)}`)
+    .join(' · ')
+}
+
+function toolIcon(icon: string) {
+  const map: Record<string, string> = {
+    search: '⌕',
+    tool: '◇',
+  }
+  return map[icon] ?? '◇'
+}
+
+function toolStatus(tool: ToolTimelineItem) {
+  if (!tool.result) return t('aiChat.toolRunning')
+  if (tool.result.success === false) return t('aiChat.toolFailed')
+  return t('aiChat.toolDone')
+}
+
+function toolResultText(result: NonNullable<ToolTimelineItem['result']>) {
+  if (result.error) return result.error
+  if (result.summary) return result.summary
+  if (typeof result.data === 'string') return result.data
+  if (result.data !== undefined && result.data !== null) return JSON.stringify(result.data)
+  return t('aiChat.toolDone')
 }
 
 function onAbort() {
@@ -1049,6 +1107,84 @@ onUnmounted(() => {
 
 .think-content :deep(p) { margin: 0 0 4px; }
 .think-content :deep(p:last-child) { margin-bottom: 0; }
+
+/* ── Tool timeline ── */
+.tool-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: min(100%, 320px);
+  margin-bottom: 4px;
+}
+
+.tool-card {
+  border: 1px solid var(--bubble-ai-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  padding: 9px 10px;
+  box-shadow: rgba(1, 1, 32, 0.08) 0 4px 10px;
+}
+
+.tool-card--done {
+  border-color: rgba(110, 231, 160, 0.28);
+}
+
+.tool-card--error {
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+.tool-card-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background: rgba(189, 187, 255, 0.12);
+  color: var(--text-primary);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.tool-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tool-card-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.tool-card-meta,
+.tool-card-args,
+.tool-result {
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.tool-card-args {
+  margin-top: 7px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.tool-result {
+  margin-top: 7px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
 
 .bubble-text {
   display: block;

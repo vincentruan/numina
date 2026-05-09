@@ -45,7 +45,10 @@ export default {
     connecting: '正在连接模型',
     thinking: '思考中',
     answering: '正在生成正文',
-    thinkingSeconds: '{seconds}s'
+    thinkingSeconds: '{seconds}s',
+    toolRunning: '调用中',
+    toolDone: '已完成',
+    toolFailed: '调用失败'
   },
   asset: {
     title: '资产',
@@ -703,5 +706,8 @@ export default {
   aiConfig: {
     hideApiKey: '隐藏 API Key',
     showApiKey: '显示 API Key',
+  },
+  aiHub: {
+    capabilities: 'AI 能力',
   },
 }

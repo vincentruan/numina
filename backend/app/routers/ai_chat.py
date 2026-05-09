@@ -1,6 +1,9 @@
 """AI 问答助手端点。"""
 
+import json
 import logging
+import time
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -81,6 +84,35 @@ def _get_latest_session(family_id: str, db: Session) -> AIChatSession | None:
     )
 
 
+def _collect_answer_token_from_event(line: str) -> str | None:
+    """Return final-answer token from a stream event, excluding thinking tokens."""
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        logger.warning("chat_stream received invalid NDJSON line")
+        return None
+    if event.get("type") != "token.stream":
+        return None
+    if event.get("is_thinking") is not False:
+        return None
+    return str(event.get("token", ""))
+
+
+def _stream_error_event(task_id: str, message: str, code: str) -> str:
+    return json.dumps(
+        {
+            "id": f"{task_id}-proxy-error",
+            "type": "capability.error",
+            "timestamp": time.time(),
+            "capability_id": "chat",
+            "task_id": task_id,
+            "error": {"message": message, "code": code},
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ) + "\n"
+
+
 @router.post("")
 async def chat(
     body: ChatRequest,
@@ -145,7 +177,7 @@ async def chat_stream(
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
-    """流式问答，支持 deep_think 模式。透传 agent 的 [THINK]/[TEXT] 前缀流。"""
+    """流式问答，透传 agent 的 NDJSON 事件流。"""
     if body.session_id is not None:
         session = _get_session_for_family(body.session_id, current_user.family_id, db)
         if session is None:
@@ -161,9 +193,11 @@ async def chat_stream(
     db.refresh(session)
 
     session_id = session.id
+    task_id = str(uuid.uuid4())
 
     async def proxy_stream():
         answer_chunks: list[str] = []
+        buffer = ""
         try:
             async with (
                 httpx.AsyncClient(timeout=None) as client,
@@ -180,14 +214,29 @@ async def chat_stream(
                 ) as resp,
             ):
                 async for chunk in resp.aiter_text():
-                    # Collect answer chunks for persistence (strip [TEXT] prefix)
-                    if chunk.startswith("[TEXT]"):
-                        answer_chunks.append(chunk[6:])
-                    yield chunk.encode("utf-8")
+                    buffer += chunk
+                    while "\n" in buffer:
+                        line, buffer = buffer.split("\n", 1)
+                        if not line.strip():
+                            continue
+                        token = _collect_answer_token_from_event(line)
+                        if token is not None:
+                            answer_chunks.append(token)
+                        yield f"{line}\n".encode()
+
+                if buffer.strip():
+                    token = _collect_answer_token_from_event(buffer)
+                    if token is not None:
+                        answer_chunks.append(token)
+                    yield f"{buffer}\n".encode()
 
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
-            yield "[TEXT]抱歉，AI 服务暂时不可用。".encode()
+            yield _stream_error_event(
+                task_id,
+                "抱歉，AI 服务暂时不可用。",
+                "backend_proxy_error",
+            ).encode()
         finally:
             # Persist the full answer after stream completes
             if answer_chunks:
@@ -201,7 +250,7 @@ async def chat_stream(
                     except Exception as e:
                         logger.error("chat_stream persist failed: %s", type(e).__name__)
 
-    return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
+    return StreamingResponse(proxy_stream(), media_type="application/x-ndjson; charset=utf-8")
 
 
 @router.get("/sessions")

@@ -45,7 +45,10 @@ export default {
     connecting: 'Connecting model',
     thinking: 'Thinking',
     answering: 'Writing answer',
-    thinkingSeconds: '{seconds}s'
+    thinkingSeconds: '{seconds}s',
+    toolRunning: 'Running',
+    toolDone: 'Done',
+    toolFailed: 'Failed'
   },
   asset: {
     title: 'Assets',
@@ -538,5 +541,8 @@ export default {
   aiConfig: {
     hideApiKey: 'Hide API Key',
     showApiKey: 'Show API Key',
+  },
+  aiHub: {
+    capabilities: 'AI Capabilities',
   },
 }
