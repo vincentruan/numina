@@ -92,11 +92,14 @@
           <circle cx="178" cy="2" r="2" fill="url(#flourishGrad)" opacity="0.6" filter="url(#logoGlow)" />
         </svg>
 
-        <p v-if="step === 1" class="app-subtitle">家庭资产可视化管理</p>
+        <p v-if="step === 1" class="app-subtitle">
+          <span class="subtitle-char c1">家</span><span class="subtitle-char c2">庭</span><span class="subtitle-char c3">资</span><span class="subtitle-char c4">产</span><span class="subtitle-char c5">可</span><span class="subtitle-char c6">视</span><span class="subtitle-char c7">化</span><span class="subtitle-char c8">管</span><span class="subtitle-char c9">理</span>
+        </p>
       </div>
 
       <!-- Step 1: username + password -->
-      <div v-if="step === 1" class="login-form">
+      <Transition name="step-fade" mode="out-in">
+      <div v-if="step === 1" key="step1" class="login-form">
         <van-cell-group inset>
           <van-field
             v-model="form.username"
@@ -133,7 +136,7 @@
       </div>
 
       <!-- Step 2: PIN verification (numeric or emoji based on secondFactorType) -->
-      <div v-else class="pin-step">
+      <div v-else key="step2" class="pin-step">
         <!-- Trusted device card — shown when fast-login path was taken -->
         <TrustedDeviceCard
           v-if="trustedUser"
@@ -243,6 +246,7 @@
           </van-button>
         </div>
       </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -482,7 +486,7 @@ watch(
 <style scoped>
 .login-page {
   min-height: 100vh;
-  background: #0a0a0a;
+  background: #010120;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -550,14 +554,69 @@ watch(
 }
 
 .app-subtitle {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  margin-top: 8px;
+  font-size: 15px;
+  font-family: 'ZCOOL KuaiLe', 'Ma Shan Zheng', 'Noto Sans SC', cursive, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  margin-top: 10px;
+  display: flex;
+  gap: 1px;
+  justify-content: center;
+}
+
+.subtitle-char {
+  display: inline-block;
+  animation: subtitleFloat 3s ease-in-out infinite;
+}
+
+.subtitle-char:nth-child(odd) {
+  animation-direction: alternate;
+}
+
+@keyframes subtitleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Stagger the float animation per character */
+.subtitle-char.c1 { animation-delay: 0s; }
+.subtitle-char.c2 { animation-delay: 0.1s; }
+.subtitle-char.c3 { animation-delay: 0.2s; }
+.subtitle-char.c4 { animation-delay: 0.3s; }
+.subtitle-char.c5 { animation-delay: 0.4s; }
+.subtitle-char.c6 { animation-delay: 0.5s; }
+.subtitle-char.c7 { animation-delay: 0.6s; }
+.subtitle-char.c8 { animation-delay: 0.7s; }
+.subtitle-char.c9 { animation-delay: 0.8s; }
+
+/* Rainbow colors — warm to cool cycle */
+.c1 { color: #ff6b6b; }
+.c2 { color: #ff9f43; }
+.c3 { color: #ffd93d; }
+.c4 { color: #6bcb77; }
+.c5 { color: #4ecdc4; }
+.c6 { color: #74b9ff; }
+.c7 { color: #a29bfe; }
+.c8 { color: #fd79a8; }
+.c9 { color: #fdcb6e; }
+
+@media (prefers-reduced-motion: reduce) {
+  .subtitle-char {
+    animation: none;
+  }
 }
 
 .login-form {
   width: 100%;
   max-width: 400px;
+}
+
+/* Strip Vant inset group card styling */
+.login-form :deep(.van-cell-group--inset) {
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
 /* Dark theme overrides for Vant components in login form */
@@ -566,26 +625,36 @@ watch(
 }
 
 .login-form :deep(.van-cell) {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(189, 187, 255, 0.07);
+  border: 1px solid rgba(189, 187, 255, 0.45);
   border-radius: 8px;
   margin-bottom: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 0 0 0 rgba(189, 187, 255, 0);
+}
+
+.login-form :deep(.van-cell):focus-within {
+  border-color: rgba(189, 187, 255, 0.85);
+  box-shadow: 0 0 12px rgba(189, 187, 255, 0.25);
+  background: rgba(189, 187, 255, 0.12);
 }
 
 .login-form :deep(.van-field__label) {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
 }
 
 .login-form :deep(.van-field__control) {
   color: #fff;
+  caret-color: #bdbbff;
 }
 
 .login-form :deep(.van-field__placeholder) {
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
 }
 
 .login-form :deep(.van-field__right-icon) {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(189, 187, 255, 0.8);
 }
 
 .form-actions {
@@ -593,9 +662,18 @@ watch(
 }
 
 .form-actions :deep(.van-button--primary) {
-  --van-button-primary-background: rgba(189, 187, 255, 0.15);
-  --van-button-primary-border-color: rgba(189, 187, 255, 0.3);
+  --van-button-primary-background: rgba(189, 187, 255, 0.18);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
   --van-button-primary-color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
+}
+
+.form-actions :deep(.van-button--primary:active) {
+  --van-button-primary-background: rgba(189, 187, 255, 0.35);
+  box-shadow: 0 0 24px rgba(189, 187, 255, 0.4);
 }
 
 .login-links {
@@ -640,14 +718,15 @@ watch(
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.7);
+  border: 2px solid rgba(189, 187, 255, 0.5);
   background: transparent;
-  transition: background 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .pin-slot.filled {
-  background: #fff;
-  border-color: #fff;
+  background: #bdbbff;
+  border-color: #bdbbff;
+  box-shadow: 0 0 8px rgba(189, 187, 255, 0.7);
 }
 
 @keyframes shake {
@@ -678,46 +757,54 @@ watch(
 }
 
 .numpad-btn {
-  height: 60px;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.12);
+  height: 64px;
+  border: 1px solid rgba(189, 187, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(189, 187, 255, 0.08);
   color: #fff;
   font-size: 22px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s, box-shadow 0.15s;
 }
 
-.numpad-btn:active {
-  background: rgba(255, 255, 255, 0.35);
-  transform: scale(0.94);
+.numpad-btn:hover:not(:disabled) {
+  background: rgba(189, 187, 255, 0.15);
+  border-color: rgba(189, 187, 255, 0.45);
+}
+
+.numpad-btn:active:not(:disabled) {
+  background: rgba(189, 187, 255, 0.3);
+  border-color: rgba(189, 187, 255, 0.7);
+  transform: scale(0.93);
+  box-shadow: 0 0 12px rgba(189, 187, 255, 0.35);
 }
 
 .numpad-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
 }
 
 .numpad-action {
   font-size: 14px !important;
   font-weight: 500 !important;
-  background: rgba(189, 187, 255, 0.15) !important;
+  background: rgba(189, 187, 255, 0.12) !important;
+  border-color: rgba(189, 187, 255, 0.35) !important;
   color: #bdbbff !important;
 }
 
 @keyframes flash {
-  0% { background: rgba(255, 255, 255, 0.12); }
-  40% { background: rgba(189, 187, 255, 0.6); }
-  100% { background: rgba(255, 255, 255, 0.12); }
+  0% { background: rgba(189, 187, 255, 0.08); box-shadow: none; }
+  40% { background: rgba(189, 187, 255, 0.45); box-shadow: 0 0 16px rgba(189, 187, 255, 0.5); }
+  100% { background: rgba(189, 187, 255, 0.08); box-shadow: none; }
 }
 
 .numpad-btn.flash {
-  animation: flash 0.15s ease-out;
+  animation: flash 0.18s ease-out;
 }
 
 .numpad-action.flash {
-  animation: flash 0.15s ease-out;
+  animation: flash 0.18s ease-out;
 }
 
 .pin-username {
@@ -731,9 +818,13 @@ watch(
 .pin-confirm-btn {
   max-width: 280px;
   margin-bottom: 12px;
-  --van-button-primary-background: #bdbbff;
-  --van-button-primary-border-color: #bdbbff;
-  --van-button-primary-color: #010120;
+  --van-button-primary-background: rgba(189, 187, 255, 0.18);
+  --van-button-primary-border-color: rgba(189, 187, 255, 0.7);
+  --van-button-primary-color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 0 16px rgba(189, 187, 255, 0.2);
 }
 
 .back-actions {
@@ -743,9 +834,10 @@ watch(
 }
 
 .back-btn-primary {
-  --van-button-primary-background: #bdbbff;
-  --van-button-primary-border-color: #bdbbff;
-  --van-button-primary-color: #010120;
+  --van-button-primary-background: rgba(255, 255, 255, 0.06);
+  --van-button-primary-border-color: rgba(255, 255, 255, 0.25);
+  --van-button-primary-color: rgba(255, 255, 255, 0.75);
+  font-weight: 500;
 }
 
 .trusted-card {
@@ -812,18 +904,19 @@ watch(
   width: 48px;
   height: 48px;
   border-radius: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  background: transparent;
+  border: 2px solid rgba(189, 187, 255, 0.4);
+  background: rgba(189, 187, 255, 0.05);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 28px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
 
 .emoji-pin-slot.filled {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.8);
+  background: rgba(189, 187, 255, 0.15);
+  border-color: rgba(189, 187, 255, 0.9);
+  box-shadow: 0 0 10px rgba(189, 187, 255, 0.35);
 }
 
 .emoji-grid {
@@ -839,16 +932,23 @@ watch(
   font-size: 28px;
   min-height: 56px;
   min-width: 56px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(189, 187, 255, 0.2);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(189, 187, 255, 0.07);
   cursor: pointer;
-  transition: background 0.1s, transform 0.1s;
+  transition: background 0.1s, transform 0.1s, border-color 0.1s, box-shadow 0.1s;
 }
 
-.emoji-btn:active {
-  transform: scale(0.92);
-  background: rgba(255, 255, 255, 0.2);
+.emoji-btn:hover:not(:disabled) {
+  background: rgba(189, 187, 255, 0.14);
+  border-color: rgba(189, 187, 255, 0.4);
+}
+
+.emoji-btn:active:not(:disabled) {
+  transform: scale(0.91);
+  background: rgba(189, 187, 255, 0.28);
+  border-color: rgba(189, 187, 255, 0.65);
+  box-shadow: 0 0 10px rgba(189, 187, 255, 0.3);
 }
 
 .emoji-btn:disabled {
@@ -857,7 +957,7 @@ watch(
 }
 
 .emoji-btn.flash {
-  animation: flash 0.15s ease-out;
+  animation: flash 0.18s ease-out;
 }
 
 .emoji-actions {
@@ -869,18 +969,19 @@ watch(
 .emoji-action-btn {
   min-height: 44px;
   min-width: 88px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(189, 187, 255, 0.3);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(189, 187, 255, 0.08);
   font-size: 14px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+  color: #bdbbff;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 
 .emoji-action-btn:active {
-  background: rgba(255, 255, 255, 0.18);
+  background: rgba(189, 187, 255, 0.22);
+  box-shadow: 0 0 10px rgba(189, 187, 255, 0.25);
 }
 
 .emoji-action-btn:disabled {
@@ -895,5 +996,40 @@ watch(
   margin-bottom: 16px;
   color: rgba(255, 255, 255, 0.9);
   font-size: 14px;
+}
+
+/* Step transition */
+.step-fade-enter-active,
+.step-fade-leave-active {
+  transition: opacity 0.22s ease, transform 0.22s ease;
+}
+
+.step-fade-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.step-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+</style>
+
+<style>
+@font-face {
+  font-family: 'ZCOOL KuaiLe';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/zcool-kuaile-latin-400-normal.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'ZCOOL KuaiLe';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/zcool-kuaile-chinese-simplified-400-normal.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF, U+3000-9FFF, U+F900-FAFF, U+FE30-FE4F;
 }
 </style>
