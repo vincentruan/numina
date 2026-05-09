@@ -510,11 +510,11 @@ watch(
   mask-image: url('/images/deer.svg');
   mask-repeat: no-repeat;
   mask-position: center center;
-  mask-size: 100vw;
+  mask-size: contain;      /* 移动端：使用 contain 确保可见 */
   -webkit-mask-image: url('/images/deer.svg');
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-position: center center;
-  -webkit-mask-size: 100vw;
+  -webkit-mask-size: contain;
 }
 
 @media (min-width: 768px) {
