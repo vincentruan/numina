@@ -110,10 +110,9 @@ http.interceptors.response.use(
     const originalRequest = error.config as RetryableConfig
 
     if (error.response?.status === 401 && !originalRequest._retry) {
-      // Don't try to refresh for login/register/refresh endpoints
-      if (originalRequest.url?.includes('/auth/login') ||
-          originalRequest.url?.includes('/auth/register') ||
-          originalRequest.url?.includes('/auth/family/join')) {
+      // Don't try to refresh or redirect for auth endpoints — they handle their own errors
+      // This prevents a loop: LoginPage.onMounted calls checkDevice → 401 → router.push('/login') → loop
+      if (originalRequest.url?.includes('/auth/')) {
         showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
         return Promise.reject(error)
       }
