@@ -13,30 +13,42 @@ const FLICKER_RATE = 0.06
 // ── Firefly depth-layer constants ─────────────────────────────────────────
 // 4 depth layers (0=far/dim/slow, 3=near/bright/fast) — inspired by Galaxy shader
 const NUM_LAYERS = 4
-// Particles per layer — generous count so halos overlap and fill the field
-const PARTICLES_PER_LAYER = 50
-// Outer glow radius per layer (CSS px): far=large diffuse blob, near=tight bright dot
-const LAYER_RADIUS_MIN = [60, 35, 14, 4]
-const LAYER_RADIUS_MAX = [110, 60, 24, 9]
+// Base particles per layer at 1080×1920 reference area (~2M px²).
+// Actual count scales linearly with viewport area so mobile/desktop feel equally dense.
+const PARTICLES_PER_LAYER_BASE = [30, 25, 12, 6]
+const REFERENCE_AREA = 2_073_600  // 1080×1920
+// Outer glow radius per layer (CSS px)
+// Layer 0: large diffuse far halos; Layer 3: large bright near orbs with spikes
+const LAYER_RADIUS_MIN = [55, 30, 22, 35]
+const LAYER_RADIUS_MAX = [100, 55, 40, 70]
 // Core radius fraction of glow radius
-const CORE_RATIO = 0.10
+const CORE_RATIO = 0.12
 // Speed (px/s): near layers move faster
-const LAYER_SPEED_MIN = [3, 7, 13, 20]
-const LAYER_SPEED_MAX = [8, 16, 26, 40]
-// Peak opacity per layer — all layers visible, far layers are soft hazes
-const LAYER_BASE_ALPHA_MIN = [0.40, 0.45, 0.55, 0.70]
-const LAYER_BASE_ALPHA_MAX = [0.65, 0.70, 0.80, 0.95]
-// Glow center opacity multiplier per layer (far=soft center, near=bright center)
-const LAYER_GLOW_CENTER = [0.28, 0.42, 0.58, 0.75]
-// Twinkle speed (cycles/s): near layers twinkle faster
-const LAYER_TWINKLE_MIN = [0.12, 0.22, 0.38, 0.55]
-const LAYER_TWINKLE_MAX = [0.25, 0.45, 0.72, 1.10]
-// Twinkle depth per layer: far layers barely flicker, near layers pulse more
-const LAYER_TWINKLE_DEPTH = [0.20, 0.35, 0.50, 0.65]
+const LAYER_SPEED_MIN = [3, 7, 13, 18]
+const LAYER_SPEED_MAX = [8, 16, 26, 35]
+// Peak opacity per layer
+const LAYER_BASE_ALPHA_MIN = [0.35, 0.42, 0.55, 0.72]
+const LAYER_BASE_ALPHA_MAX = [0.60, 0.68, 0.80, 0.98]
+// Glow center opacity multiplier per layer
+const LAYER_GLOW_CENTER = [0.25, 0.40, 0.60, 0.80]
+// Twinkle speed (cycles/s)
+const LAYER_TWINKLE_MIN = [0.10, 0.20, 0.40, 0.60]
+const LAYER_TWINKLE_MAX = [0.22, 0.42, 0.75, 1.20]
+// Twinkle depth per layer
+const LAYER_TWINKLE_DEPTH = [0.18, 0.32, 0.52, 0.70]
 // Wander interval (s)
 const WANDER_MIN = 2.0
 const WANDER_MAX = 5.5
 const WANDER_ANGLE = Math.PI * 0.65
+// Lifecycle duration (s) — near layers cycle faster
+const LIFECYCLE_DURATION_MIN = [6.0, 4.5, 3.0, 2.5]
+const LIFECYCLE_DURATION_MAX = [12.0, 8.0, 5.5, 4.5]
+// Star spike: layers 2 and 3 (near/mid-near) get diffraction spikes
+const SPIKE_LAYERS = [false, false, true, true]
+// Spike arm half-length (CSS px) — scales with the larger near-layer glow radii
+const SPIKE_LENGTH_PX = [0, 0, 35, 60]
+// Spike arm width (CSS px)
+const SPIKE_WIDTH = [0, 0, 1.5, 2.0]
 
 interface Grid {
   cols: number
@@ -50,19 +62,23 @@ interface Firefly {
   y: number
   glowR: number      // outer glow radius (CSS px)
   coreR: number      // bright core radius
-  baseAlpha: number  // peak opacity
-  alpha: number      // current opacity
+  baseAlpha: number  // peak opacity at lifecycle peak
+  alpha: number      // current opacity (lifecycle × twinkle)
   twinklePhase: number
   twinkleSpeed: number
-  twinkleDepth: number  // per-particle twinkle intensity
+  twinkleDepth: number
   vx: number
   vy: number
   wanderTimer: number
   wanderInterval: number
-  layer: number      // 0=far … NUM_LAYERS-1=near
-  glowCenter: number // center opacity multiplier for this layer
-  rTint: number      // slight color variation
+  layer: number
+  glowCenter: number
+  rTint: number
   bTint: number
+  // Lifecycle: 0→1 over lifecycleDuration, then respawn
+  lifecyclePhase: number  // 0..1
+  lifecycleDuration: number  // seconds for one full birth→death cycle
+  spikeAngle: number  // rotation of the 4-arm star spike (radians)
 }
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
@@ -130,17 +146,25 @@ function drawGrid(ctx: CanvasRenderingContext2D, grid: Grid) {
 
 // ── Firefly helpers ────────────────────────────────────────────────────────
 
+function layerCount(layer: number, w: number, h: number): number {
+  const area = w * h
+  const scale = area / REFERENCE_AREA
+  // Clamp scale: mobile gets at least 50%, large monitors get at most 250%
+  const clamped = Math.max(0.5, Math.min(2.5, scale))
+  return Math.max(4, Math.round(PARTICLES_PER_LAYER_BASE[layer] * clamped))
+}
+
 function buildFireflies(w: number, h: number): Firefly[] {
-  // Scale count with viewport area but keep a generous minimum
-  const area = (w * h) / (1_000_000)
-  const countPerLayer = Math.round(PARTICLES_PER_LAYER * Math.max(area * 2.5, 1.0))
   const flies: Firefly[] = []
 
   for (let layer = 0; layer < NUM_LAYERS; layer++) {
-    for (let i = 0; i < countPerLayer; i++) {
+    const count = layerCount(layer, w, h)
+    for (let i = 0; i < count; i++) {
       const glowR = rand(LAYER_RADIUS_MIN[layer], LAYER_RADIUS_MAX[layer])
       const speed = rand(LAYER_SPEED_MIN[layer], LAYER_SPEED_MAX[layer])
       const angle = Math.random() * Math.PI * 2
+      // Stagger lifecycle phases so particles don't all peak simultaneously
+      const lifecyclePhase = Math.random()
       flies.push({
         x: Math.random() * w,
         y: Math.random() * h,
@@ -159,6 +183,9 @@ function buildFireflies(w: number, h: number): Firefly[] {
         glowCenter: LAYER_GLOW_CENTER[layer],
         rTint: Math.random() * 0.20,
         bTint: Math.random() * 0.15,
+        lifecyclePhase,
+        lifecycleDuration: rand(LIFECYCLE_DURATION_MIN[layer], LIFECYCLE_DURATION_MAX[layer]),
+        spikeAngle: Math.random() * Math.PI * 0.25, // slight random rotation of spike arms
       })
     }
   }
@@ -188,13 +215,102 @@ function updateFireflies(flies: Firefly[], dt: number, w: number, h: number) {
       f.vy = Math.sin(newAngle) * speed
     }
 
-    // Triangle-wave twinkle — per-layer depth controls modulation range
+    // Lifecycle: advance phase 0→1, then respawn with new duration
+    f.lifecyclePhase += dt / f.lifecycleDuration
+    if (f.lifecyclePhase >= 1.0) {
+      f.lifecyclePhase = 0
+      f.lifecycleDuration = rand(LIFECYCLE_DURATION_MIN[f.layer], LIFECYCLE_DURATION_MAX[f.layer])
+    }
+
+    // Lifecycle envelope: fade in (0→0.3), peak (0.3→0.75), fade out (0.75→1.0)
+    // Mirrors deerflow's `depth * smoothstep(1.0, 0.9, depth)` pattern
+    const p = f.lifecyclePhase
+    let lifecycle: number
+    if (p < 0.3) {
+      lifecycle = p / 0.3  // 0→1 fade in
+    } else if (p < 0.75) {
+      lifecycle = 1.0       // peak
+    } else {
+      lifecycle = (1.0 - p) / 0.25  // 1→0 fade out
+    }
+
+    // Triangle-wave twinkle — modulates on top of lifecycle envelope
     f.twinklePhase = (f.twinklePhase + f.twinkleSpeed * dt) % 1
     const twinkle = triWave(f.twinklePhase)
-    // modulation: 1.0 ± (twinkleDepth * 0.5), so far layers barely flicker
     const modulation = 1.0 + (twinkle - 0.5) * f.twinkleDepth
-    f.alpha = Math.min(f.baseAlpha * modulation, 1.0)
+
+    f.alpha = Math.min(f.baseAlpha * lifecycle * modulation, 1.0)
   }
+}
+
+function drawSpikes(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number,
+  glowR: number, coreR: number,
+  r: number, g: number,
+  alpha: number, layer: number,
+  spikeAngle: number,
+  dpr: number,
+) {
+  // armLen in physical pixels (already DPR-scaled input coords)
+  const armLen = SPIKE_LENGTH_PX[layer] * dpr
+  const halfW = SPIKE_WIDTH[layer] * dpr
+  // 4 arms at 0°, 45°, 90°, 135° plus the particle's random rotation offset
+  const angles = [0, Math.PI * 0.5, Math.PI * 0.25, Math.PI * 0.75]
+
+  ctx.save()
+  // Spike opacity: boost relative to particle alpha so spikes are visible even at mid-lifecycle
+  ctx.globalAlpha = Math.min(alpha * 1.4, 1.0)
+  ctx.translate(x, y)
+  ctx.rotate(spikeAngle)
+
+  for (const baseAngle of angles) {
+    ctx.save()
+    ctx.rotate(baseAngle)
+    const grad = ctx.createLinearGradient(0, 0, armLen, 0)
+    grad.addColorStop(0,    `rgba(${Math.min(r + 60, 255)},${Math.min(g + 55, 255)},255,1.0)`)
+    grad.addColorStop(0.12, `rgba(${Math.min(r + 40, 255)},${Math.min(g + 35, 255)},255,0.7)`)
+    grad.addColorStop(0.4,  `rgba(${r},${g},255,0.25)`)
+    grad.addColorStop(1,    `rgba(${r},${g},255,0)`)
+
+    ctx.beginPath()
+    ctx.moveTo(-coreR * 0.5, 0)
+    ctx.bezierCurveTo(
+      armLen * 0.1, -halfW,
+      armLen * 0.4, -halfW * 0.4,
+      armLen, 0,
+    )
+    ctx.bezierCurveTo(
+      armLen * 0.4, halfW * 0.4,
+      armLen * 0.1, halfW,
+      -coreR * 0.5, 0,
+    )
+    ctx.fillStyle = grad
+    ctx.fill()
+
+    // Mirror arm in opposite direction
+    ctx.save()
+    ctx.rotate(Math.PI)
+    ctx.beginPath()
+    ctx.moveTo(-coreR * 0.5, 0)
+    ctx.bezierCurveTo(
+      armLen * 0.1, -halfW,
+      armLen * 0.4, -halfW * 0.4,
+      armLen, 0,
+    )
+    ctx.bezierCurveTo(
+      armLen * 0.4, halfW * 0.4,
+      armLen * 0.1, halfW,
+      -coreR * 0.5, 0,
+    )
+    ctx.fillStyle = grad
+    ctx.fill()
+    ctx.restore()
+
+    ctx.restore()
+  }
+
+  ctx.restore()
 }
 
 function drawFireflies(ctx: CanvasRenderingContext2D, flies: Firefly[], dpr: number) {
@@ -204,6 +320,7 @@ function drawFireflies(ctx: CanvasRenderingContext2D, flies: Firefly[], dpr: num
   for (let layer = 0; layer < NUM_LAYERS; layer++) {
     for (const f of flies) {
       if (f.layer !== layer) continue
+      if (f.alpha < 0.005) continue
 
       const x = f.x * dpr
       const y = f.y * dpr
@@ -214,25 +331,23 @@ function drawFireflies(ctx: CanvasRenderingContext2D, flies: Firefly[], dpr: num
       // Color: lavender base with per-particle tint
       const r = Math.round(189 + f.rTint * 40)
       const g = Math.round(187 + Math.min(f.rTint, f.bTint) * 20)
-      const b = 255
 
       // Use globalAlpha to scale the entire particle — far layers are genuinely dim
       ctx.globalAlpha = a
 
       // Outer glow — radial gradient with inverse-distance falloff
-      // Far layers: wide soft halo; near layers: tight bright halo
       const gc = f.glowCenter
       const glow = ctx.createRadialGradient(x, y, 0, x, y, gr)
-      glow.addColorStop(0,    `rgba(${r},${g},${b},${gc.toFixed(3)})`)
-      glow.addColorStop(0.3,  `rgba(${r},${g},${b},${(gc * 0.45).toFixed(3)})`)
-      glow.addColorStop(0.65, `rgba(${r},${g},${b},${(gc * 0.12).toFixed(3)})`)
-      glow.addColorStop(1,    `rgba(${r},${g},${b},0)`)
+      glow.addColorStop(0,    `rgba(${r},${g},255,${gc.toFixed(3)})`)
+      glow.addColorStop(0.3,  `rgba(${r},${g},255,${(gc * 0.45).toFixed(3)})`)
+      glow.addColorStop(0.65, `rgba(${r},${g},255,${(gc * 0.12).toFixed(3)})`)
+      glow.addColorStop(1,    `rgba(${r},${g},255,0)`)
       ctx.beginPath()
       ctx.arc(x, y, gr, 0, Math.PI * 2)
       ctx.fillStyle = glow
       ctx.fill()
 
-      // Bright core — near layers get a more prominent solid dot
+      // Bright core
       const coreAlpha = 0.5 + f.layer * 0.15
       ctx.beginPath()
       ctx.arc(x, y, cr, 0, Math.PI * 2)
@@ -240,6 +355,12 @@ function drawFireflies(ctx: CanvasRenderingContext2D, flies: Firefly[], dpr: num
       ctx.fill()
 
       ctx.globalAlpha = 1
+
+      // Star spikes for near layers — drawn after resetting globalAlpha so they
+      // use their own alpha internally (avoids double-multiplying lifecycle fade)
+      if (SPIKE_LAYERS[layer]) {
+        drawSpikes(ctx, x, y, gr, cr, r, g, a, layer, f.spikeAngle, dpr)
+      }
     }
   }
 }
