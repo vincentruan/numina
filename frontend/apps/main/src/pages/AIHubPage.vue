@@ -98,20 +98,20 @@
 
     <!-- Feature grid -->
     <div class="feature-section">
-      <h2 class="feature-section-title">AI 功能</h2>
+      <h2 class="feature-section-title">{{ t('aiHub.capabilities') }}</h2>
       <div class="feature-grid" role="list">
         <button
-          v-for="feat in features"
-          :key="feat.route"
+          v-for="cap in capabilities"
+          :key="cap.id"
           class="feature-card"
           role="listitem"
-          :aria-label="feat.title + '：' + feat.desc"
-          @click="$router.push(feat.route)"
+          :data-testid="`capability-${cap.id}`"
+          :aria-label="cap.name + '：' + cap.description"
+          @click="startCapability(cap)"
         >
-          <!-- eslint-disable-next-line vue/no-v-html -- feat.svg is a static local SVG constant -->
-          <div class="feature-icon" aria-hidden="true" v-html="feat.svg"></div>
-          <span class="feature-title">{{ feat.title }}</span>
-          <span class="feature-desc">{{ feat.desc }}</span>
+          <span class="feature-icon" aria-hidden="true">{{ capabilityEmoji(cap.id) }}</span>
+          <span class="feature-title">{{ cap.name }}</span>
+          <span class="feature-desc">{{ cap.description }}</span>
         </button>
       </div>
     </div>
@@ -135,6 +135,7 @@ import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
+import { useCapabilityStore } from '@/stores/capability'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
@@ -144,6 +145,7 @@ const { t } = useI18n()
 
 const router = useRouter()
 const aiStore = useAIStore()
+const capabilityStore = useCapabilityStore()
 const ws = useAIReportWS()
 
 const currentReport = ref<Record<string, unknown> | null>(null)
@@ -152,6 +154,7 @@ const reportLoading = ref(false)
 const chatInput = ref('')
 const deepThink = ref(false)
 const webSearch = ref(false)
+const capabilities = computed(() => capabilityStore.capabilities)
 
 const userName = computed(() => getUser()?.display_name || '用户')
 
@@ -217,6 +220,14 @@ async function loadReport() {
   }
 }
 
+async function loadCapabilities() {
+  try {
+    await capabilityStore.loadCapabilities()
+  } catch {
+    // keep empty grid if discovery fails
+  }
+}
+
 async function generateReport() {
   if (!aiStore.aiEnabled) {
     showToast(t('toast.aiNotEnabled'))
@@ -271,59 +282,27 @@ function startChat(q: string) {
   })
 }
 
-const features = [
-  {
-    route: '/ai/report',
-    title: '资产体检',
-    desc: '综合健康评分',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>`,
-  },
-  {
-    route: '/ai/alerts',
-    title: '老化预警',
-    desc: '即将到期资产',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`,
-  },
-  {
-    route: '/ai/disposal',
-    title: '闲置清仓',
-    desc: '建议处置资产',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="7.5 4.21 12 6.81 16.5 4.21"/><polyline points="7.5 19.79 7.5 14.6 3 12"/><polyline points="21 12 16.5 14.6 16.5 19.79"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>`,
-  },
-  {
-    route: '/ai/liability',
-    title: '负债优化',
-    desc: '还款策略建议',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>`,
-  },
-  {
-    route: '/ai/allocation',
-    title: '配置漂移',
-    desc: '资产配置偏离检测',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 010 8.49m-8.48-.01a6 6 0 010-8.49m11.31-2.82a10 10 0 010 14.14m-14.14 0a10 10 0 010-14.14"/></svg>`,
-  },
-  {
-    route: '/ai/time-machine',
-    title: '资产时光机',
-    desc: 'What-if 模拟、财务推演',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
-  },
-  {
-    route: '/ai/chat',
-    title: 'AI 问答',
-    desc: '自由对话助手',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`,
-  },
-  {
-    route: '/ai/spending-leaks',
-    title: '资金泄漏',
-    desc: '检测资金泄漏',
-    svg: `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>`,
-  },
-]
+function capabilityEmoji(id: string) {
+  const map: Record<string, string> = {
+    report: '📊',
+    chat: '💬',
+    alerts: '🔔',
+    allocation: '⚖️',
+    disposal: '🗑️',
+    liability: '💳',
+    spending_leak: '🔍',
+    time_machine: '⏰',
+  }
+  return map[id] ?? '✨'
+}
+
+function startCapability(cap: { id: string; ui?: { route?: string | null } }) {
+  router.push(cap.ui?.route ?? '/ai/chat')
+}
 
 onMounted(async () => {
   await aiStore.fetchConfig()
+  await loadCapabilities()
   await loadReport()
 })
 </script>

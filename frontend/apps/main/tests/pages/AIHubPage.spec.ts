@@ -1,11 +1,32 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { nextTick } from 'vue'
 
 import AIHubPage from '../../src/pages/AIHubPage.vue'
 import { useAIStore } from '../../src/stores/ai'
 
 const push = vi.fn()
+const { getAICapabilities } = vi.hoisted(() => ({
+  getAICapabilities: vi.fn(() =>
+    Promise.resolve({
+      data: [
+        {
+          id: 'chat',
+          name: 'AI 问答',
+          description: '自由对话助手',
+          ui: { route: '/ai/chat' },
+        },
+        {
+          id: 'report',
+          name: '资产体检',
+          description: '综合健康评分',
+          ui: { route: '/ai/report' },
+        },
+      ],
+    }),
+  ),
+}))
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push }),
@@ -18,6 +39,7 @@ vi.mock('../../src/utils/storage', () => ({
 vi.mock('../../src/api/ai', () => ({
   getAIConfig: vi.fn(() => Promise.resolve({ data: { ai_enabled: true } })),
   getAIReport: vi.fn(() => Promise.resolve({ data: { report: null } })),
+  getAICapabilities,
 }))
 
 vi.mock('../../src/composables/useAIReportWS', () => ({
@@ -40,10 +62,13 @@ vi.mock('vant', () => ({
 }))
 
 describe('AIHubPage chat entry', () => {
-  it('passes draft text and input mode selections to AI chat page', async () => {
+  beforeEach(() => {
     setActivePinia(createPinia())
     push.mockClear()
+    getAICapabilities.mockClear()
+  })
 
+  it('passes draft text and input mode selections to AI chat page', async () => {
     const wrapper = shallowMount(AIHubPage, {
       global: {
         stubs: {
@@ -76,5 +101,27 @@ describe('AIHubPage chat entry', () => {
         webSearch: '1',
       },
     })
+  })
+
+  it('renders capability cards from the registry and navigates by route', async () => {
+    const wrapper = shallowMount(AIHubPage, {
+      global: {
+        stubs: {
+          AIChatInput: true,
+          VanLoading: true,
+        },
+      },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await nextTick()
+
+    expect(getAICapabilities).toHaveBeenCalled()
+    expect(wrapper.text()).toContain('AI 问答')
+    expect(wrapper.text()).toContain('资产体检')
+
+    await wrapper.find('[data-testid="capability-chat"]').trigger('click')
+
+    expect(push).toHaveBeenCalledWith('/ai/chat')
   })
 })

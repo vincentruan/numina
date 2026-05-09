@@ -54,6 +54,30 @@ export interface AIConfigTestResult {
   vision_text_latency_ms?: number | null
 }
 
+export interface AICapability {
+  id: string
+  name: string
+  description: string
+  category: string
+  ui: {
+    icon: string
+    color: string
+    route: string | null
+    input_mode: string
+    placeholder: string | null
+    example_questions: string[]
+  }
+  policy: {
+    allowed_roles: string[]
+    require_confirmation: boolean
+    max_tokens: number
+    enable_thinking: boolean
+    enable_tools: string[]
+  }
+  skill_id: string
+  harness_config: Record<string, unknown>
+}
+
 // Backend response shapes
 interface _BackendTestResult {
   id: string
@@ -136,6 +160,9 @@ export async function getAIConfig(): Promise<{ data: AIConfig }> {
   _cachedConfigId = active.id
   return { data: _mapConfig(active) }
 }
+
+export const getAICapabilities = () =>
+  http.get<AICapability[]>('/ai/capabilities')
 
 export async function updateAIConfig(data: AIConfigUpdate): Promise<{ data: AIConfig }> {
   const backendPayload: Record<string, unknown> = {}

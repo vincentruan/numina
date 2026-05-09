@@ -71,6 +71,7 @@ from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
 from app.routers import ai_allocation as ai_allocation_router
 from app.routers import ai_chat as ai_chat_router
+from app.routers import ai_capabilities as ai_capabilities_router
 from app.routers import ai_config as ai_config_router
 from app.routers import ai_disposal as ai_disposal_router
 from app.routers import ai_internal as ai_internal_router
@@ -381,6 +382,7 @@ app.include_router(upload.router, prefix="/api/v1")
 app.include_router(captcha.router, prefix="/api/v1")
 app.include_router(files_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
+app.include_router(ai_capabilities_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")

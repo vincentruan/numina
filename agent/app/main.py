@@ -43,6 +43,7 @@ from routers import allocation as allocation_router
 from routers import chat as chat_router
 from routers import disposal as disposal_router
 from routers import import_parse as import_parse_router
+from routers import capabilities as capabilities_router
 from routers import liability as liability_router
 from routers import report as report_router
 from routers import spending_leak as spending_leak_router
@@ -61,6 +62,7 @@ app.include_router(spending_leak_router.router)
 app.include_router(time_machine_router.router)
 app.include_router(cache_router.router)
 app.include_router(import_parse_router.router)
+app.include_router(capabilities_router.router)
 app.include_router(model_test_router.router)
 
 
