@@ -83,26 +83,25 @@
           >
             <div class="bubble" :class="msg.role">
               <div class="bubble-body">
+                <!-- Unified phase indicator: integrated into think block when deep thinking, standalone otherwise -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error'"
-                  class="phase-strip"
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink"
+                  class="phase-strip standalone"
                   :class="`phase-strip--${msg.phase}`"
                   aria-live="polite"
                 >
                   <span class="phase-pulse" aria-hidden="true" />
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
-                  <span v-if="msg.phase === 'thinking' && msg.thinkSeconds !== undefined" class="phase-meta">
-                    {{ t('aiChat.thinkingSeconds', { seconds: msg.thinkSeconds }) }}
-                  </span>
                 </div>
-                <!-- Deep think block (assistant only) -->
+                <!-- Deep think block with integrated phase indicator -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.thinkContent"
+                  v-if="msg.role === 'assistant' && (msg.thinkContent || (msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && deepThink))"
                   class="think-block"
-                  :class="{ 'think-block--open': msg.thinkOpen, 'think-block--done': msg.thinkDone }"
+                  :class="{ 'think-block--open': msg.thinkOpen, 'think-block--done': msg.thinkDone, 'think-block--active': msg.phase && msg.phase !== 'done' && msg.phase !== 'error' }"
                 >
                   <button class="think-toggle" @click="msg.thinkOpen = !msg.thinkOpen">
                     <div class="think-icon-wrapper">
+                      <span class="phase-pulse-small" v-if="msg.phase && msg.phase !== 'done' && msg.phase !== 'error'" aria-hidden="true" />
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
                         <path d="M9 21h6"/>
@@ -110,7 +109,7 @@
                     </div>
                     <span v-if="msg.thinkDone" class="think-status">已深度思考</span>
                     <span v-else class="think-status think-status--active">
-                      <span class="think-text-animated">正在思考</span>
+                      <span class="think-text-animated">{{ phaseLabel(msg.phase || 'thinking') }}</span>
                     </span>
                     <span v-if="msg.thinkDone" class="think-duration">{{ msg.thinkSeconds }}s</span>
                     <svg class="think-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -118,7 +117,7 @@
                     </svg>
                   </button>
                   <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
-                  <div v-if="msg.thinkOpen" class="think-content" v-html="msg.thinkContent" />
+                  <div v-if="msg.thinkOpen && msg.thinkContent" class="think-content" v-html="msg.thinkContent" />
                 </div>
                 <div v-if="msg.role === 'assistant' && msg.toolTimeline?.length" class="tool-timeline">
                   <div
@@ -302,6 +301,12 @@ const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 const showHistory = ref(false)
 
+// Throttled markdown rendering state (scoped to this component instance)
+let renderTimer: ReturnType<typeof setTimeout> | null = null
+let pendingRenderText = ''
+let pendingRenderTarget: { content: string; renderedContent: string } | null = null
+let scrollRAF: number | null = null
+
 // Follow global theme via data-theme attribute set by App.vue
 const dataTheme = ref(document.documentElement.getAttribute('data-theme') ?? 'dark')
 const isLight = computed(() => dataTheme.value === 'light')
@@ -319,10 +324,31 @@ const sessionTitle = computed(() => {
 
 const suggestions = SUGGESTIONS
 
+// Throttled markdown render helper (uses state declared above)
+function renderMarkdownThrottled(text: string, target: { content: string; renderedContent: string }) {
+  pendingRenderText = text
+  pendingRenderTarget = target
+
+  if (renderTimer) return // Already pending
+
+  renderTimer = setTimeout(() => {
+    renderTimer = null
+    if (pendingRenderTarget && pendingRenderText) {
+      pendingRenderTarget.renderedContent = renderMarkdown(pendingRenderText)
+    }
+  }, 100) // Render every 100ms max
+}
+
 async function scrollToBottom() {
   await nextTick()
   if (scrollRef.value) {
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    if (scrollRAF) return // Already pending
+    scrollRAF = requestAnimationFrame(() => {
+      scrollRAF = null
+      if (scrollRef.value) {
+        scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+      }
+    })
   }
 }
 
@@ -434,10 +460,16 @@ async function onSend() {
           messages.value[msgIdx].thinkDone = true
           messages.value[msgIdx].thinkOpen = false
           messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+          // Final render for think content
+          if (thinkRaw) {
+            messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+          }
         }
         textRaw += event.token ?? ''
         messages.value[msgIdx].content = textRaw
-        messages.value[msgIdx].renderedContent = renderMarkdown(textRaw)
+        // Use throttled rendering for smoother streaming
+        renderMarkdownThrottled(textRaw, messages.value[msgIdx])
+        scrollToBottom()
         return
       }
       if (event.type === 'tool.call' && event.tool) {
@@ -488,9 +520,17 @@ async function onSend() {
       const { done, value } = await reader.read()
       if (done) break
       parser.push(decoder.decode(value, { stream: true }))
-      await scrollToBottom()
     }
     parser.flush()
+
+    // Flush pending markdown render
+    if (renderTimer) {
+      clearTimeout(renderTimer)
+      renderTimer = null
+      if (pendingRenderTarget && pendingRenderText) {
+        pendingRenderTarget.renderedContent = renderMarkdown(pendingRenderText)
+      }
+    }
 
     // Finalize think block if no text came (e.g. error from agent)
     if (deepThink.value && !thinkingDone) {
@@ -498,6 +538,10 @@ async function onSend() {
       messages.value[msgIdx].thinkDone = true
       messages.value[msgIdx].thinkOpen = false
       messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+      // Final render for think content
+      if (thinkRaw) {
+        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+      }
     }
 
     messages.value[msgIdx].phase = textRaw ? 'done' : 'error'
@@ -983,6 +1027,23 @@ onUnmounted(() => {
   box-shadow: 0 0 0 0 rgba(110, 231, 160, 0.45);
 }
 
+/* Standalone phase strip (non-deep-think mode) */
+.phase-strip.standalone {
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+/* Small pulse for think block icon wrapper */
+.phase-pulse-small {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #818cf8;
+  box-shadow: 0 0 0 0 rgba(129, 140, 248, 0.5);
+  animation: phase-pulse 1.4s ease-out infinite;
+}
+
 .phase-label {
   color: var(--text-primary);
   font-weight: 500;
@@ -1008,6 +1069,11 @@ onUnmounted(() => {
   margin-bottom: 4px;
 }
 
+.think-block--active {
+  border-color: rgba(99, 102, 241, 0.3);
+  background: rgba(99, 102, 241, 0.12);
+}
+
 .think-toggle {
   display: flex;
   align-items: center;
@@ -1031,6 +1097,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   width: 20px;
   height: 20px;
   border-radius: 6px;
