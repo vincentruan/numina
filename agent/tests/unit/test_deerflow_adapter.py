@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from schemas.context import FamilyContext, RedactedContext
+from schemas.context import RedactedContext
 from services.deerflow_adapter.exceptions import (
     DeerFlowError,
     DeerFlowSkillNotFoundError,
@@ -58,7 +58,7 @@ class TestDeerFlowAdapterDispatch:
         adapter = self._make_adapter(mock_client)
         try:
             asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except DeerFlowError:
             pass
 
@@ -68,7 +68,7 @@ class TestDeerFlowAdapterDispatch:
         adapter = self._make_adapter(mock_client)
         try:
             asyncio.run(adapter.dispatch("unknown-skill", _make_redacted(), "thread-1"))
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except DeerFlowSkillNotFoundError:
             pass
 
@@ -80,29 +80,34 @@ class TestDeerFlowAdapterDispatch:
 
         # Patch asyncio.wait_for to raise TimeoutError
         async def fake_wait_for(coro, timeout):
-            raise asyncio.TimeoutError()
+            raise TimeoutError()
 
         with patch("services.deerflow_adapter.adapter.asyncio.wait_for", fake_wait_for):
             try:
                 asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
-                assert False, "Should have raised"
+                raise AssertionError("Should have raised")
             except DeerFlowTimeoutError:
                 pass
 
 
 class TestClientFactory:
     def test_reset_clears_singleton(self):
-        from services.deerflow_adapter.client_factory import reset_client
         import services.deerflow_adapter.client_factory as cf
+        from services.deerflow_adapter.client_factory import reset_client
+
         cf._client = object()  # set to something non-None
         reset_client()
         assert cf._client is None
 
     def test_get_client_raises_on_bad_config(self):
-        from services.deerflow_adapter.client_factory import get_deerflow_client, reset_client
+        from services.deerflow_adapter.client_factory import (
+            get_deerflow_client,
+            reset_client,
+        )
+
         reset_client()
         try:
             get_deerflow_client("/nonexistent/config.yaml")
-            assert False, "Should have raised"
+            raise AssertionError("Should have raised")
         except RuntimeError as e:
             assert "DeerFlowClient" in str(e) or "config" in str(e).lower()

@@ -1,7 +1,6 @@
 """DeerFlowClient factory — singleton per process."""
 
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 

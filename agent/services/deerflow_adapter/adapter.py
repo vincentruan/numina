@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
@@ -14,11 +15,14 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from schemas.context import RedactedContext
-from services.deerflow_adapter.family_adapter_cache import get_family_adapter, invalidate_family_adapter
 from services.deerflow_adapter.exceptions import (
     DeerFlowError,
     DeerFlowSkillNotFoundError,
     DeerFlowTimeoutError,
+)
+from services.deerflow_adapter.family_adapter_cache import (
+    get_family_adapter,
+    invalidate_family_adapter,
 )
 
 logger = logging.getLogger(__name__)
@@ -165,7 +169,7 @@ class DeerFlowAdapter:
                 if chunk is None:
                     break
                 yield chunk
-        except asyncio.TimeoutError as e:
+        except TimeoutError as e:
             raise DeerFlowTimeoutError(
                 f"DeerFlow stream_dispatch timeout after {self._timeout}s"
             ) from e
@@ -173,10 +177,8 @@ class DeerFlowAdapter:
             # Wait for the producer thread to finish so it doesn't leak a thread-pool
             # slot. asyncio.shield prevents an outer cancellation from abandoning the
             # wait, but we still need to await the shielded coroutine to actually block.
-            try:
+            with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                 await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
-            except (asyncio.TimeoutError, asyncio.CancelledError):
-                pass
 
     def _sync_dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
         """Synchronous DeerFlow call — runs in thread pool executor."""

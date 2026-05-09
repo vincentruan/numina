@@ -16,14 +16,14 @@ class TestDeerFlowImport:
         except ImportError as e:
             raise AssertionError(
                 f"deerflow.client not importable — run scripts/vendor-deerflow.sh then uv add --editable ./vendor/deerflow-harness\n{e}"
-            )
+            ) from e
 
     def test_deerflow_agents_importable(self):
         try:
             from deerflow.agents import make_lead_agent  # noqa: F401
             assert True
         except ImportError as e:
-            raise AssertionError(f"deerflow.agents not importable: {e}")
+            raise AssertionError(f"deerflow.agents not importable: {e}") from e
 
 
 class TestVendorManifest:
