@@ -76,3 +76,18 @@ class AITaskService:
     @staticmethod
     def get_task_by_id(task_id: str, db: Session) -> AITask | None:
         return db.query(AITask).filter_by(id=task_id).first()
+
+    @staticmethod
+    def cancel_task(family_id: int | str, capability: str, db: Session) -> bool:
+        """终止指定 capability 的运行任务。返回是否成功终止。"""
+        task = (
+            db.query(AITask)
+            .filter_by(family_id=int(family_id), capability=capability, status="running")
+            .first()
+        )
+        if task:
+            task.status = "cancelled"
+            task.completed_at = datetime.utcnow()
+            db.commit()
+            return True
+        return False

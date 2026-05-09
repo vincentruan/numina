@@ -14,12 +14,16 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
-import { getAITask, startAIStream, type AITaskStatus } from '@/api/ai'
+import { getAITask, startAIStream, cancelAITask, type AITaskStatus } from '@/api/ai'
 
 const MAX_CHUNKS = 10
 const POLL_INTERVAL_MS = 3000
 
-export function useAITask(capability: string, triggerEndpoint: string) {
+export function useAITask(
+  capability: string,
+  triggerEndpoint: string,
+  onComplete?: () => void,
+) {
   const { t } = useI18n()
 
   const status = ref<AITaskStatus['status']>('idle')
@@ -66,6 +70,7 @@ export function useAITask(capability: string, triggerEndpoint: string) {
           stopTimer()
           if (task.status === 'completed') {
             isConsoleOpen.value = false
+            onComplete?.()
           }
         }
       } catch {
@@ -105,6 +110,7 @@ export function useAITask(capability: string, triggerEndpoint: string) {
       stopTimer()
       stopPolling()
       isConsoleOpen.value = false
+      onComplete?.()
     } catch (err: unknown) {
       const e = err as { name?: string }
       if (e?.name === 'AbortError') return // user navigated away
@@ -176,6 +182,33 @@ export function useAITask(capability: string, triggerEndpoint: string) {
     }
   }
 
+  // ── Cancel task ─────────────────────────────────────────────────────────────
+
+  async function cancelTask() {
+    abortController?.abort()
+    abortController = null
+    stopPolling()
+    stopTimer()
+    try {
+      const res = await cancelAITask(capability)
+      if (res.ok) {
+        status.value = 'idle'
+        isConsoleOpen.value = false
+        showToast(t('aiTask.cancelled'))
+      } else {
+        // Task may have completed while we were cancelling - check actual status
+        const task = await getAITask(capability)
+        status.value = task.status
+        if (task.status === 'completed') {
+          isConsoleOpen.value = false
+          onComplete?.()
+        }
+      }
+    } catch {
+      showToast(t('toast.operationFailed'))
+    }
+  }
+
   // ── Visibility change ──────────────────────────────────────────────────────
 
   function onVisibilityChange() {
@@ -210,6 +243,7 @@ export function useAITask(capability: string, triggerEndpoint: string) {
     sessionId,
     isConsoleOpen,
     startStream,
+    cancelTask,
     checkAndResume,
   }
 }

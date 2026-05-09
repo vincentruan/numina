@@ -44,7 +44,27 @@
         :elapsed-seconds="taskElapsed"
         v-model="isConsoleOpen"
       />
-      <van-button block type="primary" :loading="taskStatus === 'running'" @click="onCheck">检测配置漂移</van-button>
+      <van-button
+        v-if="taskStatus !== 'running'"
+        block
+        type="primary"
+        @click="onCheck"
+      >
+        检测配置漂移
+      </van-button>
+      <van-button
+        v-else
+        block
+        type="danger"
+        class="cancel-btn"
+        @click="cancelTask"
+      >
+        <span class="stop-icon-wrapper">
+          <van-icon name="stop-circle-o" class="stop-icon" />
+          <van-loading size="14" type="spinner" class="spinning-ring" />
+        </span>
+        {{ t('aiTask.cancelBtn') }}
+      </van-button>
     </div>
 
     <!-- Results -->
@@ -102,14 +122,6 @@ import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
 
-const {
-  status: taskStatus,
-  chunks: taskChunks,
-  elapsedSeconds: taskElapsed,
-  isConsoleOpen,
-  startStream,
-} = useAITask('allocation', '/ai/allocation-target/check/stream')
-
 const hasTarget = ref(false)
 const editingTarget = ref(false)
 const driftResult = ref<Record<string, unknown> | null>(null)
@@ -139,14 +151,26 @@ async function onSaveTarget() {
   }
 }
 
-async function onCheck() {
-  await startStream()
+async function onScanComplete() {
   try {
     const res = await checkAllocationDrift()
     driftResult.value = res.data
   } catch {
     showToast(t('toast.aiDetectFailed'))
   }
+}
+
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+  cancelTask,
+} = useAITask('allocation', '/ai/allocation-target/check/stream', onScanComplete)
+
+async function onCheck() {
+  await startStream()
 }
 
 onMounted(async () => {
@@ -232,4 +256,22 @@ onMounted(async () => {
 }
 .badge-warn { background: #fce4ec; color: #c62828; }
 .badge-ok { background: #e8f5e9; color: #2e7d32; }
+.cancel-btn {
+  position: relative;
+}
+.stop-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+.stop-icon { font-size: 16px; }
+.spinning-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.6);
+}
 </style>

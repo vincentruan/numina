@@ -32,8 +32,26 @@
           :elapsed-seconds="taskElapsed"
           v-model="isConsoleOpen"
         />
-        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onRefresh">
+        <van-button
+          v-if="taskStatus !== 'running'"
+          type="primary"
+          block
+          @click="onRefresh"
+        >
           {{ t('aiTask.emptyAlertsBtn') }}
+        </van-button>
+        <van-button
+          v-else
+          type="danger"
+          block
+          class="cancel-btn"
+          @click="cancelTask"
+        >
+          <span class="stop-icon-wrapper">
+            <van-icon name="stop-circle-o" class="stop-icon" />
+            <van-loading size="14" type="spinner" class="spinning-ring" />
+          </span>
+          {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
     </div>
@@ -41,7 +59,27 @@
     <template v-else>
       <div class="summary-bar">
         <span>共 {{ alerts.length }} 条预警</span>
-        <van-button size="mini" plain :loading="taskStatus === 'running'" @click="onRefresh">重新扫描</van-button>
+        <van-button
+          v-if="taskStatus !== 'running'"
+          size="mini"
+          plain
+          @click="onRefresh"
+        >
+          重新扫描
+        </van-button>
+        <van-button
+          v-else
+          size="mini"
+          type="danger"
+          class="cancel-btn-mini"
+          @click="cancelTask"
+        >
+          <span class="stop-icon-wrapper-mini">
+            <van-icon name="stop-circle-o" class="stop-icon-mini" />
+            <van-loading size="12" type="spinner" class="spinning-ring-mini" />
+          </span>
+          终止
+        </van-button>
       </div>
 
       <van-swipe-cell v-for="alert in alerts" :key="alert.id" class="alert-item">
@@ -86,14 +124,6 @@ interface Alert {
 
 const { t } = useI18n()
 
-const {
-  status: taskStatus,
-  chunks: taskChunks,
-  elapsedSeconds: taskElapsed,
-  isConsoleOpen,
-  startStream,
-} = useAITask('alerts', '/ai/asset-alerts/refresh')
-
 const loading = ref(false)
 const alerts = ref<Alert[]>([])
 
@@ -119,10 +149,22 @@ async function loadAlerts() {
   }
 }
 
-async function onRefresh() {
-  await startStream()
+async function onScanComplete() {
   await loadAlerts()
   showToast(t('toast.aiScanComplete'))
+}
+
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+  cancelTask,
+} = useAITask('alerts', '/ai/asset-alerts/refresh', onScanComplete)
+
+async function onRefresh() {
+  await startStream()
 }
 
 async function onDismiss(id: string) {
@@ -219,4 +261,40 @@ onMounted(loadAlerts)
 .alert-meta { font-size: 12px; color: var(--text-secondary); }
 .alert-suggestion { font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; line-height: 1.5; }
 .dismiss-btn { height: 100%; }
+.cancel-btn {
+  position: relative;
+}
+.stop-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+.stop-icon { font-size: 16px; }
+.spinning-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.6);
+}
+.cancel-btn-mini {
+  position: relative;
+}
+.stop-icon-wrapper-mini {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+}
+.stop-icon-mini { font-size: 14px; }
+.spinning-ring-mini {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(244, 67, 54, 0.4);
+}
 </style>

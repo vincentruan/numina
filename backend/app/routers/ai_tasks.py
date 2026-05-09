@@ -2,6 +2,7 @@
 
 - GET /ai/tasks/{capability}         — 查询当前 capability 的任务状态
 - GET /ai/tasks/{capability}/session — 获取关联的 session_id（用于前端接续）
+- POST /ai/tasks/{capability}/cancel — 终止当前运行的任务
 """
 
 from fastapi import APIRouter, Depends
@@ -57,3 +58,19 @@ def get_task_session(
         return {"session_id": None}
 
     return {"session_id": task.session_id, "task_id": task.id}
+
+
+@router.post("/{capability}/cancel")
+def cancel_task(
+    capability: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """终止当前运行的任务。"""
+    if capability not in VALID_CAPABILITIES:
+        return {"ok": False, "message": "invalid_capability"}
+
+    cancelled = AITaskService.cancel_task(current_user.family_id, capability, db)
+    if cancelled:
+        return {"ok": True, "status": "cancelled"}
+    return {"ok": False, "message": "no_running_task"}
