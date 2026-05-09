@@ -351,6 +351,11 @@ async function onStep1Submit() {
       }
       showToast(t('toast.loginSuccess'))
       router.push('/')
+    }
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { code?: string; message?: string; detail?: string }; status?: number } }
+    const code = axiosError.response?.data?.code
+    const status = axiosError.response?.status
     if (code?.startsWith('CAPTCHA_') || status === 503) {
       altchaRef.value?.reset()
     }
