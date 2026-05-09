@@ -13,10 +13,11 @@ const max = props.max ?? 100
 
 const levelClass = computed(() => {
   const pct = props.score / max
+  // Inverted logic: lower scores = green (improvement opportunity), higher scores = better status
   if (pct >= 0.8) return 'level-excellent'
   if (pct >= 0.6) return 'level-good'
   if (pct >= 0.4) return 'level-fair'
-  return 'level-poor'
+  return 'level-poor' // Low score = green (improvement opportunity)
 })
 
 const label = computed(() => {
@@ -47,12 +48,18 @@ const label = computed(() => {
   font-size: 11px;
   margin-top: 2px;
 }
-.level-excellent { background: #e8f5e9; color: #2e7d32; }
-.level-good      { background: var(--color-soft-stone); color: var(--color-primary); }
-.level-fair      { background: #fff8e1; color: #f57f17; }
-.level-poor      { background: #fce4ec; color: #c62828; }
-[data-theme='dark'] .level-excellent { background: #1b3a1f; color: #81c784; }
-[data-theme='dark'] .level-good      { background: #1e1e24; color: var(--color-coral); }
+/* Color scheme based on improvement opportunity:
+   - Poor scores = green (opportunity to improve, starting point)
+   - Fair scores = yellow (some improvement needed)
+   - Good scores = orange (minor optimization possible)
+   - Excellent scores = green (healthy status)
+*/
+.level-poor      { background: #e8f5e9; color: #2e7d32; }  /* Green - improvement opportunity */
+.level-fair      { background: #fff8e1; color: #f57f17; }  /* Yellow - moderate priority */
+.level-good      { background: #fff3e0; color: #e65100; }  /* Orange - minor improvements */
+.level-excellent { background: #e8f5e9; color: #2e7d32; }  /* Green - healthy status */
+[data-theme='dark'] .level-poor      { background: #1b3a1f; color: #81c784; }
 [data-theme='dark'] .level-fair      { background: #2e2200; color: #ffd54f; }
-[data-theme='dark'] .level-poor      { background: #3b0a14; color: #ef9a9a; }
+[data-theme='dark'] .level-good      { background: #2a1800; color: #ffb74d; }
+[data-theme='dark'] .level-excellent { background: #1b3a1f; color: #81c784; }
 </style>

@@ -28,8 +28,24 @@
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">
-          <div class="overall-score" :class="overallScoreClass">
-            {{ currentReport.overall_score }}
+          <div class="overall-score-circle">
+            <svg viewBox="0 0 120 120" class="score-ring-svg">
+              <circle cx="60" cy="60" r="54" fill="none" class="score-ring-bg" />
+              <circle
+                cx="60"
+                cy="60"
+                r="54"
+                fill="none"
+                class="score-ring-fill"
+                :class="overallScoreClass"
+                :stroke-dasharray="`${scoreProgress} ${324 - scoreProgress}`"
+                stroke-dashoffset="81"
+              />
+            </svg>
+            <div class="score-inner">
+              <span class="score-number" :class="overallScoreClass">{{ currentReport.overall_score }}</span>
+              <span class="score-unit">分</span>
+            </div>
           </div>
           <div class="overall-label">综合健康评分</div>
         </div>
@@ -163,6 +179,12 @@ const overallScoreClass = computed(() => {
   return 'score-poor'
 })
 
+const scoreProgress = computed(() => {
+  const score = currentReport.value?.overall_score ?? 0
+  // Circle circumference is 2πr = 2 * π * 54 ≈ 339, but we use 324 for smooth animation
+  return (score / 100) * 324
+})
+
 function formatMoney(val: number | null | undefined): string {
   if (val == null) return '-'
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(val)
@@ -235,25 +257,62 @@ onMounted(async () => {
   align-items: center;
   margin-bottom: 12px;
 }
-.overall-score {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-  margin-bottom: 6px;
+.overall-score-circle {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  margin-bottom: 8px;
 }
-.score-excellent { background: #e8f5e9; color: #2e7d32; }
-.score-good      { background: var(--color-soft-stone); color: var(--color-primary); }
-.score-fair      { background: #fff8e1; color: #f57f17; }
-.score-poor      { background: #fce4ec; color: #c62828; }
-[data-theme='dark'] .score-excellent { background: #1b3a1f; color: #81c784; }
-[data-theme='dark'] .score-good      { background: #1e1e24; color: var(--color-coral); }
-[data-theme='dark'] .score-fair      { background: #2e2200; color: #ffd54f; }
-[data-theme='dark'] .score-poor      { background: #3b0a14; color: #ef9a9a; }
+.score-ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.score-ring-bg {
+  stroke: var(--bg-secondary);
+  stroke-width: 8;
+}
+.score-ring-fill {
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.6s ease;
+}
+.score-ring-fill.score-excellent { stroke: #2e7d32; }
+.score-ring-fill.score-good      { stroke: var(--color-primary); }
+.score-ring-fill.score-fair      { stroke: #f57f17; }
+.score-ring-fill.score-poor      { stroke: #4caf50; }
+[data-theme='dark'] .score-ring-fill.score-excellent { stroke: #81c784; }
+[data-theme='dark'] .score-ring-fill.score-good      { stroke: var(--color-coral); }
+[data-theme='dark'] .score-ring-fill.score-fair      { stroke: #ffd54f; }
+[data-theme='dark'] .score-ring-fill.score-poor      { stroke: #81c784; }
+.score-inner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.score-number {
+  font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+.score-number.score-excellent { color: #2e7d32; }
+.score-number.score-good      { color: var(--color-primary); }
+.score-number.score-fair      { color: #f57f17; }
+.score-number.score-poor      { color: #4caf50; }
+[data-theme='dark'] .score-number.score-excellent { color: #81c784; }
+[data-theme='dark'] .score-number.score-good      { color: var(--color-coral); }
+[data-theme='dark'] .score-number.score-fair      { color: #ffd54f; }
+[data-theme='dark'] .score-number.score-poor      { color: #81c784; }
+.score-unit {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: -2px;
+}
 .overall-label {
   font-size: 13px;
   color: var(--text-secondary);
