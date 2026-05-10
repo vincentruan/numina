@@ -110,6 +110,7 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
     # ── 儿童账号 ──────────────────────────────────────────────────────────────
     child, _ = UserFactory.get_or_create_child(
         db, display_name="小明", family_id=fam.id, avatar_color="#FF6B6B",
+        username="xiaoming", pin="🐰🥕🌈⭐",
     )
 
     # 任务模板

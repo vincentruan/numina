@@ -84,10 +84,11 @@ class UserFactory:
         *,
         display_name: str,
         family_id: int,
+        username: str | None = None,
         pin: str | None = None,
         avatar_color: str = "#FF6B6B",
     ) -> tuple[User, bool]:
-        """Child accounts have role='child', no username, optional PIN."""
+        """Child accounts have role='child', optional username, optional PIN."""
         existing = (
             db.query(User)
             .filter(User.family_id == family_id, User.display_name == display_name, User.role == "child")
@@ -98,7 +99,7 @@ class UserFactory:
         child = User(
             id=next_id(),
             family_id=family_id,
-            username=None,
+            username=username.lower() if username else None,
             display_name=display_name,
             password_hash=None,
             role="child",

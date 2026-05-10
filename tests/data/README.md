@@ -37,12 +37,13 @@ TEST_DATABASE_URL=sqlite:///test.db python seed_data.py
 
 ### 儿童账户（demouser 家庭）
 
-儿童账号无用户名，通过家庭 ID + PIN 登录儿童端 app。
+儿童账号通过 `username + emoji PIN` 直接登录儿童端 app（一步，无密码）。
 
-| 显示名 | PIN | 星星币余额 | 说明 |
-|--------|-----|-----------|------|
-| 小宝 | `🐰🥕🌈⭐` | 200 + 任务奖励 | 有已完成任务实例（最近3天） |
-| 大宝 | `🐻🍯🌟⭐` | 150 | 有待审核心愿 |
+| 显示名 | 用户名 | PIN | 星星币余额 | 说明 |
+|--------|--------|-----|-----------|------|
+| 小宝 | `xiaobao` | `🐰🥕🌈⭐` | 200 + 任务奖励 | 有已完成任务实例（最近3天） |
+| 大宝 | `dabao` | `🐰🥕🌈⭐` | 150 | 有待审核心愿 |
+| 小明 | `xiaoming` | `🐰🥕🌈⭐` | 50 | test_rich 家庭，有1条已完成任务 |
 
 ## 数据场景详情
 
@@ -193,18 +194,14 @@ curl -s http://localhost:8080/api/v1/auth/me \
 
 ### 儿童账户登录
 
-儿童登录需要先知道 `child_id`（通过家长 token 查询家庭成员获得），再用 emoji PIN 序列登录。
+儿童登录用 `username + pin_sequence`，一步完成，无需密码，无需先查 child_id。
 
 ```bash
-# Step 1: 用家长账号获取家庭成员列表，找到 child_id
-curl -s http://localhost:8080/api/v1/family/members \
-  -H "Authorization: Bearer $PARENT_TOKEN" | jq '.[] | select(.role=="child") | {id, display_name}'
-
-# Step 2: 儿童 PIN 登录（pin_sequence 是 4 个 emoji 分开的数组）
+# 儿童直接登录（username + emoji PIN 数组）
 curl -s -X POST http://localhost:8080/api/v1/auth/child/login \
   -H "Content-Type: application/json" \
   -d '{
-    "child_id": 123456789,
+    "username": "xiaobao",
     "pin_sequence": ["🐰", "🥕", "🌈", "⭐"]
   }' | jq .
 ```
@@ -296,20 +293,10 @@ curl -s "$BASE/wishes" -H "Authorization: Bearer $TOKEN" | \
 验证儿童登录、任务列表、星星币余额、心愿兑换流程。
 
 ```bash
-# 获取家长 token
-PARENT_TOKEN=$(curl -s -X POST $BASE/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"demouser","password":"DemoPass123"}' | jq -r .access_token)
-
-# 获取小宝的 child_id
-CHILD_ID=$(curl -s "$BASE/family/members" \
-  -H "Authorization: Bearer $PARENT_TOKEN" | \
-  jq '.[] | select(.display_name=="小宝") | .id')
-
-# 儿童登录
+# 儿童直接登录，无需家长 token
 CHILD_TOKEN=$(curl -s -X POST $BASE/auth/child/login \
   -H "Content-Type: application/json" \
-  -d "{\"child_id\": $CHILD_ID, \"pin_sequence\": [\"🐰\",\"🥕\",\"🌈\",\"⭐\"]}" | \
+  -d '{"username": "xiaobao", "pin_sequence": ["🐰","🥕","🌈","⭐"]}' | \
   jq -r .access_token)
 
 # 查看星星币余额

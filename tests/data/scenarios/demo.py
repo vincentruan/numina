@@ -146,10 +146,12 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
 
     # ── 2 儿童账号 ────────────────────────────────────────────────────────────
     child1, _ = UserFactory.get_or_create_child(
-        db, display_name="小宝", family_id=fam.id, avatar_color="#FF6B6B", pin="🐰🥕🌈⭐",
+        db, display_name="小宝", family_id=fam.id, avatar_color="#FF6B6B",
+        username="xiaobao", pin="🐰🥕🌈⭐",
     )
     child2, _ = UserFactory.get_or_create_child(
-        db, display_name="大宝", family_id=fam.id, avatar_color="#4ADE80", pin="🐰🥕🌈⭐",
+        db, display_name="大宝", family_id=fam.id, avatar_color="#4ADE80",
+        username="dabao", pin="🐰🥕🌈⭐",
     )
 
     # 任务模板
