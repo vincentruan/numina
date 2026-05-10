@@ -75,6 +75,7 @@
                   :style="{ background: child.avatar_color || '#f5a623' }"
                 >{{ child.display_name[0] }}</span>
                 <span class="child-name">{{ child.display_name }}</span>
+                <span v-if="child.username" class="child-username">@{{ child.username }}</span>
               </div>
               <div class="child-mgmt-stats">
                 <div class="stat">
@@ -508,6 +509,12 @@ onMounted(async () => {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
+}
+
+.child-username {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 400;
 }
 
 .child-mgmt-stats {
