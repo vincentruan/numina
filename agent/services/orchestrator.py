@@ -11,6 +11,7 @@ Pipeline per request:
 All exceptions are caught here; callers always receive an AgentResponse.
 """
 
+import asyncio
 import json
 import logging
 import time
@@ -32,9 +33,27 @@ from services.fallback_engine import fallback_engine
 from services.output_mapper import output_mapper
 from services.pii_redactor import pii_redactor
 from services.policy_guard import policy_guard
+from services.session_journal import session_journal
 from services.stream_events import EventStreamBuilder
 
 logger = logging.getLogger(__name__)
+
+
+def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-arg]
+    """Schedule a coroutine as a fire-and-forget task.
+
+    Holds a strong reference so the task is not garbage-collected before it
+    runs. Logs exceptions via WARNING so failures are visible without crashing
+    the caller. Silently skips if no event loop is running (e.g. app shutdown).
+    """
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return  # no event loop — app shutting down, skip silently
+    task = loop.create_task(coro)
+    task.add_done_callback(
+        lambda t: t.exception() and logger.warning("fire-and-forget task failed: %s", t.exception())
+    )
 
 # Module-level adapter factory — exposed for patching in tests
 _deerflow_adapter = None  # sentinel; real adapter is created per-request via _create_family_adapter
@@ -346,6 +365,8 @@ class Orchestrator:
         deerflow_attempted = False
         success = True
         error_type: str | None = None
+        model_name: str | None = None
+        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{effective_thread_id}.jsonl"
 
         yield builder.phase("connecting").to_ndjson()
 
@@ -359,6 +380,8 @@ class Orchestrator:
                 error_type = type(e).__name__
                 yield builder.error("无法获取 AI 配置，请稍后重试。", code="ai_config_error").to_ndjson()
                 return
+
+            model_name = ai_config.get("ai_model_id")
 
             policy = CapabilityPolicy(
                 ai_enabled=ai_config.get("ai_enabled", False),
@@ -375,6 +398,34 @@ class Orchestrator:
 
             context = await self._build_context(client, family_id, free_text=free_text)
             redacted_context = pii_redactor.redact(context)
+
+            # ── Journal: session start + user message ──────────────────────
+            session_journal.write_session_start(
+                family_id=family_id,
+                session_id=effective_thread_id,
+                user_id=user_id,
+                capability=capability,
+                model_name=model_name,
+                jsonl_path=jsonl_path,
+            )
+            # Write redacted user message (PII already stripped by pii_redactor.redact above)
+            redacted_free_text = redacted_context.free_text or ""
+            if redacted_free_text:
+                session_journal.write_user_message(
+                    family_id=family_id,
+                    session_id=effective_thread_id,
+                    user_id=user_id,
+                    content=redacted_free_text,
+                )
+            # Upsert DB index record (fire-and-forget; failure must not affect stream)
+            _fire_and_forget(self._upsert_session(
+                session_id=effective_thread_id,
+                family_id=family_id,
+                user_id=user_id,
+                capability=capability,
+                jsonl_path=jsonl_path,
+                model_name=model_name,
+            ))
 
             skill_config = skill_loader.load(capability)
             thinking_supported = ai_config.get("thinking_supported", False)
@@ -394,7 +445,9 @@ class Orchestrator:
                         effective_thread_id,
                         enable_thinking=enable_thinking,
                     ):
-                        async for event_line in self._chunk_to_event_lines(builder, chunk, answer_parts):
+                        async for event_line in self._chunk_to_event_lines(
+                            builder, chunk, answer_parts, family_id, effective_thread_id
+                        ):
                             yield event_line
                     elapsed_ms = int(time.monotonic() * 1000) - start_ms
                     yield builder.end(
@@ -448,6 +501,33 @@ class Orchestrator:
             error_type = type(e).__name__
             yield builder.error("暂时无法完成分析，请稍后重试。").to_ndjson()
         finally:
+            duration_ms = int(time.monotonic() * 1000) - start_ms
+            # ── Journal: assistant message + session end ───────────────────
+            final_answer = "".join(answer_parts)
+            if final_answer:
+                # Redact assistant output before persisting (mirrors audit_logger path)
+                redacted_answer, _ = pii_redactor.redact_text(final_answer)
+                session_journal.write_assistant_message(
+                    family_id=family_id,
+                    session_id=effective_thread_id,
+                    content=redacted_answer,
+                    model_name=model_name,
+                )
+            else:
+                redacted_answer = ""
+            session_journal.write_session_end(
+                family_id=family_id,
+                session_id=effective_thread_id,
+                success=success and error_type is None,
+                duration_ms=duration_ms,
+            )
+            _fire_and_forget(self._update_session_summary(
+                session_id=effective_thread_id,
+                family_id=family_id,
+                summary=redacted_answer[:200] if redacted_answer else None,
+                model=model_name,
+                status="completed" if success and error_type is None else "error",
+            ))
             audit_logger.log_call(
                 AuditEntry(
                     audit_id=audit_id,
@@ -457,10 +537,9 @@ class Orchestrator:
                     success=success and error_type is None,
                     fallback_used=fallback_used,
                     deerflow_attempted=deerflow_attempted,
-                    duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    duration_ms=duration_ms,
                     error_type=error_type,
-                    output_summary=pii_redactor.redact_text("".join(answer_parts)[:200])[0]
-                    if answer_parts else None,
+                    output_summary=redacted_answer[:200] if redacted_answer else None,
                 )
             )
 
@@ -469,6 +548,8 @@ class Orchestrator:
         builder: EventStreamBuilder,
         chunk: str,
         answer_parts: list[str],
+        family_id: str = "",
+        session_id: str = "",
     ) -> AsyncGenerator[str, None]:
         if chunk.startswith("[THINK]"):
             yield builder.phase("thinking").to_ndjson()
@@ -577,6 +658,54 @@ class Orchestrator:
 
         async for chunk in llm.stream_text(prompt, max_tokens=1024):
             yield f"[TEXT]{chunk}"
+
+    async def _upsert_session(
+        self,
+        *,
+        session_id: str,
+        family_id: str,
+        user_id: str | None,
+        capability: str,
+        jsonl_path: str,
+        model_name: str | None,
+    ) -> None:
+        """Fire-and-forget: upsert session index record. Failures are logged only."""
+        try:
+            from routers.sessions import _session_repo
+            if _session_repo is not None:
+                await _session_repo.upsert(
+                    session_id=session_id,
+                    family_id=family_id,
+                    user_id=user_id,
+                    capability=capability,
+                    jsonl_path=jsonl_path,
+                    last_model=model_name,
+                )
+        except Exception as e:
+            logger.warning("[orchestrator] session upsert failed session=%s: %s", session_id, e)
+
+    async def _update_session_summary(
+        self,
+        *,
+        session_id: str,
+        family_id: str,
+        summary: str | None,
+        model: str | None,
+        status: str,
+    ) -> None:
+        """Fire-and-forget: update session summary after turn completes."""
+        try:
+            from routers.sessions import _session_repo
+            if _session_repo is not None:
+                await _session_repo.update_summary(
+                    session_id=session_id,
+                    family_id=family_id,
+                    summary=summary,
+                    model=model,
+                    status=status,
+                )
+        except Exception as e:
+            logger.warning("[orchestrator] session summary update failed session=%s: %s", session_id, e)
 
     async def _build_context(
         self,

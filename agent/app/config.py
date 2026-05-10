@@ -31,6 +31,9 @@ class AgentSettings(BaseSettings):
     # DeerFlow 集成开关（默认关闭，迁移验证后开启）
     USE_DEERFLOW: bool = False
 
+    # 会话 JSONL 文件存储目录（按 family_id 隔离）
+    SESSIONS_DATA_DIR: str = "data/sessions"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     def validate_required(self) -> None:

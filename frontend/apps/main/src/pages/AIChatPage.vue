@@ -29,8 +29,23 @@
           <span class="history-title">{{ t('aiChat.historyTitle') }}</span>
         </div>
         <div class="history-empty">
-          <p>暂无历史会话</p>
-          <p class="history-hint">每次对话记录将显示在这里</p>
+          <p v-if="sessionsLoading">{{ t('aiChat.loadingHistory') }}</p>
+          <template v-else-if="sessions.length === 0">
+            <p>{{ t('aiChat.noHistory') }}</p>
+            <p class="history-hint">{{ t('aiChat.historyHint') }}</p>
+          </template>
+          <ul v-else class="history-list">
+            <li
+              v-for="session in sessions"
+              :key="session.session_id"
+              class="history-item"
+              @click="loadSessionMessages(session)"
+            >
+              <p class="history-item-title">{{ session.title ?? t('aiChat.untitledSession') }}</p>
+              <p v-if="session.last_message_summary" class="history-item-summary">{{ session.last_message_summary }}</p>
+              <p class="history-item-time">{{ formatTime(session.updated_at) }}</p>
+            </li>
+          </ul>
         </div>
       </div>
     </van-popup>
@@ -252,17 +267,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
+import { getSessions, streamSessionEvents } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import type { AgentEvent } from '@/types/agent-stream'
+import type { SessionSummary } from '@/types/session'
 
 // Configure marked
 marked.use({ breaks: true })
@@ -338,6 +355,10 @@ const deepThink = ref(false)
 const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 const showHistory = ref(false)
+const sessions = ref<SessionSummary[]>([])
+const sessionsLoading = ref(false)
+const sessionsLoaded = ref(false)
+const currentSessionId = ref<string | null>(null)
 
 // Throttled markdown rendering state (scoped to this component instance)
 let renderTimer: ReturnType<typeof setTimeout> | null = null
@@ -402,12 +423,84 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
   return ''
 }
 
+// Load session list when history panel opens (lazy, once per mount)
+watch(showHistory, async (open) => {
+  if (!open || sessionsLoaded.value) return
+  sessionsLoading.value = true
+  try {
+    const res = await getSessions(50, 0)
+    sessions.value = res.data.sessions
+    sessionsLoaded.value = true
+  } catch {
+    // silently ignore — list stays empty
+  } finally {
+    sessionsLoading.value = false
+  }
+})
+
+async function loadSessionMessages(session: SessionSummary) {
+  showHistory.value = false
+  messages.value = []
+  currentSessionId.value = session.session_id
+  asking.value = true
+  connecting.value = true
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  try {
+    reader = await streamSessionEvents(session.session_id)
+    const decoder = new TextDecoder()
+    let buf = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let nl = buf.indexOf('\n')
+      while (nl >= 0) {
+        const line = buf.slice(0, nl).trim()
+        buf = buf.slice(nl + 1)
+        if (!line) { nl = buf.indexOf('\n'); continue }
+        try {
+          const event = JSON.parse(line)
+          if (event.type === 'user.message') {
+            messages.value.push({
+              id: event.eventId ?? Date.now().toString(),
+              role: 'user',
+              content: event.content ?? '',
+              created_at: event.timestamp ?? new Date().toISOString(),
+              displayTime: formatTime(event.timestamp ?? new Date().toISOString()),
+            })
+          } else if (event.type === 'assistant.message') {
+            messages.value.push({
+              id: event.eventId ?? Date.now().toString(),
+              role: 'assistant',
+              phase: 'done',
+              content: event.content ?? '',
+              renderedContent: renderMarkdown(event.content ?? ''),
+              created_at: event.timestamp ?? new Date().toISOString(),
+              displayTime: formatTime(event.timestamp ?? new Date().toISOString()),
+            })
+          }
+        } catch { /* skip malformed */ }
+        nl = buf.indexOf('\n')
+      }
+    }
+  } catch {
+    showToast(t('aiChat.loadSessionFailed'))
+  } finally {
+    reader?.cancel().catch(() => {})
+    asking.value = false
+    connecting.value = false
+    await scrollToBottom()
+  }
+}
+
 async function onNewChat() {
   if (messages.value.length === 0) return
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: '开始新对话？当前对话将被清空。' })
     await clearChatHistory()
     messages.value = []
+    currentSessionId.value = null
+    sessionsLoaded.value = false  // force refresh next time history panel opens
   } catch {
     // cancelled
   }
@@ -465,7 +558,7 @@ async function onSend() {
   let thinkingDone = false
 
   try {
-    const reader = await sendChatEventStream(q, deepThink.value, abortController.signal)
+    const reader = await sendChatEventStream(q, deepThink.value, abortController.signal, currentSessionId.value ?? undefined)
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation

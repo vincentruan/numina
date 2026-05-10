@@ -54,6 +54,11 @@ export default {
     retrying: 'Regenerating',
     errorRetry: 'Request failed, please retry',
     historyTitle: 'Chat History',
+    loadingHistory: 'Loading history…',
+    noHistory: 'No chat history',
+    historyHint: 'Your conversations will appear here',
+    untitledSession: 'Untitled session',
+    loadSessionFailed: '❌ Failed to load session, please try again',
   },
   asset: {
     title: 'Assets',

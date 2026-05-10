@@ -54,6 +54,11 @@ export default {
     retrying: '重新生成中',
     errorRetry: '请求失败，请重试',
     historyTitle: '会话历史',
+    loadingHistory: '加载历史中…',
+    noHistory: '暂无历史会话',
+    historyHint: '每次对话记录将显示在这里',
+    untitledSession: '未命名会话',
+    loadSessionFailed: '❌ 加载会话失败，请重试',
   },
   asset: {
     title: '资产',

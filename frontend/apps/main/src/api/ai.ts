@@ -278,10 +278,13 @@ export function sendChatMessageStream(
   question: string,
   deepThink: boolean,
   signal?: AbortSignal,
+  sessionId?: string,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (sessionId) headers['X-Thread-Id'] = sessionId
   return fetch('/api/v1/ai/chat/stream', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     credentials: 'include',
     body: JSON.stringify({ question, deep_think: deepThink }),
     signal,

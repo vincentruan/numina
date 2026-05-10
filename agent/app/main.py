@@ -20,11 +20,39 @@ async def lifespan(app: FastAPI):
     setup_schedules()
     scheduler.start()
 
+    # Initialise SQLite persistence (shared with DeerFlow checkpointer)
+    try:
+        import os
+
+        from deerflow.persistence.engine import get_session_factory, init_engine
+
+        from routers.sessions import set_session_repo
+        from services.session_store import AiSessionRepository
+
+        db_dir = ".deer-flow/data"
+        db_path = os.path.join(db_dir, "deerflow.db")
+        await init_engine(
+            backend="sqlite",
+            url=f"sqlite+aiosqlite:///{db_path}",
+            sqlite_dir=db_dir,
+        )
+        sf = get_session_factory()
+        if sf is not None:
+            set_session_repo(AiSessionRepository(sf))
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("Session DB init failed: %s", _e)
+
     yield
 
     # Shutdown
     scheduler.shutdown(wait=False)
     await close_shared_client()  # Close shared backend connection pool
+    try:
+        from deerflow.persistence.engine import close_engine
+        await close_engine()
+    except Exception:
+        pass
 
 
 app = FastAPI(
@@ -40,15 +68,16 @@ app = FastAPI(
 from app.routers import cache as cache_router
 from routers import alerts as alerts_router
 from routers import allocation as allocation_router
+from routers import capabilities as capabilities_router
 from routers import chat as chat_router
 from routers import disposal as disposal_router
 from routers import import_parse as import_parse_router
-from routers import capabilities as capabilities_router
 from routers import liability as liability_router
+from routers import model_test as model_test_router
 from routers import report as report_router
+from routers import sessions as sessions_router
 from routers import spending_leak as spending_leak_router
 from routers import suggest as suggest_router
-from routers import model_test as model_test_router
 from routers import time_machine as time_machine_router
 
 app.include_router(report_router.router)
@@ -64,6 +93,7 @@ app.include_router(cache_router.router)
 app.include_router(import_parse_router.router)
 app.include_router(capabilities_router.router)
 app.include_router(model_test_router.router)
+app.include_router(sessions_router.router)
 
 
 @app.get("/health")
