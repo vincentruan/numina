@@ -628,6 +628,7 @@ def login_step2(
     req: LoginStep2Request,
     response: Response,
     db: Session = Depends(get_db),
+    _: None = Depends(verify_captcha),
 ):
     """Step 2: Verify second factor (PIN). Returns full tokens on success."""
     from app.auth.jwt_utils import user_claims
