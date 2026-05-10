@@ -523,14 +523,12 @@ watch(
   z-index: 0;
 }
 
-/* The deer canvas is masked to the deer SVG silhouette */
+/* The deer canvas is masked to the deer SVG silhouette — mask applied via JS (blob URL) for mobile compatibility */
 .deer-canvas--deer {
   z-index: 1;
-  mask-image: url('/images/deer.svg');
   mask-repeat: no-repeat;
   mask-position: center center;
-  mask-size: contain;      /* 移动端：使用 contain 确保可见 */
-  -webkit-mask-image: url('/images/deer.svg');
+  mask-size: contain;
   -webkit-mask-repeat: no-repeat;
   -webkit-mask-position: center center;
   -webkit-mask-size: contain;

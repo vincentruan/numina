@@ -383,6 +383,7 @@ export function useDeerField(
   let paused = false
   let handleResize: (() => void) | null = null
   let handleVisibility: (() => void) | null = null
+  let maskBlobUrl: string | null = null
 
   function resize() {
     const bg = bgCanvasRef.value
@@ -421,8 +422,28 @@ export function useDeerField(
     rafId = requestAnimationFrame(loop)
   }
 
+  function applyMask(url: string) {
+    const deer = deerCanvasRef.value
+    if (!deer) return
+    deer.style.webkitMaskImage = `url("${url}")`
+    deer.style.maskImage = `url("${url}")`
+  }
+
   function start() {
     resize()
+
+    // Fetch SVG as blob URL so mobile browsers (iOS Safari) can use it as a CSS mask.
+    // External URL references in mask-image are unreliable on mobile WebKit.
+    fetch('/images/deer.svg')
+      .then((r) => r.blob())
+      .then((blob) => {
+        maskBlobUrl = URL.createObjectURL(blob)
+        applyMask(maskBlobUrl)
+      })
+      .catch(() => {
+        // Fallback to direct path if fetch fails
+        applyMask('/images/deer.svg')
+      })
 
     handleResize = debounce(resize, 150)
     window.addEventListener('resize', handleResize)
@@ -448,6 +469,10 @@ export function useDeerField(
     if (handleVisibility) {
       document.removeEventListener('visibilitychange', handleVisibility)
       handleVisibility = null
+    }
+    if (maskBlobUrl) {
+      URL.revokeObjectURL(maskBlobUrl)
+      maskBlobUrl = null
     }
   }
 
