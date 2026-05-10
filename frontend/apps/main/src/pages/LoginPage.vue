@@ -220,23 +220,16 @@
             <button class="emoji-action-btn" :disabled="loading" @click="clearEmojiPin">清空</button>
             <button class="emoji-action-btn emoji-action-btn--delete" :disabled="loading" @click="deleteEmoji">⌫</button>
           </div>
-
-          <!-- Loading indicator for emoji PIN verification -->
-          <div v-if="loading && emojiPin.length === 4" class="emoji-loading">
-            <van-loading size="24px" color="#bdbbff" />
-            <span>验证中…</span>
-          </div>
         </div>
 
         <van-button
-          v-if="secondFactorType !== 'emoji_pin'"
           round
           block
           type="primary"
           :loading="loading"
-          :disabled="pinInput.length < 6"
+          :disabled="secondFactorType === 'emoji_pin' ? emojiPin.length < 4 : pinInput.length < 6"
           class="pin-confirm-btn"
-          @click="submitPin"
+          @click="secondFactorType === 'emoji_pin' ? submitEmojiPin() : submitPin()"
         >确认</van-button>
 
         <div class="form-actions back-actions">
@@ -251,7 +244,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
@@ -373,6 +366,9 @@ function onNumpadPress(key: number | string) {
   }
   if (typeof key === 'number' && pinInput.value.length < 6) {
     pinInput.value += String(key)
+    if (pinInput.value.length === 6) {
+      submitPin()
+    }
   }
 }
 
@@ -440,6 +436,9 @@ function addEmoji(emoji: string) {
   setTimeout(() => { flashKey.value = null }, 150)
   if (emojiPin.value.length < 4) {
     emojiPin.value.push(emoji)
+    if (emojiPin.value.length === 4) {
+      submitEmojiPin()
+    }
   }
 }
 
@@ -452,53 +451,47 @@ function clearEmojiPin() {
   pinError.value = ''
 }
 
-// Auto-submit emoji PIN when 4 emojis selected
-watch(
-  () => emojiPin.value.length,
-  async (len) => {
-    if (len === 4 && !submitting.value) {
-      submitting.value = true
-      loading.value = true
-      pinError.value = ''
-      try {
-        await authStore.loginStep2({
-          temp_token: tempToken.value,
-          factor_type: 'emoji_pin',
-          payload: { pin_sequence: emojiPin.value },
-        })
-        showToast(t('toast.loginSuccess'))
-        // Child users with emoji PIN should redirect to child app
-        const user = authStore.user
-        if (user?.role === 'child') {
-          const redirect = route.query.redirect as string
-          if (redirect && redirect.startsWith('/child/')) {
-            window.location.href = `https://numina.xiaoshutiao.space${redirect}`
-          } else {
-            window.location.href = 'https://numina.xiaoshutiao.space/child/'
-          }
-          return
-        }
-        router.push('/')
-      } catch (error: unknown) {
-        shaking.value = true
-        emojiPin.value = []
-        setTimeout(() => { shaking.value = false }, 600)
-
-        const axiosError = error as { response?: { data?: { code?: string; message?: string } } }
-        const code = axiosError.response?.data?.code
-        const i18nKey = code ? `errors.${code}` : ''
-        if (i18nKey && t(i18nKey) !== i18nKey) {
-          pinError.value = t(i18nKey)
-        } else {
-          pinError.value = axiosError.response?.data?.message || t('toast.loginFailedGeneric')
-        }
-      } finally {
-        loading.value = false
-        submitting.value = false
+async function submitEmojiPin() {
+  if (emojiPin.value.length < 4 || submitting.value) return
+  submitting.value = true
+  loading.value = true
+  pinError.value = ''
+  try {
+    await authStore.loginStep2({
+      temp_token: tempToken.value,
+      factor_type: 'emoji_pin',
+      payload: { pin_sequence: emojiPin.value },
+    })
+    showToast(t('toast.loginSuccess'))
+    const user = authStore.user
+    if (user?.role === 'child') {
+      const redirect = route.query.redirect as string
+      if (redirect && redirect.startsWith('/child/')) {
+        window.location.href = `https://numina.xiaoshutiao.space${redirect}`
+      } else {
+        window.location.href = 'https://numina.xiaoshutiao.space/child/'
       }
+      return
     }
-  },
-)
+    router.push('/')
+  } catch (error: unknown) {
+    shaking.value = true
+    emojiPin.value = []
+    setTimeout(() => { shaking.value = false }, 600)
+
+    const axiosError = error as { response?: { data?: { code?: string; message?: string } } }
+    const code = axiosError.response?.data?.code
+    const i18nKey = code ? `errors.${code}` : ''
+    if (i18nKey && t(i18nKey) !== i18nKey) {
+      pinError.value = t(i18nKey)
+    } else {
+      pinError.value = axiosError.response?.data?.message || t('toast.loginFailedGeneric')
+    }
+  } finally {
+    loading.value = false
+    submitting.value = false
+  }
+}
 </script>
 
 <style scoped>
