@@ -563,6 +563,7 @@ def login_step1(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
+    _: None = Depends(verify_captcha),
 ):
     """Step 1: Verify username + password. Returns temp token if second factor required."""
     import bcrypt
