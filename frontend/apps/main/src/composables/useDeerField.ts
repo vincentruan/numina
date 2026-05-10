@@ -105,8 +105,6 @@ function buildGrid(canvas: HTMLCanvasElement, w: number, h: number): Grid {
   const dpr = Math.min(window.devicePixelRatio || 1, 2)
   canvas.width = w * dpr
   canvas.height = h * dpr
-  canvas.style.width = `${w}px`
-  canvas.style.height = `${h}px`
 
   const step = CELL_SIZE + CELL_GAP
   const cols = Math.floor(w / step)
@@ -401,6 +399,8 @@ export function useDeerField(
     bgCtx = bg.getContext('2d')
     bgCtx?.setTransform(1, 0, 0, 1, 0, 0)
 
+    deer.style.width = `${vpW}px`
+    deer.style.height = `${vpH}px`
     grid = buildGrid(deer, vpW, vpH)
     deerCtx = deer.getContext('2d')
     deerCtx?.setTransform(1, 0, 0, 1, 0, 0)
