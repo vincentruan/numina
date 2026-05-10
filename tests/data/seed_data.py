@@ -72,6 +72,71 @@ def parse_args():
     return parser.parse_args()
 
 
+SEED_USERNAMES = ["test_empty", "test_asset", "test_rich", "demouser", "demouser_spouse"]
+
+
+def _reset_seed_accounts(db) -> None:
+    """删除所有 seed 账号及其家庭数据，允许场景重新创建。"""
+    from sqlalchemy import text
+
+    print("【Reset】清空 seed 账号数据...\n")
+
+    users = db.query(User).filter(User.username.in_(SEED_USERNAMES)).all()
+    if not users:
+        print("  (无 seed 账号，跳过 reset)")
+        return
+
+    family_ids = list({u.family_id for u in users if u.family_id})
+    user_ids = [u.id for u in users]
+
+    def _del(table: str, col: str, vals: list) -> None:
+        if not vals:
+            return
+        placeholders = ",".join(str(v) for v in vals)
+        db.execute(text(f"DELETE FROM {table} WHERE {col} IN ({placeholders})"))
+
+    if not user_ids or not family_ids:
+        print("  (无 seed 账号，跳过 reset)")
+        return
+
+    uid_list = ",".join(str(v) for v in user_ids)
+    fid_list = ",".join(str(v) for v in family_ids)
+
+    # Join tables — delete via subquery (no direct family_id/user_id column)
+    db.execute(text(
+        f"DELETE FROM asset_tags WHERE asset_id IN "
+        f"(SELECT id FROM assets WHERE user_id IN ({uid_list}))"
+    ))
+    db.execute(text(
+        f"DELETE FROM chore_template_assignees WHERE template_id IN "
+        f"(SELECT id FROM chore_templates WHERE family_id IN ({fid_list}))"
+    ))
+
+    # Tables with family_id
+    for table in ["coin_transactions", "chore_instances", "chore_templates",
+                  "child_wishes", "blind_box_gifts", "blind_box_config", "bonus_draws"]:
+        db.execute(text(f"DELETE FROM {table} WHERE family_id IN ({fid_list})"))
+
+    # Tables with user_id
+    for table in ["wishes", "liabilities", "assets"]:
+        db.execute(text(f"DELETE FROM {table} WHERE user_id IN ({uid_list})"))
+
+    # Child users in these families
+    db.execute(text(f"DELETE FROM users WHERE family_id IN ({fid_list}) AND role = 'child'"))
+
+    # Seed users and their families
+    name_list = ",".join(f"'{n}'" for n in SEED_USERNAMES)
+    db.execute(text(f"DELETE FROM users WHERE username IN ({name_list})"))
+    db.execute(text(f"DELETE FROM families WHERE id IN ({fid_list})"))
+
+    db.flush()
+    print(f"  [ok] 已清空 {len(users)} 个 seed 账号及关联数据\n")
+
+
+# Import User for reset function
+from models import User  # noqa: E402
+
+
 def main():
     args = parse_args()
     
@@ -99,10 +164,14 @@ def main():
         print("\n" + "="*50)
         print("Numina 仿真测试数据生成")
         print("="*50 + "\n")
-        
+
+        # --reset: 删除所有 seed 账号及其关联数据，让场景重新创建
+        if args.reset:
+            _reset_seed_accounts(db)
+
         # Part 1: 固定测试账号
         print("【Part 1】固定测试账号\n")
-        
+
         seed_empty_scenario(db, verbose=args.verbose)
         seed_single_asset_scenario(db, verbose=args.verbose)
         seed_full_scenario(db, verbose=args.verbose)

@@ -1,6 +1,9 @@
 """儿童相关工厂 — 任务模板、任务实例、星星币流水。"""
 
+from __future__ import annotations
+
 from datetime import date, datetime
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 

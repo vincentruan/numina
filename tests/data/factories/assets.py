@@ -1,6 +1,9 @@
 """资产工厂 — 幂等创建，按 (user_id, name) 查重。"""
 
+from __future__ import annotations
+
 from datetime import date
+from typing import Optional
 
 from sqlalchemy.orm import Session
 

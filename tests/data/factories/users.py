@@ -1,8 +1,11 @@
 """用户和家庭工厂 — 幂等创建，按 username 查重。"""
 
+from __future__ import annotations
+
 import random
 import string
 from datetime import datetime
+from typing import Optional
 
 from bcrypt import checkpw, hashpw, gensalt
 from sqlalchemy.orm import Session

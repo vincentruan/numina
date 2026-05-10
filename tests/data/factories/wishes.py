@@ -1,5 +1,8 @@
 """心愿工厂 — 幂等创建，按 (user_id, name) 查重。"""
 
+from __future__ import annotations
+
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import ChildWish, Wish

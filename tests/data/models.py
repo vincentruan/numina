@@ -4,7 +4,10 @@
 儿童账号是 role='child' 的 User 行，无独立 child_users 表。
 """
 
+from __future__ import annotations
+
 from datetime import date, datetime
+from typing import Optional
 
 from sqlalchemy import (
     BigInteger,

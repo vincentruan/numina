@@ -63,7 +63,7 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
         ("乐高 42143 法拉利", "玩具", 1299, 800, date(2023, 6, 1), "rarely", None, "书房"),
         ("柯基犬 — 豆豆", "宠物", 5000, 5000, date(2022, 3, 15), "daily", None, None),
         ("Chanel 香水套装", "美妆", 3200, 2000, date(2023, 12, 25), "daily", 365, None),
-        ("百达翡丽手表", "奢侈品", 120000, 135000, date(2019, 6, 18), "rarely", None, "保险柜"),
+        ("百达翡丽手表", "珠宝", 120000, 135000, date(2019, 6, 18), "rarely", None, "保险柜"),
     ]
 
     created_physical: list = []

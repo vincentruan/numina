@@ -1,5 +1,8 @@
 """盲盒工厂 — 配置和礼物创建。"""
 
+from __future__ import annotations
+
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from models import BlindBoxConfig, BlindBoxGift
