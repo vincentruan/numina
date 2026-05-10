@@ -86,6 +86,25 @@
       <p class="report-generating-sub">AI 正在综合分析，请稍候</p>
     </div>
 
+    <!-- AI disabled state: shown when family has not enabled AI -->
+    <div v-else-if="!aiStore.aiEnabled" class="ai-disabled-card" role="status" aria-label="AI 助手未开启">
+      <div class="ai-disabled-icon" aria-hidden="true">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+          <path d="M9 21h6"/>
+          <line x1="2" y1="2" x2="22" y2="22" stroke-width="1.8"/>
+        </svg>
+      </div>
+      <p class="ai-disabled-title">{{ t('aiHub.disabledTitle') }}</p>
+      <p class="ai-disabled-desc">{{ t('aiHub.disabledDesc') }}</p>
+      <button class="ai-disabled-action" @click="$router.push('/settings/ai')">
+        {{ t('aiHub.disabledAction') }}
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+
     <div v-else class="report-empty-card" role="button" tabindex="0" aria-label="立即生成资产体检报告" @click="generateReport">
       <div class="report-empty-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -229,11 +248,6 @@ async function loadCapabilities() {
 }
 
 async function generateReport() {
-  if (!aiStore.aiEnabled) {
-    showToast(t('toast.aiNotEnabled'))
-    router.push('/settings/ai')
-    return
-  }
   reportLoading.value = true
   ws.reset()
   try {
@@ -841,6 +855,90 @@ onMounted(async () => {
 
 [data-theme='dark'] .chat-entry {
   border-top-color: rgba(255, 255, 255, 0.10);
+}
+
+/* ── AI disabled card ── */
+.ai-disabled-card {
+  margin: 12px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 28px 20px 24px;
+  text-align: center;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-theme='dark'] .ai-disabled-card {
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
+}
+
+.ai-disabled-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(0, 0, 0, 0.30);
+  margin-bottom: 4px;
+}
+
+[data-theme='dark'] .ai-disabled-icon {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.30);
+}
+
+.ai-disabled-title {
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: -0.15px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.ai-disabled-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.ai-disabled-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ai-disabled-action:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.25);
+}
+
+[data-theme='dark'] .ai-disabled-action {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+[data-theme='dark'] .ai-disabled-action:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.30);
 }
 
 /* Focus rings */

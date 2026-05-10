@@ -552,5 +552,8 @@ export default {
   },
   aiHub: {
     capabilities: 'AI Capabilities',
+    disabledTitle: 'AI Assistant Not Enabled',
+    disabledDesc: 'Please ask your family admin to configure and enable the AI assistant in settings',
+    disabledAction: 'Go to Settings',
   },
 }

@@ -720,5 +720,8 @@ export default {
   },
   aiHub: {
     capabilities: 'AI 能力',
+    disabledTitle: 'AI 助手未开启',
+    disabledDesc: '请联系家庭管理员在设置中配置并启用 AI 助手',
+    disabledAction: '前往设置',
   },
 }
