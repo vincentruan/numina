@@ -16,7 +16,7 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
         db,
         username="test_rich",
         display_name="完整数据测试",
-        password="TestRich123!",
+        password="DemoPass123",
         family_id=0,
         role="owner",
         avatar_color="#10B981",

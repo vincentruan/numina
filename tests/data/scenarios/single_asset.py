@@ -13,7 +13,7 @@ def seed_single_asset_scenario(db: Session, verbose: bool = False) -> None:
         db,
         username="test_asset",
         display_name="单资产测试",
-        password="TestAsset123!",
+        password="DemoPass123",
         family_id=0,
         role="owner",
         avatar_color="#3B82F6",

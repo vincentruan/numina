@@ -29,9 +29,9 @@ TEST_DATABASE_URL=sqlite:///test.db python seed_data.py
 
 | 用户名 | 密码 | 角色 | 场景 |
 |--------|------|------|------|
-| `test_empty` | `TestEmpty123!` | owner | 空家庭，无任何数据 |
-| `test_asset` | `TestAsset123!` | owner | 单资产（MacBook Pro） |
-| `test_rich` | `TestRich123!` | owner | 完整数据（5资产+2负债+3心愿+1儿童） |
+| `test_empty` | `DemoPass123` | owner | 空家庭，无任何数据 |
+| `test_asset` | `DemoPass123` | owner | 单资产（MacBook Pro） |
+| `test_rich` | `DemoPass123` | owner | 完整数据（5资产+2负债+3心愿+1儿童） |
 | `demouser` | `DemoPass123` | owner | 完整仿真（见下方详情） |
 | `demouser_spouse` | `DemoPass123` | member | demouser 的配偶账号 |
 

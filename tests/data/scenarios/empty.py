@@ -10,7 +10,7 @@ def seed_empty_scenario(db: Session, verbose: bool = False) -> None:
         db,
         username="test_empty",
         display_name="空家庭测试",
-        password="TestEmpty123!",
+        password="DemoPass123",
         family_id=0,  # placeholder, replaced below
         role="owner",
         avatar_color="#6366F1",
