@@ -160,6 +160,177 @@ TEST_DATABASE_URL=sqlite:///test.db python seed_data.py
 
 **盲盒**：已启用，5 个礼物（冰淇淋、电影票、披萨、游乐场、新玩具）
 
+## 使用测试账户
+
+### 环境
+
+```
+本地开发:  http://localhost:8080
+生产服务器: http://74.120.169.252:8080
+API 前缀:  /api/v1
+```
+
+### 成人账户登录
+
+```bash
+# 登录，获取 access_token
+curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "demouser", "password": "DemoPass123"}' | jq .
+
+# 响应示例
+# {
+#   "access_token": "eyJ...",
+#   "refresh_token": "eyJ...",
+#   "token_type": "bearer"
+# }
+
+# 获取当前用户信息（登录后必须调用）
+TOKEN="eyJ..."
+curl -s http://localhost:8080/api/v1/auth/me \
+  -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### 儿童账户登录
+
+儿童登录需要先知道 `child_id`（通过家长 token 查询家庭成员获得），再用 emoji PIN 序列登录。
+
+```bash
+# Step 1: 用家长账号获取家庭成员列表，找到 child_id
+curl -s http://localhost:8080/api/v1/family/members \
+  -H "Authorization: Bearer $PARENT_TOKEN" | jq '.[] | select(.role=="child") | {id, display_name}'
+
+# Step 2: 儿童 PIN 登录（pin_sequence 是 4 个 emoji 分开的数组）
+curl -s -X POST http://localhost:8080/api/v1/auth/child/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "child_id": 123456789,
+    "pin_sequence": ["🐰", "🥕", "🌈", "⭐"]
+  }' | jq .
+```
+
+### 常用 API 调用示例
+
+以下示例均使用 `demouser` 账号（数据最丰富）。
+
+```bash
+BASE="http://localhost:8080/api/v1"
+TOKEN="eyJ..."  # 登录后替换
+
+# 资产列表
+curl -s "$BASE/assets" -H "Authorization: Bearer $TOKEN" | jq '.items | length'
+
+# 按类型筛选（physical / financial）
+curl -s "$BASE/assets?asset_type=physical" -H "Authorization: Bearer $TOKEN" | jq '.items[].name'
+
+# 负债列表
+curl -s "$BASE/liabilities" -H "Authorization: Bearer $TOKEN" | jq '.[] | {name, category, remaining_amount}'
+
+# 心愿列表
+curl -s "$BASE/wishes" -H "Authorization: Bearer $TOKEN" | jq '.[] | {name, status, priority}'
+
+# 仪表盘资产分配
+curl -s "$BASE/dashboard/allocation" -H "Authorization: Bearer $TOKEN" | jq '{total: .total, categories: [.items[].label]}'
+
+# 仪表盘趋势
+curl -s "$BASE/dashboard/trend" -H "Authorization: Bearer $TOKEN" | jq '.points | length'
+```
+
+### 常见测试场景
+
+#### 空状态测试（test_empty）
+
+验证空数据时 UI 的空状态展示、零值处理、引导提示。
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"test_empty","password":"DemoPass123"}' | jq -r .access_token)
+
+curl -s "$BASE/assets" -H "Authorization: Bearer $TOKEN" | jq '.items | length'
+# 期望: 0
+
+curl -s "$BASE/dashboard/allocation" -H "Authorization: Bearer $TOKEN" | jq '.total'
+# 期望: 0
+```
+
+#### 单资产测试（test_asset）
+
+验证单条数据的展示、详情页、编辑流程。
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"test_asset","password":"DemoPass123"}' | jq -r .access_token)
+
+curl -s "$BASE/assets" -H "Authorization: Bearer $TOKEN" | jq '.items[0] | {name, asset_type, current_value}'
+# 期望: MacBook Pro 16寸, physical, 15000
+```
+
+#### 完整功能测试（demouser）
+
+验证多资产、负债关联、心愿状态、儿童模块、盲盒等全功能。
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demouser","password":"DemoPass123"}' | jq -r .access_token)
+
+# 验证资产总数
+curl -s "$BASE/assets" -H "Authorization: Bearer $TOKEN" | jq '.items | length'
+# 期望: 30
+
+# 验证负债中有关联资产的条目
+curl -s "$BASE/liabilities" -H "Authorization: Bearer $TOKEN" | \
+  jq '[.[] | select(.linked_asset_id != null)] | length'
+# 期望: 2（住房贷款 + 车贷）
+
+# 验证心愿包含三种状态
+curl -s "$BASE/wishes" -H "Authorization: Bearer $TOKEN" | \
+  jq '[.[].status] | unique | sort'
+# 期望: ["cancelled", "pending", "realized"]
+```
+
+#### 儿童端测试（小宝）
+
+验证儿童登录、任务列表、星星币余额、心愿兑换流程。
+
+```bash
+# 获取家长 token
+PARENT_TOKEN=$(curl -s -X POST $BASE/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demouser","password":"DemoPass123"}' | jq -r .access_token)
+
+# 获取小宝的 child_id
+CHILD_ID=$(curl -s "$BASE/family/members" \
+  -H "Authorization: Bearer $PARENT_TOKEN" | \
+  jq '.[] | select(.display_name=="小宝") | .id')
+
+# 儿童登录
+CHILD_TOKEN=$(curl -s -X POST $BASE/auth/child/login \
+  -H "Content-Type: application/json" \
+  -d "{\"child_id\": $CHILD_ID, \"pin_sequence\": [\"🐰\",\"🥕\",\"🌈\",\"⭐\"]}" | \
+  jq -r .access_token)
+
+# 查看星星币余额
+curl -s "$BASE/children/coins/balance" \
+  -H "Authorization: Bearer $CHILD_TOKEN" | jq .
+```
+
+#### 配偶账号测试（demouser_spouse）
+
+验证家庭成员（非 owner）的权限边界：可查看家庭数据，但部分管理操作受限。
+
+```bash
+TOKEN=$(curl -s -X POST $BASE/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demouser_spouse","password":"DemoPass123"}' | jq -r .access_token)
+
+# member 可以查看资产
+curl -s "$BASE/assets" -H "Authorization: Bearer $TOKEN" | jq '.items | length'
+# 期望: 30（同家庭数据）
+```
+
 ## 目录结构
 
 ```
