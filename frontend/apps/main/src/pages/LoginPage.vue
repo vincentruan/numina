@@ -234,7 +234,7 @@
           block
           type="primary"
           :loading="loading"
-          :disabled="pinInput.length < 4"
+          :disabled="pinInput.length < 6"
           class="pin-confirm-btn"
           @click="submitPin"
         >确认</van-button>
