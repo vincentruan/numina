@@ -170,3 +170,5 @@ tests/screenshot/screenshots/*-after-*.png
 
 # Runtime chat data (user-generated, not source code)
 data/chat/
+data/sessions/
+agent/data/sessions
