@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.conftest import child_login_two_phase
+
 
 @pytest.fixture
 def child_a(client, auth_headers):
@@ -14,11 +16,7 @@ def child_a(client, auth_headers):
     })
     assert resp.status_code == 201
     child = resp.json()["data"]
-    login = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    token = login.json()["data"]["access_token"]
+    token = child_login_two_phase(client, "xiaoming", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     client.cookies.delete("child_access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
@@ -35,11 +33,7 @@ def child_b(client, auth_headers):
     })
     assert resp.status_code == 201
     child = resp.json()["data"]
-    login = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🌈", "🍎", "🐸", "🦁"],
-    })
-    token = login.json()["data"]["access_token"]
+    token = child_login_two_phase(client, "xiaohong", "ChildPass1", ["🌈", "🍎", "🐸", "🦁"])
     client.cookies.delete("access_token")
     client.cookies.delete("child_access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
@@ -154,11 +148,7 @@ def test_gift_cross_family_fails(client, auth_headers, second_user_headers, chil
 def test_bearer_priority_over_cookie(client, auth_headers, child_a, child_b):
     """Bearer token identity takes precedence over child_access_token cookie."""
     # child_b logs in — sets child_access_token cookie on client
-    login_b = client.post("/api/v1/auth/child/login", json={
-        "child_id": child_b["id"],
-        "pin_sequence": ["🌈", "🍎", "🐸", "🦁"],
-    })
-    assert login_b.status_code == 200
+    child_login_two_phase(client, "xiaohong", "ChildPass1", ["🌈", "🍎", "🐸", "🦁"])
     # Now client has child_b's cookie set
 
     # But we use child_a's Bearer token — should get child_a's balance

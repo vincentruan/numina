@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.conftest import child_login_two_phase
+
 
 @pytest.fixture
 def category_id(client, auth_headers):
@@ -22,11 +24,7 @@ def child_user(client, auth_headers):
     })
     assert resp.status_code == 201
     child = resp.json()["data"]
-    login = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    token = login.json()["data"]["access_token"]
+    token = child_login_two_phase(client, "xiaoming", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     client.cookies.delete("child_access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}

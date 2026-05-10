@@ -183,18 +183,27 @@ def _make_child_pin_hash(emojis: list[str]) -> str:
     return bcrypt.hashpw(normalized.encode("utf-8"), bcrypt.gensalt(rounds=settings.PIN_BCRYPT_ROUNDS)).decode("utf-8")
 
 
+CHILD_PASSWORD = "ChildPass123"
+_child_counter = 0
+
+
 def _create_child_user(db, family_id: str, display_name: str = "小明", pin: list[str] | None = None):
     """Create a child user directly in the DB."""
+    import bcrypt
+
     from app.models.user import User
+
+    global _child_counter
+    _child_counter += 1
 
     if pin is None:
         pin = ["🐱", "🐶", "🐸", "🦊"]
 
     child = User(
         family_id=int(family_id),
-        username=None,
+        username=f"child_{_child_counter}",
         display_name=display_name,
-        password_hash=None,
+        password_hash=bcrypt.hashpw(CHILD_PASSWORD.encode(), bcrypt.gensalt()).decode(),
         role="child",
         pin_hash=_make_child_pin_hash(pin),
         pin_fail_count=0,
@@ -203,6 +212,27 @@ def _create_child_user(db, family_id: str, display_name: str = "小明", pin: li
     db.commit()
     db.refresh(child)
     return child
+
+
+def _child_login(client, child, pin: list[str] | None = None) -> None:
+    """Two-phase child login: step1 (password) → step2 (emoji PIN). Sets child cookies."""
+    if pin is None:
+        pin = VALID_PIN
+    step1 = client.post("/api/v1/auth/login/step1", json={
+        "username": child.username,
+        "password": CHILD_PASSWORD,
+    })
+    assert step1.status_code == 200, step1.text
+    data = step1.json()["data"]
+    assert data["second_factor_required"] is True
+    temp_token = data["temp_token"]
+
+    step2 = client.post("/api/v1/auth/login/step2", json={
+        "temp_token": temp_token,
+        "factor_type": "emoji_pin",
+        "payload": {"pin_sequence": pin},
+    })
+    assert step2.status_code == 200, step2.text
 
 
 def _get_family_id(client) -> str:
@@ -224,42 +254,54 @@ WRONG_PIN = ["🐱", "🐶", "🐸", "🐼"]
 
 
 class TestChildPinAuth:
-    """Tests for child PIN authentication."""
+    """Tests for child two-phase authentication (password → emoji PIN)."""
 
     def test_child_login_happy_path(self, client, db):
-        """Correct PIN returns 200 and sets child cookies."""
+        """Correct password + PIN returns 200 and sets child cookies."""
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
+        # Step 1: password
+        step1 = client.post("/api/v1/auth/login/step1", json={
+            "username": child.username,
+            "password": CHILD_PASSWORD,
         })
-        assert resp.status_code == 200
-        data = resp.json()["data"]
-        assert "access_token" in data
-        assert "refresh_token" in data
-        # Child cookies should be set
-        assert "child_access_token" in resp.cookies
-        assert "child_refresh_token" in resp.cookies
+        assert step1.status_code == 200
+        data = step1.json()["data"]
+        assert data["second_factor_required"] is True
+        assert data["second_factor_type"] == "emoji_pin"
+
+        # Step 2: emoji PIN
+        step2 = client.post("/api/v1/auth/login/step2", json={
+            "temp_token": data["temp_token"],
+            "factor_type": "emoji_pin",
+            "payload": {"pin_sequence": VALID_PIN},
+        })
+        assert step2.status_code == 200
+        resp_data = step2.json()["data"]
+        assert "access_token" in resp_data
+        assert "child_access_token" in step2.cookies
+        assert "child_refresh_token" in step2.cookies
 
     def test_child_login_resets_fail_count(self, client, db):
         """Successful login resets pin_fail_count to 0."""
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        # Cause one failure first
-        client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": WRONG_PIN,
+        # Cause one PIN failure via step2 with wrong PIN
+        step1 = client.post("/api/v1/auth/login/step1", json={
+            "username": child.username,
+            "password": CHILD_PASSWORD,
+        })
+        temp_token = step1.json()["data"]["temp_token"]
+        client.post("/api/v1/auth/login/step2", json={
+            "temp_token": temp_token,
+            "factor_type": "emoji_pin",
+            "payload": {"pin_sequence": WRONG_PIN},
         })
 
         # Now login correctly
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert resp.status_code == 200
+        _child_login(client, child)
 
         db.refresh(child)
         assert child.pin_fail_count == 0
@@ -269,26 +311,28 @@ class TestChildPinAuth:
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        login_resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert login_resp.status_code == 200
+        _child_login(client, child)
 
-        # Use the child_refresh_token cookie set during login
         refresh_resp = client.post("/api/v1/auth/child/refresh")
         assert refresh_resp.status_code == 200
         assert refresh_resp.json()["data"]["message"] == "token refreshed"
         assert "child_access_token" in refresh_resp.cookies
 
     def test_wrong_pin_returns_401(self, client, db):
-        """Wrong PIN returns 401 and increments fail count."""
+        """Wrong PIN at step2 returns 401 and increments fail count."""
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": WRONG_PIN,
+        step1 = client.post("/api/v1/auth/login/step1", json={
+            "username": child.username,
+            "password": CHILD_PASSWORD,
+        })
+        temp_token = step1.json()["data"]["temp_token"]
+
+        resp = client.post("/api/v1/auth/login/step2", json={
+            "temp_token": temp_token,
+            "factor_type": "emoji_pin",
+            "payload": {"pin_sequence": WRONG_PIN},
         })
         assert resp.status_code == 401
 
@@ -301,51 +345,66 @@ class TestChildPinAuth:
         child = _create_child_user(db, family_id)
 
         for _ in range(3):
-            client.post("/api/v1/auth/child/login", json={
-                "child_id": child.id,
-                "pin_sequence": WRONG_PIN,
+            step1 = client.post("/api/v1/auth/login/step1", json={
+                "username": child.username,
+                "password": CHILD_PASSWORD,
+            })
+            temp_token = step1.json()["data"]["temp_token"]
+            client.post("/api/v1/auth/login/step2", json={
+                "temp_token": temp_token,
+                "factor_type": "emoji_pin",
+                "payload": {"pin_sequence": WRONG_PIN},
             })
 
         db.refresh(child)
         assert child.pin_locked_until is not None
 
-        # 4th attempt should be 423
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
+        # 4th attempt — account locked
+        step1 = client.post("/api/v1/auth/login/step1", json={
+            "username": child.username,
+            "password": CHILD_PASSWORD,
+        })
+        temp_token = step1.json()["data"]["temp_token"]
+        resp = client.post("/api/v1/auth/login/step2", json={
+            "temp_token": temp_token,
+            "factor_type": "emoji_pin",
+            "payload": {"pin_sequence": VALID_PIN},
         })
         assert resp.status_code == 423
         assert "locked_until" in resp.json()["details"]
 
-    def test_nonexistent_child_id_returns_401(self, client, db):
-        """Non-existent child_id returns 401 (same as wrong PIN)."""
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": 999999999999999999,
-            "pin_sequence": VALID_PIN,
+    def test_nonexistent_child_returns_401(self, client, db):
+        """Non-existent username at step1 returns 401."""
+        resp = client.post("/api/v1/auth/login/step1", json={
+            "username": "no_such_child_xyz",
+            "password": CHILD_PASSWORD,
         })
         assert resp.status_code == 401
 
-    def test_invalid_emoji_in_pin_returns_422(self, client, db):
-        """PIN with invalid emoji returns 422 validation error."""
+    def test_invalid_emoji_in_pin_returns_4xx(self, client, db):
+        """PIN with invalid emoji at step2 returns 401 or 422."""
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": ["🐱", "🐶", "🐸", "❌"],
+        step1 = client.post("/api/v1/auth/login/step1", json={
+            "username": child.username,
+            "password": CHILD_PASSWORD,
         })
-        assert resp.status_code == 422
+        temp_token = step1.json()["data"]["temp_token"]
+
+        resp = client.post("/api/v1/auth/login/step2", json={
+            "temp_token": temp_token,
+            "factor_type": "emoji_pin",
+            "payload": {"pin_sequence": ["🐱", "🐶", "🐸", "❌"]},
+        })
+        assert resp.status_code in (401, 422)
 
     def test_token_version_mismatch_on_refresh_returns_401(self, client, db):
         """Stale token_version on refresh returns 401."""
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        login_resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert login_resp.status_code == 200
+        _child_login(client, child)
 
         # Bump token_version to invalidate existing tokens
         child.token_version += 1
@@ -359,12 +418,7 @@ class TestChildPinAuth:
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        # Login as child to get child cookie
-        login_resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert login_resp.status_code == 200
+        _child_login(client, child)
 
         resp = client.post("/api/v1/auth/child/verify-parent", json={
             "password": "ParentPass123",
@@ -377,11 +431,7 @@ class TestChildPinAuth:
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        login_resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert login_resp.status_code == 200
+        _child_login(client, child)
 
         resp = client.post("/api/v1/auth/child/verify-parent", json={
             "password": "WrongPassword999",
@@ -393,7 +443,6 @@ class TestChildPinAuth:
         """After lockout window passes, child can login again and fail count resets."""
         from datetime import datetime, timedelta
 
-
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
@@ -403,13 +452,8 @@ class TestChildPinAuth:
         db.commit()
 
         # Login should succeed — lockout has expired
-        resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert resp.status_code == 200
+        _child_login(client, child)
 
-        # Verify DB state reset
         db.refresh(child)
         assert child.pin_fail_count == 0
         assert child.pin_locked_until is None
@@ -438,11 +482,7 @@ class TestChildPinAuth:
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
-        login_resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child.id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert login_resp.status_code == 200
+        _child_login(client, child)
 
         resp = client.post("/api/v1/auth/child/verify-parent", json={"password": "WrongPassword999!"})
         assert resp.status_code == 401

@@ -165,8 +165,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         "/api/v1/auth/login",
         "/api/v1/auth/register",
         "/api/v1/captcha/challenge",  # Allow challenge fetch before auth attempt
-        # NOTE: /api/v1/auth/child/login is intentionally NOT skipped —
-        # it must be rate-limited to prevent PIN brute-force attacks.
     }
 
     # Paths that don't count towards rate limit

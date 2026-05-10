@@ -38,8 +38,8 @@ export const useChildAuthStore = defineStore('childAuth', () => {
   const isLocked = ref(false)
   const lockMessage = ref<ChildAuthErrorCode | null>(null)
 
-  // Two-stage login: step 1 — username + password
-  async function childLoginStep1(username: string, password: string): Promise<ChildLoginStep1Result> {
+  // Two-stage login: step 1 — username + password + altcha
+  async function childLoginStep1(username: string, password: string, altcha?: string): Promise<ChildLoginStep1Result> {
     loginError.value = null
     isLocked.value = false
     lockMessage.value = null
@@ -47,6 +47,7 @@ export const useChildAuthStore = defineStore('childAuth', () => {
       const res = await getHttp().post<ChildLoginStep1Result>('/auth/login/step1', {
         username,
         password,
+        ...(altcha ? { altcha } : {}),
       })
       return res.data
     } catch (err: unknown) {

@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.conftest import child_login_two_phase
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -20,13 +22,7 @@ def child_user(client, auth_headers):
     assert resp.status_code == 201
     child = resp.json()["data"]
 
-    # Login as child
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    token = login_resp.json()["data"]["access_token"]
+    token = child_login_two_phase(client, "xiaoming3", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     # Remove parent's access_token cookie so child Bearer token isn't shadowed
     client.cookies.delete("access_token")
     return {
@@ -534,12 +530,8 @@ def test_cross_family_child_cannot_complete_chore(client, auth_headers, child_us
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert child_b_resp.status_code == 201
-    child_b = child_b_resp.json()["data"]
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child_b["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    child_b_headers = {"Authorization": f"Bearer {login_resp.json()['data']['access_token']}"}
+    child_b_token = child_login_two_phase(client, "familybchild", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
+    child_b_headers = {"Authorization": f"Bearer {child_b_token}"}
 
     # Family B child cannot complete family A's chore instance
     resp = client.post(f"/api/v1/child/chores/{instance_id}/complete", headers=child_b_headers)

@@ -220,21 +220,17 @@ def _get_child_token(client) -> str:
     Clears adult cookies after setup so subsequent requests with the child
     Bearer token are not shadowed by the owner's access_token cookie.
     """
-    owner_headers = _register_owner(client)
-    child_resp = _create_child(client, owner_headers)
-    child_id = child_resp.json()["data"]["id"]
+    from tests.conftest import child_login_two_phase
 
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child_id,
-        "pin_sequence": VALID_PIN,
-    })
-    assert login_resp.status_code == 200
-    child_token = login_resp.json()["data"]["access_token"]
+    owner_headers = _register_owner(client)
+    _create_child(client, owner_headers)
+
+    token = child_login_two_phase(client, "xiaoming2", "ChildPass1", VALID_PIN)
 
     # Clear all cookies so the adult access_token cookie doesn't shadow
     # the child Bearer token in subsequent requests.
     client.cookies.clear()
-    return child_token
+    return token
 
 
 class TestRequireAdult:
@@ -260,16 +256,12 @@ class TestRequireAdult:
 
     def test_child_blocked_from_family_children(self, client):
         # C3 fix: child tokens must NOT be able to enumerate siblings
-        owner_headers = _register_owner(client)
-        child_resp = _create_child(client, owner_headers)
-        child_id = child_resp.json()["data"]["id"]
+        from tests.conftest import child_login_two_phase
 
-        login_resp = client.post("/api/v1/auth/child/login", json={
-            "child_id": child_id,
-            "pin_sequence": VALID_PIN,
-        })
-        assert login_resp.status_code == 200
-        child_token = login_resp.json()["data"]["access_token"]
+        owner_headers = _register_owner(client)
+        _create_child(client, owner_headers)
+
+        child_token = child_login_two_phase(client, "xiaoming2", "ChildPass1", VALID_PIN)
 
         # Clear adult cookies so child Bearer token is used
         client.cookies.clear()

@@ -41,7 +41,6 @@ from app.models.user import User
 from app.schemas.auth import (
     ChangeNumericPinRequest,
     ChangePasswordRequest,
-    ChildPinLoginRequest,
     ChildRefreshResponse,
     JoinFamilyRequest,
     LoginRequest,
@@ -303,26 +302,6 @@ async def reset_password(
 # Child authentication endpoints
 # ---------------------------------------------------------------------------
 
-
-@router.post("/child/login", response_model=TokenResponse)
-def child_login(
-    response: Response,
-    req: ChildPinLoginRequest,
-    db: Session = Depends(get_db),
-):
-    """Child PIN login — no captcha required.
-
-    支持双模式登录：
-    - username + PIN（主要方式）
-    - child_id + PIN（备选方式，向后兼容）
-
-    Sets child-specific httpOnly cookies and returns tokens in body.
-    """
-    tokens = auth_service.child_pin_login(
-        db, req.child_id, req.username, req.pin_sequence
-    )
-    set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
-    return tokens
 
 
 @router.get("/child/me", response_model=UserResponse)

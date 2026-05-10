@@ -23,13 +23,9 @@ class User(Base):
     family_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("families.id"), nullable=False
     )
-    username: Mapped[str | None] = mapped_column(
-        String(50), nullable=True
-    )  # NULL for child accounts
+    username: Mapped[str | None] = mapped_column(String(50), nullable=True)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    password_hash: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )  # NULL for child accounts
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     avatar_color: Mapped[str] = mapped_column(String(20), default="#4F46E5")
     role: Mapped[str] = mapped_column(
         String(10), default="member"

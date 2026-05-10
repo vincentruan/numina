@@ -1,5 +1,7 @@
 from datetime import UTC
 
+from tests.conftest import child_login_two_phase
+
 
 def test_create_blind_box_gift(db):
     from app.models.blind_box_gift import BlindBoxGift
@@ -169,12 +171,7 @@ def test_child_draw(client, auth_headers, second_user_headers):
     })
     assert child_resp.status_code == 201
     child = child_resp.json()["data"]
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    child_token = login_resp.json()["data"]["access_token"]
+    child_token = child_login_two_phase(client, "xiaomingbb", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     child_headers = {"Authorization": f"Bearer {child_token}"}
 
@@ -195,13 +192,7 @@ def test_child_list_draws(client, auth_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert child_resp.status_code == 201
-    child = child_resp.json()["data"]
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    child_token = login_resp.json()["data"]["access_token"]
+    child_token = child_login_two_phase(client, "xiaohongbb", "ChildPass2", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     child_headers = {"Authorization": f"Bearer {child_token}"}
 
@@ -237,13 +228,7 @@ def test_child_list_bonus_draws(client, auth_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert child_resp.status_code == 201
-    child = child_resp.json()["data"]
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    child_token = login_resp.json()["data"]["access_token"]
+    child_token = child_login_two_phase(client, "xiaolanbb", "ChildPass3", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     child_headers = {"Authorization": f"Bearer {child_token}"}
 
@@ -262,13 +247,7 @@ def test_child_use_bonus_draw_not_found(client, auth_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert child_resp.status_code == 201
-    child = child_resp.json()["data"]
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    child_token = login_resp.json()["data"]["access_token"]
+    child_token = child_login_two_phase(client, "xiaolvbb", "ChildPass4", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     child_headers = {"Authorization": f"Bearer {child_token}"}
 
@@ -312,13 +291,7 @@ def test_draw_requires_chore_instance_ids(client, auth_headers):
         "pin": ["🐱", "🌟", "🎈", "🐶"],
     })
     assert child_resp.status_code == 201
-    child = child_resp.json()["data"]
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    child_token = login_resp.json()["data"]["access_token"]
+    child_token = child_login_two_phase(client, "xiaozibb", "ChildPass5", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     child_headers = {"Authorization": f"Bearer {child_token}"}
 

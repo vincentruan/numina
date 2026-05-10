@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.conftest import child_login_two_phase
+
 
 def _data(resp):
     """Unwrap envelope response: {"code": "OK", "data": {...}} → data."""
@@ -25,12 +27,7 @@ def child_user(client, auth_headers):
     })
     assert resp.status_code == 201
     child = _data(resp)
-    login_resp = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    assert login_resp.status_code == 200
-    token = _data(login_resp)["access_token"]
+    token = child_login_two_phase(client, "xiaoming8", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 

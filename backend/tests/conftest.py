@@ -140,3 +140,21 @@ def second_user_headers(client):
         "Authorization": f"Bearer {data['access_token']}",
         "_refresh_token": data["refresh_token"],
     }
+
+
+def child_login_two_phase(client, username: str, password: str, pin_sequence: list[str]) -> str:
+    """Two-phase child login helper. Returns child access token and sets child cookies."""
+    step1 = client.post("/api/v1/auth/login/step1", json={
+        "username": username,
+        "password": password,
+    })
+    assert step1.status_code == 200, f"step1 failed: {step1.text}"
+    data = step1.json()["data"]
+    assert data["second_factor_required"] is True
+    step2 = client.post("/api/v1/auth/login/step2", json={
+        "temp_token": data["temp_token"],
+        "factor_type": "emoji_pin",
+        "payload": {"pin_sequence": pin_sequence},
+    })
+    assert step2.status_code == 200, f"step2 failed: {step2.text}"
+    return step2.json()["data"]["access_token"]

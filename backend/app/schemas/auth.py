@@ -1,8 +1,7 @@
 import re
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator
 
-from app.constants.pin import ALLOWED_EMOJIS
 from app.schemas.base import SnowflakeBase
 
 _HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
@@ -163,27 +162,6 @@ class ResetPasswordRequest(BaseModel):
 # Child authentication schemas
 # ---------------------------------------------------------------------------
 
-
-class ChildPinLoginRequest(BaseModel):
-    child_id: int | None = None  # 可选：UUID 方式
-    username: str | None = None  # 新增：username 方式
-    pin_sequence: list[str]  # 4 emojis from ALLOWED_EMOJIS
-
-    @field_validator("pin_sequence")
-    @classmethod
-    def validate_pin_sequence(cls, v: list[str]) -> list[str]:
-        if len(v) != 4:
-            raise ValueError("PIN 必须是 4 个表情")
-        for emoji in v:
-            if emoji not in ALLOWED_EMOJIS:
-                raise ValueError(f"无效的表情: {emoji}")
-        return v
-
-    @model_validator(mode="after")
-    def check_identifier_present(self):
-        if not self.child_id and not self.username:
-            raise ValueError("必须提供 child_id 或 username")
-        return self
 
 
 class VerifyParentRequest(BaseModel):

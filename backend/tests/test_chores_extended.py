@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from tests.conftest import child_login_two_phase
+
 # ---------------------------------------------------------------------------
 # Fixtures (reuse pattern from test_chores.py)
 # ---------------------------------------------------------------------------
@@ -19,11 +21,7 @@ def child_user(client, auth_headers):
     })
     assert resp.status_code == 201
     child = resp.json()["data"]
-    login = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    token = login.json()["data"]["access_token"]
+    token = child_login_two_phase(client, "xiaoming4", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -39,11 +37,7 @@ def child_user2(client, auth_headers):
     })
     assert resp.status_code == 201
     child = resp.json()["data"]
-    login = client.post("/api/v1/auth/child/login", json={
-        "child_id": child["id"],
-        "pin_sequence": ["🐶", "🌟", "🎈", "🐱"],
-    })
-    token = login.json()["data"]["access_token"]
+    token = child_login_two_phase(client, "xiaohong4", "ChildPass1", ["🐶", "🌟", "🎈", "🐱"])
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -174,11 +168,7 @@ def test_auto_approve_triggers_on_list(client, child_user, daily_template, auth_
     # Verify coin transaction was written
     client.cookies.delete("access_token")
     # Re-login child to check balance
-    login = client.post("/api/v1/auth/child/login", json={
-        "child_id": child_user["id"],
-        "pin_sequence": ["🐱", "🌟", "🎈", "🐶"],
-    })
-    child_token = login.json()["data"]["access_token"]
+    child_token = child_login_two_phase(client, "xiaoming4", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
     child_headers = {"Authorization": f"Bearer {child_token}"}
     bal_resp = client.get("/api/v1/child/coins/balance", headers=child_headers)
     assert bal_resp.json()["data"]["balance"] == 5  # coin_reward from daily_template
