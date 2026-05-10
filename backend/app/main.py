@@ -125,7 +125,6 @@ from app.scheduler import (
     setup_revoked_token_cleanup_schedule,
     setup_snapshot_schedule,
 )
-from app.seed.categories import seed_categories
 from app.seed.currencies import seed_currencies
 from app.seed.invitation_codes import seed_invitation_codes
 from app.seed.storage_backends import seed_storage_backends
@@ -176,7 +175,6 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
-        seed_categories(db)
         seed_currencies(db)
         seed_invitation_codes(db)
         seed_storage_backends(db)
