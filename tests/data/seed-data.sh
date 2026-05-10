@@ -424,7 +424,7 @@ else
   # 获取分类 ID
   CAT_HOUSE_R=$(get_category_id "$TOKEN_RICH" "房产" "physical")
   CAT_CAR_R=$(get_category_id "$TOKEN_RICH" "车辆" "physical")
-  CAT_ELEC_R=$(get_category_id "$TOKEN_RICH" "电子设备" "physical")
+  CAT_ELEC_R=$(get_category_id "$TOKEN_RICH" "数码" "physical")
   CAT_STOCK_R=$(get_category_id "$TOKEN_RICH" "股票" "financial")
   CAT_FUND_R=$(get_category_id "$TOKEN_RICH" "基金" "financial")
   CAT_DEPOSIT_R=$(get_category_id "$TOKEN_RICH" "存款" "financial")
@@ -525,7 +525,7 @@ if [ -n "$MEMBER_TOKEN" ] && [ "$MEMBER_TOKEN" != "null" ]; then
   # 检查是否已有资产，没有则补充
   MEMBER_ASSET_COUNT=$(get_asset_count "$MEMBER_TOKEN") || MEMBER_ASSET_COUNT="0"
   if [ "$MEMBER_ASSET_COUNT" = "0" ]; then
-    CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "电子设备" "physical")
+    CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "数码" "physical")
     if [ -n "$CAT_DIGITAL_M" ] && [ "$CAT_DIGITAL_M" != "null" ]; then
       create_physical_asset "$MEMBER_TOKEN" "{\"name\":\"成员手机\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_DIGITAL_M\",\"purchase_price\":5000,\"current_value\":4000,\"currency\":\"CNY\",\"purchase_date\":\"2023-06-01\",\"status\":\"in_use\"}"
       log_ok "test_rich_member 补充 1 个资产（member 数据隔离测试）"
@@ -550,7 +550,7 @@ else
     if [ "$MEMBER_HTTP" = "200" ] || [ "$MEMBER_HTTP" = "201" ]; then
       MEMBER_TOKEN=$(echo "$MEMBER_BODY" | jq -r '.access_token // .data.access_token')
       log_ok "test_rich_member 创建成功（member 角色）"
-      CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "电子设备" "physical")
+      CAT_DIGITAL_M=$(get_category_id "$MEMBER_TOKEN" "数码" "physical")
       if [ -n "$CAT_DIGITAL_M" ] && [ "$CAT_DIGITAL_M" != "null" ]; then
         create_physical_asset "$MEMBER_TOKEN" "{\"name\":\"成员手机\",\"asset_type\":\"physical\",\"category_id\":\"$CAT_DIGITAL_M\",\"purchase_price\":5000,\"current_value\":4000,\"currency\":\"CNY\",\"purchase_date\":\"2023-06-01\",\"status\":\"in_use\"}"
         log_ok "test_rich_member 创建 1 个资产（member 数据隔离测试）"
