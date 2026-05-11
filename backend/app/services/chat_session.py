@@ -210,6 +210,22 @@ class ChatSessionService:
         return session
 
     @staticmethod
+    def get_session(
+        session_id: str,
+        family_id: int | str,
+        db: Session,
+    ) -> AIChatSession | None:
+        """Fetch an existing session by ID, scoped to the family."""
+        return (
+            db.query(AIChatSession)
+            .filter(
+                AIChatSession.id == session_id,
+                AIChatSession.family_id == int(family_id),
+            )
+            .first()
+        )
+
+    @staticmethod
     async def append_message(
         session: AIChatSession,
         role: str,

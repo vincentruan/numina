@@ -9,7 +9,11 @@ export function createAgentEventParser(onEvent: (event: AgentEvent) => void) {
     while (newline >= 0) {
       const line = buffer.slice(0, newline).trim()
       buffer = buffer.slice(newline + 1)
-      if (line) onEvent(JSON.parse(line) as AgentEvent)
+      try {
+        if (line) onEvent(JSON.parse(line) as AgentEvent)
+      } catch {
+        // skip malformed NDJSON line
+      }
       newline = buffer.indexOf('\n')
     }
   }
@@ -17,7 +21,11 @@ export function createAgentEventParser(onEvent: (event: AgentEvent) => void) {
   function flush() {
     const line = buffer.trim()
     buffer = ''
-    if (line) onEvent(JSON.parse(line) as AgentEvent)
+    try {
+      if (line) onEvent(JSON.parse(line) as AgentEvent)
+    } catch {
+      // skip malformed NDJSON line
+    }
   }
 
   return { push, flush }

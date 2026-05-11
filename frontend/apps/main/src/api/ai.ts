@@ -312,10 +312,11 @@ export const createWsTicket = () =>
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
 export interface AITaskStatus {
-  status: 'idle' | 'running' | 'completed' | 'failed' | 'timeout'
+  status: 'idle' | 'running' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
   task_id?: string
   session_id?: string
   started_at?: string
+  queue_position?: number | null
 }
 
 export async function getAITask(capability: string): Promise<AITaskStatus> {
@@ -354,6 +355,30 @@ export function startAIStream(
     if (!res.ok) throw new Error(`${res.status}`)
     return res.body!.getReader()
   })
+}
+
+// NDJSON event stream — returns reader for application/x-ndjson responses.
+// Returns { reader, queued, queuePosition } — if queued=true, no stream is open.
+export async function startAIEventStream(
+  endpoint: string,
+  signal?: AbortSignal,
+): Promise<
+  | { queued: false; reader: ReadableStreamDefaultReader<Uint8Array> }
+  | { queued: true; taskId: string; queuePosition: number | null }
+> {
+  const res = await fetch(`/api/v1${endpoint}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    signal,
+  })
+  if (res.status === 202) {
+    const body = await res.json()
+    return { queued: true, taskId: body.task_id, queuePosition: body.queue_position ?? null }
+  }
+  if (!res.ok) throw new Error(`${res.status}`)
+  if (!res.body) throw new Error('Response body is null')
+  return { queued: false, reader: res.body.getReader() }
 }
 
 // ── MCP Server Management ─────────────────────────────────────────────────────
