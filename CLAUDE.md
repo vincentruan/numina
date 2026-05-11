@@ -81,6 +81,10 @@ All API endpoints must respond with 200 directly — no 307 redirects.
 
 Applies to every router with root-path endpoints. Frontend calls must also omit trailing slashes.
 
+### Bigint Serialization
+
+JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts, etc.) **must be serialized as strings in API responses** and typed as `string` in TypeScript. The DB stores them as `bigint`.
+
 ### API Return Code Conventions
 
 - **Auth endpoints return 200** — `register`, `login`, `join-family` all return `TokenResponse` with status 200, not 201.
