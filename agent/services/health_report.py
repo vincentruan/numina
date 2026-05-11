@@ -162,6 +162,14 @@ async def generate_health_report(
         logger.error(f"[health_report] LLM 解析失败 family={family_id}: {e}")
         raise ValueError(f"LLM 响应解析失败: {e}") from e
 
+    # Clamp overall_score to valid range regardless of LLM compliance with the prompt formula.
+    if "overall_score" in report_data:
+        try:
+            report_data["overall_score"] = max(20, min(100, int(float(str(report_data["overall_score"])))))
+        except (TypeError, ValueError):
+            logger.warning(f"[health_report] overall_score 无法转换为整数，使用默认值 60: {report_data['overall_score']!r}")
+            report_data["overall_score"] = 60
+
     report_data["generated_at"] = datetime.utcnow().isoformat()
     report_data["data_completeness_score"] = data_completeness
 
