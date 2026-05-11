@@ -7,7 +7,20 @@
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <h1 class="header-title">{{ sessionTitle }}</h1>
+      <div class="header-title-wrap">
+        <h1 class="header-title">{{ displayedTitle }}</h1>
+        <button
+          v-if="sessionTitle && sessionTitle !== t('aiChat.newChat')"
+          class="header-edit-btn"
+          :aria-label="t('aiChat.editTitle')"
+          @click="onEditTitle"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+      </div>
       <div class="header-actions">
         <button class="header-btn" aria-label="新对话" @click="onNewChat">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -263,6 +276,26 @@
         @action="onAction"
       />
     </div>
+
+    <!-- Edit title dialog -->
+    <van-dialog
+      v-model:show="showEditTitleDialog"
+      :title="t('aiChat.editTitle')"
+      show-cancel-button
+      @confirm="onConfirmEditTitle"
+      @cancel="onCancelEditTitle"
+    >
+      <div style="padding: 16px 16px 8px">
+        <van-field
+          v-model="editTitleInput"
+          :placeholder="t('aiChat.editTitlePlaceholder')"
+          autofocus
+          clearable
+          maxlength="30"
+          show-word-limit
+        />
+      </div>
+    </van-dialog>
   </div>
 </template>
 
@@ -376,10 +409,57 @@ let abortController: AbortController | null = null
 
 const sessionTitle = computed(() => {
   const firstUser = messages.value.find((m) => m.role === 'user')
-  if (!firstUser) return '新对话'
+  if (!firstUser) return t('aiChat.newChat')
   const text = firstUser.content.trim()
   return text.length > 20 ? text.slice(0, 20) + '…' : text
 })
+
+// Typewriter effect for title
+const displayedTitle = ref(t('aiChat.newChat'))
+const customTitle = ref<string | null>(null)
+const showEditTitleDialog = ref(false)
+const editTitleInput = ref('')
+let titleTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(sessionTitle, (newTitle) => {
+  if (customTitle.value !== null) return // user has set a custom title, don't overwrite
+  if (titleTimer) { clearTimeout(titleTimer); titleTimer = null }
+  if (!newTitle || newTitle === t('aiChat.newChat')) {
+    displayedTitle.value = newTitle
+    return
+  }
+  // Animate character by character
+  let i = 0
+  displayedTitle.value = ''
+  function tick() {
+    if (i < newTitle.length) {
+      displayedTitle.value = newTitle.slice(0, ++i)
+      titleTimer = setTimeout(tick, 40)
+    }
+  }
+  tick()
+})
+
+watch(customTitle, (val) => {
+  if (val !== null) displayedTitle.value = val
+})
+
+function onEditTitle() {
+  showEditTitleDialog.value = true
+  editTitleInput.value = customTitle.value ?? sessionTitle.value
+}
+
+function onConfirmEditTitle() {
+  const val = editTitleInput.value.trim()
+  if (val) {
+    customTitle.value = val.length > 30 ? val.slice(0, 30) + '…' : val
+  }
+  showEditTitleDialog.value = false
+}
+
+function onCancelEditTitle() {
+  showEditTitleDialog.value = false
+}
 
 const suggestions = SUGGESTIONS
 
@@ -500,6 +580,7 @@ async function onNewChat() {
     await clearChatHistory()
     messages.value = []
     currentSessionId.value = null
+    customTitle.value = null
     sessionsLoaded.value = false  // force refresh next time history panel opens
   } catch {
     // cancelled
@@ -877,7 +958,7 @@ onUnmounted(() => {
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.5);
   --text-muted: rgba(255, 255, 255, 0.3);
-  --bubble-user-bg: #010120;
+  --bubble-user-bg: rgba(99, 102, 241, 0.22);
   --bubble-user-color: #ffffff;
   --bubble-ai-bg: rgba(189, 187, 255, 0.12);
   --bubble-ai-color: rgba(255, 255, 255, 0.85);
@@ -898,8 +979,8 @@ onUnmounted(() => {
   --text-primary: rgba(0, 0, 0, 0.9);
   --text-secondary: rgba(0, 0, 0, 0.6);
   --text-muted: rgba(0, 0, 0, 0.45);
-  --bubble-user-bg: #010120;
-  --bubble-user-color: #fff;
+  --bubble-user-bg: #e8e8f4;
+  --bubble-user-color: #1a1a2e;
   --bubble-ai-bg: rgba(189, 187, 255, 0.22);
   --bubble-ai-color: rgba(0, 0, 0, 0.9);
   --bubble-ai-border: rgba(0, 0, 0, 0.15);
@@ -957,9 +1038,17 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
-.header-title {
+.header-title-wrap {
   flex: 1;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.header-title {
   font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
@@ -967,7 +1056,26 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 0 4px;
+}
+
+.header-edit-btn {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.header-edit-btn:hover {
+  background: var(--btn-hover-bg);
+  color: var(--text-primary);
 }
 
 .header-actions {

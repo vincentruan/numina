@@ -184,11 +184,6 @@ const panelItems = [
     label: '上传图片',
     icon: { viewBox: '0 0 24 24', paths: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12'] },
   },
-  {
-    action: 'clear' as const,
-    label: '清空对话',
-    icon: { viewBox: '0 0 24 24', paths: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'] },
-  },
 ]
 
 watch(
