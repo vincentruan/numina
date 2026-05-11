@@ -59,13 +59,20 @@ export function getHomeAssets(limit = 5) {
   return http.get<Record<string, Asset[]>>('/dashboard/home-assets', { params: { limit } })
 }
 
+export function getHomeAssetsCategoryCounts(status: string) {
+  return http.get<Array<{ id: string; name: string; icon: string; count: number }>>(
+    `/dashboard/home-assets/${status}/categories`
+  )
+}
+
 export function getHomeAssetsPaginated(
   status: string,
   page: number = 1,
-  pageSize: number = 20
+  pageSize: number = 20,
+  categoryId?: string | null
 ) {
   return http.get<HomeAssetsPageResponse>(`/dashboard/home-assets/${status}`, {
-    params: { page, page_size: pageSize }
+    params: { page, page_size: pageSize, ...(categoryId ? { category_id: categoryId } : {}) }
   })
 }
 

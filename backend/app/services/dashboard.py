@@ -405,12 +405,50 @@ def get_home_assets(db: Session, user: User, limit: int = 5) -> dict:
     return result
 
 
+def get_home_assets_category_counts(db: Session, user: User, status: str) -> list[dict]:
+    """返回指定状态下各分类的资产数量，用于分类导航（不分页）"""
+    from app.models.category import Category
+
+    results = (
+        db.query(
+            Asset.category_id,
+            func.count(Asset.id).label("count"),
+        )
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived.is_(False),
+            Asset.status == status,
+            Asset.category_id.isnot(None),
+        )
+        .group_by(Asset.category_id)
+        .all()
+    )
+
+    if not results:
+        return []
+
+    category_ids = [r.category_id for r in results]
+    categories = db.query(Category).filter(Category.id.in_(category_ids)).all()
+    cat_map = {c.id: c for c in categories}
+
+    return [
+        {
+            "id": str(r.category_id),
+            "name": cat_map[r.category_id].name if r.category_id in cat_map else "",
+            "icon": cat_map[r.category_id].icon if r.category_id in cat_map else "",
+            "count": r.count,
+        }
+        for r in results
+    ]
+
+
 def get_home_assets_page(
     db: Session,
     user: User,
     status: str,
     page: int = 1,
     page_size: int = 20,
+    category_id: str | None = None,
 ) -> dict:
     """分页获取指定状态的资产列表"""
     import math
@@ -420,14 +458,21 @@ def get_home_assets_page(
 
     family_id = user.family_id
 
+    filters = [
+        Asset.family_id == family_id,
+        Asset.is_archived.is_(False),
+        Asset.status == status,
+    ]
+    if category_id:
+        try:
+            filters.append(Asset.category_id == int(category_id))
+        except ValueError:
+            pass  # invalid category_id format — ignore filter, return all
+
     query = (
         db.query(Asset)
         .options(joinedload(Asset.category), joinedload(Asset.tags))
-        .filter(
-            Asset.family_id == family_id,
-            Asset.is_archived == False,
-            Asset.status == status,
-        )
+        .filter(*filters)
         .order_by(Asset.updated_at.desc())
     )
 

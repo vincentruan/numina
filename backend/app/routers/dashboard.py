@@ -96,11 +96,28 @@ def get_home_assets(
     return dashboard_service.get_home_assets(db, user, limit)
 
 
+@router.get("/home-assets/{status}/categories")
+def get_home_assets_category_counts(
+    status: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """获取指定状态下各分类的资产数量（用于分类导航）"""
+    valid_statuses = ["in_use", "idle", "sold", "retired"]
+    if status not in valid_statuses:
+        raise AppError(
+            ErrorCode.DASHBOARD_INVALID_STATUS,
+            detail=f"Invalid status: {status}. Must be one of {valid_statuses}",
+        )
+    return dashboard_service.get_home_assets_category_counts(db, user, status)
+
+
 @router.get("/home-assets/{status}")
 def get_home_assets_paginated(
     status: str,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    category_id: str | None = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -111,7 +128,7 @@ def get_home_assets_paginated(
             ErrorCode.DASHBOARD_INVALID_STATUS,
             detail=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
-    return dashboard_service.get_home_assets_page(db, user, status, page, page_size)
+    return dashboard_service.get_home_assets_page(db, user, status, page, page_size, category_id)
 
 
 @router.get("/expiring-soon", response_model=list[ExpiringSoonItem])

@@ -42,6 +42,19 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const assetPageInfo = ref<Map<string, { total: number; total_pages: number; has_next: boolean; current: number }>>(new Map())
   // Current active status filter
   const activeAssetStatus = ref<string>('in_use')
+  // Current active category filter (null = all categories)
+  const activeAssetCategoryId = ref<string | null>(null)
+  // Category counts for nav (full counts from backend, not page-limited)
+  const categoryCounts = ref<Array<{ id: string; name: string; icon: string; count: number }>>([])
+
+  async function fetchCategoryCounts(status: string) {
+    try {
+      const res = await dashboardApi.getHomeAssetsCategoryCounts(status)
+      categoryCounts.value = res.data
+    } catch {
+      // non-critical
+    }
+  }
 
   async function fetchOverview() {
     const res = await dashboardApi.getOverview()
@@ -139,14 +152,17 @@ export const useDashboardStore = defineStore('dashboard', () => {
    * Fetch a specific page of assets for a given status
    * Implements server-side pagination with client-side cache management
    */
-  async function fetchAssetsPage(status: string, page: number = 1, pageSize: number = DEFAULT_PAGE_SIZE): Promise<void> {
+  async function fetchAssetsPage(status: string, page: number = 1, pageSize: number = DEFAULT_PAGE_SIZE, categoryId?: string): Promise<void> {
     if (assetListLoading.value) return
 
     assetListLoading.value = true
     activeAssetStatus.value = status
+    if (categoryId !== undefined) {
+      activeAssetCategoryId.value = categoryId || null
+    }
 
     try {
-      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize)
+      const res = await dashboardApi.getHomeAssetsPaginated(status, page, pageSize, activeAssetCategoryId.value)
       const data = res.data
 
       // Store page data in cache
@@ -195,8 +211,8 @@ export const useDashboardStore = defineStore('dashboard', () => {
     const keepPages = [
       currentPage - KEEP_PAGES_BEFORE,
       currentPage,
+      currentPage + 1,
       currentPage + KEEP_PAGES_AFTER,
-      currentPage + KEEP_PAGES_AFTER + 1,
     ].filter(p => p >= 1)
 
     // Create a new Map to ensure Vue reactivity updates
@@ -247,7 +263,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
     if (!info || !info.has_next || assetListLoading.value) return
 
     const nextPage = info.current + 1
-    await fetchAssetsPage(status, nextPage, assetPageSize)
+    await fetchAssetsPage(status, nextPage, assetPageSize, activeAssetCategoryId.value || undefined)
   }
 
   /**
@@ -269,6 +285,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       assetPage.value = 1
       assetListFinished.value = false
       activeAssetStatus.value = 'in_use'
+      activeAssetCategoryId.value = null
     }
   }
 
@@ -301,11 +318,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
     lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
     displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
-    assetPagesCache, assetPageInfo, activeAssetStatus,
+    assetPagesCache, assetPageInfo, activeAssetStatus, activeAssetCategoryId, categoryCounts,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
     fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll,
     fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets,
-    invalidateDashboard,
+    fetchCategoryCounts, invalidateDashboard,
   }
 })

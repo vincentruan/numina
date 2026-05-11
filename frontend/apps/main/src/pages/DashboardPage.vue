@@ -215,7 +215,6 @@ import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
-import { useCategoryStore } from '@/stores/category'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
@@ -233,7 +232,6 @@ const { t } = useI18n()
 const router = useRouter()
 
 const dashboardStore = useDashboardStore()
-const categoryStore = useCategoryStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
@@ -274,38 +272,15 @@ function onFabAction(action: 'add' | 'import') {
 }
 
 const overview = computed(() => dashboardStore.overview)
-const categories = computed(() => categoryStore.categories)
-
-// Filter and sort categories by asset count (descending)
+// Category counts from backend (full counts, not page-limited)
 const categoriesWithAssetCount = computed(() => {
-  const allAssets = dashboardStore.displayedAssets
-  const counts = new Map<string, number>()
-
-  // Count assets per category
-  allAssets.forEach(asset => {
-    const catId = asset.category_id
-    counts.set(catId, (counts.get(catId) || 0) + 1)
-  })
-
-  // Filter categories with assets and sort by count descending
-  return categories.value
-    .filter(cat => (counts.get(cat.id) ?? 0) > 0)
-    .map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      icon: cat.icon,
-      count: counts.get(cat.id) || 0
-    }))
+  return dashboardStore.categoryCounts
+    .map(c => ({ id: c.id, name: c.name, icon: c.icon, count: c.count }))
     .sort((a, b) => b.count - a.count)
 })
 
-// Filter displayed assets by selected category
-const filteredByCategoryAssets = computed(() => {
-  if (!activeCategoryId.value) {
-    return dashboardStore.displayedAssets
-  }
-  return dashboardStore.displayedAssets.filter(asset => asset.category_id === activeCategoryId.value)
-})
+// Asset list: displayedAssets is already filtered by backend (status + optional category)
+const filteredByCategoryAssets = computed(() => dashboardStore.displayedAssets)
 
 const statusLabelMap: Record<string, string> = {
   in_use: '服役中',
@@ -335,20 +310,28 @@ const sectionTitle = computed(() => {
 
 function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
+  const targetStatus = activeStatus.value || 'in_use'
   if (index === 0) {
     activeCategoryId.value = null  // "全部" tab
+    dashboardStore.resetAssetPagination(targetStatus)
+    dashboardStore.fetchAssetsPage(targetStatus, 1, 20, '')
   } else {
     const category = categoriesWithAssetCount.value[index - 1]
+    if (!category) return
     activeCategoryId.value = category.id
+    dashboardStore.resetAssetPagination(targetStatus)
+    dashboardStore.fetchAssetsPage(targetStatus, 1, 20, category.id)
   }
 }
 
 function onStatusSelect(status: string | null) {
   activeStatus.value = status
-  // Reset pagination and load first page for the new status
+  activeCategoryId.value = null
+  activeCategoryIndex.value = 0
   const targetStatus = status || 'in_use'
   dashboardStore.resetAssetPagination(targetStatus)
-  dashboardStore.fetchAssetsPage(targetStatus, 1, 20)
+  dashboardStore.fetchAssetsPage(targetStatus, 1, 20, '')
+  dashboardStore.fetchCategoryCounts(targetStatus)
 }
 
 // Selection mode functions
@@ -524,7 +507,7 @@ function handleScroll() {
   if (overviewCard) {
     const rect = overviewCard.getBoundingClientRect()
     // Show category nav when overview card is scrolled out of view
-    showCategoryNav.value = rect.bottom < 0 && categories.value.length > 1
+    showCategoryNav.value = rect.bottom < 0 && categoriesWithAssetCount.value.length > 0
   }
 }
 
@@ -553,11 +536,15 @@ async function onLoadMore() {
 }
 
 async function onRefresh() {
+  activeCategoryId.value = null
+  activeCategoryIndex.value = 0
   dashboardStore.resetAssetPagination()
   await dashboardStore.fetchAll()
-  // Reload first page after refresh
   const currentStatus = activeStatus.value || 'in_use'
-  await dashboardStore.fetchAssetsPage(currentStatus, 1, 20)
+  await Promise.all([
+    dashboardStore.fetchAssetsPage(currentStatus, 1, 20, undefined),
+    dashboardStore.fetchCategoryCounts(currentStatus),
+  ])
   if (authStore.user?.role === 'owner') {
     await choreStore.fetchPendingApprovals()
   }
@@ -568,9 +555,9 @@ onMounted(() => {
   // Fetch dashboard bundle first, then load first page of assets
   dashboardStore.fetchAll().then(() => {
     const initialStatus = activeStatus.value || 'in_use'
-    dashboardStore.fetchAssetsPage(initialStatus, 1, 20)
+    dashboardStore.fetchAssetsPage(initialStatus, 1, 20, undefined)
+    dashboardStore.fetchCategoryCounts(initialStatus)
   })
-  categoryStore.fetchCategories()
   if (authStore.user?.role === 'owner') {
     choreStore.fetchPendingApprovals()
   }
