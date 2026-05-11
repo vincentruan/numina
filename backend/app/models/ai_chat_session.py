@@ -2,7 +2,16 @@
 
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -11,7 +20,7 @@ from app.database import Base
 class AIChatSession(Base):
     __tablename__ = "ai_chat_sessions"
 
-    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
     family_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("families.id"), nullable=False, index=True
     )
@@ -21,13 +30,16 @@ class AIChatSession(Base):
     cached_file_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("cached_files.id"), nullable=True
     )
-    jsonl_path: Mapped[str] = mapped_column(
-        String(500), nullable=False
-    )  # Relative to CHAT_DIR
+    capability: Mapped[str] = mapped_column(String(32), nullable=False, default="chat")
+    title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    jsonl_path: Mapped[str] = mapped_column(String(512), nullable=False)
+    last_message_summary: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    last_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    has_attachments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Kept for backward compatibility — no longer written by agent
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_preview: Mapped[str | None] = mapped_column(
-        Text, nullable=True
-    )  # Last assistant message preview (first 100 chars)
+    last_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=func.now(), onupdate=func.now()

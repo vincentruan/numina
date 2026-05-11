@@ -131,6 +131,46 @@ class BackendClient:
     async def get_family_ai_config(self) -> dict:
         return await get_family_ai_config(self.family_id)
 
+    async def upsert_session(
+        self,
+        *,
+        session_id: str,
+        user_id: str | None,
+        capability: str,
+        jsonl_path: str,
+        last_model: str | None = None,
+    ) -> None:
+        await upsert_session(
+            self.family_id,
+            session_id=session_id,
+            user_id=user_id,
+            capability=capability,
+            jsonl_path=jsonl_path,
+            last_model=last_model,
+        )
+
+    async def update_session_summary(
+        self,
+        *,
+        session_id: str,
+        summary: str | None,
+        model: str | None = None,
+        status: str = "completed",
+    ) -> None:
+        await update_session_summary(
+            self.family_id,
+            session_id=session_id,
+            summary=summary,
+            model=model,
+            status=status,
+        )
+
+    async def list_sessions(self, *, limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
+        return await list_sessions(self.family_id, limit=limit, offset=offset)
+
+    async def get_session(self, session_id: str) -> dict | None:
+        return await get_session(self.family_id, session_id)
+
 
 def _make_headers(family_id: str) -> dict[str, str]:
     return {
@@ -363,3 +403,81 @@ async def get_ai_enabled_families() -> list[str]:
         )
         resp.raise_for_status()
         return _unwrap(resp)
+
+
+async def upsert_session(
+    family_id: str,
+    *,
+    session_id: str,
+    user_id: str | None,
+    capability: str,
+    jsonl_path: str,
+    last_model: str | None = None,
+) -> None:
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    payload: dict = {
+        "session_id": session_id,
+        "user_id": user_id,
+        "capability": capability,
+        "jsonl_path": jsonl_path,
+        "last_model": last_model,
+    }
+    resp = await client.post(
+        "/api/v1/internal/ai/sessions/upsert",
+        json=payload,
+        headers=_make_headers(validated_id),
+    )
+    resp.raise_for_status()
+
+
+async def update_session_summary(
+    family_id: str,
+    *,
+    session_id: str,
+    summary: str | None,
+    model: str | None = None,
+    status: str = "completed",
+) -> None:
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    payload: dict = {"summary": summary, "model": model, "status": status}
+    resp = await client.post(
+        f"/api/v1/internal/ai/sessions/{session_id}/summary",
+        json=payload,
+        headers=_make_headers(validated_id),
+    )
+    resp.raise_for_status()
+
+
+async def list_sessions(
+    family_id: str,
+    *,
+    limit: int = 20,
+    offset: int = 0,
+) -> tuple[list[dict], int]:
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    resp = await client.get(
+        "/api/v1/internal/ai/sessions",
+        params={"limit": limit, "offset": offset},
+        headers=_make_headers(validated_id),
+    )
+    resp.raise_for_status()
+    body = _unwrap(resp)
+    if isinstance(body, dict):
+        return body.get("sessions", []), body.get("total", 0)
+    return [], 0
+
+
+async def get_session(family_id: str, session_id: str) -> dict | None:
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    resp = await client.get(
+        f"/api/v1/internal/ai/sessions/{session_id}",
+        headers=_make_headers(validated_id),
+    )
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return _unwrap(resp)

@@ -5,8 +5,10 @@
 """
 
 import json
+from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import verify_agent_token
@@ -26,14 +28,14 @@ def _get_mock_user(family_id: str, db: Session) -> User:
     """为 agent 调用构造一个代理 User 对象（使用家庭 owner）。"""
     user = (
         db.query(User)
-        .filter(User.family_id == family_id, User.role == "owner", User.is_active == True)
+        .filter(User.family_id == family_id, User.role == "owner", User.is_active == True)  # noqa: E712
         .first()
     )
     if not user:
         # fallback: 取任意活跃成员
         user = (
             db.query(User)
-            .filter(User.family_id == family_id, User.is_active == True)
+            .filter(User.family_id == family_id, User.is_active == True)  # noqa: E712
             .first()
         )
     if not user:
@@ -105,7 +107,7 @@ def internal_get_liabilities(
     from app.models.liability import Liability
     liabilities = (
         db.query(Liability)
-        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .filter(Liability.family_id == family_id, Liability.is_active == True)  # noqa: E712
         .all()
     )
     return [
@@ -247,3 +249,127 @@ def internal_get_mcp_servers(
             "env_vars": env_vars,
         })
     return result
+
+
+# ---------------------------------------------------------------------------
+# AI Session CRUD — agent writes session metadata here instead of local SQLite
+# ---------------------------------------------------------------------------
+
+class SessionUpsertRequest(BaseModel):
+    session_id: str
+    user_id: str | None = None
+    capability: str
+    jsonl_path: str
+    last_model: str | None = None
+
+
+class SessionSummaryRequest(BaseModel):
+    summary: str | None = None
+    model: str | None = None
+    status: str = "completed"
+
+
+def _session_to_dict(s: "object") -> dict:
+    return {
+        "session_id": s.id,  # type: ignore[attr-defined]
+        "family_id": str(s.family_id),  # type: ignore[attr-defined]
+        "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
+        "capability": s.capability,  # type: ignore[attr-defined]
+        "title": s.title,  # type: ignore[attr-defined]
+        "status": s.status,  # type: ignore[attr-defined]
+        "last_message_summary": s.last_message_summary,  # type: ignore[attr-defined]
+        "last_model": s.last_model,  # type: ignore[attr-defined]
+        "has_attachments": s.has_attachments,  # type: ignore[attr-defined]
+        "created_at": s.created_at.isoformat() if s.created_at else None,  # type: ignore[attr-defined]
+        "updated_at": s.updated_at.isoformat() if s.updated_at else None,  # type: ignore[attr-defined]
+    }
+
+
+@router.post("/ai/sessions/upsert")
+def internal_upsert_session(
+    body: SessionUpsertRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    from app.models.ai_chat_session import AIChatSession
+
+    row = db.query(AIChatSession).filter(AIChatSession.id == body.session_id).first()
+    if row is None:
+        row = AIChatSession(
+            id=body.session_id,
+            family_id=int(family_id),
+            user_id=int(body.user_id) if body.user_id else None,
+            capability=body.capability,
+            jsonl_path=body.jsonl_path,
+            last_model=body.last_model,
+        )
+        db.add(row)
+    else:
+        if row.family_id != int(family_id):
+            raise HTTPException(status_code=403, detail="family_id mismatch")
+        row.updated_at = datetime.utcnow()
+        if body.last_model:
+            row.last_model = body.last_model
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/ai/sessions/{session_id}/summary")
+def internal_update_session_summary(
+    session_id: str,
+    body: SessionSummaryRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    from app.models.ai_chat_session import AIChatSession
+
+    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
+    if row is None or row.family_id != int(family_id):
+        raise HTTPException(status_code=404, detail="session not found")
+    if body.summary:
+        row.last_message_summary = body.summary[:200]
+    row.status = body.status
+    if body.model:
+        row.last_model = body.model
+    row.updated_at = datetime.utcnow()
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/ai/sessions")
+def internal_list_sessions(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    from app.models.ai_chat_session import AIChatSession
+
+    total = (
+        db.query(AIChatSession)
+        .filter(AIChatSession.family_id == int(family_id))
+        .count()
+    )
+    rows = (
+        db.query(AIChatSession)
+        .filter(AIChatSession.family_id == int(family_id))
+        .order_by(AIChatSession.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return {"sessions": [_session_to_dict(r) for r in rows], "total": total}
+
+
+@router.get("/ai/sessions/{session_id}")
+def internal_get_session(
+    session_id: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    from app.models.ai_chat_session import AIChatSession
+
+    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
+    if row is None or row.family_id != int(family_id):
+        raise HTTPException(status_code=404, detail="session not found")
+    return _session_to_dict(row)

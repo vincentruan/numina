@@ -20,28 +20,30 @@ async def lifespan(app: FastAPI):
     setup_schedules()
     scheduler.start()
 
-    # Initialise SQLite persistence (shared with DeerFlow checkpointer)
+    # Initialise DeerFlow persistence engine (checkpointer only — session metadata
+    # is now stored in backend via HTTP). Supports sqlite (default) and postgres
+    # via DEERFLOW_DB_URL env var.
     try:
         import os
 
-        from deerflow.persistence.engine import get_session_factory, init_engine
+        from deerflow.persistence.engine import init_engine
 
-        from routers.sessions import set_session_repo
-        from services.session_store import AiSessionRepository
-
-        db_dir = ".deer-flow/data"
-        db_path = os.path.join(db_dir, "deerflow.db")
-        await init_engine(
-            backend="sqlite",
-            url=f"sqlite+aiosqlite:///{db_path}",
-            sqlite_dir=db_dir,
-        )
-        sf = get_session_factory()
-        if sf is not None:
-            set_session_repo(AiSessionRepository(sf))
+        db_url = os.environ.get("DEERFLOW_DB_URL")
+        if db_url:
+            # Postgres or explicit URL (cluster deployments)
+            await init_engine(backend="postgres" if db_url.startswith("postgres") else "sqlite", url=db_url)
+        else:
+            # Default: local SQLite for single-node deployments
+            db_dir = ".deer-flow/data"
+            db_path = os.path.join(db_dir, "deerflow.db")
+            await init_engine(
+                backend="sqlite",
+                url=f"sqlite+aiosqlite:///{db_path}",
+                sqlite_dir=db_dir,
+            )
     except Exception as _e:
         import logging
-        logging.getLogger(__name__).warning("Session DB init failed: %s", _e)
+        logging.getLogger(__name__).warning("DeerFlow engine init failed: %s", _e)
 
     yield
 
