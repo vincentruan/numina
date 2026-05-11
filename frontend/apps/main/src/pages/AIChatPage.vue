@@ -1,7 +1,12 @@
 <template>
   <div class="ai-chat-page" :class="{ 'theme-light': isLight }">
-    <!-- Fixed top bar: [history/sidebar] [title] [new chat] -->
+    <!-- Fixed top bar: [back] [history/sidebar] [title] [new chat] -->
     <div class="chat-header">
+      <button class="header-btn" :aria-label="t('common.back')" @click="router.back()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
       <button class="header-btn" aria-label="会话历史" @click="showHistory = true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
@@ -302,7 +307,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -379,6 +384,7 @@ interface ToolTimelineItem {
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const aiStore = useAIStore()
 const messages = ref<Message[]>([])
 const inputText = ref('')
