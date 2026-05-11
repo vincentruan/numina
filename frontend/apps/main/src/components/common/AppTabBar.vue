@@ -27,21 +27,18 @@ const authStore = useAuthStore()
 
 const isOwner = computed(() => authStore.user?.role === 'owner')
 
-const routeToTab: Record<string, string> = {
-  '/': 'dashboard',
-  '/wishes': 'wishes',
-  '/liabilities': 'liabilities',
-  '/baby': 'baby',
-  '/settings': 'settings',
-  '/ai': 'ai',
-}
-
 const activeTab = computed(() => {
   const path = route.path
-  if (path.startsWith('/ai')) return 'ai'
-  if (path.startsWith('/settings')) return 'settings'
-  if (path.startsWith('/family')) return 'settings'
-  return routeToTab[path] ?? 'dashboard'
+  if (path === '/ai' || path.startsWith('/ai/')) return 'ai'
+  if (path === '/settings' || path.startsWith('/settings/')) return 'settings'
+  if (path === '/family' || path.startsWith('/family/')) return 'settings'
+  if (path === '/liabilities' || path.startsWith('/liabilities/')) return 'liabilities'
+  if (path === '/wishes' || path.startsWith('/wishes/')) return 'wishes'
+  if (path === '/baby' || path.startsWith('/baby/')) return 'baby'
+  if (path.startsWith('/blind-box/')) return 'baby'
+  if (path === '/chore-approvals') return 'baby'
+  if (path === '/wish-review') return 'baby'
+  return 'dashboard'
 })
 
 const tabToRoute: Record<string, string> = {
