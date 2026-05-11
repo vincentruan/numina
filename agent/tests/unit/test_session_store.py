@@ -98,6 +98,7 @@ class TestAiSessionRepository:
                 summary="This is a summary",
                 model="claude-3",
                 status="completed",
+                title=None,
             )
 
     async def test_update_summary_swallows_backend_error(self, repo):

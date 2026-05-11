@@ -55,6 +55,7 @@ class AiSessionRepository:
         summary: str | None,
         model: str | None = None,
         status: str = "completed",
+        title: str | None = None,
     ) -> None:
         try:
             await self._client.update_session_summary(
@@ -62,6 +63,7 @@ class AiSessionRepository:
                 summary=summary,
                 model=model,
                 status=status,
+                title=title,
             )
         except Exception as e:
             logger.warning("session summary update failed for %s: %s", session_id, e)

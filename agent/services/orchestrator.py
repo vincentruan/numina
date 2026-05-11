@@ -166,6 +166,10 @@ class Orchestrator:
         effective_thread_id = thread_id if thread_id is not None else audit_id
         start_ms = int(time.monotonic() * 1000)
         error_type: str | None = None
+        answer_parts: list[str] = []
+        model_name: str | None = None
+        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{effective_thread_id}.jsonl"
+        session_started = False
 
         # ── 1. Fetch AI config & build policy ──────────────────────────
         client = BackendClient(family_id=family_id)
@@ -175,6 +179,8 @@ class Orchestrator:
             logger.error("[orchestrator] stream_dispatch fetch ai_config failed: %s", e)
             yield "暂时无法完成分析，请稍后重试。"
             return
+
+        model_name = ai_config.get("ai_model_id")
 
         policy = CapabilityPolicy(
             ai_enabled=ai_config.get("ai_enabled", False),
@@ -195,7 +201,34 @@ class Orchestrator:
         # ── 4. Redact PII ──────────────────────────────────────────────
         redacted_context = pii_redactor.redact(context)
 
-        # ── 5. Load thinking flag ──────────────────────────────────────
+        # ── 5. Journal: session start + user message ───────────────────
+        session_journal.write_session_start(
+            family_id=family_id,
+            session_id=effective_thread_id,
+            user_id=user_id,
+            capability=capability,
+            model_name=model_name,
+            jsonl_path=jsonl_path,
+        )
+        session_started = True
+        redacted_free_text = redacted_context.free_text or ""
+        if redacted_free_text:
+            session_journal.write_user_message(
+                family_id=family_id,
+                session_id=effective_thread_id,
+                user_id=user_id,
+                content=redacted_free_text,
+            )
+        _fire_and_forget(self._upsert_session(
+            session_id=effective_thread_id,
+            family_id=family_id,
+            user_id=user_id,
+            capability=capability,
+            jsonl_path=jsonl_path,
+            model_name=model_name,
+        ))
+
+        # ── 6. Load thinking flag ──────────────────────────────────────
         skill_config = skill_loader.load(capability)
         thinking_supported = ai_config.get("thinking_supported", False)
         enable_thinking = (
@@ -204,7 +237,7 @@ class Orchestrator:
             else skill_config.thinking and thinking_supported
         )
 
-        # ── 6. DeerFlow stream dispatch ────────────────────────────────
+        # ── 7. DeerFlow stream dispatch ────────────────────────────────
         try:
             adapter = _create_family_adapter(family_id, ai_config)
             async for chunk in adapter.stream_dispatch(
@@ -213,6 +246,9 @@ class Orchestrator:
                 effective_thread_id,
                 enable_thinking=enable_thinking,
             ):
+                text = chunk[6:] if chunk.startswith("[TEXT]") else (None if chunk.startswith("[THINK]") else chunk)
+                if text:
+                    answer_parts.append(text)
                 yield chunk
             audit_logger.log_call(
                 AuditEntry(
@@ -242,6 +278,40 @@ class Orchestrator:
                     error_type=error_type,
                 )
             )
+        finally:
+            if session_started:
+                duration_ms = int(time.monotonic() * 1000) - start_ms
+                final_answer = "".join(answer_parts)
+                if final_answer:
+                    redacted_answer, _ = pii_redactor.redact_text(final_answer)
+                else:
+                    redacted_answer = ""
+                session_journal.write_assistant_message(
+                    family_id=family_id,
+                    session_id=effective_thread_id,
+                    content=redacted_answer,
+                    model_name=model_name,
+                )
+                session_journal.write_session_end(
+                    family_id=family_id,
+                    session_id=effective_thread_id,
+                    success=error_type is None,
+                    duration_ms=duration_ms,
+                )
+                _fire_and_forget(self._update_session_summary(
+                    session_id=effective_thread_id,
+                    family_id=family_id,
+                    summary=redacted_answer[:200] if redacted_answer else None,
+                    model=model_name,
+                    status="completed" if error_type is None else "error",
+                ))
+                if redacted_free_text and thread_id is None:
+                    _fire_and_forget(self._generate_title(
+                        session_id=effective_thread_id,
+                        family_id=family_id,
+                        first_user_message=redacted_free_text,
+                        ai_config=ai_config,
+                    ))
 
     async def stream_dispatch_events(
         self,
@@ -289,6 +359,10 @@ class Orchestrator:
         success = True
         error_type: str | None = None
         model_name: str | None = None
+        redacted_free_text: str = ""
+        redacted_answer: str = ""
+        ai_config: dict = {}
+        session_started = False
         jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{effective_thread_id}.jsonl"
 
         yield builder.phase("connecting").to_ndjson()
@@ -331,6 +405,7 @@ class Orchestrator:
                 model_name=model_name,
                 jsonl_path=jsonl_path,
             )
+            session_started = True
             redacted_free_text = redacted_context.free_text or ""
             if redacted_free_text:
                 session_journal.write_user_message(
@@ -388,30 +463,38 @@ class Orchestrator:
             yield builder.error("暂时无法完成分析，请稍后重试。").to_ndjson()
         finally:
             duration_ms = int(time.monotonic() * 1000) - start_ms
-            final_answer = "".join(answer_parts)
-            if final_answer:
-                redacted_answer, _ = pii_redactor.redact_text(final_answer)
-                session_journal.write_assistant_message(
+            if session_started:
+                final_answer = "".join(answer_parts)
+                if final_answer:
+                    redacted_answer, _ = pii_redactor.redact_text(final_answer)
+                    session_journal.write_assistant_message(
+                        family_id=family_id,
+                        session_id=effective_thread_id,
+                        content=redacted_answer,
+                        model_name=model_name,
+                    )
+                else:
+                    redacted_answer = ""
+                session_journal.write_session_end(
                     family_id=family_id,
                     session_id=effective_thread_id,
-                    content=redacted_answer,
-                    model_name=model_name,
+                    success=success and error_type is None,
+                    duration_ms=duration_ms,
                 )
-            else:
-                redacted_answer = ""
-            session_journal.write_session_end(
-                family_id=family_id,
-                session_id=effective_thread_id,
-                success=success and error_type is None,
-                duration_ms=duration_ms,
-            )
-            _fire_and_forget(self._update_session_summary(
-                session_id=effective_thread_id,
-                family_id=family_id,
-                summary=redacted_answer[:200] if redacted_answer else None,
-                model=model_name,
-                status="completed" if success and error_type is None else "error",
-            ))
+                _fire_and_forget(self._update_session_summary(
+                    session_id=effective_thread_id,
+                    family_id=family_id,
+                    summary=redacted_answer[:200] if redacted_answer else None,
+                    model=model_name,
+                    status="completed" if success and error_type is None else "error",
+                ))
+                if redacted_free_text and success and error_type is None and thread_id is None:
+                    _fire_and_forget(self._generate_title(
+                        session_id=effective_thread_id,
+                        family_id=family_id,
+                        first_user_message=redacted_free_text,
+                        ai_config=ai_config,
+                    ))
             audit_logger.log_call(
                 AuditEntry(
                     audit_id=audit_id,
@@ -456,16 +539,16 @@ class Orchestrator:
         model_name: str | None,
     ) -> None:
         try:
-            from routers.sessions import _session_repo
-            if _session_repo is not None:
-                await _session_repo.upsert(
-                    session_id=session_id,
-                    family_id=family_id,
-                    user_id=user_id,
-                    capability=capability,
-                    jsonl_path=jsonl_path,
-                    last_model=model_name,
-                )
+            from services.session_store import AiSessionRepository
+            repo = AiSessionRepository(family_id)
+            await repo.upsert(
+                session_id=session_id,
+                family_id=family_id,
+                user_id=user_id,
+                capability=capability,
+                jsonl_path=jsonl_path,
+                last_model=model_name,
+            )
         except Exception as e:
             logger.warning("[orchestrator] session upsert failed session=%s: %s", session_id, e)
 
@@ -477,19 +560,52 @@ class Orchestrator:
         summary: str | None,
         model: str | None,
         status: str,
+        title: str | None = None,
     ) -> None:
         try:
-            from routers.sessions import _session_repo
-            if _session_repo is not None:
-                await _session_repo.update_summary(
-                    session_id=session_id,
-                    family_id=family_id,
-                    summary=summary,
-                    model=model,
-                    status=status,
-                )
+            from services.session_store import AiSessionRepository
+            repo = AiSessionRepository(family_id)
+            await repo.update_summary(
+                session_id=session_id,
+                family_id=family_id,
+                summary=summary,
+                model=model,
+                status=status,
+                title=title,
+            )
         except Exception as e:
             logger.warning("[orchestrator] session summary update failed session=%s: %s", session_id, e)
+
+    async def _generate_title(
+        self,
+        *,
+        session_id: str,
+        family_id: str,
+        first_user_message: str,
+        ai_config: dict,
+    ) -> None:
+        """Fire-and-forget: generate a short session title via LLM and persist it."""
+        try:
+            from core.llm import LLMClient
+            provider = ai_config.get("ai_provider", "")
+            api_key = ai_config.get("api_key", "")
+            model_id = ai_config.get("ai_model_id", "")
+            if not (provider and api_key and model_id):
+                return
+            llm = LLMClient(provider=provider, api_key=api_key, model_id=model_id)
+            prompt = f"请用10字以内概括以下问题的主题，只输出标题，不要标点：{first_user_message[:200]}"
+            title = (await llm.complete(prompt, max_tokens=30)).strip()
+            if title:
+                from services.session_store import AiSessionRepository
+                repo = AiSessionRepository(family_id)
+                await repo.update_summary(
+                    session_id=session_id,
+                    family_id=family_id,
+                    summary=None,
+                    title=title[:50],
+                )
+        except Exception as e:
+            logger.warning("[orchestrator] title generation failed session=%s: %s", session_id, e)
 
     async def _build_context(
         self,

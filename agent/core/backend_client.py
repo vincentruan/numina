@@ -156,6 +156,7 @@ class BackendClient:
         summary: str | None,
         model: str | None = None,
         status: str = "completed",
+        title: str | None = None,
     ) -> None:
         await update_session_summary(
             self.family_id,
@@ -163,6 +164,7 @@ class BackendClient:
             summary=summary,
             model=model,
             status=status,
+            title=title,
         )
 
     async def list_sessions(self, *, limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
@@ -438,10 +440,13 @@ async def update_session_summary(
     summary: str | None,
     model: str | None = None,
     status: str = "completed",
+    title: str | None = None,
 ) -> None:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
     payload: dict = {"summary": summary, "model": model, "status": status}
+    if title is not None:
+        payload["title"] = title
     resp = await client.post(
         f"/api/v1/internal/ai/sessions/{session_id}/summary",
         json=payload,
