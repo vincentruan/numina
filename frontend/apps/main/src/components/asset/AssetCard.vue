@@ -4,7 +4,7 @@
     :class="{ 'selection-mode': selectable, 'selected': selected, 'syncing': syncing }"
     :aria-disabled="syncing ? 'true' : undefined"
     role="listitem"
-    :aria-label="`${asset.name}, ${statusText}, 当前价值 ${formatPrice(asset.current_value)}${syncing ? ' (同步中)' : ''}`"
+    :aria-label="t('assetCard.ariaLabel', { name: asset.name, status: statusText, value: formatPrice(asset.current_value) }) + (syncing ? t('assetCard.ariaSyncing') : '')"
     tabindex="0"
     @click="handleClick"
     @touchstart="startLongPress"
@@ -16,7 +16,7 @@
   >
     <!-- Syncing indicator badge -->
     <div v-if="syncing" class="syncing-badge" aria-hidden="true">
-      <van-tag type="warning">同步中</van-tag>
+      <van-tag type="warning">{{ t('assetCard.syncing') }}</van-tag>
     </div>
     <div v-if="selectable" class="selection-overlay" aria-hidden="true">
       <van-checkbox
@@ -29,7 +29,7 @@
       type="checkbox"
       class="sr-only"
       :checked="selected"
-      :aria-label="`选择 ${asset.name}`"
+      :aria-label="t('assetCard.selectAriaLabel', { name: asset.name })"
       tabindex="-1"
       @change="$emit('update:selected', ($event.target as HTMLInputElement).checked)"
     />
@@ -49,23 +49,23 @@
         <van-tag :type="statusType" size="medium">{{ statusText }}</van-tag>
       </div>
       <div class="card-row-category">
-        <span class="card-category-text">{{ asset.category?.name || '未分类' }}</span>
-        <span v-if="daysUsed > 0" class="card-days">已使用 {{ daysUsed }} 天</span>
+        <span class="card-category-text">{{ asset.category?.name || t('assetCard.uncategorized') }}</span>
+        <span v-if="daysUsed > 0" class="card-days">{{ t('assetCard.daysUsed', { days: daysUsed }) }}</span>
       </div>
       <div class="card-row-prices">
         <div class="price-item">
-          <span class="price-label">购入</span>
+          <span class="price-label">{{ t('assetCard.purchaseLabel') }}</span>
           <span class="price-value">{{ formatPrice(asset.purchase_price) }}</span>
         </div>
         <div class="price-item">
-          <span class="price-label">当前</span>
+          <span class="price-label">{{ t('assetCard.currentLabel') }}</span>
           <span class="price-value current">{{ formatPrice(asset.current_value) }}</span>
         </div>
       </div>
       <div class="card-row-bottom">
           <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
             <van-icon name="clock-o" size="12" aria-hidden="true" />
-            日均 {{ currency.format(asset.daily_cost) }}
+            {{ t('assetCard.dailyCost', { cost: currency.format(asset.daily_cost) }) }}
           </span>
         <span v-else class="card-daily-cost-placeholder" />
       </div>
@@ -75,6 +75,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
 import { useAssetStore } from '@/stores/asset'
@@ -94,6 +95,7 @@ const emit = defineEmits<{
 
 const assetStore = useAssetStore()
 const currency = useCurrency()
+const { t } = useI18n()
 const imageError = ref(false)
 
 // Check if this asset is currently syncing
@@ -162,15 +164,15 @@ function formatPrice(price: number | null | undefined): string {
   return currency.format(price)
 }
 
-const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
-  in_use: { text: '服役中', type: 'success' },
-  idle: { text: '闲置', type: 'warning' },
-  sold: { text: '已出售', type: 'default' },
-  retired: { text: '已退役', type: 'danger' }
-}
+const statusMap = computed<Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }>>(() => ({
+  in_use: { text: t('asset.inUse'), type: 'success' },
+  idle: { text: t('asset.idle'), type: 'warning' },
+  sold: { text: t('asset.sold'), type: 'default' },
+  retired: { text: t('asset.retired'), type: 'danger' },
+}))
 
-const statusText = computed(() => statusMap[props.asset.status]?.text || props.asset.status)
-const statusType = computed(() => statusMap[props.asset.status]?.type || 'default')
+const statusText = computed(() => statusMap.value[props.asset.status]?.text || props.asset.status)
+const statusType = computed(() => statusMap.value[props.asset.status]?.type || 'default')
 </script>
 
 <style scoped>

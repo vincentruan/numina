@@ -2,7 +2,7 @@
   <van-tabbar :model-value="activeTab" class="app-tabbar" @change="onTabChange">
     <van-tabbar-item name="dashboard" icon="chart-trending-o">{{ t('nav.dashboard') }}</van-tabbar-item>
     <van-tabbar-item name="wishes" icon="star-o">{{ t('nav.wishes') }}</van-tabbar-item>
-    <van-tabbar-item name="ai" aria-label="AI 智能助手">
+    <van-tabbar-item name="ai" :aria-label="t('settings.aiAssistant')">
       <template #icon="{ active: isActive }">
         <AIBrainIcon :active="isActive" />
       </template>

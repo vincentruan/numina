@@ -3,7 +3,7 @@
     <!-- Month navigation -->
     <div class="cal-header">
       <button class="nav-btn" @click="prevMonth">‹</button>
-      <span class="cal-title">{{ year }}年{{ month }}月</span>
+      <span class="cal-title">{{ t('calendar.monthTitle', { year, month }) }}</span>
       <button class="nav-btn" @click="nextMonth">›</button>
     </div>
 
@@ -53,21 +53,21 @@
 
     <!-- Legend -->
     <div class="cal-legend">
-      <span class="legend-item"><span class="dot dot-chore" />打卡</span>
-      <span class="legend-item"><span class="dot dot-wish" />心愿</span>
-      <span class="legend-item"><span class="dot dot-milestone" />成就</span>
+      <span class="legend-item"><span class="dot dot-chore" />{{ t('calendar.legendChore') }}</span>
+      <span class="legend-item"><span class="dot dot-wish" />{{ t('calendar.legendWish') }}</span>
+      <span class="legend-item"><span class="dot dot-milestone" />{{ t('calendar.legendMilestone') }}</span>
     </div>
 
     <!-- Stats bar -->
     <div class="cal-stats">
-      <span>打卡 {{ monthStats.totalChores }}次</span>
+      <span>{{ t('calendar.statsChores', { count: monthStats.totalChores }) }}</span>
       <span class="stats-sep">·</span>
-      <span>心愿 {{ monthStats.totalWishes }}个</span>
+      <span>{{ t('calendar.statsWishes', { count: monthStats.totalWishes }) }}</span>
       <span class="stats-sep">·</span>
-      <span>成就 {{ monthStats.totalMilestones }}个</span>
+      <span>{{ t('calendar.statsMilestones', { count: monthStats.totalMilestones }) }}</span>
       <template v-if="showCompletionRate">
         <span class="stats-sep">·</span>
-        <span class="stats-rate">完成率 {{ monthStats.completionRate }}%</span>
+        <span class="stats-rate">{{ t('calendar.statsRate', { rate: monthStats.completionRate }) }}</span>
       </template>
     </div>
   </div>
@@ -76,6 +76,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { type CalendarDaySummary, type CalendarMonthResponse } from '@/api/calendar'
 
 const props = defineProps<{
@@ -115,6 +116,7 @@ function isDark(day: CalendarDaySummary): boolean {
 }
 
 const router = useRouter()
+const { t, tm } = useI18n()
 
 const today = new Date()
 const todayStr = today.toISOString().slice(0, 10)
@@ -124,7 +126,7 @@ const month = ref(today.getMonth() + 1)
 const days = ref<CalendarDaySummary[]>([])
 const loading = ref(false)
 
-const weekdays = ['日', '一', '二', '三', '四', '五', '六']
+const weekdays = computed(() => tm('calendar.weekdays') as string[])
 
 const leadingBlanks = computed(() => {
   const first = new Date(year.value, month.value - 1, 1)
@@ -161,7 +163,7 @@ async function loadMonth() {
   loading.value = true
   try {
     const res = await props.fetchMonth(year.value, month.value)
-    days.value = res.days
+    days.value = res.days ?? []
   } catch {
     days.value = []
   } finally {

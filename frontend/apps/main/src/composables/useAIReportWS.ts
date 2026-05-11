@@ -1,9 +1,11 @@
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createWsTicket } from '@/api/ai'
 
 export type WSStatus = 'idle' | 'connecting' | 'analyzing' | 'completed' | 'error'
 
 export function useAIReportWS() {
+  const { t } = useI18n()
   const status = ref<WSStatus>('idle')
   const progressMessage = ref('')
   const report = ref<Record<string, unknown> | null>(null)
@@ -26,13 +28,13 @@ export function useAIReportWS() {
         ws?.close()
         settle(() => {
           status.value = 'error'
-          errorMessage.value = '请求超时，请稍后重试'
-          reject(new Error('请求超时'))
+          errorMessage.value = t('wsErrors.timeout')
+          reject(new Error(t('wsErrors.timeoutShort')))
         })
       }, 120_000)
 
       status.value = 'connecting'
-      progressMessage.value = '正在连接...'
+      progressMessage.value = t('wsErrors.connecting')
 
       // Exchange JWT for a one-time ticket, then open WS with ticket
       createWsTicket()
@@ -69,8 +71,8 @@ export function useAIReportWS() {
             clearTimeout(timeoutId)
             settle(() => {
               status.value = 'error'
-              errorMessage.value = '连接失败'
-              reject(new Error('WebSocket 连接失败'))
+              errorMessage.value = t('wsErrors.connectionFailed')
+              reject(new Error(t('wsErrors.wsConnectionFailed')))
             })
           }
 
@@ -79,8 +81,8 @@ export function useAIReportWS() {
             if (status.value === 'connecting' || status.value === 'analyzing') {
               settle(() => {
                 status.value = 'error'
-                errorMessage.value = '连接中断'
-                reject(new Error('连接中断'))
+                errorMessage.value = t('wsErrors.connectionInterrupted')
+                reject(new Error(t('wsErrors.connectionInterrupted')))
               })
             }
           }
@@ -89,7 +91,7 @@ export function useAIReportWS() {
           clearTimeout(timeoutId)
           settle(() => {
             status.value = 'error'
-            errorMessage.value = err?.response?.data?.detail || '鉴权失败'
+            errorMessage.value = err?.response?.data?.detail || t('wsErrors.authFailed')
             reject(err)
           })
         })

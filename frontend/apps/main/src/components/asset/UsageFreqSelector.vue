@@ -14,16 +14,21 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+
 defineProps<{ modelValue: string }>()
 defineEmits<{ 'update:modelValue': [value: string] }>()
 
-const options = [
-  { value: 'daily',   icon: 'clock-o',      label: '每天' },
-  { value: 'weekly',  icon: 'calendar-o',   label: '每周' },
-  { value: 'monthly', icon: 'notes-o',      label: '每月' },
-  { value: 'rarely',  icon: 'pause-circle-o', label: '偶尔' },
-  { value: 'idle',    icon: 'bag-o',        label: '闲置' },
-]
+const { t } = useI18n()
+
+const options = computed(() => [
+  { value: 'daily',   icon: 'clock-o',        label: t('usageFreq.daily') },
+  { value: 'weekly',  icon: 'calendar-o',     label: t('usageFreq.weekly') },
+  { value: 'monthly', icon: 'notes-o',        label: t('usageFreq.monthly') },
+  { value: 'rarely',  icon: 'pause-circle-o', label: t('usageFreq.rarely') },
+  { value: 'idle',    icon: 'bag-o',          label: t('usageFreq.idle') },
+])
 </script>
 
 <style scoped>

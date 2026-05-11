@@ -3,7 +3,7 @@
     class="gift-card"
     :class="{ surprise: gift.is_surprise, bonus: gift.is_bonus }"
     role="article"
-    :aria-label="`${gift.gift_emoji ?? '🎁'} ${gift.gift_name}，${gift.is_surprise ? '超预期惊喜，' : ''}${statusText}`"
+    :aria-label="`${gift.gift_emoji ?? '🎁'} ${gift.gift_name}，${gift.is_surprise ? t('blindBox.surpriseAriaPrefix') : ''}${statusText}`"
   >
     <div class="gift-card-left">
       <span class="gift-emoji" aria-hidden="true">{{ gift.gift_emoji ?? '🎁' }}</span>
@@ -11,9 +11,9 @@
     <div class="gift-card-body">
       <div class="gift-card-name">{{ gift.gift_name }}</div>
       <div class="gift-card-meta">
-        <span class="coins-spent">花费 {{ gift.coins_spent }} 金币</span>
-        <span v-if="gift.is_surprise" class="badge surprise-badge" aria-hidden="true">✨ 惊喜</span>
-        <span v-if="gift.is_bonus" class="badge bonus-badge" aria-hidden="true">🎀 免费</span>
+        <span class="coins-spent">{{ t('blindBox.coinsSpent', { coins: gift.coins_spent }) }}</span>
+        <span v-if="gift.is_surprise" class="badge surprise-badge" aria-hidden="true">{{ t('blindBox.surpriseLabel') }}</span>
+        <span v-if="gift.is_bonus" class="badge bonus-badge" aria-hidden="true">{{ t('blindBox.bonusLabel') }}</span>
       </div>
       <div class="gift-card-date">{{ formatDate(gift.draw_at) }}</div>
     </div>
@@ -27,12 +27,14 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BlindBoxDraw } from '@/types/blindBox'
 
+const { t } = useI18n()
 const props = defineProps<{ gift: BlindBoxDraw }>()
 
 const statusText = computed(() =>
-  props.gift.status === 'fulfilled' ? '已兑现' : '待兑现',
+  props.gift.status === 'fulfilled' ? t('blindBox.statusFulfilled') : t('blindBox.statusPending'),
 )
 
 function formatDate(dateStr: string) {

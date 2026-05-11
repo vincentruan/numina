@@ -1,5 +1,5 @@
 <template>
-  <van-cell class="member-card" :title="member.display_name" :label="member.username ? '@' + member.username : (member.role === 'child' ? '儿童账户' : '')">
+  <van-cell class="member-card" :title="member.display_name" :label="member.username ? '@' + member.username : (member.role === 'child' ? t('memberCard.childAccount') : '')">
     <template #icon>
       <div class="avatar" :style="{ background: member.avatar_color || 'var(--color-primary)' }">
         {{ member.display_name.charAt(0) }}
@@ -7,14 +7,17 @@
     </template>
     <template #value>
       <van-tag :type="member.role === 'owner' ? 'primary' : 'default'" size="medium">
-        {{ member.role === 'owner' ? '管理员' : '成员' }}
+        {{ member.role === 'owner' ? t('memberCard.owner') : t('memberCard.member') }}
       </van-tag>
     </template>
   </van-cell>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { User } from '@/types'
+
+const { t } = useI18n()
 
 defineProps<{
   member: User

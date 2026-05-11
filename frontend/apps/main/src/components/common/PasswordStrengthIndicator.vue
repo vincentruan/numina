@@ -14,10 +14,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   password: string
 }>()
+
+const { t } = useI18n()
 
 // Password strength calculation
 const strengthLevel = computed(() => {
@@ -54,10 +57,10 @@ const strengthClass = computed(() => {
 
 const strengthText = computed(() => {
   const level = strengthLevel.value
-  if (level === 1) return '弱'
-  if (level === 2) return '一般'
-  if (level === 3) return '良好'
-  return '强'
+  if (level === 1) return t('passwordStrength.weak')
+  if (level === 2) return t('passwordStrength.fair')
+  if (level === 3) return t('passwordStrength.good')
+  return t('passwordStrength.strong')
 })
 </script>
 

@@ -1,10 +1,12 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { showFailToast } from 'vant'
+import i18n from '@/i18n'
 import * as choreApi from '@/api/chores'
 
 export const useChoreStore = defineStore('chore', () => {
   const pendingApprovals = ref<choreApi.PendingApprovalInstance[]>([])
+  const { t } = i18n.global
 
   const pendingCount = computed(() => pendingApprovals.value.length)
 
@@ -13,7 +15,7 @@ export const useChoreStore = defineStore('chore', () => {
       const items = await choreApi.getPendingApprovals()
       pendingApprovals.value = items
     } catch {
-      showFailToast('加载待审批家务失败')
+      showFailToast(t('choreStore.loadFailed'))
     }
   }
 
@@ -33,7 +35,7 @@ export const useChoreStore = defineStore('chore', () => {
           pendingApprovals.value.splice(idx, 0, removed)
         }
       }
-      showFailToast('审批失败，请重试')
+      showFailToast(t('choreStore.approveFailed'))
     }
   }
 
@@ -53,7 +55,7 @@ export const useChoreStore = defineStore('chore', () => {
           pendingApprovals.value.splice(idx, 0, removed)
         }
       }
-      showFailToast('操作失败，请重试')
+      showFailToast(t('choreStore.operationFailed'))
     }
   }
 

@@ -17,7 +17,11 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { StatesSummaryResponse } from '@/types'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   summary: StatesSummaryResponse | null
@@ -28,13 +32,13 @@ const emit = defineEmits<{
   select: [status: string | null]
 }>()
 
-const statusList: { key: string | null; label: string }[] = [
-  { key: null, label: '全部' },
-  { key: 'in_use', label: '服役中' },
-  { key: 'idle', label: '闲置' },
-  { key: 'sold', label: '已出售' },
-  { key: 'retired', label: '已退役' }
-]
+const statusList = computed<{ key: string | null; label: string }[]>(() => [
+  { key: null, label: t('statusGrid.all') },
+  { key: 'in_use', label: t('statusGrid.inUse') },
+  { key: 'idle', label: t('statusGrid.idle') },
+  { key: 'sold', label: t('statusGrid.sold') },
+  { key: 'retired', label: t('statusGrid.retired') },
+])
 
 function getCount(status: string | null): number {
   if (status === null) {

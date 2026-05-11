@@ -4,23 +4,26 @@
       <div class="box" :class="{ shake: animating, open: revealed }">
         <span class="box-emoji" aria-hidden="true">{{ revealed ? (gift?.gift_emoji ?? '🎁') : '📦' }}</span>
       </div>
-      <div v-if="!animating && !revealed" class="tap-hint">点击抽奖</div>
-      <div v-if="animating" class="loading-hint">抽奖中...</div>
+      <div v-if="!animating && !revealed" class="tap-hint">{{ t('blindBoxDraw.tapHint') }}</div>
+      <div v-if="animating" class="loading-hint">{{ t('blindBoxDraw.drawing') }}</div>
     </div>
 
     <transition name="reveal">
-      <div v-if="revealed && gift" class="gift-reveal" role="alert" :aria-label="`恭喜！抽到了 ${gift.gift_name}`">
+      <div v-if="revealed && gift" class="gift-reveal" role="alert" :aria-label="t('blindBoxDraw.giftRevealAriaLabel', { name: gift.gift_name })">
         <div class="gift-emoji-large" aria-hidden="true">{{ gift.gift_emoji ?? '🎁' }}</div>
         <div class="gift-name">{{ gift.gift_name }}</div>
-        <div v-if="gift.is_surprise" class="surprise-badge" aria-label="超预期惊喜">✨ 超预期惊喜！</div>
-        <div v-if="gift.is_bonus" class="bonus-badge" aria-label="免费抽奖">🎀 免费抽奖</div>
+        <div v-if="gift.is_surprise" class="surprise-badge">{{ t('blindBoxDraw.surpriseBadge') }}</div>
+        <div v-if="gift.is_bonus" class="bonus-badge">{{ t('blindBoxDraw.bonusBadge') }}</div>
       </div>
     </transition>
   </div>
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import type { BlindBoxDraw } from '@/types/blindBox'
+
+const { t } = useI18n()
 
 defineProps<{
   animating: boolean

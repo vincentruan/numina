@@ -1,7 +1,7 @@
 <template>
   <div class="category-grid">
     <div v-if="physicalCategories.length" class="category-group">
-      <div class="group-label">实物资产</div>
+      <div class="group-label">{{ t('categoryGrid.physical') }}</div>
       <div class="grid">
         <div
           v-for="cat in physicalCategories"
@@ -18,7 +18,7 @@
       </div>
     </div>
     <div v-if="financialCategories.length" class="category-group">
-      <div class="group-label">金融资产</div>
+      <div class="group-label">{{ t('categoryGrid.financial') }}</div>
       <div class="grid">
         <div
           v-for="cat in financialCategories"
@@ -39,8 +39,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Category } from '@/types'
 import { getIconId } from '@/utils/icon'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: string

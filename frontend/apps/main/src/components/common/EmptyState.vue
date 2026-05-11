@@ -1,5 +1,5 @@
 <template>
-  <van-empty :image="image" :description="description">
+  <van-empty :image="image" :description="description ?? t('common.noData')">
     <template v-if="$slots.default">
       <slot />
     </template>
@@ -7,11 +7,12 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
+defineProps<{
   description?: string
   image?: string
-}>(), {
-  description: '暂无数据',
-  image: 'default'
-})
+}>()
 </script>

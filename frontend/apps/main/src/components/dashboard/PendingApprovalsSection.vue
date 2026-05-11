@@ -2,7 +2,7 @@
   <div v-if="choreStore.pendingCount > 0" class="pending-approvals-section">
     <!-- Collapse Toggle -->
     <div class="approval-toggle" @click="isExpanded = !isExpanded">
-      <span class="toggle-label">待审批家务</span>
+      <span class="toggle-label">{{ t('pendingApprovals.title') }}</span>
       <span class="toggle-count">{{ choreStore.pendingCount }}</span>
       <van-icon :name="isExpanded ? 'arrow-up' : 'arrow-down'" class="toggle-icon" />
     </div>
@@ -29,7 +29,7 @@
             {{ item.chore_name }}
           </div>
           <div class="card-meta">
-            <span class="child-name">{{ item.child_display_name || '未知' }}</span>
+            <span class="child-name">{{ item.child_display_name || t('pendingApprovals.unknown') }}</span>
             <span class="separator">·</span>
             <span class="reward">+{{ item.coin_reward }}⭐</span>
             <span class="separator">·</span>
@@ -47,7 +47,7 @@
             :loading="actioningId === item.id"
             @click="onApprove(item.id)"
           >
-            批准
+            {{ t('pendingApprovals.approve') }}
           </van-button>
           <van-button
             size="mini"
@@ -56,7 +56,7 @@
             :disabled="actioningId === item.id"
             @click="onReject(item.id, true)"
           >
-            退回
+            {{ t('pendingApprovals.returnRedo') }}
           </van-button>
           <van-button
             size="mini"
@@ -65,7 +65,7 @@
             :disabled="actioningId === item.id"
             @click="onReject(item.id, false)"
           >
-            拒绝
+            {{ t('pendingApprovals.reject') }}
           </van-button>
         </div>
       </div>
@@ -75,26 +75,28 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useChoreStore } from '@/stores/chore'
 
+const { t } = useI18n()
 const choreStore = useChoreStore()
 const isExpanded = ref(false)
 const actioningId = ref<string | null>(null)
 
 function formatRelativeTime(isoStr: string | null): string {
   if (!isoStr) return ''
-  const t = new Date(isoStr).getTime()
-  if (Number.isNaN(t)) return ''
-  const diff = Date.now() - t
+  const ts = new Date(isoStr).getTime()
+  if (Number.isNaN(ts)) return ''
+  const diff = Date.now() - ts
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins}分钟前`
+  if (mins < 1) return t('pendingApprovals.justNow')
+  if (mins < 60) return t('pendingApprovals.minutesAgo', { mins })
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}小时前`
+  if (hours < 24) return t('pendingApprovals.hoursAgo', { hours })
   const days = Math.floor(hours / 24)
-  if (days < 7) return `${days}天前`
+  if (days < 7) return t('pendingApprovals.daysAgo', { days })
   const d = new Date(isoStr)
-  return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 async function onApprove(id: string) {

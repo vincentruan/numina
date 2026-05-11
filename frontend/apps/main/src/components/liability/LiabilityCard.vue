@@ -23,7 +23,7 @@
           <div class="card-title">
             <span class="name">{{ liability.name }}</span>
             <van-tag :type="liability.is_active ? 'danger' : 'success'" class="status-tag">
-              {{ liability.is_active ? '还款中' : '已结清' }}
+              {{ liability.is_active ? t('liabilityCard.active') : t('liabilityCard.inactive') }}
             </van-tag>
           </div>
           <div class="card-meta">
@@ -35,16 +35,16 @@
 
       <div class="card-body">
         <div class="amount-section">
-          <div class="amount-label">剩余本金</div>
+          <div class="amount-label">{{ t('liabilityCard.remainingPrincipal') }}</div>
           <div class="amount-value">{{ formatAmountDisplay(liability.remaining_amount) }}</div>
         </div>
         <div class="details-grid">
           <div class="detail-item">
-            <span class="detail-label">月供</span>
+            <span class="detail-label">{{ t('liabilityCard.monthlyPayment') }}</span>
             <span class="detail-value">{{ formatAmountDisplay(liability.monthly_payment) }}</span>
           </div>
           <div class="detail-item">
-            <span class="detail-label">年利率</span>
+            <span class="detail-label">{{ t('liabilityCard.annualRate') }}</span>
             <span class="detail-value">{{ liability.interest_rate }}%</span>
           </div>
         </div>
@@ -55,8 +55,8 @@
           <div class="progress-fill" :style="{ width: repaidPercent + '%' }" />
         </div>
         <div class="progress-text">
-          <span class="progress-label">已还 {{ repaidPercent }}%</span>
-          <span class="progress-remaining">剩余 {{ formatAmountDisplay(liability.remaining_amount) }}</span>
+          <span class="progress-label">{{ t('liabilityCard.repaidPercent', { pct: repaidPercent }) }}</span>
+          <span class="progress-remaining">{{ t('liabilityCard.remaining', { amount: formatAmountDisplay(liability.remaining_amount) }) }}</span>
         </div>
       </div>
     </div>
@@ -66,15 +66,15 @@
       <div class="swipe-actions">
         <button v-if="liability.is_active" class="swipe-btn swipe-btn--pay" @click.stop="$emit('pay', liability)">
           <van-icon name="gold-coin-o" size="20" />
-          <span>还款</span>
+          <span>{{ t('liabilityCard.pay') }}</span>
         </button>
         <button class="swipe-btn swipe-btn--edit" @click.stop="$emit('edit', liability)">
           <van-icon name="edit" size="20" />
-          <span>编辑</span>
+          <span>{{ t('liabilityCard.edit') }}</span>
         </button>
         <button class="swipe-btn swipe-btn--delete" @click.stop="$emit('delete', liability)">
           <van-icon name="delete-o" size="20" />
-          <span>删除</span>
+          <span>{{ t('liabilityCard.delete') }}</span>
         </button>
       </div>
     </template>
@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Liability } from '@/types'
 
 const props = defineProps<{
@@ -99,17 +100,19 @@ const emit = defineEmits<{
   longpress: [liability: Liability]
 }>()
 
-const categoryMap: Record<string, { text: string; icon: string; color: string }> = {
-  mortgage: { text: '房贷', icon: 'icon-mortgage', color: '#d97706' },
-  car_loan: { text: '车贷', icon: 'icon-car-loan', color: '#0891b2' },
-  credit_card: { text: '信用卡', icon: 'icon-credit-card', color: '#dc2626' },
-  personal_loan: { text: '个人贷款', icon: 'icon-personal-loan', color: '#ea580c' },
-  other: { text: '其他', icon: 'icon-other-liability', color: '#64748b' },
-}
+const { t } = useI18n()
 
-const categoryText = computed(() => categoryMap[props.liability.category]?.text || props.liability.category)
-const categoryIcon = computed(() => categoryMap[props.liability.category]?.icon || 'icon-other-liability')
-const categoryColor = computed(() => categoryMap[props.liability.category]?.color || '#64748b')
+const categoryMap = computed<Record<string, { text: string; icon: string; color: string }>>(() => ({
+  mortgage: { text: t('liability.mortgage'), icon: 'icon-mortgage', color: '#d97706' },
+  car_loan: { text: t('liability.carLoan'), icon: 'icon-car-loan', color: '#0891b2' },
+  credit_card: { text: t('liability.creditCard'), icon: 'icon-credit-card', color: '#dc2626' },
+  personal_loan: { text: t('liability.personalLoan'), icon: 'icon-personal-loan', color: '#ea580c' },
+  other: { text: t('liability.other'), icon: 'icon-other-liability', color: '#64748b' },
+}))
+
+const categoryText = computed(() => categoryMap.value[props.liability.category]?.text || props.liability.category)
+const categoryIcon = computed(() => categoryMap.value[props.liability.category]?.icon || 'icon-other-liability')
+const categoryColor = computed(() => categoryMap.value[props.liability.category]?.color || '#64748b')
 
 const repaidPercent = computed(() => {
   const { original_amount, remaining_amount } = props.liability
