@@ -385,7 +385,7 @@ export interface AIReportSection {
 }
 
 export interface AIReport {
-  overall_score: number
+  overall_score: number | null
   summary: string
   data_completeness_score: number
   net_worth_health?: AIReportSection & {

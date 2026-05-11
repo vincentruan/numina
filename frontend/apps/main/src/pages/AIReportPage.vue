@@ -43,7 +43,7 @@
               />
             </svg>
             <div class="score-inner">
-              <span class="score-number" :class="overallScoreClass">{{ currentReport.overall_score }}</span>
+              <span class="score-number" :class="overallScoreClass">{{ currentReport.overall_score ?? 0 }}</span>
               <span class="score-unit">分</span>
             </div>
           </div>
