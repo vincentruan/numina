@@ -31,48 +31,6 @@ def docker_client():
 
 
 @pytest.fixture(scope="session")
-def mysql_container(docker_client):
-    """启动 MySQL Docker 容器"""
-    container = docker_client.containers.run(
-        "mysql:8.0",
-        environment={
-            "MYSQL_ROOT_PASSWORD": "testpass",
-            "MYSQL_DATABASE": "test_numina",
-            "MYSQL_USER": "test",
-            "MYSQL_PASSWORD": "testpass",
-        },
-        ports={"3306/tcp": None},
-        detach=True,
-        auto_remove=True,
-        healthcheck={
-            "Test": ["CMD", "mysqladmin", "ping", "-h", "localhost"],
-            "Interval": 1_000_000_000,  # 1秒
-            "Timeout": 5_000_000_000,  # 5秒
-            "Retries": 10,
-        },
-    )
-
-    # 等待容器就绪
-    if not wait_for_container(container, timeout=60):
-        container.stop()
-        pytest.fail("MySQL container failed to start")
-
-    # 获取随机端口
-    container.reload()
-    port = container.attrs["NetworkSettings"]["Ports"]["3306/tcp"][0]["HostPort"]
-
-    yield {
-        "host": "localhost",
-        "port": port,
-        "user": "test",
-        "password": "testpass",
-        "database": "test_numina",
-    }
-
-    container.stop()
-
-
-@pytest.fixture(scope="session")
 def postgres_container(docker_client):
     """启动 PostgreSQL Docker 容器"""
     container = docker_client.containers.run(
@@ -109,15 +67,6 @@ def postgres_container(docker_client):
     }
 
     container.stop()
-
-
-@pytest.fixture
-def mysql_url(mysql_container):
-    """MySQL 连接 URL"""
-    return (
-        f"mysql+pymysql://{mysql_container['user']}:{mysql_container['password']}"
-        f"@{mysql_container['host']}:{mysql_container['port']}/{mysql_container['database']}"
-    )
 
 
 @pytest.fixture

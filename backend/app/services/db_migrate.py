@@ -1,7 +1,7 @@
 """Database schema alignment service.
 
 Provides automatic schema migration with:
-- Multi-database support (SQLite, MySQL, PostgreSQL)
+- Multi-database support (SQLite, PostgreSQL)
 - Distributed locking for multi-instance safety
 - Full table/column/index alignment
 """
@@ -29,8 +29,6 @@ def get_db_type(engine: Engine) -> str:
     dialect = engine.dialect.name
     if dialect == "sqlite":
         return "sqlite"
-    elif dialect in ("mysql", "mariadb"):
-        return "mysql"
     elif dialect in ("postgresql", "postgres"):
         return "postgresql"
     else:
@@ -45,11 +43,6 @@ def get_existing_tables(engine: Engine) -> set[str]:
         if db_type == "sqlite":
             result = conn.execute(text(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
-            ))
-            return {row[0] for row in result}
-        elif db_type == "mysql":
-            result = conn.execute(text(
-                "SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE()"
             ))
             return {row[0] for row in result}
         elif db_type == "postgresql":
@@ -69,12 +62,6 @@ def get_existing_columns(engine: Engine, table_name: str) -> dict[str, str]:
         if db_type == "sqlite":
             result = conn.execute(text(f"PRAGMA table_info({table_name})"))
             return {row[1]: row[2] for row in result}
-        elif db_type == "mysql":
-            result = conn.execute(text(
-                f"SELECT column_name, column_type FROM information_schema.columns "
-                f"WHERE table_schema = DATABASE() AND table_name = '{table_name}'"
-            ))
-            return {row[0]: row[1] for row in result}
         elif db_type == "postgresql":
             result = conn.execute(text(
                 f"SELECT column_name, data_type FROM information_schema.columns "
@@ -93,12 +80,6 @@ def get_existing_indexes(engine: Engine, table_name: str) -> set[str]:
         if db_type == "sqlite":
             result = conn.execute(text(f"PRAGMA index_list({table_name})"))
             return {row[1] for row in result}
-        elif db_type == "mysql":
-            result = conn.execute(text(
-                f"SELECT index_name FROM information_schema.statistics "
-                f"WHERE table_schema = DATABASE() AND table_name = '{table_name}'"
-            ))
-            return {row[0] for row in result}
         elif db_type == "postgresql":
             result = conn.execute(text(
                 f"SELECT indexname FROM pg_indexes "
@@ -126,14 +107,6 @@ def ensure_lock_table(engine: Engine) -> None:
                 "lock_id TEXT PRIMARY KEY, "
                 "locked_at REAL, "
                 "holder TEXT"
-                ")"
-            ))
-        elif db_type == "mysql":
-            conn.execute(text(
-                f"CREATE TABLE {LOCK_TABLE_NAME} ("
-                "lock_id VARCHAR(64) PRIMARY KEY, "
-                "locked_at DOUBLE, "
-                "holder VARCHAR(255)"
                 ")"
             ))
         elif db_type == "postgresql":
@@ -279,11 +252,7 @@ def get_expected_columns_from_model(table_name: str) -> dict[str, Any]:
                     default_val = arg
                     default_type = 'sql_expr'
                 elif hasattr(arg, 'name'):
-                    # func.now() has .name = 'now'
-                    if arg.name == 'now':
-                        default_type = 'func_now'
-                    else:
-                        default_type = 'sql_func'
+                    default_type = 'func_now' if arg.name == 'now' else 'sql_func'
                 else:
                     default_type = 'sql_expr'
             else:
@@ -370,13 +339,6 @@ def add_column(engine: Engine, table_name: str, column_name: str, column_info: d
             type_sql = "REAL"
         elif "NUMERIC" in type_sql.upper():
             type_sql = "NUMERIC"
-    elif db_type == "mysql":
-        # MySQL types - ensure VARCHAR has length
-        if "TEXT" in type_sql.upper() and "VARCHAR" not in type_sql.upper():
-            type_sql = "VARCHAR(255)"
-        elif "DATETIME" in type_sql.upper():
-            type_sql = "DATETIME"
-
     nullable_clause = "" if column_info["nullable"] else "NOT NULL"
 
     # Handle default value properly
@@ -386,7 +348,7 @@ def add_column(engine: Engine, table_name: str, column_name: str, column_info: d
 
     if default_type == "func_now":
         # func.now() - use database-specific timestamp function
-        if db_type == "sqlite" or db_type == "mysql" or db_type == "postgresql":
+        if db_type in ("sqlite", "postgresql"):
             default_clause = "DEFAULT CURRENT_TIMESTAMP"
     elif default_type == "sql_expr" and default_val is not None:
         # SQL expression default - use as-is
@@ -394,7 +356,7 @@ def add_column(engine: Engine, table_name: str, column_name: str, column_info: d
     elif default_type == "scalar" and default_val is not None:
         # Scalar value default
         if isinstance(default_val, bool):
-            # Boolean: SQLite uses 0/1, MySQL/Postgres use FALSE/TRUE
+            # Boolean: SQLite uses 0/1, PostgreSQL uses FALSE/TRUE
             if db_type == "sqlite":
                 default_clause = f"DEFAULT {1 if default_val else 0}"
             else:

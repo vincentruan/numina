@@ -55,7 +55,7 @@ backend/app/
 ├── auth/           # JWT token generation, validation, get_current_user dependency
 ├── constants/      # Shared constants and enumerations
 ├── core/           # Core utilities and shared infrastructure
-├── db/             # Database backend factory (SQLite, MySQL, PostgreSQL)
+├── db/             # Database backend factory (SQLite, PostgreSQL)
 ├── middleware/     # Custom ASGI middleware
 ├── models/         # SQLAlchemy ORM models (30+ modules — assets, liabilities, users, families, AI, children, chores, coins, files, and more)
 ├── routers/        # API route handlers (35+ modules — auth, assets, liabilities, dashboard, family, AI, children, chores, wishes, files, and more)
@@ -145,9 +145,6 @@ Run `ls tests/test_*.py | sort` to see all test files.
 # SQLite (default)
 sqlite:///./data/numina.db            # local dev
 sqlite:////app/data/numina.db         # Docker
-
-# MySQL
-mysql+pymysql://user:password@host:3306/database
 
 # PostgreSQL
 postgresql+psycopg2://user:password@host:5432/database

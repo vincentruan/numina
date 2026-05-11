@@ -4,15 +4,11 @@ from sqlalchemy import Engine
 from sqlalchemy.engine.url import make_url
 
 from app.db.backend import DatabaseBackend
-from app.db.mysql import MySQLBackend
 from app.db.postgres import PostgreSQLBackend
 from app.db.sqlite import SQLiteBackend
 
 BACKEND_MAP: dict[str, type[DatabaseBackend]] = {
     "sqlite": SQLiteBackend,
-    "mysql": MySQLBackend,
-    "mysql+pymysql": MySQLBackend,
-    "mysql+aiomysql": MySQLBackend,
     "postgresql": PostgreSQLBackend,
     "postgresql+psycopg2": PostgreSQLBackend,
     "postgresql+psycopg": PostgreSQLBackend,
@@ -25,7 +21,6 @@ def create_backend(url: str) -> DatabaseBackend:
     Args:
         url: SQLAlchemy 连接 URL，如:
             - sqlite:///./data/numina.db
-            - mysql+pymysql://user:pass@host:3306/db
             - postgresql+psycopg2://user:pass@host:5432/db
 
     Returns:
