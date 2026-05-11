@@ -5,7 +5,7 @@ from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled
@@ -13,8 +13,10 @@ from app.auth.deps import require_adult
 from app.config import settings
 from app.database import SessionLocal, get_db
 from app.errors import AppError, ErrorCode
+from app.models.ai_chat_session import AIChatSession
 from app.models.ai_disposal_suggestion import AIDisposalSuggestion
 from app.models.user import User
+from app.routers._ai_events_helper import proxy_capability_events
 from app.services.ai_task_service import AITaskService
 from app.services.chat_session import ChatSessionService
 
@@ -31,7 +33,7 @@ def get_disposal_suggestions(
         db.query(AIDisposalSuggestion)
         .filter(
             AIDisposalSuggestion.family_id == current_user.family_id,
-            AIDisposalSuggestion.is_dismissed == False,
+            AIDisposalSuggestion.is_dismissed == False,  # noqa: E712
         )
         .order_by(AIDisposalSuggestion.inefficiency_score.desc())
         .all()
@@ -60,19 +62,15 @@ async def refresh_disposal_suggestions(
     db: Session = Depends(get_db),
 ):
     """触发 agent 扫描并刷新处置建议（streaming，任务状态追踪）。"""
-    # 1. 检查在途任务
     existing = AITaskService.get_running_task(current_user.family_id, "disposal", db)
     if existing:
         raise AppError(ErrorCode.AI_TASK_IN_PROGRESS, "⏳ 处置建议生成中，请稍后")
 
-    # 2. 创建 AIChatSession
     session = await ChatSessionService.create_session(
         family_id=str(current_user.family_id),
         user_id=str(current_user.id),
         db=db,
     )
-
-    # 3. 创建 AITask
     task = AITaskService.create_task(
         family_id=current_user.family_id,
         capability="disposal",
@@ -80,7 +78,6 @@ async def refresh_disposal_suggestions(
         db=db,
     )
 
-    # 4. 透传 agent streaming
     async def proxy_stream():
         buffer: list[str] = []
         with SessionLocal() as stream_db:
@@ -99,14 +96,14 @@ async def refresh_disposal_suggestions(
                         timeout=None,
                     ) as resp,
                 ):
-                        async for chunk in resp.aiter_text():
-                            buffer.append(chunk)
-                            yield chunk.encode("utf-8")
-                            if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
-                                await ChatSessionService.append_message(
-                                    session, "assistant", "".join(buffer), current_user, stream_db
-                                )
-                                buffer.clear()
+                    async for chunk in resp.aiter_text():
+                        buffer.append(chunk)
+                        yield chunk.encode("utf-8")
+                        if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
+                            await ChatSessionService.append_message(
+                                session, "assistant", "".join(buffer), current_user, stream_db
+                            )
+                            buffer.clear()
                 if buffer:
                     await ChatSessionService.append_message(
                         session, "assistant", "".join(buffer), current_user, stream_db
@@ -122,6 +119,62 @@ async def refresh_disposal_suggestions(
                 raise
 
     return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
+
+
+@router.post("/refresh/events")
+async def refresh_disposal_events(
+    current_user: User = Depends(require_adult),
+    _ai: None = Depends(require_ai_enabled),
+    db: Session = Depends(get_db),
+):
+    """触发 agent 扫描并刷新处置建议（NDJSON 事件流）。"""
+    existing = AITaskService.get_running_task(current_user.family_id, "disposal", db)
+    if existing:
+        task = existing
+        session_id = task.session_id or str(task.id)
+        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        session = await ChatSessionService.create_session(
+            family_id=str(current_user.family_id),
+            user_id=str(current_user.id),
+            db=db,
+        )
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                capability="disposal",
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
+            )
+        task = AITaskService.create_task(
+            family_id=current_user.family_id,
+            capability="disposal",
+            session_id=session.id,
+            db=db,
+        )
+        session_id = session.id
+
+    task_id = task.id
+    family_id = current_user.family_id
+
+    return StreamingResponse(
+        proxy_capability_events(
+            agent_path="/disposal/events",
+            capability="disposal",
+            task_id=task_id,
+            session_id=session_id,
+            family_id=family_id,
+            current_user=current_user,
+        ),
+        media_type="application/x-ndjson",
+    )
 
 
 @router.post("/{suggestion_id}/dismiss")
@@ -140,3 +193,4 @@ def dismiss_suggestion(
     s.dismissed_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
+

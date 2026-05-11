@@ -14,7 +14,9 @@ from app.config import settings
 from app.database import SessionLocal, get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_asset_alert import AIAssetAlert
+from app.models.ai_chat_session import AIChatSession
 from app.models.user import User
+from app.routers._ai_events_helper import proxy_capability_events
 from app.services.ai_task_service import AITaskService
 from app.services.chat_session import ChatSessionService
 
@@ -31,7 +33,7 @@ def get_alerts(
         db.query(AIAssetAlert)
         .filter(
             AIAssetAlert.family_id == current_user.family_id,
-            AIAssetAlert.is_dismissed == False,
+            AIAssetAlert.is_dismissed == False,  # noqa: E712
         )
         .order_by(AIAssetAlert.created_at.desc())
         .all()
@@ -123,6 +125,77 @@ async def refresh_alerts(
     return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 
 
+@router.post("/refresh/events")
+async def refresh_alerts_events(
+    current_user: User = Depends(require_adult),
+    _ai: None = Depends(require_ai_enabled),
+    db: Session = Depends(get_db),
+):
+    """触发 agent 扫描并刷新预警（NDJSON 事件流）。
+    若家庭已有其他 capability 运行，则排队等待（返回 202 + queued task）。
+    若同 capability 已在运行（从排队提升），则接续该任务启动 agent 流。
+    """
+    # 1. 检查同 capability 是否已在运行（可能是从排队提升的）
+    existing = AITaskService.get_running_task(current_user.family_id, "alerts", db)
+    if existing:
+        # 已有运行中任务（从排队提升）— 直接接续，不重复创建
+        task = existing
+        session_id = task.session_id or str(task.id)
+        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        # 2. 创建 AIChatSession
+        session = await ChatSessionService.create_session(
+            family_id=str(current_user.family_id),
+            user_id=str(current_user.id),
+            db=db,
+        )
+
+        # 3. 检查家庭是否有其他 capability 在运行 → 排队
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                capability="alerts",
+                session_id=session.id,
+                db=db,
+            )
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "queued",
+                    "task_id": task.id,
+                    "queue_position": task.queue_position,
+                },
+            )
+
+        # 4. 创建 AITask
+        task = AITaskService.create_task(
+            family_id=current_user.family_id,
+            capability="alerts",
+            session_id=session.id,
+            db=db,
+        )
+        session_id = session.id
+
+    task_id = task.id
+    family_id = current_user.family_id
+
+    return StreamingResponse(
+        proxy_capability_events(
+            agent_path="/alerts/events",
+            capability="alerts",
+            task_id=task_id,
+            session_id=session_id,
+            family_id=family_id,
+            current_user=current_user,
+        ),
+        media_type="application/x-ndjson",
+    )
+
+
 @router.post("/{alert_id}/dismiss")
 def dismiss_alert(
     alert_id: str,
@@ -139,3 +212,4 @@ def dismiss_alert(
     alert.dismissed_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
+

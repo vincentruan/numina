@@ -14,7 +14,9 @@ from app.config import settings
 from app.database import SessionLocal, get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_allocation_target import AIAllocationTarget
+from app.models.ai_chat_session import AIChatSession
 from app.models.user import User
+from app.routers._ai_events_helper import proxy_capability_events
 from app.services.ai_task_service import AITaskService
 from app.services.chat_session import ChatSessionService
 
@@ -107,7 +109,7 @@ async def check_drift(
             return resp.json()
     except Exception as e:
         logger.error(f"调用 agent allocation drift 失败: {e}")
-        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
 
 
 @router.post("/check/stream")
@@ -123,19 +125,15 @@ async def stream_check_drift(
     if not target or not target.category_targets:
         return JSONResponse({"has_target": False, "message": "尚未设置配置目标"})
 
-    # 1. 检查在途任务
     existing = AITaskService.get_running_task(current_user.family_id, "allocation", db)
     if existing:
         raise AppError(ErrorCode.AI_TASK_IN_PROGRESS, "⏳ 配置分析中，请稍后")
 
-    # 2. 创建 AIChatSession
     session = await ChatSessionService.create_session(
         family_id=str(current_user.family_id),
         user_id=str(current_user.id),
         db=db,
     )
-
-    # 3. 创建 AITask
     task = AITaskService.create_task(
         family_id=current_user.family_id,
         capability="allocation",
@@ -143,7 +141,6 @@ async def stream_check_drift(
         db=db,
     )
 
-    # 4. 透传 agent streaming
     async def proxy_stream():
         buffer: list[str] = []
         with SessionLocal() as stream_db:
@@ -166,14 +163,14 @@ async def stream_check_drift(
                         timeout=None,
                     ) as resp,
                 ):
-                        async for chunk in resp.aiter_text():
-                            buffer.append(chunk)
-                            yield chunk.encode("utf-8")
-                            if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
-                                await ChatSessionService.append_message(
-                                    session, "assistant", "".join(buffer), current_user, stream_db
-                                )
-                                buffer.clear()
+                    async for chunk in resp.aiter_text():
+                        buffer.append(chunk)
+                        yield chunk.encode("utf-8")
+                        if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
+                            await ChatSessionService.append_message(
+                                session, "assistant", "".join(buffer), current_user, stream_db
+                            )
+                            buffer.clear()
                 if buffer:
                     await ChatSessionService.append_message(
                         session, "assistant", "".join(buffer), current_user, stream_db
@@ -189,3 +186,66 @@ async def stream_check_drift(
                 raise
 
     return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
+
+
+@router.post("/check/events")
+async def events_check_drift(
+    current_user: User = Depends(require_adult),
+    _ai: None = Depends(require_ai_enabled),
+    db: Session = Depends(get_db),
+):
+    """检测当前配置与目标的漂移（NDJSON 事件流）。"""
+    target = db.query(AIAllocationTarget).filter(
+        AIAllocationTarget.family_id == current_user.family_id
+    ).first()
+    if not target or not target.category_targets:
+        return JSONResponse({"has_target": False, "message": "尚未设置配置目标"})
+
+    existing = AITaskService.get_running_task(current_user.family_id, "allocation", db)
+    if existing:
+        task = existing
+        session_id = task.session_id or str(task.id)
+        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        session = await ChatSessionService.create_session(
+            family_id=str(current_user.family_id),
+            user_id=str(current_user.id),
+            db=db,
+        )
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                capability="allocation",
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
+            )
+        task = AITaskService.create_task(
+            family_id=current_user.family_id,
+            capability="allocation",
+            session_id=session.id,
+            db=db,
+        )
+        session_id = session.id
+
+    task_id = task.id
+    family_id = current_user.family_id
+
+    return StreamingResponse(
+        proxy_capability_events(
+            agent_path="/allocation/events",
+            capability="allocation",
+            task_id=task_id,
+            session_id=session_id,
+            family_id=family_id,
+            current_user=current_user,
+        ),
+        media_type="application/x-ndjson",
+    )
+
