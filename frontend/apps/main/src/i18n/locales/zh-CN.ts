@@ -108,7 +108,8 @@ export default {
     other: '其他',
     noLiabilityDesc: '当前无活跃负债，财务状况良好 ✅',
     analyzePrompt: '点击分析负债状况',
-    startAnalyze: '开始分析'
+    startAnalyze: '开始分析',
+    reanalyzeBtn: '重新分析',
   },
   family: {
     title: '家庭',
@@ -470,6 +471,7 @@ export default {
     aiNotEnabled: '⚠️ 请先在设置中启用 AI 功能',
     aiScanComplete: '✅ 扫描完成',
     aiScanFailed: '❌ 扫描失败，请检查 AI 配置',
+    aiAnalyzeComplete: '✅ 分析完成',
     aiAnalyzeFailed: '❌ 分析失败，请检查 AI 配置',
     aiDetectFailed: '❌ 检测失败，请检查 AI 配置',
     aiTargetSaved: '✅ 目标已保存',

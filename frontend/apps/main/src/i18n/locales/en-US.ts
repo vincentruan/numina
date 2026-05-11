@@ -105,7 +105,11 @@ export default {
     carLoan: 'Car Loan',
     creditCard: 'Credit Card',
     personalLoan: 'Personal Loan',
-    other: 'Other'
+    other: 'Other',
+    noLiabilityDesc: 'No active liabilities, finances are healthy ✅',
+    analyzePrompt: 'Click to analyze liabilities',
+    startAnalyze: 'Start Analysis',
+    reanalyzeBtn: 'Re-analyze',
   },
   family: {
     title: 'Family',
@@ -431,6 +435,7 @@ export default {
     aiNotEnabled: '⚠️ Please enable AI in settings first',
     aiScanComplete: '✅ Scan complete',
     aiScanFailed: '❌ Scan failed, please check AI configuration',
+    aiAnalyzeComplete: '✅ Analysis complete',
     aiAnalyzeFailed: '❌ Analysis failed, please check AI configuration',
     aiDetectFailed: '❌ Detection failed, please check AI configuration',
     aiTargetSaved: '✅ Target saved',

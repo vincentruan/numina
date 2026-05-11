@@ -2,7 +2,7 @@
   <div class="ai-liability-page">
     <PageHeader title="负债优化顾问" />
 
-    <div v-if="loading" class="loading-state">
+    <div v-if="loading && !data" class="loading-state">
       <van-loading size="32" type="spinner" />
     </div>
 
@@ -26,7 +26,25 @@
           :elapsed-seconds="taskElapsed"
           v-model="isConsoleOpen"
         />
-        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onAnalyze">{{ t('liability.startAnalyze') }}</van-button>
+        <van-button
+          v-if="taskStatus !== 'running'"
+          type="primary"
+          block
+          @click="onAnalyze"
+        >{{ t('liability.startAnalyze') }}</van-button>
+        <van-button
+          v-else
+          type="danger"
+          block
+          class="cancel-btn"
+          @click="cancelTask"
+        >
+          <span class="stop-icon-wrapper">
+            <van-icon name="stop-circle-o" class="stop-icon" />
+            <van-loading size="14" type="spinner" class="spinning-ring" />
+          </span>
+          {{ t('aiTask.cancelBtn') }}
+        </van-button>
       </div>
     </div>
 
@@ -45,6 +63,32 @@
       </div>
 
       <template v-else>
+        <!-- Summary bar with reanalyze/cancel -->
+        <div class="summary-bar">
+          <span>{{ t('liability.title') }}</span>
+          <van-button
+            v-if="taskStatus !== 'running'"
+            size="mini"
+            plain
+            @click="onAnalyze"
+          >
+            重新分析
+          </van-button>
+          <van-button
+            v-else
+            size="mini"
+            type="danger"
+            class="cancel-btn-mini"
+            @click="cancelTask"
+          >
+            <span class="stop-icon-wrapper-mini">
+              <van-icon name="stop-circle-o" class="stop-icon-mini" />
+              <van-loading size="12" type="spinner" class="spinning-ring-mini" />
+            </span>
+            终止
+          </van-button>
+        </div>
+
         <!-- Summary -->
         <div class="summary-card">
           <div class="summary-row">
@@ -101,7 +145,12 @@
         </van-tabs>
 
         <div class="reanalyze">
-          <van-button plain block :loading="taskStatus === 'running'" @click="onAnalyze">重新分析</van-button>
+          <TaskConsole
+            :status="taskStatus"
+            :chunks="taskChunks"
+            :elapsed-seconds="taskElapsed"
+            v-model="isConsoleOpen"
+          />
         </div>
       </template>
     </template>
@@ -118,14 +167,6 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
-
-const {
-  status: taskStatus,
-  chunks: taskChunks,
-  elapsedSeconds: taskElapsed,
-  isConsoleOpen,
-  startStream,
-} = useAITask('liability', '/ai/liability-advice/stream')
 
 const loading = ref(false)
 const data = ref<Record<string, unknown> | null>(null)
@@ -164,21 +205,22 @@ async function loadData() {
   }
 }
 
+async function onAnalyzeComplete() {
+  await loadData()
+  showToast(t('toast.aiAnalyzeComplete'))
+}
+
+const {
+  status: taskStatus,
+  chunks: taskChunks,
+  elapsedSeconds: taskElapsed,
+  isConsoleOpen,
+  startStream,
+  cancelTask,
+} = useAITask('liability', '/ai/liability-advice/stream', onAnalyzeComplete)
+
 async function onAnalyze() {
   await startStream()
-  // Reload advice data after streaming completes
-  try {
-    const res = await getLiabilityAdvice()
-    data.value = res.data
-    if (data.value?.recommended_strategy) {
-      const idx = (data.value.strategies as { strategy: string }[] ?? []).findIndex(
-        (s) => s.strategy === data.value?.recommended_strategy,
-      )
-      if (idx >= 0) activeTab.value = idx
-    }
-  } catch {
-    showToast(t('toast.aiAnalyzeFailed'))
-  }
 }
 
 onMounted(loadData)
@@ -260,4 +302,48 @@ onMounted(loadData)
 .order-name { flex: 1; color: var(--text-primary); }
 .order-rate { color: #f44336; font-size: 12px; }
 .reanalyze { padding: 16px; }
+.summary-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.cancel-btn {
+  position: relative;
+}
+.stop-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+.stop-icon { font-size: 16px; }
+.spinning-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.6);
+}
+.cancel-btn-mini {
+  position: relative;
+}
+.stop-icon-wrapper-mini {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+}
+.stop-icon-mini { font-size: 14px; }
+.spinning-ring-mini {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(244, 67, 54, 0.4);
+}
 </style>
