@@ -642,11 +642,16 @@ function onSubmit() {
   margin-left: 4px;
 }
 .same-price-btn {
-  height: 28px;
+  height: 26px;
+  line-height: 24px;
   padding: 0 10px;
   font-size: 12px;
   white-space: nowrap;
-  align-self: center;
+  vertical-align: middle;
+}
+:deep(.van-field__right-icon) {
+  display: flex;
+  align-items: center;
 }
 .form-actions {
   padding: 16px;
