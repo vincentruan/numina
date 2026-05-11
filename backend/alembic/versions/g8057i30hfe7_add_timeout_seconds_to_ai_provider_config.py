@@ -8,8 +8,9 @@ Adds:
 - ai_provider_configs.timeout_seconds (integer, default 60, nullable)
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = 'g8057i30hfe7'
 down_revision = 'f7946h29ged6'

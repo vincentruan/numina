@@ -191,6 +191,7 @@ def test_generate_report_409_when_task_in_progress(client, auth_headers, db):
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     """If agent streaming fails, AITask is marked as failed."""
     import pytest
+
     from app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)

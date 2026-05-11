@@ -1,11 +1,10 @@
 # backend/app/routers/notification_channels.py
 from fastapi import APIRouter, Depends
-
-from app.errors import AppError, ErrorCode
 from sqlalchemy.orm import Session
 
 from app.auth.deps import require_adult
 from app.database import get_db
+from app.errors import AppError, ErrorCode
 from app.models.notification_channel import NotificationChannel
 from app.models.notification_channel_config import NotificationChannelConfig
 from app.models.notification_subscription import NotificationSubscription

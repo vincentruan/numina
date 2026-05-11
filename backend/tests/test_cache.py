@@ -203,6 +203,7 @@ class TestCacheFactory:
 
     def test_get_rate_limit_cache_returns_redis_when_configured(self, monkeypatch):
         import fakeredis
+
         from app.config import settings
         monkeypatch.setattr(settings, "CACHE_BACKEND", "redis")
         monkeypatch.setattr("app.services.cache.redis.redis_lib.from_url", lambda url, **kw: fakeredis.FakeRedis(decode_responses=True))

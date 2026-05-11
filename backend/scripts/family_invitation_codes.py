@@ -25,10 +25,11 @@ from pathlib import Path
 # Add parent directory to path for app imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.models.child_bind_token import ChildBindToken  # noqa: F401
+
 from app.database import SessionLocal
 from app.models.asset import Asset  # noqa: F401
 from app.models.category import Category  # noqa: F401
-from app.models.child_bind_token import ChildBindToken  # noqa: F401
 from app.models.family import Family
 from app.models.family_invitation_code import FamilyInvitationCode
 from app.models.liability import Liability  # noqa: F401

@@ -26,6 +26,7 @@ def _fallback_narrative(chore_name: str, coins: int, multiplier: float = 1.0) ->
 def _is_ai_enabled(family: Family) -> bool:
     """Check if the family has an active AI provider config."""
     from sqlalchemy.orm import object_session
+
     from app.models.ai_provider_config import AIProviderConfig
 
     db = object_session(family)

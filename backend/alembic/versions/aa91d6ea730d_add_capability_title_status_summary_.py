@@ -11,8 +11,9 @@ Changes:
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision: str = 'aa91d6ea730d'
 down_revision: Union[str, None] = 'k2491m74lih1'

@@ -6,22 +6,27 @@ from alembic import context
 from app.config import settings
 from app.database import Base
 from app.db import get_engine
-from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult  # noqa: F401
+from app.models.ai_provider_config import (  # noqa: F401
+    AIProviderConfig,
+    AIProviderTestResult,
+)
 from app.models.ai_task import AITask  # noqa: F401
 from app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from app.models.asset import Asset  # noqa: F401
 from app.models.asset_lifecycle_event import AssetLifecycleEvent  # noqa: F401
-from app.models.child_economy_config import ChildEconomyConfig  # noqa: F401
-from app.models.child_wish_cost_history import ChildWishCostHistory  # noqa: F401
-from app.models.notification_channel_config import NotificationChannelConfig  # noqa: F401
-from app.models.reminder_notification import ReminderNotification  # noqa: F401
 from app.models.category import Category  # noqa: F401
+from app.models.child_economy_config import ChildEconomyConfig  # noqa: F401
 from app.models.child_wish import ChildWish  # noqa: F401
+from app.models.child_wish_cost_history import ChildWishCostHistory  # noqa: F401
 from app.models.device_session import DeviceSession  # noqa: F401
 from app.models.family import Family  # noqa: F401
 from app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
+from app.models.notification_channel_config import (
+    NotificationChannelConfig,  # noqa: F401
+)
 from app.models.payment_record import PaymentRecord  # noqa: F401
+from app.models.reminder_notification import ReminderNotification  # noqa: F401
 from app.models.snapshot import AssetSnapshot  # noqa: F401
 from app.models.tag import Tag  # noqa: F401
 

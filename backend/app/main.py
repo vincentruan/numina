@@ -70,17 +70,17 @@ from app.responses import EnvelopeResponse
 from app.routers import activities as activities_router
 from app.routers import ai_alerts as ai_alerts_router
 from app.routers import ai_allocation as ai_allocation_router
-from app.routers import ai_chat as ai_chat_router
 from app.routers import ai_capabilities as ai_capabilities_router
+from app.routers import ai_chat as ai_chat_router
 from app.routers import ai_config as ai_config_router
 from app.routers import ai_disposal as ai_disposal_router
 from app.routers import ai_internal as ai_internal_router
 from app.routers import ai_liability as ai_liability_router
+from app.routers import ai_mcp as ai_mcp_router
 from app.routers import ai_report as ai_report_router
+from app.routers import ai_skills as ai_skills_router
 from app.routers import ai_spending_leaks as ai_spending_leaks_router
 from app.routers import ai_suggest as ai_suggest_router
-from app.routers import ai_mcp as ai_mcp_router
-from app.routers import ai_skills as ai_skills_router
 from app.routers import ai_tasks as ai_tasks_router
 from app.routers import ai_time_machine as ai_time_machine_router
 from app.routers import (
@@ -393,6 +393,7 @@ app.include_router(ai_disposal_router.router, prefix="/api/v1")
 app.include_router(ai_liability_router.router, prefix="/api/v1")
 app.include_router(ai_allocation_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.router, prefix="/api/v1")
+app.include_router(ai_chat_router.sessions_router, prefix="/api/v1")
 app.include_router(children_router.router, prefix="/api/v1")
 app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")

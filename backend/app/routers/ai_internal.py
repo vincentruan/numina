@@ -267,6 +267,7 @@ class SessionSummaryRequest(BaseModel):
     summary: str | None = None
     model: str | None = None
     status: str = "completed"
+    title: str | None = None
 
 
 def _session_to_dict(s: "object") -> dict:
@@ -328,6 +329,8 @@ def internal_update_session_summary(
         raise HTTPException(status_code=404, detail="session not found")
     if body.summary:
         row.last_message_summary = body.summary[:200]
+    if body.title:
+        row.title = body.title[:50]
     row.status = body.status
     if body.model:
         row.last_model = body.model

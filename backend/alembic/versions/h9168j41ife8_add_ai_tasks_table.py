@@ -8,8 +8,9 @@ Adds:
 - ai_tasks table for tracking async AI capability task status
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = 'h9168j41ife8'
 down_revision = '2b8b34306273'

@@ -4,7 +4,10 @@ from app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from app.models.ai_chat_message import AIChatMessage  # noqa: F401
 from app.models.ai_chat_session import AIChatSession  # noqa: F401
 from app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
-from app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult  # noqa: F401
+from app.models.ai_provider_config import (  # noqa: F401
+    AIProviderConfig,
+    AIProviderTestResult,
+)
 from app.models.ai_report import AIReport  # noqa: F401
 from app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
 from app.models.ai_task import AITask  # noqa: F401
@@ -34,7 +37,9 @@ from app.models.family_skill_config import FamilySkillConfig  # noqa: F401
 from app.models.file_remote_location import FileRemoteLocation  # noqa: F401
 from app.models.liability import Liability  # noqa: F401
 from app.models.notification_channel import NotificationChannel  # noqa: F401
-from app.models.notification_channel_config import NotificationChannelConfig  # noqa: F401
+from app.models.notification_channel_config import (
+    NotificationChannelConfig,  # noqa: F401
+)
 from app.models.notification_config import NotificationConfig  # noqa: F401
 from app.models.notification_subscription import NotificationSubscription  # noqa: F401
 from app.models.payment_record import PaymentRecord  # noqa: F401

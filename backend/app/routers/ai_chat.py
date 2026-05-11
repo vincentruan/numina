@@ -25,6 +25,7 @@ from app.models.user import User
 from app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
+sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
 logger = logging.getLogger(__name__)
 
 
@@ -365,3 +366,75 @@ def mark_read(
     current_user.ai_chat_last_read_at = datetime.utcnow()
     db.commit()
     return {"ok": True}
+
+
+# ── Unified sessions endpoints (all capabilities) ──────────────────────────
+
+@sessions_router.get("/sessions")
+def list_all_sessions(
+    capability: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """列出当前家庭所有 AI 功能的会话，支持按 capability 过滤。"""
+    q = db.query(AIChatSession).filter_by(family_id=current_user.family_id)
+    if capability:
+        q = q.filter(AIChatSession.capability == capability)
+    total = q.count()
+    rows = q.order_by(AIChatSession.updated_at.desc()).limit(limit).offset(offset).all()
+    return {
+        "sessions": [
+            {
+                "session_id": s.id,
+                "family_id": str(s.family_id),
+                "user_id": str(s.user_id) if s.user_id else None,
+                "capability": s.capability,
+                "title": s.title,
+                "status": s.status,
+                "last_message_summary": s.last_message_summary,
+                "last_model": s.last_model,
+                "has_attachments": s.has_attachments,
+                "created_at": s.created_at.isoformat() if s.created_at else None,
+                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+            }
+            for s in rows
+        ],
+        "total": total,
+    }
+
+
+@sessions_router.get("/sessions/{session_id}/events")
+async def stream_session_events(
+    session_id: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """代理 agent 的会话事件流（NDJSON），用于历史回放。"""
+    import re
+    if not re.fullmatch(r"[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    async def proxy_events():
+        try:
+            async with (
+                httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)) as client,
+                client.stream(
+                    "GET",
+                    f"{settings.AGENT_BASE_URL}/sessions/{session_id}/events",
+                    headers={
+                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                        "X-Family-Id": str(current_user.family_id),
+                    },
+                ) as resp,
+            ):
+                async for chunk in resp.aiter_bytes():
+                    yield chunk
+        except Exception as e:
+            logger.error("session events proxy failed session=%s: %s", session_id, type(e).__name__)
+
+    return StreamingResponse(proxy_events(), media_type="application/x-ndjson; charset=utf-8")

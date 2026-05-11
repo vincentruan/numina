@@ -19,8 +19,14 @@ from app.auth.revoke_jti import revoke_jti
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.errors import AppError, ErrorCode
-from app.schemas.device import DeviceCheckRequest, DeviceCheckResponse, DeviceSessionResponse, DeviceTrustRequest, DeviceTrustResponse, FamilyDeviceResponse
+from app.schemas.device import (
+    DeviceCheckRequest,
+    DeviceCheckResponse,
+    DeviceSessionResponse,
+    DeviceTrustRequest,
+    DeviceTrustResponse,
+    FamilyDeviceResponse,
+)
 from app.services import device as device_service
 
 router = APIRouter(prefix="/auth", tags=["device"])
