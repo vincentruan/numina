@@ -1,6 +1,6 @@
 <template>
   <div class="wish-detail-page">
-    <PageHeader title="心愿详情" />
+    <PageHeader :title="t('wish.detail')" />
 
     <template v-if="wish">
       <!-- Hero Card: Pastel Cloud Gradient -->
@@ -26,7 +26,7 @@
                 <span v-else-if="wish.category.icon">{{ wish.category.icon }}</span>
                 {{ wish.category.name }}
               </template>
-              <template v-else>未分类</template>
+              <template v-else>{{ t('wish.uncategorized') }}</template>
             </div>
           </div>
           <!-- Status badge -->
@@ -36,48 +36,48 @@
         <!-- Stats row -->
         <div class="hero-values">
           <div class="hero-value-item">
-            <div class="hero-value-label">预期价格</div>
+            <div class="hero-value-label">{{ t('wish.expectedPrice') }}</div>
             <div class="hero-value-num">
               <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
-              <span v-else class="hero-value-unset">未设置</span>
+              <span v-else class="hero-value-unset">{{ t('wish.unset') }}</span>
             </div>
           </div>
           <div class="hero-value-item">
-            <div class="hero-value-label">优先级</div>
+            <div class="hero-value-label">{{ t('wish.priority') }}</div>
             <div class="hero-value-num">{{ priorityText }}</div>
           </div>
           <div class="hero-value-item">
-            <div class="hero-value-label">状态</div>
+            <div class="hero-value-label">{{ t('wish.status') }}</div>
             <div class="hero-value-num">{{ statusText }}</div>
           </div>
         </div>
 
-        <div v-if="wish.realized_asset_id" class="hero-realized-info">已转化为资产</div>
+        <div v-if="wish.realized_asset_id" class="hero-realized-info">{{ t('wish.realizedAsset') }}</div>
 
         <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
 
       <!-- Detail Info -->
-      <van-cell-group inset title="详细信息">
-        <van-cell title="状态" :value="statusText">
+      <van-cell-group inset :title="t('wish.detailInfo')">
+        <van-cell :title="t('wish.status')" :value="statusText">
           <template #value>
             <van-tag :type="statusType">{{ statusText }}</van-tag>
           </template>
         </van-cell>
-        <van-cell title="预期价格">
+        <van-cell :title="t('wish.expectedPrice')">
           <template #value>
             <span v-if="wish.expected_price">¥{{ wish.expected_price.toLocaleString() }}</span>
-            <span v-else class="unset">未设置</span>
+            <span v-else class="unset">{{ t('wish.unset') }}</span>
           </template>
         </van-cell>
-        <van-cell title="优先级" :value="priorityText" />
-        <van-cell title="分类" :value="wish.category?.name || '未分类'" />
-        <van-cell title="创建时间" :value="formatDate(wish.created_at)" />
-        <van-cell title="更新时间" :value="formatDate(wish.updated_at)" />
+        <van-cell :title="t('wish.priority')" :value="priorityText" />
+        <van-cell :title="t('asset.category')" :value="wish.category?.name || t('wish.uncategorized')" />
+        <van-cell :title="t('wish.createdAt')" :value="formatDate(wish.created_at)" />
+        <van-cell :title="t('wish.updatedAt')" :value="formatDate(wish.updated_at)" />
       </van-cell-group>
 
       <!-- Notes -->
-      <van-cell-group v-if="wish.description" inset title="备注">
+      <van-cell-group v-if="wish.description" inset :title="t('wish.notes')">
         <van-cell :title="wish.description" />
       </van-cell-group>
 
@@ -85,69 +85,69 @@
       <div class="actions">
         <template v-if="wish.status === 'pending'">
           <van-button v-if="wish.converts_to_asset" block type="primary" @click="showRealizeDialog = true">
-            转化为资产
+            {{ t('wish.convertToAsset') }}
           </van-button>
           <van-button block type="default" plain @click="$router.push(`/wishes/${wish.id}/edit`)">
-            编辑
+            {{ t('common.edit') }}
           </van-button>
           <van-button block type="warning" plain @click="onCancel">
-            取消心愿
+            {{ t('wish.cancelWish') }}
           </van-button>
         </template>
         <template v-else-if="wish.status === 'cancelled'">
           <van-button block type="success" plain @click="onReactivate">
-            重新激活
+            {{ t('wish.reactivate') }}
           </van-button>
           <van-button block type="primary" plain @click="$router.push(`/wishes/${wish.id}/edit`)">
-            编辑
+            {{ t('common.edit') }}
           </van-button>
         </template>
         <template v-else>
           <van-button block type="primary" plain @click="$router.push(`/wishes/${wish.id}/edit`)">
-            编辑
+            {{ t('common.edit') }}
           </van-button>
         </template>
         <van-button block type="danger" plain :loading="deleting" class="delete-btn" @click="onDelete">
-          删除
+          {{ t('common.delete') }}
         </van-button>
       </div>
 
       <!-- Realize Dialog -->
       <van-popup v-model:show="showRealizeDialog" round position="bottom" :style="{ height: '60%' }">
         <div class="realize-dialog">
-          <div class="dialog-title">转化为资产</div>
+          <div class="dialog-title">{{ t('wish.dialogTitle') }}</div>
           <van-form @submit="onRealize">
             <van-cell-group inset>
               <van-field
                 v-model="realizeForm.purchase_price"
                 name="purchase_price"
-                label="购入价格"
+                :label="t('asset.purchasePrice')"
                 type="number"
                 inputmode="decimal"
-                placeholder="请输入购入价格"
-                :rules="[{ required: true, message: '请输入购入价格' }]"
+                :placeholder="t('wish.purchasePricePlaceholder')"
+                :rules="[{ required: true, message: t('wish.purchasePriceRequired') }]"
               />
               <van-field
                 v-model="realizeForm.purchase_date"
                 name="purchase_date"
-                label="购入日期"
-                placeholder="点击选择"
+                :label="t('asset.purchaseDate')"
+                :placeholder="t('wish.selectDate')"
                 readonly
-                :rules="[{ required: true, message: '请选择购入日期' }]"
+                :rules="[{ required: true, message: t('wish.selectDateRequired') }]"
                 @click="showDatePicker = true"
               />
               <van-field
                 v-model="selectedCategoryName"
                 name="category"
-                label="分类"
-                placeholder="点击选择"
+                :label="t('asset.category')"
+                :placeholder="t('wish.selectCategory')"
                 readonly
                 @click="showCategoryPicker = true"
               />
             </van-cell-group>
             <div style="margin: 16px">
               <van-button round block type="primary" native-type="submit" :loading="realizing">
-                确认转化
+                {{ t('wish.confirmConvert') }}
               </van-button>
             </div>
           </van-form>
@@ -159,11 +159,34 @@
 
       <!-- Category Picker -->
       <van-popup v-model:show="showCategoryPicker" round position="bottom">
-        <van-picker
-          :columns="categoryColumns"
-          @confirm="onCategoryConfirm"
-          @cancel="showCategoryPicker = false"
-        />
+        <div class="category-picker-popup">
+          <div class="category-type-tabs">
+            <div
+              class="type-tab"
+              :class="{ active: selectedAssetType === 'physical' }"
+              @click="selectedAssetType = 'physical'"
+            >{{ t('categoryGrid.physical') }}</div>
+            <div
+              class="type-tab"
+              :class="{ active: selectedAssetType === 'financial' }"
+              @click="selectedAssetType = 'financial'"
+            >{{ t('categoryGrid.financial') }}</div>
+          </div>
+          <div class="category-grid">
+            <div
+              v-for="cat in filteredCategories"
+              :key="cat.id"
+              class="category-item"
+              :class="{ selected: realizeForm.category_id === cat.id }"
+              @click="selectCategory(cat.id)"
+            >
+              <svg class="cat-icon" aria-hidden="true">
+                <use :href="`#${getIconId(cat.icon)}`" />
+              </svg>
+              <span class="cat-name">{{ cat.name }}</span>
+            </div>
+          </div>
+        </div>
       </van-popup>
     </template>
 
@@ -205,30 +228,32 @@ const categories = ref<Category[]>([])
 
 const wish = computed(() => wishStore.currentWish)
 
-const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
-  pending: { text: '待实现', type: 'primary' },
-  realized: { text: '已实现', type: 'success' },
-  cancelled: { text: '已取消', type: 'default' }
-}
+const statusMap = computed<Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }>>(() => ({
+  pending: { text: t('wish.statusPending'), type: 'primary' },
+  realized: { text: t('wish.statusRealized'), type: 'success' },
+  cancelled: { text: t('wish.statusCancelled'), type: 'default' }
+}))
 
-const statusText = computed(() => statusMap[wish.value?.status || '']?.text || '')
-const statusType = computed(() => statusMap[wish.value?.status || '']?.type || 'default')
+const statusText = computed(() => statusMap.value[wish.value?.status || '']?.text || '')
+const statusType = computed(() => statusMap.value[wish.value?.status || '']?.type || 'default')
 
-const priorityMap: Record<string, string> = {
-  low: '低',
-  medium: '中',
-  high: '高'
-}
-const priorityText = computed(() => priorityMap[wish.value?.priority || 'medium'] || '中')
+const priorityMap = computed<Record<string, string>>(() => ({
+  low: t('wish.priorityLow'),
+  medium: t('wish.priorityMedium'),
+  high: t('wish.priorityHigh'),
+}))
+const priorityText = computed(() => priorityMap.value[wish.value?.priority ?? ''] ?? t('wish.unset'))
 
-const categoryColumns = computed(() => {
-  return categories.value.map(c => ({ text: `${c.icon} ${c.name}`, value: c.id }))
-})
+const selectedAssetType = ref<'physical' | 'financial'>('physical')
+
+const filteredCategories = computed(() =>
+  categories.value.filter(c => c.asset_type === selectedAssetType.value)
+)
 
 const selectedCategoryName = computed(() => {
   if (!realizeForm.value.category_id) return ''
   const cat = categories.value.find(c => c.id === realizeForm.value.category_id)
-  return cat ? `${cat.icon} ${cat.name}` : ''
+  return cat?.name ?? ''
 })
 
 function formatDate(dateStr: string) {
@@ -240,8 +265,8 @@ function onDateConfirm(date: Date) {
   showDatePicker.value = false
 }
 
-function onCategoryConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  realizeForm.value.category_id = selectedOptions[0].value
+function selectCategory(id: string) {
+  realizeForm.value.category_id = id
   showCategoryPicker.value = false
 }
 
@@ -258,6 +283,8 @@ async function onRealize() {
     showToast(t('toast.assetConverted'))
     showRealizeDialog.value = false
     router.push(`/assets/${res.data.id}`)
+  } catch {
+    showToast(t('toast.operationFailed'))
   } finally {
     realizing.value = false
   }
@@ -315,6 +342,12 @@ onMounted(async () => {
   // Load categories for picker
   const catRes = await getCategories()
   categories.value = catRes.data
+
+  // Pre-set asset type tab based on wish's existing category
+  if (wish.value?.category_id) {
+    const cat = categories.value.find(c => c.id === wish.value!.category_id)
+    if (cat) selectedAssetType.value = cat.asset_type as 'physical' | 'financial'
+  }
 })
 </script>
 
@@ -595,5 +628,72 @@ onMounted(async () => {
   text-align: center;
   margin-bottom: 16px;
   color: var(--text-primary);
+}
+
+/* Category picker popup */
+.category-picker-popup {
+  padding: 16px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.category-type-tabs {
+  display: flex;
+  background: var(--van-background-2);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 12px;
+}
+.type-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--van-text-color-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.type-tab.active {
+  background: var(--van-primary-color);
+  color: #fff;
+  font-weight: 600;
+}
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--van-background-2);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.category-item:active {
+  transform: scale(0.95);
+}
+.category-item.selected {
+  border-color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 12%, transparent);
+}
+.cat-icon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+.cat-name {
+  font-size: 10px;
+  color: var(--van-text-color-2);
+  margin-top: 4px;
+  text-align: center;
+  line-height: 1.2;
+}
+.category-item.selected .cat-name {
+  color: var(--van-primary-color);
 }
 </style>

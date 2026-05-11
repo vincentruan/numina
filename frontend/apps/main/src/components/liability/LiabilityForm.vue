@@ -3,34 +3,45 @@
     <van-cell-group inset>
       <van-field
         v-model="form.name"
-        label="名称"
-        placeholder="请输入负债名称"
-        :rules="[{ required: true, message: '请输入名称' }]"
+        :label="t('liability.name')"
+        :placeholder="t('liability.namePlaceholder')"
+        :rules="[{ required: true, message: t('liability.nameRequired') }]"
       />
 
       <van-field
         v-model="categoryDisplay"
         is-link
         readonly
-        label="类别"
-        placeholder="选择负债类别"
-        :rules="[{ required: true, message: '请选择类别' }]"
+        :label="t('liability.category')"
+        :placeholder="t('liability.selectCategory')"
+        :rules="[{ required: true, message: t('liability.categoryRequired') }]"
         @click="showCategoryPicker = true"
       />
       <van-popup v-model:show="showCategoryPicker" position="bottom" round>
-        <van-picker
-          :columns="categoryColumns"
-          @confirm="onCategoryConfirm"
-          @cancel="showCategoryPicker = false"
-        />
+        <div class="category-popup">
+          <div class="category-grid-popup">
+            <div
+              v-for="cat in categoryItems"
+              :key="cat.value"
+              class="category-item"
+              :class="{ selected: form.category === cat.value }"
+              @click="selectCategory(cat.value)"
+            >
+              <svg class="cat-icon" aria-hidden="true">
+                <use :href="`#${cat.icon}`" />
+              </svg>
+              <span class="cat-name">{{ cat.text }}</span>
+            </div>
+          </div>
+        </div>
       </van-popup>
 
       <van-field
         v-model="form.original_amount"
         type="number" inputmode="decimal"
-        label="原始金额"
-        placeholder="请输入原始金额"
-        :rules="[{ required: true, message: '请输入原始金额' }]"
+        :label="t('liability.originalAmount')"
+        :placeholder="t('liability.originalAmountPlaceholder')"
+        :rules="[{ required: true, message: t('liability.amountRequired') }]"
       >
         <template #left-icon>
           <CurrencyButton v-model="form.currency" />
@@ -40,9 +51,9 @@
       <van-field
         v-model="form.remaining_amount"
         type="number" inputmode="decimal"
-        label="剩余金额"
-        placeholder="请输入剩余金额"
-        :rules="[{ required: true, message: '请输入剩余金额' }]"
+        :label="t('liability.remainingAmount')"
+        :placeholder="t('liability.remainingAmountPlaceholder')"
+        :rules="[{ required: true, message: t('liability.amountRequired') }]"
       >
         <template #left-icon>
           <span class="field-prefix">{{ currencySymbol }}</span>
@@ -52,9 +63,9 @@
       <van-field
         v-model="form.monthly_payment"
         type="number" inputmode="decimal"
-        label="月供"
-        placeholder="请输入月供金额"
-        :rules="[{ required: true, message: '请输入月供' }]"
+        :label="t('liability.monthlyPayment')"
+        :placeholder="t('liability.monthlyPaymentPlaceholder')"
+        :rules="[{ required: true, message: t('liability.monthlyPaymentRequired') }]"
       >
         <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
@@ -62,23 +73,23 @@
       <van-field
         v-model="form.interest_rate"
         type="number" inputmode="decimal"
-        label="利率(%)"
-        placeholder="请输入年利率"
-        :rules="[{ required: true, message: '请输入利率' }]"
+        :label="t('liability.interestRateLabel')"
+        :placeholder="t('liability.interestRatePlaceholder')"
+        :rules="[{ required: true, message: t('liability.interestRateRequired') }]"
       />
 
       <van-field
         v-model="form.start_date"
         is-link
         readonly
-        label="开始日期"
-        placeholder="选择开始日期"
+        :label="t('liability.startDate')"
+        :placeholder="t('liability.selectStartDate')"
         @click="showStartPicker = true"
       />
       <van-popup v-model:show="showStartPicker" position="bottom" round>
         <van-date-picker
           v-model="startPickerValue"
-          title="选择开始日期"
+          :title="t('liability.selectStartDate')"
           @confirm="onStartConfirm"
           @cancel="showStartPicker = false"
         />
@@ -88,27 +99,27 @@
         v-model="form.end_date"
         is-link
         readonly
-        label="结束日期"
-        placeholder="选择结束日期(可选)"
+        :label="t('liability.endDate')"
+        :placeholder="t('liability.endDateOptional')"
         @click="showEndPicker = true"
       />
       <van-popup v-model:show="showEndPicker" position="bottom" round>
         <van-date-picker
           v-model="endPickerValue"
-          title="选择结束日期"
+          :title="t('liability.selectEndDate')"
           @confirm="onEndConfirm"
           @cancel="showEndPicker = false"
         />
       </van-popup>
 
-      <van-field v-model="form.institution" label="金融机构" placeholder="请输入金融机构(可选)" />
+      <van-field v-model="form.institution" :label="t('liability.institution')" :placeholder="t('liability.institutionPlaceholder')" />
 
-      <van-field v-model="form.notes" type="textarea" label="备注" placeholder="请输入备注(可选)" rows="2" autosize />
+      <van-field v-model="form.notes" type="textarea" :label="t('liability.notes')" :placeholder="t('liability.notesPlaceholder')" rows="2" autosize />
     </van-cell-group>
 
     <div class="form-actions">
       <van-button round block type="primary" native-type="submit" :loading="loading">
-        {{ isEdit ? '保存修改' : '添加负债' }}
+        {{ isEdit ? t('liability.saveChanges') : t('liability.addLiability') }}
       </van-button>
     </div>
   </van-form>
@@ -116,9 +127,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Liability } from '@/types'
 import { getLiabilityField } from '@/types'
 import CurrencyButton from '@/components/common/CurrencyButton.vue'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Liability>
@@ -187,26 +201,21 @@ const startPickerValue = ref([
 ])
 const endPickerValue = ref([...startPickerValue.value])
 
-const categoryColumns = [
-  { text: '房贷', value: 'mortgage' },
-  { text: '车贷', value: 'car_loan' },
-  { text: '信用卡', value: 'credit_card' },
-  { text: '个人贷款', value: 'personal_loan' },
-  { text: '其他', value: 'other' }
-]
+const categoryItems = computed(() => [
+  { text: t('liability.mortgage'), value: 'mortgage', icon: 'icon-mortgage' },
+  { text: t('liability.carLoan'), value: 'car_loan', icon: 'icon-car-loan' },
+  { text: t('liability.creditCard'), value: 'credit_card', icon: 'icon-credit-card' },
+  { text: t('liability.personalLoan'), value: 'personal_loan', icon: 'icon-personal-loan' },
+  { text: t('liability.other'), value: 'other', icon: 'icon-other-liability' },
+])
 
-const categoryDisplayMap: Record<string, string> = {
-  mortgage: '房贷',
-  car_loan: '车贷',
-  credit_card: '信用卡',
-  personal_loan: '个人贷款',
-  other: '其他'
-}
+const categoryDisplay = computed(() => {
+  const item = categoryItems.value.find(c => c.value === form.value.category)
+  return item?.text ?? ''
+})
 
-const categoryDisplay = computed(() => categoryDisplayMap[form.value.category] || '')
-
-function onCategoryConfirm({ selectedOptions }: { selectedOptions: { value: string }[] }) {
-  form.value.category = selectedOptions[0].value
+function selectCategory(value: string) {
+  form.value.category = value
   showCategoryPicker.value = false
 }
 
@@ -240,10 +249,51 @@ function onSubmit() {
 
 <style scoped>
 .field-prefix {
-  color: #323233;
+  color: var(--text-primary);
   margin-right: 4px;
 }
 .form-actions {
   padding: 16px;
+}
+.category-popup {
+  padding: 16px;
+}
+.category-grid-popup {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+.category-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 4px;
+  border-radius: 10px;
+  background: var(--van-background-2);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.category-item:active {
+  transform: scale(0.95);
+}
+.category-item.selected {
+  border-color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 12%, transparent);
+}
+.cat-icon {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
+}
+.cat-name {
+  font-size: 10px;
+  color: var(--van-text-color-2);
+  margin-top: 4px;
+  text-align: center;
+  line-height: 1.2;
+}
+.category-item.selected .cat-name {
+  color: var(--van-primary-color);
 }
 </style>
