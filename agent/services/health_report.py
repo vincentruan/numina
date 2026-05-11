@@ -44,12 +44,16 @@ REPORT_PROMPT_TEMPLATE = """你是一位专业的家庭财务顾问。以下是�
     "score": <1-5整数>,
     "narrative": "<50-100字的资产效率分析>"
   }},
-  "overall_score": <0-100整数>,
+  "overall_score": <20-100整数>,
   "summary": "<100-150字的综合总结和核心建议>"
 }}
 
 评分标准：1=很差，2=较差，3=一般，4=良好，5=优秀
-overall_score = 各维度加权平均（净资产30% + 配置25% + 负债25% + 效率20%）* 20"""
+overall_score 计算方式（必须严格按此公式）：
+  overall_score = round((net_worth_health.score * 0.30 + allocation_analysis.score * 0.25 + liability_pressure.score * 0.25 + asset_efficiency.score * 0.20) * 20)
+  示例：各维度均为4分 → (4*0.30 + 4*0.25 + 4*0.25 + 4*0.20) * 20 = 4 * 20 = 80
+  示例：各维度均为5分 → 5 * 20 = 100
+  overall_score 范围：20（全1分）到 100（全5分），不得输出 0"""
 
 
 def _build_data_summary(overview: dict, allocation: dict, trend: dict, low_usage: list, liabilities: list) -> str:
