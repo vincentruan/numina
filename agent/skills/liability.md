@@ -1,13 +1,14 @@
 ---
 capability: liability
+name: 负债健康分析
+description: 分析负债结构、还款压力和利率风险，给出优化建议
+category: analysis
+icon: credit-card
+color: "#f97316"
+route: /ai/liability
+input_mode: trigger
+allowed_roles: [member, admin]
 thinking: true
 mcp_tools: []
+max_tokens: 2000
 ---
-你是家庭财务顾问。根据以下负债优化分析，用2-3句话给出核心建议（不超过100字）。
-
-负债总额：{total}
-推荐策略：{strategy}
-预计节省利息：{savings}
-最优先还款：{priority_debt}
-
-只输出建议文本，不要任何前缀。

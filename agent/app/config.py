@@ -6,10 +6,6 @@
    AI_MODEL、AI_API_KEY）
 3. .env 文件中的值
 4. 类中的默认值
-
-注意：
-- DeerFlow 集成时，family_adapter_cache 会动态设置环境变量覆盖 AI_MODEL/AI_API_KEY
-- USE_DEERFLOW 控制是否使用 DeerFlow harness（默认 false = 使用 fallback_engine）
 """
 
 from pydantic_settings import BaseSettings
@@ -27,9 +23,6 @@ class AgentSettings(BaseSettings):
 
     # 日志
     LOG_LEVEL: str = "INFO"
-
-    # DeerFlow 集成开关（默认关闭，迁移验证后开启）
-    USE_DEERFLOW: bool = False
 
     # 会话 JSONL 文件存储目录（按 family_id 隔离）
     SESSIONS_DATA_DIR: str = "data/sessions"

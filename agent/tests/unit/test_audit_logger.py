@@ -131,13 +131,7 @@ class TestAuditLogger:
         assert any("user-42" in m for m in messages)
 
 
-class TestUseDeerflowFlag:
-    def test_use_deerflow_defaults_false(self):
-        import importlib
-        import app.config
-        importlib.reload(app.config)
-        assert app.config.settings.USE_DEERFLOW is False
-
+class TestDeerflowAuditFields:
     def test_deerflow_attempted_defaults_false(self):
         entry = AuditEntry(family_id="f1", capability="report", success=True)
         assert entry.deerflow_attempted is False

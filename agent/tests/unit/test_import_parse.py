@@ -10,6 +10,10 @@ VALID_TOKEN = "test-token"
 @pytest.fixture(autouse=True)
 def patch_token(monkeypatch):
     monkeypatch.setenv("AGENT_INTERNAL_TOKEN", VALID_TOKEN)
+    # Also patch the already-instantiated settings singleton — monkeypatch.setenv
+    # alone doesn't affect it because pydantic-settings reads env vars at init time.
+    with patch("app.config.settings.AGENT_INTERNAL_TOKEN", VALID_TOKEN):
+        yield
 
 
 def test_parse_returns_structured_items():

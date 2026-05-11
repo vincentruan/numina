@@ -62,7 +62,7 @@ class SkillLoader:
         if not match:
             return SkillConfig(capability=capability, prompt=content.strip(), thinking=False)
 
-        frontmatter_str, body = match.group(1), match.group(2).strip()
+        frontmatter_str = match.group(1)
         try:
             meta = yaml.safe_load(frontmatter_str) or {}
         except yaml.YAMLError:
@@ -70,15 +70,12 @@ class SkillLoader:
 
         config = SkillConfig(
             capability=capability,
-            prompt=body,
+            prompt="",  # prompts live in skills/custom/*/SKILL.md, loaded by DeerFlow harness
             thinking=bool(meta.get("thinking", True)),
             mcp_tools=list(meta.get("mcp_tools", [])),
         )
         self._cache[capability] = config
         return config
-
-    def get_prompt(self, capability: str) -> str:
-        return self.load(capability).prompt
 
     def thinking_enabled(self, capability: str) -> bool:
         return self.load(capability).thinking

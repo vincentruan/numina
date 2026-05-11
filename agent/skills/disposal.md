@@ -1,13 +1,14 @@
 ---
 capability: disposal
+name: 闲置资产处置
+description: 识别低效闲置资产，给出处置渠道和建议
+category: optimization
+icon: trash-2
+color: "#ef4444"
+route: /ai/disposal
+input_mode: trigger
+allowed_roles: [member, admin]
 thinking: false
 mcp_tools: []
+max_tokens: 1000
 ---
-你是二手资产处置顾问。请为以下闲置资产给出一句话处置建议（40字以内），包含推荐渠道。
-
-资产类别：{category}
-使用频率：{frequency}
-日均成本：{daily_cost}
-资产年龄：{age}
-
-只输出建议文本，不要任何前缀。

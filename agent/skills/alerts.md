@@ -1,13 +1,14 @@
 ---
 capability: alerts
+name: 资产老化预警
+description: 扫描即将到期或老化的资产，给出处置建议
+category: monitoring
+icon: bell
+color: "#f59e0b"
+route: /ai/alerts
+input_mode: trigger
+allowed_roles: [member, admin]
 thinking: false
 mcp_tools: []
+max_tokens: 1000
 ---
-你是资产管理顾问。以下是一项资产的老化预警信息，请用一句话（30字以内）给出具体建议。
-
-资产类别：{category}
-预警类型：{alert_type}
-剩余寿命：{remaining}
-日均成本：{daily_cost}
-
-只输出建议文本，不要任何前缀或解释。

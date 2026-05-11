@@ -61,8 +61,7 @@ agent/
 │   ├── deerflow_adapter/      # DeerFlow harness integration (mandatory execution path)
 │   │   ├── adapter.py         # Async wrapper + ThreadPoolExecutor bridge
 │   │   ├── family_adapter_cache.py  # LRU cache (100 families) of DeerFlowClient instances
-│   │   └── skill_loader.py    # Loads skill prompts from skills/*.md + per-family overrides
-│   ├── fallback_engine.py     # Direct LLM dispatch (used when USE_DEERFLOW=false)
+│   │   └── skill_loader.py    # Loads thinking/mcp_tools flags from skills/*.md frontmatter
 │   ├── pii_redactor.py        # PII scrubbing (must run before any LLM call)
 │   ├── policy_guard.py        # Request policy enforcement (pure in-memory)
 │   ├── audit_logger.py        # Structured JSONL audit log (logs/agent-audit.log, 30-day rotation)
@@ -109,7 +108,6 @@ agent/
 | `AGENT_INTERNAL_TOKEN` | — | **Required.** Shared service-to-service token; startup fails without it |
 | `BACKEND_BASE_URL` | `http://backend:8000` | Backend service address |
 | `AI_ENCRYPTION_KEY` | — | Fernet key shared with backend for decrypting per-family stored API keys |
-| `USE_DEERFLOW` | `false` | Route through DeerFlow harness vs direct LLM calls |
 | `DEERFLOW_DB_URL` | — | Postgres URL for DeerFlow checkpointer; SQLite used if absent |
 | `DEERFLOW_ENV` | `base` | Which `deerflow_config/` overlay to use (`base`/`dev`/`prod`) |
 | `ENVIRONMENT` | `development` | Controls whether `/docs` is exposed (hidden in `production`) |
@@ -120,11 +118,9 @@ agent/
 
 ## Patterns
 
-### DeerFlow as Primary Execution Path
+### DeerFlow as Mandatory Execution Path
 
-DeerFlow is the intended production execution path. `USE_DEERFLOW=true` routes through the DeerFlow harness; `USE_DEERFLOW=false` (default) uses `fallback_engine` for direct LLM calls.
-
-The orchestrator automatically falls back to `fallback_engine` if DeerFlow raises any exception, setting `fallback_used=True` in the response. DeerFlow init failure at startup is non-fatal (logged as warning) — the app starts regardless.
+DeerFlow is the only execution path. There is no fallback to direct LLM calls. If DeerFlow fails, the orchestrator returns a structured error response to the caller — the user sees "AI 服务暂时不可用，请稍后重试" and should retry.
 
 Per-family `DeerFlowClient` instances are cached in an LRU cache (max 100 families). Each family gets a temp config generated from `deerflow_config/base/config.yaml` with their `api_key`/`model_id` substituted. Cache is invalidated via `POST /internal/cache/invalidate/{family_id}`.
 
@@ -141,25 +137,38 @@ NDJSON event types: `phase.{connecting|thinking|answering}`, `token.stream`, `to
 
 The legacy text stream uses `[THINK]` / `[TEXT]` chunk prefixes. Prefer the NDJSON path for new capabilities.
 
-### Two Distinct Skill Systems
+### Unified Skill Schema (`skills/*.md`)
 
-There are two separate skill file formats — do not conflate them.
+Each capability has a `skills/{capability}.md` file with a unified frontmatter schema. This single file serves two consumers:
 
-**1. Capability prompt files (`skills/*.md`)** — consumed by `SkillLoader` and `CapabilityRegistry`. These are internal prompt templates, not DeerFlow skills.
+- **`CapabilityRegistry`** — reads UI metadata (`name`, `description`, `icon`, `color`, `route`, `input_mode`, `examples`, `allowed_roles`) for the `/capabilities` discovery endpoint
+- **`SkillLoader`** — reads `thinking` and `mcp_tools` flags for orchestrator dispatch config
 
 ```markdown
 ---
-capability: report
+capability: chat
+name: 智能问答
+description: 回答关于净资产、资产配置、负债等问题
+category: chat
+icon: message-circle
+color: "#06b6d4"
+route: /ai/chat
+input_mode: free_text          # free_text | trigger
+placeholder: 问问家庭资产状况...
+examples:
+  - 我的净资产健康吗？
+allowed_roles: [member, admin]
 thinking: true
 mcp_tools: []
+max_tokens: 2000
 ---
-
-LLM prompt body with {template_vars}...
 ```
 
-`CapabilityRegistry` reads frontmatter for the `/capabilities` discovery endpoint. `SkillLoader` reads the full file for prompt dispatch. Per-family prompt overrides are fetched from backend and cached by `(family_id, capability, updated_at)`.
+There is no prompt body in these files — prompts live in `skills/custom/*/SKILL.md` and are loaded directly by the DeerFlow harness.
 
-**2. DeerFlow custom skills (`skills/custom/*/SKILL.md`)** — loaded directly by the DeerFlow harness from `/app/skills/custom` (configured in `deerflow_config/base/config.yaml`). These use the DeerFlow skill spec format:
+### DeerFlow Custom Skills (`skills/custom/*/SKILL.md`)
+
+Loaded directly by the DeerFlow harness from `/app/skills/custom` (configured in `deerflow_config/base/config.yaml`). These use the DeerFlow skill spec format and are invoked by the harness based on `trigger_phrases` matching:
 
 ```markdown
 ---
@@ -188,8 +197,6 @@ planning:          # optional — enables DeerFlow multi-step planning mode
 ...
 ```
 
-DeerFlow custom skills are invoked by the harness based on `trigger_phrases` matching. The `skills/*.md` prompt files are used by the fallback engine and capability registry — they are independent of DeerFlow.
-
 ### Pydantic v2
 
 ```python
@@ -217,11 +224,12 @@ All endpoints require `X-Agent-Token` header matching `AGENT_INTERNAL_TOKEN`. No
 ## Gotchas
 
 - **`assets` and `members` are always `[]`** — `orchestrator._build_context()` hardcodes both to empty lists (no backend endpoint yet). PII redaction for those fields is a no-op.
-- **DeerFlow init failure is non-fatal** — `init_engine()` in `main.py` lifespan is wrapped in `try/except`. `USE_DEERFLOW=true` can silently degrade if the persistence engine fails to init.
+- **DeerFlow init failure is non-fatal** — `init_engine()` in `main.py` lifespan is wrapped in `try/except`. If the persistence engine fails to init, the app starts but DeerFlow calls will fail at dispatch time and return error responses.
 - **`_CHECKPOINTER_LOCK` serialises non-streaming DeerFlow calls** — at most 1 concurrent non-streaming DeerFlow dispatch at a time. Streaming calls do not hold this lock.
 - **Temp config dirs accumulate in `/tmp`** — `family_adapter_cache.py` creates a `tempfile.mkdtemp()` per family. Evicted entries clean up, but a crash leaves orphaned dirs.
 - **Session journal and session store can diverge** — `session_journal` writes JSONL to local disk; session metadata goes to backend DB via fire-and-forget HTTP. A backend failure leaves the local log without a corresponding DB record.
 - **Scheduler has zero active jobs** — `scheduler.py` is configured and starts cleanly but all job registrations are commented out (Phase 0).
+- **`fallback_engine.py` is a stub** — the file exists for import compatibility but contains no dispatch logic. Do not add LLM dispatch code to it.
 
 ## Links
 

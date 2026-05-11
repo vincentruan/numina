@@ -1,6 +1,5 @@
 """Tests for SkillLoader."""
-import pytest
-from services.deerflow_adapter.skill_loader import SkillLoader, SkillConfig, SKILLS_DIR
+from services.deerflow_adapter.skill_loader import SkillLoader
 
 
 def test_load_report_skill():
@@ -8,8 +7,7 @@ def test_load_report_skill():
     config = loader.load("report")
     assert config.capability == "report"
     assert config.thinking is True
-    assert len(config.prompt) > 0
-    assert "财务顾问" in config.prompt
+    assert config.prompt == ""  # prompts live in skills/custom/*/SKILL.md, loaded by DeerFlow harness
 
 
 def test_load_alerts_skill():
@@ -48,4 +46,4 @@ def test_all_capabilities_loadable():
     for cap in capabilities:
         config = loader.load(cap)
         assert config.capability == cap
-        assert len(config.prompt) > 0, f"Empty prompt for {cap}"
+        assert config.prompt == "", f"Expected empty prompt for {cap} (prompts live in DeerFlow custom skills)"
