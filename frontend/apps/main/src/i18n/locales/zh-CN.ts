@@ -575,6 +575,10 @@ export default {
     emptyLeaks: '暂无资金泄漏',
     emptyLeaksDesc: 'AI 将分析您的资产持有成本，找出隐性损耗和冗余支出',
     emptyLeaksBtn: '重新分析',
+    rescanAlerts: '重新扫描',
+    rescanLeaks: '重新分析',
+    alertsSummary: '共 {count} 条预警',
+    leaksSummary: '共 {count} 条泄漏',
   },
   timeMachine: {
     title: '资产时光机',

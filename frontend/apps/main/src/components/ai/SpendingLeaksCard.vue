@@ -34,16 +34,54 @@
           :elapsed-seconds="taskElapsed"
           v-model="isConsoleOpen"
         />
-        <van-button type="primary" block :loading="taskStatus === 'running'" @click="onRefresh">
+        <van-button
+          v-if="taskStatus !== 'running'"
+          type="primary"
+          block
+          @click="onRefresh"
+        >
           {{ t('aiTask.emptyLeaksBtn') }}
+        </van-button>
+        <van-button
+          v-else
+          type="danger"
+          block
+          class="cancel-btn"
+          @click="cancelTask"
+        >
+          <span class="stop-icon-wrapper">
+            <van-icon name="stop-circle-o" class="stop-icon" />
+            <van-loading size="14" type="spinner" class="spinning-ring" />
+          </span>
+          {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
     </div>
 
     <template v-else>
       <div class="summary-bar">
-        <span>共 {{ leaks.length }} 条泄漏</span>
-        <van-button size="mini" plain :loading="taskStatus === 'running'" @click="onRefresh">重新分析</van-button>
+        <span>{{ t('aiTask.leaksSummary', { count: leaks.length }) }}</span>
+        <van-button
+          v-if="taskStatus !== 'running'"
+          size="mini"
+          plain
+          @click="onRefresh"
+        >
+          {{ t('aiTask.rescanLeaks') }}
+        </van-button>
+        <van-button
+          v-else
+          size="mini"
+          type="danger"
+          class="cancel-btn-mini"
+          @click="cancelTask"
+        >
+          <span class="stop-icon-wrapper-mini">
+            <van-icon name="stop-circle-o" class="stop-icon-mini" />
+            <van-loading size="12" type="spinner" class="spinning-ring-mini" />
+          </span>
+          {{ t('aiTask.cancelBtn') }}
+        </van-button>
       </div>
 
       <van-swipe-cell v-for="leak in leaks" :key="leak.id" class="leak-item">
@@ -77,13 +115,19 @@ import TaskConsole from '@/components/ai/TaskConsole.vue'
 
 const { t } = useI18n()
 
+async function onScanComplete() {
+  await loadLeaks()
+  showToast(t('toast.aiScanComplete'))
+}
+
 const {
   status: taskStatus,
   chunks: taskChunks,
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   startStream,
-} = useAITask('spending_leak', '/ai/spending-leaks/refresh')
+  cancelTask,
+} = useAITask('spending_leak', '/ai/spending-leaks/refresh', onScanComplete)
 
 const loading = ref(false)
 const leaks = ref<SpendingLeakItem[]>([])
@@ -123,8 +167,6 @@ async function loadLeaks() {
 
 async function onRefresh() {
   await startStream()
-  await loadLeaks()
-  showToast(t('toast.aiScanComplete'))
 }
 
 async function onDismiss(id: number) {
@@ -212,4 +254,40 @@ onMounted(loadLeaks)
 .leak-meta { font-size: 12px; color: var(--text-secondary); }
 .leak-suggestion { font-size: 13px; color: var(--text-secondary); margin: 8px 0 0; line-height: 1.5; }
 .dismiss-btn { height: 100%; }
+.cancel-btn {
+  position: relative;
+}
+.stop-icon-wrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 6px;
+}
+.stop-icon { font-size: 16px; }
+.spinning-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(255, 255, 255, 0.6);
+}
+.cancel-btn-mini {
+  position: relative;
+}
+.stop-icon-wrapper-mini {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 4px;
+}
+.stop-icon-mini { font-size: 14px; }
+.spinning-ring-mini {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(244, 67, 54, 0.4);
+}
 </style>

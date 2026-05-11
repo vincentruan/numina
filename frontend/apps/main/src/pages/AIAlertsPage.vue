@@ -58,14 +58,14 @@
 
     <template v-else>
       <div class="summary-bar">
-        <span>共 {{ alerts.length }} 条预警</span>
+        <span>{{ t('aiTask.alertsSummary', { count: alerts.length }) }}</span>
         <van-button
           v-if="taskStatus !== 'running'"
           size="mini"
           plain
           @click="onRefresh"
         >
-          重新扫描
+          {{ t('aiTask.rescanAlerts') }}
         </van-button>
         <van-button
           v-else
@@ -78,7 +78,7 @@
             <van-icon name="stop-circle-o" class="stop-icon-mini" />
             <van-loading size="12" type="spinner" class="spinning-ring-mini" />
           </span>
-          终止
+          {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
 
