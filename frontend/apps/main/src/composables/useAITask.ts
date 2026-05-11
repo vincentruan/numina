@@ -37,6 +37,7 @@ export function useAITask(
   let timer: ReturnType<typeof setInterval> | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let startTime: number | null = null
+  let completedFired = false
 
   // ── Elapsed timer ──────────────────────────────────────────────────────────
 
@@ -68,8 +69,9 @@ export function useAITask(
           pollTimer = null
           status.value = task.status
           stopTimer()
-          if (task.status === 'completed') {
+          if (task.status === 'completed' && !completedFired) {
             isConsoleOpen.value = false
+            completedFired = true
             onComplete?.()
           }
         }
@@ -110,7 +112,10 @@ export function useAITask(
       stopTimer()
       stopPolling()
       isConsoleOpen.value = false
-      onComplete?.()
+      if (!completedFired) {
+        completedFired = true
+        onComplete?.()
+      }
     } catch (err: unknown) {
       const e = err as { name?: string }
       if (e?.name === 'AbortError') return // user navigated away
@@ -126,6 +131,7 @@ export function useAITask(
     chunks.value = []
     status.value = 'running'
     isConsoleOpen.value = true
+    completedFired = false
     startTimer(0)
 
     try {
@@ -199,8 +205,9 @@ export function useAITask(
         // Task may have completed while we were cancelling - check actual status
         const task = await getAITask(capability)
         status.value = task.status
-        if (task.status === 'completed') {
+        if (task.status === 'completed' && !completedFired) {
           isConsoleOpen.value = false
+          completedFired = true
           onComplete?.()
         }
       }

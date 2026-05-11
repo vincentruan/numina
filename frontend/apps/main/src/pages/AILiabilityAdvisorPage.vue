@@ -60,6 +60,33 @@
             </svg>
           </template>
         </van-empty>
+        <div class="actions">
+          <TaskConsole
+            :status="taskStatus"
+            :chunks="taskChunks"
+            :elapsed-seconds="taskElapsed"
+            v-model="isConsoleOpen"
+          />
+          <van-button
+            v-if="taskStatus !== 'running'"
+            plain
+            block
+            @click="onAnalyze"
+          >{{ t('liability.reanalyzeBtn') }}</van-button>
+          <van-button
+            v-else
+            type="danger"
+            block
+            class="cancel-btn"
+            @click="cancelTask"
+          >
+            <span class="stop-icon-wrapper">
+              <van-icon name="stop-circle-o" class="stop-icon" />
+              <van-loading size="14" type="spinner" class="spinning-ring" />
+            </span>
+            {{ t('aiTask.cancelBtn') }}
+          </van-button>
+        </div>
       </div>
 
       <template v-else>
@@ -72,7 +99,7 @@
             plain
             @click="onAnalyze"
           >
-            重新分析
+            {{ t('liability.reanalyzeBtn') }}
           </van-button>
           <van-button
             v-else
@@ -85,7 +112,7 @@
               <van-icon name="stop-circle-o" class="stop-icon-mini" />
               <van-loading size="12" type="spinner" class="spinning-ring-mini" />
             </span>
-            终止
+            {{ t('aiTask.cancelBtn') }}
           </van-button>
         </div>
 
@@ -187,7 +214,7 @@ function formatMoney(val: number | null | undefined) {
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(val)
 }
 
-async function loadData() {
+async function loadData(): Promise<boolean> {
   loading.value = true
   try {
     const res = await getLiabilityAdvice()
@@ -198,16 +225,18 @@ async function loadData() {
       )
       if (idx >= 0) activeTab.value = idx
     }
+    return true
   } catch {
     // no data yet, show empty state
+    return false
   } finally {
     loading.value = false
   }
 }
 
 async function onAnalyzeComplete() {
-  await loadData()
-  showToast(t('toast.aiAnalyzeComplete'))
+  const ok = await loadData()
+  if (ok) showToast(t('toast.aiAnalyzeComplete'))
 }
 
 const {
