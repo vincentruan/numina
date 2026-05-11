@@ -350,7 +350,7 @@ liabilityStore.fetchLiabilities({ is_active: true })
 /* Select mode cancel button */
 .select-cancel {
   font-size: 14px;
-  color: #dc2626;
+  color: var(--color-primary);
   padding: 4px 8px;
 }
 
@@ -396,9 +396,9 @@ liabilityStore.fetchLiabilities({ is_active: true })
 }
 
 .chip.active {
-  background: #17171c;
-  border-color: #17171c;
-  color: #fff;
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-on-primary);
 }
 
 [data-theme='dark'] .chip {
@@ -406,9 +406,9 @@ liabilityStore.fetchLiabilities({ is_active: true })
 }
 
 [data-theme='dark'] .chip.active {
-  background: #f5f5f5;
-  border-color: #f5f5f5;
-  color: #17171c;
+  background: var(--color-lavender);
+  border-color: var(--color-lavender);
+  color: #010120;
 }
 
 .sort-btn {
@@ -557,23 +557,27 @@ liabilityStore.fetchLiabilities({ is_active: true })
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: #dc2626;
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.45);
+  box-shadow: var(--shadow-elevated);
   z-index: 10;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  border: none;
 }
 
 .fab:active {
   transform: scale(0.93);
-  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.4);
+  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.2);
 }
 
 [data-theme='dark'] .fab {
-  box-shadow: 0 4px 16px rgba(220, 38, 38, 0.6);
+  background: var(--color-lavender);
+  color: #010120;
+  box-shadow: 0 4px 16px rgba(189, 187, 255, 0.3);
 }
 
 /* Payment dialog */

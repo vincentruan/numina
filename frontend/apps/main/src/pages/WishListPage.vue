@@ -487,13 +487,18 @@ onMounted(loadWishes)
   padding: 10px 20px;
   border-radius: 20px;
   border: none;
-  background: var(--van-primary-color);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.15s;
   min-height: 44px;
+}
+
+[data-theme='dark'] .empty-action-btn {
+  background: var(--color-lavender);
+  color: #010120;
 }
 
 .empty-action-btn:active {
@@ -536,12 +541,12 @@ onMounted(loadWishes)
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--van-primary-color);
-  color: #fff;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 16px rgba(23, 23, 28, 0.35);
+  box-shadow: var(--shadow-elevated);
   z-index: 10;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   cursor: pointer;
@@ -550,10 +555,12 @@ onMounted(loadWishes)
 
 .fab:active {
   transform: scale(0.93);
-  box-shadow: 0 2px 8px rgba(23, 23, 28, 0.25);
+  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.2);
 }
 
 [data-theme='dark'] .fab {
-  box-shadow: 0 4px 16px rgba(255, 119, 89, 0.4);
+  background: var(--color-lavender);
+  color: #010120;
+  box-shadow: 0 4px 16px rgba(189, 187, 255, 0.3);
 }
 </style>
