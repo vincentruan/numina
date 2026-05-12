@@ -36,7 +36,7 @@
     </div>
 
     <!-- History sidebar drawer -->
-    <van-popup v-model:show="showHistory" position="left" :style="{ width: '80%', height: '100%' }">
+    <van-popup v-model:show="showHistory" position="left" :style="{ width: '66%', height: '100%' }">
       <div class="history-panel">
         <div class="history-header">
           <button class="header-btn" aria-label="返回" @click="showHistory = false">
@@ -53,7 +53,7 @@
           <p>{{ t('aiChat.noHistory') }}</p>
           <p class="history-hint">{{ t('aiChat.historyHint') }}</p>
         </div>
-        <div v-else class="history-scroll">
+        <div v-else class="history-scroll" ref="historyScrollRef">
           <template v-for="group in groupedSessions" :key="group.label">
             <div class="history-group-label">{{ group.label }}</div>
             <ul class="history-list">
@@ -77,21 +77,24 @@
               </li>
             </ul>
           </template>
+          <!-- Pagination sentinel -->
+          <div ref="paginationSentinelRef" class="history-pagination-sentinel">
+            <span v-if="sessionsLoadingMore" class="history-load-more-text">{{ t('aiChat.loadingMore') }}</span>
+            <span v-else-if="sessionsAllLoaded" class="history-load-more-text">{{ t('aiChat.noMoreSessions') }}</span>
+          </div>
         </div>
-      </div>
-    </van-popup>
 
-    <!-- Session context menu -->
-    <div
-      v-if="sessionMenu.visible"
-      class="session-menu-backdrop"
-      @click="closeSessionMenu"
-    />
-    <div
-      v-if="sessionMenu.visible"
-      class="session-menu"
-      :style="{ top: sessionMenu.y + 'px', left: sessionMenu.x + 'px' }"
-    >
+        <!-- Session context menu — inside popup to share stacking context -->
+        <div
+          v-if="sessionMenu.visible"
+          class="session-menu-backdrop"
+          @click="closeSessionMenu"
+        />
+        <div
+          v-if="sessionMenu.visible"
+          class="session-menu"
+          :style="{ top: sessionMenu.y + 'px', left: sessionMenu.x + 'px' }"
+        >
       <button class="session-menu-item" @click="onRenameSession">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -111,7 +114,10 @@
         </svg>
         <span>{{ t('aiChat.deleteSession') }}</span>
       </button>
-    </div>
+        </div>
+        <!-- /session-menu -->
+      </div>
+    </van-popup>
 
     <!-- Rename session dialog -->
     <van-dialog
@@ -461,8 +467,15 @@ const scrollRef = ref<HTMLElement | null>(null)
 const showHistory = ref(false)
 const sessions = ref<SessionSummary[]>([])
 const sessionsLoading = ref(false)
+const sessionsLoadingMore = ref(false)
 const sessionsLoaded = ref(false)
+const sessionsAllLoaded = ref(false)
+const sessionsOffset = ref(0)
+const SESSIONS_PAGE_SIZE = 20
 const currentSessionId = ref<string | null>(null)
+const historyScrollRef = ref<HTMLElement | null>(null)
+const paginationSentinelRef = ref<HTMLElement | null>(null)
+let paginationObserver: IntersectionObserver | null = null
 
 // Session context menu state
 const sessionMenu = ref<{
@@ -707,19 +720,62 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
   return ''
 }
 
-// Load session list when history panel opens (lazy, once per mount)
-watch(showHistory, async (open) => {
-  if (!open || sessionsLoaded.value) return
-  sessionsLoading.value = true
+async function loadSessionsPage(reset = false) {
+  if (reset) {
+    sessions.value = []
+    sessionsOffset.value = 0
+    sessionsAllLoaded.value = false
+    sessionsLoaded.value = false
+  }
+  if (sessionsAllLoaded.value) return
+  if (reset) {
+    sessionsLoading.value = true
+  } else {
+    sessionsLoadingMore.value = true
+  }
   try {
-    const res = await getSessions(50, 0)
-    sessions.value = res.data.sessions
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value)
+    const incoming = res.data.sessions
+    sessions.value = [...sessions.value, ...incoming]
+    sessionsOffset.value += incoming.length
+    if (incoming.length < SESSIONS_PAGE_SIZE) {
+      sessionsAllLoaded.value = true
+    }
     sessionsLoaded.value = true
   } catch {
     // silently ignore — list stays empty
   } finally {
     sessionsLoading.value = false
+    sessionsLoadingMore.value = false
   }
+}
+
+function setupPaginationObserver() {
+  if (paginationObserver) {
+    paginationObserver.disconnect()
+    paginationObserver = null
+  }
+  if (!paginationSentinelRef.value) return
+  paginationObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting && sessionsLoaded.value && !sessionsLoadingMore.value && !sessionsAllLoaded.value) {
+        loadSessionsPage(false)
+      }
+    },
+    { threshold: 0.1 },
+  )
+  paginationObserver.observe(paginationSentinelRef.value)
+}
+
+// Load session list when history panel opens (lazy, once per mount)
+watch(showHistory, async (open) => {
+  if (!open) return
+  if (!sessionsLoaded.value) {
+    await loadSessionsPage(true)
+  }
+  // Set up IntersectionObserver after DOM updates
+  await nextTick()
+  setupPaginationObserver()
 })
 
 async function loadSessionMessages(session: SessionSummary) {
@@ -772,6 +828,9 @@ async function loadSessionMessages(session: SessionSummary) {
     reader?.cancel().catch(() => {})
     asking.value = false
     connecting.value = false
+    if (messages.value.length === 0) {
+      showToast(t('aiChat.sessionNotFound'))
+    }
     await scrollToBottom()
   }
 }
@@ -785,6 +844,9 @@ async function onNewChat() {
     currentSessionId.value = null
     customTitle.value = null
     sessionsLoaded.value = false  // force refresh next time history panel opens
+    sessions.value = []
+    sessionsOffset.value = 0
+    sessionsAllLoaded.value = false
   } catch {
     // cancelled
   }
@@ -1149,6 +1211,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   themeObserver?.disconnect()
+  paginationObserver?.disconnect()
 })
 </script>
 
@@ -1415,12 +1478,12 @@ onUnmounted(() => {
 .session-menu-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 1000;
+  z-index: 100;
 }
 
 .session-menu {
   position: fixed;
-  z-index: 1001;
+  z-index: 101;
   background: var(--bg-header);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -2140,5 +2203,18 @@ onUnmounted(() => {
 
 .ai-chat-page.theme-light .error-retry-btn:hover {
   background: rgba(248, 113, 113, 0.22);
+}
+
+/* ── History pagination sentinel ── */
+.history-pagination-sentinel {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-load-more-text {
+  font-size: 11px;
+  color: var(--text-muted);
 }
 </style>
