@@ -251,7 +251,7 @@ export default {
     languageEnUS: 'English',
     defaultCurrency: 'Default Currency',
     defaultView: 'Default View',
-    viewCard: 'Card View',
+    viewCard: 'Overview Card View',
     viewList: 'List View',
     accountInfo: 'Account Info',
     currentUser: 'Current User',

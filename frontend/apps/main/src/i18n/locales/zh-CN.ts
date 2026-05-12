@@ -336,7 +336,7 @@ export default {
     languageEnUS: 'English',
     defaultCurrency: '默认币种',
     defaultView: '默认视图',
-    viewCard: '卡片视图',
+    viewCard: '总览卡片视图',
     viewList: '列表视图',
     accountInfo: '账户信息',
     currentUser: '当前用户',
