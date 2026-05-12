@@ -46,4 +46,8 @@ export const childBlindBoxApi = {
   listBonusDraws: () => http.get<BonusDraw[]>('/child/blind-box/bonus-draws'),
   useBonusDraw: (bonusId: string) =>
     http.post<BlindBoxDraw>(`/child/blind-box/bonus-draws/${bonusId}/use`),
+
+  // Auto-triggered draw after chore approval
+  getLatestAutoDraw: () =>
+    http.get<BlindBoxDraw | null>('/child/blind-box/latest-auto-draw'),
 }

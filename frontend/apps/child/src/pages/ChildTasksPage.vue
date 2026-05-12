@@ -48,6 +48,26 @@
       :milestone-type="celebrationMilestone"
       @dismiss="dismissCelebration"
     />
+
+    <div
+      v-if="showAutoDrawOverlay"
+      class="auto-draw-overlay"
+      role="dialog"
+      :aria-label="t('blindBox.navTitle')"
+    >
+      <DrawAnimation
+        :animating="false"
+        :revealed="true"
+        :gift="autoDraw"
+        @draw="() => {}"
+      />
+      <button
+        class="btn-close-overlay"
+        @click="showAutoDrawOverlay = false; autoDraw = null"
+      >
+        {{ t('blindBox.autoTriggeredClose') }}
+      </button>
+    </div>
   </div>
 </template>
 
@@ -58,6 +78,10 @@ import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
+import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
+import { childBlindBoxApi } from '@/api/blindBox'
+import type { BlindBoxDraw } from '@/types/blindBox'
+import http from '@/api/index'
 
 const { t } = useI18n()
 
@@ -68,6 +92,8 @@ const submittingId = ref<string | null>(null)
 const celebrationVisible = ref(false)
 const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
+const autoDraw = ref<BlindBoxDraw | null>(null)
+const showAutoDrawOverlay = ref(false)
 
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -122,6 +148,36 @@ function dismissCelebration() {
   }
 }
 
+async function checkAutoDraw() {
+  try {
+    const res = await childBlindBoxApi.getLatestAutoDraw()
+    if (res.data) {
+      autoDraw.value = res.data
+      showAutoDrawOverlay.value = true
+    }
+  } catch {
+    // silent — blind box is a bonus, not critical
+  }
+}
+
+async function pollForApproval(instanceId: string) {
+  const interval = 5_000
+  const deadline = Date.now() + 600_000 // 10 minutes
+  while (Date.now() < deadline) {
+    await new Promise(r => setTimeout(r, interval))
+    try {
+      const res = await http.get<{ status: string }>(`/child/chores/${instanceId}/status`)
+      if (res.data.status === 'approved') {
+        await checkAutoDraw()
+        return
+      }
+      if (res.data.status === 'rejected') return
+    } catch {
+      return
+    }
+  }
+}
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -140,6 +196,12 @@ async function complete(instanceId: string) {
     const updated = await markChoreComplete(instanceId)
     const idx = chores.value.findIndex(c => c.id === instanceId)
     if (idx !== -1) chores.value[idx] = updated
+    // Check for auto-triggered blind box
+    if (updated.status === 'approved') {
+      await checkAutoDraw()
+    } else if (updated.status === 'pending_approval') {
+      pollForApproval(instanceId) // intentionally not awaited — runs in background
+    }
   } catch {
     error.value = t('toast.submitFailed')
   } finally {
@@ -273,5 +335,29 @@ onMounted(async () => {
   margin-bottom: 12px;
   font-family: Inter, sans-serif;
   font-size: 14px;
+}
+
+/* ── Auto-draw overlay ── */
+.auto-draw-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+}
+
+.btn-close-overlay {
+  background: var(--color-brand-mint);
+  color: var(--color-ink);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 12px 32px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
 }
 </style>

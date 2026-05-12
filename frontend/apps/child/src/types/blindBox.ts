@@ -39,6 +39,8 @@ export interface BlindBoxDraw {
   gift_emoji: string | null
   is_surprise: boolean
   is_bonus: boolean
+  is_auto_triggered: boolean
+  shown_to_child: boolean
   status: 'pending_fulfillment' | 'fulfilled'
   draw_at: string
   fulfilled_at: string | null

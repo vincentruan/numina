@@ -186,6 +186,7 @@ export default {
     statusFulfilled: '已兑现',
     statusPending: '待兑现',
     surpriseAriaPrefix: '超预期惊喜，',
+    autoTriggeredClose: '关闭',
   },
   calendar: {
     legendChore: '打卡',
