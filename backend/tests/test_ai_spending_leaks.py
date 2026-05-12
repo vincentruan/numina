@@ -120,7 +120,7 @@ def test_refresh_spending_leaks(client, auth_headers, db):
 
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("httpx.AsyncClient", new_callable=lambda: lambda **kw: _mock_streaming_client()()):
+    with patch("httpx.AsyncClient", new=_mock_streaming_client()):
         resp = client.post("/api/v1/ai/spending-leaks/refresh", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -141,7 +141,6 @@ def test_refresh_spending_leaks_409_when_in_progress(client, auth_headers, db):
     family_id = _enable_ai(db, auth_headers, client)
 
     task = AITask(
-        id="test-leak-task",
         family_id=family_id,
         capability="spending_leak",
         status="running",

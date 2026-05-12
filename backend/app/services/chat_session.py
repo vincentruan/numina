@@ -19,6 +19,7 @@ from app.models.cached_file import CachedFile
 from app.models.file_remote_location import FileRemoteLocation
 from app.models.storage_backend import StorageBackend
 from app.models.user import User
+from app.utils.snowflake import next_id
 
 # UUID validation regex (36 chars: 8-4-4-4-12 hex digits with hyphens)
 UUID_PATTERN = re.compile(
@@ -182,7 +183,7 @@ class ChatSessionService:
         """
         family_id = _validate_id(family_id, "family_id")
 
-        session_id = str(uuid.uuid4())
+        session_id = next_id()
         jsonl_path_relative = f"{family_id}/{session_id}.jsonl"
 
         # Validate and create file path
@@ -211,7 +212,7 @@ class ChatSessionService:
 
     @staticmethod
     def get_session(
-        session_id: str,
+        session_id: int | str,
         family_id: int | str,
         db: Session,
     ) -> AIChatSession | None:

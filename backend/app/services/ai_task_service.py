@@ -1,12 +1,9 @@
 """AI 任务状态服务 — 管理长任务的生命周期。"""
 
-import uuid
 from datetime import datetime, timedelta
 
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.errors import AppError, ErrorCode
 from app.models.ai_task import AITask
 
 TASK_TIMEOUT_MINUTES = 30
@@ -62,12 +59,11 @@ class AITaskService:
     def create_task(
         family_id: int | str,
         capability: str,
-        session_id: str | None,
+        session_id: int | None,
         db: Session,
     ) -> AITask:
-        """创建新任务记录。若并发请求导致唯一约束冲突，抛出 AI_TASK_IN_PROGRESS。"""
+        """创建新任务记录。"""
         task = AITask(
-            id=str(uuid.uuid4()),
             family_id=int(family_id),
             capability=capability,
             status="running",
@@ -75,11 +71,7 @@ class AITaskService:
             started_at=datetime.utcnow(),
         )
         db.add(task)
-        try:
-            db.commit()
-        except IntegrityError as e:
-            db.rollback()
-            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
+        db.commit()
         db.refresh(task)
         return task
 
@@ -87,7 +79,7 @@ class AITaskService:
     def create_queued_task(
         family_id: int | str,
         capability: str,
-        session_id: str | None,
+        session_id: int | None,
         db: Session,
     ) -> AITask:
         """创建排队任务。当家庭已有其他 capability 运行时使用。"""
@@ -101,7 +93,6 @@ class AITaskService:
             .count()
         )
         task = AITask(
-            id=str(uuid.uuid4()),
             family_id=int(family_id),
             capability=capability,
             status="queued",
@@ -115,9 +106,9 @@ class AITaskService:
         return task
 
     @staticmethod
-    def promote_queued_task(task_id: str, db: Session) -> None:
+    def promote_queued_task(task_id: int | str, db: Session) -> None:
         """将排队任务提升为 running。"""
-        task = db.query(AITask).filter_by(id=task_id).first()
+        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task and task.status == "queued":
             task.status = "running"
             task.queue_position = None
@@ -138,16 +129,16 @@ class AITaskService:
         )
 
     @staticmethod
-    def complete_task(task_id: str, db: Session) -> None:
-        task = db.query(AITask).filter_by(id=task_id).first()
+    def complete_task(task_id: int | str, db: Session) -> None:
+        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task and task.status in ("running", "queued"):
             task.status = "completed"
             task.completed_at = datetime.utcnow()
             db.commit()
 
     @staticmethod
-    def fail_task(task_id: str, error_message: str, db: Session) -> None:
-        task = db.query(AITask).filter_by(id=task_id).first()
+    def fail_task(task_id: int | str, error_message: str, db: Session) -> None:
+        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
         if task and task.status in ("running", "queued"):
             task.status = "failed"
             task.completed_at = datetime.utcnow()
@@ -155,8 +146,8 @@ class AITaskService:
             db.commit()
 
     @staticmethod
-    def get_task_by_id(task_id: str, db: Session) -> AITask | None:
-        return db.query(AITask).filter_by(id=task_id).first()
+    def get_task_by_id(task_id: int | str, db: Session) -> AITask | None:
+        return db.query(AITask).filter(AITask.id == int(task_id)).first()
 
     @staticmethod
     def cancel_task(family_id: int | str, capability: str, db: Session) -> bool:

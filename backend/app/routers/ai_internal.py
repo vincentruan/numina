@@ -7,7 +7,7 @@
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -307,7 +307,7 @@ def internal_upsert_session(
         db.add(row)
     else:
         if row.family_id != int(family_id):
-            raise HTTPException(status_code=403, detail="family_id mismatch")
+            raise AppError(ErrorCode.FORBIDDEN)
         row.updated_at = datetime.utcnow()
         if body.last_model:
             row.last_model = body.last_model
@@ -326,7 +326,7 @@ def internal_update_session_summary(
 
     row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
     if row is None or row.family_id != int(family_id):
-        raise HTTPException(status_code=404, detail="session not found")
+        raise AppError(ErrorCode.NOT_FOUND)
     if body.summary:
         row.last_message_summary = body.summary[:200]
     if body.title:
@@ -374,5 +374,5 @@ def internal_get_session(
 
     row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
     if row is None or row.family_id != int(family_id):
-        raise HTTPException(status_code=404, detail="session not found")
+        raise AppError(ErrorCode.NOT_FOUND)
     return _session_to_dict(row)

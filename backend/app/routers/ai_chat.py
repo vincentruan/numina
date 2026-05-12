@@ -2,6 +2,7 @@
 
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime
@@ -61,8 +62,8 @@ class ChatStreamRequest(BaseModel):
 
 
 def _get_session_for_family(
-    session_id: str | None,
-    family_id: str,
+    session_id: int | str | None,
+    family_id: int | str,
     db: Session,
 ) -> AIChatSession | None:
     """Load a session by ID, enforcing family_id ownership (security invariant)."""
@@ -70,7 +71,7 @@ def _get_session_for_family(
         return None
     return (
         db.query(AIChatSession)
-        .filter_by(id=session_id, family_id=family_id)
+        .filter(AIChatSession.id == session_id, AIChatSession.family_id == int(family_id))
         .first()
     )
 
@@ -166,8 +167,8 @@ async def chat(
     return {
         "question": body.question,
         "answer": answer,
-        "message_id": session.id,
-        "session_id": session.id,
+        "message_id": str(session.id),
+        "session_id": str(session.id),
     }
 
 
@@ -270,7 +271,7 @@ def get_sessions(
     )
     return [
         {
-            "session_id": s.id,
+            "session_id": str(s.id),
             "created_at": s.created_at.isoformat(),
             "message_count": s.message_count,
             "last_preview": s.last_preview,
@@ -387,7 +388,7 @@ def list_all_sessions(
     return {
         "sessions": [
             {
-                "session_id": s.id,
+                "session_id": str(s.id),
                 "family_id": str(s.family_id),
                 "user_id": str(s.user_id) if s.user_id else None,
                 "capability": s.capability,
@@ -412,8 +413,7 @@ async def stream_session_events(
     db: Session = Depends(get_db),
 ):
     """代理 agent 的会话事件流（NDJSON），用于历史回放。"""
-    import re
-    if not re.fullmatch(r"[0-9a-fA-F\-]{32,36}", session_id):
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
         raise AppError(ErrorCode.NOT_FOUND)
     session = _get_session_for_family(session_id, current_user.family_id, db)
     if session is None:

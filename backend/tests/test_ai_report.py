@@ -157,7 +157,7 @@ def test_generate_report_requires_ai_enabled(client, auth_headers, db):
 
 def test_generate_report_requires_owner(client, auth_headers, db):
     """POST /ai/report/generate requires owner role (embedded in JWT)."""
-    family_id = _enable_ai(db, auth_headers, client)
+    _enable_ai(db, auth_headers, client)
 
     with patch("httpx.AsyncClient", new=_make_streaming_mock()):
         resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
@@ -175,7 +175,6 @@ def test_generate_report_409_when_task_in_progress(client, auth_headers, db):
     family_id = _enable_ai(db, auth_headers, client)
 
     task = AITask(
-        id="test-task-id",
         family_id=family_id,
         capability="report",
         status="running",
@@ -214,10 +213,10 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
 
     mock_cls = MagicMock(return_value=mock_client)
 
-    with patch("httpx.AsyncClient", new=mock_cls):
-        # Starlette re-raises streaming errors through the test client
-        with pytest.raises(Exception):
-            client.post("/api/v1/ai/report/generate", headers=auth_headers)
+    with patch("httpx.AsyncClient", new=mock_cls), \
+         patch("app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()), \
+         pytest.raises(Exception, match="Agent error"):
+        client.post("/api/v1/ai/report/generate", headers=auth_headers)
 
     # The task should be marked failed in DB despite the exception
     db.expire_all()

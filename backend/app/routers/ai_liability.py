@@ -163,6 +163,7 @@ async def events_liability_advice(
             session_id=session_id,
             family_id=family_id,
             current_user=current_user,
+            db=db,
         ),
         media_type="application/x-ndjson",
     )

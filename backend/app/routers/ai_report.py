@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.auth.ai_deps import require_ai_enabled, require_owner
 from app.auth.deps import require_adult
 from app.config import settings
-from app.database import SessionLocal, get_db
+from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_report import AIReport
 from app.models.ai_ws_ticket import AIWsTicket
@@ -83,43 +83,41 @@ async def trigger_generate(
     # 4. 透传 agent streaming
     async def proxy_stream():
         buffer: list[str] = []
-        with SessionLocal() as stream_db:
-            try:
-                async with (
-                    httpx.AsyncClient(timeout=None) as client,
-                    client.stream(
-                        "POST",
-                        f"{settings.AGENT_BASE_URL}/report/generate/stream",
-                        headers={
-                            "X-Family-Id": str(current_user.family_id),
-                            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                            "X-Task-Id": task.id,
-                            "X-Thread-Id": session.id,
-                        },
-                        timeout=None,
-                    ) as resp,
-                ):
-                        async for chunk in resp.aiter_text():
-                            buffer.append(chunk)
-                            yield chunk.encode("utf-8")
-                            if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
-                                await ChatSessionService.append_message(
-                                    session, "assistant", "".join(buffer), current_user, stream_db
-                                )
-                                buffer.clear()
-                if buffer:
-                    await ChatSessionService.append_message(
-                        session, "assistant", "".join(buffer), current_user, stream_db
-                    )
-                AITaskService.complete_task(task.id, stream_db)
-            except Exception as e:
-                logger.error(f"[ai_report] proxy_stream failed: {e}")
-                if buffer:
-                    await ChatSessionService.append_message(
-                        session, "assistant", "".join(buffer), current_user, stream_db
-                    )
-                AITaskService.fail_task(task.id, "agent_stream_error", stream_db)
-                raise
+        try:
+            async with (
+                httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)) as client,
+                client.stream(
+                    "POST",
+                    f"{settings.AGENT_BASE_URL}/report/generate/stream",
+                    headers={
+                        "X-Family-Id": str(current_user.family_id),
+                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                        "X-Task-Id": task.id,
+                        "X-Thread-Id": session.id,
+                    },
+                ) as resp,
+            ):
+                    async for chunk in resp.aiter_text():
+                        buffer.append(chunk)
+                        yield chunk.encode("utf-8")
+                        if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
+                            await ChatSessionService.append_message(
+                                session, "assistant", "".join(buffer), current_user, db
+                            )
+                            buffer.clear()
+            if buffer:
+                await ChatSessionService.append_message(
+                    session, "assistant", "".join(buffer), current_user, db
+                )
+            AITaskService.complete_task(task.id, db)
+        except Exception as e:
+            logger.error(f"[ai_report] proxy_stream failed: {e}")
+            if buffer:
+                await ChatSessionService.append_message(
+                    session, "assistant", "".join(buffer), current_user, db
+                )
+            AITaskService.fail_task(task.id, "agent_stream_error", db)
+            raise
 
     return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 

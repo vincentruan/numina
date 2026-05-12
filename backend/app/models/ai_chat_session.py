@@ -15,12 +15,13 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.utils.snowflake import next_id
 
 
 class AIChatSession(Base):
     __tablename__ = "ai_chat_sessions"
 
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(
         BigInteger, ForeignKey("families.id"), nullable=False, index=True
     )
