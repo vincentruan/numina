@@ -116,9 +116,9 @@
                   <van-icon name="gift-o" size="18" />
                   <span>审批心愿</span>
                 </button>
-                <button class="action-btn action-btn--star" @click="openGrantSheet(child)">
-                  <van-icon name="star-o" size="18" />
-                  <span>赠送星星</span>
+                <button class="action-btn action-btn--edit" @click="openEditSheet(child)">
+                  <van-icon name="edit" size="18" />
+                  <span>{{ t('family.editChildBtn') }}</span>
                 </button>
                 <button class="action-btn action-btn--danger" @click="onForceLogout(child)">
                   <van-icon name="revoke" size="18" />
@@ -158,30 +158,46 @@
           >{{ t('family.addChild') }}</van-button>
         </div>
 
-        <!-- Manual coin grant bottom sheet -->
-        <van-popup v-model:show="showGrantSheet" position="bottom" round style="padding: 24px 16px 40px">
-          <p class="sheet-title">⭐ 赠送星星币给 {{ grantTargetChild?.display_name }}</p>
+        <!-- Edit child info bottom sheet -->
+        <van-popup v-model:show="editSheetVisible" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('family.editChildTitle') }}</p>
           <van-field
-            v-model="grantAmountStr"
-            type="digit"
-            label="数量"
-            placeholder="输入星星币数量"
+            v-model="editForm.display_name"
+            :label="t('family.editChildName')"
+            :placeholder="t('family.editChildNamePlaceholder')"
+            maxlength="20"
             style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
           />
-          <van-field
-            v-model="grantReason"
-            label="原因"
-            placeholder="例：今天表现很棒！"
-            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          <p class="sheet-label">{{ t('family.editChildColor') }}</p>
+          <div class="color-swatch-picker">
+            <button
+              v-for="color in AVATAR_COLORS"
+              :key="color"
+              class="color-swatch"
+              :class="{ selected: editForm.avatar_color === color }"
+              :style="{ background: color }"
+              @click="editForm.avatar_color = color"
+            />
+          </div>
+          <p class="sheet-label">{{ t('family.editChildBirthday') }}</p>
+          <van-date-picker
+            v-model="editBirthdayParts"
+            :min-date="new Date(2000, 0, 1)"
+            :max-date="new Date()"
+            style="margin-top: 4px"
           />
+          <van-cell :title="t('family.editChildLunar')" style="padding: 8px 0">
+            <template #right-icon>
+              <van-switch v-model="editForm.birthday_is_lunar" size="20" />
+            </template>
+          </van-cell>
           <van-button
             block
             type="primary"
-            :disabled="!grantAmountStr || parseInt(grantAmountStr) <= 0"
-            :loading="grantingCoins"
-            style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
-            @click="doGrant"
-          >确认赠送</van-button>
+            :loading="editSubmitting"
+            style="margin-top: 16px; border-radius: 12px"
+            @click="submitEdit"
+          >{{ t('family.editChildSave') }}</van-button>
         </van-popup>
 
         <!-- Add child bottom sheet -->
@@ -227,8 +243,7 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'
-import { grantCoins } from '@/api/coins'
+import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, type ChoreStats } from '@/api/family'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
@@ -246,12 +261,18 @@ const childWishCounts = ref<Record<string, number>>({})
 const totalPendingChores = ref(0)
 const totalPendingWishes = ref(0)
 
-// Manual grant sheet state
-const showGrantSheet = ref(false)
-const grantTargetChild = ref<{ id: string; display_name: string } | null>(null)
-const grantAmountStr = ref('')
-const grantReason = ref('')
-const grantingCoins = ref(false)
+const AVATAR_COLORS = ['#4F46E5', '#7C3AED', '#DB2777', '#D97706', '#059669', '#0284C7']
+
+// Edit child info sheet state
+const editSheetVisible = ref(false)
+const editTargetChild = ref<{ id: string; display_name: string } | null>(null)
+const editForm = ref({
+  display_name: '',
+  avatar_color: '#4F46E5',
+  birthday_is_lunar: false,
+})
+const editBirthdayParts = ref<string[]>([])
+const editSubmitting = ref(false)
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const childMembers = computed(() =>
   familyStore.members.filter(m => m.role === 'child'),
@@ -358,32 +379,44 @@ async function onRegenerate() {
   }
 }
 
-function openGrantSheet(child: { id: string; display_name: string }) {
-  grantTargetChild.value = child
-  grantAmountStr.value = ''
-  grantReason.value = ''
-  showGrantSheet.value = true
+function openEditSheet(child: { id: string; display_name: string; avatar_color?: string; birthday?: string | null; birthday_is_lunar?: boolean }) {
+  editTargetChild.value = child
+  editForm.value.display_name = child.display_name
+  editForm.value.avatar_color = child.avatar_color || '#4F46E5'
+  editForm.value.birthday_is_lunar = child.birthday_is_lunar ?? false
+  if (child.birthday) {
+    const parts = child.birthday.split('-')
+    editBirthdayParts.value = parts
+  } else {
+    const today = new Date()
+    editBirthdayParts.value = [
+      String(today.getFullYear()),
+      String(today.getMonth() + 1).padStart(2, '0'),
+      String(today.getDate()).padStart(2, '0'),
+    ]
+  }
+  editSheetVisible.value = true
 }
 
-async function doGrant() {
-  const amount = parseInt(grantAmountStr.value)
-  if (!grantTargetChild.value || !amount || amount <= 0) return
-  grantingCoins.value = true
+async function submitEdit() {
+  if (!editTargetChild.value) return
+  editSubmitting.value = true
   try {
-    await grantCoins(grantTargetChild.value.id, amount, grantReason.value || '父母奖励')
-    showToast(t('toast.childGrantedStars', { amount, name: grantTargetChild.value.display_name }))
-    showGrantSheet.value = false
+    const [year, month, day] = editBirthdayParts.value
+    await updateMemberInfo(editTargetChild.value.id, {
+      display_name: editForm.value.display_name,
+      avatar_color: editForm.value.avatar_color,
+      birthday: `${year}-${month}-${day}`,
+      birthday_is_lunar: editForm.value.birthday_is_lunar,
+    })
+    showToast(t('family.editChildSaved'))
+    editSheetVisible.value = false
+    await familyStore.fetchMembers()
   } catch {
-    showToast(t('toast.grantFailed'))
-    return
+    showToast(t('family.editChildFailed'))
   } finally {
-    grantingCoins.value = false
+    editSubmitting.value = false
   }
-  // Refresh balances separately so a fetch failure doesn't misreport the grant
-  try {
-    const res = await getAllChildBalances()
-    childBalances.value = res.data
-  } catch { /* non-critical */ }
 }
 
 async function onRefresh() {
@@ -593,8 +626,8 @@ onMounted(async () => {
   background: rgba(0, 0, 0, 0.04);
 }
 
-.action-btn--star {
-  color: #f5a623;
+.action-btn--edit {
+  color: #4F46E5;
 }
 
 
@@ -669,4 +702,26 @@ onMounted(async () => {
 .swipe-btn {
   height: 100%;
 }
+
+.color-swatch-picker {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.color-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.color-swatch.selected {
+  border-color: #333;
+  transform: scale(1.15);
+}
+
 </style>

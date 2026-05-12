@@ -68,3 +68,15 @@ export interface ChoreStats {
 export function getChildrenChoreStats() {
   return http.get<Record<string, ChoreStats>>('/family/children/chore-stats')
 }
+
+export function updateMemberInfo(
+  memberId: string,
+  data: {
+    display_name?: string
+    avatar_color?: string
+    birthday?: string // YYYY-MM-DD format
+    birthday_is_lunar?: boolean
+  },
+) {
+  return http.patch(`/family/members/${memberId}/info`, data)
+}

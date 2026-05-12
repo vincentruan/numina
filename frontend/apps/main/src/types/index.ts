@@ -13,6 +13,8 @@ export interface User {
   created_at: string
   second_factor_enabled?: boolean
   second_factor_type?: string | null
+  birthday?: string | null
+  birthday_is_lunar?: boolean
 }
 
 export interface Family {
