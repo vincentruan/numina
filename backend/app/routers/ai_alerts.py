@@ -37,7 +37,7 @@ def get_alerts(
     )
     return [
         {
-            "id": str(a.id),
+            "id": a.id,
             "asset_id": a.asset_id,
             "asset_name": a.asset_name,
             "alert_type": a.alert_type,

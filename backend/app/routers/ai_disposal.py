@@ -37,7 +37,7 @@ def get_disposal_suggestions(
     )
     return [
         {
-            "id": str(s.id),
+            "id": s.id,
             "asset_id": s.asset_id,
             "asset_name": s.asset_name,
             "category_name": s.category_name,
