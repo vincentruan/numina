@@ -1,6 +1,6 @@
 <template>
   <div class="ai-alerts-page">
-    <PageHeader title="资产老化预警" />
+    <PageHeader :title="t('aiAlerts.title')" />
 
     <div v-if="loading" class="loading-state">
       <van-loading size="32" type="spinner" />
@@ -86,19 +86,19 @@
         <div class="alert-card" :class="`severity-${alert.severity}`">
           <div class="alert-header">
             <span class="alert-type-badge">{{ alertTypeLabel(alert.alert_type) }}</span>
-          <span class="severity-dot" :class="`dot-${alert.severity}`" :aria-label="({ high: '高严重度', medium: '中严重度', low: '低严重度' } as Record<string, string>)[alert.severity]" role="img" />
+          <span class="severity-dot" :class="`dot-${alert.severity}`" :aria-label="({ high: t('aiAlerts.severityHigh'), medium: t('aiAlerts.severityMedium'), low: t('aiAlerts.severityLow') } as Record<string, string>)[alert.severity]" role="img" />
           </div>
           <div class="alert-name">{{ alert.asset_name }}</div>
           <div v-if="alert.remaining_life_days != null" class="alert-meta">
-            剩余寿命：{{ alert.remaining_life_days }} 天
+            {{ t('aiAlerts.remainingLife', { days: alert.remaining_life_days }) }}
           </div>
           <div v-if="alert.daily_cost" class="alert-meta">
-            日均成本：¥{{ alert.daily_cost.toFixed(1) }}/天
+            {{ t('aiAlerts.dailyCost', { cost: alert.daily_cost.toFixed(1) }) }}
           </div>
           <p v-if="alert.suggestion" class="alert-suggestion">{{ alert.suggestion }}</p>
         </div>
         <template #right>
-          <van-button square type="warning" text="忽略" class="dismiss-btn" @click="onDismiss(alert.id)" />
+          <van-button square type="warning" :text="t('aiAlerts.dismiss')" class="dismiss-btn" @click="onDismiss(alert.id)" />
         </template>
       </van-swipe-cell>
     </template>
@@ -128,9 +128,9 @@ const loading = ref(false)
 const alerts = ref<Alert[]>([])
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
-  aging: '即将到期',
-  high_maintenance: '维护成本高',
-  idle_cost: '闲置损耗',
+  aging: t('aiAlerts.agingType'),
+  high_maintenance: t('aiAlerts.highMaintenanceType'),
+  idle_cost: t('aiAlerts.idleCostType'),
 }
 
 function alertTypeLabel(type: string) {
