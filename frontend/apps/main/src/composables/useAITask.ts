@@ -37,6 +37,7 @@ export function useAITask(
 
   const status = ref<AITaskStatus['status']>('idle')
   const phase = ref<AITaskPhase>(null)
+  const chunks = ref<string[]>([])
   const thinkContent = ref('')
   const thinkDone = ref(false)
   const thinkSeconds = ref(0)
@@ -152,6 +153,7 @@ export function useAITask(
           thinkContent.value += event.token ?? ''
         } else {
           answerContent.value += event.token ?? ''
+          if (event.token) chunks.value.push(event.token)
         }
         break
       case 'capability.end':
@@ -257,6 +259,7 @@ export function useAITask(
     status.value = 'running'
     phase.value = 'connecting'
     isConsoleOpen.value = true
+    chunks.value = []
 
     const elapsed = existingTask.started_at
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)
@@ -370,6 +373,7 @@ export function useAITask(
   return {
     status,
     phase,
+    chunks,
     thinkContent,
     thinkDone,
     thinkSeconds,
