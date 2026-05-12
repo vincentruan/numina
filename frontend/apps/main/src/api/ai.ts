@@ -216,8 +216,6 @@ export interface AIReportResponse {
 export const getAIReport = () =>
   http.get<AIReportResponse>('/ai/report')
 
-export const generateAIReport = () =>
-  http.post<AIReportResponse>('/ai/report/generate')
 
 export interface AssetSuggestRequest {
   name: string
@@ -240,8 +238,6 @@ export const suggestAssetFields = (data: AssetSuggestRequest) =>
 export const getAssetAlerts = () =>
   http.get<AssetAlert[]>('/ai/asset-alerts')
 
-export const refreshAssetAlerts = () =>
-  http.post('/ai/asset-alerts/refresh')
 
 export const dismissAssetAlert = (id: string) =>
   http.post(`/ai/asset-alerts/${id}/dismiss`)
@@ -250,8 +246,6 @@ export const dismissAssetAlert = (id: string) =>
 export const getDisposalSuggestions = () =>
   http.get<DisposalSuggestion[]>('/ai/disposal-suggestions')
 
-export const refreshDisposalSuggestions = () =>
-  http.post('/ai/disposal-suggestions/refresh')
 
 export const dismissDisposalSuggestion = (id: string) =>
   http.post(`/ai/disposal-suggestions/${id}/dismiss`)

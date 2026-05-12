@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.auth.ai_deps import require_ai_enabled
 from app.auth.deps import require_adult
 from app.config import settings
-from app.database import SessionLocal, get_db
+from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_allocation_target import AIAllocationTarget
 from app.models.ai_chat_session import AIChatSession
@@ -110,82 +110,6 @@ async def check_drift(
     except Exception as e:
         logger.error(f"调用 agent allocation drift 失败: {e}")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
-
-
-@router.post("/check/stream")
-async def stream_check_drift(
-    current_user: User = Depends(require_adult),
-    _ai: None = Depends(require_ai_enabled),
-    db: Session = Depends(get_db),
-):
-    """检测当前配置与目标的漂移（streaming，任务状态追踪）。"""
-    target = db.query(AIAllocationTarget).filter(
-        AIAllocationTarget.family_id == current_user.family_id
-    ).first()
-    if not target or not target.category_targets:
-        return JSONResponse({"has_target": False, "message": "尚未设置配置目标"})
-
-    existing = AITaskService.get_running_task(current_user.family_id, "allocation", db)
-    if existing:
-        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS, "⏳ 配置分析中，请稍后")
-
-    session = await ChatSessionService.create_session(
-        family_id=str(current_user.family_id),
-        user_id=str(current_user.id),
-        db=db,
-    )
-    task = AITaskService.create_task(
-        family_id=current_user.family_id,
-        capability="allocation",
-        session_id=session.id,
-        db=db,
-    )
-
-    async def proxy_stream():
-        buffer: list[str] = []
-        with SessionLocal() as stream_db:
-            try:
-                async with (
-                    httpx.AsyncClient(timeout=None) as client,
-                    client.stream(
-                        "POST",
-                        f"{settings.AGENT_BASE_URL}/allocation/stream",
-                        json={
-                            "targets": target.category_targets,
-                            "threshold": target.drift_threshold,
-                        },
-                        headers={
-                            "X-Family-Id": str(current_user.family_id),
-                            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                            "X-Task-Id": task.id,
-                            "X-Thread-Id": session.id,
-                        },
-                        timeout=None,
-                    ) as resp,
-                ):
-                    async for chunk in resp.aiter_text():
-                        buffer.append(chunk)
-                        yield chunk.encode("utf-8")
-                        if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
-                            await ChatSessionService.append_message(
-                                session, "assistant", "".join(buffer), current_user, stream_db
-                            )
-                            buffer.clear()
-                if buffer:
-                    await ChatSessionService.append_message(
-                        session, "assistant", "".join(buffer), current_user, stream_db
-                    )
-                AITaskService.complete_task(task.id, stream_db)
-            except Exception as e:
-                logger.error(f"[ai_allocation] proxy_stream failed: {e}")
-                if buffer:
-                    await ChatSessionService.append_message(
-                        session, "assistant", "".join(buffer), current_user, stream_db
-                    )
-                AITaskService.fail_task(task.id, "agent_stream_error", stream_db)
-                raise
-
-    return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/check/events")
