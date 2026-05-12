@@ -1,10 +1,10 @@
 <template>
   <div class="ai-config-page">
-    <PageHeader title="AI 智能助手" />
+    <PageHeader :title="t('aiConfig.pageTitle')" />
 
     <!-- AI Enable Toggle (owner only) -->
-    <van-cell-group inset title="AI 功能">
-      <van-cell title="启用 AI 助手" center>
+    <van-cell-group inset :title="t('aiConfig.aiFeatures')">
+      <van-cell :title="t('aiConfig.enableAI')" center>
         <template #value>
           <van-switch
             v-model="aiEnabled"
@@ -17,13 +17,13 @@
 
     <!-- Provider Config (owner only, shown when enabled) -->
     <template v-if="isOwner">
-      <van-cell-group inset title="服务商配置" class="section">
-        <van-cell title="AI 服务商" :value="providerLabel" is-link @click="showProviderPicker = true" />
+      <van-cell-group inset :title="t('aiConfig.providerConfig')" class="section">
+        <van-cell :title="t('aiConfig.aiProvider')" :value="providerLabel" is-link @click="showProviderPicker = true" />
         <!-- API Key: shows masked value by default; eye icon toggles plaintext while typing new key -->
         <van-field
           v-model="apiKeyDisplay"
-          label="API Key"
-          :placeholder="'请输入 API Key'"
+          :label="t('aiConfig.apiKey')"
+          :placeholder="t('aiConfig.apiKeyPlaceholder')"
           :type="editingApiKey && !showApiKey ? 'password' : 'text'"
           :disabled="saving"
           autocomplete="off"
@@ -48,15 +48,15 @@
         </van-field>
         <van-field
           v-model="baseUrlInput"
-          label="Base URL"
-          :placeholder="selectedProvider === 'anthropic' ? '如: https://api.anthropic.com' : '如: https://api.openai.com'"
+          :label="t('aiConfig.baseUrl')"
+          :placeholder="selectedProvider === 'anthropic' ? t('aiConfig.baseUrlPlaceholderAnthropic') : t('aiConfig.baseUrlPlaceholderOpenAI')"
           clearable
           :disabled="saving"
         />
         <van-field
           v-model="modelIdInput"
-          label="模型 ID"
-          :placeholder="selectedProvider === 'anthropic' ? '如: claude-3-5-haiku-20241022' : '如: gpt-4o-mini'"
+          :label="t('aiConfig.modelId')"
+          :placeholder="selectedProvider === 'anthropic' ? t('aiConfig.modelIdPlaceholderAnthropic') : t('aiConfig.modelIdPlaceholderOpenAI')"
           :required="!!selectedProvider"
           clearable
           :disabled="saving"
@@ -70,8 +70,8 @@
         </van-field>
         <van-field
           v-model="visionModelIdInput"
-          label="图像模型 ID"
-          :placeholder="selectedProvider === 'anthropic' ? '如: claude-3-5-sonnet-20241022' : '如: gpt-4o'"
+          :label="t('aiConfig.visionModelId')"
+          :placeholder="selectedProvider === 'anthropic' ? t('aiConfig.visionModelIdPlaceholderAnthropic') : t('aiConfig.visionModelIdPlaceholderOpenAI')"
           clearable
           :disabled="saving"
         >
@@ -83,8 +83,8 @@
         </van-field>
         <van-field
           v-model="timeoutInput"
-          label="API 超时（秒）"
-          placeholder="默认 60 秒，建议 60-300"
+          :label="t('aiConfig.apiTimeout')"
+          :placeholder="t('aiConfig.timeoutPlaceholder')"
           type="digit"
           :disabled="saving"
         />
@@ -98,7 +98,7 @@
           :disabled="!canSave"
           @click="onSave"
         >
-          保存配置
+          {{ t('aiConfig.saveConfig') }}
         </van-button>
         <div
           v-if="validationError"
@@ -114,37 +114,37 @@
     <template v-else>
       <van-cell-group inset class="section">
         <van-cell
-          title="当前状态"
-          :value="aiStore.config?.ai_enabled ? '已启用' : '未启用'"
+          :title="t('aiConfig.currentStatus')"
+          :value="aiStore.config?.ai_enabled ? t('aiConfig.statusEnabled') : t('aiConfig.statusDisabled')"
         />
         <van-cell
           v-if="aiStore.config?.ai_provider"
-          title="服务商"
+          :title="t('aiConfig.providerLabel')"
           :value="providerLabel"
         />
         <van-cell
           v-if="aiStore.config?.ai_base_url"
-          title="Base URL"
+          :label="t('aiConfig.baseUrl')"
           :value="aiStore.config.ai_base_url"
         />
         <van-cell
           v-if="aiStore.config?.ai_model_id"
-          title="模型 ID"
+          :title="t('aiConfig.modelId')"
           :value="aiStore.config.ai_model_id"
         />
         <van-cell
           v-if="aiStore.config?.ai_vision_model_id"
-          title="图像模型 ID"
+          :title="t('aiConfig.visionModelId')"
           :value="aiStore.config.ai_vision_model_id"
         />
         <van-cell
-          title="API 超时"
-          :value="`${aiStore.config?.ai_timeout_seconds ?? 60} 秒`"
+          :title="t('aiConfig.apiTimeout')"
+          :value="t('aiConfig.timeoutSeconds', { seconds: aiStore.config?.ai_timeout_seconds ?? 60 })"
         />
       </van-cell-group>
       <div class="tip">
         <van-icon name="info-o" />
-        <span>AI 功能由家庭管理员配置</span>
+        <span>{{ t('aiConfig.nonOwnerTip') }}</span>
       </div>
     </template>
 
@@ -160,19 +160,19 @@
     <!-- Main Model Test Popup (combined) -->
     <van-popup v-model:show="showMainModelPopup" round position="bottom" style="padding: 20px">
       <div class="test-details">
-        <h3 style="margin-bottom: 16px; font-size: 16px">主模型测试</h3>
+        <h3 style="margin-bottom: 16px; font-size: 16px">{{ t('aiConfig.mainModelTest') }}</h3>
 
         <!-- Connection Test Section -->
         <div class="test-section">
           <div class="test-header">
             <span class="capability-emoji" :class="textEmojiClass">📝</span>
-            <span>文本连接</span>
+            <span>{{ t('aiConfig.textConnection') }}</span>
           </div>
           <van-cell-group inset>
-            <van-cell title="状态" :value="connectionStatusText" />
-            <van-cell v-if="aiStore.config?.ai_test_message" title="消息" :value="aiStore.config.ai_test_message" />
-            <van-cell v-if="aiStore.config?.ai_test_latency_ms" title="延迟" :value="`${aiStore.config.ai_test_latency_ms}ms`" />
-            <van-cell v-if="aiStore.config?.ai_test_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_test_timestamp)" />
+            <van-cell :title="t('aiConfig.status')" :value="connectionStatusText" />
+            <van-cell v-if="aiStore.config?.ai_test_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_test_message" />
+            <van-cell v-if="aiStore.config?.ai_test_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_test_latency_ms })" />
+            <van-cell v-if="aiStore.config?.ai_test_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_test_timestamp)" />
           </van-cell-group>
         </div>
 
@@ -180,13 +180,13 @@
         <div class="test-section">
           <div class="test-header">
             <span class="capability-emoji" :class="thinkingEmojiClass">🧠</span>
-            <span>思考能力</span>
+            <span>{{ t('aiConfig.thinkingCapability') }}</span>
           </div>
           <van-cell-group inset>
-            <van-cell title="状态" :value="thinkingStatusText" />
-            <van-cell v-if="aiStore.config?.ai_test_thinking_message" title="消息" :value="aiStore.config.ai_test_thinking_message" />
-            <van-cell v-if="aiStore.config?.ai_test_thinking_latency_ms" title="延迟" :value="`${aiStore.config.ai_test_thinking_latency_ms}ms`" />
-            <van-cell v-if="aiStore.config?.ai_test_thinking_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_test_thinking_timestamp)" />
+            <van-cell :title="t('aiConfig.status')" :value="thinkingStatusText" />
+            <van-cell v-if="aiStore.config?.ai_test_thinking_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_test_thinking_message" />
+            <van-cell v-if="aiStore.config?.ai_test_thinking_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_test_thinking_latency_ms })" />
+            <van-cell v-if="aiStore.config?.ai_test_thinking_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_test_thinking_timestamp)" />
           </van-cell-group>
         </div>
 
@@ -198,7 +198,7 @@
             :disabled="!aiStore.config?.ai_enabled || !modelIdInput.trim()"
             @click="onTestConnection"
           >
-            📝 测试连接
+            {{ t('aiConfig.testConnection') }}
           </van-button>
           <van-button
             type="primary"
@@ -206,11 +206,11 @@
             :disabled="!aiStore.config?.ai_enabled || !modelIdInput.trim()"
             @click="onTestThinking"
           >
-            🧠 测试思考
+            {{ t('aiConfig.testThinking') }}
           </van-button>
         </div>
         <van-button block plain style="margin-top: 16px" @click="showMainModelPopup = false">
-          关闭
+          {{ t('aiConfig.close') }}
         </van-button>
       </div>
     </van-popup>
@@ -218,19 +218,19 @@
     <!-- Vision Model Test Popup -->
     <van-popup v-model:show="showVisionModelPopup" round position="bottom" style="padding: 20px">
       <div class="test-details">
-        <h3 style="margin-bottom: 16px; font-size: 16px">图像模型测试</h3>
+        <h3 style="margin-bottom: 16px; font-size: 16px">{{ t('aiConfig.visionModelTest') }}</h3>
 
         <!-- Image Understanding Test Section -->
         <div class="test-section">
           <div class="test-header">
             <span class="capability-emoji" :class="visionEmojiClass">️</span>
-            <span>图像理解</span>
+            <span>{{ t('aiConfig.imageUnderstanding') }}</span>
           </div>
           <van-cell-group inset>
-            <van-cell title="状态" :value="visionStatusText" />
-            <van-cell v-if="aiStore.config?.ai_vision_test_message" title="消息" :value="aiStore.config.ai_vision_test_message" />
-            <van-cell v-if="aiStore.config?.ai_vision_test_latency_ms" title="延迟" :value="`${aiStore.config.ai_vision_test_latency_ms}ms`" />
-            <van-cell v-if="aiStore.config?.ai_vision_test_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_vision_test_timestamp)" />
+            <van-cell :title="t('aiConfig.status')" :value="visionStatusText" />
+            <van-cell v-if="aiStore.config?.ai_vision_test_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_vision_test_message" />
+            <van-cell v-if="aiStore.config?.ai_vision_test_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_vision_test_latency_ms })" />
+            <van-cell v-if="aiStore.config?.ai_vision_test_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_vision_test_timestamp)" />
           </van-cell-group>
         </div>
 
@@ -238,13 +238,13 @@
         <div class="test-section">
           <div class="test-header">
             <span class="capability-emoji" :class="visionTextEmojiClass">📖</span>
-            <span>OCR 文本识别</span>
+            <span>{{ t('aiConfig.ocrTextRecognition') }}</span>
           </div>
           <van-cell-group inset>
-            <van-cell title="状态" :value="visionTextStatusText" />
-            <van-cell v-if="aiStore.config?.ai_vision_text_test_message" title="消息" :value="aiStore.config.ai_vision_text_test_message" />
-            <van-cell v-if="aiStore.config?.ai_vision_text_test_latency_ms" title="延迟" :value="`${aiStore.config.ai_vision_text_test_latency_ms}ms`" />
-            <van-cell v-if="aiStore.config?.ai_vision_text_test_timestamp" title="测试时间" :value="formatTimestamp(aiStore.config.ai_vision_text_test_timestamp)" />
+            <van-cell :title="t('aiConfig.status')" :value="visionTextStatusText" />
+            <van-cell v-if="aiStore.config?.ai_vision_text_test_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_vision_text_test_message" />
+            <van-cell v-if="aiStore.config?.ai_vision_text_test_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_vision_text_test_latency_ms })" />
+            <van-cell v-if="aiStore.config?.ai_vision_text_test_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_vision_text_test_timestamp)" />
           </van-cell-group>
         </div>
 
@@ -255,7 +255,7 @@
             :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
             @click="onTestVision"
           >
-            🖼️ 测试图像
+            {{ t('aiConfig.testImage') }}
           </van-button>
           <van-button
             type="primary"
@@ -263,11 +263,11 @@
             :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
             @click="onTestVisionText"
           >
-            📖 测试 OCR
+            {{ t('aiConfig.testOCR') }}
           </van-button>
         </div>
         <van-button block plain style="margin-top: 10px" @click="showVisionModelPopup = false">
-          关闭
+          {{ t('aiConfig.close') }}
         </van-button>
       </div>
     </van-popup>
@@ -335,23 +335,23 @@ const visionTextEmojiClass = computed(() => {
 
 // Status text for popups
 const connectionStatusText = computed(() => {
-  if (aiStore.config?.ai_test_connected === null) return '⏳ 未测试'
-  return aiStore.config?.ai_test_connected ? '✅ 连接成功' : '❌ 连接失败'
+  if (aiStore.config?.ai_test_connected === null) return t('aiConfig.statusUntested')
+  return aiStore.config?.ai_test_connected ? t('aiConfig.statusConnectionSuccess') : t('aiConfig.statusConnectionFailed')
 })
 
 const thinkingStatusText = computed(() => {
-  if (aiStore.config?.ai_test_thinking_success === null) return '⏳ 未测试'
-  return aiStore.config?.ai_test_thinking_success ? '✅ 支持思考' : '❌ 不支持'
+  if (aiStore.config?.ai_test_thinking_success === null) return t('aiConfig.statusUntested')
+  return aiStore.config?.ai_test_thinking_success ? t('aiConfig.statusSupportsThinking') : t('aiConfig.statusNoThinkingSupport')
 })
 
 const visionStatusText = computed(() => {
-  if (aiStore.config?.ai_vision_test_success === null) return '⏳ 未测试'
-  return aiStore.config?.ai_vision_test_success ? '✅ 连接成功' : '❌ 连接失败'
+  if (aiStore.config?.ai_vision_test_success === null) return t('aiConfig.statusUntested')
+  return aiStore.config?.ai_vision_test_success ? t('aiConfig.statusConnectionSuccess') : t('aiConfig.statusConnectionFailed')
 })
 
 const visionTextStatusText = computed(() => {
-  if (aiStore.config?.ai_vision_text_test_success === null) return '⏳ 未测试'
-  return aiStore.config?.ai_vision_text_test_success ? '✅ OCR 准确' : '❌ OCR 失败'
+  if (aiStore.config?.ai_vision_text_test_success === null) return t('aiConfig.statusUntested')
+  return aiStore.config?.ai_vision_text_test_success ? t('aiConfig.statusOCRAccurate') : t('aiConfig.statusOCRFailed')
 })
 
 function formatTimestamp(ts: string): string {
@@ -365,21 +365,21 @@ function formatTimestamp(ts: string): string {
 }
 
 const providerOptions = [
-  { text: 'Anthropic API 格式', value: 'anthropic', icon: '💬' },
-  { text: 'OpenAI API 格式', value: 'openai', icon: '🤖' },
+  { text: t('aiConfig.providerAnthropic'), value: 'anthropic', icon: '💬' },
+  { text: t('aiConfig.providerOpenAI'), value: 'openai', icon: '🤖' },
 ]
 
 const providerLabel = computed(() => {
-  if (selectedProvider.value === 'anthropic') return '💬 Anthropic API 格式'
-  if (selectedProvider.value === 'openai') return '🤖 OpenAI API 格式'
-  return '未选择'
+  if (selectedProvider.value === 'anthropic') return `💬 ${t('aiConfig.providerAnthropic')}`
+  if (selectedProvider.value === 'openai') return `🤖 ${t('aiConfig.providerOpenAI')}`
+  return t('aiConfig.notSelected')
 })
 
 const validationError = computed(() => {
   if (saving.value) return null
-  if (aiEnabled.value && !selectedProvider.value) return '请选择 AI Provider'
-  if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return '请填写 API Key'
-  if (aiEnabled.value && selectedProvider.value && !modelIdInput.value.trim()) return '请填写模型 ID'
+  if (aiEnabled.value && !selectedProvider.value) return t('aiConfig.validationSelectProvider')
+  if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return t('aiConfig.validationApiKeyRequired')
+  if (aiEnabled.value && selectedProvider.value && !modelIdInput.value.trim()) return t('aiConfig.validationModelIdRequired')
   if (aiEnabled.value) {
     const timeout = parseInt(timeoutInput.value)
     if (isNaN(timeout) || timeout < 10 || timeout > 600) return t('toast.aiTimeoutInvalid')
@@ -474,7 +474,7 @@ async function onTestConnection() {
   try {
     await aiStore.testMainModel()
     await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_test_connected ? '✅ 连接成功' : `❌ ${aiStore.config?.ai_test_message || '连接失败'}`)
+    showToast(aiStore.config?.ai_test_connected ? t('toast.aiConnectionSuccess') : `❌ ${aiStore.config?.ai_test_message || t('toast.aiConnectionFailed')}`)
   } catch {
     showToast(t('toast.aiTestFailed'))
   } finally {
@@ -487,7 +487,7 @@ async function onTestThinking() {
   try {
     await aiStore.testThinking()
     await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_test_thinking_success ? '🧠 支持思考能力' : `❌ ${aiStore.config?.ai_test_thinking_message || '不支持'}`)
+    showToast(aiStore.config?.ai_test_thinking_success ? t('toast.aiThinkingSupported') : `❌ ${aiStore.config?.ai_test_thinking_message || t('toast.aiThinkingNotSupported')}`)
   } catch {
     showToast(t('toast.aiTestFailed'))
   } finally {
@@ -500,7 +500,7 @@ async function onTestVision() {
   try {
     await aiStore.testVisionModel()
     await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_vision_test_success ? '✅ 图像模型连接成功' : `❌ ${aiStore.config?.ai_vision_test_message || '连接失败'}`)
+    showToast(aiStore.config?.ai_vision_test_success ? t('toast.aiVisionConnectionSuccess') : `❌ ${aiStore.config?.ai_vision_test_message || t('toast.aiConnectionFailed')}`)
   } catch {
     showToast(t('toast.aiTestFailed'))
   } finally {
@@ -513,7 +513,7 @@ async function onTestVisionText() {
   try {
     await aiStore.testVisionText()
     await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_vision_text_test_success ? '✅ OCR 识别准确' : `❌ ${aiStore.config?.ai_vision_text_test_message || '识别失败'}`)
+    showToast(aiStore.config?.ai_vision_text_test_success ? t('toast.aiOCRAccurate') : `❌ ${aiStore.config?.ai_vision_text_test_message || t('toast.aiOCRFailed')}`)
   } catch {
     showToast(t('toast.aiTestFailed'))
   } finally {
