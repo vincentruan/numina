@@ -1,20 +1,18 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from app.schemas.base import SnowflakeBase
 
 
-class DeviceTrustResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    device_id: str
+class DeviceTrustResponse(SnowflakeBase):
+    device_id: int
     device_name: str
     expires_at: datetime
 
 
-class DeviceSessionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: str
+class DeviceSessionResponse(SnowflakeBase):
+    id: int
     device_name: str
     created_at: datetime
     last_seen_at: datetime
@@ -40,9 +38,7 @@ class DeviceTrustRequest(BaseModel):
     fingerprint: str | None = None  # optional browser fingerprint
 
 
-class FamilyDeviceResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class FamilyDeviceResponse(SnowflakeBase):
     id: int
     user_id: int
     display_name: str
