@@ -168,9 +168,12 @@ def update_member_info(
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
+    if user.role != "owner":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN)
     member = db.query(User).filter(
         User.id == member_id,
         User.family_id == user.family_id,
+        User.role == "child",
     ).first()
     if not member:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)

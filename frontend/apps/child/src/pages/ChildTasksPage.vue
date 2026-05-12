@@ -19,7 +19,7 @@
         :key="chore.id"
         class="chore-card"
         :class="chore.status"
-        @click="chore.status === 'available' && !submittingId.value ? complete(chore.id) : undefined"
+        @click="chore.status === 'available' && !submittingId ? complete(chore.id) : undefined"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <div class="chore-info">
@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
@@ -94,6 +94,7 @@ const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
+let pollCancelled = false
 
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -163,8 +164,9 @@ async function checkAutoDraw() {
 async function pollForApproval(instanceId: string) {
   const interval = 5_000
   const deadline = Date.now() + 600_000 // 10 minutes
-  while (Date.now() < deadline) {
+  while (Date.now() < deadline && !pollCancelled) {
     await new Promise(r => setTimeout(r, interval))
+    if (pollCancelled) return
     try {
       const res = await http.get<{ status: string }>(`/child/chores/${instanceId}/status`)
       if (res.data.status === 'approved') {
@@ -212,6 +214,10 @@ async function complete(instanceId: string) {
 onMounted(async () => {
   await load()
   await checkNewMilestones()
+})
+
+onUnmounted(() => {
+  pollCancelled = true
 })
 </script>
 

@@ -106,30 +106,34 @@ async def approve_instance(
     resp = ChoreInstanceResponse.model_validate(instance)
     resp.milestone_triggered = getattr(instance, "_milestone_triggered", None)
 
-    # Blind box auto-trigger: use the actual coin recipient (pool chores use submitted_by_user_id)
+    # Blind box auto-trigger runs in its own transaction so a draw failure never
+    # rolls back the already-committed chore approval.
     coin_recipient_id = instance.submitted_by_user_id or instance.child_user_id
-    child = db.query(User).filter(User.id == coin_recipient_id).first()
+    child = db.query(User).filter(User.id == coin_recipient_id, User.family_id == user.family_id).first()
     if child:
-        draw = blind_box_trigger(db, child)
-        db.commit()
-        if draw:
-            db.refresh(draw)
-            resp.blind_box_draw = BlindBoxDrawResponse(
-                id=draw.id,
-                family_id=draw.family_id,
-                child_user_id=draw.child_user_id,
-                coins_spent=draw.coins_spent,
-                gift_id=draw.gift_id,
-                gift_name=draw.gift.name,
-                gift_emoji=draw.gift.emoji,
-                is_surprise=draw.is_surprise,
-                is_bonus=draw.is_bonus,
-                is_auto_triggered=draw.is_auto_triggered,
-                shown_to_child=draw.shown_to_child,
-                status=draw.status,
-                draw_at=draw.draw_at,
-                fulfilled_at=draw.fulfilled_at,
-            )
+        try:
+            draw = blind_box_trigger(db, child)
+            db.commit()
+            if draw:
+                db.refresh(draw)
+                resp.blind_box_draw = BlindBoxDrawResponse(
+                    id=draw.id,
+                    family_id=draw.family_id,
+                    child_user_id=draw.child_user_id,
+                    coins_spent=draw.coins_spent,
+                    gift_id=draw.gift_id,
+                    gift_name=draw.gift.name,
+                    gift_emoji=draw.gift.emoji,
+                    is_surprise=draw.is_surprise,
+                    is_bonus=draw.is_bonus,
+                    is_auto_triggered=draw.is_auto_triggered,
+                    shown_to_child=draw.shown_to_child,
+                    status=draw.status,
+                    draw_at=draw.draw_at,
+                    fulfilled_at=draw.fulfilled_at,
+                )
+        except Exception:
+            db.rollback()
 
     return resp
 

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.schemas.base import SnowflakeBase
 
@@ -42,6 +42,13 @@ class BlindBoxGiftResponse(SnowflakeBase):
 
 class DrawRequest(BaseModel):
     chore_instance_ids: list[int] = Field(..., min_length=1, description="已批准的 ChoreInstance ID 列表")
+
+    @field_validator("chore_instance_ids")
+    @classmethod
+    def no_duplicates(cls, v: list[int]) -> list[int]:
+        if len(v) != len(set(v)):
+            raise ValueError("chore_instance_ids 不能包含重复项")
+        return v
 
 
 class BlindBoxDrawResponse(SnowflakeBase):
