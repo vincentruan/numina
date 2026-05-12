@@ -12,7 +12,11 @@ export default {
     success: '操作成功',
     failed: '操作失败',
     back: '返回',
-    next: '下一步'
+    next: '下一步',
+    noMore: '没有更多了',
+    unitHundredMillion: '亿',
+    unitTenThousand: '万',
+    unitThousand: 'k',
   },
   nav: {
     dashboard: '总览',
@@ -46,7 +50,35 @@ export default {
     actionDelete: '删除',
     actionCategory: '分类',
     actionTag: '标签',
-    actionMore: '更多'
+    actionMore: '更多',
+    emptyState: {
+      startRecording: '开始记录你的第一项资产',
+      addAssetBtn: '添加资产',
+      noAssets: '暂无资产',
+    },
+    chart: {
+      trendTitle: '资产趋势',
+      allocationTitle: '资产分布',
+    },
+    actionSheet: {
+      retire: '转为退役',
+      activate: '转为服役',
+      export: '导出',
+    },
+    toast: {
+      deleting: '删除中...',
+      processing: '处理中...',
+    },
+    aria: {
+      openBatchSelection: '开启批量选择',
+    },
+    dialog: {
+      confirmDeleteTitle: '确认删除',
+      confirmDeleteMessage: '确定要删除选中的 {count} 项资产吗？此操作不可恢复。',
+    },
+    section: {
+      assetList: '资产列表 ({count})',
+    },
   },
   aiChat: {
     connecting: '正在连接模型',
@@ -212,6 +244,43 @@ export default {
     selectDateRequired: '请选择购入日期',
     selectCategory: '点击选择',
     dialogTitle: '转化为资产',
+    nav: {
+      title: '心愿单',
+    },
+    tabs: {
+      pending: '待实现',
+      realized: '已实现',
+      cancelled: '已取消',
+    },
+    sortBar: {
+      priority: '优先级',
+      price: '价格',
+      name: '名称',
+      ariaLabel: '按{label}排序',
+    },
+    priorityText: {
+      low: '低',
+      medium: '中',
+      high: '高',
+    },
+    prioritySuffix: '优先',
+    afford: {
+      canAfford: '净资产可负担',
+      shortage: '还差 ¥{amount}',
+    },
+    emptyState: {
+      noWishesTitle: '还没有心愿',
+      noWishesDesc: '记录你想要的东西，追踪实现进度',
+      addFirstBtn: '添加第一个心愿',
+      noRealizedTitle: '还没有实现的心愿',
+      noRealizedDesc: '实现心愿后会在这里展示，继续加油！',
+      noCancelledTitle: '没有已取消的心愿',
+      noCancelledDesc: '取消的心愿会在这里保存记录',
+    },
+    aria: {
+      addWish: '添加心愿',
+      itemLabel: '{name}，{priority}优先级{price}',
+    },
   },
   baby: {
     title: '宝贝',

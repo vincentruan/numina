@@ -1,11 +1,11 @@
 <template>
   <div class="wish-list-page">
-    <van-nav-bar title="心愿单" />
+    <van-nav-bar :title="t('wish.nav.title')" />
 
     <van-tabs v-model:active="activeTab" sticky>
-      <van-tab title="待实现" name="pending" />
-      <van-tab title="已实现" name="realized" />
-      <van-tab title="已取消" name="cancelled" />
+      <van-tab :title="t('wish.tabs.pending')" name="pending" />
+      <van-tab :title="t('wish.tabs.realized')" name="realized" />
+      <van-tab :title="t('wish.tabs.cancelled')" name="cancelled" />
     </van-tabs>
 
     <!-- Sort bar -->
@@ -15,7 +15,7 @@
         :key="opt.value"
         class="sort-btn"
         :class="{ active: sortBy === opt.value }"
-        :aria-label="`按${opt.label}排序`"
+        :aria-label="t('wish.sortBar.ariaLabel', { label: opt.label })"
         :aria-pressed="sortBy === opt.value"
         @click="toggleSort(opt.value)"
       >
@@ -36,7 +36,7 @@
               class="wish-item"
               :class="`priority-${wish.priority}`"
               tabindex="0"
-              :aria-label="`${wish.name}，${priorityText(wish.priority)}优先级${wish.expected_price ? '，预算' + wish.expected_price.toLocaleString() + '元' : ''}`"
+              :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? '，预算' + wish.expected_price.toLocaleString() + '元' : '' })"
               @click="$router.push(`/wishes/${wish.id}`)"
               @keydown.enter="$router.push(`/wishes/${wish.id}`)"
             >
@@ -68,7 +68,7 @@
 
                 <div class="wish-bottom">
                   <span class="priority-badge" :class="wish.priority">
-                    {{ priorityText(wish.priority) }}优先
+                    {{ t('wish.priorityText.' + wish.priority) }}{{ t('wish.prioritySuffix') }}
                   </span>
                   <span v-if="wish.category" class="wish-cat">{{ wish.category.name }}</span>
                   <span v-if="wish.description" class="wish-desc">{{ wish.description }}</span>
@@ -84,13 +84,13 @@
                     <svg class="afford-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                       <path d="M3 8l3.5 3.5L13 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
-                    净资产可负担
+                    {{ t('wish.afford.canAfford') }}
                   </template>
                   <template v-else>
                     <svg class="afford-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                       <path d="M8 3v5M8 11v1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
                     </svg>
-                    还差 ¥{{ formatPrice(wish.expected_price - dashboardStore.overview.net_worth) }}
+                    {{ t('wish.afford.shortage', { amount: formatPrice(wish.expected_price - dashboardStore.overview.net_worth) }) }}
                   </template>
                 </div>
               </div>
@@ -107,13 +107,13 @@
                 <path d="M40 22c-1.1 0-2 .9-2 2v14H24c-1.1 0-2 .9-2 2s.9 2 2 2h14v14c0 1.1.9 2 2 2s2-.9 2-2V42h14c1.1 0 2-.9 2-2s-.9-2-2-2H42V24c0-1.1-.9-2-2-2z" fill="var(--van-primary-color)"/>
               </svg>
             </div>
-            <p class="empty-title">还没有心愿</p>
-            <p class="empty-desc">记录你想要的东西，追踪实现进度</p>
+            <p class="empty-title">{{ t('wish.emptyState.noWishesTitle') }}</p>
+            <p class="empty-desc">{{ t('wish.emptyState.noWishesDesc') }}</p>
             <button class="empty-action-btn" @click="$router.push('/wishes/new')">
               <svg viewBox="0 0 16 16" fill="none" width="14" height="14" aria-hidden="true">
                 <path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
-              添加第一个心愿
+              {{ t('wish.emptyState.addFirstBtn') }}
             </button>
           </template>
 
@@ -125,8 +125,8 @@
                 <path d="M40 20l4.9 9.9 10.9 1.6-7.9 7.7 1.9 10.9L40 45.4l-9.8 5.1 1.9-10.9-7.9-7.7 10.9-1.6L40 20z" fill="#07c160" fill-opacity="0.25" stroke="#07c160" stroke-width="1.5" stroke-linejoin="round"/>
               </svg>
             </div>
-            <p class="empty-title">还没有实现的心愿</p>
-            <p class="empty-desc">实现心愿后会在这里展示，继续加油！</p>
+            <p class="empty-title">{{ t('wish.emptyState.noRealizedTitle') }}</p>
+            <p class="empty-desc">{{ t('wish.emptyState.noRealizedDesc') }}</p>
           </template>
 
           <!-- Cancelled: neutral -->
@@ -137,14 +137,14 @@
                 <path d="M28 28l24 24M52 28L28 52" stroke="#999" stroke-width="3" stroke-linecap="round"/>
               </svg>
             </div>
-            <p class="empty-title">没有已取消的心愿</p>
-            <p class="empty-desc">取消的心愿会在这里保存记录</p>
+            <p class="empty-title">{{ t('wish.emptyState.noCancelledTitle') }}</p>
+            <p class="empty-desc">{{ t('wish.emptyState.noCancelledDesc') }}</p>
           </template>
         </div>
       </van-pull-refresh>
     </div>
 
-    <div class="fab" aria-label="添加心愿" @click="$router.push('/wishes/new')">
+    <div class="fab" :aria-label="t('wish.aria.addWish')" @click="$router.push('/wishes/new')">
       <van-icon name="plus" size="22" />
     </div>
   </div>
@@ -152,11 +152,13 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getWishes } from '@/api/wishes'
 import type { Wish } from '@/types'
 import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
 
+const { t } = useI18n()
 const dashboardStore = useDashboardStore()
 
 const wishes = ref<Wish[]>([])
@@ -166,9 +168,9 @@ const sortBy = ref<'priority' | 'price' | 'name'>('priority')
 const sortDir = ref<'asc' | 'desc'>('desc')
 
 const sortOptions = [
-  { value: 'priority' as const, label: '优先级' },
-  { value: 'price' as const, label: '价格' },
-  { value: 'name' as const, label: '名称' },
+  { value: 'priority' as const, label: t('wish.sortBar.priority') },
+  { value: 'price' as const, label: t('wish.sortBar.price') },
+  { value: 'name' as const, label: t('wish.sortBar.name') },
 ]
 
 const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 }
@@ -201,14 +203,9 @@ function toggleSort(value: typeof sortBy.value) {
   }
 }
 
-function priorityText(priority: string): string {
-  const map: Record<string, string> = { low: '低', medium: '中', high: '高' }
-  return map[priority] || '中'
-}
-
 function formatPrice(value: number): string {
   if (value >= 10000) {
-    return (value / 10000).toFixed(value % 10000 === 0 ? 0 : 1) + '万'
+    return (value / 10000).toFixed(value % 10000 === 0 ? 0 : 1) + t('common.unitTenThousand')
   }
   return value.toLocaleString()
 }

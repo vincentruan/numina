@@ -6,9 +6,9 @@
     <van-pull-refresh v-else v-model="refreshing" @refresh="onRefresh">
       <!-- Empty State for new users -->
       <div v-if="!dashboardStore.loading && overview?.asset_count === 0" class="empty-dashboard">
-        <van-empty description="开始记录你的第一项资产">
+        <van-empty :description="t('dashboard.emptyState.startRecording')">
           <van-button type="primary" size="small" @click="$router.push('/assets/new')">
-            添加资产
+            {{ t('dashboard.emptyState.addAssetBtn') }}
           </van-button>
         </van-empty>
       </div>
@@ -35,13 +35,13 @@
         <!-- Trend Chart -->
         <van-cell-group inset class="chart-section">
           <van-collapse v-model="trendExpanded" @change="toggleTrend">
-            <van-collapse-item title="资产趋势" name="trend">
+            <van-collapse-item :title="t('dashboard.chart.trendTitle')" name="trend">
               <TrendLineChart
                 v-if="dashboardStore.trend.length"
                 :data="dashboardStore.trend"
                 @period-change="onTrendPeriodChange"
               />
-              <van-empty v-else description="暂无数据" image-size="60" />
+              <van-empty v-else :description="t('common.noData')" image-size="60" />
             </van-collapse-item>
           </van-collapse>
         </van-cell-group>
@@ -49,12 +49,12 @@
         <!-- Allocation Chart -->
         <van-cell-group inset class="chart-section">
           <van-collapse v-model="allocationExpanded" @change="toggleAllocation">
-            <van-collapse-item title="资产分布" name="allocation">
+            <van-collapse-item :title="t('dashboard.chart.allocationTitle')" name="allocation">
               <AllocationPieChart
                 v-if="dashboardStore.allocation.length"
                 :data="dashboardStore.allocation"
               />
-              <van-empty v-else description="暂无数据" image-size="60" />
+              <van-empty v-else :description="t('common.noData')" image-size="60" />
             </van-collapse-item>
           </van-collapse>
         </van-cell-group>
@@ -68,8 +68,8 @@
           <template #toolbar>
             <button
               class="toolbar-selection-btn"
+              :aria-label="t('dashboard.aria.openBatchSelection')"
               @click="enterSelectionMode"
-              aria-label="开启批量选择"
             >
               <van-icon name="checked" size="18" />
             </button>
@@ -102,7 +102,7 @@
             <van-list
               v-model:loading="loadingMore"
               :finished="dashboardStore.assetListFinished"
-              finished-text="没有更多了"
+              :finished-text="t('common.noMore')"
               @load="onLoadMore"
             >
               <div class="asset-list">
@@ -126,7 +126,7 @@
             </van-list>
           </template>
 
-          <van-empty v-else description="暂无资产" image-size="60" />
+          <van-empty v-else :description="t('dashboard.emptyState.noAssets')" image-size="60" />
         </div>
 
         <!-- Selection Mode -->
@@ -357,9 +357,9 @@ const statusLabelMap: Record<string, string> = {
 
 // More actions
 const moreActions = [
-  { name: '转为退役', value: 'retire' },
-  { name: '转为服役', value: 'activate' },
-  { name: '导出', value: 'export' },
+  { name: t('dashboard.actionSheet.retire'), value: 'retire' },
+  { name: t('dashboard.actionSheet.activate'), value: 'activate' },
+  { name: t('dashboard.actionSheet.export'), value: 'export' },
 ]
 
 const sectionTitle = computed(() => {
@@ -368,7 +368,7 @@ const sectionTitle = computed(() => {
   // Use server-side total count when available, fallback to displayed assets count
   const count = pageInfo ? pageInfo.total : dashboardStore.displayedAssets.length
   if (!activeStatus.value) {
-    return `资产列表 (${count})`
+    return t('dashboard.section.assetList', { count })
   }
   const label = statusLabelMap[activeStatus.value] || activeStatus.value
   return `${label} (${count})`
@@ -439,10 +439,10 @@ async function handleBatchDelete() {
 
   try {
     await showConfirmDialog({
-      title: '确认删除',
-      message: `确定要删除选中的 ${selectedIds.value.length} 项资产吗？此操作不可恢复。`,
+      title: t('dashboard.dialog.confirmDeleteTitle'),
+      message: t('dashboard.dialog.confirmDeleteMessage', { count: selectedIds.value.length }),
     })
-    showLoadingToast({ message: '删除中...', forbidClick: true, duration: 0 })
+    showLoadingToast({ message: t('dashboard.toast.deleting'), forbidClick: true, duration: 0 })
     try {
       const res = await batchArchiveAssets(selectedIds.value)
       closeToast()
@@ -483,7 +483,7 @@ async function onMoreActionSelect(action: { value: string }) {
     return
   }
 
-  showLoadingToast({ message: '处理中...', forbidClick: true, duration: 0 })
+  showLoadingToast({ message: t('dashboard.toast.processing'), forbidClick: true, duration: 0 })
   try {
     switch (action.value) {
       case 'retire': {
