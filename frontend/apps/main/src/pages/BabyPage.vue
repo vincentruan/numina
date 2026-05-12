@@ -81,7 +81,7 @@
                 v-for="wish in filteredWishes"
                 :key="wish.id"
                 class="wish-item"
-                @click="$router.push('/wish-review')"
+                @click="$router.push('/family/wish-review')"
               >
                 <div class="wish-header">
                   <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
@@ -447,6 +447,7 @@ onMounted(async () => {
 .balance-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8px;
 }
 

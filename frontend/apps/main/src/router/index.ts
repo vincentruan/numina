@@ -116,6 +116,11 @@ const router = createRouter({
           component: () => import('@/pages/WishDetailPage.vue')
         },
         {
+          path: 'blind-box/draws',
+          name: 'BlindBoxDraws',
+          component: () => import('@/pages/BlindBoxDrawsPage.vue')
+        },
+        {
           path: 'blind-box/gifts',
           name: 'BlindBoxGiftList',
           component: () => import('@/pages/BlindBoxGiftListPage.vue')
