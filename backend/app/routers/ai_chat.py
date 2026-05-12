@@ -384,7 +384,12 @@ def list_all_sessions(
     if capability:
         q = q.filter(AIChatSession.capability == capability)
     total = q.count()
-    rows = q.order_by(AIChatSession.updated_at.desc()).limit(limit).offset(offset).all()
+    rows = (
+        q.order_by(AIChatSession.is_pinned.desc(), AIChatSession.updated_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
     return {
         "sessions": [
             {
@@ -397,6 +402,7 @@ def list_all_sessions(
                 "last_message_summary": s.last_message_summary,
                 "last_model": s.last_model,
                 "has_attachments": s.has_attachments,
+                "is_pinned": s.is_pinned,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "updated_at": s.updated_at.isoformat() if s.updated_at else None,
             }
@@ -404,6 +410,66 @@ def list_all_sessions(
         ],
         "total": total,
     }
+
+
+class SessionUpdateRequest(BaseModel):
+    title: str | None = None
+    is_pinned: bool | None = None
+
+
+@sessions_router.patch("/sessions/{session_id}")
+def update_session(
+    session_id: str,
+    body: SessionUpdateRequest,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """重命名或置顶/取消置顶会话。"""
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    if body.title is not None:
+        session.title = body.title.strip()[:256] or None
+    if body.is_pinned is not None:
+        session.is_pinned = body.is_pinned
+    db.commit()
+    return {"ok": True}
+
+
+@sessions_router.delete("/sessions/{session_id}")
+def delete_session(
+    session_id: str,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """删除单个会话及其消息文件。"""
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+    if session.cached_file_id:
+        cached_file = db.query(CachedFile).filter_by(id=session.cached_file_id).first()
+        if cached_file:
+            cached_file.deleted_at = datetime.utcnow()
+            db.query(FileRemoteLocation).filter_by(
+                file_id=session.cached_file_id, sync_status="pending"
+            ).update({"sync_status": "deleted"})
+    try:
+        jsonl_abs = Path(settings.CHAT_DIR) / session.jsonl_path
+        jsonl_abs.resolve()
+        if jsonl_abs.exists():
+            jsonl_abs.unlink()
+        lock_file = jsonl_abs.with_suffix(".lock")
+        if lock_file.exists():
+            lock_file.unlink()
+    except OSError as e:
+        logger.warning("删除 JSONL 文件失败 session=%s: %s", session.id, type(e).__name__)
+    db.delete(session)
+    db.commit()
+    return {"ok": True}
 
 
 @sessions_router.get("/sessions/{session_id}/events")

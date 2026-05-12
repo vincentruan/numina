@@ -38,6 +38,7 @@ class AIChatSession(Base):
     last_message_summary: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
     has_attachments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Kept for backward compatibility — no longer written by agent
     message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     last_preview: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -46,27 +46,92 @@
           </button>
           <span class="history-title">{{ t('aiChat.historyTitle') }}</span>
         </div>
-        <div class="history-empty">
-          <p v-if="sessionsLoading">{{ t('aiChat.loadingHistory') }}</p>
-          <template v-else-if="sessions.length === 0">
-            <p>{{ t('aiChat.noHistory') }}</p>
-            <p class="history-hint">{{ t('aiChat.historyHint') }}</p>
+        <div v-if="sessionsLoading" class="history-empty">
+          <p>{{ t('aiChat.loadingHistory') }}</p>
+        </div>
+        <div v-else-if="sessions.length === 0" class="history-empty">
+          <p>{{ t('aiChat.noHistory') }}</p>
+          <p class="history-hint">{{ t('aiChat.historyHint') }}</p>
+        </div>
+        <div v-else class="history-scroll">
+          <template v-for="group in groupedSessions" :key="group.label">
+            <div class="history-group-label">{{ group.label }}</div>
+            <ul class="history-list">
+              <li
+                v-for="session in group.sessions"
+                :key="session.session_id"
+                class="history-item"
+                :class="{ 'history-item--active': session.session_id === currentSessionId }"
+                @click="loadSessionMessages(session)"
+              >
+                <span class="history-item-title">{{ session.title ?? t('aiChat.untitledSession') }}</span>
+                <button
+                  class="history-item-menu-btn"
+                  :aria-label="'更多操作'"
+                  @click.stop="openSessionMenu(session, $event)"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/>
+                  </svg>
+                </button>
+              </li>
+            </ul>
           </template>
-          <ul v-else class="history-list">
-            <li
-              v-for="session in sessions"
-              :key="session.session_id"
-              class="history-item"
-              @click="loadSessionMessages(session)"
-            >
-              <p class="history-item-title">{{ session.title ?? t('aiChat.untitledSession') }}</p>
-              <p v-if="session.last_message_summary" class="history-item-summary">{{ session.last_message_summary }}</p>
-              <p class="history-item-time">{{ formatTime(session.updated_at) }}</p>
-            </li>
-          </ul>
         </div>
       </div>
     </van-popup>
+
+    <!-- Session context menu -->
+    <div
+      v-if="sessionMenu.visible"
+      class="session-menu-backdrop"
+      @click="closeSessionMenu"
+    />
+    <div
+      v-if="sessionMenu.visible"
+      class="session-menu"
+      :style="{ top: sessionMenu.y + 'px', left: sessionMenu.x + 'px' }"
+    >
+      <button class="session-menu-item" @click="onRenameSession">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+        <span>{{ t('aiChat.renameSession') }}</span>
+      </button>
+      <button class="session-menu-item" @click="onTogglePinSession">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>
+        </svg>
+        <span>{{ sessionMenu.session?.is_pinned ? t('aiChat.unpinSession') : t('aiChat.pinSession') }}</span>
+      </button>
+      <button class="session-menu-item session-menu-item--danger" @click="onDeleteSession">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+        <span>{{ t('aiChat.deleteSession') }}</span>
+      </button>
+    </div>
+
+    <!-- Rename session dialog -->
+    <van-dialog
+      v-model:show="showRenameDialog"
+      :title="t('aiChat.renameSession')"
+      show-cancel-button
+      @confirm="onConfirmRename"
+      @cancel="showRenameDialog = false"
+    >
+      <div style="padding: 16px 16px 8px">
+        <van-field
+          v-model="renameInput"
+          :placeholder="t('aiChat.editTitlePlaceholder')"
+          autofocus
+          clearable
+          maxlength="50"
+          show-word-limit
+        />
+      </div>
+    </van-dialog>
 
     <!-- Chat body -->
     <div ref="scrollRef" class="chat-body">
@@ -312,7 +377,7 @@ import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
-import { getSessions, streamSessionEvents } from '@/api/sessions'
+import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
@@ -398,6 +463,139 @@ const sessions = ref<SessionSummary[]>([])
 const sessionsLoading = ref(false)
 const sessionsLoaded = ref(false)
 const currentSessionId = ref<string | null>(null)
+
+// Session context menu state
+const sessionMenu = ref<{
+  visible: boolean
+  session: SessionSummary | null
+  x: number
+  y: number
+}>({ visible: false, session: null, x: 0, y: 0 })
+const showRenameDialog = ref(false)
+const renameInput = ref('')
+
+// Group sessions by time bucket for display
+const groupedSessions = computed(() => {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const yesterdayStart = new Date(todayStart.getTime() - 86400000)
+  const weekStart = new Date(todayStart.getTime() - 7 * 86400000)
+  const monthStart = new Date(todayStart.getTime() - 30 * 86400000)
+
+  const groups: Record<string, SessionSummary[]> = {}
+  const order: string[] = []
+
+  function addToGroup(label: string, session: SessionSummary) {
+    if (!groups[label]) { groups[label] = []; order.push(label) }
+    groups[label].push(session)
+  }
+
+  // Sessions already sorted by backend (pinned first, then updated_at desc)
+  for (const s of sessions.value) {
+    if (s.is_pinned) {
+      addToGroup(t('aiChat.groupPinned'), s)
+      continue
+    }
+    const d = new Date(s.updated_at)
+    if (d >= todayStart) {
+      addToGroup(t('aiChat.groupToday'), s)
+    } else if (d >= yesterdayStart) {
+      addToGroup(t('aiChat.groupYesterday'), s)
+    } else if (d >= weekStart) {
+      addToGroup(t('aiChat.groupWeek'), s)
+    } else if (d >= monthStart) {
+      addToGroup(t('aiChat.groupMonth'), s)
+    } else {
+      const label = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      addToGroup(label, s)
+    }
+  }
+
+  return order.map((label) => ({ label, sessions: groups[label] }))
+})
+
+function openSessionMenu(session: SessionSummary, event: MouseEvent) {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  const menuWidth = 140
+  const x = Math.max(4, Math.min(rect.left - menuWidth, window.innerWidth - menuWidth - 4))
+  sessionMenu.value = {
+    visible: true,
+    session,
+    x,
+    y: rect.bottom + 4,
+  }
+}
+
+function closeSessionMenu() {
+  sessionMenu.value.visible = false
+}
+
+function onRenameSession() {
+  if (!sessionMenu.value.session) return
+  renameInput.value = sessionMenu.value.session.title ?? ''
+  showRenameDialog.value = true
+  closeSessionMenu()
+}
+
+async function onConfirmRename() {
+  const session = sessionMenu.value.session
+  if (!session) return
+  const title = renameInput.value.trim()
+  if (!title) return
+  try {
+    await updateSession(session.session_id, { title })
+    session.title = title
+    showToast(t('aiChat.renameSessionSuccess'))
+  } catch {
+    showToast(t('aiChat.renameSessionFailed'))
+  }
+  showRenameDialog.value = false
+}
+
+async function onTogglePinSession() {
+  const session = sessionMenu.value.session
+  if (!session) return
+  closeSessionMenu()
+  const newPinned = !session.is_pinned
+  try {
+    await updateSession(session.session_id, { is_pinned: newPinned })
+    session.is_pinned = newPinned
+    // Re-sort: move pinned to front, unpinned back by updated_at
+    sessions.value = [
+      ...sessions.value.filter((s) => s.is_pinned),
+      ...sessions.value.filter((s) => !s.is_pinned).sort(
+        (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+      ),
+    ]
+    showToast(newPinned ? t('aiChat.pinSessionSuccess') : t('aiChat.unpinSessionSuccess'))
+  } catch {
+    // silently ignore
+  }
+}
+
+async function onDeleteSession() {
+  const session = sessionMenu.value.session
+  if (!session) return
+  closeSessionMenu()
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message: t('aiChat.confirmDeleteSession') })
+  } catch {
+    return // cancelled
+  }
+  try {
+    await deleteSessionApi(session.session_id)
+    sessions.value = sessions.value.filter((s) => s.session_id !== session.session_id)
+    showToast(t('aiChat.deleteSessionSuccess'))
+    // If deleted session is the current one, reset to new chat
+    if (currentSessionId.value === session.session_id) {
+      messages.value = []
+      currentSessionId.value = null
+      customTitle.value = null
+    }
+  } catch {
+    // silently ignore
+  }
+}
 
 // Throttled markdown rendering state (scoped to this component instance)
 let renderTimer: ReturnType<typeof setTimeout> | null = null
@@ -525,7 +723,6 @@ watch(showHistory, async (open) => {
 })
 
 async function loadSessionMessages(session: SessionSummary) {
-  showHistory.value = false
   messages.value = []
   currentSessionId.value = session.session_id
   asking.value = true
@@ -1104,6 +1301,7 @@ onUnmounted(() => {
   gap: 4px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
 }
 
 .history-title {
@@ -1131,6 +1329,133 @@ onUnmounted(() => {
   font-size: 12px;
   color: var(--text-muted);
   margin: 0;
+}
+
+.history-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0 16px;
+}
+
+.history-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 16px 4px;
+}
+
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 16px;
+  cursor: pointer;
+  border-radius: 0;
+  transition: background 0.12s;
+  position: relative;
+}
+
+.history-item:hover {
+  background: var(--btn-hover-bg);
+}
+
+.history-item--active {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+.history-item--active:hover {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+.history-item-title {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.history-item-menu-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 6px;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+}
+
+.history-item:hover .history-item-menu-btn,
+.history-item--active .history-item-menu-btn {
+  opacity: 1;
+}
+
+.history-item-menu-btn:hover {
+  background: var(--btn-hover-bg);
+  color: var(--text-primary);
+}
+
+/* ── Session context menu ── */
+.session-menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+}
+
+.session-menu {
+  position: fixed;
+  z-index: 1001;
+  background: var(--bg-header);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
+  min-width: 140px;
+  overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.session-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.12s;
+}
+
+.session-menu-item:hover {
+  background: var(--btn-hover-bg);
+}
+
+.session-menu-item--danger {
+  color: #f87171;
+}
+
+.session-menu-item--danger:hover {
+  background: rgba(248, 113, 113, 0.1);
 }
 
 /* ── Chat body ── */
