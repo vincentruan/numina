@@ -126,7 +126,7 @@ def create_ws_ticket(
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
-    return {"ticket": str(ticket.id)}
+    return {"ticket": ticket.id}
 
 
 @router.websocket("/ws")
