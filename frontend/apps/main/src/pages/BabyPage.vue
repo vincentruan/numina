@@ -1,15 +1,15 @@
 <template>
   <div class="baby-page">
-    <PageHeader title="宝贝" :show-back="false" />
+    <PageHeader :title="t('baby.title')" :show-back="false" />
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <!-- Pending Approvals -->
       <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
 
       <!-- No Children State -->
-      <van-empty v-if="childMembers.length === 0" description="暂无孩子成员">
+      <van-empty v-if="childMembers.length === 0" :description="t('baby.noChildren')">
         <van-button type="primary" size="small" @click="$router.push('/family/members')">
-          添加孩子
+          {{ t('baby.addChildren') }}
         </van-button>
       </van-empty>
 
@@ -17,7 +17,7 @@
       <template v-else>
         <!-- Child Tabs -->
         <van-tabs v-model:active="activeChildIndex" scrollable class="child-tabs">
-          <van-tab title="全部" />
+          <van-tab :title="t('baby.tabAll')" />
           <van-tab v-for="child in childMembers" :key="child.id">
             <template #title>
               <div class="child-tab-title">
@@ -32,14 +32,44 @@
 
         <!-- Summary Card -->
         <van-cell-group inset class="summary-card">
-          <van-cell title="余额" :value="`${currentBalance} ⭐`" />
-          <van-cell title="本周家务" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`" />
-          <van-cell title="进行中心愿" :value="`${currentWishCount}`" />
+          <van-cell :title="t('baby.balance')">
+            <template #value>
+              <div class="balance-row">
+                <span>{{ currentBalance }} ⭐</span>
+                <van-button
+                  size="mini"
+                  type="warning"
+                  plain
+                  class="grant-btn"
+                  @click="openGrantSheet"
+                >{{ t('baby.grantBtn') }}</van-button>
+              </div>
+            </template>
+          </van-cell>
+          <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`" />
+          <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`" />
         </van-cell-group>
 
         <!-- Content Tabs -->
         <van-tabs v-model:active="activeContentTab" class="content-tabs">
-          <van-tab title="心愿">
+          <van-tab :title="t('baby.tabDiary')">
+            <van-cell-group inset>
+              <van-cell :title="t('baby.weeklyRate')" :value="`${weeklyCompletionRate}%`" />
+            </van-cell-group>
+            <div class="calendar-wrap">
+              <ChildCalendar
+                v-if="calendarChildId"
+                :key="calendarChildId"
+                :fetch-month="fetchCalendarMonth"
+                day-route="/baby/calendar/day"
+                :extra-query="{ child_id: calendarChildId }"
+                variant="parent"
+                :show-completion-rate="true"
+              />
+            </div>
+          </van-tab>
+
+          <van-tab :title="t('baby.tabWishes')">
             <div class="wish-list">
               <div
                 v-for="wish in filteredWishes"
@@ -60,46 +90,72 @@
                   color="#f5a623"
                 />
               </div>
-              <van-empty v-if="filteredWishes.length === 0" description="暂无心愿" image-size="60" />
+              <van-empty v-if="filteredWishes.length === 0" :description="t('baby.noWishes')" image-size="60" />
             </div>
           </van-tab>
 
-          <van-tab title="任务">
+          <van-tab :title="t('baby.tabChores')">
             <div class="chore-list">
               <van-cell
                 v-for="chore in filteredChores"
                 :key="chore.id"
                 :title="chore.name"
-                :label="`奖励: ${chore.coin_reward}⭐`"
+                :label="t('baby.choreReward', { reward: chore.coin_reward })"
               >
                 <template #right-icon>
                   <van-tag :type="chore.status === 'completed' ? 'success' : 'default'">
-                    {{ chore.status === 'completed' ? '已完成' : '待完成' }}
+                    {{ chore.status === 'completed' ? t('baby.choreCompleted') : t('baby.chorePending') }}
                   </van-tag>
                 </template>
               </van-cell>
-              <van-empty v-if="filteredChores.length === 0" description="暂无任务" image-size="60" />
-            </div>
-          </van-tab>
-
-          <van-tab title="完成情况">
-            <van-cell-group inset>
-              <van-cell title="本周完成率" :value="`${weeklyCompletionRate}%`" />
-              <van-cell title="本月完成率" :value="`${monthlyCompletionRate}%`" />
-            </van-cell-group>
-            <div class="calendar-wrap">
-              <ChildCalendar
-                v-if="calendarChildId"
-                :key="calendarChildId"
-                :fetch-month="fetchCalendarMonth"
-                day-route="/baby/calendar/day"
-                :extra-query="calendarChildId ? { child_id: calendarChildId } : undefined"
-                variant="parent"
-                :show-completion-rate="true"
-              />
+              <van-empty v-if="filteredChores.length === 0" :description="t('baby.noChores')" image-size="60" />
             </div>
           </van-tab>
         </van-tabs>
+
+        <!-- Child picker popup (shown when on 全部 tab) -->
+        <van-popup v-model:show="showChildPicker" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('baby.grantSelectChild') }}</p>
+          <van-cell
+            v-for="child in childMembers"
+            :key="child.id"
+            :title="child.display_name"
+            is-link
+            @click="selectChildAndGrant(child)"
+          >
+            <template #icon>
+              <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B', marginRight: '8px' }">
+                {{ (child.display_name ?? '?').charAt(0) }}
+              </div>
+            </template>
+          </van-cell>
+        </van-popup>
+
+        <!-- Grant stars bottom sheet -->
+        <van-popup v-model:show="showGrantSheet" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('baby.grantSheetTitle', { name: grantTargetChild?.display_name }) }}</p>
+          <van-field
+            v-model="grantAmountStr"
+            type="digit"
+            :label="t('baby.grantAmountLabel')"
+            :placeholder="t('baby.grantAmountPlaceholder')"
+            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          />
+          <van-field
+            v-model="grantReason"
+            :label="t('baby.grantReasonLabel')"
+            :placeholder="t('baby.grantReasonPlaceholder')"
+            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          />
+          <van-button
+            block
+            type="primary"
+            :disabled="!grantAmountStr || parseInt(grantAmountStr, 10) <= 0"
+            :loading="grantingCoins"
+            style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
+            @click="doGrant"
+          >{{ t('baby.grantConfirm') }}</van-button>
+        </van-popup>
       </template>
     </van-pull-refresh>
   </div>
@@ -107,6 +163,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { showToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useChoreStore } from '@/stores/chore'
@@ -116,7 +174,9 @@ import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'
 import { listParentChildWishes, type ParentWish } from '@/api/childWishes'
 import { getFamilyChildCalendar } from '@/api/calendar'
+import { grantCoins } from '@/api/coins'
 
+const { t } = useI18n()
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
@@ -124,6 +184,14 @@ const choreStore = useChoreStore()
 const refreshing = ref(false)
 const activeChildIndex = ref(0)
 const activeContentTab = ref(0)
+
+// Grant stars state
+const showChildPicker = ref(false)
+const showGrantSheet = ref(false)
+const grantTargetChild = ref<{ id: string; display_name: string } | null>(null)
+const grantAmountStr = ref('')
+const grantReason = ref('')
+const grantingCoins = ref(false)
 
 const childBalances = ref<Record<string, number>>({})
 const childChoreStats = ref<Record<string, ChoreStats>>({})
@@ -187,8 +255,6 @@ const weeklyCompletionRate = computed(() => {
   return Math.round((stats.completed_this_week / stats.total_this_week) * 100)
 })
 
-const monthlyCompletionRate = computed(() => weeklyCompletionRate.value)
-
 const calendarChildId = computed<string | null>(() => {
   if (selectedChildId.value) return String(selectedChildId.value)
   // 全部视图时取第一个孩子
@@ -214,13 +280,55 @@ function getWishStatusType(status: string): 'primary' | 'success' | 'warning' | 
 
 function getWishStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    pending_review: '待审批',
-    active: '进行中',
-    redemption_requested: '待兑现',
-    fulfilled: '已完成',
-    rejected: '已拒绝',
+    pending_review: t('baby.wishStatusPendingReview'),
+    active: t('baby.wishStatusActive'),
+    redemption_requested: t('baby.wishStatusRedemptionRequested'),
+    fulfilled: t('baby.wishStatusFulfilled'),
+    rejected: t('baby.wishStatusRejected'),
   }
   return map[status] ?? status
+}
+
+function openGrantSheet() {
+  if (!selectedChildId.value) {
+    // 全部视图：先选孩子
+    showChildPicker.value = true
+  } else {
+    const child = childMembers.value.find(c => c.id === selectedChildId.value)
+    if (!child) return
+    grantTargetChild.value = { id: String(child.id), display_name: child.display_name ?? '' }
+    grantAmountStr.value = ''
+    grantReason.value = ''
+    showGrantSheet.value = true
+  }
+}
+
+function selectChildAndGrant(child: { id: string | number; display_name?: string | null }) {
+  showChildPicker.value = false
+  grantTargetChild.value = { id: String(child.id), display_name: child.display_name ?? '' }
+  grantAmountStr.value = ''
+  grantReason.value = ''
+  showGrantSheet.value = true
+}
+
+async function doGrant() {
+  const amount = parseInt(grantAmountStr.value, 10)
+  if (!grantTargetChild.value || !amount || amount <= 0) return
+  grantingCoins.value = true
+  try {
+    await grantCoins(grantTargetChild.value.id, amount, grantReason.value || t('baby.grantDefaultReason'))
+    showToast(t('toast.childGrantedStars', { amount, name: grantTargetChild.value.display_name }))
+    showGrantSheet.value = false
+  } catch {
+    showToast(t('toast.grantFailed'))
+    return
+  } finally {
+    grantingCoins.value = false
+  }
+  try {
+    const res = await getAllChildBalances()
+    childBalances.value = res.data
+  } catch { /* non-critical */ }
 }
 
 async function loadData() {
@@ -321,6 +429,27 @@ onMounted(async () => {
 
 .summary-card {
   margin-top: 12px;
+}
+
+.balance-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grant-btn {
+  flex-shrink: 0;
+  font-size: 11px;
+  padding: 0 8px;
+  height: 24px;
+  border-radius: 12px;
+}
+
+.sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--text-primary);
 }
 
 .content-tabs {
