@@ -1,11 +1,14 @@
 """Pydantic schemas for chore templates and instances."""
 
+from __future__ import annotations
+
 import re
 from datetime import datetime
 
 from pydantic import BaseModel, field_validator
 
 from app.schemas.base import SnowflakeBase
+from app.schemas.blind_box import BlindBoxDrawResponse
 
 _HEX_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
@@ -115,6 +118,7 @@ class ChoreInstanceResponse(SnowflakeBase):
     child_user_id: int | None = None
     child_display_name: str | None = None
     child_avatar_color: str | None = None
+    blind_box_draw: BlindBoxDrawResponse | None = None
 
     @field_validator("child_avatar_color", mode="before")
     @classmethod
