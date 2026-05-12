@@ -96,9 +96,9 @@ function onSelect(status: string | null) {
   transform: scale(0.96);
 }
 .status-tab.active {
-  background: var(--color-primary);
+  background: var(--van-primary-color);
   color: var(--color-on-primary);
-  border-color: var(--color-primary);
+  border-color: var(--van-primary-color);
 }
 [data-theme='dark'] .status-tab.active {
   background: rgba(189, 187, 255, 0.25);

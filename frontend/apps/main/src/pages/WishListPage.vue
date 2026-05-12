@@ -541,7 +541,7 @@ onMounted(loadWishes)
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--van-primary-color);
   color: var(--color-on-primary);
   display: flex;
   align-items: center;

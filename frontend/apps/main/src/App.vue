@@ -64,6 +64,11 @@ onMounted(() => {
   if (authStore.user?.language) {
     locale.value = authStore.user.language
   }
+  // Restore user-selected theme color on every page load
+  const savedColor = localStorage.getItem('theme-primary')
+  if (savedColor) {
+    document.documentElement.style.setProperty('--van-primary-color', savedColor)
+  }
   // Listen for system theme changes
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)

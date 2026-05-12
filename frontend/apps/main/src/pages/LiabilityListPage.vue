@@ -350,7 +350,7 @@ liabilityStore.fetchLiabilities({ is_active: true })
 /* Select mode cancel button */
 .select-cancel {
   font-size: 14px;
-  color: var(--color-primary);
+  color: var(--van-primary-color);
   padding: 4px 8px;
 }
 
@@ -396,8 +396,8 @@ liabilityStore.fetchLiabilities({ is_active: true })
 }
 
 .chip.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  background: var(--van-primary-color);
+  border-color: var(--van-primary-color);
   color: var(--color-on-primary);
 }
 
@@ -557,7 +557,7 @@ liabilityStore.fetchLiabilities({ is_active: true })
   width: 52px;
   height: 52px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: var(--van-primary-color);
   color: var(--color-on-primary);
   display: flex;
   align-items: center;

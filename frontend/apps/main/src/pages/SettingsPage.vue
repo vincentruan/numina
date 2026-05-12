@@ -232,12 +232,12 @@ const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 const themeColorOptions = [
   { name: '蓝色', value: '#007aff' },
   { name: '紫色', value: '#5856d6' },
-  { name: '绿色', value: '#34c759' },
+  { name: '靛蓝', value: '#3634a3' },
   { name: '橙色', value: '#ff9500' },
   { name: '红色', value: '#ff3b30' },
   { name: '粉色', value: '#ff2d55' },
-  { name: '青色', value: '#5ac8fa' },
-  { name: '金色', value: '#ffcc00' },
+  { name: '深绿', value: '#248a3d' },
+  { name: '深青', value: '#0071a4' },
 ]
 
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
