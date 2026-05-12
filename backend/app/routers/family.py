@@ -13,7 +13,7 @@ from app.models.child_economy_config import ChildEconomyConfig
 from app.models.family import Family
 from app.models.liability import Liability
 from app.models.user import User
-from app.schemas.auth import UserResponse
+from app.schemas.auth import UpdateMemberInfoRequest, UserResponse
 from app.schemas.coin import ChildBalanceResponse
 from app.schemas.family import (
     ChildEconomyConfigResponse,
@@ -158,6 +158,32 @@ def update_member_role(
     user: User = Depends(require_adult),
 ):
     member = family_service.update_member_role(db, user, member_id, body.role)
+    return UserResponse.model_validate(member)
+
+
+@router.patch("/members/{member_id}/info", response_model=UserResponse)
+def update_member_info(
+    member_id: int,
+    body: UpdateMemberInfoRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    member = db.query(User).filter(
+        User.id == member_id,
+        User.family_id == user.family_id,
+    ).first()
+    if not member:
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
+    if body.display_name is not None:
+        member.display_name = body.display_name
+    if body.avatar_color is not None:
+        member.avatar_color = body.avatar_color
+    if body.birthday is not None:
+        member.birthday = body.birthday
+    if body.birthday_is_lunar is not None:
+        member.birthday_is_lunar = body.birthday_is_lunar
+    db.commit()
+    db.refresh(member)
     return UserResponse.model_validate(member)
 
 

@@ -1,6 +1,7 @@
 import re
+from datetime import date as date_type
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas.base import SnowflakeBase
 
@@ -115,6 +116,8 @@ class UserResponse(SnowflakeBase):
     view_mode: str = "card"
     second_factor_enabled: bool = False
     second_factor_type: str | None = None
+    birthday: date_type | None = None
+    birthday_is_lunar: bool = False
 
     @field_validator("avatar_color", mode="before")
     @classmethod
@@ -255,3 +258,17 @@ class SetChildPasswordRequest(BaseModel):
     @classmethod
     def check_password(cls, v: str) -> str:
         return validate_password_strength(v)
+
+
+class UpdateMemberInfoRequest(BaseModel):
+    display_name: str | None = Field(None, max_length=20)
+    avatar_color: str | None = None
+    birthday: date_type | None = None
+    birthday_is_lunar: bool | None = None
+
+    @field_validator("avatar_color")
+    @classmethod
+    def check_avatar_color(cls, v: str | None) -> str | None:
+        if v is not None and not _HEX_COLOR_RE.match(v):
+            raise ValueError("avatar_color必须是有效的十六进制颜色（如 #4F46E5）")
+        return v
