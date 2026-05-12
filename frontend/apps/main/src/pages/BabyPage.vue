@@ -48,6 +48,12 @@
           </van-cell>
           <van-cell :title="t('baby.weeklyChores')" :value="`${currentChoreStats.completed_this_week ?? 0}/${currentChoreStats.total_this_week ?? 0}`" />
           <van-cell :title="t('baby.activeWishes')" :value="`${currentWishCount}`" />
+          <van-cell :title="t('baby.blindBoxGifts')" is-link @click="$router.push('/blind-box/gifts')" />
+          <van-cell :title="t('baby.blindBoxDraws')" is-link @click="$router.push('/blind-box/draws')">
+            <template v-if="pendingDrawCount > 0" #value>
+              <van-badge :content="pendingDrawCount" />
+            </template>
+          </van-cell>
         </van-cell-group>
 
         <!-- Content Tabs -->
@@ -168,6 +174,7 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useChoreStore } from '@/stores/chore'
+import { useBlindBoxStore } from '@/stores/blindBox'
 import PageHeader from '@/components/common/PageHeader.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
@@ -180,6 +187,11 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const choreStore = useChoreStore()
+const blindBoxStore = useBlindBoxStore()
+
+const pendingDrawCount = computed(
+  () => blindBoxStore.draws.filter((d) => d.status === 'pending_fulfillment').length,
+)
 
 const refreshing = ref(false)
 const activeChildIndex = ref(0)
@@ -361,6 +373,7 @@ onMounted(async () => {
     await choreStore.fetchPendingApprovals()
   }
   await loadData()
+  await blindBoxStore.fetchDraws()
 })
 </script>
 
