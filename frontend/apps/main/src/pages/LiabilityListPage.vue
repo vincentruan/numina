@@ -1,14 +1,14 @@
 <template>
   <div class="liability-list-page">
-    <PageHeader title="负债" :show-back="false">
+    <PageHeader :title="t('liability.pageTitle')" :show-back="false">
       <template v-if="selectMode" #right>
-        <span class="select-cancel" @click="exitSelectMode">取消</span>
+        <span class="select-cancel" @click="exitSelectMode">{{ t('liability.cancelSelect') }}</span>
       </template>
     </PageHeader>
 
     <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
-      <van-tab title="还款中" name="active" />
-      <van-tab title="已结清" name="inactive" />
+      <van-tab :title="t('liability.tabActive')" name="active" />
+      <van-tab :title="t('liability.tabInactive')" name="inactive" />
     </van-tabs>
 
     <!-- Filter / Sort bar -->
@@ -18,7 +18,7 @@
           class="chip"
           :class="{ active: filterCategory === '' }"
           @click="filterCategory = ''"
-        >全部</button>
+        >{{ t('liability.filterAll') }}</button>
         <button
           v-for="cat in categories"
           :key="cat.value"
@@ -38,12 +38,12 @@
       <div v-if="liabilityStore.liabilities.length" class="summary-banner">
         <div class="summary-top">
           <div class="summary-main">
-            <div class="summary-label">{{ activeTab === 'active' ? '待还总额' : '已结清总额' }}</div>
+            <div class="summary-label">{{ activeTab === 'active' ? t('liability.summaryTotal') : t('liability.summarySettled') }}</div>
             <div class="summary-amount">{{ formatAmountDisplay(totalAmount) }}</div>
           </div>
           <div class="summary-count">
             <span class="count-num">{{ filteredLiabilities.length }}</span>
-            <span class="count-unit">笔</span>
+            <span class="count-unit">{{ t('liability.countUnit') }}</span>
           </div>
         </div>
         <template v-if="activeTab === 'active' && totalOriginal > 0">
@@ -51,7 +51,7 @@
             <div class="summary-progress-fill" :style="{ width: repaidPercent + '%' }" />
           </div>
           <div class="summary-progress-text">
-            <span>总还款进度</span>
+            <span>{{ t('liability.summaryProgress') }}</span>
             <span class="summary-percent">{{ repaidPercent }}%</span>
           </div>
         </template>
@@ -71,9 +71,9 @@
           @delete="confirmDelete"
         />
       </div>
-      <EmptyState v-else description="暂无负债记录">
-        <van-button size="small" type="primary" @click="$router.push('/liabilities/new')">
-          添加负债
+      <EmptyState v-else :description="activeTab === 'active' ? t('liability.noLiabilityDesc') : t('liability.noSettledLiability')">
+        <van-button v-if="activeTab === 'active'" size="small" type="primary" @click="$router.push('/liabilities/new')">
+          {{ t('liability.addLiability') }}
         </van-button>
       </EmptyState>
     </van-pull-refresh>
@@ -81,22 +81,22 @@
     <!-- Batch action bar -->
     <Transition name="slide-up">
       <div v-if="selectMode" class="batch-bar">
-        <span class="batch-count">已选 {{ selectedIds.size }} 笔</span>
+        <span class="batch-count">{{ t('liability.batchCount', { count: selectedIds.size }) }}</span>
         <div class="batch-actions">
-          <van-button size="small" plain @click="selectAll">全选</van-button>
+          <van-button size="small" plain @click="selectAll">{{ t('liability.batchSelectAll') }}</van-button>
           <van-button
             v-if="activeTab === 'active'"
             size="small"
             type="success"
             :disabled="selectedIds.size === 0"
             @click="batchSettle"
-          >标记结清</van-button>
+          >{{ t('liability.batchSettle') }}</van-button>
           <van-button
             size="small"
             type="danger"
             :disabled="selectedIds.size === 0"
             @click="batchDelete"
-          >批量删除</van-button>
+          >{{ t('liability.batchDelete') }}</van-button>
         </div>
       </div>
     </Transition>
@@ -109,18 +109,18 @@
     <!-- Quick payment dialog -->
     <van-dialog
       v-model:show="payDialogVisible"
-      :title="`还款 · ${payTarget?.name ?? ''}`"
+      :title="t('liability.payDialogTitle', { name: payTarget?.name ?? '' })"
       show-cancel-button
-      confirm-button-text="确认还款"
+      :confirm-button-text="t('liability.payConfirmBtn')"
       confirm-button-color="#059669"
       @confirm="submitPayment"
     >
       <div class="pay-dialog-body">
-        <div class="pay-hint">剩余本金：{{ payTarget ? formatAmountDisplay(payTarget.remaining_amount) : '' }}</div>
+        <div class="pay-hint">{{ t('liability.payRemainingHint', { amount: payTarget ? formatAmountDisplay(payTarget.remaining_amount) : '' }) }}</div>
         <van-field
           v-model="payAmount"
           type="number"
-          placeholder="请输入还款金额"
+          :placeholder="t('liability.payPlaceholder')"
           input-align="center"
           autofocus
           :formatter="(v: string) => v.replace(/[^0-9.]/g, '')"
@@ -131,7 +131,7 @@
             :key="pct"
             class="quick-pct-btn"
             @click="setPayPercent(pct)"
-          >{{ pct === 100 ? '全额' : pct + '%' }}</button>
+          >{{ pct === 100 ? t('liability.payFull') : pct + '%' }}</button>
         </div>
       </div>
     </van-dialog>
@@ -160,18 +160,18 @@ const activeTab = ref('active')
 const filterCategory = ref('')
 const sortOrder = ref<'default' | 'asc' | 'desc'>('default')
 
-const categories = [
-  { value: 'mortgage', label: '房贷' },
-  { value: 'car_loan', label: '车贷' },
-  { value: 'credit_card', label: '信用卡' },
-  { value: 'personal_loan', label: '个人贷款' },
-  { value: 'other', label: '其他' },
-]
+const categories = computed(() => [
+  { value: 'mortgage', label: t('liability.mortgage') },
+  { value: 'car_loan', label: t('liability.carLoan') },
+  { value: 'credit_card', label: t('liability.creditCard') },
+  { value: 'personal_loan', label: t('liability.personalLoan') },
+  { value: 'other', label: t('liability.other') },
+])
 
 const sortLabel = computed(() => {
-  if (sortOrder.value === 'asc') return '金额↑'
-  if (sortOrder.value === 'desc') return '金额↓'
-  return '排序'
+  if (sortOrder.value === 'asc') return t('liability.sortAsc')
+  if (sortOrder.value === 'desc') return t('liability.sortDesc')
+  return t('liability.sortLabel')
 })
 
 function toggleSort() {
