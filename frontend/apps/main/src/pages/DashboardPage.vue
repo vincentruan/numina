@@ -27,7 +27,7 @@
 
         <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
         <SmartRemindersCard
-          :idle-assets="dashboardStore.lowUsageAssets.filter(a => a.usage_frequency === 'idle')"
+          :idle-assets="dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle')"
           :expiring-assets="dashboardStore.expiringSoonAssets"
           @select-status="onStatusSelect"
         />
@@ -36,7 +36,11 @@
         <van-cell-group inset class="chart-section">
           <van-collapse v-model="trendExpanded" @change="toggleTrend">
             <van-collapse-item title="资产趋势" name="trend">
-              <TrendLineChart v-if="dashboardStore.trend.length" :data="dashboardStore.trend" @period-change="onTrendPeriodChange" />
+              <TrendLineChart
+                v-if="dashboardStore.trend.length"
+                :data="dashboardStore.trend"
+                @period-change="onTrendPeriodChange"
+              />
               <van-empty v-else description="暂无数据" image-size="60" />
             </van-collapse-item>
           </van-collapse>
@@ -46,7 +50,10 @@
         <van-cell-group inset class="chart-section">
           <van-collapse v-model="allocationExpanded" @change="toggleAllocation">
             <van-collapse-item title="资产分布" name="allocation">
-              <AllocationPieChart v-if="dashboardStore.allocation.length" :data="dashboardStore.allocation" />
+              <AllocationPieChart
+                v-if="dashboardStore.allocation.length"
+                :data="dashboardStore.allocation"
+              />
               <van-empty v-else description="暂无数据" image-size="60" />
             </van-collapse-item>
           </van-collapse>
@@ -59,12 +66,21 @@
           @select="onStatusSelect"
         >
           <template #toolbar>
-            <van-icon name="checked" @click="enterSelectionMode" />
+            <button
+              class="toolbar-selection-btn"
+              @click="enterSelectionMode"
+              aria-label="开启批量选择"
+            >
+              <van-icon name="checked" size="18" />
+            </button>
           </template>
         </StatusSummaryGrid>
 
         <!-- Category Navigation (Sticky, shown when scrolled) -->
-        <div v-if="showCategoryNav && categoriesWithAssetCount.length > 0" class="category-nav-sticky">
+        <div
+          v-if="showCategoryNav && categoriesWithAssetCount.length > 0"
+          class="category-nav-sticky"
+        >
           <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
             <van-tab title="全部" />
             <van-tab
@@ -116,9 +132,19 @@
         <!-- Selection Mode -->
         <div v-else class="selection-mode">
           <div class="selection-header">
-            <van-checkbox v-model="selectAll" @change="toggleSelectAll">{{ t('dashboard.selectAll') }}</van-checkbox>
-            <span class="selection-count">{{ t('dashboard.selectedCount', { count: selectedIds.length }) }}</span>
-            <van-button type="primary" size="mini" @click="exitSelectionMode">{{ t('dashboard.selectionDone') }}</van-button>
+            <van-checkbox v-model="selectAll" @change="toggleSelectAll">{{
+              t('dashboard.selectAll')
+            }}</van-checkbox>
+            <span class="selection-count">{{
+              t('dashboard.selectedCount', { count: selectedIds.length })
+            }}</span>
+            <van-button
+              type="primary"
+              size="small"
+              class="selection-done-btn"
+              @click="exitSelectionMode"
+              >{{ t('dashboard.selectionDone') }}</van-button
+            >
           </div>
           <div class="selection-actions">
             <button class="action-btn" @click="handleBatchDelete">
@@ -126,11 +152,11 @@
               <span>{{ t('dashboard.actionDelete') }}</span>
             </button>
             <button class="action-btn" @click="handleBatchCategory">
-              <van-icon name="label-o" size="18" />
+              <van-icon name="apps-o" size="18" />
               <span>{{ t('dashboard.actionCategory') }}</span>
             </button>
             <button class="action-btn" @click="handleBatchTag">
-              <van-icon name="tag-o" size="18" />
+              <van-icon name="label-o" size="18" />
               <span>{{ t('dashboard.actionTag') }}</span>
             </button>
             <button class="action-btn" @click="showMoreActions = true">
@@ -170,29 +196,54 @@
     <template v-if="!selectionMode">
       <!-- Backdrop -->
       <transition name="fab-backdrop">
-        <div v-if="fabMenuOpen" class="fab-backdrop" aria-hidden="true" @click="fabMenuOpen = false" />
+        <div
+          v-if="fabMenuOpen"
+          class="fab-backdrop"
+          aria-hidden="true"
+          @click="fabMenuOpen = false"
+        />
       </transition>
       <!-- Menu items -->
       <transition name="fab-menu">
         <div v-if="fabMenuOpen" class="fab-menu" role="menu" aria-label="快捷操作">
-          <button
-            class="fab-menu-item"
-            role="menuitem"
-            @click="onFabAction('import')"
-          >
+          <button class="fab-menu-item" role="menuitem" @click="onFabAction('import')">
             <span class="fab-menu-label">{{ t('dashboard.fabImportBill') }}</span>
             <span class="fab-menu-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="12" y1="18" x2="12" y2="12" />
+                <line x1="9" y1="15" x2="15" y2="15" />
+              </svg>
             </span>
           </button>
-          <button
-            class="fab-menu-item"
-            role="menuitem"
-            @click="onFabAction('add')"
-          >
+          <button class="fab-menu-item" role="menuitem" @click="onFabAction('add')">
             <span class="fab-menu-label">{{ t('dashboard.fabAddAsset') }}</span>
             <span class="fab-menu-icon" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="2" y="7" width="20" height="14" rx="2" />
+                <path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2" />
+                <line x1="12" y1="12" x2="12" y2="17" />
+                <line x1="9.5" y1="14.5" x2="14.5" y2="14.5" />
+              </svg>
             </span>
           </button>
         </div>
@@ -251,8 +302,12 @@ const activeStatus = ref<string | null>(null)
 const overviewCardRef = ref()
 
 // Chart collapse state (van-collapse v-model expects array of active names)
-const trendExpanded = ref<string[]>(localStorage.getItem('dashboard_trend_expanded') === 'false' ? [] : ['trend'])
-const allocationExpanded = ref<string[]>(localStorage.getItem('dashboard_allocation_expanded') === 'true' ? ['allocation'] : [])
+const trendExpanded = ref<string[]>(
+  localStorage.getItem('dashboard_trend_expanded') === 'false' ? [] : ['trend'],
+)
+const allocationExpanded = ref<string[]>(
+  localStorage.getItem('dashboard_allocation_expanded') === 'true' ? ['allocation'] : [],
+)
 
 // Pagination state
 const loadingMore = ref(false)
@@ -260,7 +315,7 @@ const loadingMore = ref(false)
 // Category view
 const showCategoryNav = ref(false)
 const activeCategoryIndex = ref(0)
-const activeCategoryId = ref<string | null>(null)  // null = show all
+const activeCategoryId = ref<string | null>(null) // null = show all
 
 // Selection mode
 const selectionMode = ref(false)
@@ -286,7 +341,7 @@ const overview = computed(() => dashboardStore.overview)
 // Category counts from backend (full counts, not page-limited)
 const categoriesWithAssetCount = computed(() => {
   return dashboardStore.categoryCounts
-    .map(c => ({ id: c.id, name: c.name, icon: c.icon, count: c.count }))
+    .map((c) => ({ id: c.id, name: c.name, icon: c.icon, count: c.count }))
     .sort((a, b) => b.count - a.count)
 })
 
@@ -297,7 +352,7 @@ const statusLabelMap: Record<string, string> = {
   in_use: '服役中',
   idle: '闲置',
   sold: '已出售',
-  retired: '已退役'
+  retired: '已退役',
 }
 
 // More actions
@@ -323,7 +378,7 @@ function onCategoryChange(index: number) {
   activeCategoryIndex.value = index
   const targetStatus = activeStatus.value || 'in_use'
   if (index === 0) {
-    activeCategoryId.value = null  // "全部" tab
+    activeCategoryId.value = null // "全部" tab
     dashboardStore.resetAssetPagination(targetStatus)
     dashboardStore.fetchAssetsPage(targetStatus, 1, 20, '')
   } else {
@@ -360,7 +415,7 @@ function exitSelectionMode() {
 
 function toggleSelectAll() {
   if (selectAll.value) {
-    selectedIds.value = dashboardStore.displayedAssets.map(a => a.id)
+    selectedIds.value = dashboardStore.displayedAssets.map((a) => a.id)
   } else {
     selectedIds.value = []
   }
@@ -375,7 +430,6 @@ function toggleSelection(id: string) {
   }
   selectAll.value = selectedIds.value.length === dashboardStore.displayedAssets.length
 }
-
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) {
@@ -488,12 +542,18 @@ function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
 
 function toggleTrend() {
   trendExpanded.value = trendExpanded.value.includes('trend') ? [] : ['trend']
-  localStorage.setItem('dashboard_trend_expanded', trendExpanded.value.length > 0 ? 'true' : 'false')
+  localStorage.setItem(
+    'dashboard_trend_expanded',
+    trendExpanded.value.length > 0 ? 'true' : 'false',
+  )
 }
 
 function toggleAllocation() {
   allocationExpanded.value = allocationExpanded.value.includes('allocation') ? [] : ['allocation']
-  localStorage.setItem('dashboard_allocation_expanded', allocationExpanded.value.length > 0 ? 'true' : 'false')
+  localStorage.setItem(
+    'dashboard_allocation_expanded',
+    allocationExpanded.value.length > 0 ? 'true' : 'false',
+  )
 }
 
 async function onLoadMore() {
@@ -554,14 +614,33 @@ onUnmounted(() => {
 }
 
 /* Toolbar Icons */
-:deep(.toolbar-slot .van-icon) {
-  font-size: 20px;
-  color: var(--text-secondary);
-  cursor: pointer;
-  padding: 4px;
+:deep(.toolbar-slot) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
-:deep(.toolbar-slot .van-icon:active) {
-  opacity: 0.6;
+.toolbar-selection-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  background: var(--van-primary-color);
+  color: var(--color-on-primary);
+  border: none;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+.toolbar-selection-btn:active {
+  transform: scale(0.95);
+  opacity: 0.9;
+}
+[data-theme='dark'] .toolbar-selection-btn {
+  background: var(--color-lavender);
+  color: #010120;
 }
 
 /* Category Navigation (Sticky) */
@@ -617,11 +696,12 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 12px;
+  padding: 10px 12px;
   background: var(--card-bg);
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 0;
+  gap: 8px;
 }
 [data-theme='dark'] .selection-header {
   border-color: rgba(255, 255, 255, 0.12);
@@ -632,6 +712,15 @@ onUnmounted(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--color-primary);
+}
+[data-theme='dark'] .selection-count {
+  color: var(--color-lavender);
+}
+.selection-done-btn {
+  min-width: 60px;
+  padding: 0 16px;
+  height: 32px;
+  flex-shrink: 0;
 }
 .selection-actions {
   display: flex;
@@ -660,7 +749,9 @@ onUnmounted(() => {
   padding: 4px 8px;
   border-radius: 4px;
   color: var(--text-secondary);
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
   min-width: 44px;
   min-height: 44px;
   justify-content: center;
@@ -703,7 +794,10 @@ onUnmounted(() => {
   z-index: 20;
   cursor: pointer;
   border: none;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.2s ease;
 }
 
 .fab:active {
@@ -756,11 +850,15 @@ onUnmounted(() => {
 }
 
 .fab-menu-enter-active {
-  transition: opacity 0.2s ease, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .fab-menu-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 .fab-menu-enter-from,
@@ -781,7 +879,9 @@ onUnmounted(() => {
   box-shadow: 0 2px 12px rgba(1, 1, 32, 0.12);
   min-height: 44px;
   white-space: nowrap;
-  transition: transform 0.1s ease, box-shadow 0.1s ease;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
 }
 
 .fab-menu-item:active {

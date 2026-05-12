@@ -1,7 +1,7 @@
 <template>
   <div
     class="asset-list-item"
-    :class="{ 'selection-mode': selectable, 'selected': selected }"
+    :class="{ 'selection-mode': selectable, selected: selected }"
     role="listitem"
     :aria-label="`${asset.name}, ${statusText}, ${currency.format(asset.purchase_price || 0)}购入`"
     :aria-selected="selected"
@@ -15,13 +15,25 @@
     @keydown.space.prevent="toggleSelect"
   >
     <div v-if="selectable" class="selection-checkbox" aria-hidden="true">
-      <van-checkbox
-        :model-value="selected"
-        @update:model-value="$emit('update:selected', $event)"
-      />
+      <div class="selection-check">
+        <svg viewBox="0 0 24 24" width="18" height="18" class="check-icon">
+          <circle cx="12" cy="12" r="9" fill="var(--color-success)" />
+          <path
+            d="M9 12l2 2 4-4"
+            stroke="white"
+            stroke-width="2"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
     </div>
     <div class="item-main">
-      <div class="item-icon" :style="{ background: asset.category?.color || 'var(--color-primary)' }">
+      <div
+        class="item-icon"
+        :style="{ background: asset.category?.color || 'var(--color-primary)' }"
+      >
         <svg class="icon-svg" aria-hidden="true">
           <use :href="`#${getIconId(asset.category?.icon)}`" />
         </svg>
@@ -29,10 +41,14 @@
       <div class="item-info">
         <div class="item-header">
           <span class="item-name">{{ asset.name }}</span>
-          <van-tag :type="statusType" size="medium" class="item-status-tag">{{ statusText }}</van-tag>
+          <van-tag :type="statusType" size="medium" class="item-status-tag">{{
+            statusText
+          }}</van-tag>
         </div>
         <div class="item-meta">
-          <span class="item-price-days">{{ currency.format(asset.purchase_price || 0) }} | {{ daysUsed }}天</span>
+          <span class="item-price-days"
+            >{{ currency.format(asset.purchase_price || 0) }} | {{ daysUsed }}天</span
+          >
         </div>
         <div class="item-cost">
           <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="item-daily">
@@ -49,8 +65,12 @@
             </div>
           </div>
           <div class="progress-info">
-            <span class="progress-target">{{ t('asset.progressTarget', { days: targetDays }) }}</span>
-            <span class="progress-remaining">{{ t('asset.progressRemaining', { days: remainingDays }) }}</span>
+            <span class="progress-target">{{
+              t('asset.progressTarget', { days: targetDays })
+            }}</span>
+            <span class="progress-remaining">{{
+              t('asset.progressRemaining', { days: remainingDays })
+            }}</span>
           </div>
         </div>
       </div>
@@ -112,21 +132,31 @@ onUnmounted(() => {
 
 const statusType = computed(() => {
   switch (props.asset.status) {
-    case 'in_use': return 'primary'
-    case 'idle': return 'warning'
-    case 'sold': return 'danger'
-    case 'retired': return 'default'
-    default: return 'primary'
+    case 'in_use':
+      return 'primary'
+    case 'idle':
+      return 'warning'
+    case 'sold':
+      return 'danger'
+    case 'retired':
+      return 'default'
+    default:
+      return 'primary'
   }
 })
 
 const statusText = computed(() => {
   switch (props.asset.status) {
-    case 'in_use': return t('asset.inUse')
-    case 'idle': return t('asset.idle')
-    case 'sold': return t('asset.sold')
-    case 'retired': return t('asset.retired')
-    default: return props.asset.status
+    case 'in_use':
+      return t('asset.inUse')
+    case 'idle':
+      return t('asset.idle')
+    case 'sold':
+      return t('asset.sold')
+    case 'retired':
+      return t('asset.retired')
+    default:
+      return props.asset.status
   }
 })
 
@@ -148,7 +178,6 @@ const progressPercent = computed(() => {
   if (!targetDays.value) return 0
   return Math.min(100, (daysUsed.value / targetDays.value) * 100)
 })
-
 
 /**
  * Get the icon ID for a category icon.
@@ -172,7 +201,9 @@ function getIconId(icon: string | undefined): string {
   padding: 12px 14px;
   border-bottom: 1px solid var(--separator);
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .asset-list-item:active {
   background: var(--bg-tertiary);
@@ -188,16 +219,30 @@ function getIconId(icon: string | undefined): string {
 .asset-list-item.selection-mode.selected {
   border-left-color: var(--color-primary);
   background: rgba(23, 23, 28, 0.04);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
 }
 [data-theme='dark'] .asset-list-item.selection-mode.selected {
   border-left-color: var(--color-coral);
   background: rgba(255, 119, 89, 0.08);
+  box-shadow: inset 0 0 0 1px var(--color-coral);
 }
 
 /* Selection checkbox */
 .selection-checkbox {
   margin-right: 8px;
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+.selection-check {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.check-icon {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
 }
 
 /* Accessibility - Focus styles */

@@ -1,10 +1,16 @@
 <template>
   <div
     class="asset-card"
-    :class="{ 'selection-mode': selectable, 'selected': selected, 'syncing': syncing }"
+    :class="{ 'selection-mode': selectable, selected: selected, syncing: syncing }"
     :aria-disabled="syncing ? 'true' : undefined"
     role="listitem"
-    :aria-label="t('assetCard.ariaLabel', { name: asset.name, status: statusText, value: formatPrice(asset.current_value) }) + (syncing ? t('assetCard.ariaSyncing') : '')"
+    :aria-label="
+      t('assetCard.ariaLabel', {
+        name: asset.name,
+        status: statusText,
+        value: formatPrice(asset.current_value),
+      }) + (syncing ? t('assetCard.ariaSyncing') : '')
+    "
     tabindex="0"
     @click="handleClick"
     @touchstart="startLongPress"
@@ -19,10 +25,19 @@
       <van-tag type="warning">{{ t('assetCard.syncing') }}</van-tag>
     </div>
     <div v-if="selectable" class="selection-overlay" aria-hidden="true">
-      <van-checkbox
-        :model-value="selected"
-        @update:model-value="$emit('update:selected', $event)"
-      />
+      <div class="selection-check">
+        <svg viewBox="0 0 24 24" width="20" height="20" class="check-icon">
+          <circle cx="12" cy="12" r="10" fill="var(--color-success)" />
+          <path
+            d="M9 12l2 2 4-4"
+            stroke="white"
+            stroke-width="2"
+            fill="none"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </div>
     </div>
     <input
       v-if="selectable"
@@ -37,7 +52,11 @@
       <div v-if="asset.image_url && !imageError" class="card-image">
         <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
       </div>
-      <div v-else class="card-icon" :style="{ background: asset.category?.color || 'var(--color-primary)' }">
+      <div
+        v-else
+        class="card-icon"
+        :style="{ background: asset.category?.color || 'var(--color-primary)' }"
+      >
         <svg class="icon-svg" aria-hidden="true">
           <use :href="`#${getIconId(asset.category?.icon)}`" />
         </svg>
@@ -49,8 +68,12 @@
         <van-tag :type="statusType" size="medium">{{ statusText }}</van-tag>
       </div>
       <div class="card-row-category">
-        <span class="card-category-text">{{ asset.category?.name || t('assetCard.uncategorized') }}</span>
-        <span v-if="daysUsed > 0" class="card-days">{{ t('assetCard.daysUsed', { days: daysUsed }) }}</span>
+        <span class="card-category-text">{{
+          asset.category?.name || t('assetCard.uncategorized')
+        }}</span>
+        <span v-if="daysUsed > 0" class="card-days">{{
+          t('assetCard.daysUsed', { days: daysUsed })
+        }}</span>
       </div>
       <div class="card-row-prices">
         <div class="price-item">
@@ -63,10 +86,10 @@
         </div>
       </div>
       <div class="card-row-bottom">
-          <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
-            <van-icon name="clock-o" size="12" aria-hidden="true" />
-            {{ t('assetCard.dailyCost', { cost: currency.format(asset.daily_cost) }) }}
-          </span>
+        <span v-if="asset.daily_cost != null && asset.daily_cost > 0" class="card-daily-cost">
+          <van-icon name="clock-o" size="12" aria-hidden="true" />
+          {{ t('assetCard.dailyCost', { cost: currency.format(asset.daily_cost) }) }}
+        </span>
         <span v-else class="card-daily-cost-placeholder" />
       </div>
     </div>
@@ -164,7 +187,9 @@ function formatPrice(price: number | null | undefined): string {
   return currency.format(price)
 }
 
-const statusMap = computed<Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }>>(() => ({
+const statusMap = computed<
+  Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }>
+>(() => ({
   in_use: { text: t('asset.inUse'), type: 'success' },
   idle: { text: t('asset.idle'), type: 'warning' },
   sold: { text: t('asset.sold'), type: 'default' },
@@ -185,7 +210,9 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   margin-bottom: 8px;
   border: 1px solid var(--color-card-border);
   cursor: pointer;
-  transition: transform 0.15s, border-color 0.15s;
+  transition:
+    transform 0.15s,
+    border-color 0.15s;
 }
 [data-theme='dark'] .asset-card {
   border-color: var(--color-hairline);
@@ -200,11 +227,37 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 .asset-card.selection-mode.selected {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  box-shadow:
+    0 0 0 2px var(--color-primary),
+    0 0 12px rgba(1, 1, 32, 0.2);
 }
 [data-theme='dark'] .asset-card.selection-mode.selected {
   border-color: var(--color-lavender);
-  box-shadow: 0 0 0 1px var(--color-lavender);
+  box-shadow:
+    0 0 0 2px var(--color-lavender),
+    0 0 12px rgba(189, 187, 255, 0.3);
+}
+/* Selection overlay with check icon */
+.selection-overlay {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+.asset-card.selection-mode.selected .selection-overlay {
+  opacity: 1;
+}
+.selection-check {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.check-icon {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
@@ -221,19 +274,6 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   top: 8px;
   left: 8px;
   z-index: 10;
-}
-.selection-overlay {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 10;
-  background: var(--card-bg);
-  border-radius: 50%;
-  padding: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-.selection-overlay :deep(.van-checkbox) {
-  display: flex;
 }
 .card-left {
   flex-shrink: 0;
