@@ -15,12 +15,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
-import {
-  getAITask,
-  startAIEventStream,
-  cancelAITask,
-  type AITaskStatus,
-} from '@/api/ai'
+import { getAITask, startAIEventStream, cancelAITask, type AITaskStatus } from '@/api/ai'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import type { AgentEvent } from '@/types/agent-stream'
 
@@ -28,11 +23,7 @@ const POLL_INTERVAL_MS = 3000
 
 export type AITaskPhase = 'connecting' | 'thinking' | 'answering' | null
 
-export function useAITask(
-  capability: string,
-  triggerEndpoint: string,
-  onComplete?: () => void,
-) {
+export function useAITask(capability: string, triggerEndpoint: string, onComplete?: () => void) {
   const { t } = useI18n()
 
   const status = ref<AITaskStatus['status']>('idle')
@@ -61,8 +52,13 @@ export function useAITask(
   function startTimer(fromSeconds = 0) {
     elapsedSeconds.value = fromSeconds
     startTime = Date.now() - fromSeconds * 1000
-    if (timer) clearInterval(timer)
+    if (timer) {
+      clearInterval(timer)
+      timer = null
+    }
     timer = setInterval(() => {
+      // Guard against race: timer might fire after stopTimer but before clearInterval completes
+      if (timer === null) return
       elapsedSeconds.value = Math.floor((Date.now() - startTime!) / 1000)
     }, 1000)
   }
@@ -70,15 +66,20 @@ export function useAITask(
   function stopTimer() {
     if (timer) {
       clearInterval(timer)
-      timer = null
+      timer = null // Set to null BEFORE clearInterval to prevent race
     }
   }
 
   function startThinkTimer() {
     thinkStartTime = Date.now()
     thinkSeconds.value = 0
-    if (thinkTimer) clearInterval(thinkTimer)
+    if (thinkTimer) {
+      clearInterval(thinkTimer)
+      thinkTimer = null
+    }
     thinkTimer = setInterval(() => {
+      // Guard against race
+      if (thinkTimer === null) return
       thinkSeconds.value = Math.floor((Date.now() - thinkStartTime!) / 1000)
     }, 1000)
   }
@@ -86,15 +87,20 @@ export function useAITask(
   function stopThinkTimer() {
     if (thinkTimer) {
       clearInterval(thinkTimer)
-      thinkTimer = null
+      thinkTimer = null // Set to null BEFORE clearInterval
     }
   }
 
   // ── Polling ────────────────────────────────────────────────────────────────
 
   function startPolling() {
-    if (pollTimer) clearInterval(pollTimer)
+    if (pollTimer) {
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
     pollTimer = setInterval(async () => {
+      // Guard against race
+      if (pollTimer === null) return
       try {
         const task = await getAITask(capability)
         if (task.status === 'queued') {
@@ -127,7 +133,7 @@ export function useAITask(
   function stopPolling() {
     if (pollTimer) {
       clearInterval(pollTimer)
-      pollTimer = null
+      pollTimer = null // Set to null BEFORE clearInterval
     }
   }
 
@@ -173,9 +179,16 @@ export function useAITask(
   async function consumeEventStream(reader: ReadableStreamDefaultReader<Uint8Array>) {
     const decoder = new TextDecoder()
     const parser = createAgentEventParser(handleEvent)
+    const TIMEOUT_MS = 300000 // 5 minutes max wait for next chunk
+
     try {
       while (true) {
-        const { done, value } = await reader.read()
+        // Timeout handling for read operation
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Stream timeout')), TIMEOUT_MS),
+        )
+
+        const { done, value } = await Promise.race([reader.read(), timeoutPromise])
         if (done) break
         const text = decoder.decode(value, { stream: true })
         if (text) parser.push(text)
@@ -193,12 +206,26 @@ export function useAITask(
         onComplete?.()
       }
     } catch (err: unknown) {
-      const e = err as { name?: string }
-      if (e?.name === 'AbortError') return
+      // Cancel reader on abort to signal backend
+      if (err instanceof Error && err.name === 'AbortError') {
+        try {
+          await reader.cancel()
+        } catch {
+          // Ignore reader.cancel errors
+        }
+        return
+      }
+      // Cleanup on other errors
+      try {
+        await reader.cancel()
+      } catch {
+        // Ignore
+      }
       status.value = 'failed'
       phase.value = null
       stopTimer()
       stopThinkTimer()
+      stopPolling()
     }
   }
 
@@ -236,19 +263,22 @@ export function useAITask(
 
       await consumeEventStream(result.reader)
     } catch (err: unknown) {
-      const e = err as { name?: string; message?: string }
-      if (e?.name === 'AbortError') return
-      if (e?.message?.includes('409')) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      const errorMsg = err instanceof Error ? err.message : ''
+      if (errorMsg.includes('409')) {
         showToast(t('aiTask.inProgress'))
         status.value = 'idle'
         phase.value = null
         stopTimer()
+        stopThinkTimer()
+        stopPolling()
         await checkAndResume()
       } else {
         status.value = 'failed'
         phase.value = null
         stopTimer()
         stopThinkTimer()
+        stopPolling()
       }
     }
   }
@@ -282,10 +312,10 @@ export function useAITask(
       }
       await consumeEventStream(result.reader)
     } catch (err: unknown) {
-      const e = err as { name?: string; message?: string }
-      if (e?.name === 'AbortError') return
+      if (err instanceof Error && err.name === 'AbortError') return
+      const errorMsg = err instanceof Error ? err.message : ''
       // 409 means task is running but we can't attach — fall back to polling
-      if (e?.message?.includes('409')) {
+      if (errorMsg.includes('409')) {
         showToast(t('aiTask.resuming'))
         startPolling()
       } else {
@@ -293,6 +323,7 @@ export function useAITask(
         phase.value = null
         stopTimer()
         stopThinkTimer()
+        stopPolling()
       }
     }
   }
@@ -320,6 +351,7 @@ export function useAITask(
 
   async function cancelTask() {
     abortController?.abort()
+    abortController = null
     stopTimer()
     stopThinkTimer()
     stopPolling()
@@ -342,6 +374,11 @@ export function useAITask(
       }
     } catch {
       showToast(t('toast.operationFailed'))
+      status.value = 'idle'
+      phase.value = null
+      stopTimer()
+      stopThinkTimer()
+      stopPolling()
     }
   }
 
@@ -349,10 +386,16 @@ export function useAITask(
 
   function onVisibilityChange() {
     if (document.hidden) {
-      abortController?.abort()
-      abortController = null
+      // Disconnect stream on tab hidden
+      if (abortController) {
+        abortController.abort()
+        abortController = null
+      }
       stopPolling()
+      stopTimer()
+      stopThinkTimer()
     } else if (status.value === 'running' || status.value === 'queued') {
+      // Resume when tab becomes visible again
       checkAndResume()
     }
   }
