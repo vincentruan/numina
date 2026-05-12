@@ -51,15 +51,21 @@
     <template v-else>
       <!-- No liabilities -->
       <div v-if="!data.has_liabilities" class="no-liability">
-        <van-empty :description="t('liability.noLiabilityDesc')">
-          <template #image>
-            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-              <rect x="8" y="8" width="64" height="64" rx="8" fill="rgba(189,187,255,0.10)" />
-              <rect x="20" y="20" width="40" height="40" rx="4" stroke="#bdbbff" stroke-width="1.5" fill="rgba(189,187,255,0.08)" />
-              <path d="M30 40l7 7 13-14" stroke="#bdbbff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-          </template>
-        </van-empty>
+        <div class="empty-illustration" aria-hidden="true">
+          <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="60" cy="60" r="56" fill="var(--empty-bg-outer)" />
+            <circle cx="60" cy="60" r="42" fill="var(--empty-bg-inner)" />
+            <!-- Shield body -->
+            <path d="M60 28l-22 9v16c0 13 9.5 25 22 28 12.5-3 22-15 22-28V37L60 28z" fill="var(--empty-icon-fill)" />
+            <!-- Checkmark -->
+            <path d="M50 60l7 7 13-14" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <!-- Sparkle top-right -->
+            <circle cx="86" cy="34" r="10" fill="var(--empty-badge-bg)" />
+            <path d="M86 29v10M81 34h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <p class="empty-title">{{ t('liability.noLiabilityTitle') }}</p>
+        <p class="empty-desc">{{ t('liability.noLiabilityDesc') }}</p>
         <div class="actions">
           <TaskConsole
             :status="taskStatus"
@@ -262,7 +268,43 @@ onMounted(loadData)
   padding-bottom: 24px;
 }
 .loading-state { display: flex; justify-content: center; padding: 60px; }
-.empty-state, .no-liability { padding: 40px 16px; min-height: 240px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.empty-state {
+  padding: 40px 16px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.no-liability {
+  padding: 48px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  --empty-bg-outer: rgba(76, 175, 80, 0.08);
+  --empty-bg-inner: rgba(76, 175, 80, 0.12);
+  --empty-icon-fill: #4caf50;
+  --empty-badge-bg: var(--van-primary-color, #1989fa);
+}
+.empty-illustration {
+  margin-bottom: 20px;
+  filter: drop-shadow(0 4px 12px rgba(1, 1, 32, 0.1));
+}
+.empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  letter-spacing: -0.2px;
+}
+.empty-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 24px;
+  max-width: 260px;
+}
 .actions { padding: 12px 16px 0; width: 100%; }
 .summary-card {
   background: var(--bg-primary);
