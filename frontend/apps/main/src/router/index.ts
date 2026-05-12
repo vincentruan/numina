@@ -264,12 +264,12 @@ const router = createRouter({
           component: () => import('@/pages/BabyDayDetailPage.vue')
         },
         {
-          path: 'chore-approvals',
+          path: 'family/chore-approvals',
           name: 'ChoreApprovals',
           component: () => import('@/pages/ChoreApprovalsPage.vue')
         },
         {
-          path: 'wish-review',
+          path: 'family/wish-review',
           name: 'WishReview',
           component: () => import('@/pages/WishReviewPage.vue')
         }

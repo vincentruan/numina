@@ -6,28 +6,30 @@
 
     <div v-if="loading" class="loading">加载中...</div>
 
-    <div v-if="error" class="error-msg">{{ error }}</div>
+    <template v-else>
+      <div v-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else-if="!loading && pending.length === 0" class="empty">
-      <p>暂无待审批家务 ✅</p>
-    </div>
+      <div v-else-if="pending.length === 0" class="empty">
+        <p>暂无待审批家务 ✅</p>
+      </div>
 
-    <div v-else class="approval-list">
-      <div v-for="item in pending" :key="item.id" class="approval-card">
-        <div class="card-top">
-          <span class="chore-emoji">{{ item.chore_emoji || '📋' }}</span>
-          <div class="chore-info">
-            <p class="chore-name">{{ item.chore_name }}</p>
-            <p class="chore-reward">+{{ item.coin_reward }} ⭐</p>
+      <div v-else class="approval-list">
+        <div v-for="item in pending" :key="item.id" class="approval-card">
+          <div class="card-top">
+            <span class="chore-emoji">{{ item.chore_emoji || '📋' }}</span>
+            <div class="chore-info">
+              <p class="chore-name">{{ item.chore_name }}</p>
+              <p class="chore-reward">+{{ item.coin_reward }} ⭐</p>
+            </div>
+          </div>
+          <div class="card-actions">
+            <button class="btn-approve" :disabled="actioningId === item.id" @click="approve(item.id)">批准</button>
+            <button class="btn-redo" :disabled="actioningId === item.id" @click="reject(item.id, true)">退回重做</button>
+            <button class="btn-reject" :disabled="actioningId === item.id" @click="reject(item.id, false)">拒绝</button>
           </div>
         </div>
-        <div class="card-actions">
-          <button class="btn-approve" :disabled="actioningId === item.id" @click="approve(item.id)">批准</button>
-          <button class="btn-redo" :disabled="actioningId === item.id" @click="reject(item.id, true)">退回重做</button>
-          <button class="btn-reject" :disabled="actioningId === item.id" @click="reject(item.id, false)">拒绝</button>
-        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -73,6 +75,7 @@ async function approve(instanceId: string) {
     }
   } catch {
     error.value = t('toast.operationFailed2')
+    await load()
   } finally {
     actioningId.value = null
   }
@@ -85,6 +88,7 @@ async function reject(instanceId: string, returnToRedo: boolean) {
     pending.value = pending.value.filter(i => i.id !== instanceId)
   } catch {
     error.value = t('toast.operationFailed2')
+    await load()
   } finally {
     actioningId.value = null
   }

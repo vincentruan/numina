@@ -3,50 +3,55 @@
     <PageHeader title="心愿审核" />
 
     <div v-if="loading" class="loading">加载中...</div>
-    <div v-if="error" class="error-msg">{{ error }}</div>
 
-    <!-- Redemption requested (priority) -->
-    <div v-if="!loading && redemptionItems.length > 0" class="section">
-      <h3 class="section-title">待兑现 🎁</h3>
-      <div v-for="wish in redemptionItems" :key="wish.id" class="wish-card redemption">
-        <div class="card-top">
-          <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-          <div class="wish-info">
-            <p class="wish-name">{{ wish.name }}</p>
-            <p class="child-name">{{ wish.child_display_name }}</p>
-            <p class="cost">目标积分：{{ wish.star_coin_cost }} ⭐</p>
+    <template v-else>
+      <div v-if="error" class="error-msg">{{ error }}</div>
+
+      <template v-else>
+        <!-- Redemption requested (priority) -->
+        <div v-if="redemptionItems.length > 0" class="section">
+          <h3 class="section-title">待兑现 🎁</h3>
+          <div v-for="wish in redemptionItems" :key="wish.id" class="wish-card redemption">
+            <div class="card-top">
+              <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+              <div class="wish-info">
+                <p class="wish-name">{{ wish.name }}</p>
+                <p class="child-name">{{ wish.child_display_name }}</p>
+                <p class="cost">目标积分：{{ wish.star_coin_cost }} ⭐</p>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="btn-realize" :disabled="actioningId === wish.id" @click="openRealize(wish)">兑现</button>
+              <button class="btn-defer" :disabled="actioningId === wish.id" @click="defer(wish.id)">暂不兑现</button>
+            </div>
           </div>
         </div>
-        <div class="card-actions">
-          <button class="btn-realize" :disabled="actioningId === wish.id" @click="openRealize(wish)">兑现</button>
-          <button class="btn-defer" :disabled="actioningId === wish.id" @click="defer(wish.id)">暂不兑现</button>
-        </div>
-      </div>
-    </div>
 
-    <!-- Pending review -->
-    <div v-if="!loading && pendingItems.length > 0" class="section">
-      <h3 class="section-title">待审核 ⏳</h3>
-      <div v-for="wish in pendingItems" :key="wish.id" class="wish-card">
-        <div class="card-top">
-          <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
-          <div class="wish-info">
-            <p class="wish-name">{{ wish.name }}</p>
-            <p class="child-name">{{ wish.child_display_name }}</p>
-            <p v-if="wish.description" class="wish-desc">{{ wish.description }}</p>
-            <span class="priority-badge" :class="wish.priority">{{ priorityLabel(wish.priority) }}</span>
+        <!-- Pending review -->
+        <div v-if="pendingItems.length > 0" class="section">
+          <h3 class="section-title">待审核 ⏳</h3>
+          <div v-for="wish in pendingItems" :key="wish.id" class="wish-card">
+            <div class="card-top">
+              <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+              <div class="wish-info">
+                <p class="wish-name">{{ wish.name }}</p>
+                <p class="child-name">{{ wish.child_display_name }}</p>
+                <p v-if="wish.description" class="wish-desc">{{ wish.description }}</p>
+                <span class="priority-badge" :class="wish.priority">{{ priorityLabel(wish.priority) }}</span>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="btn-approve" :disabled="actioningId === wish.id" @click="openApprove(wish)">批准</button>
+              <button class="btn-reject" :disabled="actioningId === wish.id" @click="openReject(wish)">拒绝</button>
+            </div>
           </div>
         </div>
-        <div class="card-actions">
-          <button class="btn-approve" :disabled="actioningId === wish.id" @click="openApprove(wish)">批准</button>
-          <button class="btn-reject" :disabled="actioningId === wish.id" @click="openReject(wish)">拒绝</button>
-        </div>
-      </div>
-    </div>
 
-    <div v-if="!loading && pendingItems.length === 0 && redemptionItems.length === 0" class="empty">
-      <p>暂无待处理心愿 ✅</p>
-    </div>
+        <div v-if="pendingItems.length === 0 && redemptionItems.length === 0" class="empty">
+          <p>暂无待处理心愿 ✅</p>
+        </div>
+      </template>
+    </template>
 
     <!-- Approve dialog -->
     <div v-if="approveTarget" class="dialog-overlay" @click.self="approveTarget = null">
