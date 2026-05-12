@@ -1100,9 +1100,34 @@ async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | '
 }
 
 async function onCopy(content: string) {
+  // Try modern Clipboard API first
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(content)
+      showToast(t('toast.copied'))
+      return
+    } catch {
+      // Fall through to legacy method
+    }
+  }
+  // Fallback: use textarea + execCommand for older browsers / insecure contexts
   try {
-    await navigator.clipboard.writeText(content)
-    showToast(t('toast.copied'))
+    const textarea = document.createElement('textarea')
+    textarea.value = content
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    textarea.style.top = '0'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    if (success) {
+      showToast(t('toast.copied'))
+    } else {
+      showToast(t('toast.copyFailed'))
+    }
   } catch {
     showToast(t('toast.copyFailed'))
   }
