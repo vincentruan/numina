@@ -9,7 +9,7 @@
     </van-tabs>
 
     <!-- Sort bar -->
-    <div class="sort-bar" role="toolbar" aria-label="排序选项">
+    <div class="sort-bar" role="toolbar" :aria-label="t('wish.aria.sortBar')">
       <button
         v-for="opt in sortOptions"
         :key="opt.value"
@@ -29,14 +29,14 @@
     <div class="list-content">
       <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
         <template v-if="sortedWishes.length">
-          <ul class="wish-list" aria-label="心愿清单">
+          <ul class="wish-list" :aria-label="t('wish.aria.listLabel')">
             <li
               v-for="wish in sortedWishes"
               :key="wish.id"
               class="wish-item"
               :class="`priority-${wish.priority}`"
               tabindex="0"
-              :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? '，预算' + wish.expected_price.toLocaleString() + '元' : '' })"
+              :aria-label="t('wish.aria.itemLabel', { name: wish.name, priority: t('wish.priorityText.' + wish.priority), price: wish.expected_price ? t('wish.aria.priceFormat', { price: wish.expected_price.toLocaleString() }) : '' })"
               @click="$router.push(`/wishes/${wish.id}`)"
               @keydown.enter="$router.push(`/wishes/${wish.id}`)"
             >

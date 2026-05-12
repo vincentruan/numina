@@ -71,6 +71,8 @@ export default {
     },
     aria: {
       openBatchSelection: '开启批量选择',
+      pageTitle: '家庭资产总览',
+      quickActions: '快捷操作',
     },
     dialog: {
       confirmDeleteTitle: '确认删除',
@@ -280,6 +282,9 @@ export default {
     aria: {
       addWish: '添加心愿',
       itemLabel: '{name}，{priority}优先级{price}',
+      sortBar: '排序选项',
+      listLabel: '心愿清单',
+      priceFormat: '，预算{price}元',
     },
   },
   baby: {

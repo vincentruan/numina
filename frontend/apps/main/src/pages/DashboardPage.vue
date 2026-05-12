@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-page" role="main" aria-label="家庭资产总览">
+  <div class="dashboard-page" role="main" :aria-label="t('dashboard.aria.pageTitle')">
     <!-- Skeleton Loading State -->
     <DashboardSkeleton v-if="dashboardStore.loading && !overview?.asset_count" />
 
@@ -82,7 +82,7 @@
           class="category-nav-sticky"
         >
           <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
-            <van-tab title="全部" />
+            <van-tab :title="t('statusGrid.all')" />
             <van-tab
               v-for="cat in categoriesWithAssetCount"
               :key="cat.id"
@@ -205,7 +205,7 @@
       </transition>
       <!-- Menu items -->
       <transition name="fab-menu">
-        <div v-if="fabMenuOpen" class="fab-menu" role="menu" aria-label="快捷操作">
+        <div v-if="fabMenuOpen" class="fab-menu" role="menu" :aria-label="t('dashboard.aria.quickActions')">
           <button class="fab-menu-item" role="menuitem" @click="onFabAction('import')">
             <span class="fab-menu-label">{{ t('dashboard.fabImportBill') }}</span>
             <span class="fab-menu-icon" aria-hidden="true">
@@ -265,7 +265,7 @@
     <van-action-sheet
       v-model:show="showMoreActions"
       :actions="moreActions"
-      cancel-text="取消"
+      :cancel-text="t('common.cancel')"
       @select="onMoreActionSelect"
     />
   </div>
@@ -348,11 +348,9 @@ const categoriesWithAssetCount = computed(() => {
 // Asset list: displayedAssets is already filtered by backend (status + optional category)
 const filteredByCategoryAssets = computed(() => dashboardStore.displayedAssets)
 
-const statusLabelMap: Record<string, string> = {
-  in_use: '服役中',
-  idle: '闲置',
-  sold: '已出售',
-  retired: '已退役',
+function statusLabel(status: string): string {
+  const key = status === 'in_use' ? 'statusGrid.inUse' : `statusGrid.${status}`
+  return t(key)
 }
 
 // More actions
@@ -370,7 +368,7 @@ const sectionTitle = computed(() => {
   if (!activeStatus.value) {
     return t('dashboard.section.assetList', { count })
   }
-  const label = statusLabelMap[activeStatus.value] || activeStatus.value
+  const label = statusLabel(activeStatus.value)
   return `${label} (${count})`
 })
 
