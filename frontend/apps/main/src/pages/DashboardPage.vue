@@ -116,9 +116,27 @@
         <!-- Selection Mode -->
         <div v-else class="selection-mode">
           <div class="selection-header">
-            <van-checkbox v-model="selectAll" @change="toggleSelectAll">全选</van-checkbox>
-            <span class="selection-count">已选 {{ selectedIds.length }} 项</span>
-            <van-button type="primary" size="small" @click="exitSelectionMode">完成</van-button>
+            <van-checkbox v-model="selectAll" @change="toggleSelectAll">{{ t('dashboard.selectAll') }}</van-checkbox>
+            <span class="selection-count">{{ t('dashboard.selectedCount', { count: selectedIds.length }) }}</span>
+            <van-button type="primary" size="mini" @click="exitSelectionMode">{{ t('dashboard.selectionDone') }}</van-button>
+          </div>
+          <div class="selection-actions">
+            <button class="action-btn" @click="handleBatchDelete">
+              <van-icon name="delete-o" size="18" />
+              <span>{{ t('dashboard.actionDelete') }}</span>
+            </button>
+            <button class="action-btn" @click="handleBatchCategory">
+              <van-icon name="label-o" size="18" />
+              <span>{{ t('dashboard.actionCategory') }}</span>
+            </button>
+            <button class="action-btn" @click="handleBatchTag">
+              <van-icon name="tag-o" size="18" />
+              <span>{{ t('dashboard.actionTag') }}</span>
+            </button>
+            <button class="action-btn" @click="showMoreActions = true">
+              <van-icon name="ellipsis" size="18" />
+              <span>{{ t('dashboard.actionMore') }}</span>
+            </button>
           </div>
           <div class="selection-list-cards">
             <template v-if="viewMode === 'list'">
@@ -141,13 +159,6 @@
                 @click="toggleSelection(asset.id)"
               />
             </template>
-          </div>
-          <div class="selection-actions">
-            <van-button icon="share-o" @click="handleBatchShare">分享</van-button>
-            <van-button icon="delete-o" @click="handleBatchDelete">删除</van-button>
-            <van-button icon="label-o" @click="handleBatchCategory">分类</van-button>
-            <van-button icon="tag-o" @click="handleBatchTag">标签</van-button>
-            <van-button icon="ellipsis" @click="showMoreActions = true">更多</van-button>
           </div>
         </div>
       </template>
@@ -218,7 +229,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
-import { generateAssetCard, generateSummaryCard, downloadImage } from '@/utils/shareImage'
+
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
@@ -365,46 +376,6 @@ function toggleSelection(id: string) {
   selectAll.value = selectedIds.value.length === dashboardStore.displayedAssets.length
 }
 
-async function handleBatchShare() {
-  if (selectedIds.value.length === 0) {
-    showToast(t('toast.assetSelectFirst'))
-    return
-  }
-
-  showLoadingToast({
-    message: '生成分享图片中...',
-    forbidClick: true,
-    duration: 0,
-  })
-
-  try {
-    const selectedAssets = dashboardStore.displayedAssets.filter(a => selectedIds.value.includes(a.id))
-
-    let blob: Blob
-    let title: string
-
-    if (selectedAssets.length === 1) {
-      // 单个资产：生成资产卡片
-      blob = await generateAssetCard(selectedAssets[0])
-      title = `${selectedAssets[0].name} - 资产卡片`
-    } else {
-      // 多个资产：生成汇总卡片
-      blob = await generateSummaryCard(selectedAssets)
-      title = `我的资产汇总 (${selectedAssets.length}件)`
-    }
-
-    closeToast()
-
-    // Download the image
-    downloadImage(blob, `${title}.png`)
-    showToast(t('toast.imageSaved'))
-    exitSelectionMode()
-  } catch (error) {
-    closeToast()
-    console.error('Share failed:', error)
-    showToast(t('toast.shareFailed'))
-  }
-}
 
 async function handleBatchDelete() {
   if (selectedIds.value.length === 0) {
@@ -646,33 +617,68 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: 6px 12px;
   background: var(--card-bg);
   border-radius: 8px;
-  margin-bottom: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  margin-bottom: 0;
+}
+[data-theme='dark'] .selection-header {
+  border-color: rgba(255, 255, 255, 0.12);
 }
 .selection-count {
   flex: 1;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--color-primary);
-}
-.selection-list-cards {
-  padding: 0 12px;
 }
 .selection-actions {
   display: flex;
   justify-content: space-around;
-  padding: 12px 16px;
+  align-items: center;
+  padding: 8px 12px;
   background: var(--card-bg);
-  border-radius: 8px;
-  position: sticky;
-  bottom: 60px;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+  border-radius: 0 0 8px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-top: none;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 10px rgba(1, 1, 32, 0.1);
 }
 [data-theme='dark'] .selection-actions {
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+.action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  transition: color 0.15s, background 0.15s;
+  min-width: 44px;
+  min-height: 44px;
+  justify-content: center;
+}
+.action-btn span {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: -0.1px;
+}
+.action-btn:active {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+[data-theme='dark'] .action-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+.selection-list-cards {
+  padding: 0;
 }
 
 /* Filter Popup */

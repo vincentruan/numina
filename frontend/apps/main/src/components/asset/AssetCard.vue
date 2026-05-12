@@ -200,11 +200,11 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 .asset-card.selection-mode.selected {
   border-color: var(--color-primary);
-  background: rgba(23, 23, 28, 0.04);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 [data-theme='dark'] .asset-card.selection-mode.selected {
   border-color: var(--color-lavender);
-  background: rgba(189, 187, 255, 0.08);
+  box-shadow: 0 0 0 1px var(--color-lavender);
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
