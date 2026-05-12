@@ -113,6 +113,7 @@ lerna-debug.log*
 _agents/
 _agent/
 .context/
+.deer-flow/
 
 # ===========================
 # Docker
