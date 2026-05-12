@@ -1,13 +1,13 @@
 <template>
   <div class="ai-allocation-page">
-    <PageHeader title="配置漂移检测" />
+    <PageHeader :title="t('aiAllocation.title')" />
 
     <!-- Target setup -->
-    <van-cell-group inset title="目标配置">
+    <van-cell-group inset :title="t('aiAllocation.targetConfig')">
       <van-cell
         v-if="!editingTarget"
-        title="当前目标"
-        :value="hasTarget ? '已设置' : '未设置'"
+        :title="t('aiAllocation.currentTarget')"
+        :value="hasTarget ? t('aiAllocation.targetSet') : t('aiAllocation.targetNotSet')"
         is-link
         @click="startEdit"
       />
@@ -26,11 +26,11 @@
           </div>
           <div class="target-total" :class="{ error: targetTotal !== 100 }">
             <van-icon v-if="targetTotal !== 100" name="warning-o" aria-hidden="true" />
-            合计：{{ targetTotal }}%（需等于100%）
+            {{ t('aiAllocation.targetTotal', { total: targetTotal }) }}
           </div>
           <div class="target-actions">
-            <van-button size="small" plain @click="editingTarget = false">取消</van-button>
-            <van-button size="small" type="primary" :disabled="targetTotal !== 100" @click="onSaveTarget">保存</van-button>
+            <van-button size="small" plain @click="editingTarget = false">{{ t('common.cancel') }}</van-button>
+            <van-button size="small" type="primary" :disabled="targetTotal !== 100" @click="onSaveTarget">{{ t('common.save') }}</van-button>
           </div>
         </div>
       </template>
@@ -50,7 +50,7 @@
         type="primary"
         @click="onCheck"
       >
-        检测配置漂移
+        {{ t('aiAllocation.checkDrift') }}
       </van-button>
       <van-button
         v-else
@@ -70,7 +70,7 @@
     <!-- Results -->
     <template v-if="driftResult">
       <div v-if="!driftResult.has_significant_drift" class="no-drift">
-        <van-empty description="配置在目标范围内，无需再平衡">
+        <van-empty :description="t('aiAllocation.noDrift')">
           <template #image>
             <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
               <circle cx="40" cy="40" r="36" fill="rgba(74,222,128,0.08)" />
@@ -86,16 +86,16 @@
       </div>
       <template v-else>
         <div v-if="driftResult.narrative" class="narrative-card">
-          <div class="narrative-label">AI 建议</div>
+          <div class="narrative-label">{{ t('aiAllocation.aiNarrative') }}</div>
           <p class="narrative-text">{{ driftResult.narrative }}</p>
         </div>
 
-        <van-cell-group inset title="各类别漂移">
+        <van-cell-group inset :title="t('aiAllocation.categoryDrifts')">
           <div v-for="d in driftResult.drifts" :key="d.category" class="drift-row">
             <div class="drift-info">
               <span class="drift-cat">{{ d.category }}</span>
               <span class="drift-nums">
-                目标 {{ d.target_pct }}% → 当前 {{ d.current_pct }}%
+                {{ t('aiAllocation.targetToCurrent', { target: d.target_pct, current: d.current_pct }) }}
               </span>
             </div>
             <span
@@ -126,11 +126,13 @@ const hasTarget = ref(false)
 const editingTarget = ref(false)
 const driftResult = ref<Record<string, unknown> | null>(null)
 
-// Default categories to configure
-const DEFAULT_CATEGORIES = ['实物资产', '金融资产', '其他']
 const editTargets = reactive<Record<string, number>>({})
 
 const targetTotal = computed(() => Object.values(editTargets).reduce((a, b) => a + b, 0))
+
+function getDefaultCategories() {
+  return [t('aiAllocation.categoryPhysical'), t('aiAllocation.categoryFinancial'), t('aiAllocation.categoryOther')]
+}
 
 function startEdit() {
   editingTarget.value = true
@@ -147,7 +149,7 @@ async function onSaveTarget() {
     showToast(t('toast.aiTargetSaved'))
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
-    showToast(err.response?.data?.detail || '保存失败')
+    showToast(err.response?.data?.detail || t('toast.saveFailed'))
   }
 }
 
@@ -181,10 +183,10 @@ onMounted(async () => {
       const targets = res.data.category_targets as Record<string, number>
       Object.assign(editTargets, targets)
     } else {
-      DEFAULT_CATEGORIES.forEach(c => { editTargets[c] = 0 })
+      getDefaultCategories().forEach(c => { editTargets[c] = 0 })
     }
   } catch {
-    DEFAULT_CATEGORIES.forEach(c => { editTargets[c] = 0 })
+    getDefaultCategories().forEach(c => { editTargets[c] = 0 })
   }
 })
 </script>
