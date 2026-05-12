@@ -316,6 +316,32 @@ export default {
     grantDefaultReason: '父母奖励',
     blindBoxGifts: '🎁 礼物池',
     blindBoxDraws: '🎀 待兑现',
+    dayDetail: {
+      pageTitle: '当日明细',
+      loading: '加载中...',
+      emptyState: '这天没有记录',
+      section: {
+        chores: '📋 打卡任务',
+        wishes: '🌟 心愿实现',
+        milestones: '🏆 成就解锁',
+      },
+      status: {
+        approved: '已完成',
+        pending: '待审批',
+        realized: '已实现',
+        milestone: '新成就',
+      },
+      streakBadge: '连击+{bonus}',
+    },
+  },
+  milestone: {
+    firstchore: '完成第一个任务',
+    firstwishrealized: '第一个心愿实现',
+    coins50: '累计获得50⭐',
+    coins200: '累计获得200⭐',
+    streak7: '连续打卡7天',
+    streak14: '连续打卡14天',
+    streak30: '连续打卡30天',
   },
   family: {
     title: '家庭',

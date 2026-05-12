@@ -67,9 +67,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } from '@/api/calendar'
 
+const { t } = useI18n()
 const route = useRoute()
 const date = route.query.date as string
 const childId = route.query.child_id as string | undefined
@@ -85,14 +87,9 @@ const pageTitle = computed(() => {
   return `${d.getMonth() + 1}月${d.getDate()}日`
 })
 
-const MILESTONE_LABELS: Record<string, string> = {
-  first_chore: '完成第一个任务',
-  first_wish_realized: '第一个心愿实现',
-  coins_50: '累计获得50⭐',
-  coins_200: '累计获得200⭐',
-  streak_7: '连续打卡7天',
-  streak_14: '连续打卡14天',
-  streak_30: '连续打卡30天',
+function milestoneLabel(type: string): string {
+  const key = `milestone.${type.replace('_', '')}`
+  return t(key)
 }
 
 const MILESTONE_EMOJI: Record<string, string> = {
@@ -103,10 +100,6 @@ const MILESTONE_EMOJI: Record<string, string> = {
   streak_7: '🔥',
   streak_14: '⚡',
   streak_30: '🏆',
-}
-
-function milestoneLabel(type: string): string {
-  return MILESTONE_LABELS[type] ?? type
 }
 
 function milestoneEmoji(type: string): string {
