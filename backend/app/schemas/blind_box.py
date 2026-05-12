@@ -58,6 +58,8 @@ class BlindBoxDrawResponse(SnowflakeBase):
     status: str
     draw_at: datetime
     fulfilled_at: datetime | None
+    is_auto_triggered: bool
+    shown_to_child: bool
 
 
 # ── Config ────────────────────────────────────────────────────────────────────

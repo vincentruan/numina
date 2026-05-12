@@ -37,5 +37,7 @@ class BlindBoxDraw(Base):
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending_fulfillment")
     draw_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     fulfilled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_auto_triggered: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    shown_to_child: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     gift = relationship("BlindBoxGift", lazy="joined")
