@@ -168,3 +168,42 @@ def child_use_bonus_draw(
         raise AppError(ErrorCode.INTERNAL_ERROR) from exc
 
     return _draw_to_response(draw)
+
+
+@router.get("/latest-auto-draw", response_model=BlindBoxDrawResponse | None)
+def get_latest_auto_draw(
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """返回最近一次未展示的自动触发抽奖，并标记为已展示。无则返回 null。"""
+    draw = (
+        db.query(BlindBoxDraw)
+        .filter(
+            BlindBoxDraw.child_user_id == child.id,
+            BlindBoxDraw.is_auto_triggered == True,  # noqa: E712
+            BlindBoxDraw.shown_to_child == False,  # noqa: E712
+        )
+        .order_by(BlindBoxDraw.draw_at.desc())
+        .first()
+    )
+    if not draw:
+        return None
+    draw.shown_to_child = True
+    db.commit()
+    db.refresh(draw)
+    return BlindBoxDrawResponse(
+        id=draw.id,
+        family_id=draw.family_id,
+        child_user_id=draw.child_user_id,
+        coins_spent=draw.coins_spent,
+        gift_id=draw.gift_id,
+        gift_name=draw.gift.name,
+        gift_emoji=draw.gift.emoji,
+        is_surprise=draw.is_surprise,
+        is_bonus=draw.is_bonus,
+        is_auto_triggered=draw.is_auto_triggered,
+        shown_to_child=draw.shown_to_child,
+        draw_at=draw.draw_at,
+        status=draw.status,
+        fulfilled_at=draw.fulfilled_at,
+    )

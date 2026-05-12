@@ -9,6 +9,8 @@ from app.auth.deps import (
     require_owner,
 )
 from app.database import get_db
+from app.errors import AppError, ErrorCode
+from app.models.chore import ChoreInstance
 from app.models.user import User
 from app.schemas.blind_box import BlindBoxDrawResponse
 from app.schemas.chore import (
@@ -162,3 +164,19 @@ def mark_complete(
     child: User = Depends(get_current_child_user),
 ):
     return chore_service.mark_complete(db, child, instance_id)
+
+
+@router.get("/child/chores/{instance_id}/status")
+def get_chore_status(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """轻量轮询接口，返回任务实例的当前状态。"""
+    instance = db.query(ChoreInstance).filter(
+        ChoreInstance.id == instance_id,
+        ChoreInstance.child_user_id == child.id,
+    ).first()
+    if not instance:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return {"status": instance.status}
