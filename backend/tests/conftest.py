@@ -103,9 +103,20 @@ def client(db):
         finally:
             pass
 
+    # Override get_db dependency for request injection
     app.dependency_overrides[get_db] = override_get_db
+
+    # Override SessionLocal for all new sessions (including generators)
+    # This ensures components that create their own SessionLocal() use the test database
+    from app import database as app_database_module
+    original_session_local = app_database_module.SessionLocal
+    app_database_module.SessionLocal = TestingSessionLocal
+
     with TestClient(app) as test_client:
         yield test_client
+
+    # Restore original SessionLocal after test
+    app_database_module.SessionLocal = original_session_local
     app.dependency_overrides.clear()
 
 

@@ -37,11 +37,21 @@ async def proxy_capability_events(
         session_id: Chat session ID (captured before generator starts).
         family_id: Family ID (captured before generator starts).
         current_user: Authenticated user (for append_message).
-        db: Database session from the request context.
+        db: Database session from the request context (used for initial query only).
         extra_json: Optional extra JSON body fields for the agent request.
     """
+    # Capture session_id and user_id before streaming (don't use detached session_obj)
+    user_id = current_user.id
+
+    # Import SessionLocal inside generator to respect test overrides
+    # (Test fixtures override SessionLocal after module imports are cached)
+    from app.database import SessionLocal
+
+    # Create a NEW db session for the generator (will be closed when generator ends)
+    # This avoids using the request's db session after FastAPI closes it
+    gen_db = SessionLocal()
+
     answer_parts: list[str] = []
-    session_obj = ChatSessionService.get_session(session_id, family_id, db)
     try:
         request_json: dict = extra_json or {}
         async with (
@@ -72,21 +82,33 @@ async def proxy_capability_events(
                             answer_parts.append(summary)
                 except (json.JSONDecodeError, AttributeError):
                     pass
+
+        # Success path - use generator's own db session
         answer = "".join(answer_parts)
-        if answer and session_obj:
-            await ChatSessionService.append_message(
-                session_obj, "assistant", answer, current_user, db
-            )
-        AITaskService.complete_task(task_id, db)
-        next_task = AITaskService.get_next_queued_task(family_id, db)
+        if answer:
+            # Fetch session in generator's db (fresh query, not detached instance)
+            session_obj = ChatSessionService.get_session(session_id, family_id, gen_db)
+            if session_obj:
+                # Fetch user in generator's db
+                user = gen_db.query(User).filter(User.id == user_id).first()
+                if user:
+                    await ChatSessionService.append_message(
+                        session_obj, "assistant", answer, user, gen_db
+                    )
+        AITaskService.complete_task(task_id, gen_db)
+        next_task = AITaskService.get_next_queued_task(family_id, gen_db)
         if next_task:
-            AITaskService.promote_queued_task(next_task.id, db)
+            AITaskService.promote_queued_task(next_task.id, gen_db)
     except Exception as e:
         logger.error(f"[{capability}] proxy_capability_events failed: {e}")
-        AITaskService.fail_task(task_id, "agent_stream_error", db)
-        next_task = AITaskService.get_next_queued_task(family_id, db)
+        # Error path - use generator's own db session
+        AITaskService.fail_task(task_id, "agent_stream_error", gen_db)
+        next_task = AITaskService.get_next_queued_task(family_id, gen_db)
         if next_task:
-            AITaskService.promote_queued_task(next_task.id, db)
+            AITaskService.promote_queued_task(next_task.id, gen_db)
         yield (
             json.dumps({"type": "capability.error", "message": "agent_stream_error"}) + "\n"
         ).encode("utf-8")
+    finally:
+        # ALWAYS close the generator's db session
+        gen_db.close()

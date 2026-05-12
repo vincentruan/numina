@@ -62,38 +62,36 @@ async def trigger_generate_events(
     db: Session = Depends(get_db),
 ):
     """触发体检报告生成（NDJSON 事件流）。"""
-    existing = AITaskService.get_running_task(current_user.family_id, "report", db)
-    if existing:
-        task = existing
-        session_id = task.session_id or str(task.id)
-        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
-        if not session:
-            raise AppError(ErrorCode.NOT_FOUND)
-    else:
-        session = await ChatSessionService.create_session(
-            family_id=str(current_user.family_id),
-            user_id=str(current_user.id),
-            db=db,
-        )
-        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-        if any_running:
-            task = AITaskService.create_queued_task(
-                family_id=current_user.family_id,
-                capability="report",
-                session_id=session.id,
-                db=db,
-            )
-            return JSONResponse(
-                status_code=202,
-                content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
-            )
-        task = AITaskService.create_task(
+    # Check if there's already a running task - return 409 immediately
+    existing_running = AITaskService.get_running_task(current_user.family_id, "report", db)
+    if existing_running:
+        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS)
+
+    # No running task - create new session and task
+    session = await ChatSessionService.create_session(
+        family_id=current_user.family_id,
+        user_id=current_user.id,
+        db=db,
+    )
+    any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+    if any_running:
+        task = AITaskService.create_queued_task(
             family_id=current_user.family_id,
             capability="report",
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        return JSONResponse(
+            status_code=202,
+            content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
+        )
+    task = AITaskService.create_task(
+        family_id=current_user.family_id,
+        capability="report",
+        session_id=session.id,
+        db=db,
+    )
+    session_id = session.id
 
     task_id = task.id
     family_id = current_user.family_id

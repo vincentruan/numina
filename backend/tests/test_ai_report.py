@@ -31,17 +31,20 @@ def _enable_ai(db, auth_headers, client):
 
 
 def _make_streaming_mock(chunks: list[str] | None = None):
-    """Build a mock httpx.AsyncClient that supports async streaming via client.stream()."""
-    if chunks is None:
-        chunks = ["报告生成完成。"]
+    """Build a mock httpx.AsyncClient that supports async streaming via client.stream() for NDJSON."""
+    import json
 
-    async def _aiter_text():
+    if chunks is None:
+        # Default: emit capability.end event
+        chunks = [json.dumps({"type": "capability.end", "result": {"summary": "报告生成完成。"}})]
+
+    async def _aiter_lines():
         for chunk in chunks:
             yield chunk
 
     # The innermost object: the response returned by `async with client.stream(...) as resp`
     mock_resp = MagicMock()
-    mock_resp.aiter_text = _aiter_text
+    mock_resp.aiter_lines = _aiter_lines
 
     # The context manager returned by client.stream(...)
     mock_stream_cm = MagicMock()
@@ -126,16 +129,20 @@ def test_get_report_requires_auth(client):
 # ── POST /ai/report/generate ─────────────────────────────────────────────────────
 
 def test_generate_report_creates_pending_then_completes(client, auth_headers, db):
-    """POST /ai/report/generate streams response and creates a completed AITask."""
+    """POST /ai/report/generate/events streams response and creates a completed AITask."""
     from app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
 
     with patch("httpx.AsyncClient", new=_make_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/plain")
+    assert resp.headers["content-type"].startswith("application/x-ndjson")
+
+    # CRITICAL: Consume entire response body to let generator complete execution
+    # TestClient.post() returns after first chunk, but generator hasn't finished yet
+    _ = resp.content  # Force full response consumption
 
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
@@ -144,30 +151,30 @@ def test_generate_report_creates_pending_then_completes(client, auth_headers, db
 
 
 def test_generate_report_requires_ai_enabled(client, auth_headers, db):
-    """POST /ai/report/generate returns 403 if AI not enabled for family."""
+    """POST /ai/report/generate/events returns 403 if AI not enabled for family."""
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     family_id = me["data"]["family_id"]
     family = db.query(Family).filter_by(id=family_id).first()
     family.ai_enabled = False
     db.commit()
 
-    resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
+    resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
     assert resp.status_code == 403
 
 
 def test_generate_report_requires_owner(client, auth_headers, db):
-    """POST /ai/report/generate requires owner role (embedded in JWT)."""
+    """POST /ai/report/generate/events requires owner role (embedded in JWT)."""
     _enable_ai(db, auth_headers, client)
 
     with patch("httpx.AsyncClient", new=_make_streaming_mock()):
-        resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert resp.headers["content-type"].startswith("text/plain")
+    assert resp.headers["content-type"].startswith("application/x-ndjson")
 
 
 def test_generate_report_409_when_task_in_progress(client, auth_headers, db):
-    """POST /ai/report/generate returns 409 if a task is already running."""
+    """POST /ai/report/generate/events returns 409 if a task is already running."""
     from datetime import datetime
 
     from app.models.ai_task import AITask
@@ -183,14 +190,12 @@ def test_generate_report_409_when_task_in_progress(client, auth_headers, db):
     db.add(task)
     db.commit()
 
-    resp = client.post("/api/v1/ai/report/generate", headers=auth_headers)
+    resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
     assert resp.status_code == 409
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
-    """If agent streaming fails, AITask is marked as failed."""
-    import pytest
-
+    """If agent streaming fails, AITask is marked as failed and error event is yielded."""
     from app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
@@ -200,7 +205,7 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
         yield  # make it an async generator
 
     mock_resp = MagicMock()
-    mock_resp.aiter_text = _aiter_raises
+    mock_resp.aiter_lines = _aiter_raises
 
     mock_stream_cm = MagicMock()
     mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
@@ -214,11 +219,16 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     mock_cls = MagicMock(return_value=mock_client)
 
     with patch("httpx.AsyncClient", new=mock_cls), \
-         patch("app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()), \
-         pytest.raises(Exception, match="Agent error"):
-        client.post("/api/v1/ai/report/generate", headers=auth_headers)
+         patch("app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()):
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
-    # The task should be marked failed in DB despite the exception
+    # Response should still be 200 with error event (helper catches errors)
+    assert resp.status_code == 200
+
+    # CRITICAL: Consume response to let generator's except/finally block execute
+    _ = resp.content
+
+    # The task should be marked failed in DB
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="report").first()
     assert task is not None
@@ -301,8 +311,8 @@ def test_cross_family_report_isolation(client, auth_headers, second_user_headers
 # ── Auth requirements ───────────────────────────────────────────────────────────
 
 def test_generate_requires_auth(client):
-    """POST /ai/report/generate returns 401 without auth."""
-    resp = client.post("/api/v1/ai/report/generate")
+    """POST /ai/report/generate/events returns 401 without auth."""
+    resp = client.post("/api/v1/ai/report/generate/events")
     assert resp.status_code == 401
 
 

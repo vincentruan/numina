@@ -13,7 +13,6 @@ from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.models.ai_chat_session import AIChatSession
 from app.models.ai_spending_leak import AISpendingLeak
 from app.models.user import User
 from app.routers._ai_events_helper import proxy_capability_events
@@ -33,7 +32,7 @@ def get_leaks(
         db.query(AISpendingLeak)
         .filter(
             AISpendingLeak.family_id == current_user.family_id,
-            AISpendingLeak.is_dismissed == False,  # noqa: E712
+            AISpendingLeak.is_dismissed.is_(False),
         )
         .order_by(AISpendingLeak.created_at.desc())
         .all()
@@ -65,8 +64,8 @@ async def refresh_leaks(
         raise AppError(ErrorCode.AI_TASK_IN_PROGRESS, "⏳ 消费漏洞分析中，请稍后")
 
     session = await ChatSessionService.create_session(
-        family_id=str(current_user.family_id),
-        user_id=str(current_user.id),
+        family_id=current_user.family_id,
+        user_id=current_user.id,
         db=db,
     )
     task = AITaskService.create_task(
@@ -124,38 +123,36 @@ async def refresh_leaks_events(
     db: Session = Depends(get_db),
 ):
     """触发 agent 扫描并刷新消费漏洞（NDJSON 事件流）。"""
-    existing = AITaskService.get_running_task(current_user.family_id, "spending_leak", db)
-    if existing:
-        task = existing
-        session_id = task.session_id or str(task.id)
-        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
-        if not session:
-            raise AppError(ErrorCode.NOT_FOUND)
-    else:
-        session = await ChatSessionService.create_session(
-            family_id=str(current_user.family_id),
-            user_id=str(current_user.id),
-            db=db,
-        )
-        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-        if any_running:
-            task = AITaskService.create_queued_task(
-                family_id=current_user.family_id,
-                capability="spending_leak",
-                session_id=session.id,
-                db=db,
-            )
-            return JSONResponse(
-                status_code=202,
-                content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
-            )
-        task = AITaskService.create_task(
+    # Check if there's already a running task - return 409 immediately
+    existing_running = AITaskService.get_running_task(current_user.family_id, "spending_leak", db)
+    if existing_running:
+        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS)
+
+    # No running task - create new session and task
+    session = await ChatSessionService.create_session(
+        family_id=current_user.family_id,
+        user_id=current_user.id,
+        db=db,
+    )
+    any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+    if any_running:
+        task = AITaskService.create_queued_task(
             family_id=current_user.family_id,
             capability="spending_leak",
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        return JSONResponse(
+            status_code=202,
+            content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
+        )
+    task = AITaskService.create_task(
+        family_id=current_user.family_id,
+        capability="spending_leak",
+        session_id=session.id,
+        db=db,
+    )
+    session_id = session.id
 
     task_id = task.id
     family_id = current_user.family_id

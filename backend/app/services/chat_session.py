@@ -3,6 +3,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import uuid
 from datetime import datetime
@@ -20,6 +21,8 @@ from app.models.file_remote_location import FileRemoteLocation
 from app.models.storage_backend import StorageBackend
 from app.models.user import User
 from app.utils.snowflake import next_id
+
+logger = logging.getLogger(__name__)
 
 # UUID validation regex (36 chars: 8-4-4-4-12 hex digits with hyphens)
 UUID_PATTERN = re.compile(
@@ -76,21 +79,15 @@ def _sync_append_message(
     lock_path: Path,
     role: str,
     content: str,
-    session: AIChatSession,
-    user: User,
-    db: Session,
-) -> None:
+) -> tuple[str, str]:
     """Synchronous file append with locking (runs in executor).
 
-    This function:
+    This function ONLY does file I/O (thread-safe):
     1. Acquires file lock
     2. Appends message to JSONL file
-    3. Updates session metadata
-    4. Recomputes SHA256
-    5. Updates or creates CachedFile
-    6. Commits DB transaction
+    3. Returns message_id and timestamp for db update
 
-    All operations happen inside the lock to ensure atomicity.
+    Returns (message_id, timestamp) so caller can update db in main thread.
     """
     with FileLock(str(lock_path), timeout=10):
         # Append message to JSONL file
@@ -106,57 +103,7 @@ def _sync_append_message(
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(message_line)
 
-        # Update session metadata
-        session.message_count += 1
-        if role == "assistant":
-            session.last_preview = content[:100]
-        session.updated_at = datetime.utcnow()
-
-        # Recompute SHA256
-        sha256 = _compute_sha256(file_path)
-        size_bytes = file_path.stat().st_size
-
-        # Update or create CachedFile
-        if session.cached_file_id is None:
-            # First append — create CachedFile
-            cached_file = CachedFile(
-                family_id=session.family_id,
-                user_id=user.id,
-                sha256=sha256,
-                local_path=str(file_path),
-                original_filename=f"{session.id}.jsonl",
-                mime_type="application/x-ndjson",
-                size_bytes=size_bytes,
-                date_dir=datetime.now().strftime("%Y%m%d"),
-            )
-            db.add(cached_file)
-            db.flush()  # Get cached_file.id
-            session.cached_file_id = cached_file.id
-
-            # Queue for remote sync if enabled
-            if settings.CHAT_ENABLE_REMOTE_SYNC:
-                default_backend = (
-                    db.query(StorageBackend)
-                    .filter_by(is_default=True, is_active=True)
-                    .first()
-                )
-                if default_backend:
-                    remote_loc = FileRemoteLocation(
-                        file_id=cached_file.id,
-                        backend_id=default_backend.id,
-                        remote_path=f"chat/{session.family_id}/{session.id}.jsonl",
-                        sync_status="pending",
-                    )
-                    db.add(remote_loc)
-        else:
-            # Subsequent append — update existing CachedFile
-            cached_file = db.query(CachedFile).filter_by(id=session.cached_file_id).first()
-            if cached_file:
-                cached_file.sha256 = sha256
-                cached_file.size_bytes = size_bytes
-
-        # Commit DB transaction (inside lock)
-        db.commit()
+        return message_id, timestamp
 
 
 class ChatSessionService:
@@ -164,24 +111,16 @@ class ChatSessionService:
 
     @staticmethod
     async def create_session(
-        family_id: str,
-        user_id: str,
+        family_id: int,
+        user_id: int,
         db: Session,
     ) -> AIChatSession:
         """Create a new chat session with empty JSONL file.
 
-        Args:
-            family_id: Family UUID
-            user_id: User UUID
-            db: Database session
-
-        Returns:
-            New AIChatSession instance
-
         Raises:
-            ValueError: If family_id is not a valid UUID or path is invalid
+            ValueError: If family_id is not a valid Snowflake ID or path is invalid
         """
-        family_id = _validate_id(family_id, "family_id")
+        _validate_id(family_id, "family_id")
 
         session_id = next_id()
         jsonl_path_relative = f"{family_id}/{session_id}.jsonl"
@@ -236,15 +175,16 @@ class ChatSessionService:
     ) -> None:
         """Append a message to the session's JSONL file.
 
-        This runs the file I/O in an executor to avoid blocking the event loop.
-        The DB commit happens inside the executor after the file write.
+        Architecture (thread-safe):
+        1. Executor: ONLY file I/O (append to JSONL, return message_id/timestamp)
+        2. Main thread: DB updates using existing session/db
 
         Args:
             session: AIChatSession instance
             role: "user" or "assistant"
             content: Message content
             user: User instance (for CachedFile.user_id)
-            db: Database session
+            db: Database session (used ONLY in main thread)
 
         Raises:
             ValueError: If path validation fails
@@ -253,24 +193,71 @@ class ChatSessionService:
         file_path = _resolve_and_validate_path(session.family_id, session.id)
         lock_path = file_path.with_suffix(".lock")
 
-        # Run sync file operations in executor
+        # Run sync file I/O in executor (thread-safe)
         try:
             loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
+            message_id, timestamp = await loop.run_in_executor(
                 None,
                 _sync_append_message,
                 file_path,
                 lock_path,
                 role,
                 content,
-                session,
-                user,
-                db,
             )
         except FileLockTimeout as e:
             raise FileLockTimeout(
                 f"Could not acquire lock for session {session.id} — another operation is in progress"
             ) from e
+
+        # DB updates happen in main thread (using existing session/db)
+        session.message_count += 1
+        if role == "assistant":
+            session.last_preview = content[:100]
+        session.updated_at = datetime.utcnow()
+
+        # Recompute SHA256 and update CachedFile
+        sha256 = _compute_sha256(file_path)
+        size_bytes = file_path.stat().st_size
+
+        if session.cached_file_id is None:
+            # First append — create CachedFile
+            cached_file = CachedFile(
+                family_id=session.family_id,
+                user_id=user.id,
+                sha256=sha256,
+                local_path=str(file_path),
+                original_filename=f"{session.id}.jsonl",
+                mime_type="application/x-ndjson",
+                size_bytes=size_bytes,
+                date_dir=datetime.now().strftime("%Y%m%d"),
+            )
+            db.add(cached_file)
+            db.flush()
+            session.cached_file_id = cached_file.id
+
+            # Queue for remote sync if enabled
+            if settings.CHAT_ENABLE_REMOTE_SYNC:
+                default_backend = (
+                    db.query(StorageBackend)
+                    .filter_by(is_default=True, is_active=True)
+                    .first()
+                )
+                if default_backend:
+                    remote_loc = FileRemoteLocation(
+                        file_id=cached_file.id,
+                        backend_id=default_backend.id,
+                        remote_path=f"chat/{session.family_id}/{session.id}.jsonl",
+                        sync_status="pending",
+                    )
+                    db.add(remote_loc)
+        else:
+            # Subsequent append — update existing CachedFile
+            cached_file = db.query(CachedFile).filter_by(id=session.cached_file_id).first()
+            if cached_file:
+                cached_file.sha256 = sha256
+                cached_file.size_bytes = size_bytes
+
+        db.commit()
 
     @staticmethod
     async def read_messages(session: AIChatSession) -> list[dict[str, Any]]:

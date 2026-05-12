@@ -12,7 +12,6 @@ from app.auth.deps import require_adult
 from app.database import get_db
 from app.errors import AppError, ErrorCode
 from app.models.ai_asset_alert import AIAssetAlert
-from app.models.ai_chat_session import AIChatSession
 from app.models.user import User
 from app.routers._ai_events_helper import proxy_capability_events
 from app.services.ai_task_service import AITaskService
@@ -31,7 +30,7 @@ def get_alerts(
         db.query(AIAssetAlert)
         .filter(
             AIAssetAlert.family_id == current_user.family_id,
-            AIAssetAlert.is_dismissed == False,  # noqa: E712
+            AIAssetAlert.is_dismissed.is_(False),
         )
         .order_by(AIAssetAlert.created_at.desc())
         .all()
@@ -65,47 +64,43 @@ async def refresh_alerts_events(
     # 1. 检查同 capability 是否已在运行（可能是从排队提升的）
     existing = AITaskService.get_running_task(current_user.family_id, "alerts", db)
     if existing:
-        # 已有运行中任务（从排队提升）— 直接接续，不重复创建
-        task = existing
-        session_id = task.session_id or str(task.id)
-        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
-        if not session:
-            raise AppError(ErrorCode.NOT_FOUND)
-    else:
-        # 2. 创建 AIChatSession
-        session = await ChatSessionService.create_session(
-            family_id=str(current_user.family_id),
-            user_id=str(current_user.id),
-            db=db,
-        )
+        # 已有运行中任务（从排队提升）— 返回 409
+        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS)
 
-        # 3. 检查家庭是否有其他 capability 在运行 → 排队
-        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-        if any_running:
-            task = AITaskService.create_queued_task(
-                family_id=current_user.family_id,
-                capability="alerts",
-                session_id=session.id,
-                db=db,
-            )
-            from fastapi.responses import JSONResponse
-            return JSONResponse(
-                status_code=202,
-                content={
-                    "status": "queued",
-                    "task_id": task.id,
-                    "queue_position": task.queue_position,
-                },
-            )
+    # 2. 创建 AIChatSession
+    session = await ChatSessionService.create_session(
+        family_id=current_user.family_id,
+        user_id=current_user.id,
+        db=db,
+    )
 
-        # 4. 创建 AITask
-        task = AITaskService.create_task(
+    # 3. 检查家庭是否有其他 capability 在运行 → 排队
+    any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+    if any_running:
+        task = AITaskService.create_queued_task(
             family_id=current_user.family_id,
             capability="alerts",
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=202,
+            content={
+                "status": "queued",
+                "task_id": task.id,
+                "queue_position": task.queue_position,
+            },
+        )
+
+    # 4. 创建 AITask
+    task = AITaskService.create_task(
+        family_id=current_user.family_id,
+        capability="alerts",
+        session_id=session.id,
+        db=db,
+    )
+    session_id = session.id
 
     task_id = task.id
     family_id = current_user.family_id
