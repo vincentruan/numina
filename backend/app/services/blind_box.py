@@ -55,3 +55,68 @@ def should_upgrade_surprise(config: Any, context: dict) -> bool:
     else:
         prob = config.surprise_prob_normal
     return random.random() < prob
+
+
+def blind_box_trigger(db: Any, child: Any) -> Any:
+    """任务审批通过后调用。根据概率决定是否自动触发盲盒，触发则创建 BlindBoxDraw 记录并返回。"""
+    from datetime import date as date_type
+
+    from app.models.blind_box_config import BlindBoxConfig
+    from app.models.blind_box_draw import BlindBoxDraw
+    from app.models.blind_box_gift import BlindBoxGift
+    from app.models.user import User
+    from app.utils.snowflake import next_id
+
+    config = db.query(BlindBoxConfig).filter(BlindBoxConfig.family_id == child.family_id).first()
+    if not config or not config.enabled:
+        return None
+
+    today = date_type.today()
+    is_child_special = is_special_day(child, today)
+
+    family_members = db.query(User).filter(
+        User.family_id == child.family_id,
+        User.id != child.id,
+    ).all()
+    is_parent_bday = any(
+        m.role in ("owner", "adult") and is_special_day(m, today)
+        for m in family_members
+    )
+    is_sibling_bday = any(
+        m.role == "child" and is_special_day(m, today)
+        for m in family_members
+    )
+
+    is_special = is_child_special or is_parent_bday or is_sibling_bday
+    if not should_trigger_free_draw(config, is_special):
+        return None
+
+    gifts = db.query(BlindBoxGift).filter(
+        BlindBoxGift.family_id == child.family_id,
+        BlindBoxGift.is_active == True,  # noqa: E712
+    ).all()
+    if not gifts:
+        return None
+
+    context = {"is_parent_bday": is_parent_bday, "is_sibling_bday": is_sibling_bday}
+    surprise = should_upgrade_surprise(config, context)
+    pool = [g for g in gifts if g.value_score >= 7] if surprise else gifts
+    if not pool:
+        pool = gifts
+
+    gift = pick_gift(pool, config)
+    draw = BlindBoxDraw(
+        id=next_id(),
+        family_id=child.family_id,
+        child_user_id=child.id,
+        coins_spent=0,
+        gift_id=gift.id,
+        is_surprise=surprise,
+        is_bonus=False,
+        is_auto_triggered=True,
+        shown_to_child=False,
+        status="pending_fulfillment",
+    )
+    db.add(draw)
+    db.flush()
+    return draw
