@@ -118,6 +118,7 @@
     <van-popup v-model:show="showLanguagePicker" round position="bottom">
       <van-picker
         :columns="languageOptions"
+        :default-index="languageOptions.findIndex((o) => o.value === (authStore.user?.language || 'zh-CN'))"
         @confirm="onLanguageConfirm"
         @cancel="showLanguagePicker = false"
       />
@@ -133,6 +134,7 @@
     <van-popup v-model:show="showViewModePicker" round position="bottom">
       <van-picker
         :columns="viewModeOptions"
+        :default-index="viewModeOptions.findIndex((o) => o.value === (authStore.user?.view_mode || 'card'))"
         @confirm="onViewModeConfirm"
         @cancel="showViewModePicker = false"
       />
