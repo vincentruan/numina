@@ -5,8 +5,7 @@ from pydantic import BaseModel, ConfigDict
 from app.schemas.base import SnowflakeBase
 
 
-class AssetLifecycleEventResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class AssetLifecycleEventResponse(SnowflakeBase):
     id: int
     event_type: str
     event_date: date

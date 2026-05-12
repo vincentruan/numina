@@ -83,7 +83,9 @@ Applies to every router with root-path endpoints. Frontend calls must also omit 
 
 ### Bigint Serialization
 
-JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts, etc.) **must be serialized as strings in API responses** and typed as `string` in TypeScript. The DB stores them as `bigint`.
+JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts, etc.) **must be serialized as strings in API responses** and typed as `string` in TypeScript.
+
+**Implementation:** All response schemas use `SnowflakeBase` which automatically converts `int` fields named `id` or ending in `_id` to `str` during JSON serialization. See backend [`CLAUDE.md`](./backend/CLAUDE.md) "Snowflake ID Serialization" section for pattern details.
 
 ### API Return Code Conventions
 

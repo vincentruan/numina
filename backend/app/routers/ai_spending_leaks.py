@@ -39,7 +39,7 @@ def get_leaks(
     )
     return [
         {
-            "id": str(leak.id),
+            "id": leak.id,
             "asset_id": leak.asset_id,
             "asset_name": leak.asset_name,
             "leak_type": leak.leak_type,

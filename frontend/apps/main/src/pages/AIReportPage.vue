@@ -1,6 +1,6 @@
 <template>
   <div class="ai-report-page">
-    <PageHeader title="家庭资产体检" />
+    <PageHeader :title="t('aiReport.title')" />
 
     <!-- Task console (streaming progress) -->
     <div class="console-wrap">
@@ -14,12 +14,12 @@
 
     <!-- No report yet -->
     <div v-if="!currentReport && taskStatus === 'idle'" class="empty-state">
-      <van-empty image="search" description="暂无体检报告" />
+      <van-empty image="search" :description="t('aiReport.noReport')" />
       <div class="empty-actions">
         <van-button type="primary" block :loading="taskStatus === 'running'" @click="onGenerate">
           {{ t('aiTask.startBtn') }}
         </van-button>
-        <p class="empty-tip">AI 将综合分析您的资产配置、负债压力和资产效率</p>
+        <p class="empty-tip">{{ t('aiReport.startAnalyze') }}</p>
       </div>
     </div>
 
@@ -44,16 +44,16 @@
             </svg>
             <div class="score-inner">
               <span class="score-number" :class="overallScoreClass">{{ currentReport.overall_score ?? 0 }}</span>
-              <span class="score-unit">分</span>
+              <span class="score-unit">{{ t('aiReport.scoreUnit') }}</span>
             </div>
           </div>
-          <div class="overall-label">综合健康评分</div>
+          <div class="overall-label">{{ t('aiReport.overallScore') }}</div>
         </div>
         <p class="overall-summary">{{ currentReport.summary }}</p>
         <div class="report-meta">
-          <span>生成时间：{{ formatDate(reportGeneratedAt) }}</span>
+          <span>{{ t('aiReport.generatedAt', { time: formatDate(reportGeneratedAt) }) }}</span>
           <span v-if="currentReport.data_completeness_score != null">
-            数据完整度：{{ currentReport.data_completeness_score.toFixed(0) }}%
+            {{ t('aiReport.dataCompleteness', { score: currentReport.data_completeness_score.toFixed(0) }) }}
           </span>
         </div>
       </div>
@@ -62,17 +62,17 @@
       <div class="cards-section">
         <ReportCard
           icon="balance-o"
-          title="净资产健康"
+          :title="t('aiReport.netWorthHealth')"
           :score="currentReport.net_worth_health?.score ?? 0"
           :narrative="currentReport.net_worth_health?.narrative ?? ''"
         >
           <div v-if="currentReport.net_worth_health?.data" class="card-data">
             <div class="data-row">
-              <span>净资产</span>
+              <span>{{ t('aiReport.netWorthLabel') }}</span>
               <span>{{ formatMoney(currentReport.net_worth_health.data.net_worth) }}</span>
             </div>
             <div class="data-row">
-              <span>月环比</span>
+              <span>{{ t('aiReport.momChange') }}</span>
               <span :class="currentReport.net_worth_health.data.mom_change_pct >= 0 ? 'positive' : 'negative'">
                 {{ currentReport.net_worth_health.data.mom_change_pct >= 0 ? '+' : '' }}{{ currentReport.net_worth_health.data.mom_change_pct?.toFixed(1) }}%
               </span>
@@ -82,7 +82,7 @@
 
         <ReportCard
           icon="bar-chart-o"
-          title="资产配置"
+          :title="t('aiReport.allocationAnalysis')"
           :score="currentReport.allocation_analysis?.score ?? 0"
           :narrative="currentReport.allocation_analysis?.narrative ?? ''"
         >
@@ -103,31 +103,31 @@
 
         <ReportCard
           icon="bill-o"
-          title="负债压力"
+          :title="t('aiReport.liabilityPressure')"
           :score="currentReport.liability_pressure?.score ?? 0"
           :narrative="currentReport.liability_pressure?.narrative ?? ''"
         >
           <div v-if="currentReport.liability_pressure?.data" class="card-data">
             <div class="data-row">
-              <span>活跃负债</span>
-              <span>{{ currentReport.liability_pressure.data.count }} 笔</span>
+              <span>{{ t('aiReport.activeLiabilities') }}</span>
+              <span>{{ t('aiReport.liabilityCount', { count: currentReport.liability_pressure.data.count }) }}</span>
             </div>
           </div>
         </ReportCard>
 
         <ReportCard
           icon="chart-trending-o"
-          title="资产效率"
+          :title="t('aiReport.assetEfficiency')"
           :score="currentReport.asset_efficiency?.score ?? 0"
           :narrative="currentReport.asset_efficiency?.narrative ?? ''"
         >
           <div v-if="currentReport.asset_efficiency?.data" class="card-data">
             <div class="data-row">
-              <span>低效资产</span>
-              <span>{{ currentReport.asset_efficiency.data.low_usage_count }} 项</span>
+              <span>{{ t('aiReport.lowUsageAssets') }}</span>
+              <span>{{ t('aiReport.assetCountUnit', { count: currentReport.asset_efficiency.data.low_usage_count }) }}</span>
             </div>
             <div class="data-row">
-              <span>日均成本</span>
+              <span>{{ t('aiReport.dailyCostLabel') }}</span>
               <span>{{ formatMoney(currentReport.asset_efficiency.data.total_daily_cost) }}</span>
             </div>
           </div>

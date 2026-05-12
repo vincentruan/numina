@@ -150,7 +150,7 @@ def trust_device(
     )
 
     return DeviceTrustResponse(
-        device_id=str(session.id),
+        device_id=session.id,
         device_name=session.device_name,
         expires_at=session.expires_at,
     )
@@ -174,7 +174,7 @@ def list_devices(
     sessions = device_service.list_device_sessions(db, user_id=user_id)
     return [
         DeviceSessionResponse(
-            id=str(s.id),
+            id=s.id,
             device_name=s.device_name,
             created_at=s.created_at,
             last_seen_at=s.last_seen_at,

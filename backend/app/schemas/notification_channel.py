@@ -1,7 +1,9 @@
 # backend/app/schemas/notification_channel.py
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from app.schemas.base import SnowflakeBase
 
 
 class NotificationChannelCreate(BaseModel):
@@ -19,9 +21,7 @@ class NotificationChannelUpdate(BaseModel):
     subscriptions: list[str] | None = None
 
 
-class NotificationChannelResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class NotificationChannelResponse(SnowflakeBase):
     id: int
     family_id: int
     channel_type: str

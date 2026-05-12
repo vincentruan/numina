@@ -1,12 +1,12 @@
 # backend/app/schemas/reminder.py
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
+
+from app.schemas.base import SnowflakeBase
 
 
-class ReminderResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class ReminderResponse(SnowflakeBase):
     id: int
     family_id: int
     reminder_type: str

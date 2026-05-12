@@ -167,8 +167,8 @@ async def chat(
     return {
         "question": body.question,
         "answer": answer,
-        "message_id": str(session.id),
-        "session_id": str(session.id),
+        "message_id": session.id,
+        "session_id": session.id,
     }
 
 
@@ -271,7 +271,7 @@ def get_sessions(
     )
     return [
         {
-            "session_id": str(s.id),
+            "session_id": s.id,
             "created_at": s.created_at.isoformat(),
             "message_count": s.message_count,
             "last_preview": s.last_preview,
@@ -393,9 +393,9 @@ def list_all_sessions(
     return {
         "sessions": [
             {
-                "session_id": str(s.id),
-                "family_id": str(s.family_id),
-                "user_id": str(s.user_id) if s.user_id else None,
+                "session_id": s.id,
+                "family_id": s.family_id,
+                "user_id": s.user_id if s.user_id else None,
                 "capability": s.capability,
                 "title": s.title,
                 "status": s.status,

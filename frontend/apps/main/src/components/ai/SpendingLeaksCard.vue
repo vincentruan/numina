@@ -92,12 +92,12 @@
           </div>
           <div class="leak-name">{{ leak.asset_name }}</div>
           <div v-if="leak.estimated_annual_waste != null" class="leak-meta">
-            预计年损耗：¥{{ leak.estimated_annual_waste.toFixed(0) }}
+            {{ t('spendingLeaks.estimatedWaste', { amount: leak.estimated_annual_waste.toFixed(0) }) }}
           </div>
           <p v-if="leak.suggestion" class="leak-suggestion">{{ leak.suggestion }}</p>
         </div>
         <template #right>
-          <van-button square type="warning" text="忽略" class="dismiss-btn" @click="onDismiss(leak.id)" />
+          <van-button square type="warning" :text="t('spendingLeaks.dismiss')" class="dismiss-btn" @click="onDismiss(leak.id)" />
         </template>
       </van-swipe-cell>
     </template>
@@ -132,14 +132,13 @@ const {
 const loading = ref(false)
 const leaks = ref<SpendingLeakItem[]>([])
 
-const LEAK_TYPE_LABELS: Record<string, string> = {
-  high_idle_cost: '高闲置成本',
-  redundant: '冗余持有',
-  high_maintenance: '高维护负担',
-}
-
 function leakTypeLabel(type: string) {
-  return LEAK_TYPE_LABELS[type] ?? type
+  const labels: Record<string, string> = {
+    high_idle_cost: t('spendingLeaks.leakTypeHighIdleCost'),
+    redundant: t('spendingLeaks.leakTypeRedundant'),
+    high_maintenance: t('spendingLeaks.leakTypeHighMaintenance'),
+  }
+  return labels[type] ?? type
 }
 
 function severityTagType(severity: string): 'danger' | 'warning' | 'primary' {
@@ -149,9 +148,9 @@ function severityTagType(severity: string): 'danger' | 'warning' | 'primary' {
 }
 
 function severityLabel(severity: string) {
-  if (severity === 'high') return '高'
-  if (severity === 'medium') return '中'
-  return '低'
+  if (severity === 'high') return t('spendingLeaks.severityHigh')
+  if (severity === 'medium') return t('spendingLeaks.severityMedium')
+  return t('spendingLeaks.severityLow')
 }
 
 async function loadLeaks() {

@@ -32,6 +32,47 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
 - **Pydantic v2 only** — use `ConfigDict`, `model_validate`, `field_validator`. Never v1 style (`class Config`, `parse_obj`, `validator`).
 
+## Snowflake ID Serialization
+
+All response schemas containing IDs inherit from `SnowflakeBase` (app/schemas/base.py).
+
+### Pattern
+
+```python
+from app.schemas.base import SnowflakeBase
+
+class MyResponse(SnowflakeBase):
+    id: int  # Define as int (matches DB)
+    family_id: int
+    other_id: int
+    name: str
+```
+
+JSON output automatically converts IDs to strings:
+```json
+{"id": "123456789012345", "family_id": "987654321098765"}
+```
+
+### Key Points
+
+- Schemas define IDs as `int` (internal representation matches SQLAlchemy)
+- SnowflakeBase.model_serializer converts to `str` during JSON serialization
+- No manual `str()` calls in routers — return int values directly
+- Request schemas (Create/Update) don't need SnowflakeBase — input comes as string
+
+### Common Pitfalls
+
+1. **Don't use plain BaseModel for schemas with IDs** → Use SnowflakeBase
+2. **Don't manually define `id: str`** → Define `id: int`, let serializer convert
+3. **Don't add field_validator for ID coercion** → SnowflakeBase handles it
+4. **Don't call str() in routers** → Return int, schema serializes
+5. **Request schemas don't need SnowflakeBase** → Input validation handles string→int
+
+### Why
+
+JavaScript loses precision for integers > 2^53. Snowflake IDs are 18-19 digits.
+Serializing as strings preserves exact values across the API boundary.
+
 ## Patterns
 
 ### Pydantic v2
