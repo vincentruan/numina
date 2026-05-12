@@ -1,5 +1,7 @@
 from pydantic import BaseModel
 
+from app.schemas.base import SnowflakeBase
+
 
 class OverviewResponse(BaseModel):
     total_assets: float
@@ -10,7 +12,7 @@ class OverviewResponse(BaseModel):
     total_daily_cost: float = 0
 
 
-class AllocationItem(BaseModel):
+class AllocationItem(SnowflakeBase):
     category_id: int
     category_name: str
     icon: str
@@ -35,7 +37,7 @@ class TrendResponse(BaseModel):
     points: list[TrendPoint]
 
 
-class TopAssetItem(BaseModel):
+class TopAssetItem(SnowflakeBase):
     id: int
     name: str
     category_name: str
@@ -45,7 +47,7 @@ class TopAssetItem(BaseModel):
     original_value: float = 0.0
 
 
-class DailyCostItem(BaseModel):
+class DailyCostItem(SnowflakeBase):
     id: int
     name: str
     category_name: str
@@ -57,7 +59,7 @@ class DailyCostItem(BaseModel):
     original_value: float = 0.0
 
 
-class LowUsageItem(BaseModel):
+class LowUsageItem(SnowflakeBase):
     id: int
     name: str
     category_name: str
@@ -69,7 +71,7 @@ class LowUsageItem(BaseModel):
     original_value: float = 0.0
 
 
-class InvestmentReturnItem(BaseModel):
+class InvestmentReturnItem(SnowflakeBase):
     id: int
     name: str
     category_name: str
@@ -83,7 +85,7 @@ class InvestmentReturnItem(BaseModel):
     original_current_value: float = 0.0
 
 
-class ExpiringSoonItem(BaseModel):
+class ExpiringSoonItem(SnowflakeBase):
     """Asset approaching end of expected lifespan."""
     id: int
     name: str
