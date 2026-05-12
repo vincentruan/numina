@@ -18,6 +18,7 @@ uv run alembic upgrade head                                # apply migrations
 
 ## Tooling
 
+- **uv:** package manager. Use `uv add`/`uv remove` to manage dependencies. Never use `pip install` directly.
 - **ruff:** lint + format. Config in `pyproject.toml` under `[tool.ruff]`. Rules: E, F, I (imports), UP (pyupgrade).
 - **mypy:** type checker. Config in `pyproject.toml` under `[tool.mypy]`. Starts lenient (`ignore_missing_imports = true`) — ratchet strictness over time by adding `disallow_untyped_defs = true` per module.
 - **pytest:** test runner. Tests in `backend/tests/`. Each test gets a fresh in-memory SQLite DB.
