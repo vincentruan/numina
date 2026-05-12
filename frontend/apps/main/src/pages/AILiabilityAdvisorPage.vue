@@ -1,6 +1,6 @@
 <template>
   <div class="ai-liability-page">
-    <PageHeader title="负债优化顾问" />
+    <PageHeader :title="t('aiLiability.title')" />
 
     <div v-if="loading && !data" class="loading-state">
       <van-loading size="32" type="spinner" />
@@ -98,7 +98,7 @@
       <template v-else>
         <!-- Summary bar with reanalyze/cancel -->
         <div class="summary-bar">
-          <span>{{ t('liability.title') }}</span>
+          <span>{{ t('aiLiability.title') }}</span>
           <van-button
             v-if="taskStatus !== 'running'"
             size="mini"
@@ -125,16 +125,16 @@
         <!-- Summary -->
         <div class="summary-card">
           <div class="summary-row">
-            <span class="label">负债总额</span>
+            <span class="label">{{ t('aiLiability.totalRemaining') }}</span>
             <span class="value">{{ formatMoney(data.total_remaining) }}</span>
           </div>
           <div class="summary-row">
-            <span class="label">月还款额</span>
+            <span class="label">{{ t('aiLiability.monthlyPayment') }}</span>
             <span class="value">{{ formatMoney(data.total_monthly_payment) }}</span>
           </div>
           <div class="summary-row">
             <span class="label">负债笔数</span>
-            <span class="value">{{ data.liability_count }} 笔</span>
+            <span class="value">{{ t('aiLiability.liabilityCount', { count: data.liability_count }) }}</span>
           </div>
         </div>
 
@@ -154,13 +154,13 @@
             <div class="strategy-content">
               <div class="strategy-name">{{ strategy.strategy_name }}</div>
               <div v-if="strategy.estimated_interest_saved > 0" class="savings-hint">
-                预计节省利息：¥{{ strategy.estimated_interest_saved.toLocaleString() }}
+                {{ t('aiLiability.savingsHint', { amount: strategy.estimated_interest_saved.toLocaleString() }) }}
               </div>
               <div class="priority-hint">
-                优先还款：<strong>{{ strategy.priority_debt }}</strong>
+                {{ t('aiLiability.priorityHint', { debt: strategy.priority_debt }) }}
               </div>
               <div v-if="data.recommended_strategy === strategy.strategy" class="recommended-badge">
-                <van-icon name="success" aria-hidden="true" /> 推荐方案
+                <van-icon name="success" aria-hidden="true" /> {{ t('aiLiability.recommendedBadge') }}
               </div>
               <div class="order-list">
                 <div
@@ -206,13 +206,14 @@ const data = ref<Record<string, unknown> | null>(null)
 const activeTab = ref(0)
 
 const STRATEGY_SHORT: Record<string, string> = {
-  avalanche: '雪崩法',
-  snowball: '滚雪球',
-  hybrid: '混合法',
+  avalanche: 'strategyAvalanche',
+  snowball: 'strategySnowball',
+  hybrid: 'strategyHybrid',
 }
 
 function strategyShortName(s: string) {
-  return STRATEGY_SHORT[s] ?? s
+  const key = STRATEGY_SHORT[s]
+  return key ? t(`aiLiability.${key}`) : s
 }
 
 function formatMoney(val: number | null | undefined) {

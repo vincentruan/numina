@@ -354,11 +354,11 @@ function statusLabel(status: string): string {
 }
 
 // More actions
-const moreActions = [
+const moreActions = computed(() => [
   { name: t('dashboard.actionSheet.retire'), value: 'retire' },
   { name: t('dashboard.actionSheet.activate'), value: 'activate' },
   { name: t('dashboard.actionSheet.export'), value: 'export' },
-]
+])
 
 const sectionTitle = computed(() => {
   const status = activeStatus.value || 'in_use'

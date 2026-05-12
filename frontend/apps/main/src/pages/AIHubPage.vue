@@ -5,11 +5,11 @@
       <div class="hub-header-blob" aria-hidden="true"></div>
       <div class="hub-header-main">
         <div class="hub-greeting">
-          <span class="hub-greeting-label">AI 智能助手</span>
-          <span class="hub-greeting-hi">你好，{{ userName }}</span>
+          <span class="hub-greeting-label">{{ t('aiHub.title') }}</span>
+          <span class="hub-greeting-hi">{{ t('aiHub.greeting', { userName }) }}</span>
         </div>
         <!-- Health score ring -->
-        <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="`资产健康评分 ${displayScore} 分`">
+        <div class="hub-score-ring" :class="scoreClass" role="img" :aria-label="scoreAriaLabel">
           <svg viewBox="0 0 64 64" class="score-svg" aria-hidden="true">
             <circle class="score-track" cx="32" cy="32" r="26" />
             <circle
@@ -20,7 +20,7 @@
           </svg>
           <div class="score-inner">
             <span class="score-number">{{ displayScore }}</span>
-            <span class="score-label">分</span>
+            <span class="score-label">{{ t('aiHub.scoreUnit') }}</span>
           </div>
         </div>
       </div>
@@ -28,27 +28,27 @@
       <div class="hub-stats">
         <div class="hub-stat-item">
           <span class="hub-stat-num">{{ suggestionCount }}</span>
-          <span class="hub-stat-label">项建议</span>
+          <span class="hub-stat-label">{{ t('aiHub.suggestionsCount') }}</span>
         </div>
         <div class="hub-stat-divider" aria-hidden="true"></div>
         <div class="hub-stat-item">
           <span class="hub-stat-num warn">{{ alertCount }}</span>
-          <span class="hub-stat-label">项预警</span>
+          <span class="hub-stat-label">{{ t('aiHub.alertsCount') }}</span>
         </div>
         <div class="hub-stat-divider" aria-hidden="true"></div>
         <div class="hub-stat-item">
           <span class="hub-stat-num">{{ currentReport?.data_completeness_score?.toFixed(0) ?? '-' }}%</span>
-          <span class="hub-stat-label">数据完整度</span>
+          <span class="hub-stat-label">{{ t('aiHub.dataCompleteness') }}</span>
         </div>
         <div class="hub-stat-divider" aria-hidden="true"></div>
         <div class="hub-stat-meta" aria-live="polite">
           <template v-if="reportLoading">
             <van-loading size="10" />
-            <span>生成中…</span>
+            <span>{{ t('aiHub.generating') }}</span>
           </template>
           <template v-else-if="reportGeneratedAt">
             <span>{{ reportAge }}</span>
-            <button class="refresh-btn" :disabled="reportLoading" aria-label="刷新报告" @click="() => refreshReport()">
+            <button class="refresh-btn" :disabled="reportLoading" :aria-label="t('aiHub.refreshReport')" @click="() => refreshReport()">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M23 4v6h-6"/><path d="M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -56,23 +56,23 @@
             </button>
           </template>
           <template v-else>
-            <span>暂无报告</span>
+            <span>{{ t('aiHub.noReport') }}</span>
           </template>
         </div>
       </div>
     </div>
 
     <!-- Report summary card -->
-    <div v-if="currentReport" class="report-summary-card" role="button" tabindex="0" aria-label="查看完整资产体检报告" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
+    <div v-if="currentReport" class="report-summary-card" role="button" tabindex="0" :aria-label="t('aiHub.viewFullReport')" @click="$router.push('/ai/report')" @keydown.enter="$router.push('/ai/report')" @keydown.space.prevent="$router.push('/ai/report')">
       <div class="report-summary-title">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
         </svg>
-        最新资产体检报告
+        {{ t('aiHub.latestReport') }}
       </div>
       <p class="report-summary-text">{{ currentReport.summary }}</p>
       <div class="report-summary-cta">
-        查看完整报告
+        {{ t('aiHub.viewFullReport') }}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <polyline points="9 18 15 12 9 6"/>
         </svg>
@@ -80,14 +80,14 @@
     </div>
 
     <!-- Generating in progress -->
-    <div v-else-if="reportLoading" class="report-generating-card" aria-live="polite" aria-label="正在生成报告">
+    <div v-else-if="reportLoading" class="report-generating-card" aria-live="polite" :aria-label="t('aiHub.reportGenerating')">
       <van-loading size="28" color="var(--color-primary)" />
-      <p class="report-generating-text">{{ ws.progressMessage || '正在生成报告…' }}</p>
-      <p class="report-generating-sub">AI 正在综合分析，请稍候</p>
+      <p class="report-generating-text">{{ ws.progressMessage || t('aiHub.reportGenerating') }}</p>
+      <p class="report-generating-sub">{{ t('aiHub.reportGeneratingSub') }}</p>
     </div>
 
     <!-- AI disabled state: shown when family has not enabled AI -->
-    <div v-else-if="!aiStore.aiEnabled" class="ai-disabled-card" role="status" aria-label="AI 助手未开启">
+    <div v-else-if="!aiStore.aiEnabled" class="ai-disabled-card" role="status" :aria-label="t('aiHub.disabledTitle')">
       <div class="ai-disabled-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
@@ -105,14 +105,14 @@
       </button>
     </div>
 
-    <div v-else class="report-empty-card" role="button" tabindex="0" aria-label="立即生成资产体检报告" @click="generateReport">
+    <div v-else class="report-empty-card" role="button" tabindex="0" :aria-label="t('aiHub.generateFirstReport')" @click="generateReport">
       <div class="report-empty-icon" aria-hidden="true">
         <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
       </div>
-      <p class="report-empty-text">立即生成首份资产体检报告</p>
-      <p class="report-empty-sub">AI 将综合分析资产配置、负债压力和资产效率</p>
+      <p class="report-empty-text">{{ t('aiHub.generateFirstReport') }}</p>
+      <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
     <!-- Feature grid -->
@@ -141,7 +141,7 @@
         v-model="chatInput"
         v-model:deep-think="deepThink"
         v-model:web-search="webSearch"
-        placeholder="问我任何关于家庭资产的问题…"
+        :placeholder="t('aiHub.chatPlaceholder')"
         @submit="startChat"
       />
     </div>
@@ -175,7 +175,7 @@ const deepThink = ref(false)
 const webSearch = ref(false)
 const capabilities = computed(() => capabilityStore.capabilities)
 
-const userName = computed(() => getUser()?.display_name || '用户')
+const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
 const displayScore = computed(() => currentReport.value?.overall_score ?? '?')
 
@@ -192,15 +192,20 @@ const scoreClass = computed(() => {
   return s > 0 ? 'score-poor' : 'score-empty'
 })
 
+const scoreAriaLabel = computed(() => {
+  const score = displayScore.value
+  return t('aiHub.scoreAriaLabel', { score })
+})
+
 const reportAge = computed(() => {
   if (!reportGeneratedAt.value) return ''
   const diff = Date.now() - new Date(reportGeneratedAt.value).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return '刚刚'
-  if (mins < 60) return `${mins} 分钟前`
+  if (mins < 1) return t('aiHub.justNow')
+  if (mins < 60) return t('aiHub.minutesAgo', { minutes: mins })
   const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs} 小时前`
-  return `${Math.floor(hrs / 24)} 天前`
+  if (hrs < 24) return t('aiHub.hoursAgo', { hours: hrs })
+  return t('aiHub.daysAgo', { days: Math.floor(hrs / 24) })
 })
 
 const suggestionCount = computed(() => {

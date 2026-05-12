@@ -167,11 +167,11 @@ const refreshing = ref(false)
 const sortBy = ref<'priority' | 'price' | 'name'>('priority')
 const sortDir = ref<'asc' | 'desc'>('desc')
 
-const sortOptions = [
+const sortOptions = computed(() => [
   { value: 'priority' as const, label: t('wish.sortBar.priority') },
   { value: 'price' as const, label: t('wish.sortBar.price') },
   { value: 'name' as const, label: t('wish.sortBar.name') },
-]
+])
 
 const priorityOrder: Record<string, number> = { high: 3, medium: 2, low: 1 }
 
