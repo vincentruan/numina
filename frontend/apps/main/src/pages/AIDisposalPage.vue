@@ -170,7 +170,7 @@ const {
   isConsoleOpen,
   startStream,
   cancelTask,
-} = useAITask('disposal', '/ai/disposal-suggestions/refresh', onScanComplete)
+} = useAITask('disposal', '/ai/disposal-suggestions/refresh/events', onScanComplete)
 
 async function onRefresh() {
   await startStream()

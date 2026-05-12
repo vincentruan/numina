@@ -167,7 +167,7 @@ const {
   isConsoleOpen,
   startStream,
   cancelTask,
-} = useAITask('allocation', '/ai/allocation-target/check/stream', onScanComplete)
+} = useAITask('allocation', '/ai/allocation-target/check/events', onScanComplete)
 
 async function onCheck() {
   await startStream()

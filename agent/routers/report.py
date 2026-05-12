@@ -56,3 +56,28 @@ async def generate_report_stream(
             yield chunk.encode("utf-8")
 
     return StreamingResponse(event_stream(), media_type="text/plain; charset=utf-8")
+
+
+@router.post("/events")
+async def generate_report_events(
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+    x_task_id: str = Header(..., alias="X-Task-Id"),
+    x_thread_id: str = Header(..., alias="X-Thread-Id"),
+    x_user_id: str | None = Header(None, alias="X-User-Id"),
+):
+    """NDJSON 事件流生成体检报告（由 backend 调用）。"""
+    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+    async def event_stream():
+        async for line in orchestrator.stream_dispatch_events(
+            capability="report",
+            family_id=x_family_id,
+            task_id=x_task_id,
+            thread_id=x_thread_id,
+            user_id=x_user_id,
+        ):
+            yield line.encode("utf-8")
+
+    return StreamingResponse(event_stream(), media_type="application/x-ndjson")

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth.ai_deps import require_ai_enabled, require_owner
@@ -21,9 +21,11 @@ from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
+from app.models.ai_chat_session import AIChatSession
 from app.models.ai_report import AIReport
 from app.models.ai_ws_ticket import AIWsTicket
 from app.models.user import User
+from app.routers._ai_events_helper import proxy_capability_events
 from app.services.ai_task_service import AITaskService
 from app.services.chat_session import ChatSessionService
 
@@ -120,6 +122,64 @@ async def trigger_generate(
             raise
 
     return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
+
+
+@router.post("/generate/events")
+async def trigger_generate_events(
+    current_user: User = Depends(require_adult),
+    _ai: None = Depends(require_ai_enabled),
+    _owner: None = Depends(require_owner),
+    db: Session = Depends(get_db),
+):
+    """触发体检报告生成（NDJSON 事件流）。"""
+    existing = AITaskService.get_running_task(current_user.family_id, "report", db)
+    if existing:
+        task = existing
+        session_id = task.session_id or str(task.id)
+        session = db.query(AIChatSession).filter_by(id=session_id, family_id=current_user.family_id).first()
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        session = await ChatSessionService.create_session(
+            family_id=str(current_user.family_id),
+            user_id=str(current_user.id),
+            db=db,
+        )
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                capability="report",
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
+            )
+        task = AITaskService.create_task(
+            family_id=current_user.family_id,
+            capability="report",
+            session_id=session.id,
+            db=db,
+        )
+        session_id = session.id
+
+    task_id = task.id
+    family_id = current_user.family_id
+
+    return StreamingResponse(
+        proxy_capability_events(
+            agent_path="/report/events",
+            capability="report",
+            task_id=task_id,
+            session_id=session_id,
+            family_id=family_id,
+            current_user=current_user,
+            db=db,
+        ),
+        media_type="application/x-ndjson",
+    )
 
 
 @router.post("/ws-ticket")

@@ -161,7 +161,7 @@ const {
   isConsoleOpen,
   startStream,
   cancelTask,
-} = useAITask('alerts', '/ai/asset-alerts/refresh', onScanComplete)
+} = useAITask('alerts', '/ai/asset-alerts/refresh/events', onScanComplete)
 
 async function onRefresh() {
   await startStream()

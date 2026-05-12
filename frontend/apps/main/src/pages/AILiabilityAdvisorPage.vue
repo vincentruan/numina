@@ -252,7 +252,7 @@ const {
   isConsoleOpen,
   startStream,
   cancelTask,
-} = useAITask('liability', '/ai/liability-advice/stream', onAnalyzeComplete)
+} = useAITask('liability', '/ai/liability-advice/events', onAnalyzeComplete)
 
 async function onAnalyze() {
   await startStream()

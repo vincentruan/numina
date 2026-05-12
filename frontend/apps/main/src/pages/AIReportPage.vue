@@ -166,7 +166,7 @@ const {
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   startStream,
-} = useAITask('report', '/ai/report/generate')
+} = useAITask('report', '/ai/report/generate/events')
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
