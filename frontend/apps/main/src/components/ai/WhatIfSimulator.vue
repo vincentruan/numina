@@ -7,20 +7,20 @@
             :model-value="actionTypeLabel(action.action_type)"
             is-link
             readonly
-            label="操作类型"
+            :label="t('timeMachine.actionType')"
             @click="showActionTypePicker(idx)"
           />
           <van-field
             v-if="action.action_type === 'invest' || action.action_type === 'buy'"
             v-model.number="action.amount"
             type="number"
-            label="金额（元）"
+            :label="t('timeMachine.amountYuan')"
           />
           <van-field
             v-if="action.action_type === 'invest'"
             v-model.number="action.annual_return_rate"
             type="number"
-            label="年化收益率"
+            :label="t('timeMachine.annualReturnRate')"
             placeholder="0.08"
           />
         </van-cell-group>
@@ -32,7 +32,7 @@
             type="danger"
             @click="actions.splice(idx, 1)"
           >
-            删除
+            {{ t('common.delete') }}
           </van-button>
         </div>
       </div>
@@ -74,7 +74,7 @@
       <van-cell
         v-if="result.breakeven_year !== null"
         :title="t('timeMachine.breakeven')"
-        :value="`第 ${result.breakeven_year} 年`"
+        :value="t('timeMachine.breakevenYear', { year: result.breakeven_year })"
       />
     </div>
 
@@ -86,7 +86,7 @@
     <van-action-sheet
       v-model:show="pickerVisible"
       :actions="actionTypeOptions"
-      cancel-text="取消"
+      :cancel-text="t('common.cancel')"
       @select="onActionTypeSelect"
     />
   </div>
@@ -179,10 +179,10 @@ function renderChart(data: WhatIfResponse) {
     tooltip: { trigger: 'axis' },
     legend: { data: [t('timeMachine.baseline'), t('timeMachine.scenario')] },
     grid: { left: 60, right: 20, bottom: 30 },
-    xAxis: { type: 'category', data: data.projection.map((p) => `${p.year}年`) },
+    xAxis: { type: 'category', data: data.projection.map((p) => t('timeMachine.yearUnit', { year: p.year })) },
     yAxis: {
       type: 'value',
-      axisLabel: { formatter: (v: number) => `${(v / 10000).toFixed(0)}万` },
+      axisLabel: { formatter: (v: number) => `${(v / 10000).toFixed(0)}${t('common.unitTenThousand')}` },
     },
     series: [
       {

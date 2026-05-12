@@ -7,9 +7,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ score: number; max?: number }>()
 const max = props.max ?? 100
+const { t } = useI18n()
 
 const levelClass = computed(() => {
   const pct = props.score / max
@@ -22,10 +24,10 @@ const levelClass = computed(() => {
 
 const label = computed(() => {
   const pct = props.score / max
-  if (pct >= 0.8) return '优秀'
-  if (pct >= 0.6) return '良好'
-  if (pct >= 0.4) return '一般'
-  return '待改善'
+  if (pct >= 0.8) return t('aiReport.scoreExcellent')
+  if (pct >= 0.6) return t('aiReport.scoreGood')
+  if (pct >= 0.4) return t('aiReport.scoreFair')
+  return t('aiReport.scoreNeedsImprovement')
 })
 </script>
 

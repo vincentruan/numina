@@ -27,8 +27,8 @@
     </div>
 
     <van-cell-group v-if="result" inset class="assumptions">
-      <van-cell :title="'资产数量'" :value="String(result.assumptions.asset_count ?? '-')" />
-      <van-cell :title="'负债数量'" :value="String(result.assumptions.liability_count ?? '-')" />
+      <van-cell :title="t('timeMachine.assetCount')" :value="String(result.assumptions.asset_count ?? '-')" />
+      <van-cell :title="t('timeMachine.liabilityCount')" :value="String(result.assumptions.liability_count ?? '-')" />
       <van-cell :title="t('timeMachine.inflationRate')" :value="`${(inflationRate * 100).toFixed(1)}%`" />
     </van-cell-group>
   </div>
@@ -96,7 +96,7 @@ function renderChart(data: ProjectionResponse) {
     xAxis: { type: 'category', data: years },
     yAxis: {
       type: 'value',
-      axisLabel: { formatter: (v: number) => `${(v / 10000).toFixed(0)}万` },
+      axisLabel: { formatter: (v: number) => `${(v / 10000).toFixed(0)}${t('common.unitTenThousand')}` },
     },
     series: [
       {
@@ -107,7 +107,7 @@ function renderChart(data: ProjectionResponse) {
         areaStyle: { opacity: 0.1 },
         markLine:
           historyLen > 0
-            ? { data: [{ xAxis: historyLen - 1 }], label: { formatter: '今天' } }
+            ? { data: [{ xAxis: historyLen - 1 }], label: { formatter: t('timeMachine.today') } }
             : undefined,
       },
       {
