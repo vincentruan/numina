@@ -69,29 +69,26 @@ EOF
 done
 
 # 检测运行环境，选择 Python 执行方式
-PYTHON_CMD=""
-
-if [[ -n "${VIRTUAL_ENV:-}" ]] || command -v uv &> /dev/null; then
-    # 本地 uv 环境
-    if command -v uv &> /dev/null; then
-        PYTHON_CMD="uv run python"
-    else
-        PYTHON_CMD="python"
-    fi
-elif docker ps 2>/dev/null | grep -q "numina-backend"; then
-    # Docker 容器环境
-    echo "检测到 Docker 容器，使用容器内 Python..."
-    PYTHON_CMD="docker exec -i numina-backend uv run python"
-else
-    # 默认本地 Python
-    PYTHON_CMD="python3"
+# 优先级: Docker 容器 > 本地 uv > 本地 python3
+USE_DOCKER=false
+# grep -q exits early causing SIGPIPE under pipefail; use grep -c instead
+if [[ $(docker ps 2>/dev/null | grep -c "numina-backend" || true) -gt 0 ]]; then
+    USE_DOCKER=true
 fi
 
-echo "执行: ${PYTHON_CMD} ${SCRIPT_DIR}/seed_data.py ${ARGS[*]:-}"
-echo ""
-
-# 切换工作目录
-cd "${SCRIPT_DIR}"
-
-# 执行 Python 脚本
-exec ${PYTHON_CMD} "${SCRIPT_DIR}/seed_data.py" "${ARGS[@]:-}"
+if [[ "${USE_DOCKER}" == "true" ]]; then
+    echo "检测到 Docker 容器，使用容器内 Python..."
+    echo "执行: docker exec numina-backend uv run python /app/tests/data/seed_data.py ${ARGS[*]+"${ARGS[*]}"}"
+    echo ""
+    exec docker exec numina-backend uv run python /app/tests/data/seed_data.py ${ARGS[@]+"${ARGS[@]}"}
+elif command -v uv &> /dev/null; then
+    echo "执行: uv run python ${SCRIPT_DIR}/seed_data.py ${ARGS[*]+"${ARGS[*]}"}"
+    echo ""
+    cd "${SCRIPT_DIR}"
+    exec uv run python "${SCRIPT_DIR}/seed_data.py" ${ARGS[@]+"${ARGS[@]}"}
+else
+    echo "执行: python3 ${SCRIPT_DIR}/seed_data.py ${ARGS[*]+"${ARGS[*]}"}"
+    echo ""
+    cd "${SCRIPT_DIR}"
+    exec python3 "${SCRIPT_DIR}/seed_data.py" ${ARGS[@]+"${ARGS[@]}"}
+fi
