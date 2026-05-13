@@ -51,12 +51,12 @@
           <van-field v-model="form.chat_id" :label="t('reminders.chatIdLabel')" :placeholder="t('reminders.chatIdPlaceholder')" />
         </template>
         <template v-if="form.channel_type === 'email'">
-          <van-field v-model="form.smtp_host" :label="t('reminders.smtpHostLabel')" placeholder="smtp.example.com" />
-          <van-field v-model="form.smtp_port" :label="t('reminders.smtpPortLabel')" type="number" placeholder="587" />
+          <van-field v-model="form.smtp_host" :label="t('reminders.smtpHostLabel')" :placeholder="t('reminders.smtpHostPlaceholder')" />
+          <van-field v-model="form.smtp_port" :label="t('reminders.smtpPortLabel')" type="number" :placeholder="t('reminders.smtpPortPlaceholder')" />
           <van-field v-model="form.smtp_user" :label="t('reminders.smtpUserLabel')" />
           <van-field v-model="form.smtp_password" :label="t('reminders.smtpPasswordLabel')" type="password" />
-          <van-field v-model="form.smtp_from" :label="t('reminders.smtpFromLabel')" placeholder="from@example.com" />
-          <van-field v-model="form.email_to" :label="t('reminders.emailToLabel')" placeholder="to@example.com" />
+          <van-field v-model="form.smtp_from" :label="t('reminders.smtpFromLabel')" :placeholder="t('reminders.smtpFromPlaceholder')" />
+          <van-field v-model="form.email_to" :label="t('reminders.emailToLabel')" :placeholder="t('reminders.smtpToPlaceholder')" />
         </template>
         <van-cell :title="t('reminders.subscriptions')">
           <template #value>
@@ -160,11 +160,11 @@ function editChannel(channel: NotificationChannelResponse) {
 
 async function saveChannel() {
   if (!form.name.trim()) {
-    showToast('⚠️ 请输入渠道名称')
+    showToast(t('reminders.channelNameRequired'))
     return
   }
   if (form.channel_type === 'telegram' && !form.chat_id.trim()) {
-    showToast('⚠️ 请输入 Chat ID')
+    showToast(t('reminders.chatIdRequired'))
     return
   }
   if (form.channel_type === 'telegram' && !/^-?\d+$/.test(form.chat_id)) {
@@ -172,7 +172,7 @@ async function saveChannel() {
     return
   }
   if (form.channel_type === 'email' && !form.smtp_host.trim()) {
-    showToast('⚠️ 请输入 SMTP 服务器')
+    showToast(t('reminders.smtpHostRequired'))
     return
   }
   const config: Record<string, string | number> =

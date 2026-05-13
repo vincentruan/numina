@@ -11,14 +11,14 @@
         v-model="fixedThreshold"
         :label="t('reminders.thresholdFixed')"
         type="number"
-        placeholder="如 5000"
+        :placeholder="t('reminders.thresholdFixedPlaceholder')"
         clearable
       />
       <van-field
         v-model="multiplierThreshold"
         :label="t('reminders.thresholdMultiplier')"
         type="number"
-        placeholder="如 2"
+        :placeholder="t('reminders.thresholdMultiplierPlaceholder')"
         clearable
       />
       <van-cell>

@@ -144,7 +144,7 @@
     <van-popup v-model:show="showThemeColorPicker" round position="bottom">
       <div class="theme-color-picker">
         <div class="color-picker-header">
-          <span>选择主题色</span>
+          <span>{{ t('reminders.themeColorPickerTitle') }}</span>
           <van-icon name="cross" @click="showThemeColorPicker = false" />
         </div>
         <div class="color-options">
@@ -171,13 +171,13 @@
     <!-- Edit Family Title Dialog -->
     <van-dialog
       v-model:show="showTitleDialog"
-      title="修改家庭名称"
+      :title="t('reminders.editFamilyTitleDialog')"
       show-cancel-button
       @confirm="onTitleConfirm"
     >
       <van-field
         v-model="editTitleValue"
-        placeholder="请输入新的家庭名称"
+        :placeholder="t('reminders.editFamilyTitlePlaceholder')"
         clearable
       />
     </van-dialog>
