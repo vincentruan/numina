@@ -1,6 +1,6 @@
 <template>
   <div class="tag-manage-page">
-    <PageHeader title="标签管理">
+    <PageHeader :title="t('settings.tagManageTitle')">
       <template #right>
         <van-icon name="plus" size="20" @click="showAddDialog" />
       </template>
@@ -14,14 +14,14 @@
           </template>
         </van-cell>
         <template #right>
-          <van-button square type="primary" text="编辑" class="swipe-btn" @click="showEditDialog(tag)" />
-          <van-button square type="danger" text="删除" class="swipe-btn" @click="onDelete(tag)" />
+          <van-button square type="primary" :text="t('settings.tagEditBtn')" class="swipe-btn" @click="showEditDialog(tag)" />
+          <van-button square type="danger" :text="t('settings.tagDeleteBtn')" class="swipe-btn" @click="onDelete(tag)" />
         </template>
       </van-swipe-cell>
-      <van-empty v-if="!tags.length" description="暂无标签，快来创建第一个吧">
+      <van-empty v-if="!tags.length" :description="t('settings.tagEmptyDesc')">
         <template #bottom>
           <van-button type="primary" round size="small" @click="showAddDialog">
-            ＋ 添加标签
+            {{ t('settings.tagAddFirstBtn') }}
           </van-button>
         </template>
       </van-empty>
@@ -30,13 +30,13 @@
     <!-- Add/Edit Dialog -->
     <van-dialog
       v-model:show="dialogVisible"
-      :title="editingId ? '编辑标签' : '添加标签'"
+      :title="editingId ? t('settings.tagEditDialogTitle') : t('settings.tagAddDialogTitle')"
       show-cancel-button
       @confirm="onDialogConfirm"
     >
       <van-form class="dialog-form">
-        <van-field v-model="formData.name" label="名称" placeholder="请输入标签名称" />
-        <van-field v-model="formData.color" label="颜色" placeholder="#1989fa">
+        <van-field v-model="formData.name" :label="t('settings.tagFieldName')" :placeholder="t('settings.tagNamePlaceholder')" />
+        <van-field v-model="formData.color" :label="t('settings.tagFieldColor')" :placeholder="t('settings.tagColorPlaceholder')">
           <template #right-icon>
             <div class="color-preview" :style="{ background: formData.color }" />
           </template>

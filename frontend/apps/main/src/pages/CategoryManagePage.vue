@@ -1,19 +1,19 @@
 <template>
   <div class="category-manage-page">
-    <PageHeader title="分类管理">
+    <PageHeader :title="t('settings.categoryManageTitle')">
       <template #right>
         <van-icon name="plus" size="20" @click="showAddDialog" />
       </template>
     </PageHeader>
 
     <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
-      <van-tab title="实物" name="physical" />
-      <van-tab title="金融" name="financial" />
+      <van-tab :title="t('settings.categoryTabPhysical')" name="physical" />
+      <van-tab :title="t('settings.categoryTabFinancial')" name="financial" />
     </van-tabs>
 
     <van-cell-group inset>
       <van-swipe-cell v-for="cat in categoryStore.categories" :key="cat.id">
-        <van-cell :label="cat.is_system ? '系统分类' : '自定义'">
+        <van-cell :label="cat.is_system ? t('settings.categorySystemLabel') : t('settings.categoryCustomLabel')">
           <template #title>
             <div class="cat-title">
               <div v-if="cat.icon.startsWith('icon-')" class="cat-icon-wrap" :style="{ background: cat.color }">
@@ -30,8 +30,8 @@
           </template>
         </van-cell>
         <template v-if="!cat.is_system" #right>
-          <van-button square type="primary" text="编辑" class="swipe-btn" @click="showEditDialog(cat)" />
-          <van-button square type="danger" text="删除" class="swipe-btn" @click="onDelete(cat)" />
+          <van-button square type="primary" :text="t('settings.categoryEditBtn')" class="swipe-btn" @click="showEditDialog(cat)" />
+          <van-button square type="danger" :text="t('settings.categoryDeleteBtn')" class="swipe-btn" @click="onDelete(cat)" />
         </template>
       </van-swipe-cell>
     </van-cell-group>
@@ -39,14 +39,14 @@
     <!-- Add/Edit Dialog -->
     <van-dialog
       v-model:show="dialogVisible"
-      :title="editingId ? '编辑分类' : '添加分类'"
+      :title="editingId ? t('settings.categoryEditDialogTitle') : t('settings.categoryAddDialogTitle')"
       show-cancel-button
       @confirm="onDialogConfirm"
     >
       <van-form ref="dialogForm" class="dialog-form">
-        <van-field v-model="formData.name" label="名称" placeholder="请输入分类名称" />
-        <van-field v-model="formData.icon" label="图标" placeholder="输入emoji图标" />
-        <van-field v-model="formData.color" label="颜色" placeholder="#1989fa">
+        <van-field v-model="formData.name" :label="t('settings.categoryFieldName')" :placeholder="t('settings.categoryNamePlaceholder')" />
+        <van-field v-model="formData.icon" :label="t('settings.categoryFieldIcon')" :placeholder="t('settings.categoryIconPlaceholder')" />
+        <van-field v-model="formData.color" :label="t('settings.categoryFieldColor')" :placeholder="t('settings.categoryColorPlaceholder')">
           <template #right-icon>
             <div class="color-preview" :style="{ background: formData.color }" />
           </template>

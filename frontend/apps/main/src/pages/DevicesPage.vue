@@ -115,9 +115,9 @@ function onTabChange(tab: 'my' | 'family') {
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const hours = Math.floor(diff / 3600000)
-  if (hours < 1) return '刚刚'
-  if (hours < 24) return `${hours} 小时前`
-  return `${Math.floor(hours / 24)} 天前`
+  if (hours < 1) return t('settings.timeJustNow')
+  if (hours < 24) return t('settings.timeHoursAgo', { hours })
+  return t('settings.timeDaysAgo', { days: Math.floor(hours / 24) })
 }
 
 onMounted(load)
