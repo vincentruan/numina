@@ -50,6 +50,7 @@ export default {
     toolDone: 'Done',
     toolFailed: 'Failed',
     deepThinking: 'Deep thinking…',
+    thinkDone: 'Deep thinking done',
     retry: 'Retry',
     retrying: 'Regenerating',
     errorRetry: 'Request failed, please retry',
@@ -60,6 +61,8 @@ export default {
     untitledSession: 'Untitled session',
     loadSessionFailed: '❌ Failed to load session, please try again',
     newChat: 'New Chat',
+    newChatAria: 'New chat',
+    newChatConfirm: 'Start a new chat? Current chat will be cleared.',
     editTitle: 'Edit Title',
     editTitlePlaceholder: 'Enter session title',
     renameSession: 'Rename',
@@ -448,6 +451,8 @@ export default {
     // Copy
     copied: '✅ Copied',
     copyFailed: '❌ Copy failed',
+    // Feature status
+    featureComingSoon: '🚧 Feature coming soon',
     // Second factor PIN
     pinMismatch: '⚠️ PINs do not match',
     pinChanged: '✅ PIN updated',

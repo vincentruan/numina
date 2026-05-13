@@ -7,7 +7,7 @@
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
-      <button class="header-btn" aria-label="会话历史" @click="showHistory = true">
+      <button class="header-btn" :aria-label="t('aiChat.historyAria')" @click="showHistory = true">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
@@ -27,7 +27,7 @@
         </button>
       </div>
       <div class="header-actions">
-        <button class="header-btn" aria-label="新对话" @click="onNewChat">
+        <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
@@ -39,7 +39,7 @@
     <van-popup v-model:show="showHistory" position="left" :style="{ width: '66%', height: '100%' }">
       <div class="history-panel">
         <div class="history-header">
-          <button class="header-btn" aria-label="返回" @click="showHistory = false">
+          <button class="header-btn" :aria-label="t('aiChat.backAria')" @click="showHistory = false">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
@@ -67,7 +67,7 @@
                 <span class="history-item-title">{{ session.title ?? t('aiChat.untitledSession') }}</span>
                 <button
                   class="history-item-menu-btn"
-                  :aria-label="'更多操作'"
+                  :aria-label="t('aiChat.moreActionsAria')"
                   @click.stop="openSessionMenu(session, $event)"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -152,8 +152,8 @@
             <path d="M280.842082 142.539799l14.39049 40.896295 14.390491-40.896295c5.972338-17.063823 19.338999-30.373604 36.402822-36.402822L386.8653 91.746487l-40.953174-14.390491c-17.006943-5.972338-30.373604-19.338999-36.402822-36.402822L295.289452 0.056879l-14.390491 40.953175c-6.029217 17.006943-19.338999 30.373604-36.402821 36.345942l-40.953175 14.390491 40.953175 14.39049c16.950064 6.029217 30.373604 19.395878 36.402821 36.402822z"/>
           </svg>
         </div>
-        <p class="empty-title">你好，我是 Numina AI</p>
-        <p class="empty-subtitle">问我任何关于家庭资产的问题</p>
+        <p class="empty-title">{{ t('aiChat.greetingTitle') }}</p>
+        <p class="empty-subtitle">{{ t('aiChat.greetingSubtitle') }}</p>
 
         <!-- Suggestion cards -->
         <div class="suggestion-grid">
@@ -222,7 +222,7 @@
                         <path d="M9 21h6"/>
                       </svg>
                     </div>
-                    <span v-if="msg.thinkDone" class="think-status">已深度思考</span>
+                    <span v-if="msg.thinkDone" class="think-status">{{ t('aiChat.thinkDone') }}</span>
                     <span v-else class="think-status think-status--active">
                       <span class="think-text-animated">{{ phaseLabel(msg.phase || 'thinking') }}</span>
                     </span>
@@ -277,13 +277,13 @@
                 <span class="msg-time">{{ msg.displayTime }}</span>
                 <!-- User message actions: copy + edit -->
                 <div v-if="msg.role === 'user'" class="msg-actions msg-actions--user">
-                  <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
+                  <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                     </svg>
                   </button>
-                  <button class="msg-action-btn" aria-label="修改" title="修改" @click="onEditUserMessage(idx)">
+                  <button class="msg-action-btn" :aria-label="t('aiChat.editAria')" :title="t('aiChat.editAria')" @click="onEditUserMessage(idx)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                       <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
@@ -292,13 +292,13 @@
                 </div>
                 <!-- Assistant message actions -->
                 <div v-if="msg.role === 'assistant'" class="msg-actions">
-                  <button class="msg-action-btn" aria-label="复制" title="复制" @click="onCopy(msg.content)">
+                  <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                     </svg>
                   </button>
-                  <button class="msg-action-btn" aria-label="重新生成" title="重新生成" :disabled="asking" @click="onRegenerate(idx)">
+                  <button class="msg-action-btn" :aria-label="t('aiChat.regenerateAria')" :title="t('aiChat.regenerateAria')" :disabled="asking" @click="onRegenerate(idx)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <polyline points="1 4 1 10 7 10"/>
                       <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
@@ -307,8 +307,8 @@
                   <button
                     class="msg-action-btn"
                     :class="{ 'msg-action-btn--active': msg.feedback === 1 }"
-                    aria-label="有帮助"
-                    title="有帮助"
+                    :aria-label="t('aiChat.helpfulAria')"
+                    :title="t('aiChat.helpfulAria')"
                     @click="onFeedback(msg.id, 1)"
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -319,8 +319,8 @@
                   <button
                     class="msg-action-btn"
                     :class="{ 'msg-action-btn--active': msg.feedback === -1 }"
-                    aria-label="没帮助"
-                    title="没帮助"
+                    :aria-label="t('aiChat.notHelpfulAria')"
+                    :title="t('aiChat.notHelpfulAria')"
                     @click="onFeedback(msg.id, -1)"
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -346,7 +346,7 @@
         :disabled="asking"
         :loading="asking || connecting"
         :show-clear="messages.length > 0"
-        placeholder="请输入您的问题…"
+        placeholder="{{ t('aiChat.inputPlaceholder') }}"
         @submit="onSend"
         @abort="onAbort"
         @action="onAction"
@@ -398,24 +398,25 @@ function renderMarkdown(text: string): string {
 }
 
 // Static data — module-level to avoid re-allocation on each mount
-const SUGGESTIONS = [
+// Note: suggestions array is now computed to use i18n
+const suggestions = computed(() => [
   {
-    text: '我们家净资产是多少？',
+    text: t('aiChat.suggestionAssetTotal'),
     icon: { viewBox: '0 0 24 24', paths: ['M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'] },
   },
   {
-    text: '哪类资产占比最高？',
+    text: t('aiChat.suggestionHighestCategory'),
     icon: { viewBox: '0 0 24 24', paths: ['M21.21 15.89A10 10 0 1 1 8 2.83', 'M22 12A10 10 0 0 0 12 2v10z'] },
   },
   {
-    text: '有哪些闲置资产？',
+    text: t('aiChat.suggestionIdleAssets'),
     icon: { viewBox: '0 0 24 24', paths: ['M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z', 'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'] },
   },
   {
-    text: '净资产趋势如何？',
+    text: t('aiChat.suggestionNetWorthTrend'),
     icon: { viewBox: '0 0 24 24', paths: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'] },
   },
-]
+])
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
@@ -678,8 +679,6 @@ function onCancelEditTitle() {
   showEditTitleDialog.value = false
 }
 
-const suggestions = SUGGESTIONS
-
 // Throttled markdown render helper (uses state declared above)
 function renderMarkdownThrottled(text: string, target: { content: string; renderedContent: string }) {
   pendingRenderText = text
@@ -838,7 +837,7 @@ async function loadSessionMessages(session: SessionSummary) {
 async function onNewChat() {
   if (messages.value.length === 0) return
   try {
-    await showConfirmDialog({ title: t('common.confirm'), message: '开始新对话？当前对话将被清空。' })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('aiChat.newChatConfirm') })
     await clearChatHistory()
     messages.value = []
     currentSessionId.value = null
@@ -1096,7 +1095,7 @@ async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | '
     }
     return
   }
-  showToast('🚧 该功能即将上线')
+  showToast(t('toast.featureComingSoon'))
 }
 
 async function onCopy(content: string) {

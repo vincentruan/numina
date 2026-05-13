@@ -91,6 +91,7 @@ export default {
     toolDone: '已完成',
     toolFailed: '调用失败',
     deepThinking: '深度思考中…',
+    thinkDone: '已深度思考',
     retry: '重试',
     retrying: '重新生成中',
     errorRetry: '请求失败，请重试',
@@ -101,6 +102,8 @@ export default {
     untitledSession: '未命名会话',
     loadSessionFailed: '❌ 加载会话失败，请重试',
     newChat: '新对话',
+    newChatAria: '新对话',
+    newChatConfirm: '开始新对话？当前对话将被清空。',
     editTitle: '修改标题',
     editTitlePlaceholder: '输入会话标题',
     renameSession: '重命名',
@@ -122,7 +125,6 @@ export default {
     loadingMore: '加载更多…',
     noMoreSessions: '没有更多会话了',
     historyAria: '会话历史',
-    newChatAria: '新对话',
     backAria: '返回',
     moreActionsAria: '更多操作',
     copyAria: '复制',
@@ -133,12 +135,10 @@ export default {
     inputPlaceholder: '请输入您的问题…',
     greetingTitle: '你好，我是 Numina AI',
     greetingSubtitle: '问我任何关于家庭资产的问题',
-    thinkDone: '已深度思考',
     suggestionAssetTotal: '我们家净资产是多少？',
     suggestionHighestCategory: '哪类资产占比最高？',
     suggestionIdleAssets: '有哪些闲置资产？',
     suggestionNetWorthTrend: '净资产趋势如何？',
-    newChatConfirm: '开始新对话？当前对话将被清空。',
   },
   asset: {
     title: '资产',
@@ -619,6 +619,8 @@ export default {
     // Copy
     copied: '✅ 已复制',
     copyFailed: '❌ 复制失败',
+    // Feature status
+    featureComingSoon: '🚧 该功能即将上线',
     // Second factor PIN
     pinMismatch: '⚠️ 两次输入的 PIN 不一致',
     pinChanged: '✅ PIN 已修改',
