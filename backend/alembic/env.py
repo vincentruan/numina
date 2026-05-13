@@ -40,6 +40,8 @@ from packages.db.models import CachedFile, FileRemoteLocation, StorageBackend  #
 from packages.db.models.currency import Currency  # noqa: F401
 from packages.db.models.exchange_rate import ExchangeRate  # noqa: F401
 from packages.db.models.security_audit_log import SecurityAuditLog  # noqa: F401
+from packages.db.models.device_session import DeviceSession  # noqa: F401
+from packages.db.models.revoked_token import RevokedToken  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
