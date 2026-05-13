@@ -115,9 +115,9 @@ function onTabChange(tab: 'my' | 'family') {
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const hours = Math.floor(diff / 3600000)
-  if (hours < 1) return t('settings.timeJustNow')
-  if (hours < 24) return t('settings.timeHoursAgo', { hours })
-  return t('settings.timeDaysAgo', { days: Math.floor(hours / 24) })
+  if (hours < 1) return t('common.timeJustNow')
+  if (hours < 24) return t('common.timeHoursAgo', { hours })
+  return t('common.timeDaysAgo', { days: Math.floor(hours / 24) })
 }
 
 onMounted(load)

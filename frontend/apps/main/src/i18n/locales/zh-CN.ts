@@ -17,6 +17,9 @@ export default {
     unitHundredMillion: '亿',
     unitTenThousand: '万',
     unitThousand: 'k',
+    timeJustNow: '刚刚',
+    timeHoursAgo: '{hours} 小时前',
+    timeDaysAgo: '{days} 天前',
   },
   nav: {
     dashboard: '总览',
@@ -505,9 +508,6 @@ export default {
     tagColorPlaceholder: '#1989fa',
     tagEmptyDesc: '暂无标签，快来创建第一个吧',
     tagAddFirstBtn: '＋ 添加标签',
-    timeJustNow: '刚刚',
-    timeHoursAgo: '{hours} 小时前',
-    timeDaysAgo: '{days} 天前',
   },
   changePassword: {
     title: '账户密码',
