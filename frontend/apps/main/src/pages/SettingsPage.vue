@@ -108,7 +108,7 @@
     <van-popup v-model:show="showThemePicker" round position="bottom">
       <van-picker
         :columns="themeOptions"
-        :default-index="themeOptions.findIndex((o) => o.value === (authStore.user?.theme || 'system'))"
+        :model-value="[authStore.user?.theme || 'system']"
         @confirm="onThemeConfirm"
         @cancel="showThemePicker = false"
       />
@@ -118,7 +118,7 @@
     <van-popup v-model:show="showLanguagePicker" round position="bottom">
       <van-picker
         :columns="languageOptions"
-        :default-index="languageOptions.findIndex((o) => o.value === (authStore.user?.language || 'zh-CN'))"
+        :model-value="[authStore.user?.language || 'zh-CN']"
         @confirm="onLanguageConfirm"
         @cancel="showLanguagePicker = false"
       />
@@ -134,7 +134,7 @@
     <van-popup v-model:show="showViewModePicker" round position="bottom">
       <van-picker
         :columns="viewModeOptions"
-        :default-index="viewModeOptions.findIndex((o) => o.value === (authStore.user?.view_mode || 'card'))"
+        :model-value="[authStore.user?.view_mode || 'card']"
         @confirm="onViewModeConfirm"
         @cancel="showViewModePicker = false"
       />
