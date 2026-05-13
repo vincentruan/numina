@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.utils.snowflake import next_id
+from packages.core.snowflake import next_id
 from packages.db.session import Base
 
 

@@ -3,7 +3,7 @@
 import time
 from unittest.mock import patch
 
-from app.auth import revoke_jti as revoke_module
+import packages.security.revoke_jti as revoke_module
 from app.auth.revoke_jti import (
     _is_jti_revoked,
     _is_token_revoked_for_user,
