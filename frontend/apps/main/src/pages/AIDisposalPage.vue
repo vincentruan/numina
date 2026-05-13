@@ -1,6 +1,6 @@
 <template>
   <div class="ai-disposal-page">
-    <PageHeader title="闲置资产清仓" />
+    <PageHeader :title="t('aiDisposal.title')" />
 
     <div v-if="loading" class="loading-state">
       <van-loading size="32" type="spinner" />
@@ -57,14 +57,14 @@
 
     <template v-else>
       <div class="summary-bar">
-        <span>{{ suggestions.length }} 项待处置资产</span>
+        <span>{{ t('aiDisposal.pendingCount', { count: suggestions.length }) }}</span>
         <van-button
           v-if="taskStatus !== 'running'"
           size="mini"
           plain
           @click="onRefresh"
         >
-          重新扫描
+          {{ t('aiDisposal.rescan') }}
         </van-button>
         <van-button
           v-else
@@ -77,7 +77,7 @@
             <van-icon name="stop-circle-o" class="stop-icon-mini" />
             <van-loading size="12" type="spinner" class="spinning-ring-mini" />
           </span>
-          终止
+          {{ t('aiTask.cancelBtn') }}
         </van-button>
       </div>
 
@@ -94,22 +94,22 @@
           </div>
 
           <div v-if="s.estimated_resale_range" class="resale-range">
-            估算转售价：{{ s.estimated_resale_range }}
+            {{ t('aiDisposal.estimatedResale', { range: s.estimated_resale_range }) }}
           </div>
 
           <div class="channel-row">
             <van-icon name="shop-o" size="14" />
-            <span>推荐渠道：{{ s.suggested_channel }}</span>
+            <span>{{ t('aiDisposal.suggestedChannel', { channel: s.suggested_channel }) }}</span>
           </div>
 
           <p v-if="s.suggestion" class="suggestion-text">{{ s.suggestion }}</p>
 
           <div v-if="s.daily_cost" class="daily-cost">
-            持续损耗：¥{{ s.daily_cost.toFixed(1) }}/天
+            {{ t('aiDisposal.dailyWaste', { cost: s.daily_cost.toFixed(1) }) }}
           </div>
         </div>
         <template #right>
-          <van-button square type="warning" text="忽略" class="dismiss-btn" @click="onDismiss(s.id)" />
+          <van-button square type="warning" :text="t('aiDisposal.dismiss')" class="dismiss-btn" @click="onDismiss(s.id)" />
         </template>
       </van-swipe-cell>
     </template>
