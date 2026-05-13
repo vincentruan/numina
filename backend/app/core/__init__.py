@@ -1,5 +1,5 @@
 """Core module for application infrastructure."""
 
-from app.core.logging_config import get_logger, setup_logging
+from packages.core.logging import get_logger, setup_logging  # noqa: F401
 
 __all__ = ["get_logger", "setup_logging"]

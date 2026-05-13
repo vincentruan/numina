@@ -41,7 +41,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = [".", "../server"]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
 ]
