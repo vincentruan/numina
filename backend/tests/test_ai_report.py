@@ -243,9 +243,9 @@ def test_ws_ticket_creates_one_time_ticket(client, auth_headers, db):
 
     resp = client.post("/api/v1/ai/report/ws-ticket", headers=auth_headers)
     assert resp.status_code == 200
-    ticket_id = resp.json()["data"]["ticket"]
+    ticket_id = resp.json()["data"]["ticket_id"]
 
-    ticket = db.query(AIWsTicket).filter_by(id=ticket_id).first()
+    ticket = db.query(AIWsTicket).filter_by(id=int(ticket_id)).first()
     assert ticket is not None
     assert ticket.used is False
     assert ticket.expires_at is not None
@@ -269,7 +269,7 @@ def test_ws_ticket_requires_owner(client, auth_headers, db):
 
     resp = client.post("/api/v1/ai/report/ws-ticket", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["data"]["ticket"] is not None
+    assert resp.json()["data"]["ticket_id"] is not None
 
 
 # ── Cross-family isolation ──────────────────────────────────────────────────────
