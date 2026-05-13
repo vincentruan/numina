@@ -77,8 +77,8 @@ const formData = ref({
   color: '#1989fa'
 })
 
-function onTabChange() {
-  categoryStore.fetchCategories(activeTab.value)
+function onTabChange(name: string | number) {
+  if (typeof name === 'string') categoryStore.fetchCategories(name)
 }
 
 function showAddDialog() {
