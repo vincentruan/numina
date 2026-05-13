@@ -23,6 +23,7 @@ from app.models.ai_chat_session import AIChatSession
 from app.models.cached_file import CachedFile
 from app.models.file_remote_location import FileRemoteLocation
 from app.models.user import User
+from app.schemas.ai_chat_responses import AllSessionsResponse, ChatResponse, SessionSummaryResponse
 from app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
@@ -115,7 +116,7 @@ def _stream_error_event(task_id: str, message: str, code: str) -> str:
     ) + "\n"
 
 
-@router.post("")
+@router.post("", response_model=ChatResponse)
 async def chat(
     body: ChatRequest,
     current_user: User = Depends(require_adult),

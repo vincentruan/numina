@@ -301,7 +301,7 @@ export const markChatRead = () =>
   http.put('/ai/chat/read')
 
 export const createWsTicket = () =>
-  http.post<{ ticket: string }>('/ai/report/ws-ticket')
+  http.post<{ ticket_id: string }>('/ai/report/ws-ticket')
 
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
