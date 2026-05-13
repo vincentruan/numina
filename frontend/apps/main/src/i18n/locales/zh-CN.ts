@@ -1273,6 +1273,7 @@ export default {
     approveFailed: '❌ 审批失败，请重试',
     operationFailed: '❌ 操作失败，请重试',
   },
+<<<<<<< HEAD
   spendingLeaks: {
     title: '资金泄漏检测',
     dismiss: '忽略',
@@ -1307,5 +1308,22 @@ export default {
     scoreGood: '良好',
     scoreFair: '一般',
     scoreNeedsImprovement: '待改善',
+=======
+  aiAllocation: {
+    title: '配置漂移检测',
+    targetConfig: '目标配置',
+    currentTarget: '当前目标',
+    targetSet: '已设置',
+    targetNotSet: '未设置',
+    targetTotal: '合计：{total}%（需等于100%）',
+    checkDrift: '检测配置漂移',
+    noDrift: '配置在目标范围内，无需再平衡',
+    aiNarrative: 'AI 建议',
+    categoryDrifts: '各类别漂移',
+    targetToCurrent: '目标 {target}% → 当前 {current}%',
+    categoryPhysical: '实物资产',
+    categoryFinancial: '金融资产',
+    categoryOther: '其他',
+>>>>>>> worktree-agent-a58ac7f499c0ef480
   },
 }
