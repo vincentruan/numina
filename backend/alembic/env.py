@@ -42,6 +42,12 @@ from packages.db.models.exchange_rate import ExchangeRate  # noqa: F401
 from packages.db.models.security_audit_log import SecurityAuditLog  # noqa: F401
 from packages.db.models.device_session import DeviceSession  # noqa: F401
 from packages.db.models.revoked_token import RevokedToken  # noqa: F401
+from packages.db.models.notification_channel import NotificationChannel  # noqa: F401
+from packages.db.models.notification_channel_config import NotificationChannelConfig  # noqa: F401
+from packages.db.models.notification_config import NotificationConfig  # noqa: F401
+from packages.db.models.notification_subscription import NotificationSubscription  # noqa: F401
+from packages.db.models.reminder import Reminder  # noqa: F401
+from packages.db.models.reminder_notification import ReminderNotification  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
