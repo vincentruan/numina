@@ -115,16 +115,6 @@ from app.routers import notification_config as notification_config_router
 from app.routers import notifications as notifications_router
 from app.routers import reminders as reminders_router
 from app.routers import treasures as treasures_router
-from app.scheduler import (
-    scheduler,
-    setup_audit_log_purge_schedule,
-    setup_device_session_cleanup_schedule,
-    setup_exchange_rate_schedule,
-    setup_file_sync_schedule,
-    setup_reminder_schedule,
-    setup_revoked_token_cleanup_schedule,
-    setup_snapshot_schedule,
-)
 from app.seed.currencies import seed_currencies
 from app.seed.invitation_codes import seed_invitation_codes
 from app.seed.storage_backends import seed_storage_backends
@@ -206,23 +196,7 @@ async def lifespan(app: FastAPI):
     if settings.ENABLE_SECURITY_LOGGING:
         logger.info("安全日志已启用（使用统一日志配置）")
 
-    try:
-        setup_exchange_rate_schedule()
-        setup_file_sync_schedule()
-        setup_audit_log_purge_schedule()
-        setup_revoked_token_cleanup_schedule()
-        setup_device_session_cleanup_schedule()
-        setup_reminder_schedule()
-        setup_snapshot_schedule()
-        scheduler.start()
-        logger.info("APScheduler 已启动")
-    except Exception as e:
-        logger.error(f"APScheduler 启动失败：{e}")
-
     yield
-
-    scheduler.shutdown()
-    logger.info("APScheduler 已停止")
 
 
 app = FastAPI(

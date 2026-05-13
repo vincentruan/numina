@@ -77,7 +77,7 @@ def _make_location(db, file_id, backend_id, sync_status="pending", retry_count=0
 class TestFileSyncJob:
     def test_sync_job_processes_pending_row(self, db, tmp_path):
         """Sync job calls backend.save() and updates sync_status to synced."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
         # Write a real temp file
         local_file = tmp_path / "test.jpg"
@@ -97,17 +97,18 @@ class TestFileSyncJob:
 
         loc_id = loc.id  # capture before session is closed by job
 
-        with patch("app.scheduler.SessionLocal", return_value=db), \
-             patch("app.scheduler.get_backend_for_type", return_value=mock_backend):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
         assert loc_updated.sync_status == "synced"
         assert loc_updated.remote_path == "20260410/test.jpg"
         mock_backend.save.assert_called_once()
+
     def test_sync_job_marks_failed_on_storage_error(self, db, tmp_path):
         """Sync job increments retry_count on StorageError; marks failed after 3 attempts."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
@@ -121,8 +122,8 @@ class TestFileSyncJob:
 
         loc_id = loc.id  # capture before session is closed by job
 
-        with patch("app.scheduler.SessionLocal", return_value=db), \
-             patch("app.scheduler.get_backend_for_type", return_value=mock_backend):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -132,7 +133,7 @@ class TestFileSyncJob:
 
     def test_sync_job_marks_failed_after_max_retries(self, db, tmp_path):
         """Sync job marks status=failed when retry_count reaches 3."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
@@ -146,8 +147,8 @@ class TestFileSyncJob:
 
         loc_id = loc.id
 
-        with patch("app.scheduler.SessionLocal", return_value=db), \
-             patch("app.scheduler.get_backend_for_type", return_value=mock_backend):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -156,7 +157,7 @@ class TestFileSyncJob:
 
     def test_sync_job_skips_rows_with_max_retries(self, db, tmp_path):
         """Rows with retry_count >= 3 are skipped."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
@@ -170,8 +171,8 @@ class TestFileSyncJob:
 
         loc_id = loc.id  # capture before session is closed by job
 
-        with patch("app.scheduler.SessionLocal", return_value=db), \
-             patch("app.scheduler.get_backend_for_type", return_value=mock_backend):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
             run(file_sync_job())
 
         mock_backend.save.assert_not_called()
@@ -180,14 +181,14 @@ class TestFileSyncJob:
 
     def test_sync_job_no_default_backend_does_nothing(self, db):
         """If no default backend, sync job exits early."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
-        with patch("app.scheduler.SessionLocal", return_value=db):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db):
             run(file_sync_job())  # Should not raise
 
     def test_sync_job_github_backend_uses_longer_jitter(self, db, tmp_path):
         """GitHub backend triggers write_delay_range of (1.0, 3.0) for jitter."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"fake-image-data")
@@ -218,9 +219,9 @@ class TestFileSyncJob:
         async def capture_sleep(delay):
             sleep_calls.append(delay)
 
-        with patch("app.scheduler.SessionLocal", return_value=db), \
-             patch("app.scheduler.get_backend_for_type", return_value=mock_backend), \
-             patch("app.scheduler.asyncio.sleep", side_effect=capture_sleep):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
+             patch("apps.scheduler_worker.jobs.asyncio.sleep", side_effect=capture_sleep):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -230,7 +231,7 @@ class TestFileSyncJob:
 
     def test_sync_job_save_timeout_increments_retry(self, db, tmp_path):
         """backend.save() timeout increments retry_count and records error."""
-        from app.scheduler import file_sync_job
+        from apps.scheduler_worker.jobs import file_sync_job
 
         local_file = tmp_path / "test.jpg"
         local_file.write_bytes(b"data")
@@ -247,9 +248,9 @@ class TestFileSyncJob:
         mock_backend.save = AsyncMock(side_effect=slow_save)
         mock_backend.write_delay_range = (0.2, 1.0)
 
-        with patch("app.scheduler.SessionLocal", return_value=db), \
-             patch("app.scheduler.get_backend_for_type", return_value=mock_backend), \
-             patch("app.scheduler.asyncio.sleep", new_callable=AsyncMock):
+        with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
+             patch("apps.scheduler_worker.jobs.asyncio.sleep", new_callable=AsyncMock):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()

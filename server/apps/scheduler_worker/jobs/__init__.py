@@ -62,16 +62,17 @@ async def file_sync_job() -> None:
         pending = (
             db.query(FileRemoteLocation)
             .filter_by(backend_id=default_backend_row.id)
-            .filter(FileRemoteLocation.sync_status == "pending")
+            .filter(FileRemoteLocation.sync_status.in_(["pending", "failed"]))
+            .filter(FileRemoteLocation.retry_count < 3)
             .limit(50)
             .all()
         )
 
         for loc in pending:
             cached_file = db.query(CachedFile).filter_by(id=loc.file_id).first()
-            if cached_file is None:
+            if cached_file is None or cached_file.deleted_at is not None:
                 loc.sync_status = "failed"
-                loc.last_error = "cached_file not found"
+                loc.last_error = "本地文件记录不存在或已删除"
                 db.commit()
                 continue
 
@@ -88,6 +89,20 @@ async def file_sync_job() -> None:
                 from datetime import datetime  # noqa: PLC0415
                 loc.synced_at = datetime.now()
                 db.commit()
+            except TimeoutError:
+                loc.retry_count += 1
+                loc.last_error = "上传超时 (30s)"
+                if loc.retry_count >= 3:
+                    loc.sync_status = "failed"
+                db.commit()
+                logger.warning(f"文件同步超时: {cached_file.id}")
+            except FileNotFoundError:
+                loc.retry_count += 1
+                loc.last_error = f"本地文件不存在: {cached_file.local_path}"
+                if loc.retry_count >= 3:
+                    loc.sync_status = "failed"
+                db.commit()
+                logger.warning(f"文件同步本地文件不存在: {cached_file.id}")
             except StorageError as e:
                 loc.retry_count += 1
                 loc.last_error = str(e)
