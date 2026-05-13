@@ -48,6 +48,7 @@ from packages.db.models.notification_config import NotificationConfig  # noqa: F
 from packages.db.models.notification_subscription import NotificationSubscription  # noqa: F401
 from packages.db.models.reminder import Reminder  # noqa: F401
 from packages.db.models.reminder_notification import ReminderNotification  # noqa: F401
+from packages.db.models.asset_snapshot import AssetSnapshot  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
