@@ -27,6 +27,51 @@ These must hold in every code path — never bypass them:
 1. **PII redaction:** Always call `pii_redactor.redact()` on `FamilyContext` before passing data to any LLM call or writing to logs. This produces a `RedactedContext`.
 2. **Policy guard:** All agent requests must pass through `policy_guard.check()`. Never skip or short-circuit it.
 3. **Audit logging:** Every agent decision must emit an audit event via `audit_logger`. This includes both success and error paths — the `finally` block in `orchestrator.py` guarantees this.
+4. **DeerFlow-only execution:** All agent orchestration must use `DeerFlowClient` through `services/deerflow_adapter/`. Never implement custom runtime, tool registry, skill loader, memory manager, orchestrator, or workflow engine.
+
+## DeerFlow Framework Guardrails
+
+DeerFlow 2.0 is batteries-included: it already provides runtime, tools, skills, memory, sandbox, planning, and subagent coordination. **Do NOT reimplement these.**
+
+### Prohibited Abstractions
+
+| Forbidden Class/File | Why | Use Instead |
+|---------------------|-----|-------------|
+| `AgentRuntime` | DeerFlow already provides execution harness | `DeerFlowClient` through adapter |
+| `ToolRegistry` | DeerFlow manages MCP tools natively | Configure in `deerflow_config/*.yaml` |
+| `SkillLoader` | DeerFlow loads `skills/*.md` automatically | Skill files + `SkillLoader` in adapter only |
+| `MemoryManager` | DeerFlow has checkpointer/thread memory | `checkpointer` config in client |
+| `Orchestrator` | DeerFlow orchestrates agent + tools + memory | `subagent_enabled=True` if needed |
+| `WorkflowEngine` | DeerFlow has graph-based workflows | `plan_mode=True` for multi-step |
+| `SubAgentCoordinator` | DeerFlow supports nested subagents | `subagent_enabled` + skill triggers |
+| `MCPRuntime` | DeerFlow runs MCP servers internally | MCP config in deerflow_config |
+
+### Prohibited Dependencies
+
+Never add these unless explicitly asked to migrate frameworks:
+- LangGraph, CrewAI, AutoGen, Agno, LlamaIndex AgentWorkflow, OpenAI Agents SDK
+
+### Pre-Change Checklist
+
+Before modifying any agent runtime code:
+
+1. Does `DeerFlowClient` config already support this? (`model_name`, `thinking_enabled`, `plan_mode`, `subagent_enabled`, `available_skills`, `checkpointer`)
+2. Does existing DeerFlow skill/tool/memory/MCP cover this?
+3. If no: extend `deerflow_adapter/adapter.py` minimally — never build parallel harness.
+4. If yes: call adapter from business code, don't wrap it again.
+
+### Adapter Location
+
+All DeerFlow integration lives in one place:
+
+```
+services/deerflow_adapter/
+├── adapter.py              # Async wrapper + ThreadPoolExecutor
+├── family_adapter_cache.py # LRU cache of per-family DeerFlowClient
+└── skill_loader.py         # Load flags from skills/*.md frontmatter
+```
+
+Business code (routers, services) calls adapter methods — never instantiates `DeerFlowClient` directly.
 
 ## Directory Structure
 
