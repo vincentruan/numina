@@ -39,6 +39,7 @@ from app.models.wish import Wish  # noqa: F401
 from packages.db.models import CachedFile, FileRemoteLocation, StorageBackend  # noqa: F401
 from packages.db.models.currency import Currency  # noqa: F401
 from packages.db.models.exchange_rate import ExchangeRate  # noqa: F401
+from packages.db.models.security_audit_log import SecurityAuditLog  # noqa: F401
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
