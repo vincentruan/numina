@@ -35,6 +35,9 @@ from app.models.user import User  # noqa: F401
 from app.models.valuation import AssetValuation  # noqa: F401
 from app.models.wish import Wish  # noqa: F401
 
+# Models migrated to packages/db/models (Unit 3+)
+from packages.db.models import CachedFile, FileRemoteLocation, StorageBackend  # noqa: F401
+
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
