@@ -21,13 +21,13 @@ from app.auth.deps import require_adult
 from app.config import settings
 from app.database import get_db
 from app.errors import AppError, ErrorCode
-from app.models.ai_chat_session import AIChatSession
 from app.models.ai_report import AIReport
 from app.models.ai_ws_ticket import AIWsTicket
 from app.models.user import User
 from app.routers._ai_events_helper import proxy_capability_events
 from app.services.ai_task_service import AITaskService
 from app.services.chat_session import ChatSessionService
+from app.schemas.ai_report_responses import WSTicketResponse
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
 logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ async def trigger_generate_events(
     )
 
 
-@router.post("/ws-ticket")
+@router.post("/ws-ticket", response_model=WSTicketResponse)
 def create_ws_ticket(
     current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
@@ -126,7 +126,7 @@ def create_ws_ticket(
     db.add(ticket)
     db.commit()
     db.refresh(ticket)
-    return {"ticket": ticket.id}
+    return {"ticket_id": ticket.id}
 
 
 @router.websocket("/ws")

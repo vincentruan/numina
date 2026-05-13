@@ -3,7 +3,10 @@
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from app.schemas.base import SnowflakeBase
 
+
+# ── Capability discovery schemas (no IDs, plain BaseModel) ────────────────────
 
 class AICapabilityUISchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -37,3 +40,41 @@ class AICapabilitySchema(BaseModel):
     policy: AICapabilityPolicySchema
     skill_id: str
     harness_config: dict[str, Any] = Field(default_factory=dict)
+
+
+# ── AI capability response schemas (with Snowflake IDs) ───────────────────────
+
+class AIAlertResponse(SnowflakeBase):
+    id: int
+    asset_id: int
+    asset_name: str
+    alert_type: str
+    severity: str
+    suggestion: str
+    remaining_life_days: int | None
+    daily_cost: float | None
+    created_at: str
+
+
+class AIDisposalSuggestionResponse(SnowflakeBase):
+    id: int
+    asset_id: int
+    asset_name: str
+    category_name: str
+    inefficiency_score: float
+    suggested_channel: str
+    estimated_resale_range: str
+    suggestion: str
+    daily_cost: float | None
+    created_at: str
+
+
+class AISpendingLeakResponse(SnowflakeBase):
+    id: int
+    asset_id: int
+    asset_name: str
+    leak_type: str
+    severity: str
+    estimated_annual_waste: float
+    suggestion: str
+    created_at: str

@@ -39,7 +39,7 @@ export function useAIReportWS() {
       // Exchange JWT for a one-time ticket, then open WS with ticket
       createWsTicket()
         .then((res) => {
-          const ticket = res.data.ticket
+          const ticket = res.data.ticket_id
           const protocol = location.protocol === 'https:' ? 'wss' : 'ws'
           const url = `${protocol}://${location.host}/api/v1/ai/report/ws?ticket=${encodeURIComponent(ticket)}`
           ws = new WebSocket(url)
