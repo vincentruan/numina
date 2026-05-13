@@ -9,9 +9,19 @@ const { sendChatEventStream } = vi.hoisted(() => ({
   sendChatEventStream: vi.fn(),
 }))
 
-vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: {} }),
-}))
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useRoute: () => ({ query: {} }),
+    useRouter: () => ({
+      push: vi.fn(),
+      replace: vi.fn(),
+      go: vi.fn(),
+      back: vi.fn(),
+    }),
+  }
+})
 
 vi.mock('../../src/api/ai', () => ({
   sendChatEventStream,
@@ -21,13 +31,25 @@ vi.mock('../../src/api/ai', () => ({
   markChatRead: vi.fn(() => Promise.resolve()),
 }))
 
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
-}))
+vi.mock('vue-i18n', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useI18n: () => ({ t: (key: string) => key }),
+  }
+})
 
 vi.mock('vant', () => ({
   showConfirmDialog: vi.fn(() => Promise.resolve()),
   showToast: vi.fn(),
+}))
+
+// Mock loading composable to avoid import.meta.hot issues
+vi.mock('../../packages/auth/src/composables/loading', () => ({
+  useLoading: () => ({
+    isLoading: { value: false },
+    setLoading: vi.fn(),
+  }),
 }))
 
 function streamReaderFromText(text: string) {
@@ -124,7 +146,7 @@ describe('AIChatPage tool events', () => {
 
     expect(wrapper.find('.phase-strip').exists()).toBe(false)
     expect(wrapper.find('.think-block--done').exists()).toBe(true)
-    expect(wrapper.text()).toContain('已深度思考')
+    expect(wrapper.text()).toContain('aiChat.thinkDone')
     expect(wrapper.text()).toContain('最终答案')
   })
 })

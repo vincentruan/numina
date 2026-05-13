@@ -16,10 +16,13 @@ function createState() {
 }
 
 const state: ReturnType<typeof createState> = (() => {
-  if (import.meta.hot) {
+  // HMR persistence: reuse state across hot reloads
+  // Check both import.meta.hot existence AND data object initialization
+  if (import.meta.hot?.data) {
     import.meta.hot.data.loadingState ??= createState()
     return import.meta.hot.data.loadingState as ReturnType<typeof createState>
   }
+  // Fallback for test environment or production builds without HMR
   return createState()
 })()
 

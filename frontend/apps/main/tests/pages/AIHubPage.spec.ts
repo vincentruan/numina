@@ -97,6 +97,7 @@ describe('AIHubPage chat entry', () => {
       path: '/ai/chat',
       query: {
         q: '我们家净资产是多少？',
+        newSession: '1',
         deepThink: '1',
         webSearch: '1',
       },

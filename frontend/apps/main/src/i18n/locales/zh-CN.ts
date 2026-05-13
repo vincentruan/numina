@@ -1273,7 +1273,6 @@ export default {
     approveFailed: '❌ 审批失败，请重试',
     operationFailed: '❌ 操作失败，请重试',
   },
-<<<<<<< HEAD
   spendingLeaks: {
     title: '资金泄漏检测',
     dismiss: '忽略',
@@ -1308,7 +1307,7 @@ export default {
     scoreGood: '良好',
     scoreFair: '一般',
     scoreNeedsImprovement: '待改善',
-=======
+  },
   aiAllocation: {
     title: '配置漂移检测',
     targetConfig: '目标配置',
@@ -1324,6 +1323,5 @@ export default {
     categoryPhysical: '实物资产',
     categoryFinancial: '金融资产',
     categoryOther: '其他',
->>>>>>> worktree-agent-a58ac7f499c0ef480
   },
 }
