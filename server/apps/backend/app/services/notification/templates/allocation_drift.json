@@ -1,0 +1,9 @@
+{
+  "telegram": {
+    "text": "📊 *资产配置失衡提醒*\n\n{category} 当前占比 {current_pct}%，目标 {target_pct}%，偏差 {drift_pct}%。\n建议适当再平衡。\n\n_Numina 家庭资产管理_"
+  },
+  "email": {
+    "subject": "【Numina】资产配置失衡提醒",
+    "body": "你好，\n\n你的资产配置出现偏差：\n\n类别：{category}\n当前占比：{current_pct}%\n目标占比：{target_pct}%\n偏差：{drift_pct}%\n\n建议适当调整资产配置。\n\nNumina 家庭资产管理"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "telegram": {
+    "text": "💰 *理财产品即将到期*\n\n*{asset_name}* 将于 {maturity_date} 到期，还有 {days_left} 天，金额 ¥{amount}。\n\n_Numina 家庭资产管理_"
+  },
+  "email": {
+    "subject": "【Numina】理财产品到期提醒",
+    "body": "你好，\n\n以下理财产品即将到期：\n\n产品：{asset_name}\n到期日：{maturity_date}\n剩余天数：{days_left} 天\n金额：¥{amount}\n\n请及时处理续期或赎回。\n\nNumina 家庭资产管理"
+  }
+}
