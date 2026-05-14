@@ -72,11 +72,18 @@ Numina 生产环境需要完善的安全审计能力，包括：
 
 #### 6. 安全日志实施日志轮转
 
-必须使用 `TimedRotatingFileHandler` 实现日志轮转，每天午夜轮转，保留最近 7 天的日志文件。
+安全日志使用与应用日志相同的轮转模式，由 `LOG_ROTATION_MODE` 控制：
+- **size**（默认）：使用 `RotatingFileHandler`，按文件大小轮转
+- **time**：使用 `TimedRotatingFileHandler`，每天午夜轮转
+
+日志保留天数默认为 30 天，可通过 `LOG_RETENTION_DAYS` 配置。`setup_logging()` 启动时调用 `cleanup_old_logs()`，清理包括安全日志在内的所有过期日志文件。
+
+轮转和保留策略的完整说明见 [logging-config.md](./logging-config.md)。
 
 **示例场景：**
-- 日志文件轮转：日志文件到达午夜，系统自动轮转日志文件，创建新的日志文件，旧文件重命名为带日期后缀
-- 日志文件保留期限：日志文件超过 7 天，系统自动删除过期的日志文件
+- 按大小轮转（默认）：`LOG_ROTATION_MODE=size`，日志文件达到大小上限后自动轮转，旧文件重命名为带序号后缀
+- 按时间轮转：`LOG_ROTATION_MODE=time`，日志文件到达午夜，系统自动轮转，旧文件重命名为带日期后缀
+- 日志文件保留期限：日志文件超过 30 天（或 `LOG_RETENTION_DAYS` 配置值），系统自动删除过期的日志文件
 - 日志目录不存在时创建：应用启动时日志目录不存在，系统自动创建 `logs/` 目录
 
 ### 文件上传安全
@@ -203,5 +210,5 @@ async def validate_upload(file: UploadFile) -> bool:
 ## Related
 
 - [安全防护最佳实践](./security-protection.md) - 速率限制和缓存层
-- `openspec/specs/security-logging/spec.md` - 原始需求规范
-- `openspec/specs/file-upload-security/spec.md` - 原始需求规范
+- [日志配置（轮转、归档、清理、配置项）](./logging-config.md)
+- `file-upload-security` 最佳实践 CE 文档待创建（原始规范见 git 历史 `openspec/specs/file-upload-security/`）

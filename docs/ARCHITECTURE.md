@@ -222,6 +222,5 @@ numina/
 │   └── docs/               # 测试文档
 │
 ├── docs/                    # 项目文档
-├── openspec/                # OpenSpec 变更管理
 └── docker-compose.yml       # Docker 配置
 ```

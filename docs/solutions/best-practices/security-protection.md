@@ -260,5 +260,5 @@ if cache.get(f"login_locked:{username}"):
 ## Related
 
 - [安全审计最佳实践](./security-audit.md) - 安全日志和文件上传验证
-- `openspec/specs/rate-limiting/spec.md` - 原始需求规范
-- `openspec/specs/cache-layer/spec.md` - 原始需求规范
+- `rate-limiting` 最佳实践 CE 文档待创建（原始规范见 git 历史 `openspec/specs/rate-limiting/`）
+- `cache-layer` 最佳实践 CE 文档待创建（原始规范见 git 历史 `openspec/specs/cache-layer/`）
