@@ -16,7 +16,6 @@
       <template v-else>
         <!-- Overview Card -->
         <NetWorthCard
-          ref="overviewCardRef"
           :net-worth="overview?.net_worth || 0"
           :total-assets="overview?.total_assets || 0"
           :total-liabilities="overview?.total_liabilities || 0"
@@ -59,36 +58,39 @@
           </van-collapse>
         </van-cell-group>
 
-        <!-- Status Summary Grid + Toolbar -->
-        <StatusSummaryGrid
-          :summary="dashboardStore.statesSummary"
-          :active-status="activeStatus"
-          @select="onStatusSelect"
-        >
-          <template #toolbar>
-            <button
-              class="toolbar-selection-btn"
-              :aria-label="t('dashboard.aria.openBatchSelection')"
-              @click="enterSelectionMode"
-            >
-              <van-icon name="checked" size="18" />
-            </button>
-          </template>
-        </StatusSummaryGrid>
+        <!-- Sticky Filter Bar: Status + Category -->
+        <div class="filter-bar-sticky">
+          <!-- Status Summary Grid + Toolbar -->
+          <StatusSummaryGrid
+            :summary="dashboardStore.statesSummary"
+            :active-status="activeStatus"
+            @select="onStatusSelect"
+          >
+            <template #toolbar>
+              <button
+                class="toolbar-selection-btn"
+                :aria-label="t('dashboard.aria.openBatchSelection')"
+                @click="enterSelectionMode"
+              >
+                <van-icon name="checked" size="18" />
+              </button>
+            </template>
+          </StatusSummaryGrid>
 
-        <!-- Category Navigation (Sticky, shown when scrolled) -->
-        <div
-          v-if="showCategoryNav && categoriesWithAssetCount.length > 0"
-          class="category-nav-sticky"
-        >
-          <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
-            <van-tab :title="t('statusGrid.all')" />
-            <van-tab
-              v-for="cat in categoriesWithAssetCount"
-              :key="cat.id"
-              :title="`${cat.name} (${cat.count})`"
-            />
-          </van-tabs>
+          <!-- Category Navigation (Always visible when categories exist) -->
+          <div
+            v-if="categoriesWithAssetCount.length > 0"
+            class="category-nav-container"
+          >
+            <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
+              <van-tab :title="t('statusGrid.all')" />
+              <van-tab
+                v-for="cat in categoriesWithAssetCount"
+                :key="cat.id"
+                :title="`${cat.name} (${cat.count})`"
+              />
+            </van-tabs>
+          </div>
         </div>
 
         <!-- Asset List (Normal Mode) -->
@@ -272,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -299,7 +301,6 @@ const choreStore = useChoreStore()
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
-const overviewCardRef = ref()
 
 // Chart collapse state (van-collapse v-model expects array of active names)
 const trendExpanded = ref<string[]>(
@@ -313,7 +314,6 @@ const allocationExpanded = ref<string[]>(
 const loadingMore = ref(false)
 
 // Category view
-const showCategoryNav = ref(false)
 const activeCategoryIndex = ref(0)
 const activeCategoryId = ref<string | null>(null) // null = show all
 
@@ -522,18 +522,6 @@ async function onMoreActionSelect(action: { value: string }) {
   }
 }
 
-// Scroll handler for category nav
-function handleScroll() {
-  if (!overviewCardRef.value) return
-
-  const overviewCard = overviewCardRef.value.$el
-  if (overviewCard) {
-    const rect = overviewCard.getBoundingClientRect()
-    // Show category nav when overview card is scrolled out of view
-    showCategoryNav.value = rect.bottom < 0 && categoriesWithAssetCount.value.length > 0
-  }
-}
-
 function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
   dashboardStore.fetchTrend(period)
 }
@@ -590,12 +578,8 @@ onMounted(() => {
   if (authStore.user?.role === 'owner') {
     choreStore.fetchPendingApprovals()
   }
-  window.addEventListener('scroll', handleScroll)
 })
 
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll)
-})
 </script>
 
 <style scoped>
@@ -641,27 +625,31 @@ onUnmounted(() => {
   color: #010120;
 }
 
-/* Category Navigation (Sticky) */
-.category-nav-sticky {
+/* Sticky Filter Bar: Status + Category */
+.filter-bar-sticky {
   position: sticky;
   top: 0;
   z-index: 99;
   background: var(--card-bg);
-  border-bottom: 1px solid var(--color-hairline);
 }
-.category-nav-sticky :deep(.van-tabs__wrap) {
+
+/* Category Navigation Container */
+.category-nav-container {
+  background: var(--card-bg);
+}
+.category-nav-container :deep(.van-tabs__wrap) {
   padding: 0 12px;
 }
-.category-nav-sticky :deep(.van-tabs__line) {
+.category-nav-container :deep(.van-tabs__line) {
   background: var(--color-coral);
   height: 2px;
   border-radius: var(--radius-full);
 }
-.category-nav-sticky :deep(.van-tab--active) {
+.category-nav-container :deep(.van-tab--active) {
   color: var(--color-primary);
   font-weight: 600;
 }
-[data-theme='dark'] .category-nav-sticky :deep(.van-tab--active) {
+[data-theme='dark'] .category-nav-container :deep(.van-tab--active) {
   color: var(--color-coral);
 }
 

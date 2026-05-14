@@ -9,6 +9,8 @@ COPY frontend/apps/child/package*.json /app/frontend/apps/child/
 WORKDIR /app/frontend/apps/child
 RUN sed -i 's|"workspace:\*"|"file:../../packages/auth"|g' package.json && npm install
 COPY frontend/apps/child/ .
+ARG VITE_MAIN_APP_URL=""
+ENV VITE_MAIN_APP_URL=$VITE_MAIN_APP_URL
 RUN npx vite build
 
 FROM nginx:alpine

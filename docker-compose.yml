@@ -1,6 +1,8 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./server
+      dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
     volumes:
@@ -26,7 +28,9 @@ services:
       start_period: 10s
 
   agent:
-    build: ./agent
+    build:
+      context: ./server
+      dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
     volumes:
@@ -44,6 +48,33 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  scheduler_worker:
+    build:
+      context: ./server
+      dockerfile: apps/scheduler_worker/Dockerfile
+    container_name: numina-scheduler-worker
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
       interval: 30s
       timeout: 10s
       retries: 3

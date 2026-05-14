@@ -129,10 +129,10 @@ docker-compose.override.yml
 data/*.csv
 data/*.json
 !data/.gitkeep
-backend/data/
+server/data/
 
 # Storage backend config (contains credentials)
-backend/config/storage_backends.yaml
+server/apps/backend/config/storage_backends.yaml
 
 # ===========================
 # Environment & Secrets
@@ -177,4 +177,4 @@ tests/screenshot/screenshots/*-after-*.png
 # Runtime chat data (user-generated, not source code)
 data/chat/
 data/sessions/
-agent/data/sessions
+server/apps/agent/data/sessions

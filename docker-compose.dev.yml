@@ -53,6 +53,35 @@ services:
       retries: 3
       start_period: 15s
 
+  scheduler_worker:
+    build:
+      context: ./server
+      dockerfile: apps/scheduler_worker/Dockerfile
+    container_name: numina-scheduler-worker
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - ./server:/app  # hot-reload source mount
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
+    command: uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --port 8002 --reload --reload-dir apps/scheduler_worker
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   frontend:
     build: !reset null
     image: node:20-alpine

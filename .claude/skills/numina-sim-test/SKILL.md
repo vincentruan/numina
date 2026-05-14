@@ -25,8 +25,8 @@ Covers two SPAs:
 - **API**: `http://localhost/api/v1`
 - **Adult demo account**: `demouser` / `DemoPass123`
 - **Child accounts** (under demouser family):
-  - 小宝: username `xiaobao`, PIN `🐱🌟🎈🐶`
-  - 大宝: username `dabao`, PIN `🌈🍎🐸🦁`
+  - 小宝: username `xiaobao`, PIN `🐰🥕🌈⭐`
+  - 大宝: username `dabao`, PIN `🐰🥕🌈⭐`
 - **Regression test accounts**:
   - `test_rich` / `TestRich123!` — full data (assets + liabilities + wishes + children)
   - `test_child`: username `testchild`, PIN `🐱🐶🐸🦊` (under test_rich family)
@@ -105,7 +105,7 @@ This creates (idempotently):
 **Demo account:**
 - `demouser` / `DemoPass123` — full simulation data
   - 19 physical assets + 11 financial assets + 7 liabilities + 9 wishes
-  - Children: 小宝 (`xiaobao`, PIN `🐱🌟🎈🐶`) + 大宝 (`dabao`, PIN `🌈🍎🐸🦁`)
+  - Children: 小宝 (`xiaobao`, PIN `🐰🥕🌈⭐`) + 大宝 (`dabao`, PIN `🐰🥕🌈⭐`)
   - Blind box gifts, chore templates, child wishes (5 status variants)
 
 If the script fails, check that `jq` is installed (`brew install jq`) and that the API is reachable.
@@ -230,7 +230,7 @@ take_snapshot
 - [ ] 删除 and 清除 buttons visible
 - [ ] No console errors
 
-**Test PIN input — 小宝 (PIN: 🐱🌟🎈🐶):**
+**Test PIN input — 小宝 (PIN: 🐰🥕🌈⭐):**
 ```
 click → 🐱 button
 click → 🌟 button
@@ -484,7 +484,7 @@ After all P0+P1 fixes:
 # Health check (adult + child + API)
 curl -sf http://localhost/ -o /dev/null && echo "adult UP"
 curl -sf http://localhost/child/ -o /dev/null && echo "child UP"
-curl -sf http://localhost/api/v1/health -o /dev/null && echo "api UP"
+curl -sf http://localhost/api/health -o /dev/null && echo "api UP"
 
 # Seed all test data
 ./tests/data/seed-data.sh
@@ -496,7 +496,7 @@ curl -sf http://localhost/api/v1/health -o /dev/null && echo "api UP"
 docker-compose build frontend-child && docker-compose up -d frontend-child
 
 # Child test accounts (from seed-data.sh)
-# demouser family:  小宝 (xiaobao / 🐱🌟🎈🐶)  大宝 (dabao / 🌈🍎🐸🦁)
+# demouser family:  小宝 (xiaobao / 🐰🥕🌈⭐)  大宝 (dabao / 🐰🥕🌈⭐)
 # test_rich family: test_child (testchild / 🐱🐶🐸🦊)
 ```
 

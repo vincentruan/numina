@@ -1,6 +1,7 @@
 ---
 title: CLAUDE.md Files Should Be Scoped to Module Consumers, Not Human Readers
 date: 2026-04-27
+last_updated: 2026-05-14
 category: docs/solutions/developer-experience
 module: documentation
 problem_type: developer_experience
@@ -74,10 +75,10 @@ See root `CLAUDE.md` for behavioral guidelines and cross-cutting conventions.
 | Behavioral guidelines | Root only |
 | "UI text in Chinese" | Root only |
 | "Incremental formatting" rule | Root only (remove from module files) |
-| Pydantic v2 patterns | `backend/CLAUDE.md` + `agent/CLAUDE.md` (acceptable duplication — independent modules) |
-| Emoji convention | `frontend/CLAUDE.md` only |
-| Risk control invariants (PII, policy guard) | `agent/CLAUDE.md` only |
-| Alembic migration warning | `backend/CLAUDE.md` only |
+| Pydantic v2 patterns | `server/apps/backend/CLAUDE.md` + `server/apps/agent/CLAUDE.md` (acceptable duplication — independent apps) |
+| Emoji convention | `frontend/apps/main/CLAUDE.md` only |
+| Risk control invariants (PII, policy guard) | `server/apps/agent/CLAUDE.md` only |
+| Alembic migration warning | `server/apps/backend/CLAUDE.md` only |
 | Dev commands | Each module's own file only |
 
 Acceptable duplication: when two modules are truly independent (backend and agent both use Pydantic v2 but are deployed separately), duplicating the pattern in both files is better than a cross-module reference that requires loading both files.
@@ -126,9 +127,9 @@ cd frontend && npm run typecheck...
 ## Module Documentation
 | Module | CLAUDE.md | README |
 |--------|-----------|--------|
-| Backend | backend/CLAUDE.md | backend/README.md |
-| Frontend | frontend/CLAUDE.md | frontend/README.md |
-| Agent | agent/CLAUDE.md | agent/README.md |
+| Backend | server/apps/backend/CLAUDE.md | server/apps/backend/README.md |
+| Frontend | frontend/apps/main/CLAUDE.md | frontend/README.md |
+| Agent | server/apps/agent/CLAUDE.md | server/apps/agent/README.md |
 ```
 
 ```markdown

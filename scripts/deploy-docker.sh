@@ -102,7 +102,7 @@ info "工作目录: $PROJECT_ROOT"
 # 3. DeerFlow harness 准备
 # ========================================
 DEERFLOW_REF_PATH="${PROJECT_ROOT}/../deer-flow-reference"
-HARNESS_DST="$PROJECT_ROOT/agent/vendor/deerflow-harness"
+HARNESS_DST="$PROJECT_ROOT/server/apps/agent/vendor/deerflow-harness"
 
 if [[ "$SKIP_CLONE" == true ]]; then
   info "跳过 deer-flow 克隆 (--skip-clone)"
