@@ -1,0 +1,40 @@
+# domain/CLAUDE.md
+
+Module-specific guidance for the business logic layer.
+See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-cutting conventions.
+
+## Quality Commands
+
+Run all commands from `server/`:
+
+```bash
+uv run ruff check packages/domain/        # lint
+uv run ruff check packages/domain/ --fix  # lint + auto-fix
+uv run ruff format packages/domain/       # format (only files you touch)
+uv run mypy packages/domain/ --explicit-package-bases  # type check
+uv run pytest packages/domain/ -v         # run tests
+```
+
+## Tooling
+
+- **uv:** package manager. Use `uv add`/`uv remove`. Never `pip install`.
+- **ruff:** lint + format. Config in `pyproject.toml` under `[tool.ruff]`.
+- **mypy:** type checker. Requires `--explicit-package-bases` to avoid namespace collision with other `packages/` directories.
+
+## Key Invariants
+
+1. **Import direction** — `packages/domain` must never import from `apps/`. Dependency flow is one-way: `apps/` → `packages/`. Violating this creates circular imports.
+2. **No cross-subdomain imports** — subpackages (`audit`, `device`, `exchange_rate`, `notification`, `snapshot`) must not import from each other. Cross-subdomain calls go through the app layer, not directly between domain services.
+3. **Domain services receive a `Session` parameter** — they never create their own `SessionLocal()`. The caller (app router or scheduler job) is responsible for session lifecycle. Exception: `audit.service.purge_old_audit_logs` is permitted to create its own `SessionLocal()` because it is called by the scheduler worker outside a request context where no session is passed in.
+
+## Don't Do
+
+- **Don't import from `apps/`** — import direction rule: `packages/` must not import sibling `apps/`. Use other `packages/` for shared logic.
+- **Don't import across subdomains** — `audit` must not import from `device`, `exchange_rate`, etc. Route cross-domain logic through the app layer.
+- **Don't create `SessionLocal()` inside a domain service** — accept a `Session` parameter instead. The one exception (`audit.service.purge_old_audit_logs`) is already documented and must not be replicated.
+- **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/domain/`.
+
+## Links
+
+- Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
+- Module [`README.md`](./README.md) — purpose statement, subpackage inventory
