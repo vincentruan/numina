@@ -70,6 +70,8 @@ export const useAuthStore = defineStore('auth', () => {
       const childUser = await fetchChildMe()
       // Step 3: Write to localStorage for child router guard
       setUser(childUser as StoredUser)
+      // Step 4: Update auth store state
+      user.value = childUser
     } catch (error) {
       console.error('Failed to switch to child:', error)
       throw error
