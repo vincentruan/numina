@@ -64,8 +64,8 @@ function onSelect(status: string | null) {
   align-items: center;
   justify-content: space-between;
   background: var(--card-bg);
-  padding: 12px 16px;
-  gap: 12px;
+  padding: 8px 12px;
+  gap: 8px;
   border-bottom: 1px solid var(--color-hairline);
 }
 .status-tabs {
