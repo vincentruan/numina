@@ -25,9 +25,10 @@ npm run test:run      # vitest run — run tests once (no watch)
 src/
 ├── api/           # HTTP request modules
 ├── components/    # Reusable Vue components
-├── i18n/          # Localization (zh-CN.ts)
+├── i18n/          # Localization (zh-CN.ts, en-US.ts)
 │   └── locales/
-│       └── zh-CN.ts   # All user-facing strings — add here, never inline
+│       ├── zh-CN.ts   # All user-facing strings — add here, never inline
+│       └── en-US.ts   # English translations — keep in sync with zh-CN.ts
 ├── pages/         # Route-level views
 ├── router/        # Vue Router config
 ├── stores/        # Pinia state stores

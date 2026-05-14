@@ -79,6 +79,18 @@
             {{ opt.label }}
           </button>
         </div>
+        <p class="settings-label">{{ t('home.settingsLanguage') }}</p>
+        <div class="theme-options">
+          <button
+            v-for="opt in languageOptions"
+            :key="opt.value"
+            class="theme-btn"
+            :class="{ active: currentLocale === opt.value }"
+            @click="setLocale(opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
         <button class="logout-btn" @click="handleLogout">
           {{ t('home.logout') }}
         </button>
@@ -88,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
@@ -100,12 +112,14 @@ import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useDarkMode } from '@/utils/darkMode'
+import { useLocale } from '@/utils/locale'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
 const { themeMode, setMode } = useDarkMode()
+const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
 
 const balance = ref(0)
@@ -115,11 +129,16 @@ const submittingId = ref<string | null>(null)
 const topWish = ref<ChildWish | null>(null)
 const settingsExpanded = ref(false)
 
-const themeOptions = [
+const themeOptions = computed(() => [
   { value: 'system' as const, label: t('home.themeSystem') },
   { value: 'light' as const, label: t('home.themeLight') },
   { value: 'dark' as const, label: t('home.themeDark') },
-]
+])
+
+const languageOptions = computed(() => [
+  { value: 'zh-CN' as const, label: t('home.langZhCN') },
+  { value: 'en-US' as const, label: t('home.langEnUS') },
+])
 
 function statusLabel(status: ChoreInstance['status']): string {
   switch (status) {

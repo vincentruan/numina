@@ -8,6 +8,7 @@ import router from './router'
 import i18n from './i18n'
 import http from './api/index'
 import { configureAuthHttp } from '@numina/auth'
+import '@/utils/locale' // initialize locale from localStorage before first render
 
 const app = createApp(App)
 const pinia = createPinia()

@@ -75,7 +75,7 @@ import { useBlindBoxStore } from '@/stores/blindBox'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const store = useBlindBoxStore()
 const { draws, bonusDraws, loading, lastDraw } = storeToRefs(store)
 
@@ -136,7 +136,7 @@ async function onRefresh() {
 }
 
 function formatExpiry(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+  return new Date(dateStr).toLocaleDateString(locale.value, { month: 'short', day: 'numeric' })
 }
 </script>
 
