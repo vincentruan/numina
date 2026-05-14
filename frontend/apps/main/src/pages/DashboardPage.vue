@@ -274,7 +274,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -522,8 +522,6 @@ async function onMoreActionSelect(action: { value: string }) {
   }
 }
 
-// Scroll handler removed - filter bar is now always sticky
-
 function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
   dashboardStore.fetchTrend(period)
 }
@@ -582,9 +580,6 @@ onMounted(() => {
   }
 })
 
-onUnmounted(() => {
-  // No cleanup needed - scroll handler removed
-})
 </script>
 
 <style scoped>
@@ -640,7 +635,6 @@ onUnmounted(() => {
 
 /* Category Navigation Container */
 .category-nav-container {
-  border-top: 1px solid var(--color-hairline);
   background: var(--card-bg);
 }
 .category-nav-container :deep(.van-tabs__wrap) {
