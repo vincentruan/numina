@@ -77,7 +77,7 @@ SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-102
 
 ### 本地开发
 
-各模块的本地开发说明见对应模块的 README：[后端](./backend/README.md) · [前端](./frontend/README.md) · [Agent](./agent/README.md)
+各模块的本地开发说明见对应模块的 README：[后端](./server/apps/backend/README.md) · [前端](./frontend/README.md) · [Agent](./server/apps/agent/README.md)
 
 ## 📊 功能概览
 
@@ -141,36 +141,17 @@ SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-102
 
 ```
 numina/
-├── backend/                    # FastAPI 后端
-│   ├── app/
-│   │   ├── models/            # SQLAlchemy ORM 模型
-│   │   ├── schemas/           # Pydantic 请求/响应模型
-│   │   ├── routers/           # API 路由处理器
-│   │   ├── services/          # 业务逻辑层
-│   │   ├── auth/              # JWT 认证
-│   │   └── seed/              # 数据库种子数据
-│   ├── tests/                 # pytest 测试（566 个测试通过）
-│   ├── alembic/               # 数据库迁移
-│   └── Dockerfile
-├── agent/                    # AI 分析微服务
-│   ├── app/                  # 入口文件包
-│   │   ├── main.py           # FastAPI 入口
-│   │   ├── config.py         # 配置
-│   │   ├── scheduler.py      # 定时任务
-│   │   ├── routers/          # API 路由
-│   │   ├── services/         # 业务逻辑
-│   │   ├── schemas/          # 数据模型
-│   │   └── core/             # 核心组件
-│   └── tests/                # pytest 测试
-├── frontend/                   # Vue 3 前端
-│   ├── src/
-│   │   ├── api/               # Axios API 客户端
-│   │   ├── stores/            # Pinia 状态管理
-│   │   ├── pages/             # 页面组件
-│   │   ├── components/        # 可复用组件
-│   │   ├── router/            # Vue Router 配置
-│   │   └── types/             # TypeScript 类型定义
-│   └── Dockerfile
+├── server/                     # 统一后端 monorepo
+│   ├── apps/
+│   │   ├── backend/            # FastAPI 核心后端
+│   │   ├── agent/              # AI 分析微服务
+│   │   └── scheduler_worker/   # 定时任务执行器
+│   ├── packages/               # 共享 Python 包
+│   ├── tests/                  # 统一测试集
+│   └── pyproject.toml          # 统一依赖管理 (uv)
+├── frontend/                   # Vue 3 前端 monorepo
+│   ├── apps/                   # 前端应用 (main, child)
+│   └── packages/               # 共享前端包
 ├── docker-compose.yml          # Docker Compose 配置
 ├── nginx.conf                  # Nginx 反向代理配置
 └── docs/                       # 项目文档
@@ -182,8 +163,8 @@ numina/
 
 | 模块 | README | 说明 |
 |------|--------|------|
-| 后端 | [backend/README.md](./backend/README.md) | FastAPI API 开发、数据库、测试 |
-| Agent | [agent/README.md](./agent/README.md) | AI 微服务、DeerFlow 集成、技能 |
+| 后端 | [backend/README.md](./server/apps/backend/README.md) | FastAPI API 开发、数据库、测试 |
+| Agent | [agent/README.md](./server/apps/agent/README.md) | AI 微服务、DeerFlow 集成、技能 |
 | 前端 | [frontend/README.md](./frontend/README.md) | Vue 3 UI 开发、组件、测试 |
 | 测试 | [tests/README.md](./tests/README.md) | E2E 测试、数据生成、截图 |
 
@@ -202,13 +183,13 @@ numina/
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
-完整端点列表见 [backend/README.md](./backend/README.md) 和 [agent/README.md](./agent/README.md)。
+完整端点列表见 [backend/README.md](./server/apps/backend/README.md) 和 [agent/README.md](./server/apps/agent/README.md)。
 
 ## 🧪 测试
 
 后端包含 566 个自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
 
-详见各模块 README：[后端测试](./backend/README.md#测试) · [Agent 测试](./agent/README.md#测试) · [E2E 测试](./tests/README.md)
+详见各模块 README：[后端测试](./server/apps/backend/README.md#测试) · [Agent 测试](./server/apps/agent/README.md#测试) · [E2E 测试](./tests/README.md)
 
 **测试结果**：✅ 566 passed
 
