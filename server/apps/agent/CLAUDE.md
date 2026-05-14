@@ -33,7 +33,7 @@ These must hold in every code path — never bypass them:
 
 These apply across the whole server monorepo. An agent loading only this file must still know them.
 
-1. **`redirect_slashes=False`** — `app/main.py` sets this globally. Router root-path decorators must use `""` not `"/"`. Applies to `routers/cache.py` and any new routers added to this service.
+1. **Router decorator style** — see root [CLAUDE.md](../../CLAUDE.md) §URL Style for the `redirect_slashes=False` rule
 2. **Snowflake ID serialization** — if this service ever returns IDs in API responses, use `SnowflakeBase` not plain `BaseModel`. JS loses precision on integers > 2⁵³. See `server/apps/backend/CLAUDE.md` for the full pattern.
 3. **Auth return codes** — the agent uses `X-Agent-Token` (shared secret), not JWT auth endpoints. If auth-style endpoints are ever added, they return `200` not `201`.
 4. **Import direction** — this service must never import from `apps/backend` or `apps/scheduler_worker` directly. All backend data access goes through `core/backend_client.py` (HTTP). Use `packages/` for shared logic.

@@ -30,17 +30,7 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 ## Key Invariants
 
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
-- **Pydantic v2 only** — use `ConfigDict`, `model_validate`, `field_validator`. Never v1 style (`class Config`, `parse_obj`, `validator`).
-- **`redirect_slashes=False`** — `app/main.py` sets this globally. All router root-path decorators must use `""` not `"/"`:
-  ```python
-  # ✅ Correct — hits 200 directly
-  @router.get("")
-  @router.post("")
-
-  # ❌ Wrong — FastAPI issues 307 redirect, breaks HTTPS behind nginx
-  @router.get("/")
-  @router.post("/")
-  ```
+- **Pydantic v2 only** — see root [CLAUDE.md](../../../CLAUDE.md) §Key Invariants for rule; see §Patterns below for examples.
 - **Import direction** — apps never import sibling apps. Use `packages/` for shared logic. Never `from apps.agent import ...` or `from apps.scheduler_worker import ...` inside backend code.
 
 ## Snowflake ID Serialization
@@ -144,6 +134,7 @@ Financial assets carry return fields:
 
 ### Common Pitfalls
 
+- Router decorators use `""` not `"/"` — see root [CLAUDE.md](../../../CLAUDE.md) §URL Style for the `redirect_slashes=False` rule
 - Auth endpoints (`/login`, `/register`, `/refresh`) return `200`, not `201`
 - Asset and Liability `POST` endpoints return `201`
 - `TokenResponse` does not include `user` — call `GET /auth/me` separately after login
@@ -151,11 +142,6 @@ Financial assets carry return fields:
 - Dashboard queries filter `is_archived=False` — archived assets are excluded from all aggregates
 
 ### Failure Patterns
-
-**307 Temporary Redirect on POST or GET**
-- Symptom: request returns `307 Temporary Redirect` instead of the expected response
-- Cause: router decorator has a trailing slash (`@router.post("/")`) — `redirect_slashes=False` is set in `app/main.py`, so FastAPI does not auto-redirect; the client sees a 307 from nginx or the ASGI layer
-- Fix: change `@router.post("/")` to `@router.post("")` (empty string, no slash)
 
 **JS precision loss / NaN on IDs in the frontend**
 - Symptom: frontend receives `NaN` or a rounded/incorrect integer where an ID should appear; `JSON.parse()` silently loses precision on large numbers
