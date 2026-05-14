@@ -105,7 +105,13 @@ class CoinFactory:
         narrative: str | None = None,
         narrative_emoji: str | None = None,
     ) -> CoinTransaction:
-        # For parent_grant without ref_id, always create (no dedup key)
+        """Grant coins with idempotency.
+
+        Deduplication strategy:
+        - If ref_id provided: dedup by (ref_id, transaction_type)
+        - If narrative provided and ref_id is None: dedup by (child_user_id, narrative)
+        """
+        existing = None
         if ref_id is not None:
             existing = (
                 db.query(CoinTransaction)
@@ -115,8 +121,18 @@ class CoinFactory:
                 )
                 .first()
             )
-            if existing:
-                return existing
+        elif narrative is not None:
+            existing = (
+                db.query(CoinTransaction)
+                .filter(
+                    CoinTransaction.child_user_id == child_user_id,
+                    CoinTransaction.narrative == narrative,
+                )
+                .first()
+            )
+
+        if existing:
+            return existing
 
         tx = CoinTransaction(
             id=next_id(),

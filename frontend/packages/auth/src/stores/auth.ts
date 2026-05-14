@@ -57,6 +57,25 @@ export const useAuthStore = defineStore('auth', () => {
     setUser(res.data as StoredUser)
   }
 
+  async function fetchChildMe(): Promise<User> {
+    const res = await getHttp().get<User>('/auth/child/me')
+    return res.data
+  }
+
+  async function switchToChildAndFetch(childId: string): Promise<void> {
+    try {
+      // Step 1: Switch session to child (sets cookie)
+      await getHttp().post(`/auth/admin/switch-child/${childId}`)
+      // Step 2: Fetch child user info
+      const childUser = await fetchChildMe()
+      // Step 3: Write to localStorage for child router guard
+      setUser(childUser as StoredUser)
+    } catch (error) {
+      console.error('Failed to switch to child:', error)
+      throw error
+    }
+  }
+
   async function logout(options?: { onLogout?: () => void }) {
     try {
       await getHttp().post('/auth/logout')
@@ -84,5 +103,5 @@ export const useAuthStore = defineStore('auth', () => {
     showTrustPrompt.value = false
   }
 
-  return { user, showTrustPrompt, login, loginStep1, loginStep2, register, joinFamily, fetchMe, logout, trustDevice, dismissTrustPrompt }
+  return { user, showTrustPrompt, login, loginStep1, loginStep2, register, joinFamily, fetchMe, fetchChildMe, switchToChildAndFetch, logout, trustDevice, dismissTrustPrompt }
 })

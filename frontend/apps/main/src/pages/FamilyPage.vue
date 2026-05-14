@@ -15,7 +15,7 @@
         </van-cell-group>
 
         <!-- Adult Members -->
-        <van-cell-group inset title="家庭成员" class="section">
+        <van-cell-group inset :title="t('family.memberManagement')" class="section">
           <van-swipe-cell v-for="member in adultMembers" :key="member.id">
             <van-cell :title="member.display_name" :label="'@' + member.username">
               <template #icon>
@@ -25,7 +25,7 @@
               </template>
               <template #value>
                 <van-tag :type="member.role === 'owner' ? 'primary' : 'default'" size="medium">
-                  {{ member.role === 'owner' ? '管理员' : '成员' }}
+                  {{ member.role === 'owner' ? t('family.owner') : t('family.member') }}
                 </van-tag>
               </template>
             </van-cell>
@@ -34,7 +34,7 @@
                 v-if="member.id !== currentUserId && member.role !== 'owner'"
                 square
                 type="primary"
-                text="设为管理员"
+                :text="t('family.promoteToOwner')"
                 class="swipe-btn"
                 @click="onSetOwner(member.id)"
               />
@@ -42,7 +42,7 @@
                 v-if="member.id !== currentUserId"
                 square
                 type="danger"
-                text="移除"
+                :text="t('family.removeMember')"
                 class="swipe-btn"
                 @click="onRemoveMember(member)"
               />
@@ -66,7 +66,7 @@
 
         <!-- Children management dashboard (owner only) -->
         <div v-if="isOwner && childMembers.length > 0" class="section">
-          <p class="section-heading">👧 孩子管理</p>
+          <p class="section-heading">👧 {{ t('family.childManagement') }}</p>
           <div class="child-cards">
             <div v-for="child in childMembers" :key="child.id" class="child-mgmt-card">
               <div class="child-mgmt-header">
@@ -108,13 +108,17 @@
                 </div>
               </div>
               <div class="child-mgmt-actions">
+                <button class="action-btn" @click="onSwitchToChild(child)">
+                  <van-icon name="user-o" size="18" />
+                  <span>进入孩子视角</span>
+                </button>
                 <button class="action-btn" @click="$router.push('/family/chore-approvals')">
                   <van-icon name="todo-list-o" size="18" />
-                  <span>审批家务</span>
+                  <span>{{ t('pendingApprovals.approveChores') }}</span>
                 </button>
                 <button class="action-btn" @click="$router.push('/family/wish-review')">
                   <van-icon name="gift-o" size="18" />
-                  <span>审批心愿</span>
+                  <span>{{ t('pendingApprovals.approveWishes') }}</span>
                 </button>
                 <button class="action-btn action-btn--edit" @click="openEditSheet(child)">
                   <van-icon name="edit" size="18" />
@@ -476,6 +480,17 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
   }
 }
+
+async function onSwitchToChild(child: { id: string; display_name: string }) {
+  try {
+    await authStore.switchToChildAndFetch(child.id)
+    // Redirect to child frontend
+    window.location.href = '/child/'
+  } catch {
+    showToast({ type: 'fail', message: t('toast.switchChildFailed') })
+  }
+}
+
 onMounted(async () => {
   await familyStore.fetchFamily()
   if (isOwner.value) {
