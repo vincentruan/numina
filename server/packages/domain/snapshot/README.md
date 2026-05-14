@@ -28,6 +28,16 @@ apps.backend.app.services.snapshot.auto_generate_daily_snapshots
 
 This coupling will be removed in Phase 3 when the snapshot logic is fully extracted into this package.
 
+## Phase 3 Removal Checklist
+
+When extracting snapshot logic from `apps/backend`:
+
+1. Move `apps/backend/app/services/snapshot.py` into `packages/domain/snapshot/`
+2. Update `scheduler_worker` job imports to call `packages.domain.snapshot.auto_generate_daily_snapshots` directly (no backend path needed)
+3. Remove the lazy-import wrapper from `packages/domain/snapshot/service.py`
+4. Run `pytest packages/domain/snapshot/ -v` and `pytest apps/scheduler_worker/ -v` — both must pass
+5. Remove the Python path requirement for `apps/backend` in scheduler_worker deployment
+
 ## Links
 
 - [packages/domain README](../README.md) — subdomain map and import rules

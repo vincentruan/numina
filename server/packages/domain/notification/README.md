@@ -28,6 +28,16 @@ apps.backend.app.services.notification.dispatcher.run_scheduled_checks
 
 This coupling will be removed in Phase 3 when the notification logic is fully extracted into this package.
 
+## Phase 3 Removal Checklist
+
+When extracting notification logic from `apps/backend`:
+
+1. Move `apps/backend/app/services/notification/dispatcher.py` into `packages/domain/notification/`
+2. Update `scheduler_worker` job imports to call `packages.domain.notification.run_scheduled_checks` directly (no backend path needed)
+3. Remove the lazy-import wrapper from `packages/domain/notification/service.py`
+4. Run `pytest packages/domain/notification/ -v` and `pytest apps/scheduler_worker/ -v` — both must pass
+5. Remove the Python path requirement for `apps/backend` in scheduler_worker deployment
+
 ## Links
 
 - [packages/domain README](../README.md) — subdomain map and import rules
