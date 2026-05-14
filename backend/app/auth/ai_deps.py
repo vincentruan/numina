@@ -109,6 +109,7 @@ def verify_agent_token(
                 "agent_request", "success",
                 family_id=jwt_family_id,
                 detail=f"agent_id={request.state.agent_id} path={request.url.path}",
+                db=db,
             )
             return jwt_family_id
     except JWTError:

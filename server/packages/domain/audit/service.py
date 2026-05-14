@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from packages.core.logging import get_logger
 from packages.core.settings import settings
 from packages.db.session import SessionLocal
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 logger = get_logger("security.audit")
 
@@ -17,15 +22,19 @@ def write_audit_log(
     ip_address: str | None = None,
     user_agent: str | None = None,
     detail: str | None = None,
+    db: "Session | None" = None,
 ) -> None:
-    """Append a row to security_audit_logs. Fails silently."""
+    """Append a row to security_audit_logs. Fails silently.
+
+    When db is provided, the entry is added to the caller's session (no commit/close).
+    When db is None, a new session is created, committed, and closed.
+    """
     if not settings.ENABLE_SECURITY_LOGGING:
         return
     try:
         from packages.db.models.security_audit_log import SecurityAuditLog
 
-        db = SessionLocal()
-        try:
+        if db is not None:
             entry = SecurityAuditLog(
                 event_type=event_type,
                 user_id=user_id,
@@ -36,9 +45,23 @@ def write_audit_log(
                 detail=detail,
             )
             db.add(entry)
-            db.commit()
-        finally:
-            db.close()
+            db.flush()
+        else:
+            own_db = SessionLocal()
+            try:
+                entry = SecurityAuditLog(
+                    event_type=event_type,
+                    user_id=user_id,
+                    family_id=family_id,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    outcome=outcome,
+                    detail=detail,
+                )
+                own_db.add(entry)
+                own_db.commit()
+            finally:
+                own_db.close()
     except Exception as exc:
         logger.warning(f"[audit_log] failed to write event={event_type}: {exc}")
 

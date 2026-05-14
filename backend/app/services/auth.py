@@ -387,6 +387,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
             user_id=user.id,
             family_id=user.family_id,
             detail="wrong_password",
+            db=db,
         )
         raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
 
@@ -395,7 +396,7 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
         SecurityEventType.LOGIN_SUCCESS, username=req.username, user_id=user.id
     )
     write_audit_log(
-        "login_success", "success", user_id=user.id, family_id=user.family_id
+        "login_success", "success", user_id=user.id, family_id=user.family_id, db=db
     )
     return TokenResponse(
         access_token=create_access_token(
@@ -450,7 +451,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
 
     _log_security_event(SecurityEventType.TOKEN_REFRESH_SUCCESS, user_id=user_id)
     write_audit_log(
-        "token_refresh", "success", user_id=user.id, family_id=user.family_id
+        "token_refresh", "success", user_id=user.id, family_id=user.family_id, db=db
     )
     return TokenResponse(
         access_token=create_access_token(user_claims(user)),
@@ -506,7 +507,7 @@ def change_password(
     revoke_all_user_tokens(user.id)
     _log_security_event(SecurityEventType.PASSWORD_CHANGE_SUCCESS, user_id=user.id)
     write_audit_log(
-        "password_change", "success", user_id=user.id, family_id=user.family_id
+        "password_change", "success", user_id=user.id, family_id=user.family_id, db=db
     )
 
 
