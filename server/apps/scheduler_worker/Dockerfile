@@ -1,20 +1,20 @@
-FROM python:3.11-slim
-
-RUN pip install uv
+FROM python:3.13-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
+RUN pip install uv --no-cache-dir
 
 RUN useradd -r -u 1001 -s /sbin/nologin appuser
 
 WORKDIR /app
 
-# Install dependencies from scheduler_worker's own lockfile
-COPY apps/scheduler_worker/pyproject.toml apps/scheduler_worker/uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+# Install dependencies from server/ root (cached layer)
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev --extra worker
 
-# Copy the full server tree (apps/ + packages/)
-COPY . .
+# Copy application code
+COPY apps/scheduler_worker/ ./apps/scheduler_worker/
+COPY packages/ ./packages/
 
 USER appuser
 

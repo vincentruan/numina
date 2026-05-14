@@ -69,11 +69,11 @@ def write_audit_log(
 def purge_old_audit_logs(retention_days: int = 90) -> int:
     """Delete audit log entries older than retention_days. Returns count deleted."""
     try:
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         from packages.db.models.security_audit_log import SecurityAuditLog
 
-        cutoff = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
         db = SessionLocal()
         try:
             count = db.query(SecurityAuditLog).filter(

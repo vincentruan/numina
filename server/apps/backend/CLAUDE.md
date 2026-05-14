@@ -39,7 +39,7 @@ All response schemas containing IDs inherit from `SnowflakeBase` (app/schemas/ba
 ### Pattern
 
 ```python
-from app.schemas.base import SnowflakeBase
+from apps.backend.app.schemas.base import SnowflakeBase
 
 class MyResponse(SnowflakeBase):
     id: int  # Define as int (matches DB)

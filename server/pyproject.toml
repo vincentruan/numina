@@ -29,7 +29,7 @@ backend = [
     # WebAuthn
     "webauthn>=2.7.1",
     # Integration utilities
-    "altcha>=1.0.0",
+    "altcha>=1.0.0,<2.0.0",
     "filelock>=3.13.0",
     "pyyaml>=6.0.0",
     # Chinese calendar
