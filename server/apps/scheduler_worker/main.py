@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     yield
 
     logger.info("scheduler_worker shutting down")
-    scheduler.shutdown(wait=False)
+    scheduler.shutdown(wait=True)
     logger.info("APScheduler stopped")
 
 

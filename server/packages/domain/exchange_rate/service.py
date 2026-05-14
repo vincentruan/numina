@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from sqlalchemy.orm import Session
@@ -9,9 +9,12 @@ from packages.db.models.exchange_rate import ExchangeRate
 
 logger = get_logger(__name__)
 
+_CACHE_TTL = timedelta(hours=4)
+
 
 class ExchangeRateService:
-    _cache: dict[str, tuple[float, datetime]] = {}
+    # Maps currency code → (rate, fetched_at, cached_at)
+    _cache: dict[str, tuple[float, datetime, datetime]] = {}
 
     @classmethod
     def get_rate(cls, target_currency: str, db: Session) -> tuple[float, datetime]:
@@ -19,8 +22,11 @@ class ExchangeRateService:
         if target_currency == "CNY":
             return (1.0, datetime.now())
 
-        if target_currency in cls._cache:
-            return cls._cache[target_currency]
+        entry = cls._cache.get(target_currency)
+        if entry is not None:
+            rate, fetched_at, cached_at = entry
+            if datetime.now() - cached_at < _CACHE_TTL:
+                return (rate, fetched_at)
 
         row = (
             db.query(ExchangeRate)
@@ -32,8 +38,8 @@ class ExchangeRateService:
             logger.warning(f"汇率数据不存在: {target_currency}，使用 1:1 回退")
             return (1.0, datetime.now())
 
-        cls._cache[target_currency] = (row.rate, row.fetched_at)
-        return cls._cache[target_currency]
+        cls._cache[target_currency] = (row.rate, row.fetched_at, datetime.now())
+        return (row.rate, row.fetched_at)
 
     @classmethod
     def fetch_and_store_rates(cls, db: Session) -> bool:

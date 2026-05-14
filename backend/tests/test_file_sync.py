@@ -98,7 +98,8 @@ class TestFileSyncJob:
         loc_id = loc.id  # capture before session is closed by job
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
-             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
+             patch("apps.scheduler_worker.jobs.settings.UPLOAD_DIR", str(tmp_path)):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -123,7 +124,8 @@ class TestFileSyncJob:
         loc_id = loc.id  # capture before session is closed by job
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
-             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
+             patch("apps.scheduler_worker.jobs.settings.UPLOAD_DIR", str(tmp_path)):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -148,7 +150,8 @@ class TestFileSyncJob:
         loc_id = loc.id
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
-             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
+             patch("apps.scheduler_worker.jobs.settings.UPLOAD_DIR", str(tmp_path)):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -172,7 +175,8 @@ class TestFileSyncJob:
         loc_id = loc.id  # capture before session is closed by job
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
-             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend):
+             patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
+             patch("apps.scheduler_worker.jobs.settings.UPLOAD_DIR", str(tmp_path)):
             run(file_sync_job())
 
         mock_backend.save.assert_not_called()
@@ -221,7 +225,8 @@ class TestFileSyncJob:
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
              patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
-             patch("apps.scheduler_worker.jobs.asyncio.sleep", side_effect=capture_sleep):
+             patch("apps.scheduler_worker.jobs.asyncio.sleep", side_effect=capture_sleep), \
+             patch("apps.scheduler_worker.jobs.settings.UPLOAD_DIR", str(tmp_path)):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()
@@ -250,7 +255,8 @@ class TestFileSyncJob:
 
         with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=db), \
              patch("packages.storage.factory.get_backend_for_type", return_value=mock_backend), \
-             patch("apps.scheduler_worker.jobs.asyncio.sleep", new_callable=AsyncMock):
+             patch("apps.scheduler_worker.jobs.asyncio.sleep", new_callable=AsyncMock), \
+             patch("apps.scheduler_worker.jobs.settings.UPLOAD_DIR", str(tmp_path)):
             run(file_sync_job())
 
         loc_updated = db.query(FileRemoteLocation).filter_by(id=loc_id).first()

@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from packages.core.logging import get_logger
+from packages.core.settings import settings
 from packages.db.session import SessionLocal
 
 logger = get_logger(__name__)
@@ -70,12 +71,30 @@ async def file_sync_job() -> None:
             .all()
         )
 
+        # Pre-fetch all CachedFile rows in one query to avoid N+1
+        file_ids = [loc.file_id for loc in pending]
+        cached_files: dict = {
+            cf.id: cf
+            for cf in db.query(CachedFile).filter(CachedFile.id.in_(file_ids)).all()
+        }
+
+        upload_dir = Path(settings.UPLOAD_DIR).resolve()
+
         for loc in pending:
-            cached_file = db.query(CachedFile).filter_by(id=loc.file_id).first()
+            cached_file = cached_files.get(loc.file_id)
             if cached_file is None or cached_file.deleted_at is not None:
                 loc.sync_status = "failed"
                 loc.last_error = "本地文件记录不存在或已删除"
                 db.commit()
+                continue
+
+            # Guard against path traversal: local_path must resolve within UPLOAD_DIR
+            resolved_path = Path(cached_file.local_path).resolve()
+            if not resolved_path.is_relative_to(upload_dir):
+                loc.sync_status = "failed"
+                loc.last_error = f"路径越界，拒绝访问: {cached_file.local_path}"
+                db.commit()
+                logger.warning(f"文件同步路径越界: {cached_file.id} -> {cached_file.local_path}")
                 continue
 
             try:

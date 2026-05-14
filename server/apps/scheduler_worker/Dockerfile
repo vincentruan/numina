@@ -5,6 +5,8 @@ RUN pip install uv
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
 
+RUN useradd -r -u 1001 -s /sbin/nologin appuser
+
 WORKDIR /app
 
 # Install dependencies from scheduler_worker's own lockfile
@@ -13,5 +15,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 # Copy the full server tree (apps/ + packages/)
 COPY . .
+
+USER appuser
 
 CMD ["uv", "run", "--no-dev", "uvicorn", "apps.scheduler_worker.main:app", "--host", "0.0.0.0", "--port", "8002"]

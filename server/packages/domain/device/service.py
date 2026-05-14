@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from packages.db.models.device_session import DeviceSession
@@ -29,7 +30,7 @@ def delete_old_revoked_sessions(db: Session) -> int:
         db.query(DeviceSession)
         .filter(
             DeviceSession.is_revoked.is_(True),
-            DeviceSession.last_seen_at < cutoff,
+            or_(DeviceSession.last_seen_at < cutoff, DeviceSession.last_seen_at.is_(None)),
         )
         .delete()
     )
