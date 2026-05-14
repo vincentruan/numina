@@ -29,6 +29,15 @@ These must hold in every code path — never bypass them:
 3. **Audit logging:** Every agent decision must emit an audit event via `audit_logger`. This includes both success and error paths — the `finally` block in `orchestrator.py` guarantees this.
 4. **DeerFlow-only execution:** All agent orchestration must use `DeerFlowClient` through `services/deerflow_adapter/`. Never implement custom runtime, tool registry, skill loader, memory manager, orchestrator, or workflow engine.
 
+## Cross-Cutting Invariants
+
+These apply across the whole server monorepo. An agent loading only this file must still know them.
+
+1. **`redirect_slashes=False`** — `app/main.py` sets this globally. Router root-path decorators must use `""` not `"/"`. Applies to `routers/cache.py` and any new routers added to this service.
+2. **Snowflake ID serialization** — if this service ever returns IDs in API responses, use `SnowflakeBase` not plain `BaseModel`. JS loses precision on integers > 2⁵³. See `server/apps/backend/CLAUDE.md` for the full pattern.
+3. **Auth return codes** — the agent uses `X-Agent-Token` (shared secret), not JWT auth endpoints. If auth-style endpoints are ever added, they return `200` not `201`.
+4. **Import direction** — this service must never import from `apps/backend` or `apps/scheduler_worker` directly. All backend data access goes through `core/backend_client.py` (HTTP). Use `packages/` for shared logic.
+
 ## DeerFlow Framework Guardrails
 
 DeerFlow 2.0 is batteries-included: it already provides runtime, tools, skills, memory, sandbox, planning, and subagent coordination. **Do NOT reimplement these.**
@@ -275,6 +284,7 @@ All endpoints require `X-Agent-Token` header matching `AGENT_INTERNAL_TOKEN`. No
 - **Session journal and session store can diverge** — `session_journal` writes JSONL to local disk; session metadata goes to backend DB via fire-and-forget HTTP. A backend failure leaves the local log without a corresponding DB record.
 - **Scheduler has zero active jobs** — `scheduler.py` is configured and starts cleanly but all job registrations are commented out (Phase 0).
 - **`fallback_engine.py` is a stub** — the file exists for import compatibility but contains no dispatch logic. Do not add LLM dispatch code to it.
+- **Importing from `apps/backend` directly** — Symptom: `ImportError` or `ModuleNotFoundError` on `apps.backend.*`; or tests pass locally but fail in CI because the backend package is not installed in the agent's virtualenv. Cause: violates the import direction rule — the agent must not import from `apps/backend` or `apps/scheduler_worker` directly. Fix: use `core/backend_client.py` for all backend data access; it wraps `httpx` calls to the backend HTTP API.
 
 ## Links
 

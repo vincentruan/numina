@@ -31,6 +31,17 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
 - **Pydantic v2 only** — use `ConfigDict`, `model_validate`, `field_validator`. Never v1 style (`class Config`, `parse_obj`, `validator`).
+- **`redirect_slashes=False`** — `app/main.py` sets this globally. All router root-path decorators must use `""` not `"/"`:
+  ```python
+  # ✅ Correct — hits 200 directly
+  @router.get("")
+  @router.post("")
+
+  # ❌ Wrong — FastAPI issues 307 redirect, breaks HTTPS behind nginx
+  @router.get("/")
+  @router.post("/")
+  ```
+- **Import direction** — apps never import sibling apps. Use `packages/` for shared logic. Never `from apps.agent import ...` or `from apps.scheduler_worker import ...` inside backend code.
 
 ## Snowflake ID Serialization
 
@@ -138,6 +149,18 @@ Financial assets carry return fields:
 - `TokenResponse` does not include `user` — call `GET /auth/me` separately after login
 - `DELETE /assets/{id}` archives (sets `is_archived=True`), does not hard-delete
 - Dashboard queries filter `is_archived=False` — archived assets are excluded from all aggregates
+
+### Failure Patterns
+
+**307 Temporary Redirect on POST or GET**
+- Symptom: request returns `307 Temporary Redirect` instead of the expected response
+- Cause: router decorator has a trailing slash (`@router.post("/")`) — `redirect_slashes=False` is set in `app/main.py`, so FastAPI does not auto-redirect; the client sees a 307 from nginx or the ASGI layer
+- Fix: change `@router.post("/")` to `@router.post("")` (empty string, no slash)
+
+**JS precision loss / NaN on IDs in the frontend**
+- Symptom: frontend receives `NaN` or a rounded/incorrect integer where an ID should appear; `JSON.parse()` silently loses precision on large numbers
+- Cause: response schema inherits from plain `BaseModel` — IDs are serialized as JSON integers, which exceed JS's safe integer range (2⁵³) for Snowflake IDs
+- Fix: inherit the response schema from `SnowflakeBase` (from `apps.backend.app.schemas.base`); IDs are then serialized as strings automatically — no manual `str()` calls needed
 
 ## Links
 

@@ -62,7 +62,7 @@ Both units are independent and can be executed in any order.
 
 ---
 
-- [ ] **Unit 1: backend/CLAUDE.md — add redirect_slashes and import direction**
+- [x] **Unit 1: backend/CLAUDE.md — add redirect_slashes and import direction**
 
 **Goal:** Add the two missing invariants to the existing Key Invariants section.
 
@@ -86,7 +86,7 @@ Both units are independent and can be executed in any order.
 
 ---
 
-- [ ] **Unit 2: agent/CLAUDE.md — add all four cross-cutting invariants**
+- [x] **Unit 2: agent/CLAUDE.md — add all four cross-cutting invariants**
 
 **Goal:** Add a new "Cross-Cutting Invariants" section with all four invariants framed for the agent context.
 

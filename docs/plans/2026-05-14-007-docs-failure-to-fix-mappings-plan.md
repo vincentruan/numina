@@ -54,7 +54,7 @@ Both units are independent and can be executed in any order.
 
 ---
 
-- [ ] **Unit 1: backend/CLAUDE.md — add Failure Patterns subsection**
+- [x] **Unit 1: backend/CLAUDE.md — add Failure Patterns subsection**
 
 **Goal:** Add two failure-to-fix entries for the 307 redirect and JS precision loss patterns.
 
@@ -86,7 +86,7 @@ Both units are independent and can be executed in any order.
 
 ---
 
-- [ ] **Unit 2: agent/CLAUDE.md — add import direction failure to Gotchas**
+- [x] **Unit 2: agent/CLAUDE.md — add import direction failure to Gotchas**
 
 **Goal:** Add one failure-to-fix entry for direct `apps/backend` imports to the existing Gotchas section.
 
