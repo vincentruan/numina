@@ -11,4 +11,9 @@ allowed_roles: [member, admin]
 thinking: false
 mcp_tools: []
 max_tokens: 1000
+placeholder: null
+examples:
+  - 哪些资产可以出售？
+  - 闲置资产推荐哪些处置渠道？
+  - 低效资产有哪些？
 ---

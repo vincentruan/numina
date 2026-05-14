@@ -1,5 +1,33 @@
 <template>
   <div class="input-shell" @click.self="closePanel">
+    <!-- Slash command palette -->
+    <transition name="panel">
+      <div
+        v-if="slashPaletteOpen"
+        id="slash-palette-list"
+        class="plus-panel slash-palette"
+        role="menu"
+        :aria-label="t('aiChat.slashPaletteHint')"
+      >
+        <div v-if="capabilityStore.capabilities.length === 0" class="panel-item slash-palette__empty" role="menuitem" aria-disabled="true">
+          {{ t('aiChat.slashPaletteEmpty') }}
+        </div>
+        <button
+          v-for="(cap, idx) in capabilityStore.capabilities"
+          :id="`slash-cap-${cap.id}`"
+          :key="cap.id"
+          class="panel-item slash-palette__item"
+          :class="{ 'slash-palette__item--selected': idx === selectedIndex }"
+          role="menuitem"
+          :aria-current="idx === selectedIndex ? true : undefined"
+          @mousedown.prevent="selectCapability(cap)"
+        >
+          <span class="slash-palette__name">{{ cap.name }}</span>
+          <span class="slash-palette__desc">{{ cap.description }}</span>
+        </button>
+      </div>
+    </transition>
+
     <!-- Plus panel overlay -->
     <transition name="panel">
       <div v-if="panelOpen" class="plus-panel" role="menu" aria-label="更多功能">
@@ -87,12 +115,15 @@
         class="chat-textarea"
         :placeholder="placeholder || '请输入您的问题…'"
         aria-label="向 AI 提问"
+        aria-haspopup="menu"
+        :aria-expanded="slashPaletteOpen"
+        aria-controls="slash-palette-list"
         rows="1"
         :disabled="disabled || loading"
         @input="onInput"
         @focus="focused = true"
         @blur="focused = false"
-        @keydown.enter.exact.prevent="onSubmit"
+        @keydown="onKeydown"
       />
       <button
         v-if="internalValue.length > 60"
@@ -140,6 +171,10 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import { useCapabilityStore } from '@/stores/capability'
+import type { AICapability } from '@/api/ai'
 
 const props = defineProps<{
   modelValue: string
@@ -167,6 +202,12 @@ const panelOpen = ref(false)
 const deepThinkInternal = ref(props.deepThink ?? false)
 const webSearch = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+
+const router = useRouter()
+const { t } = useI18n()
+const capabilityStore = useCapabilityStore()
+const slashPaletteOpen = ref(false)
+const selectedIndex = ref(0)
 
 const panelItems = [
   {
@@ -205,9 +246,67 @@ watch(() => props.webSearch, (val) => { if (val !== undefined) webSearch.value =
 
 function onInput() {
   adjustHeight()
+  const val = internalValue.value
+  const shouldOpen = val.startsWith('/')
+  if (shouldOpen && !slashPaletteOpen.value) {
+    if (capabilityStore.capabilities.length === 0) {
+      capabilityStore.loadCapabilities().catch(() => {
+        // silently ignore — palette shows empty state
+      })
+    }
+    selectedIndex.value = 0
+    panelOpen.value = false
+  }
+  slashPaletteOpen.value = shouldOpen
+}
+
+function onKeydown(e: KeyboardEvent) {
+  // Handle Enter for normal submit (replaces @keydown.enter.exact.prevent)
+  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    if (slashPaletteOpen.value) {
+      e.preventDefault()
+      const caps = capabilityStore.capabilities
+      if (caps.length > 0 && caps[selectedIndex.value]) selectCapability(caps[selectedIndex.value])
+      return
+    }
+    e.preventDefault()
+    onSubmit()
+    return
+  }
+
+  if (!slashPaletteOpen.value) return
+  const caps = capabilityStore.capabilities
+  if (caps.length === 0) return
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    selectedIndex.value = (selectedIndex.value + 1) % caps.length
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    selectedIndex.value = (selectedIndex.value - 1 + caps.length) % caps.length
+  } else if (e.key === 'Escape') {
+    e.preventDefault()
+    slashPaletteOpen.value = false
+  } else if (e.key === 'Tab') {
+    if (caps[selectedIndex.value]) {
+      e.preventDefault()
+      selectCapability(caps[selectedIndex.value])
+    }
+  }
+}
+
+function selectCapability(cap: AICapability) {
+  slashPaletteOpen.value = false
+  if (cap.ui.input_mode === 'free_text') {
+    internalValue.value = cap.ui.example_questions[0] ?? cap.ui.placeholder ?? cap.name
+    emit('update:modelValue', internalValue.value)
+    nextTick(() => inputRef.value?.focus())
+  } else {
+    if (cap.ui.route) router.push(cap.ui.route)
+  }
 }
 
 function onSubmit() {
+  if (slashPaletteOpen.value) return
   if (props.disabled || props.loading || !internalValue.value.trim()) return
   emit('submit', internalValue.value.trim())
 }
@@ -239,7 +338,10 @@ function onPanelItem(action: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'o
 
 function onDocClick(e: MouseEvent) {
   const el = e.target as HTMLElement
-  if (!el.closest('.input-shell')) panelOpen.value = false
+  if (!el.closest('.input-shell')) {
+    panelOpen.value = false
+    slashPaletteOpen.value = false
+  }
 }
 
 onMounted(() => {
@@ -448,6 +550,51 @@ onBeforeUnmount(() => {
 
 .panel-item-label {
   line-height: 1.2;
+}
+
+/* ── Slash command palette ── */
+.slash-palette {
+  right: 0;
+  left: 0;
+  grid-template-columns: 1fr;
+  min-width: unset;
+  padding: 6px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.slash-palette__empty {
+  flex-direction: row;
+  font-size: 13px;
+  padding: 10px 12px;
+  color: var(--ai-panel-item-color);
+  cursor: default;
+}
+
+.slash-palette__item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.slash-palette__item--selected {
+  background: var(--ai-panel-item-hover-bg);
+  color: var(--ai-panel-item-hover-color);
+}
+
+.slash-palette__name {
+  font-weight: 500;
+  color: var(--ai-text-color);
+}
+
+.slash-palette__desc {
+  font-size: 11px;
+  color: var(--ai-panel-item-color);
+  line-height: 1.3;
 }
 
 /* ── Panel transition ── */

@@ -142,6 +142,8 @@ export default {
     suggestionHighestCategory: '哪类资产占比最高？',
     suggestionIdleAssets: '有哪些闲置资产？',
     suggestionNetWorthTrend: '净资产趋势如何？',
+    slashPaletteHint: '选择功能，按 Esc 关闭',
+    slashPaletteEmpty: '暂无可用功能',
   },
   asset: {
     title: '资产',
