@@ -1,8 +1,9 @@
 ---
 title: "Monorepo module-level lint/format/typecheck setup (Vue 3 + TS + FastAPI)"
 date: 2026-04-12
+last_updated: 2026-05-14
 category: docs/solutions/developer-experience
-module: frontend, backend, agent
+module: frontend, server
 problem_type: developer_experience
 component: tooling
 severity: medium
@@ -18,7 +19,9 @@ tags: [eslint, prettier, vue3, typescript, ruff, mypy, pydantic, fastapi, monore
 
 ## Context
 
-Numina is a monorepo with three modules: `frontend/` (Vue 3 + TypeScript + Vite), `backend/` (Python FastAPI + SQLAlchemy), and `agent/` (Python FastAPI + LangChain/DeerFlow). The repo had no linting, formatting, or type-check tooling configured — root `CLAUDE.md` said "match existing style." This made code review noisy and style inconsistent across contributors.
+Numina is a monorepo with two top-level modules: `frontend/` (Vue 3 + TypeScript + Vite) and `server/` (Python — `server/apps/backend/` FastAPI + SQLAlchemy, `server/apps/agent/` DeerFlow). The repo had no linting, formatting, or type-check tooling configured — root `CLAUDE.md` said "match existing style." This made code review noisy and style inconsistent across contributors.
+
+> **Note (2026-05-14):** Phase 2 consolidated `backend/` and `agent/` into `server/apps/backend/` and `server/apps/agent/`. Path references below have been updated accordingly.
 
 The solution: module-level tooling (each module owns its own dev-experience config) plus module-level `CLAUDE.md` delta docs that tell contributors exactly how to run quality checks inside that module.
 
@@ -94,9 +97,9 @@ export default tseslint.config(
 "typecheck": "vue-tsc --noEmit"
 ```
 
-### Backend (FastAPI, Python 3.11): ruff + mypy
+### Backend (FastAPI, Python 3.12): ruff + mypy
 
-**Add to `[dependency-groups] dev` in `backend/pyproject.toml`:**
+**Add to `[dependency-groups] dev` in `server/pyproject.toml`** (or the backend extras section):
 ```toml
 "ruff>=0.9.0",
 "mypy>=1.13.0",
@@ -105,7 +108,7 @@ export default tseslint.config(
 **Append tool config:**
 ```toml
 [tool.ruff]
-target-version = "py311"
+target-version = "py312"
 line-length = 88
 
 [tool.ruff.lint]
@@ -116,7 +119,7 @@ ignore = ["E501"]
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 ignore_missing_imports = true
 warn_return_any = true
 plugins = ["pydantic.mypy"]
@@ -127,11 +130,11 @@ init_typed = true
 warn_required_dynamic_aliases = true
 ```
 
-**Run:** `uv sync` then verify with `uv run ruff check .` and `uv run mypy app/`
+**Run:** `uv sync` then verify with `uv run ruff check .` and `uv run mypy apps/backend/`
 
-### Agent (FastAPI + LangChain, Python 3.12): same pattern
+### Agent (DeerFlow, Python 3.12): same pattern
 
-Identical to backend except `target-version = "py312"` and `python_version = "3.12"`. For mypy, exclude vendor: `uv run mypy . --exclude vendor`.
+Identical to backend. For mypy, exclude vendor: `uv run mypy apps/agent/ --exclude apps/agent/vendor`.
 
 ### Module-level CLAUDE.md delta docs
 
@@ -223,4 +226,4 @@ When introducing formatters to an existing codebase, do NOT run `ruff format .` 
 
 - Design spec: `docs/superpowers/specs/2026-04-11-module-tooling-design.md`
 - Implementation plan: `docs/superpowers/plans/2026-04-11-module-tooling.md`
-- Module docs: `frontend/CLAUDE.md`, `backend/CLAUDE.md`, `agent/CLAUDE.md`
+- Module docs: `frontend/apps/main/CLAUDE.md`, `server/apps/backend/CLAUDE.md`, `server/apps/agent/CLAUDE.md`
