@@ -326,8 +326,26 @@ async function onStep1Submit() {
         step2User.value = { displayName: result.display_name, avatarColor: result.avatar_color }
       }
       step.value = 2
+    } else if (!result.second_factor_required) {
+      // Single-step login complete — token already set via cookie
+      await authStore.fetchMe()
+      // fetchMe() succeeded — safe to show success and navigate
+      showToast(t('toast.loginSuccess'))
+      authStore.showTrustPrompt = true
+      const user = authStore.user
+      if (user?.role === 'child') {
+        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+        const redirect = route.query.redirect as string
+        if (redirect && redirect.startsWith('/child/')) {
+          window.location.href = `${baseUrl}${redirect}`
+        } else {
+          window.location.href = `${baseUrl}/child/`
+        }
+        return
+      }
+      router.push('/')
     } else {
-      // No temp_token — this shouldn't happen per normal flow
+      // second_factor_required=true but no temp_token — malformed server response
       showToast(t('toast.loginFailedGeneric'))
     }
   } catch (error: unknown) {
@@ -385,11 +403,12 @@ async function submitPin() {
     // Redirect based on user role
     const user = authStore.user
     if (user?.role === 'child') {
+      const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `https://numina.xiaoshutiao.space${redirect}`
+        window.location.href = `${baseUrl}${redirect}`
       } else {
-        window.location.href = 'https://numina.xiaoshutiao.space/child/'
+        window.location.href = `${baseUrl}/child/`
       }
       return
     }
@@ -465,11 +484,12 @@ async function submitEmojiPin() {
     showToast(t('toast.loginSuccess'))
     const user = authStore.user
     if (user?.role === 'child') {
+      const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `https://numina.xiaoshutiao.space${redirect}`
+        window.location.href = `${baseUrl}${redirect}`
       } else {
-        window.location.href = 'https://numina.xiaoshutiao.space/child/'
+        window.location.href = `${baseUrl}/child/`
       }
       return
     }
