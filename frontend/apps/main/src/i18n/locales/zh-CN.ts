@@ -383,6 +383,7 @@ export default {
     promoteToOwner: '设为管理员',
     removeMember: '移除',
     childManagement: '孩子管理',
+    switchToChild: '进入孩子视角',
     memberCount: '人',
     inviteCodeCopied: '邀请码已复制',
     addChild: '+ 添加孩子账号',

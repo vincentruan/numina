@@ -110,7 +110,7 @@
               <div class="child-mgmt-actions">
                 <button class="action-btn" @click="onSwitchToChild(child)">
                   <van-icon name="user-o" size="18" />
-                  <span>进入孩子视角</span>
+                  <span>{{ t('family.switchToChild') }}</span>
                 </button>
                 <button class="action-btn" @click="$router.push('/family/chore-approvals')">
                   <van-icon name="todo-list-o" size="18" />
