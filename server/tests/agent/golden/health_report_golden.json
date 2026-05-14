@@ -1,0 +1,33 @@
+{
+  "capability": "report",
+  "summary": "家庭资产总额约42万元，净资产为负，主要由房贷和车贷构成。流动资产占比约35%，资产集中度偏高（车辆占43%）。数据可能不完整，分析仅供参考。",
+  "scorecards": [
+    {"name": "净资产健康", "score": 1.5, "max_score": 5.0, "label": "需关注", "color": "red"},
+    {"name": "资产配置", "score": 2.5, "max_score": 5.0, "label": "一般", "color": "yellow"},
+    {"name": "负债压力", "score": 2.0, "max_score": 5.0, "label": "偏高", "color": "red"},
+    {"name": "资产效率", "score": 3.0, "max_score": 5.0, "label": "一般", "color": "yellow"}
+  ],
+  "risk_flags": [
+    {"level": "high", "title": "净资产为负", "description": "总负债超过总资产，净资产约为-40.7万元"},
+    {"level": "medium", "title": "资产集中度偏高", "description": "车辆类资产占比超过40%"}
+  ],
+  "recommendations": [
+    {"priority": "high", "title": "关注净资产改善", "body": "建议优先偿还高利率负债以改善净资产状况", "action_type": "suggestion"},
+    {"priority": "medium", "title": "评估闲置数码资产", "body": "数码类资产使用频率为idle，建议评估是否处置", "action_type": "suggestion"}
+  ],
+  "rule_based_findings": [
+    {"source": "rule", "content": "净资产为负（总负债82.5万 > 总资产41.8万）", "confidence": 1.0},
+    {"source": "rule", "content": "1项资产使用频率为idle", "confidence": 1.0}
+  ],
+  "ai_inferences": [
+    {"source": "ai", "content": "基于资产结构观察，流动性可能偏低，建议关注短期现金流", "confidence": 0.65}
+  ],
+  "disclaimers": [
+    "本分析基于用户录入的脱敏数据，不构成投资建议",
+    "实际财务状况可能与分析结果存在差异"
+  ],
+  "fallback_used": false,
+  "followup_actions": [],
+  "ui_blocks": [],
+  "needs_confirmation": []
+}
