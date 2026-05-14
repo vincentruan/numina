@@ -1,0 +1,23 @@
+# DeerFlow 生产环境 overlay
+# 覆盖 base/config.yaml 中的生产专用设置
+
+memory:
+  max_facts: 50
+  fact_confidence_threshold: 0.8
+  # 仅允许存储行为偏好类事实，禁止存储财务数值或身份信息
+  allowed_fact_categories:
+    - explanation_style      # 解释风格偏好
+    - focus_areas            # 关注重点
+    - tracking_strategy      # 跟踪策略
+    - risk_alert_preference  # 风险提示偏好
+
+sandbox:
+  allow_host_bash: false
+
+stream:
+  timeout_seconds: 120
+
+subagents:
+  enabled: false
+  max_concurrent: 3
+  timeout_seconds: 900

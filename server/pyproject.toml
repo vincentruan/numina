@@ -53,7 +53,8 @@ agent = [
     "cryptography>=42.0.0",
     # Config
     "pyyaml>=6.0.3",
-    # DeerFlow harness (workspace member, not in dependencies list)
+    # DeerFlow harness (workspace member — installed from apps/agent/vendor/deerflow-harness)
+    "deerflow-harness",
 ]
 worker = [
     # Crypto for scheduler

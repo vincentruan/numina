@@ -1,0 +1,62 @@
+# DeerFlow 基础配置模板
+# 所有环境共享的基础设置，由 dev/prod overlay 覆盖
+
+# LLM 配置（从环境变量读取，不硬编码）
+llm:
+  # DeerFlow config loader expects simple $VAR syntax (not ${VAR:-default})
+  # Set AI_MODEL and AI_API_KEY env vars before starting the agent
+  model: $AI_MODEL
+  api_key: $AI_API_KEY  # 由 adapter 通过 RunnableConfig 注入，不从此处读取
+
+# 检查点（对话状态持久化）
+checkpointer:
+  type: sqlite
+  path: /app/data/deerflow-checkpoints.db
+
+# 记忆（低敏长期记忆）
+memory:
+  path: /app/data/deerflow-memory.json
+  max_facts: 50
+  fact_confidence_threshold: 0.8
+
+# 对话历史自动压缩（超过阈值时触发）
+summarization:
+  enabled: true
+  trigger:
+    - type: messages
+      value: 40  # 超过20轮（40条消息）时触发压缩
+    - type: tokens
+      value: 6000  # 或超过6000 tokens时触发（接近8k模型上限）
+  keep:
+    type: messages
+    value: 8  # 压缩后保留最后4轮（8条消息）
+  trim_tokens_to_summarize: null  # 不截断，保留完整历史生成摘要
+  summary_prompt: |
+    请将以下对话历史压缩成简洁的摘要，保留关键信息和上下文要点。
+    摘要应该：
+    1. 用不超过200字概括讨论的主要内容
+    2. 保留重要的数字、决策和结论
+    3. 保持时间顺序的逻辑关系
+    对话历史：
+    {messages}
+    请直接输出摘要，不要有任何前言或解释：
+
+# 沙盒安全设置
+sandbox:
+  use: deerflow.sandbox.local:LocalSandboxProvider
+  allow_host_bash: false  # 生产环境禁止本地 bash 执行
+
+# Skills 路径
+skills:
+  paths:
+    - /app/skills/custom
+
+# 子代理设置（默认关闭，按 skill 按需开启）
+subagents:
+  enabled: false
+  max_concurrent: 3
+  timeout_seconds: 900
+
+# 流式超时
+stream:
+  timeout_seconds: 120
