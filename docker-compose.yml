@@ -1,6 +1,8 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./server
+      dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
     volumes:
@@ -26,7 +28,9 @@ services:
       start_period: 10s
 
   agent:
-    build: ./agent
+    build:
+      context: ./server
+      dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
     volumes:

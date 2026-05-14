@@ -8,7 +8,7 @@ from apps.backend.app.errors.codes import ErrorCode
 
 def test_all_error_codes_have_zh_translation():
     """Every ErrorCode must have a corresponding key in zh-CN.json."""
-    locale_path = Path(__file__).parent.parent / "app" / "errors" / "locales" / "zh-CN.json"
+    locale_path = Path(__file__).parent.parent.parent / "apps" / "backend" / "app" / "errors" / "locales" / "zh-CN.json"
     messages = json.loads(locale_path.read_text(encoding="utf-8"))
 
     missing = [code.value for code in ErrorCode if code.value not in messages]
@@ -17,7 +17,7 @@ def test_all_error_codes_have_zh_translation():
 
 def test_all_error_codes_have_en_translation():
     """Every ErrorCode must have a corresponding key in en-US.json."""
-    locale_path = Path(__file__).parent.parent / "app" / "errors" / "locales" / "en-US.json"
+    locale_path = Path(__file__).parent.parent.parent / "apps" / "backend" / "app" / "errors" / "locales" / "en-US.json"
     messages = json.loads(locale_path.read_text(encoding="utf-8"))
 
     missing = [code.value for code in ErrorCode if code.value not in messages]
@@ -29,8 +29,8 @@ def test_no_bare_http_exception_in_routers():
 
     Use # noqa: allow-http-exception on a line to exempt it.
     """
-    routers_dir = Path(__file__).parent.parent / "app" / "routers"
-    middleware_dir = Path(__file__).parent.parent / "app" / "middleware"
+    routers_dir = Path(__file__).parent.parent.parent / "apps" / "backend" / "app" / "routers"
+    middleware_dir = Path(__file__).parent.parent.parent / "apps" / "backend" / "app" / "middleware"
 
     violations = []
 

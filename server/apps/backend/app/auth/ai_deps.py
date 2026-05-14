@@ -1,7 +1,6 @@
 """AI 功能相关的 FastAPI dependencies。"""
 
 import hmac
-from datetime import datetime, timedelta
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from jose import JWTError, jwt
@@ -14,9 +13,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.services.audit_log import write_audit_log
-
-# Agent JWT TTL: 5 minutes (short-lived, per-request)
-_AGENT_TOKEN_TTL_SECONDS = 300
+from packages.security.service_auth.agent_jwt import create_agent_token  # noqa: F401
 
 
 def require_owner(current_user: User = Depends(get_current_user)) -> User:
@@ -45,23 +42,6 @@ def require_ai_enabled(
     if not active_config:
         raise AppError(ErrorCode.AI_NOT_ENABLED)
     return current_user
-
-
-def create_agent_token(family_id: str, agent_instance_id: str = "backend") -> str:
-    """Create a short-lived JWT for backend→agent service-to-service calls.
-
-    Cryptographically binds family_id so it cannot be tampered with.
-    """
-    now = datetime.utcnow()
-    payload = {
-        "sub": "agent",
-        "fid": family_id,
-        "agt": agent_instance_id,
-        "iat": now,
-        "exp": now + timedelta(seconds=_AGENT_TOKEN_TTL_SECONDS),
-        "type": "agent",
-    }
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
 
 
 def verify_agent_token(
@@ -135,7 +115,7 @@ def verify_agent_token(
 
 
 def _validate_family_exists(db: Session, family_id: str) -> None:
-    family = db.query(Family).filter(Family.id == family_id).first()
+    family = db.query(Family).filter(Family.id == int(family_id)).first()
     if not family:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

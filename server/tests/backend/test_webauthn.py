@@ -76,7 +76,7 @@ def test_webauthn_register_options_returns_challenge(client, db):
         "pubKeyCredParams": [{"type": "public-key", "alg": -7}],
     }
     with patch(
-        "app.routers.auth.webauthn_helper.generate_registration_challenge",
+        "apps.backend.app.routers.auth.webauthn_helper.generate_registration_challenge",
         return_value=mock_options,
     ):
         response = client.post(
@@ -130,7 +130,7 @@ def test_webauthn_register_options_excludes_existing_credentials(client, db):
         "excludeCredentials": [{"id": existing_cred["id"], "type": "public-key"}],
     }
     with patch(
-        "app.routers.auth.webauthn_helper.generate_registration_challenge",
+        "apps.backend.app.routers.auth.webauthn_helper.generate_registration_challenge",
         return_value=mock_options,
     ) as mock_gen:
         response = client.post(
@@ -171,9 +171,9 @@ def test_webauthn_register_stores_credential(client, db):
     }
 
     with patch(
-        "app.routers.auth.webauthn_helper.verify_registration",
+        "apps.backend.app.routers.auth.webauthn_helper.verify_registration",
         return_value=verified_cred,
-    ), patch("app.routers.auth._decode_webauthn_challenge", return_value=b"test-challenge"):
+    ), patch("apps.backend.app.routers.auth._decode_webauthn_challenge", return_value=b"test-challenge"):
         response = client.post(
             "/api/v1/auth/child/webauthn/register",
             json={
@@ -199,9 +199,9 @@ def test_webauthn_register_verification_fails(client, db):
     child_id = child_resp.json()["data"]["id"]
 
     with patch(
-        "app.routers.auth.webauthn_helper.verify_registration",
+        "apps.backend.app.routers.auth.webauthn_helper.verify_registration",
         side_effect=Exception("Invalid attestation"),
-    ), patch("app.routers.auth._decode_webauthn_challenge", return_value=b"test-challenge"):
+    ), patch("apps.backend.app.routers.auth._decode_webauthn_challenge", return_value=b"test-challenge"):
         response = client.post(
             "/api/v1/auth/child/webauthn/register",
             json={
@@ -250,9 +250,9 @@ def test_webauthn_register_appends_to_existing_credentials(client, db):
     }
 
     with patch(
-        "app.routers.auth.webauthn_helper.verify_registration",
+        "apps.backend.app.routers.auth.webauthn_helper.verify_registration",
         return_value=new_cred,
-    ), patch("app.routers.auth._decode_webauthn_challenge", return_value=b"test-challenge"):
+    ), patch("apps.backend.app.routers.auth._decode_webauthn_challenge", return_value=b"test-challenge"):
         response = client.post(
             "/api/v1/auth/child/webauthn/register",
             json={
@@ -294,7 +294,7 @@ def test_webauthn_login_options_returns_challenge(client, db):
         "allowCredentials": [{"id": credential["id"], "type": "public-key"}],
     }
     with patch(
-        "app.routers.auth.webauthn_helper.generate_authentication_challenge",
+        "apps.backend.app.routers.auth.webauthn_helper.generate_authentication_challenge",
         return_value=mock_options,
     ):
         response = client.post(
@@ -367,9 +367,9 @@ def test_webauthn_login_success(client, db):
     verification_result = {"new_sign_count": 1}
 
     with patch(
-        "app.routers.auth.webauthn_helper.verify_authentication",
+        "apps.backend.app.routers.auth.webauthn_helper.verify_authentication",
         return_value=verification_result,
-    ), patch("app.routers.auth._decode_webauthn_challenge", return_value=b"auth-challenge"):
+    ), patch("apps.backend.app.routers.auth._decode_webauthn_challenge", return_value=b"auth-challenge"):
         response = client.post(
             "/api/v1/auth/child/webauthn/login",
             json={
@@ -450,9 +450,9 @@ def test_webauthn_login_verification_fails(client, db):
     db.commit()
 
     with patch(
-        "app.routers.auth.webauthn_helper.verify_authentication",
+        "apps.backend.app.routers.auth.webauthn_helper.verify_authentication",
         side_effect=Exception("Invalid signature"),
-    ), patch("app.routers.auth._decode_webauthn_challenge", return_value=b"challenge"):
+    ), patch("apps.backend.app.routers.auth._decode_webauthn_challenge", return_value=b"challenge"):
         response = client.post(
             "/api/v1/auth/child/webauthn/login",
             json={

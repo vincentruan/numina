@@ -21,10 +21,10 @@ def test_parse_returns_preview(client, auth_headers, db):
         ],
     }
     with patch(
-        "app.routers.import_report._call_agent_parse",
+        "apps.backend.app.routers.import_report._call_agent_parse",
         new=AsyncMock(return_value=mock_agent_resp),
     ), patch(
-        "app.routers.import_report._extract_pdf_text",
+        "apps.backend.app.routers.import_report._extract_pdf_text",
         return_value="贵州茅台 100股",
     ):
         resp = client.post(
@@ -41,7 +41,7 @@ def test_parse_returns_preview(client, auth_headers, db):
 
 def test_parse_returns_400_for_empty_pdf(client, auth_headers):
     with patch(
-        "app.routers.import_report._extract_pdf_text",
+        "apps.backend.app.routers.import_report._extract_pdf_text",
         return_value="",
     ):
         resp = client.post(
@@ -55,10 +55,10 @@ def test_parse_returns_400_for_empty_pdf(client, auth_headers):
 def test_parse_returns_422_when_agent_finds_nothing(client, auth_headers):
     empty = {"source": "", "report_date": None, "items": []}
     with patch(
-        "app.routers.import_report._call_agent_parse",
+        "apps.backend.app.routers.import_report._call_agent_parse",
         new=AsyncMock(return_value=empty),
     ), patch(
-        "app.routers.import_report._extract_pdf_text",
+        "apps.backend.app.routers.import_report._extract_pdf_text",
         return_value="这不是金融文档",
     ):
         resp = client.post(

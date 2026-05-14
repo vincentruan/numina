@@ -219,7 +219,7 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     mock_cls = MagicMock(return_value=mock_client)
 
     with patch("httpx.AsyncClient", new=mock_cls), \
-         patch("app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()):
+         patch("apps.backend.app.routers.ai_report.ChatSessionService.append_message", new=AsyncMock()):
         resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
 
     # Response should still be 200 with error event (helper catches errors)

@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from apps.backend.app.models.ai_task import AITask
+from packages.db.models.ai_task import AITask
 
 TASK_TIMEOUT_MINUTES = 30
 

@@ -1,7 +1,7 @@
 ---
 title: "refactor: Phase 2 — Consolidate backend/ and agent/ into server/ monorepo"
 type: refactor
-status: active
+status: completed
 date: 2026-05-14
 origin: docs/brainstorms/2026-05-13-runtime-decomposition-scheduler-worker-requirements.md
 ---

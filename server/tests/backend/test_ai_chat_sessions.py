@@ -66,7 +66,7 @@ def test_chat_creates_session_when_none_exists(client, auth_headers, db, tmp_pat
     """POST /ai/chat without session_id creates a new session."""
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -89,7 +89,7 @@ def test_chat_reuses_existing_session(client, auth_headers, db, tmp_path):
     """POST /ai/chat with session_id appends to existing session."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         # First message — creates session
         resp1 = client.post(
@@ -117,7 +117,7 @@ def test_chat_invalid_session_id_returns_404(client, auth_headers, db, tmp_path)
     """POST /ai/chat with non-existent session_id returns 404."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         resp = client.post(
             "/api/v1/ai/chat",
             json={"question": "Hello", "session_id": "00000000-0000-0000-0000-000000000000"},
@@ -133,7 +133,7 @@ def test_jsonl_file_contains_correct_messages(client, auth_headers, db, tmp_path
     """After POST, JSONL file contains valid JSON lines with correct content."""
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response("AI reply")):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -163,7 +163,7 @@ def test_get_history_returns_messages_in_order(client, auth_headers, db, tmp_pat
     """GET /ai/chat/history returns messages in ascending order."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response("Answer")):
         post_resp = client.post(
             "/api/v1/ai/chat",
@@ -172,7 +172,7 @@ def test_get_history_returns_messages_in_order(client, auth_headers, db, tmp_pat
         )
         session_id = post_resp.json()["data"]["session_id"]
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         resp = client.get(
             f"/api/v1/ai/chat/history?session_id={session_id}",
             headers=auth_headers,
@@ -189,11 +189,11 @@ def test_get_history_without_session_id_uses_latest(client, auth_headers, db, tm
     """GET /ai/chat/history without session_id returns latest session's messages."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         client.post("/api/v1/ai/chat", json={"question": "Q1"}, headers=auth_headers)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         resp = client.get("/api/v1/ai/chat/history", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -224,7 +224,7 @@ def test_get_history_limit_applied(client, auth_headers, db, tmp_path):
     """GET /ai/chat/history respects limit parameter."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         # Send 3 messages
         resp = client.post("/api/v1/ai/chat", json={"question": "Q1"}, headers=auth_headers)
@@ -236,7 +236,7 @@ def test_get_history_limit_applied(client, auth_headers, db, tmp_path):
                 headers=auth_headers,
             )
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         resp = client.get(
             f"/api/v1/ai/chat/history?session_id={session_id}&limit=2",
             headers=auth_headers,
@@ -258,7 +258,7 @@ def test_get_sessions_returns_list(client, auth_headers, db, tmp_path):
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     user_id = me["data"]["id"]
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         # Create two sessions directly via service
         asyncio.get_event_loop().run_until_complete(
             ChatSessionService.create_session(family_id, user_id, db)
@@ -289,8 +289,8 @@ def test_chat_stream_persists_only_non_thinking_tokens(client, auth_headers, db,
         '{"type":"capability.end","result":{"summary":"最终回答"}}\n',
     ]
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
-         patch("app.routers.ai_chat.SessionLocal", side_effect=lambda: nullcontext(db)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
+         patch("apps.backend.app.routers.ai_chat.SessionLocal", side_effect=lambda: nullcontext(db)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_stream(ndjson_lines)):
         resp = client.post(
             "/api/v1/ai/chat/stream",
@@ -335,7 +335,7 @@ def test_delete_specific_session(client, auth_headers, db, tmp_path):
     me = client.get("/api/v1/auth/me", headers=auth_headers).json()
     user_id = me["data"]["id"]
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         session1 = asyncio.get_event_loop().run_until_complete(
             ChatSessionService.create_session(family_id, user_id, db)
         )
@@ -360,7 +360,7 @@ def test_delete_all_sessions(client, auth_headers, db, tmp_path):
     """DELETE /ai/chat/history without session_id deletes all family sessions."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         client.post("/api/v1/ai/chat", json={"question": "Q1"}, headers=auth_headers)
         client.post("/api/v1/ai/chat", json={"question": "Q2"}, headers=auth_headers)
@@ -375,7 +375,7 @@ def test_delete_soft_deletes_cached_file(client, auth_headers, db, tmp_path):
     """DELETE marks CachedFile as deleted (soft delete)."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post("/api/v1/ai/chat", json={"question": "Q"}, headers=auth_headers)
         session_id = resp.json()["data"]["session_id"]
@@ -398,7 +398,7 @@ def test_cross_family_session_isolation(client, auth_headers, second_user_header
     _enable_ai(db, auth_headers, client)
     _enable_ai(db, second_user_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -408,7 +408,7 @@ def test_cross_family_session_isolation(client, auth_headers, second_user_header
         family_a_session_id = resp.json()["data"]["session_id"]
 
     # Family B tries to access Family A's session
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)):
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         resp = client.get(
             f"/api/v1/ai/chat/history?session_id={family_a_session_id}",
             headers=second_user_headers,
@@ -425,7 +425,7 @@ def test_cross_family_delete_isolation(client, auth_headers, second_user_headers
     _enable_ai(db, auth_headers, client)
     _enable_ai(db, second_user_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -450,7 +450,7 @@ def test_cached_file_created_on_first_message(client, auth_headers, db, tmp_path
     """First message creates a CachedFile row with correct mime_type."""
     family_id = _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -485,9 +485,9 @@ def test_remote_sync_queued_when_enabled(client, auth_headers, db, tmp_path):
     db.add(backend)
     db.commit()
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
-         patch("app.config.settings.CHAT_ENABLE_REMOTE_SYNC", True), \
-         patch("app.services.chat_session.settings.CHAT_ENABLE_REMOTE_SYNC", True), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
+         patch("apps.backend.app.config.settings.CHAT_ENABLE_REMOTE_SYNC", True), \
+         patch("apps.backend.app.services.chat_session.settings.CHAT_ENABLE_REMOTE_SYNC", True), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -506,7 +506,7 @@ def test_remote_sync_not_queued_by_default(client, auth_headers, db, tmp_path):
     """By default (CHAT_ENABLE_REMOTE_SYNC=False), no FileRemoteLocation is created."""
     _enable_ai(db, auth_headers, client)
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=_mock_agent_response()):
         resp = client.post(
             "/api/v1/ai/chat",
@@ -541,7 +541,7 @@ def test_agent_receives_thread_id_header(client, auth_headers, db, tmp_path):
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.post = mock_post
 
-    with patch("app.config.settings.CHAT_DIR", str(tmp_path)), \
+    with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)), \
          patch("httpx.AsyncClient", return_value=mock_client):
         resp = client.post(
             "/api/v1/ai/chat",

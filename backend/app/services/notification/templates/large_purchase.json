@@ -1,9 +1,0 @@
-{
-  "telegram": {
-    "text": "🛒 *大额消费提醒*\n\n你正在考虑购买 *{asset_name}*，金额 ¥{amount}。\n建议冷静 48 小时再决定。\n\n_Numina 家庭资产管理_"
-  },
-  "email": {
-    "subject": "【Numina】大额消费冷静期提醒",
-    "body": "你好，\n\n你正在考虑购买「{asset_name}」，金额 ¥{amount}，超过你设定的大额消费阈值（{threshold}）。\n\n建议冷静 48 小时后再做决定。\n\nNumina 家庭资产管理"
-  }
-}

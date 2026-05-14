@@ -1,21 +1,22 @@
 FROM python:3.13-slim
 
-WORKDIR /app
-
-# 安装 uv 和时区数据
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
 RUN pip install uv --no-cache-dir
 
-# 安装 DeerFlow harness（vendor 目录由 scripts/vendor-harness.sh 预先填充）
-# 同时复制到 vendor/ 目录以满足 pyproject.toml workspace 配置
-COPY vendor/deerflow-harness /app/vendor/deerflow-harness
+WORKDIR /app
 
+# DeerFlow harness must be present before uv sync (workspace member)
+COPY apps/agent/vendor/deerflow-harness ./apps/agent/vendor/deerflow-harness
+
+# Install dependencies from server/ root (cached layer)
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --extra agent
 
-COPY . .
+# Copy application code
+COPY apps/agent/ ./apps/agent/
+COPY packages/ ./packages/
 
 EXPOSE 8001
 
-CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+CMD ["uv", "run", "--no-dev", "uvicorn", "apps.agent.app.main:app", "--host", "0.0.0.0", "--port", "8001"]

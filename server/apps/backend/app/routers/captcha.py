@@ -1,6 +1,6 @@
 """ALTCHA captcha challenge endpoint."""
 
-from altcha import ChallengeOptionsV1, create_challenge
+from altcha import ChallengeOptions, create_challenge
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
@@ -45,11 +45,12 @@ def get_challenge(endpoint: str | None = None):
     Args:
         endpoint: Optional endpoint type to adjust difficulty.
             - "login": Lower difficulty (30000) for faster mobile UX
-            - "register", "join-family": Higher difficulty (100000) for abuse prevention
+            - "register": Higher difficulty (100000) for abuse prevention
+            - "join-family": Higher difficulty (100000) for abuse prevention
             - None or unrecognized: Default difficulty (50000)
     """
     max_number = DIFFICULTY_MAP.get(endpoint, DEFAULT_DIFFICULTY)
-    challenge = create_challenge(ChallengeOptionsV1(
+    challenge = create_challenge(ChallengeOptions(
         hmac_key=settings.ALTCHA_HMAC_KEY,
         max_number=max_number,
     ))

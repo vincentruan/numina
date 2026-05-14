@@ -53,9 +53,8 @@ Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visu
 
 | Layer | Technology |
 |-------|-----------|
-| Backend | Python 3.11+ + FastAPI + SQLAlchemy + Alembic |
+| Server (Backend + Agent + Worker) | Python 3.12+ + FastAPI + SQLAlchemy + Alembic |
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
-| Agent | Python 3.11+ + FastAPI + DeerFlow/LangChain |
 | Infrastructure | Docker Compose + Nginx |
 
 ## Known Pitfalls
@@ -85,7 +84,7 @@ Applies to every router with root-path endpoints. Frontend calls must also omit 
 
 JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts, etc.) **must be serialized as strings in API responses** and typed as `string` in TypeScript.
 
-**Implementation:** All response schemas use `SnowflakeBase` which automatically converts `int` fields named `id` or ending in `_id` to `str` during JSON serialization. See backend [`CLAUDE.md`](./backend/CLAUDE.md) "Snowflake ID Serialization" section for pattern details.
+**Implementation:** All response schemas use `SnowflakeBase` which automatically converts `int` fields named `id` or ending in `_id` to `str` during JSON serialization. See [`server/apps/backend/CLAUDE.md`](./server/apps/backend/CLAUDE.md) "Snowflake ID Serialization" section for pattern details.
 
 ### API Return Code Conventions
 
@@ -110,10 +109,10 @@ For module-specific dev commands, conventions, and patterns:
 
 | Module | CLAUDE.md | README |
 |--------|-----------|--------|
-| Backend | [`backend/CLAUDE.md`](./backend/CLAUDE.md) | [`backend/README.md`](./backend/README.md) |
+| Server | [`server/apps/backend/CLAUDE.md`](./server/apps/backend/CLAUDE.md) | [`server/apps/backend/README.md`](./server/apps/backend/README.md) |
 | Frontend (main) | [`frontend/apps/main/CLAUDE.md`](./frontend/apps/main/CLAUDE.md) | [`frontend/README.md`](./frontend/README.md) |
 | Frontend (child) | [`frontend/apps/child/CLAUDE.md`](./frontend/apps/child/CLAUDE.md) | — |
-| Agent | [`agent/CLAUDE.md`](./agent/CLAUDE.md) | [`agent/README.md`](./agent/README.md) |
+| Agent | [`server/apps/agent/CLAUDE.md`](./server/apps/agent/CLAUDE.md) | [`server/apps/agent/README.md`](./server/apps/agent/README.md) |
 | Site | [`site/CLAUDE.md`](./site/CLAUDE.md) | — |
 
 ## Development Commands

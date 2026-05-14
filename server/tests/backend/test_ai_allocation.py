@@ -211,7 +211,7 @@ def test_check_drift_calls_agent_with_target(client, auth_headers, db):
     db.commit()
 
     # Patch httpx where it's imported in the router module
-    with patch("app.routers.ai_allocation.httpx.AsyncClient", return_value=_mock_agent_drift_response()):
+    with patch("apps.backend.app.routers.ai_allocation.httpx.AsyncClient", return_value=_mock_agent_drift_response()):
         resp = client.get("/api/v1/ai/allocation-target/check", headers=auth_headers)
 
     assert resp.status_code == 200
@@ -252,7 +252,7 @@ def test_check_drift_handles_agent_failure(client, auth_headers, db):
     mock_client.__aexit__ = AsyncMock(return_value=False)
     mock_client.post = AsyncMock(return_value=mock_resp)
 
-    with patch("app.routers.ai_allocation.httpx.AsyncClient", return_value=mock_client):
+    with patch("apps.backend.app.routers.ai_allocation.httpx.AsyncClient", return_value=mock_client):
         resp = client.get("/api/v1/ai/allocation-target/check", headers=auth_headers)
 
     # Returns 503 (AI_SERVICE_UNAVAILABLE) on agent failure

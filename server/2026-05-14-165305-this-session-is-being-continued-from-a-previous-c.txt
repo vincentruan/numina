@@ -1,0 +1,642 @@
+ ▐▛███▜▌   Claude Code v2.1.128
+▝▜█████▛▘  Sonnet 4.6 · API Usage Billing
+  ▘▘ ▝▝    ~/geek_space/github/numina/server
+
+✻ Conversation compacted (ctrl+o for history)
+
+
+❯ /compact                                                                      
+  ⎿  Compacted (ctrl+o to see full summary)
+     PreCompact [node "$CLAUDE_PLUGIN_ROOT"/scripts/run.cjs 
+     "$CLAUDE_PLUGIN_ROOT"/scripts/pre-compact.mjs] completed successfully: 
+     {"continue":true,"systemMessage":"# PreCompact Checkpoint\n\nCreated: 
+     2026-05-14T08:31:35.579Z\nTrigger: manual\n\n---\nNote: This checkpoint
+     preserves critical state before compaction.\nReview active modes to ensure
+     continuity after compaction."}
+     PreCompact [node "$CLAUDE_PLUGIN_ROOT"/scripts/run.cjs 
+     "$CLAUDE_PLUGIN_ROOT"/scripts/project-memory-precompact.mjs] completed 
+     successfully: {"continue":true,"systemMessage":"# Project Memory 
+     (Post-Compaction Recovery)\n\nThe following project context and user 
+     directives must be preserved after compaction:\n\n[Project Environment]\n- 
+     Python | fastapi\n- test=pytest | lint=ruff check\n\n[Hot Paths]\n- 
+     apps/backend/alembic/env.py (8x)\n- apps/backend/app/models/user.py (4x)\n- 
+     apps/backend/app/auth/ai_deps.py (4x)\n\nIMPORTANT: These user directives
+     must be followed throughout the session, even after compaction."}
+     PreCompact [node "$CLAUDE_PLUGIN_ROOT"/scripts/run.cjs 
+     "$CLAUDE_PLUGIN_ROOT"/scripts/wiki-pre-compact.mjs] completed successfully: 
+     {"continue":true,"suppressOutput":true}
+  ⎿  Read apps/backend/alembic/env.py (100 lines)
+  ⎿  Read ../../../../../../private/tmp/claude-501/-Users-vincentruan-geek-space-github-numina/9c7eb810-8496-4f56-b330-0e72a818c2ac/tasks/bvssc75uj.output (21 lines)
+  ⎿  Read apps/backend/app/auth/ai_deps.py (124 lines)
+  ⎿  Read apps/backend/CLAUDE.md (147 lines)
+  ⎿  Read apps/agent/Dockerfile (22 lines)
+  ⎿  Skills restored (compound-engineering:ce-review, compound-engineering:ce-work, compound-engineering:document-review, compound-engineering:ce-plan, compound-engineering:ce-brainstorm, engineering:code-review)
+
+❯ /compound-engineering:agent-native-audit                                      
+
+⏺ I'll run the agent-native architecture audit for the Numina project, launching
+   8 parallel sub-agents to evaluate each principle.
+
+⏺ 8 Explore agents finished (ctrl+o to expand)
+   ├ Audit Action Parity - what users can do vs what agents can do · 26 tool uses · 71.7k tokens
+   │ ⎿  Done
+   ├ Audit Tools as Primitives - classify agent tools as primitives vs workflows · 20 tool uses · 64.8k tokens
+   │ ⎿  Done
+   ├ Audit Context Injection - what dynamic context is injected into agent system prompts · 25 tool uses · 71.4k tokens
+   │ ⎿  Done
+   ├ Audit Shared Workspace - agent and user data space isolation check · 37 tool uses · 67.2k tokens
+   │ ⎿  Done
+   ├ Audit CRUD Completeness - every entity has full create/read/update/delete via agent · 21 tool uses · 63.6k tokens
+   │ ⎿  Done
+   ├ Audit UI Integration - agent actions reflected in UI via streaming/polling · 29 tool uses · 76.0k tokens
+   │ ⎿  Done
+   ├ Audit Capability Discovery - how users discover what the agent can do · 36 tool uses · nan tokens
+   │ ⎿  Done
+   └ Audit Prompt-Native Features - features defined in prompts vs hardcoded in code · 19 tool uses · 65.4k tokens
+     ⎿  Done
+
+⏺ Compiling the results from all 8 parallel sub-agents into the final report.
+
+  ---
+  Agent-Native Architecture Review: Numina
+
+  Overall Score Summary
+
+  ┌────────────────────────┬───────┬────────────┬───────────────┐
+  │     Core Principle     │ Score │ Percentage │    Status     │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ Action Parity          │ 8/28  │ 29%        │ ❌ Needs Work │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ Tools as Primitives    │ 8/16  │ 50%        │ ⚠️ Partial    │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ Context Injection      │ 5/12  │ 42%        │ ❌ Needs Work │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ Shared Workspace       │ 11/11 │ 100%       │ ✅ Excellent  │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ CRUD Completeness      │ 9/49  │ 18%        │ ❌ Needs Work │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ UI Integration         │ 4/6   │ 67%        │ ⚠️ Partial    │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ Capability Discovery   │ 5/7   │ 71%        │ ⚠️ Partial    │
+  ├────────────────────────┼───────┼────────────┼───────────────┤
+  │ Prompt-Native Features │ 5/9   │ 56%        │ ⚠️ Partial    │
+  └────────────────────────┴───────┴────────────┴───────────────┘
+
+  Overall Agent-Native Score: 54%
+
+  ---
+  Status Legend
+
+  - ✅ Excellent (80%+)
+  - ⚠️ Partial (50–79%)
+  - ❌ Needs Work (<50%)
+
+  ---
+  What's Working Excellently
+
+  1. Shared Workspace (100%) — Agent has zero direct DB access. All data flows
+  through the backend HTTP API via BackendClient. Single shared database,
+  family-scoped via X-Family-Id headers. This is the correct pattern.
+  2. Streaming UI for AI features — Chat uses NDJSON streaming, AI reports use
+  WebSocket with ticket-based auth. Real-time feedback is solid for the core AI
+  flows.
+  3. Capability Discovery infrastructure — /capabilities endpoint returns
+  structured metadata, AIHubPage.vue renders a feature grid, and chat shows
+  suggested prompts. The bones are there.
+  4. Prompt-native analysis narratives — Health reports, liability advice, asset
+   suggestions, and spending leak summaries are all prompt-defined. Changing the
+   tone or logic of these requires only a prompt edit.
+  5. Security architecture — Policy guard, PII redaction before LLM injection,
+  and audit logging are all in place as proper primitives.
+
+  ---
+  Top 10 Recommendations by Impact
+
+  ┌──────────┬────────────────────────────────────┬────────────────┬────────┐
+  │ Priority │               Action               │   Principle    │ Effort │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Add agent tools for                │                │        │
+  │ 1        │ asset/liability CRUD — the core    │ Action Parity  │ Medium │
+  │          │ financial entities have no write   │                │        │
+  │          │ path via agent                     │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Populate assets and members fields │                │        │
+  │ 2        │  in context (currently hardcoded   │ Context        │ Small  │
+  │          │ []) — LLM is blind to the asset    │ Injection      │        │
+  │          │ inventory                          │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Broadcast asset mutations via      │                │        │
+  │ 3        │ notification bus — other family    │ UI Integration │ Small  │
+  │          │ members see stale data after agent │                │        │
+  │          │  writes                            │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Refactor Orchestrator, Chat,       │                │        │
+  │ 4        │ LiabilityAdvisor, DisposalAdvisor  │ Tools as       │ Large  │
+  │          │ from workflow services into        │ Primitives     │        │
+  │          │ router-level orchestration         │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Add session memory injection —     │ Context        │        │
+  │ 5        │ each dispatch is stateless;        │ Injection      │ Medium │
+  │          │ multi-turn reasoning is impossible │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Move disposal scoring thresholds   │                │        │
+  │ 6        │ and aging alert thresholds to      │ Prompt-Native  │ Small  │
+  │          │ backend config or skill            │                │        │
+  │          │ frontmatter                        │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │ 7        │ Add slash command system (/help,   │ Capability     │ Small  │
+  │          │ /tools) in chat interface          │ Discovery      │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │ 8        │ Push AI task completion via        │ UI Integration │ Medium │
+  │          │ WebSocket instead of polling       │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Add agent tools for                │                │        │
+  │ 9        │ chore/wish/coin system — family    │ Action Parity  │ Medium │
+  │          │ coordination features have zero    │                │        │
+  │          │ agent coverage                     │                │        │
+  ├──────────┼────────────────────────────────────┼────────────────┼────────┤
+  │          │ Externalize policy rules from      │                │        │
+  │ 10       │ policy_guard.py to backend config  │ Prompt-Native  │ Small  │
+  │          │ — currently requires code deploy   │                │        │
+  │          │ to change                          │                │        │
+  └──────────┴────────────────────────────────────┴────────────────┴────────┘
+
+  ---
+  Key Findings by Principle
+
+  Action Parity (29%) — The 8 existing agent capabilities are all read-only
+  analysis tools (report, alerts, disposal, liability, allocation, spending
+  leak, time machine, chat). The entire write surface — asset CRUD, liability
+  CRUD, chore management, child wishes, coin rewards, family management — has no
+   agent coverage. The agent can analyze but cannot act.
+
+  CRUD Completeness (18%) — Only 9 of 49 entities have full CRUD. The 9 that do
+  (Asset, Liability, Wish, Category, Tag, Chore, Child, BlindBoxGift,
+  NotificationChannel) are the right ones to prioritize. The remaining 40 are
+  mostly system/audit records where read-only is intentional and correct.
+
+  Context Injection (42%) — The most impactful gap: assets and members are
+  hardcoded to [] in orchestrator._build_context()
+  (server/apps/agent/services/orchestrator.py:642-643). The LLM receives
+  dashboard aggregates but cannot see individual assets by name, type, or value.
+   This limits the quality of every analysis capability.
+
+  Tools as Primitives (50%) — The 8 primitive services (PolicyGuard,
+  AuditLogger, SessionStore, PIIRedactor, etc.) are well-designed. The 8
+  workflow services embed business logic that should live in routers or schema
+  modules. The Orchestrator class is the biggest offender — it encodes the
+  entire dispatch pipeline as a 28KB class.
+
+  UI Integration (67%) — Chat streaming and AI report WebSocket are excellent.
+  The gap is asset mutations: when the agent (or any user)
+  creates/updates/deletes an asset, other family members don't see it until
+  manual refresh. fire_notification() is already used for wishes/chores/coins —
+  the same pattern just needs to be applied to asset endpoints.
+
+  Capability Discovery (71%) — Strong foundation. Missing: slash commands and
+  in-app help documentation. The /capabilities endpoint and AIHubPage feature
+  grid already provide the data; it's a matter of surfacing it in more places.
+
+  Prompt-Native (56%) — Disposal scoring (FREQ_SCORE dict, hardcoded cost/age
+  thresholds) and aging alert thresholds (180/365 days) are the clearest
+  candidates for externalization. These are tuning parameters that should not
+  require a code deploy to change.
+
+✻ Sautéed for 5m 3s
+
+❯ /compound-engineering:ce-brainstorm  fix  Top 10 Recommendations              
+
+⏺ I'll assess the scope of this request before diving in.
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ The request is "fix Top 10 Recommendations" from the agent-native audit we
+  just ran. This is a Deep scope — it spans 10 distinct improvements across 5
+  architectural principles, touching backend, agent, and frontend layers.
+
+  Let me scan the codebase to verify the current state of each recommendation
+  before we decide what to tackle.
+
+  Searched for 5 patterns, listed 1 directory (ctrl+o to expand)
+
+⏺ Let me check the remaining items before we scope the work.
+
+  Searched for 4 patterns (ctrl+o to expand)
+
+⏺ Good — all 10 items are confirmed real gaps. Before writing a requirements
+  doc, I need to understand your priorities.
+
+⏺ User answered Claude's questions:
+  ⎿  · The 10 recommendations span very different effort levels. Which area 
+     matters most to you right now? → Quick wins first
+
+⏺ Quick wins it is. Let me read the three relevant files before writing the
+  requirements doc.
+
+  Read 3 files (ctrl+o to expand)
+  ⎿  Loaded apps/agent/CLAUDE.md
+
+⏺ Good — I have a clear picture now. Let me check one more thing before writing
+  the requirements doc.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Now I have everything I need. The scope is clear and well-bounded. Let me
+  write the requirements document directly — no further dialogue needed.
+
+  Listed 1 directory (ctrl+o to expand)
+
+⏺ Write(~/geek_space/github/numina/docs/brainstorms/2026-05-14-agent-native-quic
+       k-wins-requirements.md)
+  ⎿  Wrote 101 lines to
+     ../docs/brainstorms/2026-05-14-agent-native-quick-wins-requirements.md
+      2 # Agent-Native Quick Wins Requirements
+      3 **Created:** 2026-05-14
+      4 **Source:** Agent-native architecture audit (2026-05-14) — items 
+        6, 7, 10 from Top 10 Recommendations
+      5 **Scope:** Lightweight — three independent, low-risk improvements
+         with no architectural dependencies
+      6 
+      7 ---
+      8 
+      9 ## Problem Frame
+     … +154 lines (ctrl+o to expand)
+
+⏺ Now running document review before presenting handoff options.
+
+⏺ 2 agents finished (ctrl+o to expand)
+   ├ compound-engineering:document-review:coherence-reviewer (Document review of agent-native quick wins requirements) · 1 tool use · 9.8k tokens
+   │ ⎿  Done
+   └ compound-engineering:document-review:feasibility-reviewer (Feasibility review of agent-native quick wins requirements) · 18 tool uses · 31.0k tokens
+     ⎿  Done
+
+⏺ Good findings. Let me apply the auto-fixable issues and update the
+  requirements doc.
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ Good — the services are live code paths (called from routers, not dead code).
+  The feasibility reviewer was wrong on P1 #1. Now let me check the routers to
+  confirm the call pattern.
+
+  Read 1 file (ctrl+o to expand)
+⏺ Both routers go through orchestrator.dispatch() → DeerFlow, not directly to
+  the rule-engine services. The feasibility reviewer's P1 #1 was actually
+  correct in a different way: the services exist but the current execution path
+  is DeerFlow, not the Python rule engines. Let me check the orchestrator to
+  understand the full picture.
+
+  Searched for 2 patterns (ctrl+o to expand)
+
+⏺ The feasibility reviewer was right. disposal_advisor.py and aging_alert.py are
+   imported by nobody except their own test files — the routers go through
+  orchestrator.dispatch() → DeerFlow only. These are legacy rule-engine services
+   that predate the DeerFlow migration and are now dead code relative to the
+  live execution path.
+
+  This changes the scope of R1/R2 significantly. Let me update the requirements
+  doc to reflect reality.
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ That's just the router function name — not an import of the service. The
+  rule-engine services are confirmed dead code. The requirements doc needs a
+  significant correction on R1/R2.
+
+⏺ Update(~/geek_space/github/numina/docs/brainstorms/2026-05-14-agent-native-qui
+        ck-wins-requirements.md)
+  ⎿  Added 7 lines, removed 33 lines
+       2  
+       3  **Created:** 2026-05-14
+       4  **Source:** Agent-native architecture audit (2026-05-14) — item
+          s 6, 7, 10 from Top 10 Recommendations
+       5 -**Scope:** Lightweight — three independent, low-risk improvemen
+         -ts with no architectural dependencies                          
+       5 +**Scope:** Lightweight — one frontend feature (R1) plus two bac
+         +kend cleanup items (R2/R3 are preparatory, see note)           
+       6  
+       7  ---
+       8  
+       9  ## Problem Frame
+      10  
+      11 -The agent-native audit identified three quick wins that require
+         - no new endpoints, no schema changes, and no frontend rewrites.
+         - All three are currently hardcoded values that should be config
+         -urable or discoverable:                                        
+      11 +The agent-native audit identified three quick wins. Investigati
+         +on revealed that items 6 and 10 require a prerequisite clarific
+         +ation before implementation:                                   
+      12  
+      13 -1. **Disposal scoring thresholds** (`FREQ_SCORE`, cost/age cuto
+         -ffs) are hardcoded in `server/apps/agent/services/disposal_advi
+         -sor.py`. Tuning requires a code deploy.                        
+      14 -2. **Aging alert thresholds** (180-day high, 365-day medium, 20
+         -% maintenance ratio) are hardcoded in `server/apps/agent/servic
+         -es/aging_alert.py`. Same problem.                              
+      15 -3. **Slash commands** (`/help`, `/tools`) are absent from the c
+         -hat interface. Users cannot discover agent capabilities via key
+         -board or command syntax.                                       
+      16 -4. **Policy rules** in `server/apps/agent/services/policy_guard
+         -.py` are pure in-memory logic driven by data already fetched fr
+         -om the backend (`CapabilityPolicy`). The guard itself is correc
+         -t — the issue is that `admin_only_capabilities` is populated fr
+         -om the backend config, so no code change is needed there. *(See
+         - Scope Boundaries.)*                                           
+      13 +1. **Slash command discovery** — absent from the chat interface
+         +. Users cannot discover agent capabilities via keyboard or comm
+         +and syntax. *(Becomes R1 — ready to implement.)*               
+      14 +2. **Disposal scoring thresholds** (`FREQ_SCORE`, cost/age cuto
+         +ffs) are hardcoded in `server/apps/agent/services/disposal_advi
+         +sor.py`. However, investigation shows this service is **not cal
+         +led by the live execution path** — routers dispatch through `or
+         +chestrator.dispatch()` → DeerFlow only. The service is legacy c
+         +ode predating the DeerFlow migration. *(Becomes R2 — delete dea
+         +d code, not externalize config.)*                              
+      15 +3. **Aging alert thresholds** (180-day high, 365-day medium) ar
+         +e hardcoded in `server/apps/agent/services/aging_alert.py`. Sam
+         +e situation — this service is also dead code relative to the cu
+         +rrent DeerFlow execution path. *(Becomes R3 — delete dead code.
+         +)*                                                             
+      16 +4. **Policy rules** in `server/apps/agent/services/policy_guard
+         +.py` are already data-driven from the backend `CapabilityPolicy
+         +` object. No code change needed. *(Removed from scope.)*       
+      17  
+      18  ---
+      19  
+      20  ## Requirements
+      21  
+      22 -### R1 — Externalize disposal scoring thresholds to skill front
+         -matter                                                         
+      22 +### R1 — Slash command discovery in chat interface             
+      23  
+      24 -The disposal advisor's scoring constants must be readable from 
+         -`server/apps/agent/skills/disposal.md` frontmatter so they can 
+         -be changed without a code deploy.                              
+      25 -                                                               
+      26 -**Acceptance criteria:**                                       
+      27 -- `FREQ_SCORE`, cost thresholds (`daily_cost > 10`, `> 3`, `> 0
+         -`), age thresholds (`age_years > 5`, `> 3`), and minimum score 
+         -cutoff (`score < 20`) are defined in `disposal.md` frontmatter 
+         -under a `scoring:` key.                                        
+      28 -- `disposal_advisor.py` reads these values at startup (or per-c
+         -all) from the loaded skill config; hardcoded constants are remo
+         -ved.                                                           
+      29 -- If the frontmatter key is absent, the service falls back to t
+         -he current defaults (no regression).                           
+      30 -- Existing tests pass. A new unit test verifies that custom fro
+         -ntmatter values are applied.                                   
+      31 -                                                               
+      32 -**Scope boundary:** Per-family threshold overrides are out of s
+         -cope. This is global config only.                              
+      33 -                                                               
+      34 ----                                                            
+      35 -                                                               
+      36 -### R2 — Externalize aging alert thresholds to skill frontmatte
+         -r                                                              
+      37 -                                                               
+      38 -Same pattern as R1, applied to `server/apps/agent/services/agin
+         -g_alert.py`.                                                   
+      39 -                                                               
+      40 -**Acceptance criteria:**                                       
+      41 -- `high_threshold_days` (180), `medium_threshold_days` (365), `
+         -maintenance_ratio` (0.20), and idle-cost trigger frequencies (`
+         -rarely`, `idle`) are defined in `server/apps/agent/skills/alert
+         -s.md` frontmatter under a `thresholds:` key.                   
+      42 -- `aging_alert.py` reads these values from the loaded skill con
+         -fig; hardcoded literals are removed.                           
+      43 -- If the frontmatter key is absent, the service falls back to c
+         -urrent defaults.                                               
+      44 -- Existing tests pass. A new unit test verifies custom threshol
+         -d values are applied.                                          
+      45 -                                                               
+      46 ----                                                            
+      47 -                                                               
+      48 -### R3 — Slash command discovery in chat interface             
+      49 -                                                               
+      24  Users typing `/` in the chat input should see a command palette
+           listing available agent capabilities. This surfaces the same d
+          ata already returned by `GET /capabilities`.
+      25  
+      26  **Acceptance criteria:**
+
+⏺ Now fix the rest of the document — rename R3 to R1, rewrite R2/R3 as dead code
+   deletion, fix the coherence issues, and update the files table.
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ The document needs a full rewrite of the bottom half. Let me replace
+  everything from the Requirements section onward.
+
+⏺ Update(~/geek_space/github/numina/docs/brainstorms/2026-05-14-agent-native-qui
+        ck-wins-requirements.md)
+  ⎿  Added 55 lines, removed 19 lines
+       19  
+       20  ## Requirements
+       21  
+       22 -### R1 — Slash command discovery in chat interface            
+       22 +### Frontend Requirements                                     
+       23  
+       24 +#### R1 — Slash command discovery in chat interface           
+       25 +                                                              
+       26  Users typing `/` in the chat input should see a command palett
+           e listing available agent capabilities. This surfaces the same
+            data already returned by `GET /capabilities`.
+       27  
+       28 +**Implementation note:** The slash detection and palette rende
+          +ring must live inside `AIChatInput.vue` (not `AIChatPage.vue`)
+          +, since that component owns the textarea ref, focus state, and
+          + `onInput` handler. The capability list is passed in as a prop
+          + from the page.                                               
+       29 +                                                              
+       30  **Acceptance criteria:**
+       27 -- Typing `/` in the chat input opens an inline suggestion list
+          - showing all capabilities from the `/capabilities` endpoint (n
+          -ame + description).                                           
+       28 -- Selecting a capability from the list inserts a suggested pro
+          -mpt (the capability's first `examples` entry, or its `placehol
+          -der`) into the input field.                                   
+       29 -- The list is dismissed on `Escape` or when the user types a n
+          -on-`/` character after clearing the slash.                    
+       31 +- Typing `/` as the first character in the chat input opens an
+          + inline suggestion list showing all capabilities (name + descr
+          +iption) from the capability store.                            
+       32 +- Selecting a capability inserts its first `examples` entry if
+          + present, otherwise its `placeholder`, otherwise its `name` as
+          + a prompt seed.                                               
+       33 +- The list is dismissed on `Escape` or when the input no longe
+          +r starts with `/`.                                            
+       34  - No new backend endpoint is required — the frontend uses the 
+           capability store already populated by `GET /capabilities`.
+       35  - Works on both desktop and mobile (Vant-compatible touch inte
+           raction).
+       32 -- All new UI strings are defined in `src/i18n/locales/zh-CN.ts
+          -`.                                                            
+       36 +- All new UI strings are defined in `frontend/apps/main/src/i1
+          +8n/locales/zh-CN.ts`.                                         
+       37 +- `alerts` and `disposal` skill files gain `examples` or `plac
+          +eholder` entries so they produce non-empty insertions.        
+       38  
+       39  **Out of scope:** Server-side slash command parsing, `/help` a
+           s a routed backend command, custom slash commands beyond capab
+           ility shortcuts.
+       40  
+       41  ---
+       42  
+       43 +### Backend Cleanup Requirements                              
+       44 +                                                              
+       45 +#### R2 — Delete dead rule-engine service: disposal_advisor   
+       46 +                                                              
+       47 +`server/apps/agent/services/disposal_advisor.py` is unreachabl
+          +e from the live execution path. All disposal requests route th
+          +rough `orchestrator.dispatch("disposal")` → DeerFlow. This fil
+          +e predates the DeerFlow migration and was never wired into the
+          + orchestrator.                                                
+       48 +                                                              
+       49 +**Acceptance criteria:**                                      
+       50 +- `server/apps/agent/services/disposal_advisor.py` is deleted.
+       51 +- `server/apps/agent/tests/unit/test_disposal_advisor.py` is d
+          +eleted (tests for dead code).                                 
+       52 +- No import of `disposal_advisor` exists anywhere in the codeb
+          +ase after deletion.                                           
+       53 +- All remaining agent tests pass.                             
+       54 +                                                              
+       55 +#### R3 — Delete dead rule-engine service: aging_alert        
+       56 +                                                              
+       57 +Same situation as R2 for `server/apps/agent/services/aging_ale
+          +rt.py`.                                                       
+       58 +                                                              
+       59 +**Acceptance criteria:**                                      
+       60 +- `server/apps/agent/services/aging_alert.py` is deleted.     
+       61 +- `server/apps/agent/tests/unit/test_aging_alert.py` is delete
+          +d.                                                            
+       62 +- No import of `aging_alert` exists anywhere in the codebase a
+          +fter deletion.                                                
+       63 +- All remaining agent tests pass.                             
+       64 +                                                              
+       65 +---                                                           
+       66 +                                                              
+       67  ## Scope Boundaries
+       68  
+       40 -- **Policy rules (item 10):** `policy_guard.py` is already dat
+          -a-driven — `allowed_capabilities` and `admin_only_capabilities
+          -` come from the backend `CapabilityPolicy` object. No code cha
+          -nge needed. Removed from scope.                               
+       41 -- **Per-family threshold tuning:** Not in scope. Global frontm
+          -atter config is sufficient for now.                           
+       69 +- **Threshold externalization:** Not in scope. The rule-engine
+          + services that held the thresholds are dead code — the thresho
+          +lds live in DeerFlow skill prompts now, not Python constants. 
+       70 +- **Policy rules (item 10):** `policy_guard.py` is already dat
+          +a-driven from the backend `CapabilityPolicy` object. No change
+          + needed.                                                      
+       71 +- **Per-family threshold tuning:** Not in scope.              
+       72  - **New capabilities or agent tools:** Not in scope.
+       43 -- **Backend changes:** Not in scope for R1/R2. R3 is frontend-
+          -only.                                                         
+       73  
+       74  ---
+       75  
+       76  ## Success Criteria
+       77  
+       49 -- Disposal scoring and aging alert thresholds can be changed b
+          -y editing two YAML frontmatter files and restarting the agent 
+          -service — no Python code change required.                     
+       78  - A user typing `/` in the Numina chat sees a list of availabl
+           e capabilities and can select one to pre-fill a prompt.
+       79 +- `disposal_advisor.py` and `aging_alert.py` and their test fi
+          +les are removed; the codebase has no dangling imports.        
+       80  - All existing backend and agent tests continue to pass.
+       81  
+       82  ---
+       83  
+       84  ## Dependencies
+       85  
+       57 -- R1 and R2 depend on `CapabilityRegistry` already parsing YAM
+          -L frontmatter (confirmed: `capability_registry.py` uses `yaml.
+          -safe_load`). The scoring config just needs a new frontmatter k
+          -ey.                                                           
+       58 -- R3 depends on the capability store (`frontend/apps/main/src/
+          -stores/capability.ts`) already being populated — confirmed by 
+          -audit.                                                        
+       86 +- R1 depends on the capability store (`frontend/apps/main/src/
+          +stores/capability.ts`) already being populated — confirmed by 
+          +audit.                                                        
+       87 +- R2 and R3 require confirming no remaining imports before del
+          +etion — grep check is part of the acceptance criteria.        
+       88  - R1, R2, and R3 are independent of each other and can be impl
+           emented in any order.
+       89  
+       90  ---
+       91  
+       92  ## Files Affected
+       93  
+       94 +**Frontend (R1)**                                             
+       95 +                                                              
+       96  | File | Change |
+       97  |------|--------|
+       67 -| `server/apps/agent/skills/disposal.md` | Add `scoring:` bloc
+          -k to frontmatter |                                            
+       68 -| `server/apps/agent/services/disposal_advisor.py` | Read scor
+          -ing config from skill frontmatter |                           
+       69 -| `server/apps/agent/skills/alerts.md` | Add `thresholds:` blo
+          -ck to frontmatter |                                           
+       70 -| `server/apps/agent/services/aging_alert.py` | Read threshold
+          - config from skill frontmatter |                              
+       71 -| `server/apps/agent/services/capability_registry.py` | Expose
+          - full frontmatter dict (not just UI fields) |                 
+       72 -| `frontend/apps/main/src/pages/AIChatPage.vue` | Add slash co
+          -mmand palette trigger |                                       
+       98 +| `server/apps/agent/skills/alerts.md` | Add `examples` or `pl
+          +aceholder` to frontmatter |                                   
+       99 +| `server/apps/agent/skills/disposal.md` | Add `examples` or `
+          +placeholder` to frontmatter |                                 
+      100 +| `frontend/apps/main/src/components/ai/AIChatInput.vue` | Add
+          + slash detection + capability palette |                       
+      101 +| `frontend/apps/main/src/pages/AIChatPage.vue` | Pass capabil
+          +ity list as prop to AIChatInput |                             
+      102  | `frontend/apps/main/src/i18n/locales/zh-CN.ts` | Add slash c
+           ommand UI strings |
+       74 -| `server/apps/agent/tests/unit/test_disposal_advisor.py` | Ne
+          -w/updated tests for configurable thresholds |                 
+       75 -| `server/apps/agent/tests/unit/test_aging_alert.py` | New/upd
+          -ated tests for configurable thresholds |                      
+      103 +                                                              
+      104 +**Backend cleanup (R2, R3)**                                  
+      105 +                                                              
+      106 +| File | Change |                                             
+      107 +|------|--------|                                             
+      108 +| `server/apps/agent/services/disposal_advisor.py` | Delete | 
+      109 +| `server/apps/agent/services/aging_alert.py` | Delete |      
+      110 +| `server/apps/agent/tests/unit/test_disposal_advisor.py` | De
+          +lete |                                                        
+      111 +| `server/apps/agent/tests/unit/test_aging_alert.py` | Delete 
+          +|                                                             
+
+⏺ Requirements doc is finalized. Here's a summary of what changed from the
+  original audit recommendations and why:
+
+  R1 — Slash command palette (frontend, ready to implement)
+  Typing / in chat opens a capability picker that pre-fills a prompt.
+  Implemented inside AIChatInput.vue (not the page), using the existing
+  capability store. Skill files for alerts and disposal need
+  examples/placeholder entries added so they produce non-empty insertions.
+
+  R2/R3 — Delete dead rule-engine services (backend cleanup)
+  The audit recommended externalizing thresholds in disposal_advisor.py and
+  aging_alert.py to skill frontmatter. Investigation showed both services are
+  unreachable — all disposal/alerts requests go through orchestrator.dispatch()
+  → DeerFlow. The thresholds already live in DeerFlow skill prompts. The right
+  fix is deletion, not configuration.
+
+  Item 10 (policy rules) — dropped
+  policy_guard.py is already data-driven from the backend CapabilityPolicy. No
+  change needed.
+
+  ---
+  What would you like to do next?
+
+  1. /ce:plan — create an implementation plan for these three items
+  2. /ce:work — execute directly from this requirements doc
+  3. Done — the requirements doc is the deliverable for now
+
+✻ Brewed for 10m 27s

@@ -277,7 +277,7 @@ class TestDeleteFileEndpoint:
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
 
-        with patch("app.routers.files.settings") as mock_settings:
+        with patch("apps.backend.app.routers.files.settings") as mock_settings:
             mock_settings.UPLOAD_DIR = str(tmp_path)
             resp = client.delete(f"/api/v1/files/{cf.id}", headers=headers)
         assert resp.status_code == 204
@@ -294,7 +294,7 @@ class TestDeleteFileEndpoint:
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
 
-        with patch("app.routers.files.settings") as mock_settings:
+        with patch("apps.backend.app.routers.files.settings") as mock_settings:
             mock_settings.UPLOAD_DIR = str(tmp_path)
             client.delete(f"/api/v1/files/{cf.id}", headers=headers)
         assert not local_file.exists()
@@ -324,8 +324,8 @@ class TestDeleteFileEndpoint:
         mock_backend = AsyncMock()
         mock_backend.delete = AsyncMock()
 
-        with patch("app.routers.files.settings") as mock_settings, \
-             patch("app.routers.files.get_backend_for_type", return_value=mock_backend):
+        with patch("apps.backend.app.routers.files.settings") as mock_settings, \
+             patch("apps.backend.app.routers.files.get_backend_for_type", return_value=mock_backend):
             mock_settings.UPLOAD_DIR = str(tmp_path)
             resp = client.delete(f"/api/v1/files/{cf.id}", headers=headers)
 
@@ -344,7 +344,7 @@ class TestGetFileUrlEndpoint:
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
 
-        with patch("app.routers.files.settings") as mock_settings:
+        with patch("apps.backend.app.routers.files.settings") as mock_settings:
             mock_settings.UPLOAD_DIR = str(tmp_path)
             resp = client.get(f"/api/v1/files/{cf.id}/url", headers=headers)
         assert resp.status_code == 200

@@ -206,7 +206,7 @@ class TestCacheFactory:
 
         from apps.backend.app.config import settings
         monkeypatch.setattr(settings, "CACHE_BACKEND", "redis")
-        monkeypatch.setattr("app.services.cache.redis.redis_lib.from_url", lambda url, **kw: fakeredis.FakeRedis(decode_responses=True))
+        monkeypatch.setattr("apps.backend.app.services.cache.redis.redis_lib.from_url", lambda url, **kw: fakeredis.FakeRedis(decode_responses=True))
         reset_rate_limit_cache()
         cache = get_rate_limit_cache()
         assert isinstance(cache, RedisCacheBackend)

@@ -1,6 +1,0 @@
-{
-  "source": "https://github.com/bytedance/deer-flow",
-  "commit": "7caf03e97c21531ea52fb52009d7dae160e212c3",
-  "vendored_at": "2026-05-09T06:18:08Z",
-  "harness_path": "backend/packages/harness"
-}

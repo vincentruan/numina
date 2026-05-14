@@ -1,19 +1,17 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
-# Install uv via pip
-RUN pip install uv
-
-# Install tzdata for Asia/Shanghai timezone support
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
+RUN pip install uv --no-cache-dir
 
 WORKDIR /app
 
-# Install dependencies (cached layer)
+# Install dependencies from server/ root (cached layer)
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --extra backend
 
 # Copy application code
-COPY . .
+COPY apps/backend/ ./apps/backend/
+COPY packages/ ./packages/
 
-CMD ["uv", "run", "--no-dev", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uv", "run", "--no-dev", "uvicorn", "apps.backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]

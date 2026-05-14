@@ -82,7 +82,7 @@ def test_trigger_no_gifts(db):
     _make_config(db, family.id, enabled=True)
     db.commit()
 
-    with patch("app.services.blind_box.should_trigger_free_draw", return_value=True):
+    with patch("apps.backend.app.services.blind_box.should_trigger_free_draw", return_value=True):
         result = blind_box_trigger(db, child)
 
     assert result is None
@@ -100,8 +100,8 @@ def test_trigger_creates_draw(db):
     db.commit()
 
     with (
-        patch("app.services.blind_box.should_trigger_free_draw", return_value=True),
-        patch("app.services.blind_box.should_upgrade_surprise", return_value=False),
+        patch("apps.backend.app.services.blind_box.should_trigger_free_draw", return_value=True),
+        patch("apps.backend.app.services.blind_box.should_upgrade_surprise", return_value=False),
     ):
         result = blind_box_trigger(db, child)
 
