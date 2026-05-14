@@ -1,0 +1,111 @@
+[project]
+name = "numina-server"
+version = "1.0.0"
+description = "Numina unified server — backend API, AI agent, and scheduler worker"
+requires-python = ">=3.12"  # DeerFlow constraint from agent/
+dependencies = [
+    # Core web framework (all apps)
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    # Database (backend + scheduler_worker)
+    "sqlalchemy>=2.0.36",
+    "alembic>=1.14.0",
+    "psycopg2-binary>=2.9.9",
+    # Pydantic validation (all apps)
+    "pydantic[email]>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    # HTTP client (all apps)
+    "httpx>=0.28.0",
+    # Scheduler (backend + agent + scheduler_worker)
+    "apscheduler>=3.11.2",
+]
+
+[project.optional-dependencies]
+backend = [
+    # Auth
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0",
+    "python-multipart>=0.0.18",
+    # WebAuthn
+    "webauthn>=2.7.1",
+    # Integration utilities
+    "altcha>=1.0.0",
+    "filelock>=3.13.0",
+    "pyyaml>=6.0.0",
+    # Chinese calendar
+    "lunardate>=0.2.2",
+    # Analytics
+    "user-agents>=2.2.0",
+    "pdfplumber>=0.11",
+    # Cache
+    "redis>=5.0.0",
+]
+agent = [
+    # AI/ML
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langgraph-runtime-inmem>=0.27.0",
+    # Crypto
+    "cryptography>=42.0.0",
+    # Config
+    "pyyaml>=6.0.3",
+    # DeerFlow harness (workspace member, not in dependencies list)
+]
+worker = [
+    # Crypto for scheduler
+    "cryptography>=44.0.0",
+]
+
+[dependency-groups]
+dev = [
+    # Testing (union of all three)
+    "pytest>=9.0.3",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "fakeredis>=2.0.0",
+    "docker>=7.0.0",
+    "playwright>=1.58.0",
+    # Lint + format + typecheck
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+]
+
+[tool.uv.workspace]
+members = ["apps/agent/vendor/deerflow-harness"]
+
+[tool.uv.sources]
+deerflow-harness = { workspace = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = true
+plugins = ["pydantic.mypy"]
+
+[tool.pydantic-mypy]
+init_forbid_extra = true
+init_typed = true
+warn_required_dynamic_aliases = true
