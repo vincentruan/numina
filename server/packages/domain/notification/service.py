@@ -10,9 +10,15 @@ from sqlalchemy.orm import Session
 
 def run_scheduled_checks(db: Session) -> None:
     """Run all scheduled notification checks. Called by scheduler_worker."""
-    # Delegate to backend dispatcher for Phase 1.
-    # Phase 2: move rules/sender/dispatcher here and remove this import.
-    from app.services.notification.dispatcher import (  # noqa: PLC0415
-        run_scheduled_checks as _run,
-    )
+    # PHASE1_COUPLING: imports backend internals. Remove in Phase 2 when
+    # notification logic is fully migrated to packages/domain/notification/.
+    try:
+        from app.services.notification.dispatcher import (  # noqa: PLC0415
+            run_scheduled_checks as _run,
+        )
+    except ImportError as exc:
+        raise RuntimeError(
+            "PHASE1_COUPLING: backend package not on PYTHONPATH. "
+            "Migrate notification logic to packages/domain/notification/ (Phase 2)."
+        ) from exc
     _run(db)

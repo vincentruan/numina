@@ -7,6 +7,8 @@ No module-level app.* imports — lazy imports inside job bodies only.
 
 import asyncio
 import random
+from datetime import datetime
+from pathlib import Path
 
 from packages.core.logging import get_logger
 from packages.db.session import SessionLocal
@@ -77,16 +79,16 @@ async def file_sync_job() -> None:
                 continue
 
             try:
-                from pathlib import Path  # noqa: PLC0415
                 filename = Path(cached_file.local_path).name
-                with open(cached_file.local_path, "rb") as f:
-                    content = f.read()
+                content = await asyncio.to_thread(_read_file, cached_file.local_path)
 
-                remote_path = await backend.save(content, filename, cached_file.date_dir)
+                remote_path = await asyncio.wait_for(
+                    backend.save(content, filename, cached_file.date_dir),
+                    timeout=30,
+                )
                 loc.sync_status = "synced"
                 loc.remote_path = remote_path
                 loc.remote_url = backend.get_url(remote_path)
-                from datetime import datetime  # noqa: PLC0415
                 loc.synced_at = datetime.now()
                 db.commit()
             except TimeoutError:
@@ -204,3 +206,8 @@ def snapshot_job() -> None:
         logger.exception(f"每日快照生成失败: {e}")
     finally:
         db.close()
+
+
+def _read_file(local_path: str) -> bytes:
+    with open(local_path, "rb") as f:
+        return f.read()
