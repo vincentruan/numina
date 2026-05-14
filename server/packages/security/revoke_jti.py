@@ -14,8 +14,7 @@ from sqlalchemy.orm import Session
 from packages.core.settings import settings
 from packages.db.session import SessionLocal
 
-# RevokedToken migrates to packages/db/models/ in Unit 8 (domain/device)
-from app.models.revoked_token import RevokedToken
+from packages.db.models.revoked_token import RevokedToken
 
 
 def revoke_jti(jti: str, ttl_seconds: float) -> None:

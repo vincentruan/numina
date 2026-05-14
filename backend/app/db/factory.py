@@ -1,12 +1,12 @@
 # Re-export shim — engine factory moved to packages/db/engine.py
 # create_backend / get_session_factory remain here for backend-internal use.
+from packages.db.engine import get_engine  # noqa: F401
 from sqlalchemy import Engine
 from sqlalchemy.engine.url import make_url
 
 from app.db.backend import DatabaseBackend
 from app.db.postgres import PostgreSQLBackend
 from app.db.sqlite import SQLiteBackend
-from packages.db.engine import get_engine  # noqa: F401
 
 BACKEND_MAP: dict[str, type[DatabaseBackend]] = {
     "sqlite": SQLiteBackend,

@@ -35,6 +35,8 @@ def setup_all_jobs() -> None:
         id="exchange_rate",
         name="fetch_rates_job",
         replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
     logger.info("汇率定时任务已配置 (Cron: hour='8,10,12,14,16,18,20,22', jitter=900s)")
 

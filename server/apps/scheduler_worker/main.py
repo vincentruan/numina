@@ -9,7 +9,7 @@ Start:
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
 from packages.core.logging import get_logger, setup_logging
 from packages.core.settings import settings
@@ -48,13 +48,15 @@ app = FastAPI(
 
 
 @app.get("/health")
-def health() -> dict:
+def health(response: Response) -> dict:
     """Docker healthcheck endpoint."""
     from apps.scheduler_worker.scheduler import scheduler  # noqa: PLC0415
 
     jobs = scheduler.get_jobs()
+    if not scheduler.running:
+        response.status_code = 503
     return {
-        "status": "ok",
+        "status": "ok" if scheduler.running else "degraded",
         "scheduler_running": scheduler.running,
         "job_count": len(jobs),
         "jobs": [

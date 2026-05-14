@@ -76,5 +76,5 @@ def test_resolve_machine_id_fallback():
 
     env = {k: v for k, v in os.environ.items() if k != "SNOWFLAKE_MACHINE_ID"}
 
-    with patch.dict(os.environ, env, clear=True), patch("app.utils.snowflake.socket.gethostbyname", side_effect=OSError("no network")):
+    with patch.dict(os.environ, env, clear=True), patch("packages.core.snowflake.socket.gethostbyname", side_effect=OSError("no network")):
         assert resolve_machine_id() == 1

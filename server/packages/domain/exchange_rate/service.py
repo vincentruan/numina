@@ -57,15 +57,14 @@ class ExchangeRateService:
             if code == "CNY":
                 continue
             try:
-                row = ExchangeRate(
-                    target_currency=code,
-                    rate=rate,
-                    fetched_at=fetched_at,
-                )
-                db.add(row)
-                db.flush()
+                with db.begin_nested():
+                    row = ExchangeRate(
+                        target_currency=code,
+                        rate=rate,
+                        fetched_at=fetched_at,
+                    )
+                    db.add(row)
             except Exception:
-                db.rollback()
                 continue
 
         existing_codes = {c.code for c in db.query(Currency.code).all()}
