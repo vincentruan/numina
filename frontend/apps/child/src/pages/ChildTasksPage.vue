@@ -72,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
@@ -83,7 +83,7 @@ import { childBlindBoxApi } from '@/api/blindBox'
 import type { BlindBoxDraw } from '@/types/blindBox'
 import http from '@/api/index'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -98,7 +98,7 @@ let pollCancelled = false
 
 const now = new Date()
 const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-const todayLabel = now.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'short' })
+const todayLabel = computed(() => now.toLocaleDateString(locale.value, { month: 'long', day: 'numeric', weekday: 'short' }))
 
 const SEEN_KEY = `seen_milestones_${getUser()?.id ?? 'anon'}`
 
