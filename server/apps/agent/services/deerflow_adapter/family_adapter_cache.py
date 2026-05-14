@@ -4,6 +4,14 @@
 - 每家庭一个 DeerFlowClient 实例（LRU 缓存）
 - 动态生成临时配置文件，注入家庭的 api_key/model_id
 - 缓存失效：家庭禁用 AI 或配置变更时清理
+
+Session memory injection:
+- A shared SqliteSaver checkpointer is passed explicitly to every DeerFlowClient.
+- Without an explicit checkpointer, DeerFlowClient falls back to get_checkpointer()
+  which may return InMemorySaver (lost on restart) or a stale singleton after
+  reload_app_config() resets the global config for a different family.
+- All families share one checkpointer instance; DeerFlow namespaces state by
+  thread_id so family isolation is maintained at the conversation level.
 """
 
 import contextlib
@@ -26,6 +34,91 @@ _MAX_CACHE_SIZE = 100
 _adapter_cache: OrderedDict[str, tuple[DeerFlowClient, Path]] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
+
+# Shared checkpointer singleton — created once, reused by all DeerFlowClient instances.
+# Guarded by _checkpointer_lock to prevent double-initialisation under concurrency.
+_shared_checkpointer = None
+_checkpointer_lock = threading.Lock()
+_checkpointer_ctx = None  # open context manager keeping the SqliteSaver connection alive
+
+
+def _get_shared_checkpointer(base_config_dir: str | None = None):
+    """Return the shared LangGraph checkpointer, creating it on first call.
+
+    Reads the checkpointer config from the base config.yaml so the DB path
+    matches what the operator configured (default: /app/data/deerflow-checkpoints.db).
+    Falls back to InMemorySaver if the config is absent or the sqlite package
+    is not installed.
+    """
+    global _shared_checkpointer, _checkpointer_ctx
+
+    with _checkpointer_lock:
+        if _shared_checkpointer is not None:
+            return _shared_checkpointer
+
+        if base_config_dir is None:
+            base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
+
+        # Read checkpointer path from base config.yaml
+        db_path = _read_checkpointer_path(base_config_dir)
+
+        try:
+            from langgraph.checkpoint.sqlite import SqliteSaver
+
+            os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
+            _checkpointer_ctx = SqliteSaver.from_conn_string(db_path)
+            _shared_checkpointer = _checkpointer_ctx.__enter__()
+            _shared_checkpointer.setup()
+            logger.info("[deerflow_cache] shared checkpointer: SqliteSaver(%s)", db_path)
+        except ImportError:
+            from langgraph.checkpoint.memory import InMemorySaver
+
+            _shared_checkpointer = InMemorySaver()
+            logger.warning(
+                "[deerflow_cache] langgraph-checkpoint-sqlite not installed; "
+                "using InMemorySaver — multi-turn memory will not survive restarts"
+            )
+        except Exception as e:
+            from langgraph.checkpoint.memory import InMemorySaver
+
+            _shared_checkpointer = InMemorySaver()
+            logger.warning(
+                "[deerflow_cache] checkpointer init failed (%s); falling back to InMemorySaver", e
+            )
+
+        return _shared_checkpointer
+
+
+def _read_checkpointer_path(base_config_dir: str) -> str:
+    """Extract the checkpointer DB path from base/config.yaml.
+
+    Returns the configured path, or a safe default if the config is missing
+    or the checkpointer section is absent.
+    """
+    default = "/app/data/deerflow-checkpoints.db"
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        config_path = Path(base_config_dir) / "base" / "config.yaml"
+        if not config_path.exists():
+            return default
+        with open(config_path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        path = cfg.get("checkpointer", {}).get("path", default)
+        return path or default
+    except Exception:
+        return default
+
+
+def close_shared_checkpointer() -> None:
+    """Close the shared checkpointer connection. Call at process shutdown."""
+    global _shared_checkpointer, _checkpointer_ctx
+    with _checkpointer_lock:
+        if _checkpointer_ctx is not None:
+            with contextlib.suppress(Exception):
+                _checkpointer_ctx.__exit__(None, None, None)
+            _checkpointer_ctx = None
+        _shared_checkpointer = None
 
 
 def _generate_temp_config(
@@ -95,6 +188,11 @@ def get_family_adapter(
 ) -> DeerFlowClient:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
+    Each client receives the shared checkpointer so multi-turn conversation
+    state is persisted across requests. DeerFlow namespaces state by thread_id,
+    so different families' conversations remain isolated even with a shared
+    checkpointer instance.
+
     Args:
         family_id: 家庭 ID
         ai_config: 家庭的 AI 配置
@@ -113,7 +211,7 @@ def get_family_adapter(
             client, _ = _adapter_cache[family_id]
             # 移到末尾（LRU 更新）
             _adapter_cache.move_to_end(family_id)
-            logger.debug(f"[deerflow_cache] reuse cached adapter for family={family_id}")
+            logger.debug("[deerflow_cache] reuse cached adapter for family=%s", family_id)
             return client
 
         # 缓存满时清理最旧的
@@ -122,7 +220,7 @@ def get_family_adapter(
             # 清理临时配置目录
             with contextlib.suppress(Exception):
                 shutil.rmtree(oldest_config_path.parent, ignore_errors=True)
-            logger.debug(f"[deerflow_cache] evicted adapter for family={oldest_family_id}")
+            logger.debug("[deerflow_cache] evicted adapter for family=%s", oldest_family_id)
 
     # 生成临时配置（outside lock to avoid blocking during file I/O）
     temp_config_path = _generate_temp_config(base_config_dir, ai_config)
@@ -132,14 +230,26 @@ def get_family_adapter(
     os.environ["AI_MODEL"] = ai_config.get("ai_model_id", "claude-haiku-4-5")
     os.environ["AI_API_KEY"] = ai_config.get("api_key", "")
 
-    # 初始化 DeerFlowClient
+    # Obtain the shared checkpointer before reload_app_config() so the
+    # checkpointer DB path is read from the base config, not the per-family
+    # temp config (which has the same checkpointer section but we want to
+    # initialise it exactly once).
+    checkpointer = _get_shared_checkpointer(base_config_dir)
+
+    # 初始化 DeerFlowClient — pass checkpointer explicitly so each client
+    # uses the shared persistent store instead of resolving get_checkpointer()
+    # lazily after reload_app_config() may have changed the global config.
     try:
         reload_app_config(str(temp_config_path))
-        client = DeerFlowClient(config_path=str(temp_config_path))
+        client = DeerFlowClient(config_path=str(temp_config_path), checkpointer=checkpointer)
         # 缓存 (thread lock for safe insertion)
         with _cache_lock:
             _adapter_cache[family_id] = (client, temp_config_path)
-        logger.info(f"[deerflow_cache] created new adapter for family={family_id}, model={ai_config.get('ai_model_id')}")
+        logger.info(
+            "[deerflow_cache] created new adapter for family=%s, model=%s",
+            family_id,
+            ai_config.get("ai_model_id"),
+        )
         return client
     except Exception as e:
         # 清理临时配置
@@ -159,7 +269,7 @@ def invalidate_family_adapter(family_id: str) -> None:
             _, config_path = _adapter_cache.pop(family_id)
             with contextlib.suppress(Exception):
                 shutil.rmtree(config_path.parent, ignore_errors=True)
-            logger.info(f"[deerflow_cache] invalidated adapter for family={family_id}")
+            logger.info("[deerflow_cache] invalidated adapter for family=%s", family_id)
 
 
 def clear_cache() -> None:

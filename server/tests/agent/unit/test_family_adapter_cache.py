@@ -4,14 +4,17 @@ import os
 import tempfile
 import shutil
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _generate_temp_config,
+    _get_shared_checkpointer,
     get_family_adapter,
     invalidate_family_adapter,
     clear_cache,
+    close_shared_checkpointer,
     get_cache_stats,
     _adapter_cache,
 )
@@ -97,6 +100,82 @@ class TestGenerateTempConfig:
         """Should raise FileNotFoundError if base config is missing."""
         with pytest.raises(FileNotFoundError):
             _generate_temp_config("/nonexistent/path", ai_config)
+
+
+class TestCheckpointerInjection:
+    """Tests that DeerFlowClient receives an explicit checkpointer for multi-turn memory."""
+
+    def test_get_shared_checkpointer_returns_same_instance(self, base_config_dir):
+        """_get_shared_checkpointer must return the same object on repeated calls."""
+        import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
+
+        # Reset singleton so this test is isolated
+        orig = cache_mod._shared_checkpointer
+        orig_ctx = cache_mod._checkpointer_ctx
+        cache_mod._shared_checkpointer = None
+        cache_mod._checkpointer_ctx = None
+
+        try:
+            cp1 = _get_shared_checkpointer(base_config_dir)
+            cp2 = _get_shared_checkpointer(base_config_dir)
+            assert cp1 is cp2
+        finally:
+            close_shared_checkpointer()
+            cache_mod._shared_checkpointer = orig
+            cache_mod._checkpointer_ctx = orig_ctx
+
+    def test_deerflow_client_receives_checkpointer(self, base_config_dir, ai_config):
+        """DeerFlowClient must be constructed with the shared checkpointer, not None."""
+        clear_cache()
+
+        os.environ["AI_MODEL"] = ai_config["ai_model_id"]
+        os.environ["AI_API_KEY"] = ai_config["api_key"]
+
+        captured_kwargs: dict = {}
+
+        original_client_cls = None
+        try:
+            import deerflow.client as df_client_mod
+            original_client_cls = df_client_mod.DeerFlowClient
+        except ImportError:
+            pytest.skip("deerflow not available")
+
+        mock_checkpointer = MagicMock(name="shared_checkpointer")
+
+        def _fake_client(config_path, checkpointer=None, **kwargs):
+            captured_kwargs["checkpointer"] = checkpointer
+            return MagicMock(name="DeerFlowClient")
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=mock_checkpointer),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=_fake_client),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            get_family_adapter("family_cp_test", ai_config, base_config_dir)
+
+        assert captured_kwargs.get("checkpointer") is mock_checkpointer, (
+            "DeerFlowClient must receive the shared checkpointer — "
+            "without it each dispatch is stateless and multi-turn reasoning is impossible"
+        )
+
+        clear_cache()
+
+    def test_close_shared_checkpointer_resets_singleton(self, base_config_dir):
+        """close_shared_checkpointer must allow a fresh checkpointer to be created."""
+        import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
+
+        orig = cache_mod._shared_checkpointer
+        orig_ctx = cache_mod._checkpointer_ctx
+        cache_mod._shared_checkpointer = None
+        cache_mod._checkpointer_ctx = None
+
+        try:
+            cp1 = _get_shared_checkpointer(base_config_dir)
+            close_shared_checkpointer()
+            assert cache_mod._shared_checkpointer is None
+        finally:
+            cache_mod._shared_checkpointer = orig
+            cache_mod._checkpointer_ctx = orig_ctx
 
 
 class TestFamilyAdapterCache:

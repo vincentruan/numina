@@ -96,7 +96,48 @@ invalidate_family_adapter_cache(family_id)
 
 生成的临时配置文件存放在 `/tmp/deerflow_config_xxx/`，缓存清理时自动删除。
 
-## OD-2: SQLite checkpointer concurrency
+## OD-3: Session memory injection — multi-turn reasoning
+
+Each `DeerFlowClient` must receive an explicit `checkpointer` to support multi-turn
+conversations. Without one, `DeerFlowClient` falls back to `get_checkpointer()` which
+may return `InMemorySaver` (lost on restart) or a stale singleton after
+`reload_app_config()` resets the global config for a different family.
+
+### Architecture
+
+```
+family_adapter_cache.get_family_adapter(family_id, ai_config)
+    ↓
+_get_shared_checkpointer()          ← created once, shared by all families
+    ↓ SqliteSaver(/app/data/deerflow-checkpoints.db)
+DeerFlowClient(config_path=..., checkpointer=shared_checkpointer)
+    ↓
+client.stream(message, thread_id=thread_id)
+    ↓ DeerFlow namespaces state by thread_id — family isolation maintained
+```
+
+### Why a shared checkpointer
+
+- `SqliteSaver` holds a connection to a single SQLite file. Creating one per family
+  would open 100 connections (LRU cache size) to 100 different files — wasteful and
+  unnecessary.
+- DeerFlow namespaces all checkpoint state by `thread_id`. Two families using the
+  same checkpointer instance cannot see each other's conversation history as long as
+  their `thread_id` values are distinct (which they are — each session gets a UUID).
+- The shared instance is created once in `_get_shared_checkpointer()` and reused for
+  the lifetime of the process. It is closed in `close_shared_checkpointer()` at
+  shutdown.
+
+### Checkpointer DB path
+
+Read from `deerflow_config/base/config.yaml` → `checkpointer.path`.
+Default: `/app/data/deerflow-checkpoints.db`.
+
+### Fallback behaviour
+
+If `langgraph-checkpoint-sqlite` is not installed, falls back to `InMemorySaver`
+with a WARNING log. Multi-turn memory will not survive restarts in this case.
+
 
 The harness uses `SqliteSaver` (langgraph-checkpoint-sqlite) which does not
 handle concurrent writes internally. The adapter uses a separate

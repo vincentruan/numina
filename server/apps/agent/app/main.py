@@ -51,6 +51,13 @@ async def lifespan(app: FastAPI):
     scheduler.shutdown(wait=False)
     await close_shared_client()  # Close shared backend connection pool
     try:
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            close_shared_checkpointer,
+        )
+        close_shared_checkpointer()
+    except Exception:
+        pass
+    try:
         from deerflow.persistence.engine import close_engine
         await close_engine()
     except Exception:
