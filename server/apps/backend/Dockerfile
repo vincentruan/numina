@@ -6,6 +6,9 @@ RUN pip install uv --no-cache-dir
 
 WORKDIR /app
 
+# DeerFlow harness must be present before uv sync (workspace member)
+COPY apps/agent/vendor/deerflow-harness ./apps/agent/vendor/deerflow-harness
+
 # Install dependencies from server/ root (cached layer)
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --extra backend

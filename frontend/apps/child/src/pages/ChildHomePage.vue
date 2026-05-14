@@ -157,7 +157,7 @@ async function handleLogout() {
     await childAuthStore.childLogout()
     showToast(t('toast.logoutSuccess'))
     // Redirect to main app login page (child app has no auth routes)
-    const baseUrl = import.meta.env.VITE_MAIN_APP_URL || 'https://numina.xiaoshutiao.space'
+    const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
     window.location.href = `${baseUrl}/login`
   } catch {
     // User cancelled or logout failed

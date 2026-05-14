@@ -36,7 +36,7 @@ http.interceptors.response.use(
         clearAuth()
         // Redirect to main login (child app has no auth pages)
         // Use full URL to ensure it goes through nginx to main frontend
-        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || 'https://numina.xiaoshutiao.space'
+        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
         window.location.replace(`${baseUrl}/login?redirect=/child/`)
       }
     }
