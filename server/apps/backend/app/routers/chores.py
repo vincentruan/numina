@@ -121,7 +121,15 @@ def list_children_chores(
         )
         .all()
     )
-    return [ChoreInstanceResponse.model_validate(i) for i in instances]
+    result = []
+    for instance in instances:
+        resp = ChoreInstanceResponse.model_validate(instance)
+        # For pool chores child_user_id == family_id; substitute the actual submitter's ID,
+        # or None if unclaimed (so the frontend doesn't receive a family ID as a child ID).
+        if instance.child_user_id == instance.family_id:
+            resp.child_user_id = instance.submitted_by_user_id or None
+        result.append(resp)
+    return result
 
 
 # ---------------------------------------------------------------------------
