@@ -58,7 +58,7 @@
                 :loading="regenerating"
                 @click="onRegenerate"
               >
-                重新生成邀请码
+                {{ t('family.regenerateInviteCode') }}
               </van-button>
             </template>
           </van-cell>
@@ -79,39 +79,35 @@
               </div>
               <div class="child-mgmt-stats">
                 <div class="stat">
-                  <span class="stat-label">余额</span>
+                  <span class="stat-label">{{ t('family.childBalance') }}</span>
                   <span class="stat-value">{{ childBalances[child.id] ?? '…' }} ⭐</span>
                 </div>
                 <div class="stat">
-                  <span class="stat-label">本周家务</span>
+                  <span class="stat-label">{{ t('family.childWeeklyChores') }}</span>
                   <span class="stat-value">
                     {{ childChoreStats[child.id]?.completed_this_week ?? '…' }}/{{ childChoreStats[child.id]?.total_this_week ?? '…' }}
                   </span>
                 </div>
                 <div class="stat">
-                  <span class="stat-label">进行中心愿</span>
+                  <span class="stat-label">{{ t('family.childActiveWishes') }}</span>
                   <span class="stat-value" :class="{ 'has-pending': (childWishCounts[child.id] ?? 0) > 0 }">
                     {{ childWishCounts[child.id] ?? 0 }}
                   </span>
                 </div>
                 <div class="stat">
-                  <span class="stat-label">待审家务</span>
+                  <span class="stat-label">{{ t('family.childPendingChores') }}</span>
                   <span class="stat-value" :class="{ 'has-pending': totalPendingChores > 0 }">
                     {{ totalPendingChores }}
                   </span>
                 </div>
                 <div class="stat">
-                  <span class="stat-label">待审心愿</span>
+                  <span class="stat-label">{{ t('family.childPendingWishes') }}</span>
                   <span class="stat-value" :class="{ 'has-pending': totalPendingWishes > 0 }">
                     {{ totalPendingWishes }}
                   </span>
                 </div>
               </div>
               <div class="child-mgmt-actions">
-                <button class="action-btn" @click="onSwitchToChild(child)">
-                  <van-icon name="user-o" size="18" />
-                  <span>{{ t('family.switchToChild') }}</span>
-                </button>
                 <button class="action-btn" @click="$router.push('/family/chore-approvals')">
                   <van-icon name="todo-list-o" size="18" />
                   <span>{{ t('pendingApprovals.approveChores') }}</span>
@@ -478,16 +474,6 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
     showToast(t('toast.childPinUnlocked'))
   } catch {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
-  }
-}
-
-async function onSwitchToChild(child: { id: string; display_name: string }) {
-  try {
-    await authStore.switchToChildAndFetch(child.id)
-    // Redirect to child frontend
-    window.location.href = '/child/'
-  } catch {
-    showToast({ type: 'fail', message: t('toast.switchChildFailed') })
   }
 }
 

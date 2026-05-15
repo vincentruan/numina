@@ -508,29 +508,6 @@ def child_webauthn_login(
     return tokens
 
 
-@router.post("/admin/switch-child/{child_id}", response_model=TokenResponse)
-def admin_switch_child(
-    response: Response,
-    child_id: str,
-    db: Session = Depends(get_db),
-    owner: User = Depends(require_owner),
-):
-    """Admin switches to child view without PIN verification.
-
-    Only family owner can use this endpoint. Returns child JWT tokens
-    and sets child authentication cookies.
-
-    Args:
-        child_id: Target child ID to switch to
-
-    Returns:
-        TokenResponse with child access and refresh tokens
-    """
-    tokens = auth_service.admin_switch_to_child(db, owner, child_id)
-    set_child_auth_cookies(response, tokens.access_token, tokens.refresh_token)
-    return tokens
-
-
 # ---------------------------------------------------------------------------
 # Two-step login
 # ---------------------------------------------------------------------------
