@@ -1,6 +1,7 @@
 """Chore template and instance endpoints."""
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import (
@@ -112,7 +113,10 @@ def list_children_chores(
         db.query(ChoreInstance)
         .filter(
             ChoreInstance.family_id == user.family_id,
-            ChoreInstance.child_user_id.in_(child_ids),
+            or_(
+                ChoreInstance.child_user_id.in_(child_ids),
+                ChoreInstance.child_user_id == user.family_id,  # pool chores
+            ),
             ChoreInstance.date_bucket.in_([daily_bucket, weekly_bucket]),
         )
         .all()
@@ -134,6 +138,7 @@ def list_pending_approvals(
     result = []
     for instance in instances:
         resp = ChoreInstanceResponse.model_validate(instance)
+        resp.child_user_id = getattr(instance, "_child_user_id", None)
         resp.child_display_name = getattr(instance, "_child_display_name", None)
         resp.child_avatar_color = getattr(instance, "_child_avatar_color", None)
         result.append(resp)

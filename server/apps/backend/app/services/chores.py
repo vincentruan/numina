@@ -379,6 +379,7 @@ def list_pending_approvals(db: Session, parent_user: User) -> list[ChoreInstance
         child = child_map.get(lookup_id) if lookup_id else None
         instance._child_display_name = child.display_name if child else None
         instance._child_avatar_color = child.avatar_color if child else None
+        instance._child_user_id = lookup_id  # actual child's user ID (for pool chores)
 
     return result
 
