@@ -3,9 +3,6 @@
     <PageHeader :title="t('baby.title')" :show-back="false" />
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <!-- Pending Approvals -->
-      <PendingApprovalsSection v-if="authStore.user?.role === 'owner'" />
-
       <!-- No Children State -->
       <van-empty v-if="childMembers.length === 0" :description="t('baby.noChildren')">
         <van-button type="primary" size="small" @click="$router.push('/family/members')">
@@ -29,6 +26,12 @@
             </template>
           </van-tab>
         </van-tabs>
+
+        <!-- Pending Approvals (filtered by selected child) -->
+        <PendingApprovalsSection
+          v-if="authStore.user?.role === 'owner'"
+          :child-id="selectedChildId ? String(selectedChildId) : null"
+        />
 
         <!-- Summary Card -->
         <van-cell-group inset class="summary-card">
@@ -357,11 +360,14 @@ async function loadData() {
 }
 
 async function onRefresh() {
-  await Promise.all([
+  const tasks = [
     familyStore.fetchFamily(),
-    choreStore.fetchPendingApprovals(),
     loadData(),
-  ])
+  ]
+  if (authStore.user?.role === 'owner') {
+    tasks.push(choreStore.fetchPendingApprovals())
+  }
+  await Promise.all(tasks)
   refreshing.value = false
 }
 

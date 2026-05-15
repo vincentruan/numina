@@ -1073,4 +1073,17 @@ export default {
     scoreFair: 'Fair',
     scoreNeedsImprovement: 'Needs Improvement',
   },
+  pendingApprovals: {
+    title: 'Pending Tasks',
+    unknown: 'Unknown',
+    approve: 'Approve',
+    returnRedo: 'Redo',
+    reject: 'Reject',
+    approveChores: 'Approve Chores',
+    approveWishes: 'Approve Wishes',
+    justNow: 'Just now',
+    minutesAgo: '{mins}m ago',
+    hoursAgo: '{hours}h ago',
+    daysAgo: '{days}d ago',
+  },
 }

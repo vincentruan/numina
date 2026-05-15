@@ -1,68 +1,71 @@
 <template>
-  <div v-if="choreStore.pendingCount > 0" class="pending-approvals-section">
-    <!-- Collapse Toggle -->
-    <div class="approval-toggle" @click="isExpanded = !isExpanded">
-      <span class="toggle-label">{{ t('pendingApprovals.title') }}</span>
-      <span class="toggle-count">{{ choreStore.pendingCount }}</span>
-      <van-icon :name="isExpanded ? 'arrow-up' : 'arrow-down'" class="toggle-icon" />
+  <div v-if="filteredApprovals.length > 0" class="pending-approvals-section">
+    <!-- Header -->
+    <div class="approval-header">
+      <span class="header-label">{{ t('pendingApprovals.title') }}</span>
+      <span class="header-count">{{ filteredApprovals.length }}</span>
     </div>
 
     <!-- Card List -->
-    <div v-if="isExpanded" class="approval-list">
+    <div class="approval-list">
       <div
-        v-for="item in choreStore.pendingApprovals"
+        v-for="item in filteredApprovals"
         :key="item.id"
         class="approval-card"
       >
         <!-- Avatar + Info -->
-        <div
-          class="child-avatar"
-          :style="{ backgroundColor: item.child_avatar_color || '#ccc' }"
-          aria-hidden="true"
-        >
-          {{ item.child_display_name?.charAt(0) || '?' }}
+        <div class="card-top">
+          <div
+            class="child-avatar"
+            :style="{ backgroundColor: item.child_avatar_color || '#ccc' }"
+            aria-hidden="true"
+          >
+            {{ item.child_display_name?.charAt(0) || '?' }}
+          </div>
+
+          <div class="card-info">
+            <div class="card-title">
+              <span class="chore-emoji">{{ item.chore_emoji || '📋' }}</span>
+              {{ item.chore_name }}
+            </div>
+            <div class="card-meta">
+              <span class="child-name">{{ item.child_display_name || t('pendingApprovals.unknown') }}</span>
+              <span class="separator">·</span>
+              <span class="reward">+{{ item.coin_reward }}⭐</span>
+              <span class="separator">·</span>
+              <span class="time">{{ formatRelativeTime(item.submitted_at) }}</span>
+            </div>
+          </div>
         </div>
 
-        <div class="card-info">
-          <div class="card-title">
-            <span class="chore-emoji">{{ item.chore_emoji || '📋' }}</span>
-            {{ item.chore_name }}
-          </div>
-          <div class="card-meta">
-            <span class="child-name">{{ item.child_display_name || t('pendingApprovals.unknown') }}</span>
-            <span class="separator">·</span>
-            <span class="reward">+{{ item.coin_reward }}⭐</span>
-            <span class="separator">·</span>
-            <span class="time">{{ formatRelativeTime(item.submitted_at) }}</span>
-          </div>
-        </div>
-
-        <!-- Action Buttons -->
+        <!-- Piano Key Buttons -->
         <div class="card-actions">
           <van-button
-            size="mini"
+            block
             type="success"
-            plain
             :disabled="actioningId === item.id"
-            :loading="actioningId === item.id"
+            :loading="actioningId === item.id && currentAction === 'approve'"
+            class="piano-btn"
             @click="onApprove(item.id)"
           >
             {{ t('pendingApprovals.approve') }}
           </van-button>
           <van-button
-            size="mini"
+            block
             type="warning"
-            plain
             :disabled="actioningId === item.id"
+            :loading="actioningId === item.id && currentAction === 'redo'"
+            class="piano-btn"
             @click="onReject(item.id, true)"
           >
             {{ t('pendingApprovals.returnRedo') }}
           </van-button>
           <van-button
-            size="mini"
+            block
             type="danger"
-            plain
             :disabled="actioningId === item.id"
+            :loading="actioningId === item.id && currentAction === 'reject'"
+            class="piano-btn"
             @click="onReject(item.id, false)"
           >
             {{ t('pendingApprovals.reject') }}
@@ -74,14 +77,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChoreStore } from '@/stores/chore'
 
+const props = defineProps<{
+  childId?: string | null
+}>()
+
 const { t } = useI18n()
 const choreStore = useChoreStore()
-const isExpanded = ref(false)
 const actioningId = ref<string | null>(null)
+const currentAction = ref<'approve' | 'redo' | 'reject' | null>(null)
+
+const filteredApprovals = computed(() => {
+  if (!props.childId) return choreStore.pendingApprovals
+  return choreStore.pendingApprovals.filter(item => item.child_user_id === props.childId)
+})
 
 function formatRelativeTime(isoStr: string | null): string {
   if (!isoStr) return ''
@@ -101,62 +113,59 @@ function formatRelativeTime(isoStr: string | null): string {
 
 async function onApprove(id: string) {
   actioningId.value = id
+  currentAction.value = 'approve'
   try {
     await choreStore.approvePendingChore(id)
   } finally {
     actioningId.value = null
+    currentAction.value = null
   }
 }
 
 async function onReject(id: string, returnToRedo: boolean) {
   actioningId.value = id
+  currentAction.value = returnToRedo ? 'redo' : 'reject'
   try {
     await choreStore.rejectPendingChore(id, returnToRedo)
   } finally {
     actioningId.value = null
+    currentAction.value = null
   }
 }
 </script>
 
 <style scoped>
 .pending-approvals-section {
-  margin: 12px 16px 0;
+  margin: 0 16px 12px;
   border-radius: 12px;
   overflow: hidden;
   background: var(--van-background-2, #fff);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
-.approval-toggle {
+.approval-header {
   display: flex;
   align-items: center;
   padding: 12px 16px;
-  cursor: pointer;
-  user-select: none;
+  background: var(--van-background-2, #fff);
 }
 
-.toggle-label {
+.header-label {
   font-size: 14px;
   font-weight: 600;
   color: var(--van-text-color, #323233);
   flex: 1;
 }
 
-.toggle-count {
+.header-count {
   font-size: 12px;
   font-weight: 600;
   color: #fff;
   background: var(--van-danger-color, #ee0a24);
   border-radius: 10px;
   padding: 1px 7px;
-  margin-right: 8px;
   min-width: 20px;
   text-align: center;
-}
-
-.toggle-icon {
-  color: var(--van-text-color-2, #969799);
-  font-size: 14px;
 }
 
 .approval-list {
@@ -165,14 +174,20 @@ async function onReject(id: string, returnToRedo: boolean) {
 
 .approval-card {
   display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  gap: 12px;
+  flex-direction: column;
+  padding: 12px 0;
   border-bottom: 1px solid var(--van-border-color, #ebedf0);
 }
 
 .approval-card:last-child {
   border-bottom: none;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
 }
 
 .child-avatar {
@@ -224,10 +239,30 @@ async function onReject(id: string, returnToRedo: boolean) {
   color: var(--van-warning-color, #ff976a);
 }
 
+/* Piano key buttons - full-width at bottom */
 .card-actions {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex-shrink: 0;
+  flex-direction: row;
+  gap: 0;
+  margin-top: 12px;
+}
+
+.piano-btn {
+  flex: 1;
+  border-radius: 0;
+  border: none;
+  border-right: 1px solid var(--van-border-color, #ebedf0);
+  font-size: 14px;
+  height: 44px;
+  min-height: 44px;
+}
+
+.piano-btn:last-child {
+  border-right: none;
+}
+
+/* Ensure touch targets are tappable */
+.piano-btn:disabled {
+  opacity: 0.6;
 }
 </style>
