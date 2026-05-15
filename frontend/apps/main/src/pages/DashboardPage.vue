@@ -278,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -335,8 +335,6 @@ const filterBarContentRef = ref<HTMLElement | null>(null)
 const assetListTopRef = ref<HTMLElement | null>(null)
 const filterBarFrozen = ref(false)
 const filterBarHeight = ref(0)
-// Natural top offset of filter bar in document (set once refs are available)
-let filterBarNaturalTop = 0
 
 function onScroll() {
   if (!filterBarRef.value || !assetListTopRef.value) return
@@ -344,27 +342,20 @@ function onScroll() {
   const scrollY = window.scrollY
 
   if (!filterBarFrozen.value) {
-    // Freeze when the filter bar's natural position has scrolled past the viewport top
-    if (scrollY >= filterBarNaturalTop) {
+    // Read offsetTop fresh each time — content above (charts, reminders) can change height
+    const naturalTop = filterBarRef.value.offsetTop
+    if (scrollY >= naturalTop) {
       filterBarHeight.value = filterBarRef.value.offsetHeight
       filterBarFrozen.value = true
     }
   } else {
-    // Unfreeze when the asset list top sentinel is back at or below the filter bar bottom
+    // Unfreeze when the asset list top sentinel scrolls back above the filter bar bottom
     const sentinelTop = assetListTopRef.value.getBoundingClientRect().top
     if (sentinelTop >= filterBarHeight.value) {
       filterBarFrozen.value = false
     }
   }
 }
-
-// Re-initialize scroll anchor whenever the filter bar ref becomes available
-// (handles the skeleton → content transition)
-watchEffect(() => {
-  if (filterBarRef.value) {
-    filterBarNaturalTop = filterBarRef.value.offsetTop
-  }
-})
 
 function onFabAction(action: 'add' | 'import') {
   fabMenuOpen.value = false
