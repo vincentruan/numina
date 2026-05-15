@@ -14,15 +14,17 @@
       </div>
 
       <template v-else>
-        <!-- Overview Card -->
-        <NetWorthCard
-          :net-worth="overview?.net_worth || 0"
-          :total-assets="overview?.total_assets || 0"
-          :total-liabilities="overview?.total_liabilities || 0"
-          :total-daily-cost="overview?.total_daily_cost || 0"
-          :asset-count="overview?.asset_count || 0"
-          :month-over-month-change="overview?.month_over_month_change"
-        />
+        <!-- Hero section: colored background ends here -->
+        <div class="hero-section">
+          <NetWorthCard
+            :net-worth="overview?.net_worth || 0"
+            :total-assets="overview?.total_assets || 0"
+            :total-liabilities="overview?.total_liabilities || 0"
+            :total-daily-cost="overview?.total_daily_cost || 0"
+            :asset-count="overview?.asset_count || 0"
+            :month-over-month-change="overview?.month_over_month_change"
+          />
+        </div>
 
         <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
         <SmartRemindersCard
@@ -612,8 +614,12 @@ onUnmounted(() => {
 
 <style scoped>
 .dashboard-page {
-  background: var(--bg-secondary);
+  background: var(--card-bg);
   min-height: 100vh;
+}
+
+.hero-section {
+  background: var(--bg-secondary);
 }
 
 .stale-hint {
