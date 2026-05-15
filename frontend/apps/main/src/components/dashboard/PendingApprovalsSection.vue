@@ -38,38 +38,35 @@
           </div>
         </div>
 
-        <!-- Piano Key Buttons -->
+        <!-- Piano Key Buttons (FamilyPage style) -->
         <div class="card-actions">
-          <van-button
-            block
-            type="success"
+          <button
+            class="action-btn action-btn--success"
             :disabled="actioningId === item.id"
-            :loading="actioningId === item.id && currentAction === 'approve'"
-            class="piano-btn"
             @click="onApprove(item.id)"
           >
-            {{ t('pendingApprovals.approve') }}
-          </van-button>
-          <van-button
-            block
-            type="warning"
+            <van-icon name="success" size="18" />
+            <span v-if="actioningId === item.id && currentAction === 'approve'">{{ t('pendingApprovals.approving') }}</span>
+            <span v-else>{{ t('pendingApprovals.approve') }}</span>
+          </button>
+          <button
+            class="action-btn action-btn--warning"
             :disabled="actioningId === item.id"
-            :loading="actioningId === item.id && currentAction === 'redo'"
-            class="piano-btn"
             @click="onReject(item.id, true)"
           >
-            {{ t('pendingApprovals.returnRedo') }}
-          </van-button>
-          <van-button
-            block
-            type="danger"
+            <van-icon name="redo" size="18" />
+            <span v-if="actioningId === item.id && currentAction === 'redo'">{{ t('pendingApprovals.redoing') }}</span>
+            <span v-else>{{ t('pendingApprovals.returnRedo') }}</span>
+          </button>
+          <button
+            class="action-btn action-btn--danger"
             :disabled="actioningId === item.id"
-            :loading="actioningId === item.id && currentAction === 'reject'"
-            class="piano-btn"
             @click="onReject(item.id, false)"
           >
-            {{ t('pendingApprovals.reject') }}
-          </van-button>
+            <van-icon name="cross" size="18" />
+            <span v-if="actioningId === item.id && currentAction === 'reject'">{{ t('pendingApprovals.rejecting') }}</span>
+            <span v-else>{{ t('pendingApprovals.reject') }}</span>
+          </button>
         </div>
       </div>
     </div>
@@ -239,30 +236,67 @@ async function onReject(id: string, returnToRedo: boolean) {
   color: var(--van-warning-color, #ff976a);
 }
 
-/* Piano key buttons - full-width at bottom */
 .card-actions {
   display: flex;
-  flex-direction: row;
-  gap: 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
   margin-top: 12px;
+  overflow: hidden;
 }
 
-.piano-btn {
+[data-theme='dark'] .card-actions {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn {
   flex: 1;
-  border-radius: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
   border: none;
-  border-right: 1px solid var(--van-border-color, #ebedf0);
-  font-size: 14px;
-  height: 44px;
+  background: transparent;
+  color: var(--van-text-color-2, #969799);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
   min-height: 44px;
 }
 
-.piano-btn:last-child {
-  border-right: none;
+.action-btn + .action-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
 }
 
-/* Ensure touch targets are tappable */
-.piano-btn:disabled {
-  opacity: 0.6;
+[data-theme='dark'] .action-btn + .action-btn::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.action-btn--success {
+  color: var(--van-success-color, #07c160);
+}
+
+.action-btn--warning {
+  color: var(--van-warning-color, #ff976a);
+}
+
+.action-btn--danger {
+  color: var(--van-danger-color, #ee0a24);
 }
 </style>
