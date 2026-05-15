@@ -8,6 +8,7 @@ See root [`CLAUDE.md`](../../CLAUDE.md) for behavioral guidelines and cross-cutt
 Run all commands from `frontend/apps/child/`:
 
 ```bash
+npm run dev          # Vite dev server — http://localhost:5174, hot reload
 npm run lint          # ESLint — check for errors and warnings
 npm run lint:fix      # ESLint — auto-fix where possible
 npm run typecheck     # vue-tsc --noEmit — type check without building

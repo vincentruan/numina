@@ -74,6 +74,25 @@ JSON output automatically converts IDs to strings:
 JavaScript loses precision for integers > 2^53. Snowflake IDs are 18-19 digits.
 Serializing as strings preserves exact values across the API boundary.
 
+## Router Inventory
+
+| Router | Path prefix | Purpose |
+|--------|-------------|---------|
+| `auth` | `/api/v1/auth` | Login, register, token refresh |
+| `assets` | `/api/v1/assets` | CRUD, batch ops |
+| `liabilities` | `/api/v1/liabilities` | CRUD |
+| `family` | `/api/v1/family` | Invite, members |
+| `dashboard` | `/api/v1/dashboard` | Overview, trend, allocation |
+| `categories` | `/api/v1/categories` | System category list |
+| `tags` | `/api/v1/tags` | CRUD |
+| `chores` | `/api/v1/chores` | Child chore tracking |
+| `wishes` | `/api/v1/wishes` | Child wish list |
+| `ai` | `/api/v1/ai` | Chat, capabilities (backend → agent proxy) |
+| `internal` | `/api/v1/internal` | Service-to-service (agent → backend) |
+| `devices` | `/api/v1/devices` | Trusted device management |
+| `exchange_rates` | `/api/v1/exchange-rates` | Currency rates |
+| `audit` | `/api/v1/audit` | Audit log (admin only) |
+
 ## Patterns
 
 ### Pydantic v2
@@ -140,6 +159,7 @@ Financial assets carry return fields:
 - `TokenResponse` does not include `user` — call `GET /auth/me` separately after login
 - `DELETE /assets/{id}` archives (sets `is_archived=True`), does not hard-delete
 - Dashboard queries filter `is_archived=False` — archived assets are excluded from all aggregates
+- **Error handling pattern:** backend raises `HTTPException(status_code=404, detail="资产不存在")`; frontend catches via axios interceptor and maps to `showToast(t('errors.*'))`. Never return raw English error strings to users.
 
 ### Failure Patterns
 

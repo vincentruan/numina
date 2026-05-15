@@ -124,6 +124,25 @@ For module-specific dev commands, conventions, and patterns:
 
 ## Development Commands
 
+### Frontend (Main App)
+
+```bash
+cd frontend/apps/main
+npm run dev          # Dev server — http://localhost:5173 (hot reload)
+npm run test:run     # Run tests once
+npm run typecheck    # Type check before push
+```
+
+### Backend
+
+```bash
+cd server/apps/backend
+uv run uvicorn app.main:app --reload --port 8000  # Dev server (hot reload)
+uv run pytest tests/ -v                            # Run tests
+uv run alembic upgrade head                        # Apply migrations
+uv run alembic downgrade -1                        # Rollback last migration
+```
+
 ### Docker (All Services)
 
 ```bash

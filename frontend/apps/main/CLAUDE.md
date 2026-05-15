@@ -8,6 +8,7 @@ See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting
 Run all commands from `frontend/apps/main/`:
 
 ```bash
+npm run dev          # Vite dev server — http://localhost:5173, hot reload
 npm run lint          # ESLint — check for errors and warnings
 npm run lint:fix      # ESLint — auto-fix where possible
 npm run format        # Prettier — format all files in src/
@@ -39,6 +40,18 @@ src/
 ├── types/         # TypeScript type definitions
 └── utils/         # Helper functions
 ```
+
+## Architecture Flow
+
+```
+pages/ → stores/ → api/ → backend HTTP
+   ↓
+components/ (reusable UI)
+```
+
+- Pages use stores for state
+- Stores call api modules for HTTP
+- Components are pure UI (no direct api calls)
 
 ## Key Invariants
 

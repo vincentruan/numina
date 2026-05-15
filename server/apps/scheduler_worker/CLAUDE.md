@@ -8,6 +8,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 Run all commands from `server/`:
 
 ```bash
+uv run uvicorn apps.scheduler_worker.app.main:app --reload --port 8002  # Dev worker
 uv run ruff check apps/scheduler_worker/        # lint
 uv run ruff check apps/scheduler_worker/ --fix  # lint + auto-fix
 uv run ruff format apps/scheduler_worker/       # format (only files you touch)
