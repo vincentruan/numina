@@ -1,13 +1,14 @@
 <template>
   <div v-if="filteredApprovals.length > 0" class="pending-approvals-section">
     <!-- Header -->
-    <div class="approval-header">
+    <div class="approval-header" @click="collapsed = !collapsed">
       <span class="header-label">{{ t('pendingApprovals.title') }}</span>
       <span class="header-count">{{ filteredApprovals.length }}</span>
+      <van-icon :name="collapsed ? 'arrow-down' : 'arrow-up'" size="14" class="collapse-icon" />
     </div>
 
     <!-- Card List -->
-    <div class="approval-list">
+    <div v-if="!collapsed" class="approval-list">
       <div
         v-for="item in filteredApprovals"
         :key="item.id"
@@ -54,7 +55,7 @@
             :disabled="actioningId === item.id"
             @click="onReject(item.id, true)"
           >
-            <van-icon name="redo" size="18" />
+            <van-icon name="revoke" size="18" />
             <span v-if="actioningId === item.id && currentAction === 'redo'">{{ t('pendingApprovals.redoing') }}</span>
             <span v-else>{{ t('pendingApprovals.returnRedo') }}</span>
           </button>
@@ -86,6 +87,7 @@ const { t } = useI18n()
 const choreStore = useChoreStore()
 const actioningId = ref<string | null>(null)
 const currentAction = ref<'approve' | 'redo' | 'reject' | null>(null)
+const collapsed = ref(true)
 
 const filteredApprovals = computed(() => {
   if (!props.childId) return choreStore.pendingApprovals
@@ -145,6 +147,13 @@ async function onReject(id: string, returnToRedo: boolean) {
   align-items: center;
   padding: 12px 16px;
   background: var(--van-background-2, #fff);
+  cursor: pointer;
+  user-select: none;
+}
+
+.collapse-icon {
+  color: var(--van-text-color-3, #c8c9cc);
+  margin-left: 4px;
 }
 
 .header-label {
@@ -250,11 +259,11 @@ async function onReject(id: string, returnToRedo: boolean) {
 .action-btn {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 10px 4px;
+  padding: 8px 4px;
   border: none;
   background: transparent;
   color: var(--van-text-color-2, #969799);
@@ -262,7 +271,7 @@ async function onReject(id: string, returnToRedo: boolean) {
   cursor: pointer;
   transition: background 0.15s;
   position: relative;
-  min-height: 44px;
+  min-height: 36px;
 }
 
 .action-btn + .action-btn::before {
