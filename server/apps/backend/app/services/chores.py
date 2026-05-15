@@ -416,7 +416,11 @@ def claim_instance(db: Session, child_user: User, instance_id: str) -> ChoreInst
 
     instance.child_user_id = child_user.id
     instance.claimed_at = datetime.utcnow()
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
     db.refresh(instance)
     return instance
 
@@ -428,10 +432,15 @@ def abandon_instance(db: Session, child_user: User, instance_id: str) -> ChoreIn
     Raises 409 otherwise.
     Effect: reset child_user_id to family_id, clear claimed_at and assigned_by_user_id.
     """
-    instance = db.query(ChoreInstance).filter(
-        ChoreInstance.id == instance_id,
-        ChoreInstance.family_id == child_user.family_id,
-    ).first()
+    instance = (
+        db.query(ChoreInstance)
+        .filter(
+            ChoreInstance.id == instance_id,
+            ChoreInstance.family_id == child_user.family_id,
+        )
+        .with_for_update()
+        .first()
+    )
     if not instance:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "家务实例不存在")
 
@@ -444,7 +453,11 @@ def abandon_instance(db: Session, child_user: User, instance_id: str) -> ChoreIn
     instance.child_user_id = child_user.family_id
     instance.claimed_at = None
     instance.assigned_by_user_id = None
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
     db.refresh(instance)
     fire_notification(child_user.family_id, {
         "type": "chore_abandoned",
