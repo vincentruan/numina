@@ -244,7 +244,13 @@ def get_my_chores(
     db: Session = Depends(get_db),
     child: User = Depends(get_current_child_user),
 ):
-    return chore_service.get_or_create_instances(db, child, date)
+    instances = chore_service.get_or_create_instances(db, child, date)
+    result = []
+    for instance in instances:
+        resp = ChoreInstanceResponse.model_validate(instance)
+        resp.is_pool_unclaimed = getattr(instance, "_is_pool_unclaimed", False)
+        result.append(resp)
+    return result
 
 
 @router.post("/child/chores/{instance_id}/complete", response_model=ChoreInstanceResponse)
@@ -254,6 +260,32 @@ def mark_complete(
     child: User = Depends(get_current_child_user),
 ):
     return chore_service.mark_complete(db, child, instance_id)
+
+
+@router.post("/child/chores/{instance_id}/claim", response_model=ChoreInstanceResponse)
+def claim_instance(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Claim an unclaimed pool chore instance for this child."""
+    instance = chore_service.claim_instance(db, child, instance_id)
+    resp = ChoreInstanceResponse.model_validate(instance)
+    resp.is_pool_unclaimed = False
+    return resp
+
+
+@router.post("/child/chores/{instance_id}/abandon", response_model=ChoreInstanceResponse)
+def abandon_instance(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    child: User = Depends(get_current_child_user),
+):
+    """Abandon a claimed or hard-assigned chore instance, returning it to the pool."""
+    instance = chore_service.abandon_instance(db, child, instance_id)
+    resp = ChoreInstanceResponse.model_validate(instance)
+    resp.is_pool_unclaimed = True
+    return resp
 
 
 @router.get("/child/chores/{instance_id}/status")

@@ -1,6 +1,7 @@
 """Service layer for chore templates and instances."""
 
 from datetime import datetime, timedelta
+from typing import cast
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_, text
@@ -131,19 +132,55 @@ def _date_to_bucket(date_str: str, frequency: str) -> str:
 
 
 def get_or_create_instances(db: Session, child_user: User, date_str: str) -> list[ChoreInstance]:
-    """Return all chore instances for a child on a given date, creating missing ones."""
+    """Return all chore instances visible to a child on a given date, creating missing ones.
+
+    Returns:
+    1. Instances where child_user_id == child.id (personal/claimed/hard-assigned)
+    2. Instances where child_user_id == family_id AND assigned_by_user_id IS NULL (unclaimed pool)
+
+    Does NOT return instances hard-assigned to a different child
+    (child_user_id != child.id AND child_user_id != family_id, or
+     child_user_id == family_id AND assigned_by_user_id IS NOT NULL pointing elsewhere).
+    """
     # Find all active templates for this child
     templates = _get_templates_for_child(db, child_user)
 
-    instances = []
     for template in templates:
         bucket = _date_to_bucket(date_str, template.frequency)
         # Pool chores use family_id as the instance owner so all children share one instance.
         # Assigned chores use the child's own user_id.
         owner_id = child_user.family_id if template.assignment_type == "pool" else child_user.id
-        instance = _get_or_create_instance(db, template, owner_id, child_user.family_id, bucket)
-        if instance:
-            instances.append(instance)
+        _get_or_create_instance(db, template, owner_id, child_user.family_id, bucket)
+
+    # Now fetch all instances visible to this child:
+    # - personal/claimed/hard-assigned: child_user_id == child.id
+    # - unclaimed pool: child_user_id == family_id AND assigned_by_user_id IS NULL
+    bucket_daily = date_str
+    bucket_weekly = _date_to_bucket(date_str, "weekly")
+
+    instances: list[ChoreInstance] = cast(
+        list[ChoreInstance],
+        db.query(ChoreInstance)
+        .filter(
+            ChoreInstance.family_id == child_user.family_id,
+            ChoreInstance.date_bucket.in_([bucket_daily, bucket_weekly]),
+            or_(
+                ChoreInstance.child_user_id == child_user.id,
+                (
+                    (ChoreInstance.child_user_id == child_user.family_id)
+                    & (ChoreInstance.assigned_by_user_id.is_(None))
+                ),
+            ),
+        )
+        .all()
+    )
+
+    # Set is_pool_unclaimed transient attribute on each instance
+    for instance in instances:
+        instance._is_pool_unclaimed = (
+            instance.child_user_id == child_user.family_id
+            and instance.assigned_by_user_id is None
+        )
 
     return instances
 
@@ -334,6 +371,88 @@ def assign_instance(db: Session, parent_user: User, instance_id: str, target_chi
     instance.claimed_at = None
     db.commit()
     db.refresh(instance)
+    return instance
+
+
+def claim_instance(db: Session, child_user: User, instance_id: str) -> ChoreInstance:
+    """Claim an unclaimed pool chore instance for this child.
+
+    Concurrency-safe via SELECT FOR UPDATE (no-op on SQLite, serialized writes).
+    Guard: instance must be visible to this child (child_user_id == family_id AND
+    assigned_by_user_id IS NULL) and status must be 'available'.
+    Raises 409 if already claimed by another child.
+    """
+    instance = (
+        db.query(ChoreInstance)
+        .filter(
+            ChoreInstance.id == instance_id,
+            ChoreInstance.family_id == child_user.family_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if not instance:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "家务实例不存在")
+
+    # Hard-assigned to a different child (assigned_by_user_id set, child_user_id != this child)
+    # → invisible to this child, treat as 404
+    if instance.assigned_by_user_id is not None and instance.child_user_id != child_user.id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "家务实例不存在")
+
+    # Claimed by another child (child_user_id is a real child id, not family_id, not this child)
+    # → visible but already taken, 409
+    if instance.child_user_id != child_user.family_id and instance.child_user_id != child_user.id:
+        raise AppError(ErrorCode.CHORE_ALREADY_CLAIMED)
+
+    # Already claimed by this child or is their personal assigned chore — nothing to claim
+    if instance.child_user_id == child_user.id:
+        raise AppError(ErrorCode.CHORE_ALREADY_CLAIMED)
+
+    # At this point: child_user_id == family_id AND assigned_by_user_id IS NULL → unclaimed pool
+    # (the only remaining case)
+
+    if instance.status != "available":
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
+
+    instance.child_user_id = child_user.id
+    instance.claimed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(instance)
+    return instance
+
+
+def abandon_instance(db: Session, child_user: User, instance_id: str) -> ChoreInstance:
+    """Abandon a claimed or hard-assigned chore instance, returning it to the pool.
+
+    Guard: instance.child_user_id must equal child.id; status must be 'available'.
+    Raises 409 otherwise.
+    Effect: reset child_user_id to family_id, clear claimed_at and assigned_by_user_id.
+    """
+    instance = db.query(ChoreInstance).filter(
+        ChoreInstance.id == instance_id,
+        ChoreInstance.family_id == child_user.family_id,
+    ).first()
+    if not instance:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "家务实例不存在")
+
+    if instance.child_user_id != child_user.id:
+        raise AppError(ErrorCode.CHORE_NOT_YOURS)
+
+    if instance.status != "available":
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
+
+    instance.child_user_id = child_user.family_id
+    instance.claimed_at = None
+    instance.assigned_by_user_id = None
+    db.commit()
+    db.refresh(instance)
+    fire_notification(child_user.family_id, {
+        "type": "chore_abandoned",
+        "instance_id": instance.id,
+        "chore_name": instance.chore_name,
+        "child_name": child_user.display_name,
+        "message": f"{child_user.display_name} 放弃了「{instance.chore_name}」，任务已回到任务池",
+    })
     return instance
 
 
