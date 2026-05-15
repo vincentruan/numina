@@ -83,5 +83,8 @@
   "CALENDAR_DATE_INVALID": "Invalid date format, please use YYYY-MM-DD",
   "CHILD_NOT_FOUND": "Child not found",
   "AI_SPENDING_LEAK_NOT_FOUND": "Spending leak record not found",
-  "NOTIFICATION_NO_CHANNEL": "No notification channel configured"
+  "NOTIFICATION_NO_CHANNEL": "No notification channel configured",
+  "CHORE_INSTANCE_NOT_FOUND": "Chore instance not found",
+  "CHORE_INSTANCE_STATUS_CONFLICT": "Chore instance status does not allow this operation",
+  "CHORE_ASSIGN_TARGET_INVALID": "Target user is not a child in this family"
 }

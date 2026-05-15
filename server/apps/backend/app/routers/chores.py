@@ -15,6 +15,7 @@ from apps.backend.app.models.chore import ChoreInstance
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.blind_box import BlindBoxDrawResponse
 from apps.backend.app.schemas.chore import (
+    AssignRequest,
     ChoreInstanceResponse,
     ChoreTemplateCreate,
     ChoreTemplateResponse,
@@ -203,6 +204,34 @@ def reject_instance(
     user: User = Depends(require_owner),
 ):
     return chore_service.reject_instance(db, user, instance_id, req.return_to_redo)
+
+
+@router.post("/family/chore-instances/{instance_id}/assign", response_model=ChoreInstanceResponse)
+def assign_instance(
+    instance_id: int,
+    req: AssignRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Assign or reassign a pool chore instance to a specific child."""
+    instance = chore_service.assign_instance(db, user, instance_id, req.child_user_id)
+    resp = ChoreInstanceResponse.model_validate(instance)
+    # is_pool_unclaimed: True when child_user_id == family_id AND assigned_by_user_id is None
+    resp.is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
+    return resp
+
+
+@router.delete("/family/chore-instances/{instance_id}", status_code=204)
+def void_instance(
+    instance_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Hard-delete an available chore instance (void it)."""
+    chore_service.void_instance(db, user, instance_id)
 
 
 # ---------------------------------------------------------------------------

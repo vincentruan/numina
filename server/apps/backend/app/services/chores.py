@@ -7,7 +7,12 @@ from sqlalchemy import or_, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from apps.backend.app.models.chore import ChoreInstance, ChoreTemplate, chore_template_assignees
+from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.chore import (
+    ChoreInstance,
+    ChoreTemplate,
+    chore_template_assignees,
+)
 from apps.backend.app.models.coin_transaction import CoinTransaction
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
@@ -302,6 +307,43 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
     })
 
     return instance
+
+
+def assign_instance(db: Session, parent_user: User, instance_id: str, target_child_id: str) -> ChoreInstance:
+    """Assign (or reassign) a pool chore instance to a specific child.
+
+    Works for both first-time assign (pool unclaimed) and reassign (already claimed/assigned).
+    Status must be 'available'; target must be role=child in the same family.
+    """
+    instance = _get_family_instance(db, parent_user, instance_id)
+    if instance.status != "available":
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
+
+    # Validate target child belongs to same family and has role=child
+    target = db.query(User).filter(
+        User.id == target_child_id,
+        User.family_id == parent_user.family_id,
+    ).first()
+    if not target:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "目标用户不存在")
+    if target.role != "child":
+        raise AppError(ErrorCode.CHORE_ASSIGN_TARGET_INVALID)
+
+    instance.child_user_id = target_child_id
+    instance.assigned_by_user_id = parent_user.id
+    instance.claimed_at = None
+    db.commit()
+    db.refresh(instance)
+    return instance
+
+
+def void_instance(db: Session, parent_user: User, instance_id: str) -> None:
+    """Hard-delete a chore instance. Status must be 'available'."""
+    instance = _get_family_instance(db, parent_user, instance_id)
+    if instance.status != "available":
+        raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
+    db.delete(instance)
+    db.commit()
 
 
 def reject_instance(db: Session, parent_user: User, instance_id: str, return_to_redo: bool = False) -> ChoreInstance:

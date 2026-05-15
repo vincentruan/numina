@@ -119,6 +119,9 @@ class ChoreInstanceResponse(SnowflakeBase):
     child_display_name: str | None = None
     child_avatar_color: str | None = None
     blind_box_draw: BlindBoxDrawResponse | None = None
+    assigned_by_user_id: int | None = None
+    claimed_at: datetime | None = None
+    is_pool_unclaimed: bool = False
 
     @field_validator("child_avatar_color", mode="before")
     @classmethod
@@ -134,6 +137,10 @@ class ApproveRequest(BaseModel):
 
 class RejectRequest(BaseModel):
     return_to_redo: bool = False
+
+
+class AssignRequest(BaseModel):
+    child_user_id: int
 
 
 class GrantRequest(BaseModel):
