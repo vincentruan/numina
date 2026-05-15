@@ -68,6 +68,9 @@ class ChoreInstance(Base):
     streak_bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Tracks the actual child who submitted — needed for pool chores where child_user_id is family_id
     submitted_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    # Pool chore assignment tracking
+    assigned_by_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
