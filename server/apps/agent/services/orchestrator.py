@@ -24,6 +24,9 @@ from apps.agent.schemas.policy import CapabilityPolicy
 from apps.agent.schemas.response import AgentResponse
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import (
+    DeerFlowTimeoutError,
+)
+from apps.agent.services.deerflow_adapter.adapter import (
     create_family_adapter as _create_family_adapter,
 )
 from apps.agent.services.deerflow_adapter.skill_loader import skill_loader
@@ -111,7 +114,9 @@ class Orchestrator:
             # ── 5. DeerFlow dispatch ───────────────────────────────────────
             deerflow_attempted = True
             try:
-                family_adapter = _deerflow_adapter or _create_family_adapter(family_id, ai_config)
+                family_adapter = _deerflow_adapter or _create_family_adapter(
+                    family_id, ai_config, timeout_seconds=ai_config.get("timeout_seconds", 60)
+                )
                 raw_output = await family_adapter.dispatch(
                     skill_name=capability,
                     context=redacted,
@@ -196,10 +201,14 @@ class Orchestrator:
             return
 
         # ── 3. Fetch context ───────────────────────────────────────────
-        context = await self._build_context(client, family_id, free_text=free_text)
-
-        # ── 4. Redact PII ──────────────────────────────────────────────
-        redacted_context = pii_redactor.redact(context)
+        try:
+            context = await self._build_context(client, family_id, free_text=free_text)
+            # ── 4. Redact PII ──────────────────────────────────────────────
+            redacted_context = pii_redactor.redact(context)
+        except Exception as e:
+            logger.error("[orchestrator] stream_dispatch pre-dispatch failed: %s", e)
+            yield "暂时无法完成分析，请稍后重试。"
+            return
 
         # ── 5. Journal: session start + user message ───────────────────
         session_journal.write_session_start(
@@ -239,7 +248,7 @@ class Orchestrator:
 
         # ── 7. DeerFlow stream dispatch ────────────────────────────────
         try:
-            adapter = _create_family_adapter(family_id, ai_config)
+            adapter = _create_family_adapter(family_id, ai_config, timeout_seconds=ai_config.get("timeout_seconds", 60))
             async for chunk in adapter.stream_dispatch(
                 capability,
                 redacted_context,
@@ -260,6 +269,22 @@ class Orchestrator:
                     skill_triggered=capability,
                     deerflow_attempted=True,
                     duration_ms=int(time.monotonic() * 1000) - start_ms,
+                )
+            )
+        except DeerFlowTimeoutError:
+            logger.warning("[orchestrator] stream_dispatch timed out family=%s", family_id)
+            error_type = "DeerFlowTimeoutError"
+            yield "AI 响应超时，请稍后重试。"
+            audit_logger.log_call(
+                AuditEntry(
+                    audit_id=audit_id,
+                    capability=capability,
+                    family_id=family_id,
+                    user_id=user_id,
+                    success=False,
+                    deerflow_attempted=True,
+                    duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    error_type="DeerFlowTimeoutError",
                 )
             )
         except Exception as e:
@@ -433,7 +458,7 @@ class Orchestrator:
 
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
-                adapter = _create_family_adapter(family_id, ai_config)
+                adapter = _create_family_adapter(family_id, ai_config, timeout_seconds=ai_config.get("timeout_seconds", 60))
                 async for chunk in adapter.stream_dispatch(
                     capability,
                     redacted_context,
@@ -450,6 +475,11 @@ class Orchestrator:
                     execution_time_ms=elapsed_ms,
                 ).to_ndjson()
                 return
+            except DeerFlowTimeoutError:
+                logger.warning("[orchestrator] event stream timed out family=%s", family_id)
+                success = False
+                error_type = "DeerFlowTimeoutError"
+                yield builder.error("AI 响应超时，请稍后重试。", code="deerflow_timeout").to_ndjson()
             except Exception as e:
                 logger.error("[orchestrator] event stream DeerFlow failed: %s", e)
                 success = False

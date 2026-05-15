@@ -125,7 +125,7 @@ def _generate_temp_config(
     base_config_dir: str,
     ai_config: dict[str, Any],
 ) -> Path:
-    """生成临时配置文件，注入家庭的 AI 配置。
+    """生成临时配置文件，动态注入家庭的 AI 配置到 models 列表。
 
     Args:
         base_config_dir: 基础配置目录路径
@@ -134,48 +134,50 @@ def _generate_temp_config(
     Returns:
         临时配置文件的路径
     """
+    import yaml  # type: ignore[import-untyped]
+
     # 复制 base config 作为模板
     base_config_path = Path(base_config_dir) / "base" / "config.yaml"
     if not base_config_path.exists():
         raise FileNotFoundError(f"Base config not found: {base_config_path}")
 
-    # 读取模板内容
+    # 读取模板 YAML
     with open(base_config_path, encoding="utf-8") as f:
-        content = f.read()
+        config = yaml.safe_load(f)
 
-    # 替换环境变量占位符为实际值
-    # DeerFlow 配置格式：$AI_MODEL → 替换为实际模型名
+    # 提取家庭的 AI 配置
     api_key = ai_config.get("api_key", "")
     model_id = ai_config.get("ai_model_id", "claude-haiku-4-5")
     base_url = ai_config.get("ai_base_url", "")
+    provider = ai_config.get("ai_provider", "openai")
 
-    # 构建新配置内容
-    # 替换 llm 部分
-    content = content.replace("$AI_MODEL", model_id)
-    content = content.replace("$AI_API_KEY", api_key)
+    # 映射 provider 到 LangChain 类路径（DeerFlow 期望冒号分隔格式）
+    provider_class_map: dict[str, str] = {
+        "anthropic": "langchain_anthropic:ChatAnthropic",
+        "openai": "langchain_openai:ChatOpenAI",
+        "openai_compatible": "langchain_openai:ChatOpenAI",
+    }
+    use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
 
-    # 如果有自定义 base_url，注入到配置
+    # 构建 models 列表（DeerFlow harness 期望的格式）
+    model_entry: dict[str, Any] = {
+        "name": "main",
+        "use": use_class,
+        "model": model_id,
+        "api_key": api_key,
+    }
     if base_url:
-        # 在 llm 部分添加 base_url（需要 YAML 格式处理）
-        lines = content.split("\n")
-        new_lines = []
-        in_llm_section = False
-        for line in lines:
-            new_lines.append(line)
-            if line.startswith("llm:"):
-                in_llm_section = True
-            elif in_llm_section and line.strip() and not line.startswith("  ") and not line.startswith("#"):
-                in_llm_section = False
-            elif in_llm_section and "api_key:" in line:
-                new_lines.append(f"  base_url: {base_url}")
+        model_entry["base_url"] = base_url
 
-        content = "\n".join(new_lines)
+    config["models"] = [model_entry]
+    # 移除旧的 llm 节（已弃用）
+    config.pop("llm", None)
 
     # 写入临时文件
     temp_dir = Path(tempfile.mkdtemp(prefix="deerflow_config_"))
     temp_config_path = temp_dir / "config.yaml"
     with open(temp_config_path, "w", encoding="utf-8") as f:
-        f.write(content)
+        yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
     return temp_config_path
 
@@ -225,10 +227,8 @@ def get_family_adapter(
     # 生成临时配置（outside lock to avoid blocking during file I/O）
     temp_config_path = _generate_temp_config(base_config_dir, ai_config)
 
-    # 设置环境变量（DeerFlow 需要）
+    # 设置环境变量（DeerFlow harness 需要 DEER_FLOW_CONFIG_PATH）
     os.environ["DEER_FLOW_CONFIG_PATH"] = str(temp_config_path)
-    os.environ["AI_MODEL"] = ai_config.get("ai_model_id", "claude-haiku-4-5")
-    os.environ["AI_API_KEY"] = ai_config.get("api_key", "")
 
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family

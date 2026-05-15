@@ -72,7 +72,9 @@ class DeerFlowAdapter:
             self._is_family_mode = True
         elif config_path:
             # 全局配置模式：直接初始化（向后兼容）
-            from apps.agent.services.deerflow_adapter.client_factory import get_deerflow_client
+            from apps.agent.services.deerflow_adapter.client_factory import (
+                get_deerflow_client,
+            )
             self._client = get_deerflow_client(config_path)
             self._is_family_mode = False
         else:
@@ -141,34 +143,44 @@ class DeerFlowAdapter:
     ) -> AsyncGenerator[str, None]:
         """Wrap synchronous DeerFlowClient.stream() to yield chunks asynchronously."""
         loop = asyncio.get_running_loop()
-        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        # Queue carries str chunks, None for clean end, or BaseException for errors.
+        queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
 
         def _produce() -> None:
             """Run in thread pool — puts chunks into queue, None signals end."""
             try:
                 message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
                 for event in self._client.stream(message, thread_id=thread_id):
-                    if hasattr(event, "data") and isinstance(event.data, str):
-                        chunk = event.data
-                    elif isinstance(event, str):
-                        chunk = event
-                    else:
-                        chunk = None
+                    chunk = None
+                    # DeerFlow returns StreamEvent(type="messages-tuple", data={"type": "ai", "content": "..."})
+                    if (
+                        hasattr(event, "type")
+                        and event.type == "messages-tuple"
+                        and isinstance(event.data, dict)
+                        and event.data.get("type") == "ai"
+                    ):
+                        content = event.data.get("content")
+                        if isinstance(content, str) and content:
+                            chunk = content
                     if chunk:
                         loop.call_soon_threadsafe(queue.put_nowait, chunk)
             except Exception as e:
-                logger.error(f"[deerflow] stream_chunks failed: {e}")
-                raise
+                logger.error("[deerflow] stream_chunks failed: %s", e)
+                # Send the exception to the consumer so it can re-raise rather than
+                # silently treating the error as a clean end-of-stream.
+                loop.call_soon_threadsafe(queue.put_nowait, e)
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
         future = loop.run_in_executor(_EXECUTOR, _produce)
         try:
             while True:
-                chunk = await asyncio.wait_for(queue.get(), timeout=self._timeout)
-                if chunk is None:
+                item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
+                if item is None:
                     break
-                yield chunk
+                if isinstance(item, BaseException):
+                    raise DeerFlowError(f"DeerFlow stream error: {item}") from item
+                yield item
         except TimeoutError as e:
             raise DeerFlowTimeoutError(
                 f"DeerFlow stream_dispatch timeout after {self._timeout}s"
@@ -189,10 +201,15 @@ class DeerFlowAdapter:
                 message=prompt,
                 thread_id=thread_id,
             ):
-                if hasattr(event, "data") and isinstance(event.data, str):
-                    chunks.append(event.data)
-                elif isinstance(event, str):
-                    chunks.append(event)
+                if (
+                    hasattr(event, "type")
+                    and event.type == "messages-tuple"
+                    and isinstance(event.data, dict)
+                    and event.data.get("type") == "ai"
+                ):
+                    content = event.data.get("content")
+                    if isinstance(content, str) and content:
+                        chunks.append(content)
             return "".join(chunks)
         except Exception as e:
             err_msg = str(e).lower()

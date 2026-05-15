@@ -1,12 +1,8 @@
 # DeerFlow 基础配置模板
 # 所有环境共享的基础设置，由 dev/prod overlay 覆盖
 
-# LLM 配置（从环境变量读取，不硬编码）
-llm:
-  # DeerFlow config loader expects simple $VAR syntax (not ${VAR:-default})
-  # Set AI_MODEL and AI_API_KEY env vars before starting the agent
-  model: $AI_MODEL
-  api_key: $AI_API_KEY  # 由 adapter 通过 RunnableConfig 注入，不从此处读取
+# models 列表由 family_adapter_cache._generate_temp_config 动态注入，
+# 根据家庭的 ai_provider/ai_model_id/api_key 生成正确的 LangChain 类路径。
 
 # 检查点（对话状态持久化）
 checkpointer:
