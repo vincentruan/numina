@@ -898,7 +898,11 @@ export default {
   },
   reminders: {
     title: '智能提醒',
+    expiringSoon: '即将到期',
+    idleAssets: '闲置资产',
     empty: '暂无提醒',
+    expiringSoonEmpty: '暂无即将到期资产',
+    smartRemindersEmpty: '暂无智能提醒',
     dismiss: '忽略',
     types: {
       large_purchase: '大额消费',

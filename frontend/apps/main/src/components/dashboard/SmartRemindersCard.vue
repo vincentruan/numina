@@ -14,76 +14,82 @@
           <span v-else class="reminder-summary reminder-summary--empty">暂无提醒</span>
         </template>
 
-        <!-- Expiring Soon items (shown first) -->
-        <template v-if="expiringAssets.length > 0">
-          <div class="reminder-section-label">即将到期</div>
-          <div
-            v-for="item in expiringAssets"
-            :key="`exp-${item.id}`"
-            class="expiring-row"
-            :class="getRemainingClass(item)"
-            @click="goToAsset(item.id)"
-          >
-            <van-icon name="clock-o" class="expiring-icon" />
-            <div class="expiring-content">
-              <div class="expiring-name">{{ item.name }}</div>
-              <div class="expiring-meta">{{ item.category_name }} · {{ item.asset_type === 'financial' ? '金融' : '实物' }}</div>
-            </div>
-            <div class="expiring-remaining" :class="getRemainingClass(item)">
-              {{ formatRemaining(item.remaining_days) }}
-            </div>
-          </div>
-        </template>
+        <!-- Dynamic section order: 有数据的在前，都有/都无时智能提醒在前 -->
+        <template v-for="section in sectionOrder" :key="section">
 
-        <!-- Idle Assets -->
-        <template v-if="idleAssets.length > 0">
-          <div class="reminder-section-label">闲置资产</div>
-          <van-cell
-            v-for="item in idleAssets"
-            :key="`idle-${item.id}`"
-            :title="item.name"
-            :label="item.category_name"
-            icon="box-o"
-            is-link
-            @click="$emit('select-status', 'idle')"
-          />
-        </template>
+          <!-- 即将到期 + 闲置资产 -->
+          <template v-if="section === 'expiring'">
+            <div class="reminder-section-label">{{ t('reminders.expiringSoon') }}</div>
+            <template v-if="expiringAssets.length > 0">
+              <div
+                v-for="item in expiringAssets"
+                :key="`exp-${item.id}`"
+                class="expiring-row"
+                :class="getRemainingClass(item)"
+                @click="goToAsset(item.id)"
+              >
+                <van-icon name="clock-o" class="expiring-icon" />
+                <div class="expiring-content">
+                  <div class="expiring-name">{{ item.name }}</div>
+                  <div class="expiring-meta">{{ item.category_name }} · {{ item.asset_type === 'financial' ? '金融' : '实物' }}</div>
+                </div>
+                <div class="expiring-remaining" :class="getRemainingClass(item)">
+                  {{ formatRemaining(item.remaining_days) }}
+                </div>
+              </div>
+            </template>
+            <van-empty
+              v-else
+              :description="t('reminders.expiringSoonEmpty')"
+              image-size="60"
+              class="section-empty"
+            />
 
-        <!-- AI Smart Reminders -->
-        <template v-if="store.summary.total > 0 || loaded">
-          <div v-if="expiringAssets.length > 0 || idleAssets.length > 0" class="reminder-section-label">智能提醒</div>
-          <van-loading v-if="store.loading" size="24px" class="reminder-loading" />
-          <van-empty
-            v-else-if="store.reminders.length === 0 && expiringAssets.length === 0 && idleAssets.length === 0"
-            :description="t('reminders.empty')"
-            image-size="60"
-          />
-          <template v-else>
-            <van-swipe-cell v-for="reminder in store.reminders" :key="reminder.id">
+            <template v-if="idleAssets.length > 0">
+              <div class="reminder-section-label">{{ t('reminders.idleAssets') }}</div>
               <van-cell
-                :title="reminder.title"
-                :label="reminder.body"
-                :icon="severityIcon(reminder.severity)"
+                v-for="item in idleAssets"
+                :key="`idle-${item.id}`"
+                :title="item.name"
+                :label="item.category_name"
+                icon="box-o"
+                is-link
+                @click="$emit('select-status', 'idle')"
               />
-              <template #right>
-                <van-button
-                  square
-                  type="warning"
-                  :text="t('reminders.dismiss')"
-                  class="dismiss-btn"
-                  @click="onDismiss(reminder.id)"
-                />
-              </template>
-            </van-swipe-cell>
+            </template>
           </template>
-        </template>
 
-        <!-- Empty state when no alerts at all -->
-        <van-empty
-          v-if="!store.loading && totalCount === 0 && loaded"
-          :description="t('reminders.empty')"
-          image-size="60"
-        />
+          <!-- 智能提醒 -->
+          <template v-if="section === 'smart'">
+            <div class="reminder-section-label">{{ t('reminders.title') }}</div>
+            <van-loading v-if="store.loading" size="24px" class="reminder-loading" />
+            <template v-else-if="store.reminders.length > 0">
+              <van-swipe-cell v-for="reminder in store.reminders" :key="reminder.id">
+                <van-cell
+                  :title="reminder.title"
+                  :label="reminder.body"
+                  :icon="severityIcon(reminder.severity)"
+                />
+                <template #right>
+                  <van-button
+                    square
+                    type="warning"
+                    :text="t('reminders.dismiss')"
+                    class="dismiss-btn"
+                    @click="onDismiss(reminder.id)"
+                  />
+                </template>
+              </van-swipe-cell>
+            </template>
+            <van-empty
+              v-else-if="loaded"
+              :description="t('reminders.smartRemindersEmpty')"
+              image-size="60"
+              class="section-empty"
+            />
+          </template>
+
+        </template>
       </van-collapse-item>
     </van-collapse>
   </van-cell-group>
@@ -114,6 +120,20 @@ const loaded = ref(false)
 
 const idleAssets = computed(() => props.idleAssets ?? [])
 const expiringAssets = computed(() => props.expiringAssets ?? [])
+
+// 排序规则：有数据的在前；都有/都无时，智能提醒在前
+// 注意：闲置资产固定跟在即将到期后面，不参与排序决策
+const hasExpiringSoon = computed(() => expiringAssets.value.length > 0)
+const hasSmartReminders = computed(() => store.reminders.length > 0)
+
+const sectionOrder = computed(() => {
+  if (hasExpiringSoon.value === hasSmartReminders.value) {
+    // 都有数据或都无数据：智能提醒在前
+    return ['smart', 'expiring']
+  }
+  // 一方有数据：有数据的在前
+  return hasExpiringSoon.value ? ['expiring', 'smart'] : ['smart', 'expiring']
+})
 
 const totalCount = computed(
   () => expiringAssets.value.length + idleAssets.value.length + store.summary.total
@@ -186,6 +206,10 @@ function goToAsset(id: string) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 8px 16px 4px;
+}
+
+.section-empty {
+  padding: 12px 0;
 }
 
 .expiring-row {
