@@ -66,6 +66,9 @@ export interface ChoreInstance {
   streak_bonus: number
   milestone_triggered: string | null
   child_user_id?: string
+  is_pool_unclaimed: boolean
+  assigned_by_user_id: string | null
+  claimed_at: string | null
 }
 
 /** Extends ChoreInstance with child identity fields present on pending-approval responses. */
@@ -103,4 +106,13 @@ export async function approveChore(instanceId: string): Promise<ChoreInstance> {
 export async function rejectChore(instanceId: string, returnToRedo: boolean): Promise<ChoreInstance> {
   const res = await http.post(`/family/chore-approvals/${instanceId}/reject`, { return_to_redo: returnToRedo })
   return res.data
+}
+
+export async function assignChoreInstance(instanceId: string, childUserId: string): Promise<ChoreInstance> {
+  const res = await http.post(`/family/chore-instances/${instanceId}/assign`, { child_user_id: childUserId })
+  return res.data
+}
+
+export async function voidChoreInstance(instanceId: string): Promise<void> {
+  await http.delete(`/family/chore-instances/${instanceId}`)
 }

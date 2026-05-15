@@ -105,18 +105,74 @@
 
           <van-tab :title="t('baby.tabChores')">
             <div class="chore-list">
-              <van-cell
+              <div
                 v-for="chore in filteredChores"
                 :key="chore.id"
-                :title="chore.chore_name"
-                :label="t('baby.choreReward', { reward: chore.coin_reward })"
+                class="chore-card"
               >
-                <template #right-icon>
-                  <van-tag :type="chore.status === 'approved' ? 'success' : 'default'">
-                    {{ chore.status === 'approved' ? t('baby.choreCompleted') : t('baby.chorePending') }}
-                  </van-tag>
-                </template>
-              </van-cell>
+                <!-- Card top -->
+                <div class="chore-card-top">
+                  <div class="chore-card-left">
+                    <!-- Child avatar or unclaimed tag -->
+                    <template v-if="chore.is_pool_unclaimed">
+                      <van-tag type="default" class="unclaimed-tag">{{ t('baby.choreUnclaimed') }}</van-tag>
+                    </template>
+                    <template v-else-if="getChildForChore(chore)">
+                      <div
+                        class="chore-child-avatar"
+                        :style="{ background: getChildForChore(chore)?.avatar_color || '#FF6B6B' }"
+                      >
+                        {{ (getChildForChore(chore)?.display_name ?? '?').charAt(0) }}
+                      </div>
+                      <span class="chore-child-name">{{ getChildForChore(chore)?.display_name }}</span>
+                    </template>
+                  </div>
+                  <div class="chore-card-center">
+                    <span class="chore-emoji-icon">{{ chore.chore_emoji || '📋' }}</span>
+                    <span class="chore-name">{{ chore.chore_name }}</span>
+                  </div>
+                  <div class="chore-card-right">
+                    <van-tag :type="getChoreStatusType(chore.status)">{{ getChoreStatusLabel(chore.status) }}</van-tag>
+                  </div>
+                </div>
+
+                <!-- Action row -->
+                <div
+                  v-if="chore.status === 'available'"
+                  class="card-actions"
+                >
+                  <!-- Pool unclaimed: show assign button -->
+                  <template v-if="chore.is_pool_unclaimed">
+                    <button
+                      class="action-btn action-btn--primary"
+                      :disabled="assigningId === chore.id"
+                      @click="openAssignPicker(chore)"
+                    >
+                      <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
+                      <span v-else>{{ t('baby.choreAssign') }}</span>
+                    </button>
+                  </template>
+                  <!-- Assigned: show reassign + void -->
+                  <template v-else>
+                    <button
+                      class="action-btn action-btn--warning"
+                      :disabled="assigningId === chore.id || voidingId === chore.id"
+                      @click="openAssignPicker(chore)"
+                    >
+                      <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
+                      <span v-else>{{ t('baby.choreReassign') }}</span>
+                    </button>
+                    <button
+                      class="action-btn action-btn--danger"
+                      :disabled="assigningId === chore.id || voidingId === chore.id"
+                      @click="doVoidChore(chore)"
+                    >
+                      <span v-if="voidingId === chore.id">{{ t('baby.choreVoiding') }}</span>
+                      <span v-else>{{ t('baby.choreVoid') }}</span>
+                    </button>
+                  </template>
+                </div>
+              </div>
               <van-empty v-if="filteredChores.length === 0" :description="t('baby.noChores')" image-size="60" />
             </div>
           </van-tab>
@@ -165,6 +221,24 @@
             @click="doGrant"
           >{{ t('baby.grantConfirm') }}</van-button>
         </van-popup>
+
+        <!-- Assign chore picker popup -->
+        <van-popup v-model:show="showAssignPicker" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('baby.choreAssign') }}</p>
+          <van-cell
+            v-for="child in childMembers"
+            :key="child.id"
+            :title="child.display_name"
+            is-link
+            @click="selectChildForAssign(child)"
+          >
+            <template #icon>
+              <div class="child-tab-avatar" :style="{ background: child.avatar_color || '#FF6B6B', marginRight: '8px' }">
+                {{ (child.display_name ?? '?').charAt(0) }}
+              </div>
+            </template>
+          </van-cell>
+        </van-popup>
       </template>
     </van-pull-refresh>
   </div>
@@ -172,7 +246,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
@@ -185,7 +259,7 @@ import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/a
 import { listParentChildWishes, type ParentWish } from '@/api/childWishes'
 import { getFamilyChildCalendar } from '@/api/calendar'
 import { grantCoins } from '@/api/coins'
-import { getChildrenChores, type ChoreInstance } from '@/api/chores'
+import { getChildrenChores, assignChoreInstance, voidChoreInstance, type ChoreInstance } from '@/api/chores'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -208,6 +282,12 @@ const grantTargetChild = ref<{ id: string; display_name: string } | null>(null)
 const grantAmountStr = ref('')
 const grantReason = ref('')
 const grantingCoins = ref(false)
+
+// Assign/void chore state
+const showAssignPicker = ref(false)
+const assigningChore = ref<ChoreInstance | null>(null)
+const assigningId = ref<string | null>(null)
+const voidingId = ref<string | null>(null)
 
 const childBalances = ref<Record<string, number>>({})
 const childChoreStats = ref<Record<string, ChoreStats>>({})
@@ -298,6 +378,31 @@ function getWishStatusLabel(status: string): string {
   return map[status] ?? status
 }
 
+function getChoreStatusType(status: string): 'primary' | 'success' | 'warning' | 'danger' | 'default' {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'default'> = {
+    available: 'default',
+    pending_approval: 'warning',
+    approved: 'success',
+    rejected: 'danger',
+  }
+  return map[status] ?? 'default'
+}
+
+function getChoreStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    available: t('baby.chorePending'),
+    pending_approval: t('baby.wishStatusPendingReview'),
+    approved: t('baby.choreCompleted'),
+    rejected: t('baby.wishStatusRejected'),
+  }
+  return map[status] ?? status
+}
+
+function getChildForChore(chore: ChoreInstance) {
+  if (!chore.child_user_id || chore.is_pool_unclaimed) return null
+  return childMembers.value.find(m => String(m.id) === chore.child_user_id) ?? null
+}
+
 function openGrantSheet() {
   if (!selectedChildId.value) {
     // 全部视图：先选孩子
@@ -338,6 +443,62 @@ async function doGrant() {
     const res = await getAllChildBalances()
     childBalances.value = res.data
   } catch { /* non-critical */ }
+}
+
+function openAssignPicker(chore: ChoreInstance) {
+  assigningChore.value = chore
+  showAssignPicker.value = true
+}
+
+async function selectChildForAssign(child: { id: string | number; display_name?: string | null }) {
+  if (!assigningChore.value) return
+  showAssignPicker.value = false
+  assigningId.value = assigningChore.value.id
+  try {
+    const updated = await assignChoreInstance(assigningChore.value.id, String(child.id))
+    // Update the chore in allChores
+    const idx = allChores.value.findIndex(c => c.id === updated.id)
+    if (idx >= 0) {
+      allChores.value[idx] = updated
+    }
+    showToast(t('baby.choreAssignSuccess'))
+  } catch {
+    showToast(t('baby.choreAssignFailed'))
+  } finally {
+    assigningId.value = null
+    assigningChore.value = null
+  }
+}
+
+async function doVoidChore(chore: ChoreInstance) {
+  try {
+    await showConfirmDialog({
+      title: t('baby.voidChoreTitle'),
+      message: t('baby.voidChoreMessage', { name: chore.chore_name }),
+    })
+  } catch {
+    // User cancelled
+    return
+  }
+  voidingId.value = chore.id
+  // Optimistic removal
+  const idx = allChores.value.findIndex(c => c.id === chore.id)
+  const backup = allChores.value[idx]
+  if (idx >= 0) {
+    allChores.value.splice(idx, 1)
+  }
+  try {
+    await voidChoreInstance(chore.id)
+    showToast(t('baby.choreVoidSuccess'))
+  } catch {
+    // Re-add on error
+    if (idx >= 0 && backup) {
+      allChores.value.splice(idx, 0, backup)
+    }
+    showToast(t('baby.choreVoidFailed'))
+  } finally {
+    voidingId.value = null
+  }
 }
 
 async function loadData() {
@@ -516,5 +677,141 @@ onMounted(async () => {
 
 .calendar-wrap {
   margin: 12px 16px 0;
+}
+
+/* Chore card styles */
+.chore-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.chore-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chore-card-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.unclaimed-tag {
+  font-size: 11px;
+}
+
+.chore-child-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.chore-child-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.chore-card-center {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.chore-emoji-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.chore-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chore-card-right {
+  flex-shrink: 0;
+}
+
+/* Piano-key action buttons (from PendingApprovalsSection) */
+.card-actions {
+  display: flex;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+[data-theme='dark'] .card-actions {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--van-text-color-2, #969799);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+  min-height: 36px;
+}
+
+.action-btn + .action-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .action-btn + .action-btn::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.action-btn--primary {
+  color: var(--van-primary-color, #1989fa);
+}
+
+.action-btn--warning {
+  color: var(--van-warning-color, #ff976a);
+}
+
+.action-btn--danger {
+  color: var(--van-danger-color, #ee0a24);
 }
 </style>
