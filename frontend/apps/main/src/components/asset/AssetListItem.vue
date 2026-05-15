@@ -199,7 +199,7 @@ function getIconId(icon: string | undefined): string {
 
 /* Selection mode styles */
 .asset-list-item.selection-mode.selected {
-  box-shadow: inset 0 0 0 2px var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-coral);
 }
 [data-theme='dark'] .asset-list-item.selection-mode.selected {
   box-shadow: inset 0 0 0 2px var(--color-lavender);

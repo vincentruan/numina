@@ -207,16 +207,12 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
   border-color: var(--color-hairline);
 }
 /* Selection mode styles */
-.asset-card.selection-mode {
-  border: 2px solid transparent;
-}
 .asset-card.selection-mode.selected {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary);
+  outline: 2px solid var(--color-coral);
+  outline-offset: -1px;
 }
 [data-theme='dark'] .asset-card.selection-mode.selected {
-  border-color: var(--color-lavender);
-  box-shadow: 0 0 0 1px var(--color-lavender);
+  outline-color: var(--color-lavender);
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
