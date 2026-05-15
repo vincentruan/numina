@@ -14,21 +14,6 @@
     @keydown.enter="$emit('click')"
     @keydown.space.prevent="toggleSelect"
   >
-    <div v-if="selectable" class="selection-checkbox" aria-hidden="true">
-      <div class="selection-check">
-        <svg viewBox="0 0 24 24" width="18" height="18" class="check-icon">
-          <circle cx="12" cy="12" r="9" fill="var(--color-success)" />
-          <path
-            d="M9 12l2 2 4-4"
-            stroke="white"
-            stroke-width="2"
-            fill="none"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </div>
-    </div>
     <div class="item-main">
       <div
         class="item-icon"
@@ -213,36 +198,11 @@ function getIconId(icon: string | undefined): string {
 }
 
 /* Selection mode styles */
-.asset-list-item.selection-mode {
-  border-left: 3px solid transparent;
-}
 .asset-list-item.selection-mode.selected {
-  border-left-color: var(--color-primary);
-  background: rgba(23, 23, 28, 0.04);
-  box-shadow: inset 0 0 0 1px var(--color-primary);
+  box-shadow: inset 0 0 0 2px var(--color-primary);
 }
 [data-theme='dark'] .asset-list-item.selection-mode.selected {
-  border-left-color: var(--color-coral);
-  background: rgba(255, 119, 89, 0.08);
-  box-shadow: inset 0 0 0 1px var(--color-coral);
-}
-
-/* Selection checkbox */
-.selection-checkbox {
-  margin-right: 8px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-}
-.selection-check {
-  width: 22px;
-  height: 22px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.check-icon {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+  box-shadow: inset 0 0 0 2px var(--color-lavender);
 }
 
 /* Accessibility - Focus styles */

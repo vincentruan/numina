@@ -24,21 +24,6 @@
     <div v-if="syncing" class="syncing-badge" aria-hidden="true">
       <van-tag type="warning">{{ t('assetCard.syncing') }}</van-tag>
     </div>
-    <div v-if="selectable" class="selection-overlay" aria-hidden="true">
-      <div class="selection-check">
-        <svg viewBox="0 0 24 24" width="20" height="20" class="check-icon">
-          <circle cx="12" cy="12" r="10" fill="var(--color-success)" />
-          <path
-            d="M9 12l2 2 4-4"
-            stroke="white"
-            stroke-width="2"
-            fill="none"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
-      </div>
-    </div>
     <input
       v-if="selectable"
       type="checkbox"
@@ -227,37 +212,11 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 .asset-card.selection-mode.selected {
   border-color: var(--color-primary);
-  box-shadow:
-    0 0 0 2px var(--color-primary),
-    0 0 12px rgba(1, 1, 32, 0.2);
+  box-shadow: 0 0 0 1px var(--color-primary);
 }
 [data-theme='dark'] .asset-card.selection-mode.selected {
   border-color: var(--color-lavender);
-  box-shadow:
-    0 0 0 2px var(--color-lavender),
-    0 0 12px rgba(189, 187, 255, 0.3);
-}
-/* Selection overlay with check icon */
-.selection-overlay {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 10;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-.asset-card.selection-mode.selected .selection-overlay {
-  opacity: 1;
-}
-.selection-check {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.check-icon {
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+  box-shadow: 0 0 0 1px var(--color-lavender);
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
