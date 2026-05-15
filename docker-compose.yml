@@ -43,6 +43,8 @@ services:
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AI_MODEL=${AI_MODEL:-placeholder}
+      - AI_API_KEY=${AI_API_KEY:-placeholder}
     depends_on:
       backend:
         condition: service_healthy
