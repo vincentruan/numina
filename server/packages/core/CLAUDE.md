@@ -35,6 +35,26 @@ uv run pytest packages/core/ -v         # run tests
 - **Don't call `logging.getLogger()`** — use `get_logger(__name__)` instead.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/core/`.
 
+## Patterns
+
+### Settings singleton import
+
+```python
+# ✅ Correct — import the pre-built singleton
+from packages.core.settings import settings
+
+# ❌ Wrong — re-reads environment, breaks singleton guarantee
+from packages.core.settings import Settings
+settings = Settings()
+```
+
+### Logger
+
+```python
+from packages.core.logging import get_logger
+logger = get_logger(__name__)
+```
+
 ## Links
 
 - Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions

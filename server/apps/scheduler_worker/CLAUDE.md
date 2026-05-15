@@ -22,6 +22,18 @@ uv run pytest apps/scheduler_worker/ -v         # run tests
 - **mypy:** type checker. Requires `--explicit-package-bases` to avoid namespace collision with other `apps/` packages.
 - **APScheduler 3.x:** uses `AsyncIOScheduler` so async jobs (`file_sync_job`) run natively in the event loop.
 
+## Directory Structure
+
+```
+scheduler_worker/
+├── app/
+│   ├── config.py          # Settings (pydantic-settings)
+│   └── main.py            # FastAPI app entry point + lifespan
+├── jobs/
+│   └── __init__.py        # All job function definitions (add new jobs here)
+└── scheduler.py           # setup_all_jobs() — job registration (register new jobs here)
+```
+
 ## Key Invariants
 
 1. **`max_instances=1`** — every `scheduler.add_job()` call must include this. Prevents concurrent runs if a previous execution is still in progress.

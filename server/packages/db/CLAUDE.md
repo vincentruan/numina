@@ -37,6 +37,30 @@ uv run pytest packages/db/ -v         # run tests
 - **Don't leave sessions open** — always close in a `finally` block or use a context manager.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/db/`.
 
+## Patterns
+
+### Session lifecycle
+
+```python
+# ✅ Correct — always close in finally
+db = SessionLocal()
+try:
+    result = db.query(MyModel).all()
+    db.commit()
+finally:
+    db.close()
+```
+
+### Model definition
+
+```python
+from packages.db.session import Base
+
+class MyModel(Base):
+    __tablename__ = "my_table"
+    id: Mapped[int] = mapped_column(primary_key=True)
+```
+
 ## Links
 
 - Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions

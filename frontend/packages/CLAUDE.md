@@ -6,9 +6,25 @@ Shared packages under `frontend/packages/`. All conventions from [`frontend/apps
 
 | Package | Purpose |
 |---------|---------|
-| `auth` | Shared authentication utilities (token storage, refresh logic) |
+| `auth` | Shared auth components, stores, and utilities used by both `main` and `child` apps |
 
 Code changes here affect both `frontend/apps/main` and `frontend/apps/child`.
+
+## auth Package Exports
+
+Import from `@numina/auth`:
+
+| Export | Type | Purpose |
+|--------|------|---------|
+| `useAuthStore` | Pinia store | Main app auth state (login, logout, token refresh) |
+| `useChildAuthStore` | Pinia store | Child app auth state (PIN login, step-1/step-2 flow) |
+| `configureAuthHttp` | Function | Wire the shared axios instance — call in `main.ts` before using stores |
+| `AuthStep1Form` | Component | Step-1 login form (shared UI) |
+| `TrustedDeviceCard` | Component | Trusted device management card |
+| `LoadingOverlay` | Component | Full-screen loading overlay |
+| `useLoadingOverlay` | Composable | Show/hide the loading overlay |
+| `getUser` / `setUser` / `removeUser` / `clearAuth` | Utils | LocalStorage token/user helpers |
+| `getDeviceFingerprint` | Util | Stable browser fingerprint for trusted-device flow |
 
 ## Key Invariants (inherited)
 

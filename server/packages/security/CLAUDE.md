@@ -35,6 +35,31 @@ uv run pytest packages/security/ -v         # run tests
 - **Don't mix `frontend_auth` and `service_auth`** — they serve different callers with different token formats and trust models.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/security/`.
 
+## Auth Contexts
+
+| Context | Caller | Token format |
+|---------|--------|-------------|
+| `frontend_auth` | Vue frontend users | JWT with user claims |
+| `service_auth` | Internal service-to-service | Shared secret / service token |
+
+Do not mix middleware, dependencies, or token validation logic between these two contexts.
+
+## Patterns
+
+### JWT revocation
+
+```python
+# ✅ Correct — use public revocation functions
+from packages.security.revoke_jti import revoke_jti, revoke_all_user_tokens, cleanup_expired_revoked_tokens
+
+revoke_jti(db, jti)
+revoke_all_user_tokens(db, user_id)
+
+# ❌ Wrong — never query RevokedToken directly
+from packages.security.models import RevokedToken
+db.query(RevokedToken).filter(RevokedToken.jti == jti)  # never do this
+```
+
 ## Links
 
 - Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions

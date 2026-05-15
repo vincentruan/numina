@@ -34,6 +34,41 @@ uv run pytest packages/storage/ -v         # run tests
 - **Don't let `StorageError` propagate to API responses** — catch at the app boundary and handle explicitly.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/storage/`.
 
+## Backends
+
+| Backend | Type string | Use case |
+|---------|-------------|---------|
+| `LocalStorageBackend` | `"local"` | Default; stores files on local disk |
+| `GitHubStorageBackend` | `"github"` | Stores files as GitHub repo contents |
+| `WebDAVStorageBackend` | `"webdav"` | Stores files on a WebDAV server |
+
+## Patterns
+
+### Obtaining a backend
+
+```python
+# ✅ Correct — use the factory
+from packages.storage.factory import get_backend_for_type, get_local_backend
+
+backend = get_backend_for_type("local")   # by type string
+backend = get_local_backend()             # convenience for local
+
+# ❌ Wrong — never instantiate directly
+from packages.storage.backends.local import LocalStorageBackend
+backend = LocalStorageBackend(...)  # bypasses factory singleton management
+```
+
+### Error handling at the app boundary
+
+```python
+from packages.storage.exceptions import StorageError
+
+try:
+    await backend.upload(path, data)
+except StorageError as e:
+    raise HTTPException(status_code=502, detail=str(e))
+```
+
 ## Links
 
 - Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions

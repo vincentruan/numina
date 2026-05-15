@@ -5,6 +5,8 @@ See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting
 
 ## Quality Commands
 
+Run all commands from `frontend/apps/main/`:
+
 ```bash
 npm run lint          # ESLint — check for errors and warnings
 npm run lint:fix      # ESLint — auto-fix where possible

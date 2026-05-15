@@ -34,6 +34,32 @@ uv run pytest packages/domain/ -v         # run tests
 - **Don't create `SessionLocal()` inside a domain service** — accept a `Session` parameter instead. The one exception (`audit.service.purge_old_audit_logs`) is already documented and must not be replicated.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/domain/`.
 
+## Subpackages
+
+| Subpackage | Purpose |
+|------------|---------|
+| `audit` | Audit log write/purge |
+| `device` | Device registration and management |
+| `exchange_rate` | Currency exchange rate fetching and caching |
+| `notification` | Push notification dispatch |
+| `snapshot` | Daily family net-worth snapshots |
+
+## Patterns
+
+### Domain service signature
+
+```python
+# ✅ Correct — accept Session, never create one
+from sqlalchemy.orm import Session
+
+def my_service_function(db: Session, ...) -> ...:
+    ...
+
+# ❌ Wrong — domain services must not create their own session
+def my_service_function(...) -> ...:
+    db = SessionLocal()  # violates invariant
+```
+
 ## Links
 
 - Root [`CLAUDE.md`](../../../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
