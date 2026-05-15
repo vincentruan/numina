@@ -157,7 +157,6 @@ export function useAITask(
           thinkContent.value += event.token ?? ''
         } else {
           answerContent.value += event.token ?? ''
-          if (event.token) chunks.value.push(event.token)
         }
         break
       case 'capability.end':
@@ -238,7 +237,6 @@ export function useAITask(
     answerContent.value = ''
     thinkDone.value = false
     thinkSeconds.value = 0
-    chunks.value = []
     phase.value = 'connecting'
     status.value = 'running'
     isConsoleOpen.value = true
@@ -287,7 +285,6 @@ export function useAITask(
     status.value = 'running'
     phase.value = 'connecting'
     isConsoleOpen.value = true
-    chunks.value = []
 
     const elapsed = existingTask.started_at
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)
