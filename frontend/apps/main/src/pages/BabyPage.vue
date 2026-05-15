@@ -226,7 +226,7 @@
         <van-popup v-model:show="showAssignPicker" position="bottom" round style="padding: 24px 16px 40px">
           <p class="sheet-title">{{ t('baby.choreAssign') }}</p>
           <van-cell
-            v-for="child in childMembers"
+            v-for="child in childMembers.filter(c => c.is_active)"
             :key="child.id"
             :title="child.display_name"
             is-link

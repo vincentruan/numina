@@ -356,13 +356,14 @@ def assign_instance(db: Session, parent_user: User, instance_id: str, target_chi
     if instance.status != "available":
         raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
 
-    # Validate target child belongs to same family and has role=child
+    # Validate target child belongs to same family, has role=child, and is active
     target = db.query(User).filter(
         User.id == target_child_id,
         User.family_id == parent_user.family_id,
+        User.is_active.is_(True),
     ).first()
     if not target:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "目标用户不存在")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "目标用户不存在或已禁用")
     if target.role != "child":
         raise AppError(ErrorCode.CHORE_ASSIGN_TARGET_INVALID)
 
