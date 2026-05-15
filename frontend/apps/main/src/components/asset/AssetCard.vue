@@ -208,11 +208,8 @@ const statusType = computed(() => statusMap.value[props.asset.status]?.type || '
 }
 /* Selection mode styles */
 .asset-card.selection-mode.selected {
-  outline: 2px solid var(--color-coral);
+  outline: 2px solid var(--van-primary-color);
   outline-offset: -1px;
-}
-[data-theme='dark'] .asset-card.selection-mode.selected {
-  outline-color: var(--color-lavender);
 }
 /* Accessibility - Focus styles */
 .asset-card:focus-visible {
