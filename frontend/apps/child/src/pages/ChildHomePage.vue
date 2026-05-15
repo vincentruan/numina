@@ -244,6 +244,7 @@ async function doAbandon() {
     abandonTarget.value = null
   } catch {
     showToast(t('chore.abandonFailed'))
+    abandonTarget.value = null
   } finally {
     abandoningId.value = null
   }
