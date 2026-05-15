@@ -97,6 +97,12 @@ services:
       dockerfile: frontend/apps/child/Dockerfile
     container_name: numina-frontend-child
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   nginx:
     image: nginx:alpine
@@ -108,9 +114,12 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./site:/usr/share/nginx/site:ro
     depends_on:
-      - backend
-      - frontend
-      - frontend-child
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      frontend-child:
+        condition: service_healthy
 
   # 可选 MySQL 服务（使用 --profile mysql 启动）
   mysql:
