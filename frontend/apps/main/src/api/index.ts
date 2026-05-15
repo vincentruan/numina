@@ -209,3 +209,32 @@ http.interceptors.response.use(
 )
 
 export default http
+
+// ── Export refresh logic for fetch-based streaming requests ─────────────────────
+
+export async function refreshTokenIfNeeded(): Promise<void> {
+  // If already refreshing, wait for it to complete
+  if (isRefreshing) {
+    return new Promise((resolve, reject) => {
+      pendingRequests.push({ resolve, reject })
+    })
+  }
+
+  isRefreshing = true
+  try {
+    // IMPORTANT: Send null (not {}) to avoid 422 from Pydantic validation
+    await axios.post('/api/v1/auth/refresh', null, {
+      withCredentials: true,
+    })
+    onRefreshed()
+  } catch (refreshError) {
+    onRefreshFailed(refreshError)
+    clearAuth()
+    router.push('/login')
+    const re = refreshError as { response?: { data?: { code?: string; message?: string; detail?: string } } }
+    showToast(resolveErrorMsg(re.response?.data?.code, re.response?.data?.message || re.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+    throw refreshError
+  } finally {
+    isRefreshing = false
+  }
+}

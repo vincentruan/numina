@@ -1,4 +1,4 @@
-import http from './index'
+import http, { refreshTokenIfNeeded } from './index'
 import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse, ChatMessage } from '@/types'
 
 // Frontend-facing flat config shape (mapped from backend multi-config model)
@@ -268,7 +268,7 @@ export const checkAllocationDrift = () =>
 export const sendChatMessage = (question: string, signal?: AbortSignal) =>
   http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question }, { signal })
 
-export function sendChatMessageStream(
+export async function sendChatMessageStream(
   question: string,
   deepThink: boolean,
   signal?: AbortSignal,
@@ -276,17 +276,34 @@ export function sendChatMessageStream(
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
-  return fetch('/api/v1/ai/chat/stream', {
+  const body = JSON.stringify({ question, deep_think: deepThink })
+
+  let res = await fetch('/api/v1/ai/chat/stream', {
     method: 'POST',
     headers,
     credentials: 'include',
-    body: JSON.stringify({ question, deep_think: deepThink }),
+    body,
     signal,
-  }).then((res) => {
-    if (!res.ok) throw new Error(`${res.status}`)
-    if (!res.body) throw new Error('streaming_not_supported')
-    return res.body.getReader()
   })
+
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await fetch('/api/v1/ai/chat/stream', {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body,
+      signal,
+    })
+  }
+
+  if (!res.ok) throw new Error(`${res.status}`)
+  if (!res.body) throw new Error('streaming_not_supported')
+  return res.body.getReader()
 }
 
 export const sendChatEventStream = sendChatMessageStream
@@ -334,25 +351,41 @@ export async function cancelAITask(capability: string): Promise<{ ok: boolean }>
 
 // Streaming fetch helper — returns a ReadableStream reader.
 // Auth uses httpOnly cookies (withCredentials), no Bearer token needed.
-export function startAIStream(
+// Auto-refreshes token on 401 before retrying.
+export async function startAIStream(
   endpoint: string,
   signal?: AbortSignal,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
-  return fetch(`/api/v1${endpoint}`, {
+  let res = await fetch(`/api/v1${endpoint}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     credentials: 'include',
     signal,
-  }).then((res) => {
-    if (!res.ok) throw new Error(`${res.status}`)
-    return res.body!.getReader()
   })
+
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await fetch(`/api/v1${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      signal,
+    })
+  }
+
+  if (!res.ok) throw new Error(`${res.status}`)
+  return res.body!.getReader()
 }
 
 // NDJSON event stream — returns reader for application/x-ndjson responses.
 // Returns { reader, queued, queuePosition } — if queued=true, no stream is open.
+// Auto-refreshes token on 401 before retrying.
 export async function startAIEventStream(
   endpoint: string,
   signal?: AbortSignal,
@@ -360,12 +393,25 @@ export async function startAIEventStream(
   | { queued: false; reader: ReadableStreamDefaultReader<Uint8Array> }
   | { queued: true; taskId: string; queuePosition: number | null }
 > {
-  const res = await fetch(`/api/v1${endpoint}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    signal,
-  })
+  const doFetch = () =>
+    fetch(`/api/v1${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      signal,
+    })
+
+  let res = await doFetch()
+
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await doFetch()
+  }
+
   if (res.status === 202) {
     const body = await res.json()
     return { queued: true, taskId: body.task_id, queuePosition: body.queue_position ?? null }
