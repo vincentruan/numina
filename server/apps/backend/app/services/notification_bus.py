@@ -50,4 +50,4 @@ def fire_notification(family_id: str, event: dict[str, Any]) -> None:
         # 没有运行中的事件循环（测试环境或同步上下文），静默跳过
         pass
     except Exception as e:
-        logger.debug("通知广播失败（非致命）: %s", e)
+        logger.warning("通知广播失败（非致命）: %s", e)

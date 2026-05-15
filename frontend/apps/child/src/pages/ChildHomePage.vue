@@ -26,7 +26,7 @@
           <button
             v-if="c.is_pool_unclaimed"
             class="btn-complete"
-            :disabled="claimingId === c.id"
+            :disabled="claimingId === c.id || submittingId === c.id"
             @click="claim(c.id)"
           >{{ claimingId === c.id ? t('chore.claiming') : t('chore.claim') }}</button>
           <template v-else-if="c.status === 'available'">
@@ -37,7 +37,7 @@
             >{{ t('chore.complete') }}</button>
             <button
               class="btn-abandon"
-              :disabled="submittingId === c.id"
+              :disabled="submittingId === c.id || claimingId === c.id || abandoningId === c.id"
               @click="abandon(c)"
             >{{ t('chore.abandon') }}</button>
           </template>

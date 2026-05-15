@@ -129,6 +129,11 @@ def list_children_chores(
         # or None if unclaimed (so the frontend doesn't receive a family ID as a child ID).
         if instance.child_user_id == instance.family_id:
             resp.child_user_id = instance.submitted_by_user_id or None
+        # is_pool_unclaimed: True when child_user_id == family_id AND assigned_by_user_id is None
+        resp.is_pool_unclaimed = (
+            instance.child_user_id == instance.family_id
+            and instance.assigned_by_user_id is None
+        )
         result.append(resp)
     return result
 

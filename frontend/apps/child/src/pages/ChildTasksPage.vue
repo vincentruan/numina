@@ -32,7 +32,7 @@
           <button
             v-if="chore.is_pool_unclaimed"
             class="btn-complete"
-            :disabled="claimingId === chore.id"
+            :disabled="claimingId === chore.id || submittingId === chore.id"
             @click.stop="claim(chore.id)"
           >{{ claimingId === chore.id ? t('chore.claiming') : t('chore.claim') }}</button>
           <template v-else-if="chore.status === 'available'">
@@ -43,7 +43,7 @@
             >{{ t('chore.complete') }}</button>
             <button
               class="btn-abandon"
-              :disabled="submittingId === chore.id"
+              :disabled="submittingId === chore.id || claimingId === chore.id || abandoningId === chore.id"
               @click.stop="abandon(chore)"
             >{{ t('chore.abandon') }}</button>
           </template>
@@ -69,7 +69,7 @@
           <p class="abandon-sheet-reward">+{{ abandonTarget.coin_reward }} ⭐</p>
         </div>
       </div>
-      <p v-if="topWish && topWish.star_coin_cost" class="abandon-sheet-hint">
+      <p v-if="topWish && topWish.star_coin_cost && topWish.star_coin_cost > balance" class="abandon-sheet-hint">
         {{ t('chore.abandonWishHint', { wishName: topWish.name, remaining: Math.max(0, topWish.star_coin_cost - balance) }) }}
       </p>
       <button class="btn-keep-going" @click="abandonSheetVisible = false">
@@ -294,6 +294,7 @@ async function doAbandon() {
     abandonTarget.value = null
   } catch {
     showToast(t('chore.abandonFailed'))
+    abandonTarget.value = null
   } finally {
     abandoningId.value = null
   }

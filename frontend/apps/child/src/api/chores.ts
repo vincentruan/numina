@@ -55,6 +55,7 @@ export async function deleteChoreTemplate(id: string): Promise<void> {
 export interface ChoreInstance {
   id: string
   template_id: string
+  child_user_id?: string
   chore_name: string
   chore_emoji: string | null
   coin_reward: number
