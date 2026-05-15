@@ -1,4 +1,5 @@
 export type AgentEventType =
+  | 'session.start'
   | 'phase.connecting'
   | 'phase.thinking'
   | 'phase.answering'
@@ -12,6 +13,7 @@ export interface AgentEvent {
   id?: string
   type: AgentEventType
   timestamp?: number
+  session_id?: string
   capability_id?: string
   task_id?: string
   phase?: 'connecting' | 'thinking' | 'answering'

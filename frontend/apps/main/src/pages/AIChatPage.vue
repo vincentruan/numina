@@ -838,7 +838,6 @@ async function onNewChat() {
   if (messages.value.length === 0) return
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('aiChat.newChatConfirm') })
-    await clearChatHistory()
     messages.value = []
     currentSessionId.value = null
     customTitle.value = null
@@ -912,6 +911,10 @@ async function onSend() {
     await scrollToBottom()
 
     function handleEvent(event: AgentEvent) {
+      if (event.type === 'session.start') {
+        if (event.session_id) currentSessionId.value = event.session_id
+        return
+      }
       if (event.type === 'phase.connecting') {
         messages.value[msgIdx].phase = 'connecting'
         return
@@ -1200,19 +1203,17 @@ onMounted(async () => {
     aiStore.webSearchEnabled = false
   }
 
-  // Clear history if navigating from hub with newSession flag
+  // Start fresh session when navigating from hub with newSession flag
   if (isNewSession) {
     messages.value = []
-    try {
-      await clearChatHistory()
-    } catch {
-      // ignore
-    }
   } else {
     // Load existing history (normal navigation)
     try {
       const res = await getChatHistory()
-      messages.value = res.data.map((m) => ({
+      if (res.data.session_id) {
+        currentSessionId.value = res.data.session_id
+      }
+      messages.value = res.data.messages.map((m) => ({
         ...m,
         displayTime: formatTime(m.created_at),
         renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,

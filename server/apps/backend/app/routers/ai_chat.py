@@ -70,9 +70,13 @@ def _get_session_for_family(
     """Load a session by ID, enforcing family_id ownership (security invariant)."""
     if session_id is None:
         return None
+    try:
+        sid = int(session_id)
+    except (ValueError, TypeError):
+        return None
     return (
         db.query(AIChatSession)
-        .filter(AIChatSession.id == session_id, AIChatSession.family_id == int(family_id))
+        .filter(AIChatSession.id == sid, AIChatSession.family_id == int(family_id))
         .first()
     )
 
@@ -186,11 +190,10 @@ async def chat_stream(
         if session is None:
             raise AppError(ErrorCode.NOT_FOUND)
     else:
-        session = _get_latest_session(current_user.family_id, db)
-        if session is None:
-            session = await ChatSessionService.create_session(
-                current_user.family_id, current_user.id, db
-            )
+        # Always create a new session when session_id is not provided
+        session = await ChatSessionService.create_session(
+            current_user.family_id, current_user.id, db
+        )
 
     await ChatSessionService.append_message(session, "user", body.question, current_user, db)
     db.refresh(session)
@@ -199,6 +202,13 @@ async def chat_stream(
     task_id = str(uuid.uuid4())
 
     async def proxy_stream():
+        # Emit session.start event first
+        yield json.dumps(
+            {"type": "session.start", "session_id": str(session_id), "task_id": task_id},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        ).encode() + b"\n"
+
         answer_chunks: list[str] = []
         buffer = ""
         try:
@@ -296,21 +306,24 @@ async def get_history(
     else:
         session = _get_latest_session(current_user.family_id, db)
         if session is None:
-            return []
+            return {"session_id": None, "messages": []}
 
     messages = await ChatSessionService.read_messages(session)
     # Return last N messages in ascending order (file is already ascending)
     if limit and len(messages) > limit:
         messages = messages[-limit:]
-    return [
-        {
-            "id": m.get("message_id", ""),
-            "role": m.get("role", ""),
-            "content": m.get("content", ""),
-            "created_at": m.get("timestamp", ""),
-        }
-        for m in messages
-    ]
+    return {
+        "session_id": str(session.id),
+        "messages": [
+            {
+                "id": m.get("message_id", ""),
+                "role": m.get("role", ""),
+                "content": m.get("content", ""),
+                "created_at": m.get("timestamp", ""),
+            }
+            for m in messages
+        ],
+    }
 
 
 @router.delete("/history")

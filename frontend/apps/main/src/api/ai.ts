@@ -308,8 +308,10 @@ export async function sendChatMessageStream(
 
 export const sendChatEventStream = sendChatMessageStream
 
-export const getChatHistory = () =>
-  http.get<ChatMessage[]>('/ai/chat/history')
+export const getChatHistory = (sessionId?: string) =>
+  http.get<{ session_id: string | null; messages: ChatMessage[] }>('/ai/chat/history', {
+    params: sessionId ? { session_id: sessionId } : undefined,
+  })
 
 export const clearChatHistory = () =>
   http.delete('/ai/chat/history')
