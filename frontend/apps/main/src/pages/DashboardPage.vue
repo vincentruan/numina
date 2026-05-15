@@ -31,25 +31,20 @@
           @select-status="onStatusSelect"
         />
 
-        <!-- Trend Chart -->
+        <!-- Analytics: Trend + Allocation -->
         <van-cell-group inset class="chart-section">
-          <van-collapse v-model="trendExpanded" @change="toggleTrend">
-            <van-collapse-item :title="t('dashboard.chart.trendTitle')" name="trend">
+          <van-collapse v-model="analyticsExpanded" @change="toggleAnalytics">
+            <van-collapse-item :title="t('dashboard.chart.analyticsTitle')" name="analytics">
+              <div class="chart-subsection-label">{{ t('dashboard.chart.trendTitle') }}</div>
               <TrendLineChart
                 v-if="dashboardStore.trend.length"
                 :data="dashboardStore.trend"
                 @period-change="onTrendPeriodChange"
               />
               <van-empty v-else :description="t('common.noData')" image-size="60" />
-            </van-collapse-item>
-          </van-collapse>
-        </van-cell-group>
 
-        <!-- Allocation Chart -->
-        <van-cell-group inset class="chart-section">
-          <van-collapse v-model="allocationExpanded" @change="toggleAllocation">
-            <van-collapse-item :title="t('dashboard.chart.allocationTitle')" name="allocation">
-              <AllocationPieChart
+              <div class="chart-subsection-label chart-subsection-label--spaced">{{ t('dashboard.chart.allocationTitle') }}</div>
+              <AllocationTreemapChart
                 v-if="dashboardStore.allocation.length"
                 :data="dashboardStore.allocation"
               />
@@ -289,7 +284,7 @@ import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
-import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
+import AllocationTreemapChart from '@/components/charts/AllocationTreemapChart.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 
 const { t } = useI18n()
@@ -303,11 +298,8 @@ const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 
 // Chart collapse state (van-collapse v-model expects array of active names)
-const trendExpanded = ref<string[]>(
-  localStorage.getItem('dashboard_trend_expanded') === 'false' ? [] : ['trend'],
-)
-const allocationExpanded = ref<string[]>(
-  localStorage.getItem('dashboard_allocation_expanded') === 'true' ? ['allocation'] : [],
+const analyticsExpanded = ref<string[]>(
+  localStorage.getItem('dashboard_analytics_expanded') === 'false' ? [] : ['analytics'],
 )
 
 // Pagination state
@@ -526,19 +518,11 @@ function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
   dashboardStore.fetchTrend(period)
 }
 
-function toggleTrend() {
-  trendExpanded.value = trendExpanded.value.includes('trend') ? [] : ['trend']
+function toggleAnalytics() {
+  analyticsExpanded.value = analyticsExpanded.value.includes('analytics') ? [] : ['analytics']
   localStorage.setItem(
-    'dashboard_trend_expanded',
-    trendExpanded.value.length > 0 ? 'true' : 'false',
-  )
-}
-
-function toggleAllocation() {
-  allocationExpanded.value = allocationExpanded.value.includes('allocation') ? [] : ['allocation']
-  localStorage.setItem(
-    'dashboard_allocation_expanded',
-    allocationExpanded.value.length > 0 ? 'true' : 'false',
+    'dashboard_analytics_expanded',
+    analyticsExpanded.value.length > 0 ? 'true' : 'false',
   )
 }
 
@@ -909,5 +893,16 @@ onMounted(() => {
 
 .chart-section :deep(.van-collapse-item__content) {
   padding: 12px;
+}
+
+.chart-subsection-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.chart-subsection-label--spaced {
+  margin-top: 16px;
 }
 </style>

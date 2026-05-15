@@ -15,6 +15,7 @@ declare module 'vue' {
     AIChatInput: typeof import('./src/components/common/AIChatInput.vue')['default']
     AlertCards: typeof import('./src/components/dashboard/AlertCards.vue')['default']
     AllocationPieChart: typeof import('./src/components/charts/AllocationPieChart.vue')['default']
+    AllocationTreemapChart: typeof import('./src/components/charts/AllocationTreemapChart.vue')['default']
     AltchaWidget: typeof import('./src/components/common/AltchaWidget.vue')['default']
     AppTabBar: typeof import('./src/components/common/AppTabBar.vue')['default']
     AssetCard: typeof import('./src/components/asset/AssetCard.vue')['default']

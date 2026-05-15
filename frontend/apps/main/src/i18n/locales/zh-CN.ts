@@ -62,6 +62,7 @@ export default {
     chart: {
       trendTitle: '资产趋势',
       allocationTitle: '资产分布',
+      analyticsTitle: '资产分析',
     },
     actionSheet: {
       retire: '转为退役',
@@ -1253,7 +1254,7 @@ export default {
     strong: '强',
   },
   pendingApprovals: {
-    title: '待审批家务',
+    title: '待审批任务',
     unknown: '未知',
     approve: '批准',
     returnRedo: '退回',
