@@ -54,37 +54,43 @@
         </van-cell-group>
 
         <!-- Sticky Filter Bar: Status + Category -->
-        <div class="filter-bar-sticky">
-          <!-- Status Summary Grid + Toolbar -->
-          <StatusSummaryGrid
-            :summary="dashboardStore.statesSummary"
-            :active-status="activeStatus"
-            @select="onStatusSelect"
-          >
-            <template #toolbar>
-              <button
-                class="toolbar-selection-btn"
-                :aria-label="t('dashboard.aria.openBatchSelection')"
-                @click="enterSelectionMode"
-              >
-                <van-icon name="checked" size="18" />
-              </button>
-            </template>
-          </StatusSummaryGrid>
+        <div ref="filterBarRef" class="filter-bar-sticky">
+          <!-- Placeholder: maintains layout space when content is fixed -->
+          <div v-if="filterBarFrozen" class="filter-bar-placeholder" :style="{ height: `${filterBarHeight}px` }" />
 
-          <!-- Category Navigation (Always visible when categories exist) -->
-          <div
-            v-if="categoriesWithAssetCount.length > 0"
-            class="category-nav-container"
-          >
-            <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
-              <van-tab :title="t('statusGrid.all')" />
-              <van-tab
-                v-for="cat in categoriesWithAssetCount"
-                :key="cat.id"
-                :title="`${cat.name} (${cat.count})`"
-              />
-            </van-tabs>
+          <!-- Filter bar content: becomes fixed when frozen -->
+          <div ref="filterBarContentRef" class="filter-bar-content" :class="{ 'filter-bar-content--fixed': filterBarFrozen }">
+            <!-- Status Summary Grid + Toolbar -->
+            <StatusSummaryGrid
+              :summary="dashboardStore.statesSummary"
+              :active-status="activeStatus"
+              @select="onStatusSelect"
+            >
+              <template #toolbar>
+                <button
+                  class="toolbar-selection-btn"
+                  :aria-label="t('dashboard.aria.openBatchSelection')"
+                  @click="enterSelectionMode"
+                >
+                  <van-icon name="checked" size="18" />
+                </button>
+              </template>
+            </StatusSummaryGrid>
+
+            <!-- Category Navigation (Always visible when categories exist) -->
+            <div
+              v-if="categoriesWithAssetCount.length > 0"
+              class="category-nav-container"
+            >
+              <van-tabs v-model:active="activeCategoryIndex" @change="onCategoryChange">
+                <van-tab :title="t('statusGrid.all')" />
+                <van-tab
+                  v-for="cat in categoriesWithAssetCount"
+                  :key="cat.id"
+                  :title="`${cat.name} (${cat.count})`"
+                />
+              </van-tabs>
+            </div>
           </div>
         </div>
 
@@ -93,6 +99,9 @@
           <div class="section-header">
             <span class="section-title">{{ sectionTitle }}</span>
           </div>
+
+          <!-- Sentinel: top of asset list, used to detect when to unfreeze filter bar -->
+          <div ref="assetListTopRef" class="asset-list-top-sentinel" />
 
           <!-- Asset List -->
           <template v-if="filteredByCategoryAssets.length">
@@ -269,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watchEffect } from 'vue'
 import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -319,6 +328,43 @@ const showMoreActions = ref(false)
 
 // FAB menu
 const fabMenuOpen = ref(false)
+
+// Filter bar sticky/frozen control
+const filterBarRef = ref<HTMLElement | null>(null)
+const filterBarContentRef = ref<HTMLElement | null>(null)
+const assetListTopRef = ref<HTMLElement | null>(null)
+const filterBarFrozen = ref(false)
+const filterBarHeight = ref(0)
+// Natural top offset of filter bar in document (set once refs are available)
+let filterBarNaturalTop = 0
+
+function onScroll() {
+  if (!filterBarRef.value || !assetListTopRef.value) return
+
+  const scrollY = window.scrollY
+
+  if (!filterBarFrozen.value) {
+    // Freeze when the filter bar's natural position has scrolled past the viewport top
+    if (scrollY >= filterBarNaturalTop) {
+      filterBarHeight.value = filterBarRef.value.offsetHeight
+      filterBarFrozen.value = true
+    }
+  } else {
+    // Unfreeze when the asset list top sentinel is back at or below the filter bar bottom
+    const sentinelTop = assetListTopRef.value.getBoundingClientRect().top
+    if (sentinelTop >= filterBarHeight.value) {
+      filterBarFrozen.value = false
+    }
+  }
+}
+
+// Re-initialize scroll anchor whenever the filter bar ref becomes available
+// (handles the skeleton → content transition)
+watchEffect(() => {
+  if (filterBarRef.value) {
+    filterBarNaturalTop = filterBarRef.value.offsetTop
+  }
+})
 
 function onFabAction(action: 'add' | 'import') {
   fabMenuOpen.value = false
@@ -562,6 +608,13 @@ onMounted(() => {
   if (authStore.user?.role === 'owner') {
     choreStore.fetchPendingApprovals()
   }
+
+  // Attach scroll listener for freeze/unfreeze logic
+  window.addEventListener('scroll', onScroll, { passive: true })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', onScroll)
 })
 
 </script>
@@ -611,10 +664,26 @@ onMounted(() => {
 
 /* Sticky Filter Bar: Status + Category */
 .filter-bar-sticky {
-  position: sticky;
+  position: relative;
+  z-index: 99;
+}
+
+.filter-bar-content {
+  background: var(--card-bg);
+}
+
+.filter-bar-content--fixed {
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 99;
   background: var(--card-bg);
+  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.08);
+}
+
+[data-theme='dark'] .filter-bar-content--fixed {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* Category Navigation Container */
@@ -641,6 +710,14 @@ onMounted(() => {
 .asset-section {
   padding: 0 12px;
   margin-top: 10px;
+}
+
+/* Sentinel for detecting asset list scroll position */
+.asset-list-top-sentinel {
+  height: 1px;
+  width: 100%;
+  visibility: hidden;
+  pointer-events: none;
 }
 .section-header {
   display: flex;
