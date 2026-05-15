@@ -255,6 +255,10 @@ def mark_complete(db: Session, child_user: User, instance_id: str) -> ChoreInsta
     instance.submitted_by_user_id = child_user.id
     db.commit()
     db.refresh(instance)
+    instance._is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
     fire_notification(child_user.family_id, {
         "type": "chore_pending_approval",
         "instance_id": instance.id,
@@ -333,6 +337,10 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
         {"instance": instance},
     )
     instance._milestone_triggered = milestone  # transient attr for response
+    instance._is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
 
     fire_notification(parent_user.family_id, {
         "type": "chore_approved",
@@ -372,6 +380,10 @@ def assign_instance(db: Session, parent_user: User, instance_id: str, target_chi
     instance.claimed_at = None
     db.commit()
     db.refresh(instance)
+    instance._is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
     return instance
 
 
@@ -423,6 +435,10 @@ def claim_instance(db: Session, child_user: User, instance_id: str) -> ChoreInst
         db.rollback()
         raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
     db.refresh(instance)
+    instance._is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
     return instance
 
 
@@ -460,6 +476,10 @@ def abandon_instance(db: Session, child_user: User, instance_id: str) -> ChoreIn
         db.rollback()
         raise AppError(ErrorCode.CHORE_INSTANCE_STATUS_CONFLICT)
     db.refresh(instance)
+    instance._is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
     fire_notification(child_user.family_id, {
         "type": "chore_abandoned",
         "instance_id": instance.id,
@@ -486,6 +506,10 @@ def reject_instance(db: Session, parent_user: User, instance_id: str, return_to_
     instance.status = "available" if return_to_redo else "rejected"
     db.commit()
     db.refresh(instance)
+    instance._is_pool_unclaimed = (
+        instance.child_user_id == instance.family_id
+        and instance.assigned_by_user_id is None
+    )
     recipient_id = instance.submitted_by_user_id or instance.child_user_id
     fire_notification(parent_user.family_id, {
         "type": "chore_rejected",

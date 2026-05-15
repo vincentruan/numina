@@ -129,11 +129,7 @@ def list_children_chores(
         # or None if unclaimed (so the frontend doesn't receive a family ID as a child ID).
         if instance.child_user_id == instance.family_id:
             resp.child_user_id = instance.submitted_by_user_id or None
-        # is_pool_unclaimed: True when child_user_id == family_id AND assigned_by_user_id is None
-        resp.is_pool_unclaimed = (
-            instance.child_user_id == instance.family_id
-            and instance.assigned_by_user_id is None
-        )
+        resp.is_pool_unclaimed = getattr(instance, "_is_pool_unclaimed", False)
         result.append(resp)
     return result
 
@@ -221,11 +217,7 @@ def assign_instance(
     """Assign or reassign a pool chore instance to a specific child."""
     instance = chore_service.assign_instance(db, user, instance_id, req.child_user_id)
     resp = ChoreInstanceResponse.model_validate(instance)
-    # is_pool_unclaimed: True when child_user_id == family_id AND assigned_by_user_id is None
-    resp.is_pool_unclaimed = (
-        instance.child_user_id == instance.family_id
-        and instance.assigned_by_user_id is None
-    )
+    resp.is_pool_unclaimed = getattr(instance, "_is_pool_unclaimed", False)
     return resp
 
 
@@ -276,7 +268,8 @@ def claim_instance(
     """Claim an unclaimed pool chore instance for this child."""
     instance = chore_service.claim_instance(db, child, instance_id)
     resp = ChoreInstanceResponse.model_validate(instance)
-    resp.is_pool_unclaimed = False
+    resp.is_pool_unclaimed = getattr(instance, "_is_pool_unclaimed", False)
+    return resp
     return resp
 
 
@@ -289,7 +282,7 @@ def abandon_instance(
     """Abandon a claimed or hard-assigned chore instance, returning it to the pool."""
     instance = chore_service.abandon_instance(db, child, instance_id)
     resp = ChoreInstanceResponse.model_validate(instance)
-    resp.is_pool_unclaimed = True
+    resp.is_pool_unclaimed = getattr(instance, "_is_pool_unclaimed", False)
     return resp
 
 
