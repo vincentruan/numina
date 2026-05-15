@@ -16,6 +16,7 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncGenerator
+from datetime import date
 
 from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
@@ -173,7 +174,9 @@ class Orchestrator:
         error_type: str | None = None
         answer_parts: list[str] = []
         model_name: str | None = None
-        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{effective_thread_id}.jsonl"
+        today = date.today().strftime("%Y-%m-%d")
+        user_segment = user_id if user_id else "_shared"
+        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{user_segment}/{today}/{effective_thread_id}.jsonl"
         session_started = False
 
         # ── 1. Fetch AI config & build policy ──────────────────────────
@@ -388,7 +391,9 @@ class Orchestrator:
         redacted_answer: str = ""
         ai_config: dict = {}
         session_started = False
-        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{effective_thread_id}.jsonl"
+        today = date.today().strftime("%Y-%m-%d")
+        user_segment = user_id if user_id else "_shared"
+        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{user_segment}/{today}/{effective_thread_id}.jsonl"
 
         yield builder.phase("connecting").to_ndjson()
 
@@ -518,7 +523,7 @@ class Orchestrator:
                     model=model_name,
                     status="completed" if success and error_type is None else "error",
                 ))
-                if redacted_free_text and success and error_type is None and thread_id is None:
+                if redacted_free_text and success and error_type is None:
                     _fire_and_forget(self._generate_title(
                         session_id=effective_thread_id,
                         family_id=family_id,
@@ -614,20 +619,35 @@ class Orchestrator:
         first_user_message: str,
         ai_config: dict,
     ) -> None:
-        """Fire-and-forget: generate a short session title via LLM and persist it."""
+        """Fire-and-forget: generate a short session title via LLM and persist it.
+
+        Skips generation if the session already has a title (multi-turn continuation).
+        """
         try:
+            logger.info("[orchestrator] title generation starting session=%s", session_id)
+            from apps.agent.services.session_store import AiSessionRepository
+            repo = AiSessionRepository(family_id)
+            # Check if title already exists — skip for multi-turn continuations
+            existing = await repo.get_title(session_id=session_id, family_id=family_id)
+            if existing:
+                logger.info("[orchestrator] title already exists session=%s, skipping", session_id)
+                return
             from apps.agent.core.llm import LLMClient
             provider = ai_config.get("ai_provider", "")
             api_key = ai_config.get("api_key", "")
             model_id = ai_config.get("ai_model_id", "")
+            base_url = ai_config.get("ai_base_url", "") or None
+            logger.info("[orchestrator] title generation params session=%s provider=%s model=%s base_url=%s",
+                        session_id, provider, model_id, base_url[:50] if base_url else "None")
             if not (provider and api_key and model_id):
+                logger.warning("[orchestrator] title generation skipped session=%s: missing ai_config", session_id)
                 return
-            llm = LLMClient(provider=provider, api_key=api_key, model_id=model_id)
+            llm = LLMClient(provider=provider, api_key=api_key, model_id=model_id, base_url=base_url)
             prompt = f"请用10字以内概括以下问题的主题，只输出标题，不要标点：{first_user_message[:200]}"
+            logger.info("[orchestrator] title generation calling LLM session=%s prompt=%s", session_id, prompt[:80])
             title = (await llm.complete(prompt, max_tokens=30)).strip()
+            logger.info("[orchestrator] title generation received session=%s title=%s", session_id, repr(title[:50] if title else ""))
             if title:
-                from apps.agent.services.session_store import AiSessionRepository
-                repo = AiSessionRepository(family_id)
                 await repo.update_summary(
                     session_id=session_id,
                     family_id=family_id,

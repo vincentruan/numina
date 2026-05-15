@@ -43,9 +43,12 @@ async def stream_session_events(
     if session is None:
         raise HTTPException(status_code=404, detail="session not found")
 
+    # Use the stored jsonl_path so reading works across restarts
+    jsonl_path = session.get("jsonl_path")
+
     async def generate():
         import json
-        for event in session_journal.iter_events(x_family_id, session_id):
+        for event in session_journal.iter_events(x_family_id, session_id, jsonl_path=jsonl_path):
             if event.get("visibility") == "debug":
                 continue
             yield json.dumps(event, ensure_ascii=False) + "\n"

@@ -140,7 +140,7 @@
         <!-- Selection Mode -->
         <div v-else class="selection-mode">
           <div class="selection-header">
-            <van-checkbox v-model="selectAll" @change="toggleSelectAll">{{
+            <van-checkbox :model-value="selectAll" @change="toggleSelectAll">{{
               t('dashboard.selectAll')
             }}</van-checkbox>
             <span class="selection-count">{{
@@ -443,10 +443,13 @@ function exitSelectionMode() {
 }
 
 function toggleSelectAll() {
-  if (selectAll.value) {
+  // Ignore Vant's emitted boolean — read current state and toggle manually
+  if (!selectAll.value) {
     selectedIds.value = dashboardStore.displayedAssets.map((a) => a.id)
+    selectAll.value = dashboardStore.displayedAssets.length > 0
   } else {
     selectedIds.value = []
+    selectAll.value = false
   }
 }
 
@@ -457,7 +460,8 @@ function toggleSelection(id: string) {
   } else {
     selectedIds.value.push(id)
   }
-  selectAll.value = selectedIds.value.length === dashboardStore.displayedAssets.length
+  const total = dashboardStore.displayedAssets.length
+  selectAll.value = total > 0 && selectedIds.value.length === total
 }
 
 async function handleBatchDelete() {

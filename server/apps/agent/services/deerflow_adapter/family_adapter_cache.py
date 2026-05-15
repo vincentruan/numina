@@ -160,12 +160,25 @@ def _generate_temp_config(
     use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
 
     # 构建 models 列表（DeerFlow harness 期望的格式）
+    thinking_supported = bool(ai_config.get("thinking_supported", False))
+    # For OpenAI-compatible models that support thinking, use ReasoningChatOpenAI which
+    # extracts reasoning_content from the API delta into additional_kwargs automatically.
+    # Standard ChatOpenAI ignores the reasoning_content field in streaming responses.
+    if thinking_supported and provider in ("openai", "openai_compatible"):
+        use_class = "deerflow.models.patched_openai:ReasoningChatOpenAI"
     model_entry: dict[str, Any] = {
         "name": "main",
         "use": use_class,
         "model": model_id,
         "api_key": api_key,
+        "supports_thinking": thinking_supported,
     }
+    if thinking_supported and provider in ("openai", "openai_compatible"):
+        # Pass enable_thinking=true in extra_body when thinking mode is active.
+        # This triggers GLM-5/Qwen3/DeepSeek to return reasoning_content in the delta.
+        model_entry["when_thinking_enabled"] = {"extra_body": {"enable_thinking": True}}
+        # Explicitly disable thinking when deep_think=false to prevent spurious reasoning_content.
+        model_entry["when_thinking_disabled"] = {"extra_body": {"enable_thinking": False}}
     if base_url:
         model_entry["base_url"] = base_url
 

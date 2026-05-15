@@ -323,6 +323,12 @@ def internal_update_session_summary(
     db: Session = Depends(get_db),
 ):
     from apps.backend.app.models.ai_chat_session import AIChatSession
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",
+                session_id, repr(body.title), repr(body.summary[:50] if body.summary else None),
+                body.status, repr(body.model))
 
     row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
     if row is None or row.family_id != int(family_id):
@@ -331,11 +337,13 @@ def internal_update_session_summary(
         row.last_message_summary = body.summary[:200]
     if body.title:
         row.title = body.title[:50]
+        logger.info("[backend] updating title for session=%s to %s", session_id, repr(body.title[:50]))
     row.status = body.status
     if body.model:
         row.last_model = body.model
     row.updated_at = datetime.utcnow()
     db.commit()
+    logger.info("[backend] session updated successfully session=%s title=%s", session_id, repr(row.title))
     return {"ok": True}
 
 

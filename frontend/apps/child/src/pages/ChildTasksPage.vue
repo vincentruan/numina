@@ -19,7 +19,6 @@
         :key="chore.id"
         class="chore-card"
         :class="chore.status"
-        @click="chore.status === 'available' && !submittingId ? complete(chore.id) : undefined"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
         <div class="chore-info">
@@ -31,17 +30,59 @@
         </div>
         <div class="chore-action">
           <button
-            v-if="chore.status === 'available'"
+            v-if="chore.is_pool_unclaimed"
             class="btn-complete"
-            :disabled="submittingId === chore.id"
-            @click.stop="complete(chore.id)"
-          >{{ t('chore.complete') }}</button>
+            :disabled="claimingId === chore.id"
+            @click.stop="claim(chore.id)"
+          >{{ claimingId === chore.id ? t('chore.claiming') : t('chore.claim') }}</button>
+          <template v-else-if="chore.status === 'available'">
+            <button
+              class="btn-complete"
+              :disabled="submittingId === chore.id"
+              @click.stop="complete(chore.id)"
+            >{{ t('chore.complete') }}</button>
+            <button
+              class="btn-abandon"
+              :disabled="submittingId === chore.id"
+              @click.stop="abandon(chore)"
+            >{{ t('chore.abandon') }}</button>
+          </template>
           <span v-else-if="chore.status === 'pending_approval'" class="status-badge pending">{{ t('chore.pendingApproval') }}</span>
           <span v-else-if="chore.status === 'approved'" class="status-badge approved">{{ t('chore.approved') }}</span>
           <span v-else-if="chore.status === 'rejected'" class="status-badge rejected">{{ t('chore.rejected') }}</span>
         </div>
       </div>
     </div>
+
+    <!-- Motivational abandon sheet -->
+    <van-popup
+      v-model:show="abandonSheetVisible"
+      position="bottom"
+      round
+      :style="{ padding: '24px 20px 40px' }"
+    >
+      <p class="abandon-sheet-title">{{ t('chore.abandonTitle') }}</p>
+      <div v-if="abandonTarget" class="abandon-sheet-chore">
+        <span class="abandon-sheet-emoji">{{ abandonTarget.chore_emoji || '📋' }}</span>
+        <div>
+          <p class="abandon-sheet-name">{{ abandonTarget.chore_name }}</p>
+          <p class="abandon-sheet-reward">+{{ abandonTarget.coin_reward }} ⭐</p>
+        </div>
+      </div>
+      <p v-if="topWish && topWish.star_coin_cost" class="abandon-sheet-hint">
+        {{ t('chore.abandonWishHint', { wishName: topWish.name, remaining: Math.max(0, topWish.star_coin_cost - balance) }) }}
+      </p>
+      <button class="btn-keep-going" @click="abandonSheetVisible = false">
+        {{ t('chore.abandonKeepGoing') }}
+      </button>
+      <button
+        class="btn-abandon-confirm"
+        :disabled="abandoningId !== null"
+        @click="doAbandon"
+      >
+        {{ t('chore.abandonConfirm') }}
+      </button>
+    </van-popup>
 
     <MilestoneCelebration
       :visible="celebrationVisible"
@@ -74,9 +115,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { showToast } from 'vant'
 import { getUser } from '@numina/auth'
-import { getMyChores, markChoreComplete, type ChoreInstance } from '@/api/chores'
+import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
+import { getCoinBalance } from '@/api/coins'
+import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import { childBlindBoxApi } from '@/api/blindBox'
@@ -89,6 +133,12 @@ const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
 const error = ref('')
 const submittingId = ref<string | null>(null)
+const claimingId = ref<string | null>(null)
+const abandoningId = ref<string | null>(null)
+const abandonSheetVisible = ref(false)
+const abandonTarget = ref<ChoreInstance | null>(null)
+const balance = ref(0)
+const topWish = ref<ChildWish | null>(null)
 const celebrationVisible = ref(false)
 const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
@@ -211,9 +261,58 @@ async function complete(instanceId: string) {
   }
 }
 
+async function claim(instanceId: string) {
+  claimingId.value = instanceId
+  // Optimistic update
+  const idx = chores.value.findIndex(c => c.id === instanceId)
+  if (idx !== -1) chores.value[idx] = { ...chores.value[idx], is_pool_unclaimed: false }
+  try {
+    const updated = await claimChore(instanceId)
+    if (idx !== -1) chores.value[idx] = updated
+  } catch {
+    // Revert optimistic update
+    if (idx !== -1) chores.value[idx] = { ...chores.value[idx], is_pool_unclaimed: true }
+    showToast(t('chore.claimFailed'))
+  } finally {
+    claimingId.value = null
+  }
+}
+
+function abandon(chore: ChoreInstance) {
+  abandonTarget.value = chore
+  abandonSheetVisible.value = true
+}
+
+async function doAbandon() {
+  if (!abandonTarget.value) return
+  const instanceId = abandonTarget.value.id
+  abandoningId.value = instanceId
+  try {
+    await abandonChore(instanceId)
+    chores.value = chores.value.filter(c => c.id !== instanceId)
+    abandonSheetVisible.value = false
+    abandonTarget.value = null
+  } catch {
+    showToast(t('chore.abandonFailed'))
+  } finally {
+    abandoningId.value = null
+  }
+}
+
 onMounted(async () => {
   await load()
   await checkNewMilestones()
+  try {
+    const [bal, wishData] = await Promise.all([
+      getCoinBalance().catch(() => 0),
+      listChildWishes().catch(() => null),
+    ])
+    balance.value = bal
+    const active = wishData?.active ?? []
+    topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
+  } catch {
+    // non-blocking
+  }
 })
 
 onUnmounted(() => {
@@ -320,6 +419,25 @@ onUnmounted(() => {
 .btn-complete:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-complete:active:not(:disabled) { transform: scale(0.96); }
 
+/* ── Abandon button — secondary action ── */
+.btn-abandon {
+  background: var(--color-surface-soft);
+  color: var(--color-muted);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 0 12px;
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  height: 44px;
+  white-space: nowrap;
+  transition: opacity 0.15s, transform 0.1s;
+  margin-left: 8px;
+}
+.btn-abandon:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-abandon:active:not(:disabled) { transform: scale(0.96); }
+
 /* ── Status badges ── */
 .status-badge {
   font-family: Inter, sans-serif;
@@ -366,4 +484,87 @@ onUnmounted(() => {
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ── Abandon sheet ── */
+.abandon-sheet-title {
+  font-family: Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0 0 16px;
+  text-align: center;
+}
+
+.abandon-sheet-chore {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.abandon-sheet-emoji {
+  font-size: 32px;
+}
+
+.abandon-sheet-name {
+  font-family: Inter, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+.abandon-sheet-reward {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-brand-ochre);
+  margin: 4px 0 0;
+  font-weight: 500;
+}
+
+.abandon-sheet-hint {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 0 0 20px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.btn-keep-going {
+  width: 100%;
+  background: var(--color-brand-pink);
+  color: var(--color-on-dark);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+  transition: transform 0.1s;
+}
+.btn-keep-going:active { transform: scale(0.96); }
+
+.btn-abandon-confirm {
+  width: 100%;
+  background: var(--color-surface-soft);
+  color: var(--color-muted);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  min-height: 44px;
+  margin-top: 8px;
+  transition: transform 0.1s;
+}
+.btn-abandon-confirm:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-abandon-confirm:active:not(:disabled) { transform: scale(0.96); }
 </style>

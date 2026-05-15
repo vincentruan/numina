@@ -72,10 +72,17 @@ class SessionJournalService:
 
     def __init__(self, base_dir: str | Path) -> None:
         self._base_dir = Path(base_dir)
+        # Maps session_id → resolved Path, set on write_session_start.
+        # Allows orchestrator to pass a date-based jsonl_path without
+        # changing every write_* method signature.
+        self._path_cache: dict[str, Path] = {}
 
     def _session_path(self, family_id: str, session_id: str) -> Path:
         _validate_id(family_id, "family_id")
         _validate_id(session_id, "session_id")
+        # Use cached path if available (set by write_session_start)
+        if session_id in self._path_cache:
+            return self._path_cache[session_id]
         return self._base_dir / family_id / f"{session_id}.jsonl"
 
     def append_event(self, family_id: str, session_id: str, event: dict[str, Any]) -> None:
@@ -92,9 +99,12 @@ class SessionJournalService:
                 family_id,
             )
 
-    def read_events(self, family_id: str, session_id: str) -> list[dict[str, Any]]:
+    def read_events(self, family_id: str, session_id: str, jsonl_path: str | None = None) -> list[dict[str, Any]]:
         """Read all events for a session. Malformed lines are skipped."""
-        path = self._session_path(family_id, session_id)
+        if jsonl_path:
+            path = Path(jsonl_path)
+        else:
+            path = self._session_path(family_id, session_id)
         if not path.exists():
             return []
         events: list[dict[str, Any]] = []
@@ -108,9 +118,12 @@ class SessionJournalService:
                 logger.debug("session_journal skipping malformed line in %s", path)
         return events
 
-    def iter_events(self, family_id: str, session_id: str) -> Iterator[dict[str, Any]]:
+    def iter_events(self, family_id: str, session_id: str, jsonl_path: str | None = None) -> Iterator[dict[str, Any]]:
         """Yield events one by one (streaming-friendly). Malformed lines skipped."""
-        path = self._session_path(family_id, session_id)
+        if jsonl_path:
+            path = Path(jsonl_path)
+        else:
+            path = self._session_path(family_id, session_id)
         if not path.exists():
             return
         with open(path, encoding="utf-8") as f:
@@ -135,6 +148,10 @@ class SessionJournalService:
         model_name: str | None,
         jsonl_path: str,
     ) -> None:
+        # Cache the resolved path so all subsequent writes for this session
+        # use the date-based directory structure set by the orchestrator.
+        resolved = Path(jsonl_path)
+        self._path_cache[session_id] = resolved
         event = _make_event(
             "session.start",
             session_id=session_id,
