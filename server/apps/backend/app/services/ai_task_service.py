@@ -10,13 +10,16 @@ TASK_TIMEOUT_MINUTES = 30
 
 
 class AITaskService:
-
     @staticmethod
-    def get_running_task(family_id: int | str, capability: str, db: Session) -> AITask | None:
+    def get_running_task(
+        family_id: int | str, capability: str, db: Session
+    ) -> AITask | None:
         """返回 running 且未超时的任务。超时任务自动标记为 timeout 并返回 None。"""
         task = (
             db.query(AITask)
-            .filter_by(family_id=int(family_id), capability=capability, status="running")
+            .filter_by(
+                family_id=int(family_id), capability=capability, status="running"
+            )
             .first()
         )
         if task is None:
@@ -62,7 +65,9 @@ class AITaskService:
         session_id: int | None,
         db: Session,
     ) -> AITask:
-        """创建新任务记录。"""
+        """创建新任务记录。若并发请求导致唯一约束冲突，抛出 AI_TASK_IN_PROGRESS。"""
+        from sqlalchemy.exc import IntegrityError
+
         task = AITask(
             family_id=int(family_id),
             capability=capability,
@@ -71,7 +76,13 @@ class AITaskService:
             started_at=datetime.utcnow(),
         )
         db.add(task)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as e:
+            db.rollback()
+            from apps.backend.app.errors import AppError, ErrorCode
+
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
         db.refresh(task)
         return task
 
@@ -82,27 +93,59 @@ class AITaskService:
         session_id: int | None,
         db: Session,
     ) -> AITask:
-        """创建排队任务。当家庭已有其他 capability 运行时使用。"""
-        # Count existing queued tasks for this family to determine position
-        queued_count = (
-            db.query(AITask)
-            .filter(
-                AITask.family_id == int(family_id),
-                AITask.status == "queued",
-            )
-            .count()
-        )
+        """创建排队任务。当家庭已有其他 capability 运行时使用。
+
+        queue_position 在创建时设为 None，由 get_queued_task 动态计算，
+        避免并发请求导致的位置竞态条件。
+        """
+        from sqlalchemy.exc import IntegrityError
+
         task = AITask(
             family_id=int(family_id),
             capability=capability,
             status="queued",
             session_id=session_id,
             started_at=datetime.utcnow(),
-            queue_position=queued_count + 1,
+            queue_position=None,
         )
         db.add(task)
-        db.commit()
+        try:
+            db.commit()
+        except IntegrityError as e:
+            db.rollback()
+            from apps.backend.app.errors import AppError, ErrorCode
+
+            raise AppError(ErrorCode.AI_TASK_IN_PROGRESS) from e
         db.refresh(task)
+        return task
+
+    @staticmethod
+    def get_queued_task(
+        family_id: int | str, capability: str, db: Session
+    ) -> AITask | None:
+        """返回该 capability 的排队任务，并动态计算其队列位置。"""
+        from sqlalchemy import func
+
+        fid = int(family_id)
+        task = (
+            db.query(AITask)
+            .filter_by(family_id=fid, capability=capability, status="queued")
+            .first()
+        )
+        if task is None:
+            return None
+        # Compute position dynamically: count tasks queued before this one
+        # (by started_at)
+        position = (
+            db.query(func.count(AITask.id))
+            .filter(
+                AITask.family_id == fid,
+                AITask.status == "queued",
+                AITask.started_at <= task.started_at,
+            )
+            .scalar()
+        ) or 1
+        task.queue_position = position
         return task
 
     @staticmethod
@@ -167,4 +210,3 @@ class AITaskService:
             db.commit()
             return True
         return False
-

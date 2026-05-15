@@ -43,9 +43,11 @@ def get_target(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    target = db.query(AIAllocationTarget).filter(
-        AIAllocationTarget.family_id == current_user.family_id
-    ).first()
+    target = (
+        db.query(AIAllocationTarget)
+        .filter(AIAllocationTarget.family_id == current_user.family_id)
+        .first()
+    )
     if not target:
         return {"has_target": False}
     return {
@@ -62,9 +64,11 @@ def set_target(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    target = db.query(AIAllocationTarget).filter(
-        AIAllocationTarget.family_id == current_user.family_id
-    ).first()
+    target = (
+        db.query(AIAllocationTarget)
+        .filter(AIAllocationTarget.family_id == current_user.family_id)
+        .first()
+    )
     if target:
         target.category_targets = body.category_targets
         target.drift_threshold = body.drift_threshold
@@ -86,9 +90,11 @@ async def check_drift(
     db: Session = Depends(get_db),
 ):
     """检测当前配置与目标的漂移。"""
-    target = db.query(AIAllocationTarget).filter(
-        AIAllocationTarget.family_id == current_user.family_id
-    ).first()
+    target = (
+        db.query(AIAllocationTarget)
+        .filter(AIAllocationTarget.family_id == current_user.family_id)
+        .first()
+    )
     if not target or not target.category_targets:
         return {"has_target": False, "message": "尚未设置配置目标"}
 
@@ -119,41 +125,56 @@ async def events_check_drift(
     db: Session = Depends(get_db),
 ):
     """检测当前配置与目标的漂移（NDJSON 事件流）。"""
-    target = db.query(AIAllocationTarget).filter(
-        AIAllocationTarget.family_id == current_user.family_id
-    ).first()
+    target = (
+        db.query(AIAllocationTarget)
+        .filter(AIAllocationTarget.family_id == current_user.family_id)
+        .first()
+    )
     if not target or not target.category_targets:
         return JSONResponse({"has_target": False, "message": "尚未设置配置目标"})
 
     existing = AITaskService.get_running_task(current_user.family_id, "allocation", db)
     if existing:
-        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS)
-
-    # No running task - create new session and task
-    session = await ChatSessionService.create_session(
-        family_id=current_user.family_id,
-        user_id=current_user.id,
-        db=db,
-    )
-    any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-    if any_running:
-        task = AITaskService.create_queued_task(
+        # 已有运行中任务（从排队提升）— 直接接续，不重复创建
+        task = existing
+        session_id = str(task.session_id) if task.session_id else str(task.id)
+        session = (
+            db.query(AIChatSession)
+            .filter_by(id=session_id, family_id=current_user.family_id)
+            .first()
+        )
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        # No running task - create new session and task
+        session = await ChatSessionService.create_session(
             family_id=current_user.family_id,
-            capability="allocation",
-            session_id=session.id,
+            user_id=current_user.id,
             db=db,
         )
-        return JSONResponse(
-            status_code=202,
-            content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
-        )
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                capability="allocation",
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "queued",
+                    "task_id": task.id,
+                    "queue_position": task.queue_position,
+                },
+            )
         task = AITaskService.create_task(
             family_id=current_user.family_id,
             capability="allocation",
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        session_id = str(session.id)
 
     task_id = task.id
     family_id = current_user.family_id
@@ -167,7 +188,10 @@ async def events_check_drift(
             family_id=family_id,
             current_user=current_user,
             db=db,
+            extra_json={
+                "targets": target.category_targets,
+                "threshold": target.drift_threshold,
+            },
         ),
         media_type="application/x-ndjson",
     )
-

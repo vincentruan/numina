@@ -10,15 +10,19 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.database import get_db
-from apps.backend.app.models.ai_task import AITask
 from apps.backend.app.models.user import User
 from apps.backend.app.services.ai_task_service import AITaskService
 
 router = APIRouter(prefix="/ai/tasks", tags=["ai-tasks"])
 
 VALID_CAPABILITIES = {
-    "report", "alerts", "disposal", "allocation",
-    "spending_leak", "liability", "time_machine",
+    "report",
+    "alerts",
+    "disposal",
+    "allocation",
+    "spending_leak",
+    "liability",
+    "time_machine",
 }
 
 
@@ -43,12 +47,8 @@ def get_task_status(
             "queue_position": None,
         }
 
-    # Check queued task for this capability
-    queued = (
-        db.query(AITask)
-        .filter_by(family_id=int(current_user.family_id), capability=capability, status="queued")
-        .first()
-    )
+    # Check queued task for this capability (position computed dynamically)
+    queued = AITaskService.get_queued_task(current_user.family_id, capability, db)
     if queued is not None:
         return {
             "status": "queued",
@@ -92,4 +92,3 @@ def cancel_task(
     if cancelled:
         return {"ok": True, "status": "cancelled"}
     return {"ok": False, "message": "no_running_task"}
-

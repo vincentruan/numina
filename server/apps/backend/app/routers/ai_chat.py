@@ -23,7 +23,7 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.cached_file import CachedFile
 from apps.backend.app.models.file_remote_location import FileRemoteLocation
 from apps.backend.app.models.user import User
-from apps.backend.app.schemas.ai_chat_responses import AllSessionsResponse, ChatResponse, SessionSummaryResponse
+from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])

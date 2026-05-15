@@ -55,33 +55,46 @@ async def events_liability_advice(
     """获取负债优化建议（NDJSON 事件流）。"""
     existing = AITaskService.get_running_task(current_user.family_id, "liability", db)
     if existing:
-        raise AppError(ErrorCode.AI_TASK_IN_PROGRESS)
-
-    # No running task - create new session and task
-    session = await ChatSessionService.create_session(
-        family_id=current_user.family_id,
-        user_id=current_user.id,
-        db=db,
-    )
-    any_running = AITaskService.get_any_running_task(current_user.family_id, db)
-    if any_running:
-        task = AITaskService.create_queued_task(
+        # 已有运行中任务（从排队提升）— 直接接续，不重复创建
+        task = existing
+        session_id = str(task.session_id) if task.session_id else str(task.id)
+        session = (
+            db.query(AIChatSession)
+            .filter_by(id=session_id, family_id=current_user.family_id)
+            .first()
+        )
+        if not session:
+            raise AppError(ErrorCode.NOT_FOUND)
+    else:
+        # No running task - create new session and task
+        session = await ChatSessionService.create_session(
+            family_id=current_user.family_id,
+            user_id=current_user.id,
+            db=db,
+        )
+        any_running = AITaskService.get_any_running_task(current_user.family_id, db)
+        if any_running:
+            task = AITaskService.create_queued_task(
+                family_id=current_user.family_id,
+                capability="liability",
+                session_id=session.id,
+                db=db,
+            )
+            return JSONResponse(
+                status_code=202,
+                content={
+                    "status": "queued",
+                    "task_id": task.id,
+                    "queue_position": task.queue_position,
+                },
+            )
+        task = AITaskService.create_task(
             family_id=current_user.family_id,
             capability="liability",
             session_id=session.id,
             db=db,
         )
-        return JSONResponse(
-            status_code=202,
-            content={"status": "queued", "task_id": task.id, "queue_position": task.queue_position},
-        )
-    task = AITaskService.create_task(
-        family_id=current_user.family_id,
-        capability="liability",
-        session_id=session.id,
-        db=db,
-    )
-    session_id = session.id
+        session_id = session.id
 
     task_id = task.id
     family_id = current_user.family_id
