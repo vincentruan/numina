@@ -155,6 +155,7 @@ async def chat(
                     "X-Family-Id": str(current_user.family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                     "X-Thread-Id": str(session.id),
+                    "X-User-Id": str(current_user.id),
                 },
             )
             resp.raise_for_status()
@@ -222,6 +223,7 @@ async def chat_stream(
                         "X-Family-Id": str(current_user.family_id),
                         "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
                         "X-Thread-Id": str(session_id),
+                        "X-User-Id": str(current_user.id),
                     },
                     timeout=None,
                 ) as resp,
@@ -286,6 +288,7 @@ def get_sessions(
             "created_at": s.created_at.isoformat(),
             "message_count": s.message_count,
             "last_preview": s.last_preview,
+            "title": s.title,
         }
         for s in sessions
     ]

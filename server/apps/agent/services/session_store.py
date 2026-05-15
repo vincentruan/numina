@@ -47,6 +47,16 @@ class AiSessionRepository:
         except Exception as e:
             logger.warning("session upsert failed for %s: %s", session_id, e)
 
+    async def get_title(self, *, session_id: str, family_id: str) -> str | None:
+        """Return the existing title for a session, or None if not set."""
+        try:
+            session = await self._client.get_session(session_id)
+            if session:
+                return session.get("title")
+        except Exception as e:
+            logger.warning("session get_title failed for %s: %s", session_id, e)
+        return None
+
     async def update_summary(
         self,
         *,
@@ -67,23 +77,3 @@ class AiSessionRepository:
             )
         except Exception as e:
             logger.warning("session summary update failed for %s: %s", session_id, e)
-
-    async def list_sessions(
-        self,
-        family_id: str,
-        *,
-        limit: int = 20,
-        offset: int = 0,
-    ) -> tuple[list[dict], int]:
-        try:
-            return await self._client.list_sessions(limit=limit, offset=offset)
-        except Exception as e:
-            logger.warning("list_sessions failed for family %s: %s", family_id, e)
-            return [], 0
-
-    async def get_session(self, session_id: str, family_id: str) -> dict | None:
-        try:
-            return await self._client.get_session(session_id)
-        except Exception as e:
-            logger.warning("get_session failed for %s: %s", session_id, e)
-            return None

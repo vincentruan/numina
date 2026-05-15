@@ -150,20 +150,22 @@ class DeerFlowAdapter:
             """Run in thread pool — puts chunks into queue, None signals end."""
             try:
                 message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
-                for event in self._client.stream(message, thread_id=thread_id):
-                    chunk = None
-                    # DeerFlow returns StreamEvent(type="messages-tuple", data={"type": "ai", "content": "..."})
-                    if (
+                for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                    if not (
                         hasattr(event, "type")
                         and event.type == "messages-tuple"
                         and isinstance(event.data, dict)
                         and event.data.get("type") == "ai"
                     ):
-                        content = event.data.get("content")
-                        if isinstance(content, str) and content:
-                            chunk = content
-                    if chunk:
-                        loop.call_soon_threadsafe(queue.put_nowait, chunk)
+                        continue
+                    # Emit reasoning/thinking content before the answer text
+                    additional_kwargs = event.data.get("additional_kwargs") or {}
+                    reasoning = additional_kwargs.get("reasoning_content")
+                    if isinstance(reasoning, str) and reasoning:
+                        loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{reasoning}")
+                    content = event.data.get("content")
+                    if isinstance(content, str) and content:
+                        loop.call_soon_threadsafe(queue.put_nowait, content)
             except Exception as e:
                 logger.error("[deerflow] stream_chunks failed: %s", e)
                 # Send the exception to the consumer so it can re-raise rather than
