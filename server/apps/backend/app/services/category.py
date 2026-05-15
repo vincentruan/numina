@@ -7,15 +7,13 @@ from apps.backend.app.models.user import User
 from apps.backend.app.schemas.category import CategoryCreate, CategoryUpdate
 
 
-def list_categories(db: Session, user: User) -> list[Category]:
-    return (
-        db.query(Category)
-        .filter(
-            (Category.family_id == user.family_id) | (Category.is_system == True)
-        )
-        .order_by(Category.sort_order)
-        .all()
+def list_categories(db: Session, user: User, asset_type: str | None = None) -> list[Category]:
+    query = db.query(Category).filter(
+        (Category.family_id == user.family_id) | Category.is_system
     )
+    if asset_type:
+        query = query.filter(Category.asset_type == asset_type)
+    return query.order_by(Category.sort_order).all()
 
 
 def create_category(db: Session, user: User, req: CategoryCreate) -> Category:
