@@ -46,6 +46,16 @@
           </button>
           <span class="history-title">{{ t('aiChat.historyTitle') }}</span>
         </div>
+        <!-- Capability filter tabs -->
+        <div class="history-filter">
+          <button
+            v-for="f in capabilityFilters"
+            :key="f.value ?? 'all'"
+            class="filter-tab"
+            :class="{ 'filter-tab--active': selectedCapability === f.value }"
+            @click="onSelectCapability(f.value)"
+          >{{ f.label }}</button>
+        </div>
         <div v-if="sessionsLoading" class="history-empty">
           <p>{{ t('aiChat.loadingHistory') }}</p>
         </div>
@@ -719,65 +729,47 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
   return ''
 }
 
-async function loadSessionsPage(reset = false) {
-  if (reset) {
-    sessions.value = []
-    sessionsOffset.value = 0
-    sessionsAllLoaded.value = false
-    sessionsLoaded.value = false
-  }
-  if (sessionsAllLoaded.value) return
-  if (reset) {
-    sessionsLoading.value = true
-  } else {
-    sessionsLoadingMore.value = true
-  }
+// Load session list when history panel opens (lazy, once per mount)
+const selectedCapability = ref<string | null>(null)
+
+const capabilityFilters = computed(() => [
+  { label: t('aiChat.filterAll'), value: null },
+  { label: t('aiChat.filterChat'), value: 'chat' },
+  { label: t('aiChat.filterAlerts'), value: 'alerts' },
+  { label: t('aiChat.filterDisposal'), value: 'disposal' },
+  { label: t('aiChat.filterReport'), value: 'report' },
+  { label: t('aiChat.filterAllocation'), value: 'allocation' },
+  { label: t('aiChat.filterLiability'), value: 'liability' },
+  { label: t('aiChat.filterSpendingLeak'), value: 'spending_leak' },
+  { label: t('aiChat.filterTimeMachine'), value: 'time_machine' },
+])
+
+async function loadSessions() {
+  sessionsLoading.value = true
   try {
-    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value)
-    const incoming = res.data.sessions
-    sessions.value = [...sessions.value, ...incoming]
-    sessionsOffset.value += incoming.length
-    if (incoming.length < SESSIONS_PAGE_SIZE) {
-      sessionsAllLoaded.value = true
-    }
+    const res = await getSessions(50, 0, selectedCapability.value ?? undefined)
+    sessions.value = res.data.sessions
     sessionsLoaded.value = true
   } catch {
     // silently ignore — list stays empty
   } finally {
     sessionsLoading.value = false
-    sessionsLoadingMore.value = false
   }
 }
 
-function setupPaginationObserver() {
-  if (paginationObserver) {
-    paginationObserver.disconnect()
-    paginationObserver = null
-  }
-  if (!paginationSentinelRef.value) return
-  paginationObserver = new IntersectionObserver(
-    (entries) => {
-      if (entries[0]?.isIntersecting && sessionsLoaded.value && !sessionsLoadingMore.value && !sessionsAllLoaded.value) {
-        loadSessionsPage(false)
-      }
-    },
-    { threshold: 0.1 },
-  )
-  paginationObserver.observe(paginationSentinelRef.value)
+async function onSelectCapability(cap: string | null) {
+  selectedCapability.value = cap
+  sessionsLoaded.value = false
+  await loadSessions()
 }
 
-// Load session list when history panel opens (lazy, once per mount)
 watch(showHistory, async (open) => {
-  if (!open) return
-  if (!sessionsLoaded.value) {
-    await loadSessionsPage(true)
-  }
-  // Set up IntersectionObserver after DOM updates
-  await nextTick()
-  setupPaginationObserver()
+  if (!open || sessionsLoaded.value) return
+  await loadSessions()
 })
 
 async function loadSessionMessages(session: SessionSummary) {
+  showHistory.value = false
   messages.value = []
   currentSessionId.value = session.session_id
   asking.value = true
@@ -827,9 +819,6 @@ async function loadSessionMessages(session: SessionSummary) {
     reader?.cancel().catch(() => {})
     asking.value = false
     connecting.value = false
-    if (messages.value.length === 0) {
-      showToast(t('aiChat.sessionNotFound'))
-    }
     await scrollToBottom()
   }
 }

@@ -123,6 +123,10 @@
           v-for="cap in capabilities"
           :key="cap.id"
           class="feature-card"
+          :class="{
+            'feature-card--running': capTaskStatus[cap.id] === 'running',
+            'feature-card--queued': capTaskStatus[cap.id] === 'queued',
+          }"
           role="listitem"
           :data-testid="`capability-${cap.id}`"
           :aria-label="cap.name + '：' + cap.description"
@@ -131,6 +135,25 @@
           <span class="feature-icon" aria-hidden="true">{{ capabilityEmoji(cap.id) }}</span>
           <span class="feature-title">{{ cap.name }}</span>
           <span class="feature-desc">{{ cap.description }}</span>
+          <!-- Task status badge -->
+          <span
+            v-if="capTaskStatus[cap.id] === 'running'"
+            class="cap-status-badge cap-status-badge--running"
+            aria-label="分析中"
+            aria-hidden="true"
+          >⏳</span>
+          <span
+            v-else-if="capTaskStatus[cap.id] === 'queued'"
+            class="cap-status-badge cap-status-badge--queued"
+            aria-label="排队中"
+            aria-hidden="true"
+          >🕐</span>
+          <span
+            v-else-if="capTaskStatus[cap.id] === 'completed'"
+            class="cap-status-badge cap-status-badge--done"
+            aria-label="已完成"
+            aria-hidden="true"
+          >✅</span>
         </button>
       </div>
     </div>
@@ -149,10 +172,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
-import { getAIReport } from '@/api/ai'
+import { getAIReport, getAITask } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import { useCapabilityStore } from '@/stores/capability'
 import { showToast } from 'vant'
@@ -320,6 +343,34 @@ function startCapability(cap: { id: string; ui?: { route?: string | null } }) {
   router.push(cap.ui?.route ?? '/ai/chat')
 }
 
+// ── Capability task status badges ──────────────────────────────────────────
+const CAP_POLL_CAPABILITIES = ['alerts', 'allocation', 'disposal', 'liability', 'spending_leak']
+const capTaskStatus = ref<Record<string, string>>({})
+let capPollTimer: ReturnType<typeof setInterval> | null = null
+
+async function pollCapabilityStatuses() {
+  const results = await Promise.allSettled(
+    CAP_POLL_CAPABILITIES.map(cap => getAITask(cap))
+  )
+  results.forEach((result, i) => {
+    if (result.status === 'fulfilled') {
+      capTaskStatus.value[CAP_POLL_CAPABILITIES[i]] = result.value.status
+    }
+  })
+}
+
+function startCapabilityPolling() {
+  pollCapabilityStatuses()
+  capPollTimer = setInterval(pollCapabilityStatuses, 5000)
+}
+
+function stopCapabilityPolling() {
+  if (capPollTimer) {
+    clearInterval(capPollTimer)
+    capPollTimer = null
+  }
+}
+
 onMounted(async () => {
   await aiStore.fetchConfig()
   // Enable deep-think by default if model supports thinking capability
@@ -328,6 +379,11 @@ onMounted(async () => {
   }
   await loadCapabilities()
   await loadReport()
+  startCapabilityPolling()
+})
+
+onUnmounted(() => {
+  stopCapabilityPolling()
 })
 </script>
 
@@ -844,6 +900,41 @@ onMounted(async () => {
   text-align: center;
   line-height: 1.3;
   letter-spacing: -0.11px;
+}
+
+/* Capability task status badge */
+.feature-card {
+  position: relative;
+}
+
+.cap-status-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.cap-status-badge--running {
+  animation: badge-spin 2s linear infinite;
+  display: inline-block;
+}
+
+.cap-status-badge--queued {
+  opacity: 0.7;
+}
+
+@keyframes badge-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.feature-card--running {
+  border-color: rgba(var(--color-primary-rgb, 99, 102, 241), 0.3);
+}
+
+.feature-card--queued {
+  border-color: rgba(255, 149, 0, 0.3);
 }
 
 /* ── Chat entry ── */

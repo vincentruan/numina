@@ -15,7 +15,12 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
-import { getAITask, startAIEventStream, cancelAITask, type AITaskStatus } from '@/api/ai'
+import {
+  getAITask,
+  startAIEventStream,
+  cancelAITask,
+  type AITaskStatus,
+} from '@/api/ai'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import type { AgentEvent } from '@/types/agent-stream'
 
@@ -23,12 +28,15 @@ const POLL_INTERVAL_MS = 3000
 
 export type AITaskPhase = 'connecting' | 'thinking' | 'answering' | null
 
-export function useAITask(capability: string, triggerEndpoint: string, onComplete?: () => void) {
+export function useAITask(
+  capability: string,
+  triggerEndpoint: string,
+  onComplete?: () => void,
+) {
   const { t } = useI18n()
 
   const status = ref<AITaskStatus['status']>('idle')
   const phase = ref<AITaskPhase>(null)
-  const chunks = ref<string[]>([])
   const thinkContent = ref('')
   const thinkDone = ref(false)
   const thinkSeconds = ref(0)
@@ -52,13 +60,8 @@ export function useAITask(capability: string, triggerEndpoint: string, onComplet
   function startTimer(fromSeconds = 0) {
     elapsedSeconds.value = fromSeconds
     startTime = Date.now() - fromSeconds * 1000
-    if (timer) {
-      clearInterval(timer)
-      timer = null
-    }
+    if (timer) clearInterval(timer)
     timer = setInterval(() => {
-      // Guard against race: timer might fire after stopTimer but before clearInterval completes
-      if (timer === null) return
       elapsedSeconds.value = Math.floor((Date.now() - startTime!) / 1000)
     }, 1000)
   }
@@ -66,20 +69,15 @@ export function useAITask(capability: string, triggerEndpoint: string, onComplet
   function stopTimer() {
     if (timer) {
       clearInterval(timer)
-      timer = null // Set to null BEFORE clearInterval to prevent race
+      timer = null
     }
   }
 
   function startThinkTimer() {
     thinkStartTime = Date.now()
     thinkSeconds.value = 0
-    if (thinkTimer) {
-      clearInterval(thinkTimer)
-      thinkTimer = null
-    }
+    if (thinkTimer) clearInterval(thinkTimer)
     thinkTimer = setInterval(() => {
-      // Guard against race
-      if (thinkTimer === null) return
       thinkSeconds.value = Math.floor((Date.now() - thinkStartTime!) / 1000)
     }, 1000)
   }
@@ -87,7 +85,7 @@ export function useAITask(capability: string, triggerEndpoint: string, onComplet
   function stopThinkTimer() {
     if (thinkTimer) {
       clearInterval(thinkTimer)
-      thinkTimer = null // Set to null BEFORE clearInterval
+      thinkTimer = null
     }
   }
 
@@ -416,7 +414,6 @@ export function useAITask(capability: string, triggerEndpoint: string, onComplet
   return {
     status,
     phase,
-    chunks,
     thinkContent,
     thinkDone,
     thinkSeconds,

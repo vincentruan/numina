@@ -1,8 +1,8 @@
 import http from './index'
 import type { SessionsResponse } from '@/types/session'
 
-export const getSessions = (limit = 20, offset = 0) =>
-  http.get<SessionsResponse>('/ai/sessions', { params: { limit, offset } })
+export const getSessions = (limit = 20, offset = 0, capability?: string) =>
+  http.get<SessionsResponse>('/ai/sessions', { params: { limit, offset, ...(capability ? { capability } : {}) } })
 
 export const updateSession = (sessionId: string, data: { title?: string; is_pinned?: boolean }) =>
   http.patch(`/ai/sessions/${encodeURIComponent(sessionId)}`, data)
