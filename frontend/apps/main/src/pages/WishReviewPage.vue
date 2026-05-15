@@ -1,8 +1,8 @@
 <template>
   <div class="review-page">
-    <PageHeader title="心愿审核" />
+    <PageHeader :title="t('wishReview.title')" />
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">{{ t('wishReview.loading') }}</div>
 
     <template v-else>
       <div v-if="error" class="error-msg">{{ error }}</div>
@@ -10,7 +10,7 @@
       <template v-else>
         <!-- Redemption requested (priority) -->
         <div v-if="redemptionItems.length > 0" class="section">
-          <h3 class="section-title">待兑现 🎁</h3>
+          <h3 class="section-title">{{ t('wishReview.section.redemptionRequested') }}</h3>
           <div v-for="wish in redemptionItems" :key="wish.id" class="wish-card redemption">
             <div class="card-top">
               <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
@@ -21,15 +21,15 @@
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn-realize" :disabled="actioningId === wish.id" @click="openRealize(wish)">兑现</button>
-              <button class="btn-defer" :disabled="actioningId === wish.id" @click="defer(wish.id)">暂不兑现</button>
+              <button class="btn-realize" :disabled="actioningId === wish.id" @click="openRealize(wish)">{{ t('wishReview.btn.realize') }}</button>
+              <button class="btn-defer" :disabled="actioningId === wish.id" @click="defer(wish.id)">{{ t('wishReview.btn.defer') }}</button>
             </div>
           </div>
         </div>
 
         <!-- Pending review -->
         <div v-if="pendingItems.length > 0" class="section">
-          <h3 class="section-title">待审核 ⏳</h3>
+          <h3 class="section-title">{{ t('wishReview.section.pendingReview') }}</h3>
           <div v-for="wish in pendingItems" :key="wish.id" class="wish-card">
             <div class="card-top">
               <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
@@ -41,14 +41,14 @@
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn-approve" :disabled="actioningId === wish.id" @click="openApprove(wish)">批准</button>
-              <button class="btn-reject" :disabled="actioningId === wish.id" @click="openReject(wish)">拒绝</button>
+              <button class="btn-approve" :disabled="actioningId === wish.id" @click="openApprove(wish)">{{ t('wishReview.btn.approve') }}</button>
+              <button class="btn-reject" :disabled="actioningId === wish.id" @click="openReject(wish)">{{ t('wishReview.btn.reject') }}</button>
             </div>
           </div>
         </div>
 
         <div v-if="pendingItems.length === 0 && redemptionItems.length === 0" class="empty">
-          <p>暂无待处理心愿 ✅</p>
+          <p>{{ t('wishReview.emptyState') }}</p>
         </div>
       </template>
     </template>
@@ -56,19 +56,19 @@
     <!-- Approve dialog -->
     <div v-if="approveTarget" class="dialog-overlay" @click.self="approveTarget = null">
       <div class="dialog">
-        <h3>批准心愿</h3>
-        <p class="dialog-desc">「{{ approveTarget.name }}」需要多少星星币？</p>
+        <h3>{{ t('wishReview.dialog.approveTitle') }}</h3>
+        <p class="dialog-desc">{{ t('wishReview.dialog.approveDesc', { name: approveTarget.name }) }}</p>
         <input
           v-model.number="costInput"
           type="number"
           class="input"
-          placeholder="积分数量（≥1）"
+          :placeholder="t('wishReview.dialog.costPlaceholder')"
           min="1"
         />
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="approveTarget = null">取消</button>
-          <button class="btn-submit" :disabled="actioning || !costInput || costInput < 1" @click="approve">确认批准</button>
+          <button class="btn-cancel" @click="approveTarget = null">{{ t('wishReview.btn.cancel') }}</button>
+          <button class="btn-submit" :disabled="actioning || !costInput || costInput < 1" @click="approve">{{ t('wishReview.btn.confirmApprove') }}</button>
         </div>
       </div>
     </div>
@@ -76,13 +76,13 @@
     <!-- Reject dialog -->
     <div v-if="rejectTarget" class="dialog-overlay" @click.self="rejectTarget = null">
       <div class="dialog">
-        <h3>拒绝心愿</h3>
-        <p class="dialog-desc">「{{ rejectTarget.name }}」</p>
-        <input v-model="rejectReason" class="input" placeholder="拒绝原因（可选）" maxlength="200" />
+        <h3>{{ t('wishReview.dialog.rejectTitle') }}</h3>
+        <p class="dialog-desc">{{ t('wishReview.dialog.rejectTitle') }}「{{ rejectTarget.name }}」</p>
+        <input v-model="rejectReason" class="input" :placeholder="t('wishReview.dialog.rejectReasonPlaceholder')" maxlength="200" />
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="rejectTarget = null">取消</button>
-          <button class="btn-reject-confirm" :disabled="actioning" @click="reject">确认拒绝</button>
+          <button class="btn-cancel" @click="rejectTarget = null">{{ t('wishReview.btn.cancel') }}</button>
+          <button class="btn-reject-confirm" :disabled="actioning" @click="reject">{{ t('wishReview.btn.confirmReject') }}</button>
         </div>
       </div>
     </div>
@@ -90,12 +90,12 @@
     <!-- Realize dialog -->
     <div v-if="realizeTarget" class="dialog-overlay" @click.self="realizeTarget = null">
       <div class="dialog">
-        <h3>兑现心愿 🎊</h3>
-        <p class="dialog-desc">确认兑现「{{ realizeTarget.name }}」？将扣除 {{ realizeTarget.star_coin_cost }} ⭐ 并创建资产。</p>
+        <h3>{{ t('wishReview.dialog.realizeTitle') }}</h3>
+        <p class="dialog-desc">{{ t('wishReview.dialog.realizeDesc', { name: realizeTarget.name, cost: realizeTarget.star_coin_cost }) }}</p>
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="realizeTarget = null">取消</button>
-          <button class="btn-realize-confirm" :disabled="actioning" @click="realize">确认兑现</button>
+          <button class="btn-cancel" @click="realizeTarget = null">{{ t('wishReview.btn.cancel') }}</button>
+          <button class="btn-realize-confirm" :disabled="actioning" @click="realize">{{ t('wishReview.btn.confirmRealize') }}</button>
         </div>
       </div>
     </div>
@@ -104,11 +104,14 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   listParentChildWishes, approveChildWish, rejectChildWish, realizeChildWish, deferChildWish,
   type ParentWish
 } from '@/api/childWishes'
 import PageHeader from '@/components/common/PageHeader.vue'
+
+const { t } = useI18n()
 
 const wishes = ref<ParentWish[]>([])
 const loading = ref(true)
@@ -127,7 +130,7 @@ const pendingItems = computed(() => wishes.value.filter(w => w.status === 'pendi
 const redemptionItems = computed(() => wishes.value.filter(w => w.status === 'redemption_requested'))
 
 function priorityLabel(p: string) {
-  return p === 'high' ? '高优先级 🔥' : p === 'medium' ? '中优先级 ⭐' : '低优先级 💤'
+  return p === 'high' ? t('wishReview.priority.high') : p === 'medium' ? t('wishReview.priority.medium') : t('wishReview.priority.low')
 }
 
 async function load() {
@@ -136,7 +139,7 @@ async function load() {
   try {
     wishes.value = await listParentChildWishes()
   } catch {
-    error.value = '加载失败，请刷新重试'
+    error.value = t('wishReview.loadingFailed')
   } finally {
     loading.value = false
   }
@@ -168,7 +171,7 @@ async function approve() {
     approveTarget.value = null
     await load()
   } catch {
-    dialogError.value = '操作失败，请重试'
+    dialogError.value = t('wishReview.error.operationFailed')
   } finally {
     actioning.value = false
   }
@@ -183,7 +186,7 @@ async function reject() {
     rejectTarget.value = null
     await load()
   } catch {
-    dialogError.value = '操作失败，请重试'
+    dialogError.value = t('wishReview.error.operationFailed')
   } finally {
     actioning.value = false
   }
@@ -198,7 +201,7 @@ async function realize() {
     realizeTarget.value = null
     await load()
   } catch {
-    dialogError.value = '积分不足或操作失败，请重试'
+    dialogError.value = t('wishReview.error.insufficientCoins')
   } finally {
     actioning.value = false
   }
@@ -210,7 +213,7 @@ async function defer(wishId: string) {
     await deferChildWish(wishId)
     await load()
   } catch {
-    error.value = '操作失败，请重试'
+    error.value = t('wishReview.error.operationFailed')
   } finally {
     actioningId.value = null
   }

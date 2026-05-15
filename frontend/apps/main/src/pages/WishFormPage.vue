@@ -1,9 +1,9 @@
 <template>
   <div class="wish-form-page">
     <van-nav-bar
-      :title="isEdit ? '编辑心愿' : '添加心愿'"
+      :title="isEdit ? t('wish.form.editTitle') : t('wish.form.addTitle')"
       left-arrow
-      :right-text="isEdit ? '删除' : ''"
+      :right-text="isEdit ? t('wish.form.deleteBtn') : ''"
       @click-left="$router.back()"
       @click-right="onDelete"
     />
@@ -13,44 +13,44 @@
         <van-field
           v-model="form.name"
           name="name"
-          label="名称"
-          placeholder="请输入心愿名称"
-          :rules="[{ required: true, message: '请填写名称' }]"
+          :label="t('wish.form.nameLabel')"
+          :placeholder="t('wish.form.namePlaceholder')"
+          :rules="[{ required: true, message: t('wish.form.nameRequired') }]"
         />
         <van-field
           v-model="form.description"
           name="description"
-          label="描述"
+          :label="t('wish.form.descriptionLabel')"
           type="textarea"
-          placeholder="可选，详细描述心愿内容"
+          :placeholder="t('wish.form.descriptionPlaceholder')"
           rows="2"
           autosize
         />
         <van-field
           v-model="priceStr"
           name="expected_price"
-          label="预期价格"
+          :label="t('wish.form.priceLabel')"
           type="number"
           inputmode="decimal"
-          placeholder="可选，单位：元"
+          :placeholder="t('wish.form.pricePlaceholder')"
         >
           <template #left-icon>
             <CurrencyButton v-model="form.currency" />
           </template>
         </van-field>
-        <van-field label="优先级" name="priority">
+        <van-field :label="t('wish.form.priorityLabel')" name="priority">
           <template #input>
             <van-radio-group v-model="form.priority" direction="horizontal">
-              <van-radio name="low">低</van-radio>
-              <van-radio name="medium">中</van-radio>
-              <van-radio name="high">高</van-radio>
+              <van-radio name="low">{{ t('wish.priorityLow') }}</van-radio>
+              <van-radio name="medium">{{ t('wish.priorityMedium') }}</van-radio>
+              <van-radio name="high">{{ t('wish.priorityHigh') }}</van-radio>
             </van-radio-group>
           </template>
         </van-field>
         <van-field
           name="category"
-          label="分类"
-          placeholder="可选，点击选择"
+          :label="t('wish.form.categoryLabel')"
+          :placeholder="t('wish.form.categoryPlaceholder')"
           readonly
           @click="showCategoryPicker = true"
         >
@@ -61,7 +61,7 @@
               </svg>
               <span>{{ selectedCategory.name }}</span>
             </div>
-            <span v-else class="category-placeholder">可选，点击选择</span>
+            <span v-else class="category-placeholder">{{ t('wish.form.categoryPlaceholder') }}</span>
           </template>
         </van-field>
         <van-field name="converts_to_asset" class="converts-field">
@@ -79,7 +79,7 @@
 
       <div style="margin: 16px">
         <van-button round block type="primary" native-type="submit" :loading="submitting">
-          {{ isEdit ? '保存' : '添加' }}
+          {{ isEdit ? t('wish.form.saveBtn') : t('wish.form.addBtn') }}
         </van-button>
       </div>
     </van-form>

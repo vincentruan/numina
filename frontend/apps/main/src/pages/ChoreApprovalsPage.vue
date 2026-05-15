@@ -1,16 +1,16 @@
 <template>
   <div class="approvals-page">
-    <PageHeader title="家务审批" />
+    <PageHeader :title="t('chore.approvalTitle')" />
 
     <div v-if="toastMsg" class="bonus-toast">{{ toastMsg }}</div>
 
-    <div v-if="loading" class="loading">加载中...</div>
+    <div v-if="loading" class="loading">{{ t('chore.loading') }}</div>
 
     <template v-else>
       <div v-if="error" class="error-msg">{{ error }}</div>
 
       <div v-else-if="pending.length === 0" class="empty">
-        <p>暂无待审批家务 ✅</p>
+        <p>{{ t('chore.emptyState') }}</p>
       </div>
 
       <div v-else class="approval-list">
@@ -23,9 +23,9 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn-approve" :disabled="actioningId === item.id" @click="approve(item.id)">批准</button>
-            <button class="btn-redo" :disabled="actioningId === item.id" @click="reject(item.id, true)">退回重做</button>
-            <button class="btn-reject" :disabled="actioningId === item.id" @click="reject(item.id, false)">拒绝</button>
+            <button class="btn-approve" :disabled="actioningId === item.id" @click="approve(item.id)">{{ t('chore.btn.approve') }}</button>
+            <button class="btn-redo" :disabled="actioningId === item.id" @click="reject(item.id, true)">{{ t('chore.btn.redo') }}</button>
+            <button class="btn-reject" :disabled="actioningId === item.id" @click="reject(item.id, false)">{{ t('chore.btn.reject') }}</button>
           </div>
         </div>
       </div>
@@ -59,7 +59,7 @@ async function load() {
   try {
     pending.value = await getPendingApprovals()
   } catch {
-    error.value = '加载失败，请刷新重试'
+    error.value = t('chore.error.loadingFailed')
   } finally {
     loading.value = false
   }
