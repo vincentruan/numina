@@ -77,6 +77,50 @@ def delete_template(
 
 
 # ---------------------------------------------------------------------------
+# Parent: view children's chores
+# ---------------------------------------------------------------------------
+
+@router.get("/family/children/chores", response_model=list[ChoreInstanceResponse])
+def list_children_chores(
+    date: str = Query(..., description="Local date YYYY-MM-DD"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Return all chore instances for all children in the family on a given date."""
+    from datetime import datetime as dt
+
+    try:
+        d = dt.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        from apps.backend.app.errors import AppError, ErrorCode
+        raise AppError(ErrorCode.CALENDAR_DATE_INVALID) from None
+
+    daily_bucket = date
+    iso = d.isocalendar()
+    weekly_bucket = f"{iso[0]}-W{iso[1]:02d}"
+
+    children = db.query(User.id).filter(
+        User.family_id == user.family_id,
+        User.role == "child",
+        User.is_active.is_(True),
+    ).all()
+    child_ids = [c.id for c in children]
+    if not child_ids:
+        return []
+
+    instances = (
+        db.query(ChoreInstance)
+        .filter(
+            ChoreInstance.family_id == user.family_id,
+            ChoreInstance.child_user_id.in_(child_ids),
+            ChoreInstance.date_bucket.in_([daily_bucket, weekly_bucket]),
+        )
+        .all()
+    )
+    return [ChoreInstanceResponse.model_validate(i) for i in instances]
+
+
+# ---------------------------------------------------------------------------
 # Parent: approval queue
 # ---------------------------------------------------------------------------
 

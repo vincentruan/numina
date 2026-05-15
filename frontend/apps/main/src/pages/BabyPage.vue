@@ -105,12 +105,12 @@
               <van-cell
                 v-for="chore in filteredChores"
                 :key="chore.id"
-                :title="chore.name"
+                :title="chore.chore_name"
                 :label="t('baby.choreReward', { reward: chore.coin_reward })"
               >
                 <template #right-icon>
-                  <van-tag :type="chore.status === 'completed' ? 'success' : 'default'">
-                    {{ chore.status === 'completed' ? t('baby.choreCompleted') : t('baby.chorePending') }}
+                  <van-tag :type="chore.status === 'approved' ? 'success' : 'default'">
+                    {{ chore.status === 'approved' ? t('baby.choreCompleted') : t('baby.chorePending') }}
                   </van-tag>
                 </template>
               </van-cell>
@@ -182,6 +182,7 @@ import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/a
 import { listParentChildWishes, type ParentWish } from '@/api/childWishes'
 import { getFamilyChildCalendar } from '@/api/calendar'
 import { grantCoins } from '@/api/coins'
+import { getChildrenChores, type ChoreInstance } from '@/api/chores'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -209,14 +210,7 @@ const childBalances = ref<Record<string, number>>({})
 const childChoreStats = ref<Record<string, ChoreStats>>({})
 const allWishes = ref<ParentWish[]>([])
 
-interface ChildChore {
-  id: string
-  child_user_id: string
-  name: string
-  coin_reward: number
-  status: 'pending' | 'completed'
-}
-const allChores = ref<ChildChore[]>([])
+const allChores = ref<ChoreInstance[]>([])
 
 const childMembers = computed(() => familyStore.members.filter(m => m.role === 'child'))
 
@@ -258,7 +252,7 @@ const filteredWishes = computed(() => {
 
 const filteredChores = computed(() => {
   if (!selectedChildId.value) return allChores.value
-  return allChores.value.filter(c => c.child_user_id === selectedChildId.value)
+  return allChores.value.filter(c => c.child_user_id === String(selectedChildId.value))
 })
 
 const weeklyCompletionRate = computed(() => {
@@ -344,15 +338,19 @@ async function doGrant() {
 }
 
 async function loadData() {
+  const now = new Date()
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   try {
-    const [balances, stats, wishes] = await Promise.all([
+    const [balances, stats, wishes, chores] = await Promise.all([
       getAllChildBalances(),
       getChildrenChoreStats(),
       listParentChildWishes(),
+      getChildrenChores(today),
     ])
     childBalances.value = balances.data
     childChoreStats.value = stats.data
     allWishes.value = wishes
+    allChores.value = chores
   } catch {
     // non-critical
   }
