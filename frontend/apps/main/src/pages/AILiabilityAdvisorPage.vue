@@ -143,14 +143,14 @@
             <span class="value">{{ formatMoney(data.total_monthly_payment) }}</span>
           </div>
           <div class="summary-row">
-            <span class="label">负债笔数</span>
+            <span class="label">{{ t('aiLiability.liabilityCountLabel') }}</span>
             <span class="value">{{ t('aiLiability.liabilityCount', { count: data.liability_count }) }}</span>
           </div>
         </div>
 
         <!-- AI Narrative -->
         <div v-if="data.narrative" class="narrative-card">
-          <div class="narrative-label">AI 建议</div>
+          <div class="narrative-label">{{ t('aiLiability.aiNarrative') }}</div>
           <p class="narrative-text">{{ data.narrative }}</p>
         </div>
 

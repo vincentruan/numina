@@ -1338,6 +1338,8 @@ export default {
     priorityHint: '优先还款：{debt}',
     savingsHint: '预计节省利息：¥{amount}',
     strategyTabsAria: '还款策略',
+    liabilityCountLabel: '负债笔数',
+    aiNarrative: 'AI 建议',
   },
   spendingLeaks: {
     title: '资金泄漏检测',

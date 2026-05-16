@@ -1063,6 +1063,8 @@ export default {
     priorityHint: 'Priority: {debt}',
     savingsHint: 'Est. Interest Savings: ¥{amount}',
     strategyTabsAria: 'Repayment Strategy',
+    liabilityCountLabel: 'Liabilities',
+    aiNarrative: 'AI Advice',
   },
   spendingLeaks: {
     title: 'Spending Leak Detection',
