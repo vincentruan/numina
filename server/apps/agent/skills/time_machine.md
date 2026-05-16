@@ -14,5 +14,7 @@ examples:
 allowed_roles: [member, admin]
 thinking: true
 mcp_tools: []
+subagent_enabled: true
+plan_mode: true
 max_tokens: 2000
 ---

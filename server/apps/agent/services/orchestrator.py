@@ -26,6 +26,7 @@ from apps.agent.schemas.response import AgentResponse
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import (
     DeerFlowTimeoutError,
+    StreamChunk,
 )
 from apps.agent.services.deerflow_adapter.adapter import (
     create_family_adapter as _create_family_adapter,
@@ -356,17 +357,17 @@ class Orchestrator:
 
         # ── 7. DeerFlow stream dispatch ────────────────────────────────
         try:
-            adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60))
+            adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
             async for chunk in adapter.stream_dispatch(
                 capability,
                 redacted_context,
                 effective_thread_id,
                 enable_thinking=enable_thinking,
             ):
-                text = chunk[6:] if chunk.startswith("[TEXT]") else (None if chunk.startswith("[THINK]") else chunk)
+                text = chunk.content if chunk.type == "text" else None
                 if text:
                     answer_parts.append(text)
-                yield chunk
+                    yield text
             # Success: reset circuit failure count
             if config_id:
                 _fire_and_forget(client.reset_circuit_success(config_id))
@@ -610,7 +611,7 @@ class Orchestrator:
 
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
-                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60))
+                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
                 async for chunk in adapter.stream_dispatch(
                     capability,
                     redacted_context,
@@ -707,20 +708,19 @@ class Orchestrator:
     async def _chunk_to_event_lines(
         self,
         builder: EventStreamBuilder,
-        chunk: str,
+        chunk: StreamChunk,
         answer_parts: list[str],
         family_id: str = "",
         session_id: str = "",
     ) -> AsyncGenerator[str, None]:
-        if chunk.startswith("[THINK]"):
+        if chunk.type == "thinking":
             yield builder.phase("thinking").to_ndjson()
-            yield builder.token(chunk[7:], is_thinking=True).to_ndjson()
+            yield builder.token(chunk.content, is_thinking=True).to_ndjson()
             return
-        text = chunk[6:] if chunk.startswith("[TEXT]") else chunk
-        if text:
-            answer_parts.append(text)
+        if chunk.content:
+            answer_parts.append(chunk.content)
             yield builder.phase("answering").to_ndjson()
-            yield builder.token(text, is_thinking=False).to_ndjson()
+            yield builder.token(chunk.content, is_thinking=False).to_ndjson()
 
     async def _upsert_session(
         self,

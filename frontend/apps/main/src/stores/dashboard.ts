@@ -45,7 +45,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   // Current active category filter (null = all categories)
   const activeAssetCategoryId = ref<string | null>(null)
   // Category counts for nav (full counts from backend, not page-limited)
-  const categoryCounts = ref<Array<{ id: string; name: string; icon: string; count: number }>>([])
+  const categoryCounts = ref<Array<{ id: string; name: string; icon: string; color: string; count: number }>>([])
 
   async function fetchCategoryCounts(status: string) {
     try {

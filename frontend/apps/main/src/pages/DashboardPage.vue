@@ -89,8 +89,18 @@
                 <van-tab
                   v-for="cat in categoriesWithAssetCount"
                   :key="cat.id"
-                  :title="`${cat.name} (${cat.count})`"
-                />
+                >
+                  <template #title>
+                    <span class="cat-tab-title">
+                      <span class="cat-tab-icon" :style="{ background: cat.color || 'var(--color-primary)' }">
+                        <svg class="cat-tab-svg" aria-hidden="true">
+                          <use :href="`#${getIconId(cat.icon)}`" />
+                        </svg>
+                      </span>
+                      {{ cat.name }} ({{ cat.count }})
+                    </span>
+                  </template>
+                </van-tab>
               </van-tabs>
             </div>
           </div>
@@ -289,6 +299,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
 
+import { getIconId } from '@/utils/icon'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
 import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
@@ -372,7 +383,7 @@ const overview = computed(() => dashboardStore.overview)
 // Category counts from backend (full counts, not page-limited)
 const categoriesWithAssetCount = computed(() => {
   return dashboardStore.categoryCounts
-    .map((c) => ({ id: c.id, name: c.name, icon: c.icon, count: c.count }))
+    .map((c) => ({ id: c.id, name: c.name, icon: c.icon, color: c.color, count: c.count }))
     .sort((a, b) => b.count - a.count)
 })
 
@@ -687,6 +698,28 @@ onUnmounted(() => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
+/* Category tab with icon */
+.cat-tab-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.cat-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.cat-tab-svg {
+  width: 10px;
+  height: 10px;
+  fill: white;
+  color: white;
+}
+
 /* Category Navigation Container */
 .category-nav-container {
   background: var(--card-bg);
@@ -744,7 +777,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  padding: 6px 12px;
   background: var(--card-bg);
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -774,7 +807,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 8px 12px;
+  padding: 5px 12px;
   background: var(--card-bg);
   border-radius: 0 0 8px 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -790,7 +823,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 3px;
+  gap: 2px;
   background: none;
   border: none;
   cursor: pointer;

@@ -10,9 +10,11 @@ import contextlib
 import json
 import logging
 import os
+import threading
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from apps.agent.schemas.context import RedactedContext
 from apps.agent.services.deerflow_adapter.exceptions import (
@@ -27,16 +29,47 @@ from apps.agent.services.deerflow_adapter.family_adapter_cache import (
 
 logger = logging.getLogger(__name__)
 
-# Bounded thread pool — each stream() call holds a thread for its full duration
-_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="deerflow")
-# Semaphore bounds concurrent DeerFlow calls to match the executor pool size.
-# NOTE: Semaphore(4) does NOT serialize SQLite writes — it allows up to 4 concurrent
-# holders. The separate _CHECKPOINTER_LOCK (limit-1) serializes checkpointer writes.
-_SEMAPHORE = asyncio.Semaphore(4)
+
+@dataclass
+class StreamChunk:
+    """Structured event from DeerFlow stream — replaces [THINK]/[TEXT] string prefixes."""
+    type: Literal["thinking", "text"]
+    content: str
+
+
+# Lazy-initialized executor and semaphore — read concurrency from settings at first use,
+# not at import time, to avoid circular imports and allow test overrides.
+_executor: ThreadPoolExecutor | None = None
+_semaphore: asyncio.Semaphore | None = None
+_init_lock = threading.Lock()
+
 # Separate lock for SQLite checkpointer writes — prevents SQLITE_BUSY under concurrency.
 # The harness uses SqliteSaver (langgraph-checkpoint-sqlite) which does not handle
 # concurrent writes internally; we serialize at the adapter layer instead.
 _CHECKPOINTER_LOCK = asyncio.Lock()
+
+
+def _get_executor() -> ThreadPoolExecutor:
+    global _executor
+    if _executor is None:
+        with _init_lock:
+            if _executor is None:
+                from apps.agent.app.config import settings
+                _executor = ThreadPoolExecutor(
+                    max_workers=settings.DEERFLOW_CONCURRENCY,
+                    thread_name_prefix="deerflow",
+                )
+    return _executor
+
+
+def _get_semaphore() -> asyncio.Semaphore:
+    global _semaphore
+    if _semaphore is None:
+        with _init_lock:
+            if _semaphore is None:
+                from apps.agent.app.config import settings
+                _semaphore = asyncio.Semaphore(settings.DEERFLOW_CONCURRENCY)
+    return _semaphore
 
 
 class DeerFlowAdapter:
@@ -53,6 +86,8 @@ class DeerFlowAdapter:
         timeout_seconds: int = 120,
         family_id: str | None = None,
         ai_config: dict[str, Any] | None = None,
+        subagent_enabled: bool = False,
+        plan_mode: bool = False,
     ) -> None:
         """Initialize adapter.
 
@@ -68,7 +103,11 @@ class DeerFlowAdapter:
 
         if family_id and ai_config:
             # 家庭级配置模式：从缓存获取 DeerFlowClient
-            self._client = get_family_adapter(family_id, ai_config)
+            self._client = get_family_adapter(
+                family_id, ai_config,
+                subagent_enabled=subagent_enabled,
+                plan_mode=plan_mode,
+            )
             self._is_family_mode = True
         elif config_path:
             # 全局配置模式：直接初始化（向后兼容）
@@ -87,12 +126,12 @@ class DeerFlowAdapter:
         preventing SQLITE_BUSY. The lock is held on the async side (before the
         executor call) so it works correctly across threads.
         """
-        async with _SEMAPHORE, _CHECKPOINTER_LOCK:
+        async with _get_semaphore(), _CHECKPOINTER_LOCK:
             try:
                 loop = asyncio.get_running_loop()
                 result = await asyncio.wait_for(
                     loop.run_in_executor(
-                        _EXECUTOR,
+                        _get_executor(),
                         self._sync_dispatch,
                         skill_name,
                         context,
@@ -118,7 +157,7 @@ class DeerFlowAdapter:
         context: RedactedContext,
         thread_id: str,
         enable_thinking: bool = False,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[StreamChunk, None]:
         """Dispatch a skill call and yield text chunks as they arrive.
 
         enable_thinking: if True and the model supports it, extended thinking is enabled.
@@ -128,7 +167,7 @@ class DeerFlowAdapter:
         for synchronous SQLite checkpoint writes. Streaming reads do not write to the
         checkpointer, so holding the lock here would serialize all concurrent streams.
         """
-        async with _SEMAPHORE:
+        async with _get_semaphore():
             async for chunk in self._async_stream_chunks(
                 skill_name, context, thread_id, enable_thinking
             ):
@@ -140,14 +179,14 @@ class DeerFlowAdapter:
         context: RedactedContext,
         thread_id: str,
         enable_thinking: bool,
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[StreamChunk, None]:
         """Wrap synchronous DeerFlowClient.stream() to yield chunks asynchronously."""
         loop = asyncio.get_running_loop()
-        # Queue carries str chunks, None for clean end, or BaseException for errors.
-        queue: asyncio.Queue[str | BaseException | None] = asyncio.Queue()
+        # Queue carries StreamChunk chunks, None for clean end, or BaseException for errors.
+        queue: asyncio.Queue[StreamChunk | BaseException | None] = asyncio.Queue()
 
         def _produce() -> None:
-            """Run in thread pool — puts chunks into queue, None signals end."""
+            """Run in thread pool — puts StreamChunk objects into queue, None signals end."""
             try:
                 message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
                 for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
@@ -158,34 +197,30 @@ class DeerFlowAdapter:
                         and event.data.get("type") == "ai"
                     ):
                         continue
-                    # Emit reasoning/thinking content before the answer text
                     additional_kwargs = event.data.get("additional_kwargs") or {}
                     content = event.data.get("content")
                     reasoning = additional_kwargs.get("reasoning_content")
                     if isinstance(reasoning, str) and reasoning:
-                        loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{reasoning}")
-                    # Also handle Anthropic-style thinking content blocks
+                        loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", reasoning))
                     if isinstance(content, list):
                         text_parts: list[str] = []
                         for block in content:
                             if isinstance(block, dict):
                                 if block.get("type") == "thinking" and block.get("thinking"):
-                                    loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{block['thinking']}")
+                                    loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", block["thinking"]))
                                 elif block.get("type") == "text" and block.get("text"):
                                     text_parts.append(block["text"])
                         if text_parts:
-                            loop.call_soon_threadsafe(queue.put_nowait, "".join(text_parts))
+                            loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", "".join(text_parts)))
                     elif isinstance(content, str) and content:
-                        loop.call_soon_threadsafe(queue.put_nowait, content)
+                        loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", content))
             except Exception as e:
                 logger.error("[deerflow] stream_chunks failed: %s", e)
-                # Send the exception to the consumer so it can re-raise rather than
-                # silently treating the error as a clean end-of-stream.
                 loop.call_soon_threadsafe(queue.put_nowait, e)
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
-        future = loop.run_in_executor(_EXECUTOR, _produce)
+        future = loop.run_in_executor(_get_executor(), _produce)
         try:
             while True:
                 item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
@@ -300,18 +335,32 @@ def __getattr__(name: str) -> Any:
 
 # ── 家庭级配置模式的 API ──────────────────────────────────────────────────
 
-def create_family_adapter(family_id: str, ai_config: dict[str, Any], timeout_seconds: int = 120) -> DeerFlowAdapter:
+def create_family_adapter(
+    family_id: str,
+    ai_config: dict[str, Any],
+    timeout_seconds: int = 120,
+    subagent_enabled: bool = False,
+    plan_mode: bool = False,
+) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
     Args:
         family_id: 家庭 ID
         ai_config: 家庭的 AI 配置（从 backend 获取）
         timeout_seconds: DeerFlow 调用超时时间
+        subagent_enabled: 是否启用子 agent 委托（init-time 参数）
+        plan_mode: 是否启用 TodoList 规划中间件（init-time 参数）
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
     """
-    return DeerFlowAdapter(family_id=family_id, ai_config=ai_config, timeout_seconds=timeout_seconds)
+    return DeerFlowAdapter(
+        family_id=family_id,
+        ai_config=ai_config,
+        timeout_seconds=timeout_seconds,
+        subagent_enabled=subagent_enabled,
+        plan_mode=plan_mode,
+    )
 
 
 def invalidate_family_adapter_cache(family_id: str) -> None:

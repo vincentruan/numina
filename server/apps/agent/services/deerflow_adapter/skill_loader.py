@@ -29,6 +29,8 @@ class SkillConfig:
     thinking: bool = True
     mcp_tools: list[str] = field(default_factory=list)
     is_enabled: bool = True
+    subagent_enabled: bool = False
+    plan_mode: bool = False
 
 
 @dataclass
@@ -73,6 +75,8 @@ class SkillLoader:
             prompt="",  # prompts live in skills/custom/*/SKILL.md, loaded by DeerFlow harness
             thinking=bool(meta.get("thinking", True)),
             mcp_tools=list(meta.get("mcp_tools", [])),
+            subagent_enabled=bool(meta.get("subagent_enabled", False)),
+            plan_mode=bool(meta.get("plan_mode", False)),
         )
         self._cache[capability] = config
         return config
@@ -116,6 +120,8 @@ class SkillLoader:
                 thinking=base.thinking,
                 mcp_tools=base.mcp_tools,
                 is_enabled=False,
+                subagent_enabled=base.subagent_enabled,
+                plan_mode=base.plan_mode,
             )
 
         effective_prompt = entry.prompt if entry.prompt else base.prompt
@@ -125,6 +131,8 @@ class SkillLoader:
             thinking=base.thinking,
             mcp_tools=base.mcp_tools,
             is_enabled=True,
+            subagent_enabled=base.subagent_enabled,
+            plan_mode=base.plan_mode,
         )
 
     async def _fetch_family_entry(
