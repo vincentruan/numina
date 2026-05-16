@@ -30,7 +30,7 @@
 
     <!-- Plus panel overlay -->
     <transition name="panel">
-      <div v-if="panelOpen" class="plus-panel" role="menu" aria-label="更多功能">
+      <div v-if="panelOpen" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')">
         <button
           v-for="item in panelItems"
           :key="item.action"
@@ -56,23 +56,23 @@
           class="toggle-btn"
           :class="{ 'toggle-btn--active': deepThinkInternal }"
           :aria-pressed="deepThinkInternal"
-          aria-label="深度思考"
-          title="深度思考"
+          :aria-label="t('aiChat.deepThink')"
+          :title="t('aiChat.deepThink')"
           @click="deepThinkInternal = !deepThinkInternal"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
             <path d="M9 21h6"/>
           </svg>
-          <span>深度思考</span>
+          <span>{{ t('aiChat.deepThink') }}</span>
         </button>
         <!-- Web search toggle -->
         <button
           class="toggle-btn"
           :class="{ 'toggle-btn--active': webSearch }"
           :aria-pressed="webSearch"
-          aria-label="联网搜索"
-          title="联网搜索"
+          :aria-label="t('aiChat.webSearch')"
+          :title="t('aiChat.webSearch')"
           @click="webSearch = !webSearch"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -80,7 +80,7 @@
             <line x1="2" y1="12" x2="22" y2="12"/>
             <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
-          <span>联网搜索</span>
+          <span>{{ t('aiChat.webSearch') }}</span>
         </button>
       </div>
       <div class="toolbar-right">
@@ -88,7 +88,7 @@
         <button
           class="plus-btn"
           :class="{ 'plus-btn--open': panelOpen }"
-          aria-label="更多功能"
+          :aria-label="t('aiChat.moreFeatures')"
           :aria-expanded="panelOpen"
           @click.stop="panelOpen = !panelOpen"
         >
@@ -113,8 +113,8 @@
         ref="inputRef"
         v-model="internalValue"
         class="chat-textarea"
-        :placeholder="placeholder || '请输入您的问题…'"
-        aria-label="向 AI 提问"
+        :placeholder="placeholder || t('aiChat.inputPlaceholder')"
+        :aria-label="t('aiChat.inputAriaLabel')"
         aria-haspopup="menu"
         :aria-expanded="slashPaletteOpen"
         aria-controls="slash-palette-list"
@@ -128,7 +128,7 @@
       <button
         v-if="internalValue.length > 60"
         class="expand-btn"
-        :aria-label="expanded ? '收起' : '展开'"
+        :aria-label="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
         @click="toggleExpand"
       >
         <svg v-if="!expanded" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -144,7 +144,7 @@
       <button
         v-if="loading"
         class="send-btn send-btn--abort"
-        aria-label="中止生成"
+        :aria-label="t('aiChat.stopGeneration')"
         @click="emit('abort')"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -157,7 +157,7 @@
         class="send-btn"
         :class="{ 'send-btn--active': internalValue.trim() }"
         :disabled="disabled || !internalValue.trim()"
-        aria-label="发送"
+        :aria-label="t('common.send')"
         @click="onSubmit"
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -170,7 +170,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useCapabilityStore } from '@/stores/capability'
@@ -209,23 +209,23 @@ const capabilityStore = useCapabilityStore()
 const slashPaletteOpen = ref(false)
 const selectedIndex = ref(0)
 
-const panelItems = [
+const panelItems = computed(() => [
   {
     action: 'camera' as const,
-    label: '拍照',
+    label: t('aiChat.panelCamera'),
     icon: { viewBox: '0 0 24 24', paths: ['M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'] },
   },
   {
     action: 'file' as const,
-    label: '上传文件',
+    label: t('aiChat.panelFile'),
     icon: { viewBox: '0 0 24 24', paths: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M12 18v-6', 'M9 15h6'] },
   },
   {
     action: 'image' as const,
-    label: '上传图片',
+    label: t('aiChat.panelImage'),
     icon: { viewBox: '0 0 24 24', paths: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12'] },
   },
-]
+])
 
 watch(
   () => props.modelValue,
