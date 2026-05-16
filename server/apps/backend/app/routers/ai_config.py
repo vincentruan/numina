@@ -1,10 +1,12 @@
 """AI 配置管理路由。"""
 
+import json
 import logging
 from datetime import UTC, datetime
 
 import httpx
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_owner
@@ -12,9 +14,13 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
+from apps.backend.app.models.ai_provider_config import (
+    AIProviderConfig,
+    AIProviderTestResult,
+)
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_config import (
+    AICircuitResetResponse,
     AIConfigCreate,
     AIConfigListResponse,
     AIConfigResponse,
@@ -22,12 +28,33 @@ from apps.backend.app.schemas.ai_config import (
     AIConfigUpdate,
     AIProviderTestResultResponse,
 )
-from apps.backend.app.services.ai_crypto import decrypt_api_key, encrypt_api_key, mask_api_key
+from apps.backend.app.services.ai_crypto import (
+    decrypt_api_key,
+    encrypt_api_key,
+    mask_api_key,
+)
 from apps.backend.app.services.security_log import _log_security_event
 
 router = APIRouter(prefix="/ai", tags=["ai-config"])
 
 logger = logging.getLogger(__name__)
+
+
+def _deserialize_capabilities(cap_str: str | None) -> list[str]:
+    """Deserialize JSON capability string to list."""
+    if not cap_str:
+        return []
+    try:
+        return json.loads(cap_str)
+    except json.JSONDecodeError:
+        return []
+
+
+def _serialize_capabilities(cap_list: list[str] | None) -> str | None:
+    """Serialize capability list to JSON string."""
+    if not cap_list:
+        return None
+    return json.dumps(cap_list)
 
 
 def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: str | None) -> AIConfigResponse:
@@ -41,6 +68,16 @@ def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: 
         vision_model_id=cfg.vision_model_id,
         timeout_seconds=cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
         is_active=cfg.is_active,
+        provider_name=cfg.provider_name or "",
+        display_order=cfg.display_order or 0,
+        model_2_id=cfg.model_2_id,
+        model_3_id=cfg.model_3_id,
+        model_1_capabilities=_deserialize_capabilities(cfg.model_1_capabilities),
+        model_2_capabilities=_deserialize_capabilities(cfg.model_2_capabilities),
+        model_3_capabilities=_deserialize_capabilities(cfg.model_3_capabilities),
+        circuit_open=cfg.circuit_open,
+        circuit_open_until=cfg.circuit_open_until,
+        failure_count=cfg.failure_count,
         test_results=[AIProviderTestResultResponse.model_validate(r) for r in test_results],
     )
 
@@ -91,6 +128,16 @@ def create_ai_config(
         if encrypted is None:
             raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE)
 
+    # Auto-assign display_order if not provided
+    if payload.display_order is None:
+        max_order = (
+            db.query(AIProviderConfig)
+            .filter(AIProviderConfig.family_id == current_user.family_id)
+            .count()
+        )
+    else:
+        max_order = payload.display_order
+
     cfg = AIProviderConfig(
         family_id=current_user.family_id,
         name=payload.name,
@@ -101,6 +148,13 @@ def create_ai_config(
         vision_model_id=payload.vision_model_id,
         timeout_seconds=payload.timeout_seconds if payload.timeout_seconds is not None else 60,
         is_active=payload.is_active,
+        provider_name=payload.provider_name or payload.provider.capitalize(),
+        display_order=max_order,
+        model_2_id=payload.model_2_id,
+        model_3_id=payload.model_3_id,
+        model_1_capabilities=_serialize_capabilities(payload.model_1_capabilities),
+        model_2_capabilities=_serialize_capabilities(payload.model_2_capabilities),
+        model_3_capabilities=_serialize_capabilities(payload.model_3_capabilities),
     )
     db.add(cfg)
     db.commit()
@@ -165,6 +219,20 @@ def update_ai_config(
             cfg.api_key_encrypted = encrypted
         # 清空测试结果（API Key 变更后需重新测试）
         db.query(AIProviderTestResult).filter_by(config_id=cfg.id).delete()
+    if payload.provider_name is not None:
+        cfg.provider_name = payload.provider_name
+    if payload.display_order is not None:
+        cfg.display_order = payload.display_order
+    if payload.model_2_id is not None:
+        cfg.model_2_id = payload.model_2_id
+    if payload.model_3_id is not None:
+        cfg.model_3_id = payload.model_3_id
+    if payload.model_1_capabilities is not None:
+        cfg.model_1_capabilities = _serialize_capabilities(payload.model_1_capabilities)
+    if payload.model_2_capabilities is not None:
+        cfg.model_2_capabilities = _serialize_capabilities(payload.model_2_capabilities)
+    if payload.model_3_capabilities is not None:
+        cfg.model_3_capabilities = _serialize_capabilities(payload.model_3_capabilities)
 
     db.commit()
     db.refresh(cfg)
@@ -240,6 +308,51 @@ def delete_ai_config(
     db.query(AIProviderTestResult).filter_by(config_id=cfg.id).delete()
     db.delete(cfg)
     db.commit()
+
+
+@router.post("/config/{config_id}/reset-circuit", response_model=AICircuitResetResponse)
+def reset_circuit_breaker(
+    config_id: int,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> AICircuitResetResponse:
+    """手动重置供应商熔断状态（仅 owner）。"""
+    cfg = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == current_user.family_id,
+        )
+        .first()
+    )
+    if not cfg:
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
+
+    cfg.circuit_open = False
+    cfg.failure_count = 0
+    cfg.circuit_open_until = None
+    db.commit()
+    return AICircuitResetResponse(ok=True)
+
+
+class _ReorderPayload(BaseModel):
+    order: list[int]
+
+
+@router.put("/config/reorder", response_model=dict)
+def reorder_ai_configs(
+    payload: _ReorderPayload,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> dict:
+    """按给定顺序更新供应商 display_order（仅 owner）。"""
+    for idx, config_id in enumerate(payload.order):
+        db.query(AIProviderConfig).filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == current_user.family_id,
+        ).update({"display_order": idx})
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/config/{config_id}/test", response_model=AIConfigTestResult)
