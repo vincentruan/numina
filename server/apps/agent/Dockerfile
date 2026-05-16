@@ -1,6 +1,6 @@
 FROM python:3.13-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends tzdata git && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Shanghai
 ENV DEER_FLOW_CONFIG_PATH=/app/apps/agent/deerflow_config/base/config.yaml
 RUN pip install uv --no-cache-dir
