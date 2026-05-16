@@ -39,6 +39,7 @@
     <!-- Drift check -->
     <div v-if="hasTarget" class="check-section">
       <TaskConsole
+        v-model="isConsoleOpen"
         :status="taskStatus"
         :phase="taskPhase"
         :think-content="taskThinkContent"
@@ -47,7 +48,6 @@
         :answer-content="taskAnswerContent"
         :elapsed-seconds="taskElapsed"
         :queue-position="taskQueuePosition"
-        v-model="isConsoleOpen"
       />
       <van-button
         v-if="taskStatus !== 'running' && taskStatus !== 'queued'"

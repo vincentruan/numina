@@ -69,7 +69,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -93,20 +93,29 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const answerRef = ref<HTMLElement | null>(null)
-const isOpen = ref(props.status === 'running' || props.status === 'queued')
 const thinkOpen = ref(false)
+let scrollRAF: number | null = null
+
+// v-model contract: honor modelValue when provided, fall back to internal state
+const _internalOpen = ref(props.modelValue ?? (props.status === 'running' || props.status === 'queued'))
+const isOpen = computed({
+  get: () => (props.modelValue !== undefined ? props.modelValue : _internalOpen.value),
+  set: (val: boolean) => {
+    _internalOpen.value = val
+    emit('update:modelValue', val)
+  },
+})
 
 function toggleOpen() {
   isOpen.value = !isOpen.value
-  emit('update:modelValue', isOpen.value)
 }
 
-// Auto-open when task starts, auto-close when completed
+// Auto-open on running/queued edge, auto-close on completed
 watch(
   () => props.status,
-  (val) => {
-    if (val === 'completed') isOpen.value = false
-    if (val === 'running' || val === 'queued') isOpen.value = true
+  (val, prev) => {
+    if (val === 'completed' && prev !== 'completed') isOpen.value = false
+    if ((val === 'running' || val === 'queued') && (prev === 'idle' || prev === 'queued')) isOpen.value = true
   },
 )
 
@@ -119,19 +128,29 @@ watch(
   },
 )
 
-// Auto-scroll answer area when content streams in
+// Auto-scroll answer area when content streams in — coalesced via RAF to avoid
+// thrashing on every token
 watch(
   () => props.answerContent,
-  async () => {
-    if (props.status === 'running') {
-      await nextTick()
+  () => {
+    if (props.status !== 'running') return
+    if (scrollRAF) return
+    scrollRAF = requestAnimationFrame(() => {
+      scrollRAF = null
       answerRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
+    })
   },
 )
 
+onUnmounted(() => {
+  if (scrollRAF) {
+    cancelAnimationFrame(scrollRAF)
+    scrollRAF = null
+  }
+})
+
 const statusIcon = computed(() => {
-  const icons: Record<string, string> = {
+  const icons: Partial<Record<typeof props.status, string>> = {
     running: '⏳',
     queued: '🕐',
     completed: '✅',

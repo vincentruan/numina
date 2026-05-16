@@ -21,6 +21,7 @@
       </van-empty>
       <div class="actions">
         <TaskConsole
+          v-model="isConsoleOpen"
           :status="taskStatus"
           :phase="taskPhase"
           :think-content="taskThinkContent"
@@ -29,7 +30,6 @@
           :answer-content="taskAnswerContent"
           :queue-position="taskQueuePosition"
           :elapsed-seconds="taskElapsed"
-          v-model="isConsoleOpen"
         />
         <van-button
           v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
@@ -73,15 +73,15 @@
         <p class="empty-desc">{{ t('liability.noLiabilityDesc') }}</p>
         <div class="actions">
           <TaskConsole
+            v-model="isConsoleOpen"
             :status="taskStatus"
-            :phase="taskPhase"
+          :phase="taskPhase"
           :think-content="taskThinkContent"
           :think-done="taskThinkDone"
           :think-seconds="taskThinkSeconds"
           :answer-content="taskAnswerContent"
-          :queue-position="taskQueuePosition"
+            :queue-position="taskQueuePosition"
             :elapsed-seconds="taskElapsed"
-            v-model="isConsoleOpen"
           />
           <van-button
             v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
@@ -189,15 +189,15 @@
 
         <div class="reanalyze">
           <TaskConsole
+            v-model="isConsoleOpen"
             :status="taskStatus"
-            :phase="taskPhase"
+          :phase="taskPhase"
           :think-content="taskThinkContent"
           :think-done="taskThinkDone"
           :think-seconds="taskThinkSeconds"
           :answer-content="taskAnswerContent"
-          :queue-position="taskQueuePosition"
+            :queue-position="taskQueuePosition"
             :elapsed-seconds="taskElapsed"
-            v-model="isConsoleOpen"
           />
         </div>
       </template>

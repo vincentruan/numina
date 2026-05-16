@@ -764,10 +764,13 @@ async function loadSessions() {
 }
 
 async function loadMoreSessions() {
-  if (sessionsLoadingMore.value || sessionsAllLoaded.value) return
+  if (sessionsLoadingMore.value || sessionsAllLoaded.value || sessionsLoading.value) return
   sessionsLoadingMore.value = true
+  // Capture the capability at call time; discard results if it changed mid-flight
+  const capAtCall = selectedCapability.value
   try {
-    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, selectedCapability.value ?? undefined)
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, capAtCall ?? undefined)
+    if (selectedCapability.value !== capAtCall) return // stale response
     sessions.value = [...sessions.value, ...res.data.sessions]
     sessionsOffset.value += res.data.sessions.length
     if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
@@ -782,6 +785,9 @@ async function loadMoreSessions() {
 
 async function onSelectCapability(cap: string | null) {
   selectedCapability.value = cap
+  sessions.value = []
+  sessionsOffset.value = 0
+  sessionsAllLoaded.value = false
   sessionsLoaded.value = false
   await loadSessions()
 }
@@ -1192,6 +1198,13 @@ async function onRetryError(idx: number) {
   await onSend()
 }
 
+// Infinite scroll: watch sentinel at setup level so the watcher is properly tracked
+// and cleaned up by Vue's effect scope (not leaked inside onMounted)
+watch(paginationSentinelRef, (el) => {
+  paginationObserver?.disconnect()
+  if (el) paginationObserver?.observe(el)
+})
+
 onMounted(async () => {
   // Observe data-theme attribute changes on <html> to stay in sync with global theme
   themeObserver = new MutationObserver(() => {
@@ -1199,21 +1212,15 @@ onMounted(async () => {
   })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
 
-  // Infinite scroll for session history list
+  // Create IntersectionObserver for infinite scroll
   paginationObserver = new IntersectionObserver(
     (entries) => {
       if (entries[0]?.isIntersecting) loadMoreSessions()
     },
     { threshold: 0.1 },
   )
-  watch(
-    paginationSentinelRef,
-    (el) => {
-      paginationObserver?.disconnect()
-      if (el) paginationObserver?.observe(el)
-    },
-    { immediate: true },
-  )
+  // Observe sentinel if it's already in the DOM (e.g. history panel open on mount)
+  if (paginationSentinelRef.value) paginationObserver.observe(paginationSentinelRef.value)
 
   // Default deep think on if the primary model has passed the thinking capability test
   // or if it was enabled from AIHubPage

@@ -27,6 +27,7 @@
       <p class="empty-desc">{{ t('aiTask.emptyAlertsDesc') }}</p>
       <div class="actions">
         <TaskConsole
+          v-model="isConsoleOpen"
           :status="taskStatus"
           :phase="taskPhase"
           :think-content="taskThinkContent"
@@ -35,7 +36,6 @@
           :answer-content="taskAnswerContent"
           :elapsed-seconds="taskElapsed"
           :queue-position="taskQueuePosition"
-          v-model="isConsoleOpen"
         />
         <van-button
           v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
