@@ -63,7 +63,7 @@
           <p>{{ t('aiChat.noHistory') }}</p>
           <p class="history-hint">{{ t('aiChat.historyHint') }}</p>
         </div>
-        <div v-else class="history-scroll" ref="historyScrollRef">
+        <div v-else ref="historyScrollRef" class="history-scroll">
           <template v-for="group in groupedSessions" :key="group.label">
             <div class="history-group-label">{{ group.label }}</div>
             <ul class="history-list">
@@ -746,14 +746,37 @@ const capabilityFilters = computed(() => [
 
 async function loadSessions() {
   sessionsLoading.value = true
+  sessionsOffset.value = 0
+  sessionsAllLoaded.value = false
   try {
-    const res = await getSessions(50, 0, selectedCapability.value ?? undefined)
+    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, selectedCapability.value ?? undefined)
     sessions.value = res.data.sessions
     sessionsLoaded.value = true
+    if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
+      sessionsAllLoaded.value = true
+    }
+    sessionsOffset.value = res.data.sessions.length
   } catch {
     // silently ignore — list stays empty
   } finally {
     sessionsLoading.value = false
+  }
+}
+
+async function loadMoreSessions() {
+  if (sessionsLoadingMore.value || sessionsAllLoaded.value) return
+  sessionsLoadingMore.value = true
+  try {
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, selectedCapability.value ?? undefined)
+    sessions.value = [...sessions.value, ...res.data.sessions]
+    sessionsOffset.value += res.data.sessions.length
+    if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
+      sessionsAllLoaded.value = true
+    }
+  } catch {
+    // silently ignore
+  } finally {
+    sessionsLoadingMore.value = false
   }
 }
 
@@ -1175,6 +1198,22 @@ onMounted(async () => {
     dataTheme.value = document.documentElement.getAttribute('data-theme') ?? 'dark'
   })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
+  // Infinite scroll for session history list
+  paginationObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) loadMoreSessions()
+    },
+    { threshold: 0.1 },
+  )
+  watch(
+    paginationSentinelRef,
+    (el) => {
+      paginationObserver?.disconnect()
+      if (el) paginationObserver?.observe(el)
+    },
+    { immediate: true },
+  )
 
   // Default deep think on if the primary model has passed the thinking capability test
   // or if it was enabled from AIHubPage
