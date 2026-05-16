@@ -34,6 +34,7 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'BlindBoxGiftCreate', path: '/blind-box/gifts/new' },
   { name: 'BlindBoxGiftEdit', path: '/blind-box/gifts/1/edit' },
   { name: 'BlindBoxConfig', path: '/blind-box/config' },
+  { name: 'BlindBoxDraws', path: '/blind-box/draws' },
   { name: 'Family', path: '/family' },
   { name: 'Baby', path: '/baby' },
   { name: 'Settings', path: '/settings' },

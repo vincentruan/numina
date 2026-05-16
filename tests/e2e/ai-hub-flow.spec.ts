@@ -72,7 +72,7 @@ test.describe('AI hub and features', () => {
     await richFamily(page)
 
     // Trigger report generation via API
-    const generateResp = await page.request.post('/api/v1/ai/report/generate')
+    const generateResp = await page.request.post('/api/v1/ai/report/generate/events')
     // 200/201 = generated, 202 = already generating, 403 = AI not configured, 429 = rate limited — all acceptable
     expect(
       [200, 201, 202, 403, 429].includes(generateResp.status()),
@@ -186,7 +186,7 @@ test.describe('AI hub and features', () => {
     await page.waitForLoadState('domcontentloaded')
 
     await expect(page).not.toHaveURL(/\/login/)
-    await expect(page.getByRole('button', { name: /AI 服务商/ })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole('button', { name: /添加供应商|AI 服务商/ })).toBeVisible({ timeout: 10_000 })
 
     const realErrors = errors.filter(
       (e) => !e.includes('Failed to load resource') && !e.includes('AxiosError') && !e.includes('WebSocket')

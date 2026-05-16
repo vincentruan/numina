@@ -87,6 +87,7 @@ export const resetCircuitBreaker = (id: string) =>
   http.post<{ ok: boolean }>(`/ai/config/${id}/reset-circuit`)
 
 // ── Legacy flat config shape (kept for backward compat) ───────────────────────
+export interface AIConfig {
   id: string | null
   ai_enabled: boolean
   ai_provider: string | null
