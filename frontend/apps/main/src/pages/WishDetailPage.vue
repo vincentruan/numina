@@ -658,6 +658,10 @@ onMounted(async () => {
   color: #fff;
   font-weight: 600;
 }
+[data-theme='dark'] .type-tab.active {
+  background: var(--color-lavender, #bdbbff);
+  color: #010120;
+}
 .category-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

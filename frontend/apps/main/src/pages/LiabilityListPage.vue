@@ -613,4 +613,14 @@ liabilityStore.fetchLiabilities({ is_active: true })
   background: #059669;
   color: #fff;
 }
+
+[data-theme='dark'] .quick-pct-btn {
+  border-color: var(--color-lavender, #bdbbff);
+  color: var(--color-lavender, #bdbbff);
+}
+
+[data-theme='dark'] .quick-pct-btn:active {
+  background: var(--color-lavender, #bdbbff);
+  color: #010120;
+}
 </style>

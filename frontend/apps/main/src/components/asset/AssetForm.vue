@@ -630,6 +630,10 @@ function onSubmit() {
   color: #fff;
   font-weight: 600;
 }
+[data-theme='dark'] .type-option.active {
+  background: var(--color-lavender, #bdbbff);
+  color: #010120;
+}
 
 /* Shared */
 .field-prefix {
