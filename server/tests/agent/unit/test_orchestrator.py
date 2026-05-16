@@ -266,6 +266,7 @@ class TestOrchestratorEventStreaming:
             patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
         ):
             MockClient.return_value.get_family_ai_configs = AsyncMock(return_value=ai_configs)
+            MockClient.return_value.reset_circuit_success = AsyncMock(return_value={})
             mock_redactor.redact.return_value = _make_redacted_context(free_text="问题")
             mock_redactor.redact_text.side_effect = lambda text: (text, [])
             orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
@@ -321,6 +322,7 @@ class TestOrchestratorEventStreaming:
             patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
         ):
             MockClient.return_value.get_family_ai_configs = AsyncMock(return_value=ai_configs)
+            MockClient.return_value.report_circuit_event = AsyncMock(return_value={})
             mock_redactor.redact.return_value = _make_redacted_context()
             mock_redactor.redact_text.return_value = ("", [])
             orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
@@ -357,9 +359,10 @@ class TestSelectModel:
                 "model_3_capabilities": [],
             }
         ]
-        provider, model_id = _select_model(providers, "thinking")
+        provider, model_id, caps = _select_model(providers, "thinking")
         assert model_id == "claude-sonnet-4-6"
         assert provider["config_id"] == "cfg-1"
+        assert "deep_thinking" in caps
 
     def test_skips_provider_without_required_capability(self):
         from apps.agent.services.orchestrator import _select_model
@@ -380,9 +383,10 @@ class TestSelectModel:
                 "model_3_capabilities": [],
             },
         ]
-        provider, model_id = _select_model(providers, "thinking")
+        provider, model_id, caps = _select_model(providers, "thinking")
         assert provider["config_id"] == "cfg-think"
         assert model_id == "claude-sonnet-4-6"
+        assert "deep_thinking" in caps
 
     def test_selects_vision_model_from_slot2(self):
         from apps.agent.services.orchestrator import _select_model
@@ -397,8 +401,50 @@ class TestSelectModel:
                 "model_3_capabilities": [],
             }
         ]
-        provider, model_id = _select_model(providers, "vision")
+        provider, model_id, caps = _select_model(providers, "vision")
         assert model_id == "gpt-4o-vision"
+        assert "vision_understanding" in caps
+        assert "text_generation" not in caps  # slot-2 caps, not slot-1
+
+    def test_selects_model_from_slot3(self):
+        """Slot 3 is selected when slots 1 and 2 both lack the required capability."""
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-slot3",
+                "ai_model_id": "gpt-4o",
+                "model_2_id": "gpt-4o-mini",
+                "model_3_id": "deepseek-r1",
+                "model_1_capabilities": ["text_generation"],
+                "model_2_capabilities": ["text_generation"],
+                "model_3_capabilities": ["text_generation", "deep_thinking"],
+            }
+        ]
+        provider, model_id, caps = _select_model(providers, "thinking")
+        assert model_id == "deepseek-r1"
+        assert "deep_thinking" in caps
+        assert provider["config_id"] == "cfg-slot3"
+
+    def test_returned_caps_match_selected_slot_not_slot1(self):
+        """selected_caps must reflect the chosen slot, not always slot-1."""
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-mixed",
+                "ai_model_id": "text-model",
+                "model_2_id": "vision-model",
+                "model_1_capabilities": ["text_generation"],
+                "model_2_capabilities": ["vision_understanding"],
+                "model_3_capabilities": [],
+            }
+        ]
+        _, model_id, caps = _select_model(providers, "vision")
+        assert model_id == "vision-model"
+        # caps must be slot-2's list, not slot-1's
+        assert "vision_understanding" in caps
+        assert "text_generation" not in caps
 
     def test_fallback_when_no_provider_matches(self):
         from apps.agent.services.orchestrator import _select_model
@@ -413,9 +459,10 @@ class TestSelectModel:
             }
         ]
         # No provider has deep_thinking — should fall back to first provider slot1
-        provider, model_id = _select_model(providers, "thinking")
+        provider, model_id, caps = _select_model(providers, "thinking")
         assert model_id == "gpt-4o-mini"
         assert provider["config_id"] == "cfg-text-only"
+        assert caps == ["text_generation"]
 
     def test_raises_on_empty_providers(self):
         from apps.agent.services.orchestrator import _select_model
@@ -435,8 +482,72 @@ class TestSelectModel:
                 "model_3_capabilities": [],
             }
         ]
-        provider, model_id = _select_model(providers, "text")
+        provider, model_id, caps = _select_model(providers, "text")
         assert model_id == "claude-haiku-4-5"
+        assert "text_generation" in caps
+
+
+class TestSelectModelAuditAndGuards:
+    """Tests for audit logging on error paths and empty model_id guard in stream_dispatch."""
+
+    @pytest.mark.asyncio
+    async def test_stream_dispatch_emits_audit_on_empty_providers(self):
+        """stream_dispatch must call audit_logger.log_call when _select_model raises ValueError."""
+        from apps.agent.services.orchestrator import Orchestrator
+
+        mock_client = MagicMock()
+        mock_client.get_family_ai_configs = AsyncMock(return_value={"ai_enabled": True, "providers": []})
+
+        with (
+            patch("apps.agent.services.orchestrator.BackendClient", return_value=mock_client),
+            patch("apps.agent.services.orchestrator.audit_logger") as mock_audit,
+        ):
+            orch = Orchestrator()
+            chunks = []
+            async for chunk in orch.stream_dispatch("chat", "fam-1", task_id="task-1", user_id="u1", free_text="hi"):
+                chunks.append(chunk)
+
+        assert any("无法" in c or "重试" in c for c in chunks)
+        mock_audit.log_call.assert_called_once()
+        entry = mock_audit.log_call.call_args[0][0]
+        assert entry.success is False
+        assert entry.error_type == "NoProvider"
+        assert entry.deerflow_attempted is False
+
+    @pytest.mark.asyncio
+    async def test_stream_dispatch_emits_audit_on_empty_model_id(self):
+        """stream_dispatch must call audit_logger.log_call when selected model_id is empty."""
+        from apps.agent.services.orchestrator import Orchestrator
+
+        mock_client = MagicMock()
+        mock_client.get_family_ai_configs = AsyncMock(return_value={
+            "ai_enabled": True,
+            "providers": [
+                {
+                    "config_id": "cfg-empty",
+                    "ai_model_id": "",  # empty — triggers NoModelId guard
+                    "model_1_capabilities": ["text_generation"],
+                    "model_2_capabilities": [],
+                    "model_3_capabilities": [],
+                    "timeout_seconds": 60,
+                }
+            ],
+        })
+
+        with (
+            patch("apps.agent.services.orchestrator.BackendClient", return_value=mock_client),
+            patch("apps.agent.services.orchestrator.audit_logger") as mock_audit,
+        ):
+            orch = Orchestrator()
+            chunks = []
+            async for chunk in orch.stream_dispatch("chat", "fam-1", task_id="task-1", user_id="u1", free_text="hi"):
+                chunks.append(chunk)
+
+        assert any("无法" in c or "重试" in c for c in chunks)
+        mock_audit.log_call.assert_called_once()
+        entry = mock_audit.log_call.call_args[0][0]
+        assert entry.success is False
+        assert entry.error_type == "NoModelId"
 
 
 class TestIU5CircuitEvents:

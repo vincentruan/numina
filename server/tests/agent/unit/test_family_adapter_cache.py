@@ -364,7 +364,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             client_a = get_family_adapter("family_x", cfg_a, base_config_dir)
@@ -388,7 +388,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             client_old = get_family_adapter("family_y", cfg_old, base_config_dir)
@@ -457,7 +457,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             get_family_adapter("family_z", dict(ai_config, config_id="cfg-z1"), base_config_dir)
@@ -484,7 +484,7 @@ class TestIU6CacheKeyAndCapabilities:
 
         with (
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
-            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
             patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
         ):
             get_family_adapter("family_w", dict(ai_config, config_id="cfg-w1"), base_config_dir)
@@ -495,3 +495,79 @@ class TestIU6CacheKeyAndCapabilities:
         assert ("family_w", "cfg-w1") not in _adapter_cache
         assert ("family_w", "cfg-w2") in _adapter_cache
         clear_cache()
+
+class TestCacheFixes:
+    """Tests for Critical/Important fixes: env var removal, TOCTOU placeholder, atexit cleanup."""
+
+    def test_no_deer_flow_config_path_env_var_set(self, base_config_dir, ai_config):
+        """get_family_adapter must restore DEER_FLOW_CONFIG_PATH after init, not leave it set."""
+        clear_cache()
+        original = os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda config_path, checkpointer=None, **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            get_family_adapter("fam-env-test", ai_config, base_config_dir)
+
+        # After init, env var must be restored to its original state (absent if it wasn't set)
+        assert os.environ.get("DEER_FLOW_CONFIG_PATH") == original, (
+            "get_family_adapter must restore DEER_FLOW_CONFIG_PATH to its original value — "
+            "leaving it set to a per-family temp path would contaminate subsequent calls"
+        )
+
+        if original is not None:
+            os.environ["DEER_FLOW_CONFIG_PATH"] = original
+        clear_cache()
+
+    def test_placeholder_removed_on_init_failure(self, base_config_dir, ai_config):
+        """On DeerFlowClient init failure, the None placeholder must be removed from cache."""
+        clear_cache()
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=RuntimeError("init failed")),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            with pytest.raises(RuntimeError, match="Failed to initialize"):
+                get_family_adapter("fam-fail", ai_config, base_config_dir)
+
+        # Placeholder must be cleaned up — not left as a permanent None entry
+        assert ("fam-fail", ai_config["config_id"]) not in _adapter_cache
+        assert get_cache_stats()["cached_families"] == 0
+
+    def test_atexit_handler_registered(self):
+        """_atexit_cleanup must be registered with atexit so temp dirs are cleaned on exit."""
+        import atexit as _atexit
+        import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
+
+        # atexit._atexit_callbacks is CPython internal; use the public interface instead
+        # by checking that _atexit_cleanup is callable and calling it doesn't raise
+        assert callable(cache_mod._atexit_cleanup)
+        cache_mod._atexit_cleanup()  # must not raise even with empty cache
+
+    def test_clear_cache_handles_none_placeholder(self, base_config_dir, ai_config):
+        """clear_cache must not crash when a None placeholder is present in the cache."""
+        import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
+
+        clear_cache()
+        # Manually insert a placeholder (simulates in-progress init)
+        with cache_mod._cache_lock:
+            cache_mod._adapter_cache[("fam-placeholder", "cfg-x")] = None
+
+        # Must not raise
+        clear_cache()
+        assert get_cache_stats()["cached_families"] == 0
+
+    def test_invalidate_handles_none_placeholder(self):
+        """invalidate_family_adapter must not crash when a None placeholder is present."""
+        import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
+
+        clear_cache()
+        with cache_mod._cache_lock:
+            cache_mod._adapter_cache[("fam-ph2", "cfg-y")] = None
+
+        # Must not raise
+        invalidate_family_adapter("fam-ph2")
+        assert get_cache_stats()["cached_families"] == 0

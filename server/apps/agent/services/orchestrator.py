@@ -40,7 +40,7 @@ from apps.agent.services.stream_events import EventStreamBuilder
 logger = logging.getLogger(__name__)
 
 
-def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str]:
+def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str, list[str]]:
     """基于任务类型从 providers 列表中选择合适的模型。
 
     Args:
@@ -48,7 +48,8 @@ def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str]:
         task_type: 任务类型 ("thinking" / "vision" / "text")
 
     Returns:
-        (selected_provider_dict, model_id) — 返回完整 provider dict 和选中的 model_id
+        (selected_provider_dict, model_id, selected_capabilities) — 返回完整 provider dict、
+        选中的 model_id，以及选中槽位的 capabilities 列表（用于 thinking 能力判断）
 
     Raises:
         ValueError: providers 列表为空
@@ -69,27 +70,28 @@ def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str]:
         # 检查槽位1 (model_id / ai_model_id)
         caps_1: list[str] = provider.get("model_1_capabilities", [])
         if required_capability in caps_1 and provider.get("ai_model_id"):
-            return provider, provider["ai_model_id"]
+            return provider, provider["ai_model_id"], caps_1
 
         # 检查槽位2 (model_2_id)
         caps_2: list[str] = provider.get("model_2_capabilities", [])
         if required_capability in caps_2 and provider.get("model_2_id"):
-            return provider, provider["model_2_id"]
+            return provider, provider["model_2_id"], caps_2
 
         # 检查槽位3 (model_3_id)
         caps_3: list[str] = provider.get("model_3_capabilities", [])
         if required_capability in caps_3 and provider.get("model_3_id"):
-            return provider, provider["model_3_id"]
+            return provider, provider["model_3_id"], caps_3
 
     # Fallback: 无匹配能力时返回第一个 provider 的槽位1
     first_provider = providers[0]
     fallback_model_id = first_provider.get("ai_model_id", "")
+    fallback_caps: list[str] = first_provider.get("model_1_capabilities", [])
     logger.warning(
         "[orchestrator] _select_model: no provider with capability '%s', fallback to model='%s'",
         required_capability,
         fallback_model_id,
     )
-    return first_provider, fallback_model_id
+    return first_provider, fallback_model_id, fallback_caps
 
 
 def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-arg]
@@ -246,6 +248,7 @@ class Orchestrator:
         # ── 2. Select model ────────────────────────────────────────────
         selected_provider: dict = {}
         config_id: str = ""
+        selected_caps: list[str] = []
         try:
             # Determine task_type for model selection
             if enable_thinking_override:
@@ -254,14 +257,43 @@ class Orchestrator:
                 task_type = "vision"
             else:
                 task_type = "text"
-            selected_provider, model_id = _select_model(providers, task_type)
+            selected_provider, model_id, selected_caps = _select_model(providers, task_type)
             config_id = selected_provider.get("config_id", "")
         except ValueError as e:
             logger.error("[orchestrator] stream_dispatch _select_model failed: %s", e)
+            audit_logger.log_call(
+                AuditEntry(
+                    audit_id=audit_id,
+                    capability=capability,
+                    family_id=family_id,
+                    user_id=user_id,
+                    success=False,
+                    deerflow_attempted=False,
+                    duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    error_type="NoProvider",
+                )
+            )
             yield "暂时无法完成分析，请稍后重试。"
             return
 
-        model_name: str | None = model_id or selected_provider.get("ai_model_id")
+        if not model_id:
+            logger.error("[orchestrator] stream_dispatch: model_id is empty for family=%s", family_id)
+            audit_logger.log_call(
+                AuditEntry(
+                    audit_id=audit_id,
+                    capability=capability,
+                    family_id=family_id,
+                    user_id=user_id,
+                    success=False,
+                    deerflow_attempted=False,
+                    duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    error_type="NoModelId",
+                )
+            )
+            yield "暂时无法完成分析，请稍后重试。"
+            return
+
+        model_name: str | None = model_id
 
         policy = CapabilityPolicy(
             ai_enabled=ai_enabled,
@@ -315,7 +347,7 @@ class Orchestrator:
 
         # ── 6. Load thinking flag ──────────────────────────────────────
         skill_config = skill_loader.load(capability)
-        thinking_supported = "deep_thinking" in selected_provider.get("model_1_capabilities", [])
+        thinking_supported = "deep_thinking" in selected_caps
         enable_thinking = (
             bool(enable_thinking_override) and thinking_supported
             if enable_thinking_override is not None
@@ -499,6 +531,7 @@ class Orchestrator:
 
             # ── Select model ──────────────────────────────────────────────
             config_id: str = ""
+            selected_caps: list[str] = []
             try:
                 if enable_thinking_override:
                     task_type = "thinking"
@@ -506,7 +539,7 @@ class Orchestrator:
                     task_type = "vision"
                 else:
                     task_type = "text"
-                selected_provider, model_id = _select_model(providers, task_type)
+                selected_provider, model_id, selected_caps = _select_model(providers, task_type)
                 config_id = selected_provider.get("config_id", "")
             except ValueError as e:
                 logger.error("[orchestrator] stream events _select_model failed: %s", e)
@@ -515,7 +548,14 @@ class Orchestrator:
                 yield builder.error("暂时无法完成分析，请稍后重试。", code="no_provider").to_ndjson()
                 return
 
-            model_name = model_id or selected_provider.get("ai_model_id")
+            if not model_id:
+                logger.error("[orchestrator] stream events: model_id is empty for family=%s", family_id)
+                success = False
+                error_type = "NoModelId"
+                yield builder.error("暂时无法完成分析，请稍后重试。", code="no_model_id").to_ndjson()
+                return
+
+            model_name = model_id
 
             policy = CapabilityPolicy(
                 ai_enabled=ai_enabled,
@@ -561,7 +601,7 @@ class Orchestrator:
             ))
 
             skill_config = skill_loader.load(capability)
-            thinking_supported = "deep_thinking" in selected_provider.get("model_1_capabilities", [])
+            thinking_supported = "deep_thinking" in selected_caps
             enable_thinking = (
                 bool(enable_thinking_override) and thinking_supported
                 if enable_thinking_override is not None
