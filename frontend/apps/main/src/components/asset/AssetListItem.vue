@@ -46,7 +46,17 @@
           <div class="progress-bar-wrapper">
             <div class="progress-bar">
               <div class="progress-fill" :style="{ width: `${progressPercent}%` }"></div>
-              <div class="progress-marker" :style="{ left: `${progressPercent}%` }"></div>
+              <div
+                class="progress-marker"
+                :style="{
+                  left: `${progressPercent}%`,
+                  background: asset.category?.color || 'var(--color-primary)',
+                }"
+              >
+                <svg class="progress-marker-svg" aria-hidden="true">
+                  <use :href="`#${getIconId(asset.category?.icon)}`" />
+                </svg>
+              </div>
             </div>
           </div>
           <div class="progress-info">
@@ -68,6 +78,7 @@ import { computed, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Asset } from '@/types'
 import { useCurrency } from '@/composables/useCurrency'
+import { getIconId } from '@/utils/icon'
 
 const props = defineProps<{
   asset: Asset
@@ -164,19 +175,6 @@ const progressPercent = computed(() => {
   return Math.min(100, (daysUsed.value / targetDays.value) * 100)
 })
 
-/**
- * Get the icon ID for a category icon.
- * If the icon is already an icon ID (starts with 'icon-'), use it directly.
- * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
- */
-function getIconId(icon: string | undefined): string {
-  if (!icon) return 'icon-other'
-  if (icon.startsWith('icon-')) {
-    return icon
-  }
-  // Fallback for emoji or unknown icons
-  return 'icon-other'
-}
 </script>
 
 <style scoped>
@@ -337,17 +335,23 @@ function getIconId(icon: string | undefined): string {
   position: absolute;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: 12px;
-  height: 12px;
-  background: #fff;
-  border: 2px solid var(--card-bg);
-  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   box-shadow: 0 2px 4px rgba(23, 23, 28, 0.25);
   transition: left 0.3s ease;
 }
 [data-theme='dark'] .progress-marker {
-  background: #e9ecef;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.progress-marker-svg {
+  width: 8px;
+  height: 8px;
+  fill: white;
 }
 
 .progress-info {
