@@ -161,11 +161,27 @@ def _generate_temp_config(
 
     # 构建 models 列表（DeerFlow harness 期望的格式）
     thinking_supported = bool(ai_config.get("thinking_supported", False))
-    # For OpenAI-compatible models that support thinking, use ReasoningChatOpenAI which
-    # extracts reasoning_content from the API delta into additional_kwargs automatically.
-    # Standard ChatOpenAI ignores the reasoning_content field in streaming responses.
-    if thinking_supported and provider in ("openai", "openai_compatible"):
-        use_class = "deerflow.models.patched_openai:ReasoningChatOpenAI"
+
+    # Select appropriate LangChain model class based on provider and thinking support.
+    # DeerFlow provides patched model classes for specific providers that handle
+    # reasoning_content extraction from streaming deltas correctly.
+    if thinking_supported:
+        if "deepseek" in model_id.lower():
+            # DeepSeek R1 requires patched class for reasoning content
+            use_class = "deerflow.models.patched_deepseek:PatchedChatDeepSeek"
+        elif provider in ("openai", "openai_compatible"):
+            # OpenAI-compatible models (GLM-5, Qwen3, QwQ, etc.) that support thinking
+            use_class = "deerflow.models.patched_openai:ReasoningChatOpenAI"
+        elif provider == "anthropic":
+            # Anthropic-compatible endpoint (including DashScope GLM/Qwen via /anthropic).
+            # The adapter handles both reasoning_content and Anthropic thinking content blocks.
+            use_class = "langchain_anthropic:ChatAnthropic"
+        else:
+            use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
+    else:
+        # Non-thinking models use standard classes
+        use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
+
     model_entry: dict[str, Any] = {
         "name": "main",
         "use": use_class,
@@ -173,12 +189,42 @@ def _generate_temp_config(
         "api_key": api_key,
         "supports_thinking": thinking_supported,
     }
-    if thinking_supported and provider in ("openai", "openai_compatible"):
-        # Pass enable_thinking=true in extra_body when thinking mode is active.
-        # This triggers GLM-5/Qwen3/DeepSeek to return reasoning_content in the delta.
-        model_entry["when_thinking_enabled"] = {"extra_body": {"enable_thinking": True}}
-        # Explicitly disable thinking when deep_think=false to prevent spurious reasoning_content.
-        model_entry["when_thinking_disabled"] = {"extra_body": {"enable_thinking": False}}
+
+    # Configure when_thinking_enabled/disabled according to DeerFlow2 spec.
+    # Different model families require different extra_body structures.
+    if thinking_supported:
+        if "deepseek" in model_id.lower():
+            # DeepSeek R1 uses 'thinking.type: enabled' format
+            model_entry["when_thinking_enabled"] = {
+                "extra_body": {"thinking": {"type": "enabled"}}
+            }
+            model_entry["when_thinking_disabled"] = {
+                "extra_body": {"thinking": {"type": "disabled"}}
+            }
+        elif provider in ("openai", "openai_compatible"):
+            # OpenAI-compatible models (GLM-5, Qwen3, QwQ, etc.) use 'enable_thinking' flag.
+            # Includes models accessed via Anthropic-compatible endpoints (DashScope).
+            model_entry["when_thinking_enabled"] = {
+                "extra_body": {"enable_thinking": True}
+            }
+            # Explicitly disable thinking when deep_think=false to prevent
+            # spurious reasoning_content in streaming responses
+            model_entry["when_thinking_disabled"] = {
+                "extra_body": {"enable_thinking": False}
+            }
+        elif provider == "anthropic":
+            # Native Anthropic Claude models use the thinking parameter directly.
+            # Note: GLM/Qwen models accessed via an Anthropic-compatible endpoint
+            # (e.g. DashScope /apps/anthropic) do NOT support thinking this way —
+            # they require provider="openai_compatible" with the OpenAI-compatible
+            # endpoint and enable_thinking=true in extra_body.
+            model_entry["when_thinking_enabled"] = {
+                "thinking": {"type": "enabled", "budget_tokens": 10000}
+            }
+            model_entry["when_thinking_disabled"] = {
+                "thinking": {"type": "disabled"}
+            }
+
     if base_url:
         model_entry["base_url"] = base_url
 

@@ -22,7 +22,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table('ai_chat_sessions') as batch_op:
+    with op.batch_alter_table('ai_chat_sessions', recreate='always') as batch_op:
         batch_op.alter_column('id', type_=sa.String(64), existing_type=sa.String(36), nullable=False)
         batch_op.alter_column('jsonl_path', type_=sa.String(512), existing_type=sa.String(500), nullable=False)
         batch_op.add_column(sa.Column('capability', sa.String(32), nullable=False, server_default='chat'))

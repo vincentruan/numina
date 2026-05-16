@@ -160,11 +160,22 @@ class DeerFlowAdapter:
                         continue
                     # Emit reasoning/thinking content before the answer text
                     additional_kwargs = event.data.get("additional_kwargs") or {}
+                    content = event.data.get("content")
                     reasoning = additional_kwargs.get("reasoning_content")
                     if isinstance(reasoning, str) and reasoning:
                         loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{reasoning}")
-                    content = event.data.get("content")
-                    if isinstance(content, str) and content:
+                    # Also handle Anthropic-style thinking content blocks
+                    if isinstance(content, list):
+                        text_parts: list[str] = []
+                        for block in content:
+                            if isinstance(block, dict):
+                                if block.get("type") == "thinking" and block.get("thinking"):
+                                    loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{block['thinking']}")
+                                elif block.get("type") == "text" and block.get("text"):
+                                    text_parts.append(block["text"])
+                        if text_parts:
+                            loop.call_soon_threadsafe(queue.put_nowait, "".join(text_parts))
+                    elif isinstance(content, str) and content:
                         loop.call_soon_threadsafe(queue.put_nowait, content)
             except Exception as e:
                 logger.error("[deerflow] stream_chunks failed: %s", e)
