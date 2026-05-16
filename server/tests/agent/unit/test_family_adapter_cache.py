@@ -13,6 +13,7 @@ from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _get_shared_checkpointer,
     get_family_adapter,
     invalidate_family_adapter,
+    invalidate_family_adapter_cache,
     clear_cache,
     close_shared_checkpointer,
     get_cache_stats,
@@ -54,6 +55,7 @@ checkpointer:
 def ai_config():
     """Sample AI config for a family."""
     return {
+        "config_id": "cfg-001",
         "api_key": "sk-test-key-12345",
         "ai_model_id": "claude-haiku-4-5",
         "ai_provider": "anthropic",
@@ -233,19 +235,20 @@ class TestFamilyAdapterCache:
         os.environ["AI_MODEL"] = ai_config["ai_model_id"]
         os.environ["AI_API_KEY"] = ai_config["api_key"]
 
-        # Fill cache beyond limit (100)
+        # Fill cache beyond limit (100) — each family gets a unique config_id
         for i in range(105):
+            cfg = dict(ai_config, config_id=f"cfg-{i:03d}")
             get_family_adapter(
                 family_id=f"family_{i}",
-                ai_config=ai_config,
+                ai_config=cfg,
                 base_config_dir=base_config_dir,
             )
 
         stats = get_cache_stats()
         assert stats["cached_families"] == 100
-        # First family should be evicted
-        assert "family_0" not in _adapter_cache
-        assert "family_100" in _adapter_cache
+        # First entry should be evicted
+        assert ("family_0", "cfg-000") not in _adapter_cache
+        assert ("family_100", "cfg-100") in _adapter_cache
 
         clear_cache()
 
@@ -266,7 +269,7 @@ class TestFamilyAdapterCache:
 
         stats = get_cache_stats()
         assert stats["cached_families"] == 0
-        assert "family_1" not in _adapter_cache
+        assert ("family_1", "cfg-001") not in _adapter_cache
 
     def test_invalidate_nonexistent_family(self):
         """Should handle invalidation of non-cached family gracefully."""
@@ -330,6 +333,7 @@ class TestConcurrencySafety:
 
         # Get with new config
         new_config = {
+            "config_id": "cfg-002",
             "api_key": "sk-new-key",
             "ai_model_id": "claude-sonnet-4-6",
             "ai_provider": "anthropic",
@@ -342,4 +346,152 @@ class TestConcurrencySafety:
         # Should be different instance (old was invalidated)
         assert client1 is not client2
 
+        clear_cache()
+
+
+class TestIU6CacheKeyAndCapabilities:
+    """IU-6: Tests for (family_id, config_id) cache key and model_1_capabilities."""
+
+    def test_same_family_different_config_id_independent_entries(self, base_config_dir, ai_config):
+        """Same family with two different config_ids must have independent cache entries."""
+        clear_cache()
+
+        os.environ["AI_MODEL"] = ai_config["ai_model_id"]
+        os.environ["AI_API_KEY"] = ai_config["api_key"]
+
+        cfg_a = dict(ai_config, config_id="cfg-aaa")
+        cfg_b = dict(ai_config, config_id="cfg-bbb")
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            client_a = get_family_adapter("family_x", cfg_a, base_config_dir)
+            client_b = get_family_adapter("family_x", cfg_b, base_config_dir)
+
+        assert client_a is not client_b
+        assert ("family_x", "cfg-aaa") in _adapter_cache
+        assert ("family_x", "cfg-bbb") in _adapter_cache
+        assert get_cache_stats()["cached_families"] == 2
+        clear_cache()
+
+    def test_config_id_change_does_not_reuse_old_cache(self, base_config_dir, ai_config):
+        """After config_id changes, old cache entry must not be reused."""
+        clear_cache()
+
+        os.environ["AI_MODEL"] = ai_config["ai_model_id"]
+        os.environ["AI_API_KEY"] = ai_config["api_key"]
+
+        cfg_old = dict(ai_config, config_id="cfg-old")
+        cfg_new = dict(ai_config, config_id="cfg-new")
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            client_old = get_family_adapter("family_y", cfg_old, base_config_dir)
+            client_new = get_family_adapter("family_y", cfg_new, base_config_dir)
+
+        assert client_old is not client_new
+        assert ("family_y", "cfg-old") in _adapter_cache
+        assert ("family_y", "cfg-new") in _adapter_cache
+        clear_cache()
+
+    def test_thinking_supported_from_model_1_capabilities(self, base_config_dir):
+        """thinking_supported must be True when 'deep_thinking' is in model_1_capabilities."""
+        import yaml
+
+        cfg_with_caps = {
+            "config_id": "cfg-think",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-sonnet-4-6",
+            "ai_provider": "anthropic",
+            "model_1_capabilities": ["text_generation", "deep_thinking"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_with_caps)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_thinking") is True
+
+    def test_thinking_not_supported_without_deep_thinking_cap(self, base_config_dir):
+        """thinking_supported must be False when 'deep_thinking' is absent from model_1_capabilities."""
+        import yaml
+
+        cfg_no_think = {
+            "config_id": "cfg-noThink",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-haiku-4-5",
+            "ai_provider": "anthropic",
+            "model_1_capabilities": ["text_generation"],
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_no_think)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_thinking") is False
+
+    def test_thinking_falls_back_to_legacy_flag(self, base_config_dir):
+        """When model_1_capabilities absent, fall back to thinking_supported flag."""
+        import yaml
+
+        cfg_legacy = {
+            "config_id": "cfg-legacy",
+            "api_key": "sk-test",
+            "ai_model_id": "claude-sonnet-4-6",
+            "ai_provider": "anthropic",
+            "thinking_supported": True,
+            # no model_1_capabilities key
+        }
+        temp_config = _generate_temp_config(base_config_dir, cfg_legacy)
+        content = yaml.safe_load(temp_config.read_text())
+        model_entry = content["models"][0]
+        assert model_entry.get("supports_thinking") is True
+
+    def test_batch_invalidate_clears_all_entries_for_family(self, base_config_dir, ai_config):
+        """invalidate_family_adapter_cache(family_id) must clear all (family_id, *) entries."""
+        clear_cache()
+
+        os.environ["AI_MODEL"] = ai_config["ai_model_id"]
+        os.environ["AI_API_KEY"] = ai_config["api_key"]
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            get_family_adapter("family_z", dict(ai_config, config_id="cfg-z1"), base_config_dir)
+            get_family_adapter("family_z", dict(ai_config, config_id="cfg-z2"), base_config_dir)
+            get_family_adapter("family_other", dict(ai_config, config_id="cfg-o1"), base_config_dir)
+
+        assert get_cache_stats()["cached_families"] == 3
+
+        # Batch invalidate family_z only
+        invalidate_family_adapter_cache("family_z")
+
+        assert ("family_z", "cfg-z1") not in _adapter_cache
+        assert ("family_z", "cfg-z2") not in _adapter_cache
+        assert ("family_other", "cfg-o1") in _adapter_cache
+        assert get_cache_stats()["cached_families"] == 1
+        clear_cache()
+
+    def test_specific_config_id_invalidate(self, base_config_dir, ai_config):
+        """invalidate_family_adapter_cache(family_id, config_id) removes only that entry."""
+        clear_cache()
+
+        os.environ["AI_MODEL"] = ai_config["ai_model_id"]
+        os.environ["AI_API_KEY"] = ai_config["api_key"]
+
+        with (
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache._get_shared_checkpointer", return_value=MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.DeerFlowClient", side_effect=lambda **kw: MagicMock()),
+            patch("apps.agent.services.deerflow_adapter.family_adapter_cache.reload_app_config"),
+        ):
+            get_family_adapter("family_w", dict(ai_config, config_id="cfg-w1"), base_config_dir)
+            get_family_adapter("family_w", dict(ai_config, config_id="cfg-w2"), base_config_dir)
+
+        invalidate_family_adapter_cache("family_w", config_id="cfg-w1")
+
+        assert ("family_w", "cfg-w1") not in _adapter_cache
+        assert ("family_w", "cfg-w2") in _adapter_cache
         clear_cache()

@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 # LRU 缓存：最多 100 个家庭
 _MAX_CACHE_SIZE = 100
-_adapter_cache: OrderedDict[str, tuple[DeerFlowClient, Path]] = OrderedDict()
+_adapter_cache: OrderedDict[tuple[str, str], tuple[DeerFlowClient, Path]] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
 
@@ -160,7 +160,12 @@ def _generate_temp_config(
     use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
 
     # 构建 models 列表（DeerFlow harness 期望的格式）
-    thinking_supported = bool(ai_config.get("thinking_supported", False))
+    # Prefer model_1_capabilities list; fall back to legacy thinking_supported flag.
+    model_1_caps = ai_config.get("model_1_capabilities")
+    if model_1_caps is not None:
+        thinking_supported = "deep_thinking" in model_1_caps
+    else:
+        thinking_supported = bool(ai_config.get("thinking_supported", False))
 
     # Select appropriate LangChain model class based on provider and thinking support.
     # DeerFlow provides patched model classes for specific providers that handle
@@ -266,22 +271,25 @@ def get_family_adapter(
     if base_config_dir is None:
         base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
 
+    config_id: str = ai_config.get("config_id", "")
+    cache_key: tuple[str, str] = (family_id, config_id)
+
     # 检查缓存 (thread lock to prevent race)
     with _cache_lock:
-        if family_id in _adapter_cache:
-            client, _ = _adapter_cache[family_id]
+        if cache_key in _adapter_cache:
+            client, _ = _adapter_cache[cache_key]
             # 移到末尾（LRU 更新）
-            _adapter_cache.move_to_end(family_id)
-            logger.debug("[deerflow_cache] reuse cached adapter for family=%s", family_id)
+            _adapter_cache.move_to_end(cache_key)
+            logger.debug("[deerflow_cache] reuse cached adapter for family=%s config_id=%s", family_id, config_id)
             return client
 
         # 缓存满时清理最旧的
         if len(_adapter_cache) >= _MAX_CACHE_SIZE:
-            oldest_family_id, (_, oldest_config_path) = _adapter_cache.popitem(last=False)
+            oldest_key, (_, oldest_config_path) = _adapter_cache.popitem(last=False)
             # 清理临时配置目录
             with contextlib.suppress(Exception):
                 shutil.rmtree(oldest_config_path.parent, ignore_errors=True)
-            logger.debug("[deerflow_cache] evicted adapter for family=%s", oldest_family_id)
+            logger.debug("[deerflow_cache] evicted adapter for key=%s", oldest_key)
 
     # 生成临时配置（outside lock to avoid blocking during file I/O）
     temp_config_path = _generate_temp_config(base_config_dir, ai_config)
@@ -303,10 +311,11 @@ def get_family_adapter(
         client = DeerFlowClient(config_path=str(temp_config_path), checkpointer=checkpointer)
         # 缓存 (thread lock for safe insertion)
         with _cache_lock:
-            _adapter_cache[family_id] = (client, temp_config_path)
+            _adapter_cache[cache_key] = (client, temp_config_path)
         logger.info(
-            "[deerflow_cache] created new adapter for family=%s, model=%s",
+            "[deerflow_cache] created new adapter for family=%s config_id=%s model=%s",
             family_id,
+            config_id,
             ai_config.get("ai_model_id"),
         )
         return client
@@ -314,27 +323,52 @@ def get_family_adapter(
         # 清理临时配置
         with contextlib.suppress(Exception):
             shutil.rmtree(temp_config_path.parent, ignore_errors=True)
-        raise RuntimeError(f"Failed to initialize DeerFlowClient for family={family_id}: {e}") from e
+        raise RuntimeError(f"Failed to initialize DeerFlowClient for family={family_id} config_id={config_id}: {e}") from e
 
 
 def invalidate_family_adapter(family_id: str) -> None:
-    """清理家庭的缓存实例。
+    """清理家庭的所有缓存实例（按 family_id 批量清除所有 config_id 条目）。
 
     Args:
         family_id: 家庭 ID
     """
     with _cache_lock:
-        if family_id in _adapter_cache:
-            _, config_path = _adapter_cache.pop(family_id)
+        keys_to_remove = [k for k in _adapter_cache if k[0] == family_id]
+        for key in keys_to_remove:
+            _, config_path = _adapter_cache.pop(key)
             with contextlib.suppress(Exception):
                 shutil.rmtree(config_path.parent, ignore_errors=True)
-            logger.info("[deerflow_cache] invalidated adapter for family=%s", family_id)
+            logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, key[1])
+
+
+def invalidate_family_adapter_cache(family_id: str, config_id: str | None = None) -> None:
+    """清理家庭的缓存实例。
+
+    Args:
+        family_id: 家庭 ID
+        config_id: 供应商配置 ID。若提供则只清除该条目；若为 None 则清除该家庭所有条目。
+    """
+    with _cache_lock:
+        if config_id is not None:
+            key = (family_id, config_id)
+            if key in _adapter_cache:
+                _, config_path = _adapter_cache.pop(key)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(config_path.parent, ignore_errors=True)
+                logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, config_id)
+        else:
+            keys_to_remove = [k for k in _adapter_cache if k[0] == family_id]
+            for key in keys_to_remove:
+                _, config_path = _adapter_cache.pop(key)
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(config_path.parent, ignore_errors=True)
+                logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, key[1])
 
 
 def clear_cache() -> None:
     """清理所有缓存实例。"""
     with _cache_lock:
-        for _family_id, (_, config_path) in list(_adapter_cache.items()):
+        for _key, (_, config_path) in list(_adapter_cache.items()):
             with contextlib.suppress(Exception):
                 shutil.rmtree(config_path.parent, ignore_errors=True)
         _adapter_cache.clear()

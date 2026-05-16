@@ -234,7 +234,24 @@ class TestOrchestratorAuditAccuracy:
 class TestOrchestratorEventStreaming:
     async def test_stream_dispatch_events_uses_deerflow(self, orchestrator):
         config = _make_ai_config()
-        config["thinking_supported"] = False
+        ai_configs = {
+            "ai_enabled": True,
+            "providers": [
+                {
+                    "config_id": "cfg-001",
+                    "ai_provider": "anthropic",
+                    "api_key": "sk-test",
+                    "ai_model_id": "claude-haiku-4-5",
+                    "model_1_capabilities": ["text_generation"],
+                    "model_2_capabilities": [],
+                    "model_3_capabilities": [],
+                    "timeout_seconds": 60,
+                }
+            ],
+            "allowed_capabilities": [],
+            "admin_only_capabilities": [],
+            "member_role": "member",
+        }
 
         async def _deerflow_stream(*args, **kwargs):
             yield "DeerFlow answer"
@@ -248,7 +265,7 @@ class TestOrchestratorEventStreaming:
             patch("apps.agent.services.orchestrator.audit_logger") as mock_audit,
             patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
         ):
-            MockClient.return_value.get_family_ai_config = AsyncMock(return_value=config)
+            MockClient.return_value.get_family_ai_configs = AsyncMock(return_value=ai_configs)
             mock_redactor.redact.return_value = _make_redacted_context(free_text="问题")
             mock_redactor.redact_text.side_effect = lambda text: (text, [])
             orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
@@ -271,7 +288,24 @@ class TestOrchestratorEventStreaming:
 
     async def test_deerflow_stream_failure_emits_error_event(self, orchestrator):
         config = _make_ai_config()
-        config["thinking_supported"] = False
+        ai_configs = {
+            "ai_enabled": True,
+            "providers": [
+                {
+                    "config_id": "cfg-001",
+                    "ai_provider": "anthropic",
+                    "api_key": "sk-test",
+                    "ai_model_id": "claude-haiku-4-5",
+                    "model_1_capabilities": ["text_generation"],
+                    "model_2_capabilities": [],
+                    "model_3_capabilities": [],
+                    "timeout_seconds": 60,
+                }
+            ],
+            "allowed_capabilities": [],
+            "admin_only_capabilities": [],
+            "member_role": "member",
+        }
 
         async def _raise_stream(*args, **kwargs):
             raise RuntimeError("boom")
@@ -286,7 +320,7 @@ class TestOrchestratorEventStreaming:
             patch("apps.agent.services.orchestrator.audit_logger") as mock_audit,
             patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
         ):
-            MockClient.return_value.get_family_ai_config = AsyncMock(return_value=config)
+            MockClient.return_value.get_family_ai_configs = AsyncMock(return_value=ai_configs)
             mock_redactor.redact.return_value = _make_redacted_context()
             mock_redactor.redact_text.return_value = ("", [])
             orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
@@ -306,3 +340,241 @@ class TestOrchestratorEventStreaming:
         assert entry.success is False
         assert entry.deerflow_attempted is True
         assert entry.error_type == "RuntimeError"
+
+
+class TestSelectModel:
+    """IU-5: Tests for _select_model() model selection strategy."""
+
+    def test_selects_thinking_model_from_slot1(self):
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-1",
+                "ai_model_id": "claude-sonnet-4-6",
+                "model_1_capabilities": ["text_generation", "deep_thinking"],
+                "model_2_capabilities": [],
+                "model_3_capabilities": [],
+            }
+        ]
+        provider, model_id = _select_model(providers, "thinking")
+        assert model_id == "claude-sonnet-4-6"
+        assert provider["config_id"] == "cfg-1"
+
+    def test_skips_provider_without_required_capability(self):
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-no-think",
+                "ai_model_id": "gpt-4o",
+                "model_1_capabilities": ["text_generation"],
+                "model_2_capabilities": [],
+                "model_3_capabilities": [],
+            },
+            {
+                "config_id": "cfg-think",
+                "ai_model_id": "claude-sonnet-4-6",
+                "model_1_capabilities": ["text_generation", "deep_thinking"],
+                "model_2_capabilities": [],
+                "model_3_capabilities": [],
+            },
+        ]
+        provider, model_id = _select_model(providers, "thinking")
+        assert provider["config_id"] == "cfg-think"
+        assert model_id == "claude-sonnet-4-6"
+
+    def test_selects_vision_model_from_slot2(self):
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-vis",
+                "ai_model_id": "gpt-4o",
+                "model_2_id": "gpt-4o-vision",
+                "model_1_capabilities": ["text_generation"],
+                "model_2_capabilities": ["vision_understanding"],
+                "model_3_capabilities": [],
+            }
+        ]
+        provider, model_id = _select_model(providers, "vision")
+        assert model_id == "gpt-4o-vision"
+
+    def test_fallback_when_no_provider_matches(self):
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-text-only",
+                "ai_model_id": "gpt-4o-mini",
+                "model_1_capabilities": ["text_generation"],
+                "model_2_capabilities": [],
+                "model_3_capabilities": [],
+            }
+        ]
+        # No provider has deep_thinking — should fall back to first provider slot1
+        provider, model_id = _select_model(providers, "thinking")
+        assert model_id == "gpt-4o-mini"
+        assert provider["config_id"] == "cfg-text-only"
+
+    def test_raises_on_empty_providers(self):
+        from apps.agent.services.orchestrator import _select_model
+
+        with pytest.raises(ValueError, match="empty"):
+            _select_model([], "text")
+
+    def test_text_task_selects_text_generation_slot(self):
+        from apps.agent.services.orchestrator import _select_model
+
+        providers = [
+            {
+                "config_id": "cfg-t",
+                "ai_model_id": "claude-haiku-4-5",
+                "model_1_capabilities": ["text_generation"],
+                "model_2_capabilities": [],
+                "model_3_capabilities": [],
+            }
+        ]
+        provider, model_id = _select_model(providers, "text")
+        assert model_id == "claude-haiku-4-5"
+
+
+class TestIU5CircuitEvents:
+    """IU-5: Tests for circuit event reporting on DeerFlow failures and success."""
+
+    def _make_ai_configs(self, enabled=True):
+        return {
+            "ai_enabled": enabled,
+            "providers": [
+                {
+                    "config_id": "cfg-001",
+                    "ai_provider": "anthropic",
+                    "api_key": "sk-test",
+                    "ai_model_id": "claude-sonnet-4-6",
+                    "model_1_capabilities": ["text_generation"],
+                    "model_2_capabilities": [],
+                    "model_3_capabilities": [],
+                    "timeout_seconds": 60,
+                }
+            ],
+            "allowed_capabilities": [],
+            "admin_only_capabilities": [],
+            "member_role": "member",
+        }
+
+    async def test_deerflow_failure_triggers_report_circuit_event(self):
+        orchestrator = Orchestrator()
+        ai_configs = self._make_ai_configs()
+
+        async def _raise_stream(*args, **kwargs):
+            raise RuntimeError("provider error")
+            yield ""
+
+        mock_df = MagicMock()
+        mock_df.stream_dispatch = _raise_stream
+        mock_client = MagicMock()
+        mock_client.get_family_ai_configs = AsyncMock(return_value=ai_configs)
+        mock_client.report_circuit_event = AsyncMock(return_value={})
+        mock_client.reset_circuit_success = AsyncMock(return_value={})
+
+        with (
+            patch("apps.agent.services.orchestrator.BackendClient", return_value=mock_client),
+            patch("apps.agent.services.orchestrator.pii_redactor") as mock_redactor,
+            patch("apps.agent.services.orchestrator.audit_logger"),
+            patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
+        ):
+            mock_redactor.redact.return_value = _make_redacted_context()
+            mock_redactor.redact_text.return_value = ("", [])
+            orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
+
+            chunks = [
+                c async for c in orchestrator.stream_dispatch(
+                    capability="chat",
+                    family_id="fam-1",
+                    task_id="t-1",
+                )
+            ]
+
+        # report_circuit_event must have been scheduled (fire-and-forget)
+        mock_client.report_circuit_event.assert_called_once_with("cfg-001", 500)
+        mock_client.reset_circuit_success.assert_not_called()
+        assert any("不可用" in c or "重试" in c for c in chunks)
+
+    async def test_deerflow_success_triggers_reset_circuit_success(self):
+        orchestrator = Orchestrator()
+        ai_configs = self._make_ai_configs()
+
+        async def _ok_stream(*args, **kwargs):
+            yield "[TEXT]answer"
+
+        mock_df = MagicMock()
+        mock_df.stream_dispatch = _ok_stream
+        mock_client = MagicMock()
+        mock_client.get_family_ai_configs = AsyncMock(return_value=ai_configs)
+        mock_client.report_circuit_event = AsyncMock(return_value={})
+        mock_client.reset_circuit_success = AsyncMock(return_value={})
+
+        with (
+            patch("apps.agent.services.orchestrator.BackendClient", return_value=mock_client),
+            patch("apps.agent.services.orchestrator.pii_redactor") as mock_redactor,
+            patch("apps.agent.services.orchestrator.audit_logger"),
+            patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
+        ):
+            mock_redactor.redact.return_value = _make_redacted_context()
+            mock_redactor.redact_text.side_effect = lambda text: (text, [])
+            orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
+
+            chunks = [
+                c async for c in orchestrator.stream_dispatch(
+                    capability="chat",
+                    family_id="fam-1",
+                    task_id="t-2",
+                )
+            ]
+
+        mock_client.reset_circuit_success.assert_called_once_with("cfg-001")
+        mock_client.report_circuit_event.assert_not_called()
+
+    async def test_model_name_records_selected_model_id(self):
+        """model_name in session journal must reflect the actually selected model_id."""
+        orchestrator = Orchestrator()
+        ai_configs = self._make_ai_configs()
+
+        async def _ok_stream(*args, **kwargs):
+            yield "[TEXT]done"
+
+        mock_df = MagicMock()
+        mock_df.stream_dispatch = _ok_stream
+        mock_client = MagicMock()
+        mock_client.get_family_ai_configs = AsyncMock(return_value=ai_configs)
+        mock_client.reset_circuit_success = AsyncMock(return_value={})
+
+        captured_model: list[str | None] = []
+
+        def _capture_session_start(**kwargs):
+            captured_model.append(kwargs.get("model_name"))
+
+        with (
+            patch("apps.agent.services.orchestrator.BackendClient", return_value=mock_client),
+            patch("apps.agent.services.orchestrator.pii_redactor") as mock_redactor,
+            patch("apps.agent.services.orchestrator.audit_logger"),
+            patch("apps.agent.services.orchestrator._create_family_adapter", return_value=mock_df),
+            patch("apps.agent.services.orchestrator.session_journal") as mock_journal,
+        ):
+            mock_redactor.redact.return_value = _make_redacted_context()
+            mock_redactor.redact_text.side_effect = lambda text: (text, [])
+            orchestrator._build_context = AsyncMock(return_value=MagicMock(family_id="fam-1"))
+            mock_journal.write_session_start.side_effect = _capture_session_start
+            mock_journal.write_user_message = MagicMock()
+            mock_journal.write_assistant_message = MagicMock()
+            mock_journal.write_session_end = MagicMock()
+
+            _ = [
+                c async for c in orchestrator.stream_dispatch(
+                    capability="chat",
+                    family_id="fam-1",
+                    task_id="t-3",
+                )
+            ]
+
+        assert captured_model[0] == "claude-sonnet-4-6"
