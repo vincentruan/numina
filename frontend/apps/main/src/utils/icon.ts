@@ -1,4 +1,4 @@
-const SAFE_ICON_RE = /^icon-[a-z0-9_-]+$/
+const SAFE_ICON_RE = /^icon-[a-z0-9_-]+$/i
 
 /**
  * Resolve a category icon string to an SVG sprite ID.
