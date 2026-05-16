@@ -202,7 +202,7 @@ onMounted(loadMonth)
 
 <style scoped>
 .child-calendar {
-  /* Heat color tokens — overridden in dark mode via [data-theme="dark"] in clay.css */
+  /* Heat color tokens — light mode: warm amber tones */
   --heat-1: #fff3e0;
   --heat-2: #ffe0b2;
   --heat-3: #ffb74d;
@@ -213,11 +213,12 @@ onMounted(loadMonth)
   padding: 12px;
 }
 
-[data-theme="dark"] .child-calendar {
-  --heat-1: #1a2e1a;
-  --heat-2: #1e3a1a;
-  --heat-3: #2a4a1a;
-  --heat-4: #3a5a20;
+/* Dark mode heat colors: teal-green tones with enough contrast against #152828 */
+:global([data-theme="dark"]) .child-calendar {
+  --heat-1: rgba(34, 197, 94, 0.12);
+  --heat-2: rgba(34, 197, 94, 0.25);
+  --heat-3: rgba(34, 197, 94, 0.45);
+  --heat-4: rgba(34, 197, 94, 0.70);
 }
 
 /* Header */
@@ -299,13 +300,14 @@ onMounted(loadMonth)
 }
 .cal-cell.today .day-num {
   background: var(--color-brand-ochre);
-  color: var(--color-ink);
+  color: var(--color-surface-dark);
   border-radius: 50%;
   width: 26px;
   height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: 700;
 }
 .cal-cell.future {
   opacity: 0.35;
