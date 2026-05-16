@@ -353,6 +353,7 @@ export default {
     loading: '加载中...',
     loadingFailed: '加载失败，请刷新重试',
     emptyState: '暂无待处理心愿 ✅',
+    costLabel: '目标积分：{cost} ⭐',
     section: {
       redemptionRequested: '待兑现 🎁',
       pendingReview: '待审核 ⏳',

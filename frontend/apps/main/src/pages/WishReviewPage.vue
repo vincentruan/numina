@@ -17,7 +17,7 @@
               <div class="wish-info">
                 <p class="wish-name">{{ wish.name }}</p>
                 <p class="child-name">{{ wish.child_display_name }}</p>
-                <p class="cost">目标积分：{{ wish.star_coin_cost }} ⭐</p>
+                <p class="cost">{{ t('wishReview.costLabel', { cost: wish.star_coin_cost }) }}</p>
               </div>
             </div>
             <div class="card-actions">
@@ -224,33 +224,55 @@ onMounted(load)
 
 <style scoped>
 .review-page {
-  background: #f8f9fa;
+  background: var(--bg-secondary, #f8f9fa);
   min-height: 100vh;
   padding: 16px 16px 80px;
 }
 .loading, .empty {
   text-align: center;
   margin-top: 60px;
-  color: #999;
+  color: var(--text-tertiary, #999);
   font-size: 16px;
 }
 .section { margin-bottom: 20px; }
-.section-title { font-size: 14px; font-weight: 600; color: #666; margin: 0 0 8px; }
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary, #666);
+  margin: 0 0 8px;
+}
 .wish-card {
-  background: #fff;
+  background: var(--card-bg, #fff);
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.06);
   margin-bottom: 10px;
+}
+[data-theme='dark'] .wish-card {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 .wish-card.redemption { border-left: 4px solid #28a745; }
 .card-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .wish-emoji { font-size: 28px; flex-shrink: 0; }
 .wish-info { flex: 1; }
-.wish-name { font-size: 16px; font-weight: 600; color: #333; margin: 0 0 2px; }
-.child-name { font-size: 13px; color: #888; margin: 0 0 2px; }
-.wish-desc { font-size: 13px; color: #666; margin: 2px 0; }
+.wish-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary, #333);
+  margin: 0 0 2px;
+}
+.child-name {
+  font-size: 13px;
+  color: var(--text-tertiary, #888);
+  margin: 0 0 2px;
+}
+.wish-desc {
+  font-size: 13px;
+  color: var(--text-secondary, #666);
+  margin: 2px 0;
+}
 .cost { font-size: 13px; color: #f5a623; font-weight: 600; margin: 2px 0 0; }
+[data-theme='dark'] .cost { color: #ffc04d; }
 .priority-badge {
   font-size: 12px;
   padding: 2px 8px;
@@ -261,6 +283,9 @@ onMounted(load)
 .priority-badge.high { background: #ffe0e0; color: #c0392b; }
 .priority-badge.medium { background: #fff3cd; color: #856404; }
 .priority-badge.low { background: #e8f4fd; color: #1a6fa8; }
+[data-theme='dark'] .priority-badge.high { background: rgba(192, 57, 43, 0.2); color: #e57373; }
+[data-theme='dark'] .priority-badge.medium { background: rgba(133, 100, 4, 0.2); color: #ffb74d; }
+[data-theme='dark'] .priority-badge.low { background: rgba(26, 111, 168, 0.2); color: #64b5f6; }
 .card-actions { display: flex; gap: 8px; }
 .card-actions button {
   flex: 1;
@@ -276,18 +301,19 @@ onMounted(load)
 .btn-reject { background: #dc3545; color: #fff; }
 .btn-realize { background: linear-gradient(135deg, #f9ca24, #f0932b); color: #fff; }
 .btn-defer { background: #6c757d; color: #fff; }
+[data-theme='dark'] .btn-defer { background: rgba(108, 117, 125, 0.6); }
 
 /* Dialogs */
 .dialog-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: flex-end;
   z-index: 100;
 }
 .dialog {
-  background: #fff;
+  background: var(--card-bg, #fff);
   border-radius: 20px 20px 0 0;
   padding: 24px 20px 32px;
   width: 100%;
@@ -295,26 +321,51 @@ onMounted(load)
   flex-direction: column;
   gap: 12px;
 }
-.dialog h3 { font-size: 18px; font-weight: 700; color: #333; margin: 0; }
-.dialog-desc { font-size: 14px; color: #666; margin: 0; }
+[data-theme='dark'] .dialog {
+  background: #1a1a2e;
+}
+.dialog h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #333);
+  margin: 0;
+}
+.dialog-desc {
+  font-size: 14px;
+  color: var(--text-secondary, #666);
+  margin: 0;
+}
 .input {
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--separator, #e0e0e0);
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 15px;
   outline: none;
   width: 100%;
   box-sizing: border-box;
+  background: var(--bg-secondary, #f8f8f8);
+  color: var(--text-primary, #333);
+}
+[data-theme='dark'] .input {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
 }
 .dialog-actions { display: flex; gap: 10px; }
 .btn-cancel {
   flex: 1;
   padding: 12px;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--separator, #e0e0e0);
   border-radius: 10px;
-  background: #f8f8f8;
+  background: var(--bg-secondary, #f8f8f8);
+  color: var(--text-primary, #333);
   font-size: 15px;
   cursor: pointer;
+}
+[data-theme='dark'] .btn-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
 }
 .btn-submit {
   flex: 2;
@@ -352,5 +403,15 @@ onMounted(load)
   cursor: pointer;
 }
 .btn-realize-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
-.error-msg { background: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+.error-msg {
+  background: #f8d7da;
+  color: #721c24;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+[data-theme='dark'] .error-msg {
+  background: rgba(220, 53, 69, 0.15);
+  color: #f1aeb5;
+}
 </style>
