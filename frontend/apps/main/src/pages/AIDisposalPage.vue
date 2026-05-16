@@ -27,12 +27,17 @@
       <div class="actions">
         <TaskConsole
           :status="taskStatus"
-          :chunks="taskChunks"
+          :phase="taskPhase"
+          :think-content="taskThinkContent"
+          :think-done="taskThinkDone"
+          :think-seconds="taskThinkSeconds"
+          :answer-content="taskAnswerContent"
           :elapsed-seconds="taskElapsed"
+          :queue-position="taskQueuePosition"
           v-model="isConsoleOpen"
         />
         <van-button
-          v-if="taskStatus !== 'running'"
+          v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
           type="primary"
           block
           @click="onRefresh"
@@ -59,7 +64,7 @@
       <div class="summary-bar">
         <span>{{ t('aiDisposal.pendingCount', { count: suggestions.length }) }}</span>
         <van-button
-          v-if="taskStatus !== 'running'"
+          v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
           size="mini"
           plain
           @click="onRefresh"
@@ -165,9 +170,14 @@ async function onScanComplete() {
 
 const {
   status: taskStatus,
-  chunks: taskChunks,
+  phase: taskPhase,
+  thinkContent: taskThinkContent,
+  thinkDone: taskThinkDone,
+  thinkSeconds: taskThinkSeconds,
+  answerContent: taskAnswerContent,
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
+  queuePosition: taskQueuePosition,
   startStream,
   cancelTask,
 } = useAITask('disposal', '/ai/disposal-suggestions/refresh/events', onScanComplete)

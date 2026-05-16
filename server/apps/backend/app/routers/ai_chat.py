@@ -410,9 +410,9 @@ def list_all_sessions(
     return {
         "sessions": [
             {
-                "session_id": s.id,
-                "family_id": s.family_id,
-                "user_id": s.user_id if s.user_id else None,
+                "session_id": str(s.id),
+                "family_id": str(s.family_id),
+                "user_id": str(s.user_id) if s.user_id else None,
                 "capability": s.capability,
                 "title": s.title,
                 "status": s.status,

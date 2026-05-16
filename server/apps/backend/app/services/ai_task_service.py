@@ -125,7 +125,6 @@ class AITaskService:
     ) -> AITask | None:
         """返回该 capability 的排队任务，并动态计算其队列位置。"""
         from sqlalchemy import func
-
         fid = int(family_id)
         task = (
             db.query(AITask)
