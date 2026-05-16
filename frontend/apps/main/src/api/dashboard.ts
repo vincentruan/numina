@@ -60,7 +60,7 @@ export function getHomeAssets(limit = 5) {
 }
 
 export function getHomeAssetsCategoryCounts(status: string) {
-  return http.get<Array<{ id: string; name: string; icon: string; count: number }>>(
+  return http.get<Array<{ id: string; name: string; icon: string; color: string; count: number }>>(
     `/dashboard/home-assets/${status}/categories`
   )
 }
