@@ -79,6 +79,7 @@ def seed_test_users(db):
             id=family_id,
             name=user_data["family_name"],
             created_by=family_id,  # Will be updated after user creation
+            ai_enabled=False,  # Explicitly set to avoid NOT NULL constraint error
         )
         db.add(family)
         db.flush()  # Flush to get family.id
