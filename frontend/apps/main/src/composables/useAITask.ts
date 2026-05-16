@@ -97,8 +97,6 @@ export function useAITask(
       pollTimer = null
     }
     pollTimer = setInterval(async () => {
-      // Guard against race
-      if (pollTimer === null) return
       try {
         const task = await getAITask(capability)
         if (task.status === 'queued') {
@@ -130,8 +128,9 @@ export function useAITask(
 
   function stopPolling() {
     if (pollTimer) {
-      clearInterval(pollTimer)
-      pollTimer = null // Set to null BEFORE clearInterval
+      const t = pollTimer
+      pollTimer = null
+      clearInterval(t)
     }
   }
 
@@ -180,14 +179,20 @@ export function useAITask(
 
     try {
       while (true) {
-        // Timeout handling for read operation
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('Stream timeout')), TIMEOUT_MS),
-        )
+        let timeoutId: ReturnType<typeof setTimeout> | null = null
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timeoutId = setTimeout(() => reject(new Error('Stream timeout')), TIMEOUT_MS)
+        })
 
-        const { done, value } = await Promise.race([reader.read(), timeoutPromise])
-        if (done) break
-        const text = decoder.decode(value, { stream: true })
+        let result: { done: boolean; value: Uint8Array | undefined }
+        try {
+          result = await Promise.race([reader.read(), timeoutPromise])
+        } finally {
+          if (timeoutId !== null) clearTimeout(timeoutId)
+        }
+
+        if (result.done) break
+        const text = decoder.decode(result.value, { stream: true })
         if (text) parser.push(text)
       }
       parser.flush()
@@ -285,6 +290,12 @@ export function useAITask(
     status.value = 'running'
     phase.value = 'connecting'
     isConsoleOpen.value = true
+    // Reset content state so resumed stream doesn't append to stale content
+    thinkContent.value = ''
+    answerContent.value = ''
+    thinkDone.value = false
+    thinkSeconds.value = 0
+    completedFired = false
 
     const elapsed = existingTask.started_at
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)

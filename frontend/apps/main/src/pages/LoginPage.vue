@@ -38,12 +38,14 @@
           </defs>
 
           <!-- N: left stem + diagonal + right stem -->
-          <path d="M 4,56 C 4,50 4,30 5,18 C 5.5,14 7,12 9,13 C 11,14 13,17 15,22 C 22,36 28,48 31,54 C 32,57 33,58 34,57 C 35,56 36,40 36,18 C 36,14 37,12 39,12"
+          <path
+d="M 4,56 C 4,50 4,30 5,18 C 5.5,14 7,12 9,13 C 11,14 13,17 15,22 C 22,36 28,48 31,54 C 32,57 33,58 34,57 C 35,56 36,40 36,18 C 36,14 37,12 39,12"
             fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#logoSoftglow)" />
           <path d="M 39,12 C 41,11 44,14 45,20" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
 
           <!-- u -->
-          <path d="M 45,20 C 45,20 44,46 44,52 C 44,57 46,60 49,59 C 52,58 55,54 57,49 C 58,46 58,20 58,20"
+          <path
+d="M 45,20 C 45,20 44,46 44,52 C 44,57 46,60 49,59 C 52,58 55,54 57,49 C 58,46 58,20 58,20"
             fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#logoSoftglow)" />
           <path d="M 58,20 C 60,19 63,20 64,22" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
 
@@ -69,12 +71,14 @@
           <path d="M 124,58 C 126,59 129,58 130,56 C 131,54 131,44 131,38" fill="none" stroke="url(#textGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.7" />
 
           <!-- a: bowl + right stem + exit -->
-          <path d="M 148,32 C 146,26 142,23 138,24 C 134,25 131,29 131,36 C 131,44 134,56 140,58 C 144,59 148,56 148,52 C 148,48 148,32 148,32"
+          <path
+d="M 148,32 C 146,26 142,23 138,24 C 134,25 131,29 131,36 C 131,44 134,56 140,58 C 144,59 148,56 148,52 C 148,48 148,32 148,32"
             fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" filter="url(#logoSoftglow)" />
           <path d="M 148,32 C 148,32 148,58 149,60 C 150,62 153,63 156,61" fill="none" stroke="url(#textGrad)" stroke-width="2.4" stroke-linecap="round" filter="url(#logoSoftglow)" />
 
           <!-- Decorative flourish: sweeping arc from N top, over word, curling back -->
-          <path d="M 39,12 C 55,0 90,-4 130,-1 C 170,2 205,-2 225,10 C 240,18 244,34 238,46 C 232,56 220,62 208,58 C 196,54 193,44 198,36 C 201,30 208,27 214,30"
+          <path
+d="M 39,12 C 55,0 90,-4 130,-1 C 170,2 205,-2 225,10 C 240,18 244,34 238,46 C 232,56 220,62 208,58 C 196,54 193,44 198,36 C 201,30 208,27 214,30"
             fill="none" stroke="url(#flourishGrad)" stroke-width="1.6" stroke-linecap="round" opacity="0.85" filter="url(#logoGlow)" />
 
           <!-- Trend line from a's exit -->

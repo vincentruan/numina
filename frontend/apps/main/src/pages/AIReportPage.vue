@@ -5,10 +5,10 @@
     <!-- Task console (streaming progress) -->
     <div class="console-wrap">
       <TaskConsole
+        v-model="isConsoleOpen"
         :status="taskStatus"
         :chunks="taskChunks"
         :elapsed-seconds="taskElapsed"
-        v-model="isConsoleOpen"
       />
     </div>
 

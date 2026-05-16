@@ -63,7 +63,7 @@
           <p>{{ t('aiChat.noHistory') }}</p>
           <p class="history-hint">{{ t('aiChat.historyHint') }}</p>
         </div>
-        <div v-else class="history-scroll" ref="historyScrollRef">
+        <div v-else ref="historyScrollRef" class="history-scroll">
           <template v-for="group in groupedSessions" :key="group.label">
             <div class="history-group-label">{{ group.label }}</div>
             <ul class="history-list">
@@ -746,10 +746,16 @@ const capabilityFilters = computed(() => [
 
 async function loadSessions() {
   sessionsLoading.value = true
+  sessionsOffset.value = 0
+  sessionsAllLoaded.value = false
   try {
-    const res = await getSessions(50, 0, selectedCapability.value ?? undefined)
+    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, selectedCapability.value ?? undefined)
     sessions.value = res.data.sessions
     sessionsLoaded.value = true
+    if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
+      sessionsAllLoaded.value = true
+    }
+    sessionsOffset.value = res.data.sessions.length
   } catch {
     // silently ignore — list stays empty
   } finally {
@@ -757,8 +763,31 @@ async function loadSessions() {
   }
 }
 
+async function loadMoreSessions() {
+  if (sessionsLoadingMore.value || sessionsAllLoaded.value || sessionsLoading.value) return
+  sessionsLoadingMore.value = true
+  // Capture the capability at call time; discard results if it changed mid-flight
+  const capAtCall = selectedCapability.value
+  try {
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, capAtCall ?? undefined)
+    if (selectedCapability.value !== capAtCall) return // stale response
+    sessions.value = [...sessions.value, ...res.data.sessions]
+    sessionsOffset.value += res.data.sessions.length
+    if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
+      sessionsAllLoaded.value = true
+    }
+  } catch {
+    // silently ignore
+  } finally {
+    sessionsLoadingMore.value = false
+  }
+}
+
 async function onSelectCapability(cap: string | null) {
   selectedCapability.value = cap
+  sessions.value = []
+  sessionsOffset.value = 0
+  sessionsAllLoaded.value = false
   sessionsLoaded.value = false
   await loadSessions()
 }
@@ -1169,12 +1198,29 @@ async function onRetryError(idx: number) {
   await onSend()
 }
 
+// Infinite scroll: watch sentinel at setup level so the watcher is properly tracked
+// and cleaned up by Vue's effect scope (not leaked inside onMounted)
+watch(paginationSentinelRef, (el) => {
+  paginationObserver?.disconnect()
+  if (el) paginationObserver?.observe(el)
+})
+
 onMounted(async () => {
   // Observe data-theme attribute changes on <html> to stay in sync with global theme
   themeObserver = new MutationObserver(() => {
     dataTheme.value = document.documentElement.getAttribute('data-theme') ?? 'dark'
   })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
+  // Create IntersectionObserver for infinite scroll
+  paginationObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0]?.isIntersecting) loadMoreSessions()
+    },
+    { threshold: 0.1 },
+  )
+  // Observe sentinel if it's already in the DOM (e.g. history panel open on mount)
+  if (paginationSentinelRef.value) paginationObserver.observe(paginationSentinelRef.value)
 
   // Default deep think on if the primary model has passed the thinking capability test
   // or if it was enabled from AIHubPage
@@ -1387,8 +1433,34 @@ onUnmounted(() => {
   color: var(--text-primary);
 }
 
+.history-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.filter-tab {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.filter-tab--active {
+  background: var(--text-primary);
+  color: var(--bg);
+  border-color: var(--text-primary);
+}
+
 .history-empty {
   flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;

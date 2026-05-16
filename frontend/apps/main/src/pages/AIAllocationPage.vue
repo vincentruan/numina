@@ -39,13 +39,18 @@
     <!-- Drift check -->
     <div v-if="hasTarget" class="check-section">
       <TaskConsole
-        :status="taskStatus"
-        :chunks="taskChunks"
-        :elapsed-seconds="taskElapsed"
         v-model="isConsoleOpen"
+        :status="taskStatus"
+        :phase="taskPhase"
+        :think-content="taskThinkContent"
+        :think-done="taskThinkDone"
+        :think-seconds="taskThinkSeconds"
+        :answer-content="taskAnswerContent"
+        :elapsed-seconds="taskElapsed"
+        :queue-position="taskQueuePosition"
       />
       <van-button
-        v-if="taskStatus !== 'running'"
+        v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
         block
         type="primary"
         @click="onCheck"
@@ -164,9 +169,14 @@ async function onScanComplete() {
 
 const {
   status: taskStatus,
-  chunks: taskChunks,
+  phase: taskPhase,
+  thinkContent: taskThinkContent,
+  thinkDone: taskThinkDone,
+  thinkSeconds: taskThinkSeconds,
+  answerContent: taskAnswerContent,
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
+  queuePosition: taskQueuePosition,
   startStream,
   cancelTask,
 } = useAITask('allocation', '/ai/allocation-target/check/events', onScanComplete)
