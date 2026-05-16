@@ -76,10 +76,10 @@ dev = [
 ]
 
 [tool.uv.workspace]
-members = ["apps/agent/vendor/deerflow-harness"]
+members = []
 
 [tool.uv.sources]
-deerflow-harness = { workspace = true }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
