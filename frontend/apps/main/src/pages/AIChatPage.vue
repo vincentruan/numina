@@ -199,18 +199,20 @@
           >
             <div class="bubble" :class="[msg.role, { 'assistant--thinking': msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' }]">
               <div class="bubble-body">
-                <!-- Thinking halo placeholder (shown when phase is thinking/connecting/answering and no content yet) -->
+                <!-- Connecting state region: shown while phase === 'connecting' -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && !msg.content"
-                  class="thinking-placeholder"
+                  v-if="msg.role === 'assistant' && msg.phase === 'connecting'"
+                  class="connecting-region shimmer-active"
                   aria-live="polite"
                 >
-                  <span class="thinking-halo" aria-hidden="true" />
-                  <span class="thinking-label">{{ t('aiChat.deepThinking') }}</span>
+                  <span class="connecting-dot" aria-hidden="true" />
+                  <span class="connecting-label">{{ t('aiChat.connectingAI') }}</span>
+                  <span class="connecting-sep" aria-hidden="true">·</span>
+                  <span class="connecting-time">{{ connectingSeconds }}s</span>
                 </div>
-                <!-- Unified phase indicator: integrated into think block when deep thinking, standalone otherwise -->
+                <!-- Unified phase indicator: shown during thinking/answering when NOT deep think mode -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink && msg.content"
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink && msg.content"
                   class="phase-strip standalone"
                   :class="`phase-strip--${msg.phase}`"
                   aria-live="polite"
@@ -218,16 +220,21 @@
                   <span class="phase-pulse" aria-hidden="true" />
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
                 </div>
-                <!-- Deep think block with integrated phase indicator -->
+                <!-- Deep think block with integrated phase indicator and tool timeline -->
                 <div
-                  v-if="msg.role === 'assistant' && (msg.thinkContent || (msg.phase && msg.phase !== 'done' && msg.phase !== 'error' && deepThink))"
+                  v-if="msg.role === 'assistant' && (msg.thinkContent || msg.toolTimeline?.length || (msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && deepThink))"
                   class="think-block"
-                  :class="{ 'think-block--open': msg.thinkOpen, 'think-block--done': msg.thinkDone, 'think-block--active': msg.phase && msg.phase !== 'done' && msg.phase !== 'error' }"
+                  :class="{
+                    'think-block--open': msg.thinkOpen,
+                    'think-block--done': msg.thinkDone,
+                    'think-block--active': msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error',
+                    'shimmer-active': msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !msg.thinkDone,
+                  }"
                 >
-                  <button class="think-toggle" @click="msg.thinkOpen = !msg.thinkOpen">
+                  <button class="think-toggle" @click="onThinkToggle(msg)">
                     <div class="think-icon-wrapper">
-                      <span v-if="msg.phase && msg.phase !== 'done' && msg.phase !== 'error'" class="phase-pulse-small" aria-hidden="true" />
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <span v-if="msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !msg.thinkDone" class="phase-pulse-small" aria-hidden="true" />
+                      <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
                         <path d="M9 21h6"/>
                       </svg>
@@ -237,32 +244,42 @@
                       <span class="think-text-animated">{{ phaseLabel(msg.phase || 'thinking') }}</span>
                     </span>
                     <span v-if="msg.thinkDone" class="think-duration">{{ msg.thinkSeconds }}s</span>
+                    <!-- Tool summary chips shown when collapsed -->
+                    <template v-if="msg.thinkDone && !msg.thinkOpen && msg.toolTimeline?.length">
+                      <span class="think-chip-sep" aria-hidden="true">·</span>
+                      <span v-if="msg.toolTimeline.some(t => t.name === 'search' || t.icon === 'search')" class="think-chip">{{ t('aiChat.thinkSummarySearched') }}</span>
+                      <span v-if="msg.toolTimeline.filter(t => t.name !== 'search' && t.icon !== 'search').length > 0" class="think-chip">{{ t('aiChat.thinkSummaryTools', { n: msg.toolTimeline.filter(t => t.name !== 'search' && t.icon !== 'search').length }) }}</span>
+                    </template>
                     <svg class="think-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </button>
-                  <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
-                  <div v-if="msg.thinkOpen && msg.thinkContent" class="think-content" v-html="msg.thinkContent" />
-                </div>
-                <div v-if="msg.role === 'assistant' && msg.toolTimeline?.length" class="tool-timeline">
-                  <div
-                    v-for="tool in msg.toolTimeline"
-                    :key="tool.id"
-                    class="tool-card"
-                    :class="{ 'tool-card--done': tool.result, 'tool-card--error': tool.result && !tool.result.success }"
-                  >
-                    <div class="tool-card-main">
-                      <span class="tool-card-icon" aria-hidden="true">{{ toolIcon(tool.icon) }}</span>
-                      <div class="tool-card-copy">
-                        <span class="tool-card-title">{{ tool.displayName }}</span>
-                        <span class="tool-card-meta">{{ toolStatus(tool) }}</span>
+                  <!-- Tool timeline inside think block (shown when expanded) -->
+                  <div v-if="msg.thinkOpen && msg.toolTimeline?.length" class="tool-timeline">
+                    <div
+                      v-for="tool in msg.toolTimeline"
+                      :key="tool.id"
+                      class="tool-card"
+                      :class="{ 'tool-card--done': tool.result, 'tool-card--error': tool.result && !tool.result.success, 'shimmer-active': !tool.result }"
+                    >
+                      <div class="tool-card-main">
+                        <span class="tool-card-icon" aria-hidden="true">{{ toolIcon(tool.icon) }}</span>
+                        <div class="tool-card-copy">
+                          <span class="tool-card-title">{{ tool.displayName }}</span>
+                          <span class="tool-card-meta">{{ toolStatus(tool) }}</span>
+                        </div>
+                      </div>
+                      <div v-if="tool.argumentsText" class="tool-card-args">{{ tool.argumentsText }}</div>
+                      <div v-if="tool.result && !tool.result.success" class="tool-result tool-result--failed">
+                        {{ t('aiChat.toolCallFailed') }}
+                      </div>
+                      <div v-else-if="tool.result" class="tool-result">
+                        {{ toolResultText(tool.result) }}
                       </div>
                     </div>
-                    <div v-if="tool.argumentsText" class="tool-card-args">{{ tool.argumentsText }}</div>
-                    <div v-if="tool.result" class="tool-result">
-                      {{ toolResultText(tool.result) }}
-                    </div>
                   </div>
+                  <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
+                  <div v-if="msg.thinkOpen && msg.thinkContent" class="think-content" v-html="msg.thinkContent" />
                 </div>
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
@@ -285,6 +302,18 @@
                 <!-- eslint-enable vue/no-v-html -->
                 <div v-if="msg.role === 'user'" class="bubble-text">{{ msg.content }}</div>
                 <span class="msg-time">{{ msg.displayTime }}</span>
+                <!-- User message send status indicator -->
+                <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
+                  <span class="send-status-dot" aria-hidden="true" />
+                  <span>{{ t('aiChat.sendingMessage') }}</span>
+                </div>
+                <div v-if="msg.role === 'user' && msg.sendStatus === 'failed'" class="send-status send-status--failed" aria-live="polite">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                  </svg>
+                  <span>{{ t('aiChat.sendFailed') }}</span>
+                  <button class="send-retry-btn" :disabled="asking" @click="onRetrySend(idx)">{{ t('aiChat.resend') }}</button>
+                </div>
                 <!-- User message actions: copy + edit -->
                 <div v-if="msg.role === 'user'" class="msg-actions msg-actions--user">
                   <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
@@ -300,8 +329,14 @@
                     </svg>
                   </button>
                 </div>
-                <!-- Assistant message actions -->
-                <div v-if="msg.role === 'assistant'" class="msg-actions">
+                <!-- Streaming cursor: visible while answering -->
+                <span v-if="msg.role === 'assistant' && msg.phase === 'answering'" class="stream-cursor" aria-hidden="true">▌</span>
+                <!-- Interrupted hint -->
+                <div v-if="msg.role === 'assistant' && msg.phase === 'interrupted'" class="interrupted-hint" aria-live="polite">
+                  {{ t('aiChat.generationStopped') }}
+                </div>
+                <!-- Assistant message actions: only shown after generation completes/stops/fails -->
+                <div v-if="msg.role === 'assistant' && (msg.phase === 'done' || msg.phase === 'interrupted' || msg.phase === 'error')" class="msg-actions">
                   <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -347,6 +382,21 @@
       </template>
     </div>
 
+    <!-- Scroll-to-bottom floating button: shown when user scrolled up during streaming -->
+    <transition name="scroll-btn">
+      <button
+        v-if="isUserScrolledUp && asking"
+        class="scroll-to-bottom-btn"
+        :aria-label="t('aiChat.scrollToBottom')"
+        @click="onScrollToBottom"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <span>{{ t('aiChat.scrollToBottom') }}</span>
+      </button>
+    </transition>
+
     <!-- Input bar -->
     <div class="input-bar">
       <AIChatInput
@@ -356,7 +406,7 @@
         :disabled="asking"
         :loading="asking || connecting"
         :show-clear="messages.length > 0"
-        placeholder="{{ t('aiChat.inputPlaceholder') }}"
+        :placeholder="t('aiChat.inputPlaceholder')"
         @submit="onSend"
         @abort="onAbort"
         @action="onAction"
@@ -435,7 +485,8 @@ function formatTime(iso: string) {
 interface Message {
   id: string
   role: 'user' | 'assistant'
-  phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error'
+  phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error' | 'interrupted'
+  sendStatus?: 'sending' | 'sent' | 'failed'
   content: string
   renderedContent?: string
   created_at: string
@@ -446,6 +497,7 @@ interface Message {
   thinkOpen?: boolean
   thinkDone?: boolean
   thinkSeconds?: number
+  thinkManuallyToggled?: boolean
   toolTimeline?: ToolTimelineItem[]
 }
 
@@ -472,9 +524,11 @@ const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
+const connectingSeconds = ref(0)
 const deepThink = ref(false)
 const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
+const isUserScrolledUp = ref(false)
 const showHistory = ref(false)
 const sessions = ref<SessionSummary[]>([])
 const sessionsLoading = ref(false)
@@ -633,6 +687,7 @@ const isLight = computed(() => dataTheme.value === 'light')
 let themeObserver: MutationObserver | null = null
 
 let abortController: AbortController | null = null
+let connectTimer: ReturnType<typeof setInterval> | null = null
 
 
 const sessionTitle = computed(() => {
@@ -704,9 +759,10 @@ function renderMarkdownThrottled(text: string, target: { content: string; render
   }, 100) // Render every 100ms max
 }
 
-async function scrollToBottom() {
+async function scrollToBottom(force = false) {
   await nextTick()
   if (scrollRef.value) {
+    if (!force && isUserScrolledUp.value) return // Don't auto-scroll when user has scrolled up
     if (scrollRAF) return // Already pending
     scrollRAF = requestAnimationFrame(() => {
       scrollRAF = null
@@ -714,6 +770,23 @@ async function scrollToBottom() {
         scrollRef.value.scrollTop = scrollRef.value.scrollHeight
       }
     })
+  }
+}
+
+function onChatScroll() {
+  const el = scrollRef.value
+  if (!el) return
+  const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  // Mark as scrolled up when more than 100px from bottom (only during streaming)
+  if (asking.value) {
+    isUserScrolledUp.value = distFromBottom > 100
+  }
+}
+
+function onScrollToBottom() {
+  isUserScrolledUp.value = false
+  if (scrollRef.value) {
+    scrollRef.value.scrollTop = scrollRef.value.scrollHeight
   }
 }
 
@@ -872,9 +945,11 @@ async function onSend() {
   const q = inputText.value.trim()
   if (!q || asking.value) return
 
+  const userMsgId = Date.now().toString()
   messages.value.push({
-    id: Date.now().toString(),
+    id: userMsgId,
     role: 'user',
+    sendStatus: 'sending',
     content: q,
     created_at: new Date().toISOString(),
     displayTime: formatTime(new Date().toISOString()),
@@ -882,8 +957,11 @@ async function onSend() {
   inputText.value = ''
   asking.value = true
   connecting.value = true  // Show connecting animation first
+  connectingSeconds.value = 0
+  connectTimer = setInterval(() => { connectingSeconds.value++ }, 1000)
   abortController = new AbortController()
   await scrollToBottom()
+  const userMsgIdx = messages.value.findIndex((m) => m.id === userMsgId)
 
   // Add assistant message placeholder (with think block if deep_think)
   const thinkStart = deepThink.value ? Date.now() : 0
@@ -924,8 +1002,13 @@ async function onSend() {
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation
+    if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
     connecting.value = false
     messages.value[msgIdx].phase = deepThink.value ? 'thinking' : 'answering'
+    // Mark user message as sent
+    if (userMsgIdx >= 0) {
+      messages.value[userMsgIdx].sendStatus = 'sent'
+    }
     await scrollToBottom()
 
     function handleEvent(event: AgentEvent) {
@@ -943,6 +1026,10 @@ async function onSend() {
       }
       if (event.type === 'phase.answering') {
         messages.value[msgIdx].phase = 'answering'
+        // Auto-collapse think block when answering starts, unless user manually toggled it
+        if (messages.value[msgIdx].thinkDone && !messages.value[msgIdx].thinkManuallyToggled) {
+          messages.value[msgIdx].thinkOpen = false
+        }
         return
       }
       if (event.type === 'token.stream' && event.is_thinking) {
@@ -955,8 +1042,11 @@ async function onSend() {
           thinkingDone = true
           if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
           messages.value[msgIdx].thinkDone = true
-          messages.value[msgIdx].thinkOpen = false
           messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
+          // Auto-collapse unless user manually toggled
+          if (!messages.value[msgIdx].thinkManuallyToggled) {
+            messages.value[msgIdx].thinkOpen = false
+          }
           // Final render for think content
           if (thinkRaw) {
             messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
@@ -1033,7 +1123,9 @@ async function onSend() {
     if (deepThink.value && !thinkingDone) {
       if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
       messages.value[msgIdx].thinkDone = true
-      messages.value[msgIdx].thinkOpen = false
+      if (!messages.value[msgIdx].thinkManuallyToggled) {
+        messages.value[msgIdx].thinkOpen = false
+      }
       messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
       // Final render for think content
       if (thinkRaw) {
@@ -1044,15 +1136,30 @@ async function onSend() {
     messages.value[msgIdx].phase = textRaw ? 'done' : 'error'
     asking.value = false
     connecting.value = false
+    isUserScrolledUp.value = false
     abortController = null
-    await scrollToBottom()
+    await scrollToBottom(true)
   } catch (err: unknown) {
     if (thinkTimer) clearInterval(thinkTimer)
+    if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
     if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
+      // Finalize the assistant message so it doesn't stay in connecting/thinking/answering phase
+      if (messages.value[msgIdx]) {
+        messages.value[msgIdx].phase = textRaw ? 'interrupted' : 'error'
+        if (!textRaw) {
+          messages.value[msgIdx].content = t('toast.aiChatError')
+          messages.value[msgIdx].renderedContent = `<p>${t('toast.aiChatError')}</p>`
+        }
+      }
       asking.value = false
       connecting.value = false
+      isUserScrolledUp.value = false
       abortController = null
       return
+    }
+    // Mark user message as failed so the retry indicator shows
+    if (userMsgIdx >= 0) {
+      messages.value[userMsgIdx].sendStatus = 'failed'
     }
     messages.value[msgIdx] = {
       id: Date.now().toString(),
@@ -1100,9 +1207,18 @@ function toolResultText(result: NonNullable<ToolTimelineItem['result']>) {
 
 function onAbort() {
   abortController?.abort()
+  if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
+  // Mark the last in-progress assistant message as interrupted
+  const lastAssistant = [...messages.value].reverse().find((m) => m.role === 'assistant' && m.phase === 'answering')
+  if (lastAssistant) lastAssistant.phase = 'interrupted'
   asking.value = false
   connecting.value = false
   abortController = null
+}
+
+function onThinkToggle(msg: Message) {
+  msg.thinkManuallyToggled = true
+  msg.thinkOpen = !msg.thinkOpen
 }
 
 async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {
@@ -1166,17 +1282,11 @@ async function onRegenerate(idx: number) {
   const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
   if (!prevUser || asking.value) return
 
-  // Check if this is the last user message - don't duplicate
-  const lastUserMsg = [...messages.value].reverse().find((m) => m.role === 'user')
-  if (lastUserMsg && lastUserMsg.id === prevUser.id) {
-    // It's the last user question - just regenerate without adding duplicate
-    // Remove the assistant response and re-send
-    messages.value.splice(idx, 1)
-  } else {
-    // It's a previous user question - remove the response and add question back
-    messages.value.splice(idx, 1)
-    inputText.value = prevUser.content
-  }
+  const prevUserIdx = messages.value.indexOf(prevUser)
+  // Remove the assistant response and the preceding user message, then re-send
+  // This avoids duplicating the user message when onSend() pushes a new one
+  messages.value.splice(prevUserIdx, idx - prevUserIdx + 1)
+  inputText.value = prevUser.content
   await onSend()
 }
 
@@ -1198,6 +1308,18 @@ async function onRetryError(idx: number) {
   await onSend()
 }
 
+async function onRetrySend(idx: number) {
+  if (asking.value) return
+  const msg = messages.value[idx]
+  if (!msg || msg.role !== 'user') return
+  // Reset send status and re-send
+  msg.sendStatus = 'sending'
+  inputText.value = msg.content
+  // Remove this user message so onSend re-pushes it fresh
+  messages.value.splice(idx, 1)
+  await onSend()
+}
+
 // Infinite scroll: watch sentinel at setup level so the watcher is properly tracked
 // and cleaned up by Vue's effect scope (not leaked inside onMounted)
 watch(paginationSentinelRef, (el) => {
@@ -1211,6 +1333,9 @@ onMounted(async () => {
     dataTheme.value = document.documentElement.getAttribute('data-theme') ?? 'dark'
   })
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
+  // Bind scroll listener for auto-scroll pause detection
+  scrollRef.value?.addEventListener('scroll', onChatScroll, { passive: true })
 
   // Create IntersectionObserver for infinite scroll
   paginationObserver = new IntersectionObserver(
@@ -1272,6 +1397,7 @@ onMounted(async () => {
 onUnmounted(() => {
   themeObserver?.disconnect()
   paginationObserver?.disconnect()
+  scrollRef.value?.removeEventListener('scroll', onChatScroll)
 })
 </script>
 
@@ -1296,6 +1422,7 @@ onUnmounted(() => {
   --think-bg: rgba(99, 102, 241, 0.08);
   --think-border: rgba(99, 102, 241, 0.25);
   --think-color: rgba(255, 255, 255, 0.55);
+  --shimmer-color: rgba(255, 255, 255, 0.06);
 }
 
 .ai-chat-page.theme-light {
@@ -1317,6 +1444,7 @@ onUnmounted(() => {
   --think-bg: rgba(99, 102, 241, 0.1);
   --think-border: rgba(99, 102, 241, 0.35);
   --think-color: rgba(0, 0, 0, 0.7);
+  --shimmer-color: rgba(255, 255, 255, 0.45);
 }
 
 /* ── Page shell ── */
@@ -1918,6 +2046,26 @@ onUnmounted(() => {
   margin-left: 2px;
 }
 
+.think-chip-sep {
+  color: var(--text-muted);
+  font-size: 11px;
+  margin: 0 2px;
+}
+
+.think-chip {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: rgba(99, 102, 241, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.tool-result--failed {
+  color: #f87171;
+  font-size: 11px;
+  padding: 4px 0 0;
+}
+
 .think-chevron {
   margin-left: auto;
   transition: transform 0.2s;
@@ -2054,7 +2202,48 @@ onUnmounted(() => {
   color: var(--bubble-ai-color);
 }
 .bubble.assistant .bubble-text :deep(strong) { color: var(--text-primary); }
-.bubble.assistant .bubble-text :deep(a) { color: #818cf8; text-decoration: underline; }
+.bubble.assistant .bubble-text :deep(a) { color: #818cf8; text-decoration: underline; word-break: break-all; }
+/* Mobile overflow fixes for code blocks and tables */
+.bubble.assistant .bubble-text :deep(pre) { max-width: 100%; -webkit-overflow-scrolling: touch; }
+.bubble.assistant .bubble-text :deep(table) {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.bubble.assistant .bubble-text :deep(th),
+.bubble.assistant .bubble-text :deep(td) {
+  border: 1px solid var(--bubble-ai-border);
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+.bubble.assistant .bubble-text :deep(img) { max-width: 100%; height: auto; }
+
+/* ── Streaming cursor ── */
+.stream-cursor {
+  display: inline-block;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1;
+  margin-left: 1px;
+  animation: cursor-blink 0.8s step-end infinite;
+}
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stream-cursor { animation: none; }
+}
+
+/* ── Interrupted hint ── */
+.interrupted-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 4px 4px 0;
+}
 
 .bubble.user .bubble-text {
   background: var(--bubble-user-bg);
@@ -2073,6 +2262,50 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   padding: 0 4px;
+}
+
+/* ── User message send status ── */
+.send-status {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 2px 4px;
+  justify-content: flex-end;
+}
+.send-status--sending {
+  color: var(--text-muted);
+}
+.send-status--failed {
+  color: #f87171;
+}
+.send-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: send-dot-pulse 1.2s ease-in-out infinite;
+}
+@keyframes send-dot-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .send-status-dot { animation: none; opacity: 0.7; }
+}
+.send-retry-btn {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  color: inherit;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 1px 6px;
+  min-height: 22px;
+}
+.send-retry-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* ── Message action buttons ── */
@@ -2156,6 +2389,40 @@ onUnmounted(() => {
   }
 }
 
+/* ── Scroll-to-bottom floating button ── */
+.scroll-to-bottom-btn {
+  position: fixed;
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  background: var(--suggestion-bg);
+  border: 1px solid var(--suggestion-border);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  z-index: 10;
+  white-space: nowrap;
+  min-height: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+.scroll-to-bottom-btn:active {
+  opacity: 0.8;
+}
+.scroll-btn-enter-active,
+.scroll-btn-leave-active {
+  transition: opacity 0.2s, transform 0.2s;
+}
+.scroll-btn-enter-from,
+.scroll-btn-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+}
+
 /* ── Input bar ── */
 .input-bar {
   padding: 8px 16px calc(12px + env(safe-area-inset-bottom));
@@ -2184,6 +2451,54 @@ onUnmounted(() => {
 .bubble.assistant--thinking {
   position: relative;
   overflow: visible;
+}
+
+/* ── Connecting state region ── */
+.connecting-region {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 4px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  position: relative;
+  overflow: hidden;
+}
+.connecting-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  flex-shrink: 0;
+  animation: connecting-pulse 1.2s ease-in-out infinite;
+}
+@keyframes connecting-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+.connecting-label { font-size: 13px; }
+.connecting-sep { color: var(--text-muted); }
+.connecting-time { color: var(--text-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+/* ── Shimmer sweep animation ── */
+.shimmer-active {
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--shimmer-color, rgba(255,255,255,0.07)) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 2s linear infinite;
+}
+@keyframes shimmer-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer-active { animation: none; background-image: none; }
+  .connecting-dot { animation: none; opacity: 0.7; }
 }
 
 .thinking-placeholder {
