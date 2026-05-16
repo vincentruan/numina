@@ -8,7 +8,9 @@
 
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./server
+      dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
     volumes:
@@ -19,23 +21,76 @@ services:
       - TZ=Asia/Shanghai
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
       - UPLOAD_DIR=/app/data/uploads
+      - AGENT_BASE_URL=http://numina-agent:8001
+      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
-    # Don't expose backend port externally
     expose:
       - "8000"
 
-  frontend:
+  agent:
+    build:
+      context: ./server
+      dockerfile: apps/agent/Dockerfile
+    container_name: numina-agent
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+      - agent_logs:/app/logs
+    env_file:
+      - .env.production
+    environment:
+      - TZ=Asia/Shanghai
+      - ENVIRONMENT=production
+      - BACKEND_BASE_URL=http://numina-backend:8000
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    expose:
+      - "8001"
+
+  scheduler_worker:
+    build:
+      context: ./server
+      dockerfile: apps/scheduler_worker/Dockerfile
+    container_name: numina-scheduler-worker
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env.production
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - ENVIRONMENT=production
+      - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  frontend-main:
     build:
       context: .
       dockerfile: frontend/apps/main/Dockerfile
-    container_name: numina-frontend
+    container_name: numina-frontend-main
     restart: unless-stopped
-    # Don't expose frontend port externally
     expose:
       - "80"
 
@@ -59,6 +114,12 @@ services:
       - ./data/uploads:/app/data/uploads:ro
       - ./site:/usr/share/nginx/site:ro
     depends_on:
-      - backend
-      - frontend
-      - frontend-child
+      backend:
+        condition: service_healthy
+      frontend-main:
+        condition: service_started
+      frontend-child:
+        condition: service_started
+
+volumes:
+  agent_logs:

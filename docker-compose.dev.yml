@@ -82,10 +82,10 @@ services:
       retries: 3
       start_period: 30s
 
-  frontend:
+  frontend-main:
     build: !reset null
     image: node:20-alpine
-    container_name: numina-frontend
+    container_name: numina-frontend-main
     restart: unless-stopped
     working_dir: /app/frontend/apps/main
     volumes:
@@ -149,7 +149,7 @@ services:
       - ./site:/usr/share/nginx/site:ro
     depends_on:
       - backend
-      - frontend
+      - frontend-main
       - frontend-child
 
 volumes:

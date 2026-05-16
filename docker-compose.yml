@@ -82,14 +82,14 @@ services:
       retries: 3
       start_period: 15s
 
-  frontend:
+  frontend-main:
     build:
       context: .
       dockerfile: frontend/apps/main/Dockerfile
-    container_name: numina-frontend
+    container_name: numina-frontend-main
     restart: unless-stopped
-    ports:
-      - "28080:80"
+    expose:
+      - "80"
 
   frontend-child:
     build:
@@ -116,7 +116,7 @@ services:
     depends_on:
       backend:
         condition: service_healthy
-      frontend:
+      frontend-main:
         condition: service_started
       frontend-child:
         condition: service_healthy
