@@ -1260,6 +1260,9 @@ export default {
     minutesAgo: '{minutes} 分钟前',
     hoursAgo: '{hours} 小时前',
     daysAgo: '{days} 天前',
+    capStatusRunning: '分析中',
+    capStatusQueued: '排队中',
+    capStatusDone: '已完成',
   },
   aiReport: {
     title: '家庭资产体检',
@@ -1334,6 +1337,7 @@ export default {
     recommendedBadge: '推荐方案',
     priorityHint: '优先还款：{debt}',
     savingsHint: '预计节省利息：¥{amount}',
+    strategyTabsAria: '还款策略',
   },
   spendingLeaks: {
     title: '资金泄漏检测',

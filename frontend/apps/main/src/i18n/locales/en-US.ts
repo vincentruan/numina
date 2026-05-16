@@ -921,6 +921,9 @@ export default {
     minutesAgo: '{minutes} min ago',
     hoursAgo: '{hours} hours ago',
     daysAgo: '{days} days ago',
+    capStatusRunning: 'Analyzing',
+    capStatusQueued: 'Queued',
+    capStatusDone: 'Completed',
   },
   aiTask: {
     status: {
@@ -1059,6 +1062,7 @@ export default {
     recommendedBadge: 'Recommended',
     priorityHint: 'Priority: {debt}',
     savingsHint: 'Est. Interest Savings: ¥{amount}',
+    strategyTabsAria: 'Repayment Strategy',
   },
   spendingLeaks: {
     title: 'Spending Leak Detection',

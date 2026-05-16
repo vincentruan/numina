@@ -139,19 +139,19 @@
           <span
             v-if="capTaskStatus[cap.id] === 'running'"
             class="cap-status-badge cap-status-badge--running"
-            aria-label="分析中"
+            :aria-label="t('aiHub.capStatusRunning')"
             aria-hidden="true"
           >⏳</span>
           <span
             v-else-if="capTaskStatus[cap.id] === 'queued'"
             class="cap-status-badge cap-status-badge--queued"
-            aria-label="排队中"
+            :aria-label="t('aiHub.capStatusQueued')"
             aria-hidden="true"
           >🕐</span>
           <span
             v-else-if="capTaskStatus[cap.id] === 'completed'"
             class="cap-status-badge cap-status-badge--done"
-            aria-label="已完成"
+            :aria-label="t('aiHub.capStatusDone')"
             aria-hidden="true"
           >✅</span>
         </button>

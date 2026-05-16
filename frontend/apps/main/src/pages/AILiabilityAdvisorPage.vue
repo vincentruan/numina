@@ -155,7 +155,7 @@
         </div>
 
         <!-- Strategy Tabs -->
-        <van-tabs v-model:active="activeTab" class="strategy-tabs" aria-label="还款策略">
+        <van-tabs v-model:active="activeTab" class="strategy-tabs" :aria-label="t('aiLiability.strategyTabsAria')">
           <van-tab
             v-for="strategy in data.strategies"
             :key="strategy.strategy"
