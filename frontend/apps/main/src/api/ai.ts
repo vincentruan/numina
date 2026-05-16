@@ -1,8 +1,92 @@
 import http, { refreshTokenIfNeeded } from './index'
 import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse, ChatMessage } from '@/types'
 
-// Frontend-facing flat config shape (mapped from backend multi-config model)
-export interface AIConfig {
+// ── Multi-provider config types ───────────────────────────────────────────────
+
+export interface ProviderTestResult {
+  id: string
+  test_type: string
+  success: boolean | null
+  message: string | null
+  latency_ms: number | null
+  tested_at: string
+}
+
+export interface ProviderConfig {
+  id: string
+  name: string
+  provider: string
+  ai_api_key_masked: string | null
+  base_url: string | null
+  model_id: string | null
+  vision_model_id: string | null
+  timeout_seconds: number
+  is_active: boolean
+  provider_name: string
+  display_order: number
+  model_2_id: string | null
+  model_3_id: string | null
+  model_1_capabilities: string[]
+  model_2_capabilities: string[]
+  model_3_capabilities: string[]
+  circuit_open: boolean
+  circuit_open_until: string | null
+  failure_count: number
+  test_results: ProviderTestResult[]
+}
+
+export interface ProviderConfigCreate {
+  name: string
+  provider: string
+  ai_api_key?: string | null
+  base_url?: string | null
+  model_id?: string | null
+  vision_model_id?: string | null
+  timeout_seconds?: number | null
+  is_active?: boolean
+  provider_name?: string | null
+  display_order?: number | null
+  model_2_id?: string | null
+  model_3_id?: string | null
+  model_1_capabilities?: string[] | null
+  model_2_capabilities?: string[] | null
+  model_3_capabilities?: string[] | null
+}
+
+export interface ProviderConfigUpdate {
+  name?: string | null
+  provider?: string | null
+  ai_api_key?: string | null
+  base_url?: string | null
+  model_id?: string | null
+  vision_model_id?: string | null
+  timeout_seconds?: number | null
+  is_active?: boolean | null
+  provider_name?: string | null
+  display_order?: number | null
+  model_2_id?: string | null
+  model_3_id?: string | null
+  model_1_capabilities?: string[] | null
+  model_2_capabilities?: string[] | null
+  model_3_capabilities?: string[] | null
+}
+
+export const getAIConfigs = () =>
+  http.get<{ configs: ProviderConfig[] }>('/ai/config')
+
+export const createAIConfig = (payload: ProviderConfigCreate) =>
+  http.post<ProviderConfig>('/ai/config', payload)
+
+export const updateProviderConfig = (id: string, payload: ProviderConfigUpdate) =>
+  http.put<ProviderConfig>(`/ai/config/${id}`, payload)
+
+export const reorderAIConfigs = (order: string[]) =>
+  http.put<{ ok: boolean }>('/ai/config/reorder', { order })
+
+export const resetCircuitBreaker = (id: string) =>
+  http.post<{ ok: boolean }>(`/ai/config/${id}/reset-circuit`)
+
+// ── Legacy flat config shape (kept for backward compat) ───────────────────────
   id: string | null
   ai_enabled: boolean
   ai_provider: string | null

@@ -14,6 +14,7 @@ Session memory injection:
   thread_id so family isolation is maintained at the conversation level.
 """
 
+import atexit
 import contextlib
 import logging
 import os
@@ -31,9 +32,16 @@ logger = logging.getLogger(__name__)
 
 # LRU 缓存：最多 100 个家庭
 _MAX_CACHE_SIZE = 100
-_adapter_cache: OrderedDict[str, tuple[DeerFlowClient, Path]] = OrderedDict()
+# Values are either (DeerFlowClient, Path) for a live entry, or None as a
+# placeholder while a new client is being initialised (prevents TOCTOU races
+# where two threads both pass the size check and both insert).
+_adapter_cache: OrderedDict[tuple[str, str], tuple[DeerFlowClient, Path] | None] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
+# Per-key init lock: serialises reload_app_config + DeerFlowClient() for the
+# same (family_id, config_id) so concurrent requests don't interleave global
+# DeerFlow config state.
+_init_lock = threading.Lock()
 
 # Shared checkpointer singleton — created once, reused by all DeerFlowClient instances.
 # Guarded by _checkpointer_lock to prevent double-initialisation under concurrency.
@@ -160,7 +168,12 @@ def _generate_temp_config(
     use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
 
     # 构建 models 列表（DeerFlow harness 期望的格式）
-    thinking_supported = bool(ai_config.get("thinking_supported", False))
+    # Prefer model_1_capabilities list; fall back to legacy thinking_supported flag.
+    model_1_caps = ai_config.get("model_1_capabilities")
+    if model_1_caps is not None:
+        thinking_supported = "deep_thinking" in model_1_caps
+    else:
+        thinking_supported = bool(ai_config.get("thinking_supported", False))
 
     # Select appropriate LangChain model class based on provider and thinking support.
     # DeerFlow provides patched model classes for specific providers that handle
@@ -254,6 +267,15 @@ def get_family_adapter(
     so different families' conversations remain isolated even with a shared
     checkpointer instance.
 
+    Thread safety:
+    - _cache_lock guards all reads/writes to _adapter_cache.
+    - A None placeholder is inserted under _cache_lock before releasing it,
+      so concurrent threads that miss the cache see the placeholder and wait
+      on _init_lock rather than both starting initialisation.
+    - _init_lock serialises reload_app_config() + DeerFlowClient() so that
+      concurrent requests for different families don't interleave global
+      DeerFlow config state.
+
     Args:
         family_id: 家庭 ID
         ai_config: 家庭的 AI 配置
@@ -266,77 +288,152 @@ def get_family_adapter(
     if base_config_dir is None:
         base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
 
-    # 检查缓存 (thread lock to prevent race)
+    config_id: str = ai_config.get("config_id", "")
+    cache_key: tuple[str, str] = (family_id, config_id)
+
+    # Fast path: return cached client
     with _cache_lock:
-        if family_id in _adapter_cache:
-            client, _ = _adapter_cache[family_id]
-            # 移到末尾（LRU 更新）
-            _adapter_cache.move_to_end(family_id)
-            logger.debug("[deerflow_cache] reuse cached adapter for family=%s", family_id)
+        entry = _adapter_cache.get(cache_key)
+        if entry is not None:
+            client, _ = entry
+            _adapter_cache.move_to_end(cache_key)
+            logger.debug("[deerflow_cache] reuse cached adapter for family=%s config_id=%s", family_id, config_id)
             return client
 
-        # 缓存满时清理最旧的
+        # Reserve the slot with a placeholder to prevent concurrent initialisations
+        # for the same key (TOCTOU fix). Also evict the oldest entry if at capacity.
         if len(_adapter_cache) >= _MAX_CACHE_SIZE:
-            oldest_family_id, (_, oldest_config_path) = _adapter_cache.popitem(last=False)
-            # 清理临时配置目录
-            with contextlib.suppress(Exception):
-                shutil.rmtree(oldest_config_path.parent, ignore_errors=True)
-            logger.debug("[deerflow_cache] evicted adapter for family=%s", oldest_family_id)
+            oldest_key, oldest_entry = _adapter_cache.popitem(last=False)
+            if oldest_entry is not None:
+                _, oldest_config_path = oldest_entry
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(oldest_config_path.parent, ignore_errors=True)
+            logger.debug("[deerflow_cache] evicted adapter for key=%s", oldest_key)
 
-    # 生成临时配置（outside lock to avoid blocking during file I/O）
+        _adapter_cache[cache_key] = None  # placeholder
+
+    # Serialise reload_app_config() + DeerFlowClient() to prevent concurrent
+    # threads from interleaving global DeerFlow config state. File I/O for
+    # _generate_temp_config happens outside this lock to minimise contention.
     temp_config_path = _generate_temp_config(base_config_dir, ai_config)
-
-    # 设置环境变量（DeerFlow harness 需要 DEER_FLOW_CONFIG_PATH）
-    os.environ["DEER_FLOW_CONFIG_PATH"] = str(temp_config_path)
 
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
-    # temp config (which has the same checkpointer section but we want to
-    # initialise it exactly once).
+    # temp config (initialised exactly once).
     checkpointer = _get_shared_checkpointer(base_config_dir)
 
-    # 初始化 DeerFlowClient — pass checkpointer explicitly so each client
-    # uses the shared persistent store instead of resolving get_checkpointer()
-    # lazily after reload_app_config() may have changed the global config.
     try:
-        reload_app_config(str(temp_config_path))
-        client = DeerFlowClient(config_path=str(temp_config_path), checkpointer=checkpointer)
-        # 缓存 (thread lock for safe insertion)
+        with _init_lock:
+            # Re-check: another thread may have completed init for this key
+            # while we were waiting on _init_lock.
+            with _cache_lock:
+                entry = _adapter_cache.get(cache_key)
+                if entry is not None:
+                    client, _ = entry
+                    _adapter_cache.move_to_end(cache_key)
+                    # Clean up the temp config we generated but won't use
+                    with contextlib.suppress(Exception):
+                        shutil.rmtree(temp_config_path.parent, ignore_errors=True)
+                    return client
+
+            # Set DEER_FLOW_CONFIG_PATH inside the init lock so concurrent
+            # threads for different families don't overwrite each other's path.
+            # DeerFlowClient.__init__ calls get_app_config() which uses this
+            # env var to resolve the config file path.
+            prev_config_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
+            os.environ["DEER_FLOW_CONFIG_PATH"] = str(temp_config_path)
+            try:
+                reload_app_config(str(temp_config_path))
+                client = DeerFlowClient(config_path=str(temp_config_path), checkpointer=checkpointer)
+            finally:
+                # Restore previous value (or remove if it wasn't set)
+                if prev_config_path is not None:
+                    os.environ["DEER_FLOW_CONFIG_PATH"] = prev_config_path
+                else:
+                    os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+
         with _cache_lock:
-            _adapter_cache[family_id] = (client, temp_config_path)
+            _adapter_cache[cache_key] = (client, temp_config_path)
+
         logger.info(
-            "[deerflow_cache] created new adapter for family=%s, model=%s",
+            "[deerflow_cache] created new adapter for family=%s config_id=%s model=%s",
             family_id,
+            config_id,
             ai_config.get("ai_model_id"),
         )
         return client
     except Exception as e:
-        # 清理临时配置
+        # Remove placeholder and clean up temp config on failure
+        with _cache_lock:
+            if _adapter_cache.get(cache_key) is None:
+                _adapter_cache.pop(cache_key, None)
         with contextlib.suppress(Exception):
             shutil.rmtree(temp_config_path.parent, ignore_errors=True)
-        raise RuntimeError(f"Failed to initialize DeerFlowClient for family={family_id}: {e}") from e
+        raise RuntimeError(f"Failed to initialize DeerFlowClient for family={family_id} config_id={config_id}: {e}") from e
+
+
+def _atexit_cleanup() -> None:
+    """Clean up all cached adapters and temp config dirs at process exit."""
+    with contextlib.suppress(Exception):
+        clear_cache()
+
+
+atexit.register(_atexit_cleanup)
 
 
 def invalidate_family_adapter(family_id: str) -> None:
-    """清理家庭的缓存实例。
+    """清理家庭的所有缓存实例（按 family_id 批量清除所有 config_id 条目）。
 
     Args:
         family_id: 家庭 ID
     """
     with _cache_lock:
-        if family_id in _adapter_cache:
-            _, config_path = _adapter_cache.pop(family_id)
-            with contextlib.suppress(Exception):
-                shutil.rmtree(config_path.parent, ignore_errors=True)
-            logger.info("[deerflow_cache] invalidated adapter for family=%s", family_id)
+        keys_to_remove = [k for k in _adapter_cache if k[0] == family_id]
+        for key in keys_to_remove:
+            entry = _adapter_cache.pop(key)
+            if entry is not None:
+                _, config_path = entry
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(config_path.parent, ignore_errors=True)
+            logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, key[1])
+
+
+def invalidate_family_adapter_cache(family_id: str, config_id: str | None = None) -> None:
+    """清理家庭的缓存实例。
+
+    Args:
+        family_id: 家庭 ID
+        config_id: 供应商配置 ID。若提供则只清除该条目；若为 None 则清除该家庭所有条目。
+    """
+    with _cache_lock:
+        if config_id is not None:
+            key = (family_id, config_id)
+            if key in _adapter_cache:
+                entry = _adapter_cache.pop(key)
+                if entry is not None:
+                    _, config_path = entry
+                    with contextlib.suppress(Exception):
+                        shutil.rmtree(config_path.parent, ignore_errors=True)
+                logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, config_id)
+        else:
+            keys_to_remove = [k for k in _adapter_cache if k[0] == family_id]
+            for key in keys_to_remove:
+                entry = _adapter_cache.pop(key)
+                if entry is not None:
+                    _, config_path = entry
+                    with contextlib.suppress(Exception):
+                        shutil.rmtree(config_path.parent, ignore_errors=True)
+                logger.info("[deerflow_cache] invalidated adapter for family=%s config_id=%s", family_id, key[1])
 
 
 def clear_cache() -> None:
     """清理所有缓存实例。"""
     with _cache_lock:
-        for _family_id, (_, config_path) in list(_adapter_cache.items()):
-            with contextlib.suppress(Exception):
-                shutil.rmtree(config_path.parent, ignore_errors=True)
+        for _key, entry in list(_adapter_cache.items()):
+            if entry is not None:
+                _, config_path = entry
+                with contextlib.suppress(Exception):
+                    shutil.rmtree(config_path.parent, ignore_errors=True)
         _adapter_cache.clear()
         logger.info("[deerflow_cache] cleared all cached adapters")
 

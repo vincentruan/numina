@@ -40,6 +40,60 @@ from apps.agent.services.stream_events import EventStreamBuilder
 logger = logging.getLogger(__name__)
 
 
+def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str, list[str]]:
+    """基于任务类型从 providers 列表中选择合适的模型。
+
+    Args:
+        providers: 供应商列表（已按优先级排序、已过滤熔断），每个包含 config_id 和 3 个模型槽位
+        task_type: 任务类型 ("thinking" / "vision" / "text")
+
+    Returns:
+        (selected_provider_dict, model_id, selected_capabilities) — 返回完整 provider dict、
+        选中的 model_id，以及选中槽位的 capabilities 列表（用于 thinking 能力判断）
+
+    Raises:
+        ValueError: providers 列表为空
+    """
+    if not providers:
+        raise ValueError("providers list is empty — no available AI provider")
+
+    required_capability: str
+    if task_type == "thinking":
+        required_capability = "deep_thinking"
+    elif task_type == "vision":
+        required_capability = "vision_understanding"
+    else:
+        required_capability = "text_generation"
+
+    # 遍历 providers，检查每个槽位
+    for provider in providers:
+        # 检查槽位1 (model_id / ai_model_id)
+        caps_1: list[str] = provider.get("model_1_capabilities", [])
+        if required_capability in caps_1 and provider.get("ai_model_id"):
+            return provider, provider["ai_model_id"], caps_1
+
+        # 检查槽位2 (model_2_id)
+        caps_2: list[str] = provider.get("model_2_capabilities", [])
+        if required_capability in caps_2 and provider.get("model_2_id"):
+            return provider, provider["model_2_id"], caps_2
+
+        # 检查槽位3 (model_3_id)
+        caps_3: list[str] = provider.get("model_3_capabilities", [])
+        if required_capability in caps_3 and provider.get("model_3_id"):
+            return provider, provider["model_3_id"], caps_3
+
+    # Fallback: 无匹配能力时返回第一个 provider 的槽位1
+    first_provider = providers[0]
+    fallback_model_id = first_provider.get("ai_model_id", "")
+    fallback_caps: list[str] = first_provider.get("model_1_capabilities", [])
+    logger.warning(
+        "[orchestrator] _select_model: no provider with capability '%s', fallback to model='%s'",
+        required_capability,
+        fallback_model_id,
+    )
+    return first_provider, fallback_model_id, fallback_caps
+
+
 def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-arg]
     """Schedule a coroutine as a fire-and-forget task."""
     try:
@@ -182,19 +236,70 @@ class Orchestrator:
         # ── 1. Fetch AI config & build policy ──────────────────────────
         client = BackendClient(family_id=family_id)
         try:
-            ai_config = await client.get_family_ai_config()
+            ai_configs = await client.get_family_ai_configs()
         except Exception as e:
-            logger.error("[orchestrator] stream_dispatch fetch ai_config failed: %s", e)
+            logger.error("[orchestrator] stream_dispatch fetch ai_configs failed: %s", e)
             yield "暂时无法完成分析，请稍后重试。"
             return
 
-        model_name = ai_config.get("ai_model_id")
+        providers: list[dict] = ai_configs.get("providers", [])
+        ai_enabled: bool = ai_configs.get("ai_enabled", False)
+
+        # ── 2. Select model ────────────────────────────────────────────
+        selected_provider: dict = {}
+        config_id: str = ""
+        selected_caps: list[str] = []
+        try:
+            # Determine task_type for model selection
+            if enable_thinking_override:
+                task_type = "thinking"
+            elif capability == "import_parse":
+                task_type = "vision"
+            else:
+                task_type = "text"
+            selected_provider, model_id, selected_caps = _select_model(providers, task_type)
+            config_id = selected_provider.get("config_id", "")
+        except ValueError as e:
+            logger.error("[orchestrator] stream_dispatch _select_model failed: %s", e)
+            audit_logger.log_call(
+                AuditEntry(
+                    audit_id=audit_id,
+                    capability=capability,
+                    family_id=family_id,
+                    user_id=user_id,
+                    success=False,
+                    deerflow_attempted=False,
+                    duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    error_type="NoProvider",
+                )
+            )
+            yield "暂时无法完成分析，请稍后重试。"
+            return
+
+        if not model_id:
+            logger.error("[orchestrator] stream_dispatch: model_id is empty for family=%s", family_id)
+            audit_logger.log_call(
+                AuditEntry(
+                    audit_id=audit_id,
+                    capability=capability,
+                    family_id=family_id,
+                    user_id=user_id,
+                    success=False,
+                    deerflow_attempted=False,
+                    duration_ms=int(time.monotonic() * 1000) - start_ms,
+                    error_type="NoModelId",
+                )
+            )
+            yield "暂时无法完成分析，请稍后重试。"
+            return
+
+        model_name: str | None = model_id
 
         policy = CapabilityPolicy(
-            ai_enabled=ai_config.get("ai_enabled", False),
-            allowed_capabilities=ai_config.get("allowed_capabilities", []),
-            admin_only_capabilities=ai_config.get("admin_only_capabilities", []),
-            member_role=ai_config.get("member_role", "member"),
+            ai_enabled=ai_enabled,
+            allowed_capabilities=ai_configs.get("allowed_capabilities", []),
+            admin_only_capabilities=ai_configs.get("admin_only_capabilities", []),
+            member_role=ai_configs.get("member_role", "member"),
         )
 
         # ── 2. Policy check ────────────────────────────────────────────
@@ -242,7 +347,7 @@ class Orchestrator:
 
         # ── 6. Load thinking flag ──────────────────────────────────────
         skill_config = skill_loader.load(capability)
-        thinking_supported = ai_config.get("thinking_supported", False)
+        thinking_supported = "deep_thinking" in selected_caps
         enable_thinking = (
             bool(enable_thinking_override) and thinking_supported
             if enable_thinking_override is not None
@@ -251,7 +356,7 @@ class Orchestrator:
 
         # ── 7. DeerFlow stream dispatch ────────────────────────────────
         try:
-            adapter = _create_family_adapter(family_id, ai_config, timeout_seconds=ai_config.get("timeout_seconds", 60))
+            adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60))
             async for chunk in adapter.stream_dispatch(
                 capability,
                 redacted_context,
@@ -262,6 +367,9 @@ class Orchestrator:
                 if text:
                     answer_parts.append(text)
                 yield chunk
+            # Success: reset circuit failure count
+            if config_id:
+                _fire_and_forget(client.reset_circuit_success(config_id))
             audit_logger.log_call(
                 AuditEntry(
                     audit_id=audit_id,
@@ -293,6 +401,9 @@ class Orchestrator:
         except Exception as e:
             logger.error("[orchestrator] stream_dispatch DeerFlow failed: %s", e)
             error_type = type(e).__name__
+            # Report circuit event for provider errors
+            if config_id:
+                _fire_and_forget(client.report_circuit_event(config_id, 500))
             yield "AI 服务暂时不可用，请稍后重试。"
             audit_logger.log_call(
                 AuditEntry(
@@ -345,7 +456,7 @@ class Orchestrator:
                         session_id=effective_thread_id,
                         family_id=family_id,
                         first_user_message=redacted_free_text,
-                        ai_config=ai_config,
+                        ai_config=selected_provider,
                     ))
 
     async def stream_dispatch_events(
@@ -396,7 +507,7 @@ class Orchestrator:
         model_name: str | None = None
         redacted_free_text: str = ""
         redacted_answer: str = ""
-        ai_config: dict = {}
+        selected_provider: dict = {}
         session_started = False
         today = date.today().strftime("%Y-%m-%d")
         user_segment = user_id if user_id else "_shared"
@@ -407,21 +518,50 @@ class Orchestrator:
         try:
             client = BackendClient(family_id=family_id)
             try:
-                ai_config = await client.get_family_ai_config()
+                ai_configs = await client.get_family_ai_configs()
             except Exception as e:
-                logger.error("[orchestrator] stream events fetch ai_config failed: %s", e)
+                logger.error("[orchestrator] stream events fetch ai_configs failed: %s", e)
                 success = False
                 error_type = type(e).__name__
                 yield builder.error("无法获取 AI 配置，请稍后重试。", code="ai_config_error").to_ndjson()
                 return
 
-            model_name = ai_config.get("ai_model_id")
+            providers: list[dict] = ai_configs.get("providers", [])
+            ai_enabled: bool = ai_configs.get("ai_enabled", False)
+
+            # ── Select model ──────────────────────────────────────────────
+            config_id: str = ""
+            selected_caps: list[str] = []
+            try:
+                if enable_thinking_override:
+                    task_type = "thinking"
+                elif capability == "import_parse":
+                    task_type = "vision"
+                else:
+                    task_type = "text"
+                selected_provider, model_id, selected_caps = _select_model(providers, task_type)
+                config_id = selected_provider.get("config_id", "")
+            except ValueError as e:
+                logger.error("[orchestrator] stream events _select_model failed: %s", e)
+                success = False
+                error_type = "NoProvider"
+                yield builder.error("暂时无法完成分析，请稍后重试。", code="no_provider").to_ndjson()
+                return
+
+            if not model_id:
+                logger.error("[orchestrator] stream events: model_id is empty for family=%s", family_id)
+                success = False
+                error_type = "NoModelId"
+                yield builder.error("暂时无法完成分析，请稍后重试。", code="no_model_id").to_ndjson()
+                return
+
+            model_name = model_id
 
             policy = CapabilityPolicy(
-                ai_enabled=ai_config.get("ai_enabled", False),
-                allowed_capabilities=ai_config.get("allowed_capabilities", []),
-                admin_only_capabilities=ai_config.get("admin_only_capabilities", []),
-                member_role=ai_config.get("member_role", "member"),
+                ai_enabled=ai_enabled,
+                allowed_capabilities=ai_configs.get("allowed_capabilities", []),
+                admin_only_capabilities=ai_configs.get("admin_only_capabilities", []),
+                member_role=ai_configs.get("member_role", "member"),
             )
             decision = policy_guard.check(policy, capability)
             if not decision.allowed:
@@ -461,7 +601,7 @@ class Orchestrator:
             ))
 
             skill_config = skill_loader.load(capability)
-            thinking_supported = ai_config.get("thinking_supported", False)
+            thinking_supported = "deep_thinking" in selected_caps
             enable_thinking = (
                 bool(enable_thinking_override) and thinking_supported
                 if enable_thinking_override is not None
@@ -470,7 +610,7 @@ class Orchestrator:
 
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
-                adapter = _create_family_adapter(family_id, ai_config, timeout_seconds=ai_config.get("timeout_seconds", 60))
+                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60))
                 async for chunk in adapter.stream_dispatch(
                     capability,
                     redacted_context,
@@ -486,6 +626,9 @@ class Orchestrator:
                     "".join(answer_parts),
                     execution_time_ms=elapsed_ms,
                 ).to_ndjson()
+                # Success: reset circuit failure count
+                if config_id:
+                    _fire_and_forget(client.reset_circuit_success(config_id))
                 return
             except DeerFlowTimeoutError:
                 logger.warning("[orchestrator] event stream timed out family=%s", family_id)
@@ -496,6 +639,9 @@ class Orchestrator:
                 logger.error("[orchestrator] event stream DeerFlow failed: %s", e)
                 success = False
                 error_type = type(e).__name__
+                # Report circuit event for provider errors
+                if config_id:
+                    _fire_and_forget(client.report_circuit_event(config_id, 500))
                 yield builder.error("AI 服务暂时不可用，请稍后重试。", code="deerflow_error").to_ndjson()
 
         except Exception as e:
@@ -541,7 +687,7 @@ class Orchestrator:
                         session_id=effective_thread_id,
                         family_id=family_id,
                         first_user_message=redacted_free_text,
-                        ai_config=ai_config,
+                        ai_config=selected_provider,
                     ))
             audit_logger.log_call(
                 AuditEntry(

@@ -131,6 +131,9 @@ class BackendClient:
     async def get_family_ai_config(self) -> dict:
         return await get_family_ai_config(self.family_id)
 
+    async def get_family_ai_configs(self) -> dict:
+        return await get_family_ai_config(self.family_id)
+
     async def upsert_session(
         self,
         *,
@@ -172,6 +175,12 @@ class BackendClient:
 
     async def get_session(self, session_id: str) -> dict | None:
         return await get_session(self.family_id, session_id)
+
+    async def report_circuit_event(self, config_id: str, error_code: int) -> dict:
+        return await report_circuit_event(self.family_id, config_id, error_code)
+
+    async def reset_circuit_success(self, config_id: str) -> dict:
+        return await reset_circuit_success(self.family_id, config_id)
 
 
 def _make_headers(family_id: str) -> dict[str, str]:
@@ -486,3 +495,32 @@ async def get_session(family_id: str, session_id: str) -> dict | None:
         return None
     resp.raise_for_status()
     return _unwrap(resp)
+
+
+async def report_circuit_event(family_id: str, config_id: str, error_code: int) -> dict:
+    """报告供应商调用失败，触发熔断计数。"""
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+    ) as client:
+        resp = await client.post(
+            f"/api/v1/internal/ai/config/{config_id}/circuit-event",
+            json={"error_code": error_code},
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)
+
+
+async def reset_circuit_success(family_id: str, config_id: str) -> dict:
+    """成功调用后重置熔断计数。"""
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+    ) as client:
+        resp = await client.post(
+            f"/api/v1/internal/ai/config/{config_id}/circuit-reset",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)

@@ -14,7 +14,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.auth.ai_deps import verify_agent_token
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
-from apps.backend.app.models.ai_provider_config import AIProviderConfig, AIProviderTestResult
+from apps.backend.app.models.ai_provider_config import (
+    AIProviderConfig,
+)
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_skill_config import FamilySkillConfig
 from apps.backend.app.models.user import User
@@ -131,38 +133,128 @@ def internal_get_ai_config(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    """返回家庭 AI 配置，包含解密后的 API Key（仅供 agent 内部使用）。"""
-    cfg = (
+    """返回家庭 AI 供应商列表（按 display_order 排序，已过滤熔断中的供应商）。"""
+    from datetime import UTC
+
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    all_cfgs = (
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == family_id,
-            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+        )
+        .order_by(AIProviderConfig.display_order.asc().nulls_last(), AIProviderConfig.created_at.asc())
+        .all()
+    )
+
+    if not all_cfgs:
+        return {"ai_enabled": False, "providers": []}
+
+    providers = []
+    for cfg in all_cfgs:
+        # Half-open: circuit expired — clear state and include
+        if cfg.circuit_open and cfg.circuit_open_until and cfg.circuit_open_until <= now:
+            cfg.circuit_open = False
+            cfg.failure_count = 0
+            cfg.circuit_open_until = None
+            db.commit()
+
+        # Skip providers still in circuit-open state
+        if cfg.circuit_open and cfg.circuit_open_until and cfg.circuit_open_until > now:
+            continue
+
+        api_key = decrypt_api_key(cfg.api_key_encrypted)
+        if not api_key:
+            continue
+
+        providers.append({
+            "config_id": str(cfg.id),
+            "ai_provider": cfg.provider,
+            "api_key": api_key,
+            "ai_base_url": cfg.base_url,
+            "ai_model_id": cfg.model_id,
+            "ai_vision_model_id": cfg.vision_model_id,
+            "model_2_id": cfg.model_2_id,
+            "model_3_id": cfg.model_3_id,
+            "model_1_capabilities": _parse_capabilities(cfg.model_1_capabilities),
+            "model_2_capabilities": _parse_capabilities(cfg.model_2_capabilities),
+            "model_3_capabilities": _parse_capabilities(cfg.model_3_capabilities),
+            "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
+        })
+
+    return {"ai_enabled": bool(providers), "providers": providers}
+
+
+def _parse_capabilities(cap_str: str | None) -> list[str]:
+    if not cap_str:
+        return []
+    try:
+        return json.loads(cap_str)
+    except Exception:
+        return []
+
+
+class CircuitEventRequest(BaseModel):
+    error_code: int
+
+
+@router.post("/ai/config/{config_id}/circuit-event")
+def internal_circuit_event(
+    config_id: int,
+    body: CircuitEventRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """记录供应商调用失败，达到阈值时触发熔断。"""
+    from datetime import UTC, timedelta
+
+    cfg = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == family_id,
         )
         .first()
     )
-    if not cfg or not cfg.api_key_encrypted:
-        return {"ai_enabled": False}
+    if not cfg:
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
-    api_key = decrypt_api_key(cfg.api_key_encrypted)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    cfg.failure_count = (cfg.failure_count or 0) + 1
+    cfg.last_failure_at = now
 
-    # 查询最新 thinking 测试结果
-    thinking_result = (
-        db.query(AIProviderTestResult)
-        .filter_by(config_id=cfg.id, test_type="thinking")
-        .order_by(AIProviderTestResult.tested_at.desc())
+    if cfg.failure_count >= 5:
+        cfg.circuit_open = True
+        cfg.circuit_open_until = now + timedelta(hours=1)
+
+    db.commit()
+    return {"circuit_open": cfg.circuit_open, "failure_count": cfg.failure_count}
+
+
+@router.post("/ai/config/{config_id}/circuit-reset")
+def internal_circuit_reset(
+    config_id: int,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """成功调用后重置熔断计数。"""
+    cfg = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == family_id,
+        )
         .first()
     )
+    if not cfg:
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
-    return {
-        "ai_enabled": True,
-        "ai_provider": cfg.provider,
-        "api_key": api_key,  # 明文，仅在内部网络传输
-        "ai_base_url": cfg.base_url,
-        "ai_model_id": cfg.model_id,
-        "ai_vision_model_id": cfg.vision_model_id,
-        "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
-        "thinking_supported": bool(thinking_result and thinking_result.success),
-    }
+    cfg.failure_count = 0
+    cfg.circuit_open = False
+    cfg.circuit_open_until = None
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/ai/enabled-families")
@@ -322,8 +414,9 @@ def internal_update_session_summary(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    from apps.backend.app.models.ai_chat_session import AIChatSession
     import logging
+
+    from apps.backend.app.models.ai_chat_session import AIChatSession
     logger = logging.getLogger(__name__)
 
     logger.info("[backend] update_session_summary session=%s title=%s summary=%s status=%s model=%s",

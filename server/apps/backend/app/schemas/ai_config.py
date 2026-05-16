@@ -6,6 +6,8 @@ from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
+_VALID_PROVIDERS = ("anthropic", "openai", "openai_compatible")
+
 
 class AIProviderTestResultResponse(SnowflakeBase):
     id: int
@@ -26,6 +28,18 @@ class AIConfigResponse(SnowflakeBase):
     vision_model_id: str | None = None
     timeout_seconds: int | None = 60
     is_active: bool
+    # Multi-provider fields
+    provider_name: str = ""
+    display_order: int = 0
+    model_2_id: str | None = None
+    model_3_id: str | None = None
+    model_1_capabilities: list[str] = []
+    model_2_capabilities: list[str] = []
+    model_3_capabilities: list[str] = []
+    # Circuit breaker fields
+    circuit_open: bool = False
+    circuit_open_until: datetime | None = None
+    failure_count: int = 0
     test_results: list[AIProviderTestResultResponse] = []
 
 
@@ -42,12 +56,20 @@ class AIConfigCreate(BaseModel):
     vision_model_id: str | None = None
     timeout_seconds: int | None = 60
     is_active: bool = False
+    # Multi-provider fields
+    provider_name: str | None = None
+    display_order: int | None = None
+    model_2_id: str | None = None
+    model_3_id: str | None = None
+    model_1_capabilities: list[str] | None = None
+    model_2_capabilities: list[str] | None = None
+    model_3_capabilities: list[str] | None = None
 
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
-        if v not in ("anthropic", "openai"):
-            raise ValueError("provider 必须为 'anthropic' 或 'openai'")
+        if v not in _VALID_PROVIDERS:
+            raise ValueError(f"provider 必须为 {_VALID_PROVIDERS} 之一")
         return v
 
 
@@ -60,13 +82,25 @@ class AIConfigUpdate(BaseModel):
     vision_model_id: str | None = None
     timeout_seconds: int | None = None
     is_active: bool | None = None
+    # Multi-provider fields
+    provider_name: str | None = None
+    display_order: int | None = None
+    model_2_id: str | None = None
+    model_3_id: str | None = None
+    model_1_capabilities: list[str] | None = None
+    model_2_capabilities: list[str] | None = None
+    model_3_capabilities: list[str] | None = None
 
     @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str | None) -> str | None:
-        if v is not None and v not in ("anthropic", "openai"):
-            raise ValueError("provider 必须为 'anthropic' 或 'openai'")
+        if v is not None and v not in _VALID_PROVIDERS:
+            raise ValueError(f"provider 必须为 {_VALID_PROVIDERS} 之一")
         return v
+
+
+class AICircuitResetResponse(BaseModel):
+    ok: bool
 
 
 class AIConfigTestResult(BaseModel):

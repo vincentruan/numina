@@ -2,111 +2,128 @@
   <div class="ai-config-page">
     <PageHeader :title="t('aiConfig.pageTitle')" />
 
-    <!-- AI Enable Toggle (owner only) -->
-    <van-cell-group inset :title="t('aiConfig.aiFeatures')">
-      <van-cell :title="t('aiConfig.enableAI')" center>
-        <template #value>
-          <van-switch
-            v-model="aiEnabled"
-            :disabled="!isOwner || saving"
-            @change="onToggleAI"
-          />
-        </template>
-      </van-cell>
-    </van-cell-group>
-
-    <!-- Provider Config (owner only, shown when enabled) -->
+    <!-- Owner view -->
     <template v-if="isOwner">
-      <van-cell-group inset :title="t('aiConfig.providerConfig')" class="section">
-        <van-cell :title="t('aiConfig.aiProvider')" :value="providerLabel" is-link @click="showProviderPicker = true" />
-        <!-- API Key: shows masked value by default; eye icon toggles plaintext while typing new key -->
-        <van-field
-          v-model="apiKeyDisplay"
-          :label="t('aiConfig.apiKey')"
-          :placeholder="t('aiConfig.apiKeyPlaceholder')"
-          :type="editingApiKey && !showApiKey ? 'password' : 'text'"
-          :disabled="saving"
-          autocomplete="off"
-          @input="onApiKeyInput"
-        >
-          <template #right-icon>
-            <van-icon
-              v-if="maskedKey && !editingApiKey"
-              :name="showApiKey ? 'eye-o' : 'closed-eye'"
-              style="cursor: pointer"
-              :aria-label="showApiKey ? t('aiConfig.hideApiKey') : t('aiConfig.showApiKey')"
-              @click="onToggleRevealApiKey"
-            />
-            <van-icon
-              v-else-if="editingApiKey"
-              :name="showApiKey ? 'eye-o' : 'closed-eye'"
-              style="cursor: pointer"
-              :aria-label="showApiKey ? t('aiConfig.hideApiKey') : t('aiConfig.showApiKey')"
-              @click="showApiKey = !showApiKey"
-            />
-          </template>
-        </van-field>
-        <van-field
-          v-model="baseUrlInput"
-          :label="t('aiConfig.baseUrl')"
-          :placeholder="selectedProvider === 'anthropic' ? t('aiConfig.baseUrlPlaceholderAnthropic') : t('aiConfig.baseUrlPlaceholderOpenAI')"
-          clearable
-          :disabled="saving"
-        />
-        <van-field
-          v-model="modelIdInput"
-          :label="t('aiConfig.modelId')"
-          :placeholder="selectedProvider === 'anthropic' ? t('aiConfig.modelIdPlaceholderAnthropic') : t('aiConfig.modelIdPlaceholderOpenAI')"
-          :required="!!selectedProvider"
-          clearable
-          :disabled="saving"
-        >
-          <template #right-icon>
-            <div class="capability-btns" @click="showMainModelPopup = true">
-              <span class="capability-emoji" :class="textEmojiClass">📝</span>
-              <span class="capability-emoji" :class="thinkingEmojiClass">🧠</span>
-            </div>
-          </template>
-        </van-field>
-        <van-field
-          v-model="visionModelIdInput"
-          :label="t('aiConfig.visionModelId')"
-          :placeholder="selectedProvider === 'anthropic' ? t('aiConfig.visionModelIdPlaceholderAnthropic') : t('aiConfig.visionModelIdPlaceholderOpenAI')"
-          clearable
-          :disabled="saving"
-        >
-          <template #right-icon>
-            <div class="capability-btns" @click="showVisionModelPopup = true">
-              <span class="capability-emoji" :class="visionEmojiClass">🖼️</span>
-            </div>
-          </template>
-        </van-field>
-        <van-field
-          v-model="timeoutInput"
-          :label="t('aiConfig.apiTimeout')"
-          :placeholder="t('aiConfig.timeoutPlaceholder')"
-          type="digit"
-          :disabled="saving"
-        />
-      </van-cell-group>
+      <!-- Provider list -->
+      <div v-if="aiStore.configs.length === 0" class="empty-state">
+        <van-icon name="info-o" size="40" />
+        <p>{{ t('aiConfig.noProviders') }}</p>
+      </div>
 
-      <div class="actions">
-        <van-button
-          block
-          type="primary"
-          :loading="saving"
-          :disabled="!canSave"
-          @click="onSave"
-        >
-          {{ t('aiConfig.saveConfig') }}
+      <draggable
+        v-else
+        v-model="localConfigs"
+        item-key="id"
+        handle=".drag-handle"
+        ghost-class="ghost"
+        @end="onDragEnd"
+      >
+        <template #item="{ element: cfg }">
+          <div class="provider-card">
+            <!-- Card header -->
+            <div class="card-header">
+              <span class="drag-handle">⠿</span>
+              <span class="provider-name">{{ cfg.provider_name }}</span>
+              <span v-if="cfg.circuit_open" class="circuit-badge">⚠️</span>
+              <van-button
+                size="mini"
+                type="danger"
+                plain
+                :loading="deletingId === cfg.id"
+                @click="onDeleteProvider(cfg)"
+              >
+                {{ t('common.delete') }}
+              </van-button>
+            </div>
+
+            <!-- Card body -->
+            <div class="card-body">
+              <!-- Provider type -->
+              <van-cell-group inset>
+                <van-cell :title="t('aiConfig.aiProvider')" :value="providerLabel(cfg.provider)" />
+                <van-cell :title="t('aiConfig.apiKey')" :value="cfg.ai_api_key_masked || '—'" />
+                <van-cell :title="t('aiConfig.baseUrl')" :value="cfg.base_url || '—'" />
+              </van-cell-group>
+
+              <!-- Model slots -->
+              <div class="model-slots">
+                <div v-for="slot in [1, 2, 3]" :key="slot" class="model-slot">
+                  <div class="slot-header">
+                    <span class="slot-label">{{ t('aiConfig.modelN', { n: slot }) }}</span>
+                    <span class="slot-model-id">{{ getModelId(cfg, slot) || t('aiConfig.emptySlot') }}</span>
+                  </div>
+                  <div class="capability-badges">
+                    <span
+                      class="cap-badge"
+                      :class="hasCapability(cfg, slot, 'text_generation') ? 'active' : 'inactive'"
+                      :aria-label="t('aiConfig.capabilityText')"
+                    >📝</span>
+                    <span
+                      class="cap-badge"
+                      :class="hasCapability(cfg, slot, 'deep_thinking') ? 'active' : 'inactive'"
+                      :aria-label="t('aiConfig.capabilityThinking')"
+                    >🧠</span>
+                    <span
+                      class="cap-badge"
+                      :class="hasCapability(cfg, slot, 'vision_understanding') ? 'active' : 'inactive'"
+                      :aria-label="t('aiConfig.capabilityVision')"
+                    >🖼️</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Circuit status + actions -->
+              <div class="card-footer">
+                <div class="status-row">
+                  <span class="circuit-status">
+                    {{ cfg.circuit_open ? t('aiConfig.circuitOpen') : t('aiConfig.circuitNormal') }}
+                  </span>
+                  <span v-if="cfg.failure_count > 0" class="failure-count">
+                    {{ t('aiConfig.failureCount', { count: cfg.failure_count }) }}
+                  </span>
+                </div>
+                <van-button
+                  v-if="cfg.circuit_open"
+                  size="mini"
+                  type="warning"
+                  plain
+                  @click="onResetCircuit(cfg.id)"
+                >
+                  {{ t('aiConfig.resetCircuit') }}
+                </van-button>
+                <van-button
+                  size="mini"
+                  plain
+                  :loading="testingId === cfg.id"
+                  @click="onTestProvider(cfg.id)"
+                >
+                  {{ t('aiConfig.testConnection') }}
+                </van-button>
+                <van-button
+                  size="mini"
+                  plain
+                  @click="openEditProvider(cfg)"
+                >
+                  {{ t('common.edit') }}
+                </van-button>
+              </div>
+            </div>
+          </div>
+        </template>
+      </draggable>
+
+      <!-- Save order button -->
+      <div v-if="orderChanged" class="actions">
+        <van-button block type="primary" :loading="savingOrder" @click="onSaveOrder">
+          {{ t('aiConfig.saveOrder') }}
         </van-button>
-        <div
-          v-if="validationError"
-          class="tip"
-        >
-          <van-icon name="info-o" />
-          <span>{{ validationError }}</span>
-        </div>
+      </div>
+
+      <!-- Add provider button -->
+      <div class="actions">
+        <van-button block plain icon="plus" @click="openAddProvider">
+          {{ t('aiConfig.addProvider') }}
+        </van-button>
       </div>
     </template>
 
@@ -114,33 +131,12 @@
     <template v-else>
       <van-cell-group inset class="section">
         <van-cell
-          :title="t('aiConfig.currentStatus')"
-          :value="aiStore.config?.ai_enabled ? t('aiConfig.statusEnabled') : t('aiConfig.statusDisabled')"
+          v-for="cfg in aiStore.configs"
+          :key="cfg.id"
+          :title="cfg.provider_name"
+          :value="cfg.circuit_open ? t('aiConfig.circuitOpen') : t('aiConfig.circuitNormal')"
         />
-        <van-cell
-          v-if="aiStore.config?.ai_provider"
-          :title="t('aiConfig.providerLabel')"
-          :value="providerLabel"
-        />
-        <van-cell
-          v-if="aiStore.config?.ai_base_url"
-          :label="t('aiConfig.baseUrl')"
-          :value="aiStore.config.ai_base_url"
-        />
-        <van-cell
-          v-if="aiStore.config?.ai_model_id"
-          :title="t('aiConfig.modelId')"
-          :value="aiStore.config.ai_model_id"
-        />
-        <van-cell
-          v-if="aiStore.config?.ai_vision_model_id"
-          :title="t('aiConfig.visionModelId')"
-          :value="aiStore.config.ai_vision_model_id"
-        />
-        <van-cell
-          :title="t('aiConfig.apiTimeout')"
-          :value="t('aiConfig.timeoutSeconds', { seconds: aiStore.config?.ai_timeout_seconds ?? 60 })"
-        />
+        <van-cell v-if="aiStore.configs.length === 0" :title="t('aiConfig.noProviders')" />
       </van-cell-group>
       <div class="tip">
         <van-icon name="info-o" />
@@ -148,7 +144,95 @@
       </div>
     </template>
 
-    <!-- Provider Picker -->
+    <!-- Add/Edit Provider Popup -->
+    <van-popup
+      v-model:show="showProviderForm"
+      round
+      position="bottom"
+      :style="{ height: '90%' }"
+    >
+      <div class="provider-form">
+        <div class="form-header">
+          <h3>{{ editingConfig ? t('aiConfig.editProvider') : t('aiConfig.addProvider') }}</h3>
+          <van-icon name="cross" size="20" @click="showProviderForm = false" />
+        </div>
+
+        <van-cell-group inset>
+          <van-field
+            v-model="form.provider_name"
+            :label="t('aiConfig.providerName')"
+            :placeholder="t('aiConfig.providerNamePlaceholder')"
+          />
+          <van-cell
+            :title="t('aiConfig.aiProvider')"
+            :value="providerLabel(form.provider)"
+            is-link
+            @click="showProviderPicker = true"
+          />
+          <van-field
+            v-model="form.api_key"
+            :label="t('aiConfig.apiKey')"
+            :placeholder="editingConfig ? t('aiConfig.apiKeyPlaceholder') : t('aiConfig.apiKeyPlaceholder')"
+            type="password"
+            autocomplete="off"
+          />
+          <van-field
+            v-model="form.base_url"
+            :label="t('aiConfig.baseUrl')"
+            :placeholder="t('aiConfig.baseUrlPlaceholderOpenAI')"
+            clearable
+          />
+          <van-field
+            v-model="form.timeout_seconds"
+            :label="t('aiConfig.apiTimeout')"
+            :placeholder="t('aiConfig.timeoutPlaceholder')"
+            type="digit"
+          />
+        </van-cell-group>
+
+        <!-- Model slots -->
+        <div v-for="slot in [1, 2, 3]" :key="slot" class="model-slot-form">
+          <div class="slot-title">{{ t('aiConfig.modelN', { n: slot }) }}</div>
+          <van-cell-group inset>
+            <van-field
+              v-model="formModels[slot - 1].id"
+              :label="t('aiConfig.modelId')"
+              :placeholder="t('aiConfig.modelIdPlaceholder')"
+              clearable
+            />
+            <van-cell :title="t('aiConfig.capabilities')">
+              <template #value>
+                <div class="cap-checkboxes">
+                  <van-checkbox
+                    v-model="formModels[slot - 1].cap_text"
+                    shape="square"
+                    icon-size="18px"
+                  >📝</van-checkbox>
+                  <van-checkbox
+                    v-model="formModels[slot - 1].cap_thinking"
+                    shape="square"
+                    icon-size="18px"
+                  >🧠</van-checkbox>
+                  <van-checkbox
+                    v-model="formModels[slot - 1].cap_vision"
+                    shape="square"
+                    icon-size="18px"
+                  >🖼️</van-checkbox>
+                </div>
+              </template>
+            </van-cell>
+          </van-cell-group>
+        </div>
+
+        <div class="form-actions">
+          <van-button block type="primary" :loading="formSaving" @click="onSaveProvider">
+            {{ t('common.save') }}
+          </van-button>
+        </div>
+      </div>
+    </van-popup>
+
+    <!-- Provider type picker -->
     <van-popup v-model:show="showProviderPicker" round position="bottom">
       <van-picker
         :columns="providerOptions"
@@ -156,370 +240,252 @@
         @cancel="showProviderPicker = false"
       />
     </van-popup>
-
-    <!-- Main Model Test Popup (combined) -->
-    <van-popup v-model:show="showMainModelPopup" round position="bottom" style="padding: 20px">
-      <div class="test-details">
-        <h3 style="margin-bottom: 16px; font-size: 16px">{{ t('aiConfig.mainModelTest') }}</h3>
-
-        <!-- Connection Test Section -->
-        <div class="test-section">
-          <div class="test-header">
-            <span class="capability-emoji" :class="textEmojiClass">📝</span>
-            <span>{{ t('aiConfig.textConnection') }}</span>
-          </div>
-          <van-cell-group inset>
-            <van-cell :title="t('aiConfig.status')" :value="connectionStatusText" />
-            <van-cell v-if="aiStore.config?.ai_test_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_test_message" />
-            <van-cell v-if="aiStore.config?.ai_test_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_test_latency_ms })" />
-            <van-cell v-if="aiStore.config?.ai_test_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_test_timestamp)" />
-          </van-cell-group>
-        </div>
-
-        <!-- Thinking Test Section -->
-        <div class="test-section">
-          <div class="test-header">
-            <span class="capability-emoji" :class="thinkingEmojiClass">🧠</span>
-            <span>{{ t('aiConfig.thinkingCapability') }}</span>
-          </div>
-          <van-cell-group inset>
-            <van-cell :title="t('aiConfig.status')" :value="thinkingStatusText" />
-            <van-cell v-if="aiStore.config?.ai_test_thinking_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_test_thinking_message" />
-            <van-cell v-if="aiStore.config?.ai_test_thinking_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_test_thinking_latency_ms })" />
-            <van-cell v-if="aiStore.config?.ai_test_thinking_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_test_thinking_timestamp)" />
-          </van-cell-group>
-        </div>
-
-        <!-- Test Buttons -->
-        <div class="test-buttons">
-          <van-button
-            type="primary"
-            :loading="testingConnection"
-            :disabled="!aiStore.config?.ai_enabled || !modelIdInput.trim()"
-            @click="onTestConnection"
-          >
-            {{ t('aiConfig.testConnection') }}
-          </van-button>
-          <van-button
-            type="primary"
-            :loading="testingThinking"
-            :disabled="!aiStore.config?.ai_enabled || !modelIdInput.trim()"
-            @click="onTestThinking"
-          >
-            {{ t('aiConfig.testThinking') }}
-          </van-button>
-        </div>
-        <van-button block plain style="margin-top: 16px" @click="showMainModelPopup = false">
-          {{ t('aiConfig.close') }}
-        </van-button>
-      </div>
-    </van-popup>
-
-    <!-- Vision Model Test Popup -->
-    <van-popup v-model:show="showVisionModelPopup" round position="bottom" style="padding: 20px">
-      <div class="test-details">
-        <h3 style="margin-bottom: 16px; font-size: 16px">{{ t('aiConfig.visionModelTest') }}</h3>
-
-        <!-- Image Understanding Test Section -->
-        <div class="test-section">
-          <div class="test-header">
-            <span class="capability-emoji" :class="visionEmojiClass">️</span>
-            <span>{{ t('aiConfig.imageUnderstanding') }}</span>
-          </div>
-          <van-cell-group inset>
-            <van-cell :title="t('aiConfig.status')" :value="visionStatusText" />
-            <van-cell v-if="aiStore.config?.ai_vision_test_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_vision_test_message" />
-            <van-cell v-if="aiStore.config?.ai_vision_test_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_vision_test_latency_ms })" />
-            <van-cell v-if="aiStore.config?.ai_vision_test_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_vision_test_timestamp)" />
-          </van-cell-group>
-        </div>
-
-        <!-- OCR Text Accuracy Test Section -->
-        <div class="test-section">
-          <div class="test-header">
-            <span class="capability-emoji" :class="visionTextEmojiClass">📖</span>
-            <span>{{ t('aiConfig.ocrTextRecognition') }}</span>
-          </div>
-          <van-cell-group inset>
-            <van-cell :title="t('aiConfig.status')" :value="visionTextStatusText" />
-            <van-cell v-if="aiStore.config?.ai_vision_text_test_message" :title="t('aiConfig.message')" :value="aiStore.config.ai_vision_text_test_message" />
-            <van-cell v-if="aiStore.config?.ai_vision_text_test_latency_ms" :title="t('aiConfig.latency')" :value="t('aiConfig.latencyMs', { ms: aiStore.config.ai_vision_text_test_latency_ms })" />
-            <van-cell v-if="aiStore.config?.ai_vision_text_test_timestamp" :title="t('aiConfig.testTime')" :value="formatTimestamp(aiStore.config.ai_vision_text_test_timestamp)" />
-          </van-cell-group>
-        </div>
-
-        <div class="test-buttons">
-          <van-button
-            type="primary"
-            :loading="testingVision"
-            :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
-            @click="onTestVision"
-          >
-            {{ t('aiConfig.testImage') }}
-          </van-button>
-          <van-button
-            type="primary"
-            :loading="testingVisionText"
-            :disabled="!aiStore.config?.ai_enabled || !visionModelIdInput.trim()"
-            @click="onTestVisionText"
-          >
-            {{ t('aiConfig.testOCR') }}
-          </van-button>
-        </div>
-        <van-button block plain style="margin-top: 10px" @click="showVisionModelPopup = false">
-          {{ t('aiConfig.close') }}
-        </van-button>
-      </div>
-    </van-popup>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
+import draggable from 'vuedraggable'
 import { useAuthStore } from '@/stores/auth'
 import { useAIStore } from '@/stores/ai'
 import * as aiApi from '@/api/ai'
+import type { ProviderConfig } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t } = useI18n()
-
 const authStore = useAuthStore()
 const aiStore = useAIStore()
 
-const saving = ref(false)
-const testingConnection = ref(false)
-const testingThinking = ref(false)
-const testingVision = ref(false)
-const testingVisionText = ref(false)
-const revealingApiKey = ref(false)
-const showProviderPicker = ref(false)
-const showMainModelPopup = ref(false)
-const showVisionModelPopup = ref(false)
-const apiKeyInput = ref('')       // actual new key typed by user (empty = keep existing)
-const apiKeyDisplay = ref('')     // what the field shows (masked key or new input)
-const editingApiKey = ref(false)
-const baseUrlInput = ref('')
-const modelIdInput = ref('')
-const visionModelIdInput = ref('')
-const timeoutInput = ref('60')
-const selectedProvider = ref<string>('anthropic')
-const aiEnabled = ref(false)
-const showApiKey = ref(false)
-
 const isOwner = computed(() => authStore.user?.role === 'owner')
 
-const maskedKey = computed(() => aiStore.config?.ai_api_key_masked ?? null)
-
-// Emoji classes based on test status
-const textEmojiClass = computed(() => {
-  if (aiStore.config?.ai_test_connected === null) return 'untested'
-  return aiStore.config?.ai_test_connected ? 'success' : 'failed'
+// Local copy of configs for drag-and-drop
+const localConfigs = ref<ProviderConfig[]>([])
+const originalOrder = ref<string[]>([])
+const orderChanged = computed(() => {
+  const current = localConfigs.value.map((c) => c.id)
+  return current.length === originalOrder.value.length && current.some((id, i) => id !== originalOrder.value[i])
 })
 
-const thinkingEmojiClass = computed(() => {
-  if (aiStore.config?.ai_test_thinking_success === null) return 'untested'
-  return aiStore.config?.ai_test_thinking_success ? 'success' : 'failed'
+const savingOrder = ref(false)
+const deletingId = ref<string | null>(null)
+const testingId = ref<string | null>(null)
+
+// Provider form state
+const showProviderForm = ref(false)
+const editingConfig = ref<ProviderConfig | null>(null)
+const formSaving = ref(false)
+const showProviderPicker = ref(false)
+
+const form = reactive({
+  provider_name: '',
+  provider: 'anthropic',
+  api_key: '',
+  base_url: '',
+  timeout_seconds: '60',
 })
 
-const visionEmojiClass = computed(() => {
-  if (aiStore.config?.ai_vision_test_success === null) return 'untested'
-  return aiStore.config?.ai_vision_test_success ? 'success' : 'failed'
-})
-
-const visionTextEmojiClass = computed(() => {
-  if (aiStore.config?.ai_vision_text_test_success === null) return 'untested'
-  return aiStore.config?.ai_vision_text_test_success ? 'success' : 'failed'
-})
-
-// Status text for popups
-const connectionStatusText = computed(() => {
-  if (aiStore.config?.ai_test_connected === null) return t('aiConfig.statusUntested')
-  return aiStore.config?.ai_test_connected ? t('aiConfig.statusConnectionSuccess') : t('aiConfig.statusConnectionFailed')
-})
-
-const thinkingStatusText = computed(() => {
-  if (aiStore.config?.ai_test_thinking_success === null) return t('aiConfig.statusUntested')
-  return aiStore.config?.ai_test_thinking_success ? t('aiConfig.statusSupportsThinking') : t('aiConfig.statusNoThinkingSupport')
-})
-
-const visionStatusText = computed(() => {
-  if (aiStore.config?.ai_vision_test_success === null) return t('aiConfig.statusUntested')
-  return aiStore.config?.ai_vision_test_success ? t('aiConfig.statusConnectionSuccess') : t('aiConfig.statusConnectionFailed')
-})
-
-const visionTextStatusText = computed(() => {
-  if (aiStore.config?.ai_vision_text_test_success === null) return t('aiConfig.statusUntested')
-  return aiStore.config?.ai_vision_text_test_success ? t('aiConfig.statusOCRAccurate') : t('aiConfig.statusOCRFailed')
-})
-
-function formatTimestamp(ts: string): string {
-  return new Date(ts).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const formModels = reactive([
+  { id: '', cap_text: true, cap_thinking: false, cap_vision: false },
+  { id: '', cap_text: false, cap_thinking: false, cap_vision: false },
+  { id: '', cap_text: false, cap_thinking: false, cap_vision: false },
+])
 
 const providerOptions = [
-  { text: t('aiConfig.providerAnthropic'), value: 'anthropic', icon: '💬' },
-  { text: t('aiConfig.providerOpenAI'), value: 'openai', icon: '🤖' },
+  { text: `💬 ${t('aiConfig.providerAnthropic')}`, value: 'anthropic' },
+  { text: `🤖 ${t('aiConfig.providerOpenAI')}`, value: 'openai' },
+  { text: `🔌 ${t('aiConfig.providerOpenAICompatible')}`, value: 'openai_compatible' },
 ]
 
-const providerLabel = computed(() => {
-  if (selectedProvider.value === 'anthropic') return `💬 ${t('aiConfig.providerAnthropic')}`
-  if (selectedProvider.value === 'openai') return `🤖 ${t('aiConfig.providerOpenAI')}`
-  return t('aiConfig.notSelected')
-})
+function providerLabel(provider: string): string {
+  if (provider === 'anthropic') return `💬 ${t('aiConfig.providerAnthropic')}`
+  if (provider === 'openai') return `🤖 ${t('aiConfig.providerOpenAI')}`
+  if (provider === 'openai_compatible') return `🔌 ${t('aiConfig.providerOpenAICompatible')}`
+  return provider
+}
 
-const validationError = computed(() => {
-  if (saving.value) return null
-  if (aiEnabled.value && !selectedProvider.value) return t('aiConfig.validationSelectProvider')
-  if (aiEnabled.value && !apiKeyInput.value.trim() && !aiStore.config?.ai_api_key_masked) return t('aiConfig.validationApiKeyRequired')
-  if (aiEnabled.value && selectedProvider.value && !modelIdInput.value.trim()) return t('aiConfig.validationModelIdRequired')
-  if (aiEnabled.value) {
-    const timeout = parseInt(timeoutInput.value)
-    if (isNaN(timeout) || timeout < 10 || timeout > 600) return t('toast.aiTimeoutInvalid')
-  }
+function getModelId(cfg: ProviderConfig, slot: number): string | null {
+  if (slot === 1) return cfg.model_id
+  if (slot === 2) return cfg.model_2_id
+  if (slot === 3) return cfg.model_3_id
   return null
-})
-
-const canSave = computed(() => !saving.value && !validationError.value)
-
-onMounted(async () => {
-  await aiStore.fetchConfig()
-  aiEnabled.value = aiStore.config?.ai_enabled ?? false
-  selectedProvider.value = aiStore.config?.ai_provider ?? 'anthropic'
-  baseUrlInput.value = aiStore.config?.ai_base_url ?? ''
-  modelIdInput.value = aiStore.config?.ai_model_id ?? ''
-  visionModelIdInput.value = aiStore.config?.ai_vision_model_id ?? ''
-  timeoutInput.value = String(aiStore.config?.ai_timeout_seconds ?? 60)
-  apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
-})
-
-function onApiKeyInput(e: Event) {
-  const val = (e.target as HTMLInputElement).value
-  apiKeyInput.value = val
-  apiKeyDisplay.value = val
-  editingApiKey.value = true
 }
 
-async function onToggleRevealApiKey() {
-  if (showApiKey.value) {
-    // Hide: restore masked display
-    apiKeyDisplay.value = maskedKey.value ?? ''
-    showApiKey.value = false
-    return
-  }
-  if (!aiStore.config?.id) return
-  revealingApiKey.value = true
-  try {
-    const res = await aiApi.revealAIKey(aiStore.config.id)
-    apiKeyDisplay.value = res.data.api_key
-    showApiKey.value = true
-  } catch {
-    showToast(t('toast.operationFailed2'))
-  } finally {
-    revealingApiKey.value = false
-  }
-}
-
-async function onToggleAI(val: boolean) {
-  saving.value = true
-  try {
-    await aiStore.updateConfig({ ai_enabled: val })
-    showToast(val ? t('toast.aiEnabled') : t('toast.aiDisabled'))
-  } catch {
-    aiEnabled.value = !val
-    showToast(t('toast.operationFailed2'))
-  } finally {
-    saving.value = false
-  }
+function hasCapability(cfg: ProviderConfig, slot: number, cap: string): boolean {
+  const caps = slot === 1 ? cfg.model_1_capabilities : slot === 2 ? cfg.model_2_capabilities : cfg.model_3_capabilities
+  return caps.includes(cap)
 }
 
 function onProviderConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  selectedProvider.value = selectedOptions[0].value
+  form.provider = selectedOptions[0].value
   showProviderPicker.value = false
 }
 
-async function onSave() {
-  saving.value = true
+function openAddProvider() {
+  editingConfig.value = null
+  form.provider_name = ''
+  form.provider = 'anthropic'
+  form.api_key = ''
+  form.base_url = ''
+  form.timeout_seconds = '60'
+  formModels.forEach((m) => {
+    m.id = ''
+    m.cap_text = false
+    m.cap_thinking = false
+    m.cap_vision = false
+  })
+  formModels[0].cap_text = true
+  showProviderForm.value = true
+}
+
+function openEditProvider(cfg: ProviderConfig) {
+  editingConfig.value = cfg
+  form.provider_name = cfg.provider_name
+  form.provider = cfg.provider
+  form.api_key = ''
+  form.base_url = cfg.base_url || ''
+  form.timeout_seconds = String(cfg.timeout_seconds)
+  formModels[0].id = cfg.model_id || ''
+  formModels[0].cap_text = cfg.model_1_capabilities.includes('text_generation')
+  formModels[0].cap_thinking = cfg.model_1_capabilities.includes('deep_thinking')
+  formModels[0].cap_vision = cfg.model_1_capabilities.includes('vision_understanding')
+  formModels[1].id = cfg.model_2_id || ''
+  formModels[1].cap_text = cfg.model_2_capabilities.includes('text_generation')
+  formModels[1].cap_thinking = cfg.model_2_capabilities.includes('deep_thinking')
+  formModels[1].cap_vision = cfg.model_2_capabilities.includes('vision_understanding')
+  formModels[2].id = cfg.model_3_id || ''
+  formModels[2].cap_text = cfg.model_3_capabilities.includes('text_generation')
+  formModels[2].cap_thinking = cfg.model_3_capabilities.includes('deep_thinking')
+  formModels[2].cap_vision = cfg.model_3_capabilities.includes('vision_understanding')
+  showProviderForm.value = true
+}
+
+async function onSaveProvider() {
+  formSaving.value = true
   try {
-    const payload: { ai_provider?: string; ai_api_key?: string; ai_base_url?: string | null; ai_model_id?: string | null; ai_vision_model_id?: string | null; ai_timeout_seconds?: number } = {}
-    payload.ai_provider = selectedProvider.value
-    if (apiKeyInput.value.trim()) payload.ai_api_key = apiKeyInput.value.trim()
-    payload.ai_base_url = baseUrlInput.value.trim() || null
-    payload.ai_model_id = modelIdInput.value.trim() || null
-    payload.ai_vision_model_id = visionModelIdInput.value.trim() || null
-    payload.ai_timeout_seconds = parseInt(timeoutInput.value) || 60
-    await aiStore.updateConfig(payload)
-    apiKeyInput.value = ''
-    editingApiKey.value = false
-    showApiKey.value = false
-    apiKeyDisplay.value = aiStore.config?.ai_api_key_masked ?? ''
-    showToast(t('toast.aiConfigSaved'))
+    const caps1: string[] = []
+    if (formModels[0].cap_text) caps1.push('text_generation')
+    if (formModels[0].cap_thinking) caps1.push('deep_thinking')
+    if (formModels[0].cap_vision) caps1.push('vision_understanding')
+    const caps2: string[] = []
+    if (formModels[1].cap_text) caps2.push('text_generation')
+    if (formModels[1].cap_thinking) caps2.push('deep_thinking')
+    if (formModels[1].cap_vision) caps2.push('vision_understanding')
+    const caps3: string[] = []
+    if (formModels[2].cap_text) caps3.push('text_generation')
+    if (formModels[2].cap_thinking) caps3.push('deep_thinking')
+    if (formModels[2].cap_vision) caps3.push('vision_understanding')
+
+    if (editingConfig.value) {
+      const payload: aiApi.ProviderConfigUpdate = {
+        provider_name: form.provider_name,
+        provider: form.provider,
+        base_url: form.base_url || null,
+        timeout_seconds: parseInt(form.timeout_seconds) || 60,
+        model_id: formModels[0].id || null,
+        model_2_id: formModels[1].id || null,
+        model_3_id: formModels[2].id || null,
+        model_1_capabilities: caps1,
+        model_2_capabilities: caps2,
+        model_3_capabilities: caps3,
+      }
+      if (form.api_key.trim()) payload.ai_api_key = form.api_key.trim()
+      await aiApi.updateProviderConfig(editingConfig.value.id, payload)
+      showToast(t('toast.aiConfigSaved'))
+    } else {
+      const payload: aiApi.ProviderConfigCreate = {
+        name: form.provider_name,
+        provider: form.provider,
+        ai_api_key: form.api_key.trim() || undefined,
+        base_url: form.base_url || undefined,
+        timeout_seconds: parseInt(form.timeout_seconds) || 60,
+        model_id: formModels[0].id || undefined,
+        model_2_id: formModels[1].id || undefined,
+        model_3_id: formModels[2].id || undefined,
+        model_1_capabilities: caps1,
+        model_2_capabilities: caps2,
+        model_3_capabilities: caps3,
+      }
+      await aiApi.createAIConfig(payload)
+      showToast(t('toast.aiConfigSaved'))
+    }
+    await aiStore.fetchConfigs()
+    showProviderForm.value = false
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
-    showToast(msg.includes('API Key') ? msg : t('toast.saveFailedGeneric'))
+    showToast(msg)
   } finally {
-    saving.value = false
+    formSaving.value = false
   }
 }
 
-async function onTestConnection() {
-  testingConnection.value = true
+async function onDeleteProvider(cfg: ProviderConfig) {
   try {
-    await aiStore.testMainModel()
-    await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_test_connected ? t('toast.aiConnectionSuccess') : `❌ ${aiStore.config?.ai_test_message || t('toast.aiConnectionFailed')}`)
+    await showConfirmDialog({
+      title: t('aiConfig.deleteProvider'),
+      message: t('aiConfig.confirmDeleteProvider', { name: cfg.provider_name }),
+    })
+    deletingId.value = cfg.id
+    await aiApi.deleteAIConfig(cfg.id)
+    await aiStore.fetchConfigs()
+    showToast(t('toast.deleted'))
   } catch {
-    showToast(t('toast.aiTestFailed'))
+    // user cancelled or error
   } finally {
-    testingConnection.value = false
+    deletingId.value = null
   }
 }
 
-async function onTestThinking() {
-  testingThinking.value = true
+async function onResetCircuit(id: string) {
   try {
-    await aiStore.testThinking()
-    await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_test_thinking_success ? t('toast.aiThinkingSupported') : `❌ ${aiStore.config?.ai_test_thinking_message || t('toast.aiThinkingNotSupported')}`)
+    await aiStore.resetCircuit(id)
+    showToast(t('toast.aiConfigSaved'))
   } catch {
-    showToast(t('toast.aiTestFailed'))
-  } finally {
-    testingThinking.value = false
+    showToast(t('toast.operationFailed2'))
   }
 }
 
-async function onTestVision() {
-  testingVision.value = true
+async function onTestProvider(id: string) {
+  testingId.value = id
   try {
-    await aiStore.testVisionModel()
-    await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_vision_test_success ? t('toast.aiVisionConnectionSuccess') : `❌ ${aiStore.config?.ai_vision_test_message || t('toast.aiConnectionFailed')}`)
+    const res = await aiApi.testAIConfig(id)
+    const connected = res.data.connected
+    showToast(connected ? t('toast.aiConnectionSuccess') : `❌ ${res.data.message || t('toast.aiConnectionFailed')}`)
   } catch {
     showToast(t('toast.aiTestFailed'))
   } finally {
-    testingVision.value = false
+    testingId.value = null
   }
 }
 
-async function onTestVisionText() {
-  testingVisionText.value = true
+function onDragEnd() {
+  // Local order updated, user needs to click save
+}
+
+async function onSaveOrder() {
+  savingOrder.value = true
   try {
-    await aiStore.testVisionText()
-    await aiStore.fetchConfig()
-    showToast(aiStore.config?.ai_vision_text_test_success ? t('toast.aiOCRAccurate') : `❌ ${aiStore.config?.ai_vision_text_test_message || t('toast.aiOCRFailed')}`)
+    const order = localConfigs.value.map((c) => c.id)
+    await aiStore.reorderConfigs(order)
+    showToast(t('toast.aiConfigSaved'))
   } catch {
-    showToast(t('toast.aiTestFailed'))
+    showToast(t('toast.operationFailed2'))
   } finally {
-    testingVisionText.value = false
+    savingOrder.value = false
   }
 }
+
+onMounted(async () => {
+  await aiStore.fetchConfigs()
+  localConfigs.value = [...aiStore.configs]
+  originalOrder.value = aiStore.configs.map((c) => c.id)
+})
+
+watch(() => aiStore.configs, (newConfigs) => {
+  localConfigs.value = [...newConfigs]
+  originalOrder.value = newConfigs.map((c) => c.id)
+})
 </script>
 
 <style scoped>
@@ -528,15 +494,143 @@ async function onTestVisionText() {
   min-height: 100vh;
   padding-bottom: 20px;
 }
+
 .section {
   margin-top: 12px;
 }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.provider-card {
+  background: var(--bg-card);
+  border-radius: 12px;
+  margin: 12px 16px;
+  overflow: hidden;
+  border: 1px solid var(--border-light);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.drag-handle {
+  cursor: grab;
+  font-size: 20px;
+  color: var(--text-secondary);
+  padding: 8px;
+  user-select: none;
+}
+
+.provider-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.circuit-badge {
+  font-size: 16px;
+}
+
+.card-body {
+  padding: 12px 0;
+}
+
+.model-slots {
+  padding: 0 16px;
+  margin-top: 8px;
+}
+
+.model-slot {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.model-slot:last-child {
+  border-bottom: none;
+}
+
+.slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.slot-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.slot-model-id {
+  font-size: 14px;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.capability-badges {
+  display: flex;
+  gap: 8px;
+}
+
+.cap-badge {
+  font-size: 18px;
+  transition: opacity 0.2s, filter 0.2s;
+}
+
+.cap-badge.active {
+  opacity: 1;
+}
+
+.cap-badge.inactive {
+  opacity: 0.4;
+  filter: grayscale(100%);
+}
+
+.card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-light);
+}
+
+.status-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.circuit-status {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.failure-count {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
 .actions {
   padding: 16px 16px 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
+
 .tip {
   display: flex;
   align-items: center;
@@ -546,51 +640,48 @@ async function onTestVisionText() {
   font-size: 13px;
 }
 
-/* Capability emoji buttons */
-.capability-btns {
-  display: flex;
-  gap: 6px;
-  cursor: pointer;
-  padding: 4px;
-}
-.capability-emoji {
-  font-size: 18px;
-  transition: opacity 0.2s;
-}
-.capability-emoji.success {
-  opacity: 1;
-}
-.capability-emoji.failed {
-  opacity: 0.4;
-  filter: grayscale(100%);
-}
-.capability-emoji.untested {
-  opacity: 0.6;
-}
-
-/* Test popup styles */
-.test-details {
-  max-height: 80vh;
+/* Provider form popup */
+.provider-form {
+  padding: 20px;
+  max-height: 90vh;
   overflow-y: auto;
 }
-.test-section {
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 16px;
 }
-.test-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
+
+.form-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.model-slot-form {
+  margin-top: 16px;
+}
+
+.slot-title {
+  font-size: 15px;
   font-weight: 500;
   margin-bottom: 8px;
   padding-left: 16px;
 }
-.test-buttons {
+
+.cap-checkboxes {
   display: flex;
-  gap: 10px;
-  margin-top: 16px;
+  gap: 12px;
 }
-.test-buttons .van-button {
-  flex: 1;
+
+.form-actions {
+  margin-top: 24px;
+}
+
+/* Ghost class for drag */
+.ghost {
+  opacity: 0.5;
+  background: var(--bg-secondary);
 }
 </style>
