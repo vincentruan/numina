@@ -333,7 +333,14 @@ class Orchestrator:
                     model=model_name,
                     status="completed" if error_type is None else "error",
                 ))
-                if redacted_free_text and thread_id is None:
+                # Generate title for new chat sessions (thread_id is None) and
+                # always for non-chat capabilities (thread_id is always set by backend).
+                should_generate_title = (
+                    redacted_free_text
+                    and error_type is None
+                    and (thread_id is None or capability != "chat")
+                )
+                if should_generate_title:
                     _fire_and_forget(self._generate_title(
                         session_id=effective_thread_id,
                         family_id=family_id,
@@ -523,7 +530,13 @@ class Orchestrator:
                     model=model_name,
                     status="completed" if success and error_type is None else "error",
                 ))
-                if redacted_free_text and success and error_type is None:
+                should_generate_title = (
+                    redacted_free_text
+                    and success
+                    and error_type is None
+                    and (thread_id is None or capability != "chat")
+                )
+                if should_generate_title:
                     _fire_and_forget(self._generate_title(
                         session_id=effective_thread_id,
                         family_id=family_id,

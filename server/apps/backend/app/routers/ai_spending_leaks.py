@@ -80,43 +80,43 @@ async def refresh_leaks(
 
     async def proxy_stream():
         buffer: list[str] = []
-        try:
-            async with (
-                httpx.AsyncClient(
-                    timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)
-                ) as client,
-                client.stream(
-                    "POST",
-                    f"{settings.AGENT_BASE_URL}/spending-leak/stream",
-                    headers={
-                        "X-Family-Id": str(current_user.family_id),
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Task-Id": task.id,
-                        "X-Thread-Id": session.id,
-                    },
-                ) as resp,
-            ):
-                async for chunk in resp.aiter_text():
-                    buffer.append(chunk)
-                    yield chunk.encode("utf-8")
-                    if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
-                        await ChatSessionService.append_message(
-                            session, "assistant", "".join(buffer), current_user, db
-                        )
-                        buffer.clear()
-            if buffer:
-                await ChatSessionService.append_message(
-                    session, "assistant", "".join(buffer), current_user, db
-                )
-            AITaskService.complete_task(task.id, db)
-        except Exception as e:
-            logger.error(f"[ai_spending_leaks] proxy_stream failed: {e}")
-            if buffer:
-                await ChatSessionService.append_message(
-                    session, "assistant", "".join(buffer), current_user, db
-                )
-            AITaskService.fail_task(task.id, "agent_stream_error", db)
-            raise
+        with SessionLocal() as stream_db:
+            try:
+                async with (
+                    httpx.AsyncClient(timeout=None) as client,
+                    client.stream(
+                        "POST",
+                        f"{settings.AGENT_BASE_URL}/spending-leak/stream",
+                        headers={
+                            "X-Family-Id": str(current_user.family_id),
+                            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                            "X-Task-Id": str(task.id),
+                            "X-Thread-Id": str(session.id),
+                        },
+                        timeout=None,
+                    ) as resp,
+                ):
+                    async for chunk in resp.aiter_text():
+                        buffer.append(chunk)
+                        yield chunk.encode("utf-8")
+                        if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
+                            await ChatSessionService.append_message(
+                                session, "assistant", "".join(buffer), current_user, stream_db
+                            )
+                            buffer.clear()
+                if buffer:
+                    await ChatSessionService.append_message(
+                        session, "assistant", "".join(buffer), current_user, stream_db
+                    )
+                AITaskService.complete_task(task.id, stream_db)
+            except Exception as e:
+                logger.error(f"[ai_spending_leaks] proxy_stream failed: {e}")
+                if buffer:
+                    await ChatSessionService.append_message(
+                        session, "assistant", "".join(buffer), current_user, stream_db
+                    )
+                AITaskService.fail_task(task.id, "agent_stream_error", stream_db)
+                raise
 
     return StreamingResponse(proxy_stream(), media_type="text/plain; charset=utf-8")
 
@@ -162,7 +162,7 @@ async def refresh_leaks_events(
                 status_code=202,
                 content={
                     "status": "queued",
-                    "task_id": task.id,
+                    "task_id": str(task.id),
                     "queue_position": task.queue_position,
                 },
             )
@@ -172,9 +172,9 @@ async def refresh_leaks_events(
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        session_id = str(session.id)
 
-    task_id = task.id
+    task_id = str(task.id)
     family_id = current_user.family_id
 
     return StreamingResponse(
