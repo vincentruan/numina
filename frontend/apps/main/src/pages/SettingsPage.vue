@@ -87,6 +87,20 @@
 
     <!-- AI 助手设置 -->
     <van-cell-group inset :title="t('settings.aiSettings')" class="section">
+      <van-cell
+        v-if="authStore.user?.role === 'owner'"
+        :title="t('settings.enableAI')"
+        :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
+      >
+        <template #value>
+          <van-switch
+            :model-value="aiEnabled"
+            :disabled="!hasAnyModel || togglingAI"
+            size="22px"
+            @update:model-value="onToggleAI"
+          />
+        </template>
+      </van-cell>
       <van-cell :title="t('settings.aiAssistant')" icon="smile-o" is-link to="/settings/ai" />
       <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
       <van-cell :title="t('settings.skillsManage')" icon="star-o" is-link to="/settings/ai/skills" />
@@ -191,8 +205,10 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
+import { useAIStore } from '@/stores/ai'
 import { updateSettings } from '@/api/auth'
 import { updateFamilySettings } from '@/api/family'
+import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
 import axios from 'axios'
@@ -202,6 +218,7 @@ const router = useRouter()
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
+const aiStore = useAIStore()
 
 onMounted(() => {
   if (!familyStore.family) {
@@ -216,7 +233,39 @@ onMounted(() => {
     document.documentElement.style.setProperty('--theme-primary', savedColor)
     document.documentElement.style.setProperty('--van-primary-color', savedColor)
   }
+  if (authStore.user?.role === 'owner') {
+    aiStore.fetchConfigs()
+  }
 })
+
+// AI toggle
+const togglingAI = ref(false)
+const hasAnyModel = computed(() =>
+  aiStore.configs.some(
+    (c) => c.model_id || c.model_2_id || c.model_3_id,
+  ),
+)
+const aiEnabled = computed(() => aiStore.configs.some((c) => c.is_active))
+
+async function onToggleAI(val: boolean) {
+  if (!hasAnyModel.value) {
+    showToast(t('settings.enableAINoModel'))
+    return
+  }
+  togglingAI.value = true
+  try {
+    // Toggle is_active on the first provider that has a model
+    const target = aiStore.configs.find((c) => c.model_id || c.model_2_id || c.model_3_id)
+    if (!target) return
+    await aiApi.updateProviderConfig(target.id, { is_active: val })
+    await aiStore.fetchConfigs()
+    showToast(val ? t('toast.aiEnabled') : t('toast.aiDisabled'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  } finally {
+    togglingAI.value = false
+  }
+}
 
 const showThemePicker = ref(false)
 const showLanguagePicker = ref(false)

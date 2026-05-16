@@ -176,6 +176,16 @@ const router = createRouter({
           component: () => import('@/pages/AIConfigPage.vue')
         },
         {
+          path: 'settings/ai/provider/new',
+          name: 'AIProviderCreate',
+          component: () => import('@/pages/AIProviderFormPage.vue')
+        },
+        {
+          path: 'settings/ai/provider/:id/edit',
+          name: 'AIProviderEdit',
+          component: () => import('@/pages/AIProviderFormPage.vue')
+        },
+        {
           path: 'settings/ai/mcp',
           name: 'MCPManage',
           component: () => import('@/pages/MCPManagePage.vue')

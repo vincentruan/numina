@@ -4,124 +4,92 @@
 
     <!-- Owner view -->
     <template v-if="isOwner">
-      <!-- Provider list -->
       <div v-if="aiStore.configs.length === 0" class="empty-state">
-        <van-icon name="info-o" size="40" />
+        <van-icon name="setting-o" size="40" color="var(--text-secondary)" />
         <p>{{ t('aiConfig.noProviders') }}</p>
       </div>
 
-      <draggable
-        v-else
-        v-model="localConfigs"
-        item-key="id"
-        handle=".drag-handle"
-        ghost-class="ghost"
-        @end="onDragEnd"
-      >
-        <template #item="{ element: cfg }">
-          <div class="provider-card">
-            <!-- Card header -->
-            <div class="card-header">
-              <span class="drag-handle">⠿</span>
-              <span class="provider-name">{{ cfg.provider_name }}</span>
-              <span v-if="cfg.circuit_open" class="circuit-badge">⚠️</span>
-              <van-button
-                size="mini"
-                type="danger"
-                plain
-                :loading="deletingId === cfg.id"
-                @click="onDeleteProvider(cfg)"
-              >
-                {{ t('common.delete') }}
-              </van-button>
-            </div>
+      <div v-else class="provider-list">
+        <div
+          v-for="(cfg, index) in aiStore.configs"
+          :key="cfg.id"
+          class="provider-card"
+        >
+          <!-- Card top: index + name + circuit badge -->
+          <div class="card-top">
+            <span class="card-index">{{ t('aiConfig.providerIndex', { n: index + 1 }) }}</span>
+            <span class="card-name">{{ cfg.provider_name }}</span>
+            <span v-if="cfg.circuit_open" class="circuit-badge">⚠️</span>
+          </div>
 
-            <!-- Card body -->
-            <div class="card-body">
-              <!-- Provider type -->
-              <van-cell-group inset>
-                <van-cell :title="t('aiConfig.aiProvider')" :value="providerLabel(cfg.provider)" />
-                <van-cell :title="t('aiConfig.apiKey')" :value="cfg.ai_api_key_masked || '—'" />
-                <van-cell :title="t('aiConfig.baseUrl')" :value="cfg.base_url || '—'" />
-              </van-cell-group>
-
-              <!-- Model slots -->
-              <div class="model-slots">
-                <div v-for="slot in [1, 2, 3]" :key="slot" class="model-slot">
-                  <div class="slot-header">
-                    <span class="slot-label">{{ t('aiConfig.modelN', { n: slot }) }}</span>
-                    <span class="slot-model-id">{{ getModelId(cfg, slot) || t('aiConfig.emptySlot') }}</span>
-                  </div>
-                  <div class="capability-badges">
-                    <span
-                      class="cap-badge"
-                      :class="hasCapability(cfg, slot, 'text_generation') ? 'active' : 'inactive'"
-                      :aria-label="t('aiConfig.capabilityText')"
-                    >📝</span>
-                    <span
-                      class="cap-badge"
-                      :class="hasCapability(cfg, slot, 'deep_thinking') ? 'active' : 'inactive'"
-                      :aria-label="t('aiConfig.capabilityThinking')"
-                    >🧠</span>
-                    <span
-                      class="cap-badge"
-                      :class="hasCapability(cfg, slot, 'vision_understanding') ? 'active' : 'inactive'"
-                      :aria-label="t('aiConfig.capabilityVision')"
-                    >🖼️</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Circuit status + actions -->
-              <div class="card-footer">
-                <div class="status-row">
-                  <span class="circuit-status">
-                    {{ cfg.circuit_open ? t('aiConfig.circuitOpen') : t('aiConfig.circuitNormal') }}
-                  </span>
-                  <span v-if="cfg.failure_count > 0" class="failure-count">
-                    {{ t('aiConfig.failureCount', { count: cfg.failure_count }) }}
+          <!-- Model rows -->
+          <div class="model-rows">
+            <template v-for="slot in [1, 2, 3]" :key="slot">
+              <div v-if="getModelId(cfg, slot)" class="model-row">
+                <span class="model-id">{{ getModelId(cfg, slot) }}</span>
+                <div class="model-caps">
+                  <span
+                    v-for="cap in getCapabilities(cfg, slot)"
+                    :key="cap"
+                    class="cap-chip"
+                    :class="`cap-chip--${cap}`"
+                  >
+                    <component :is="capIcon(cap)" class="cap-chip__icon" />
+                    <span class="cap-chip__label">{{ capShortLabel(cap) }}</span>
                   </span>
                 </div>
                 <van-button
-                  v-if="cfg.circuit_open"
-                  size="mini"
-                  type="warning"
-                  plain
-                  @click="onResetCircuit(cfg.id)"
-                >
-                  {{ t('aiConfig.resetCircuit') }}
-                </van-button>
-                <van-button
                   size="mini"
                   plain
-                  :loading="testingId === cfg.id"
-                  @click="onTestProvider(cfg.id)"
+                  :loading="testingKey === `${cfg.id}-${slot}`"
+                  class="test-btn"
+                  @click="onTestModel(cfg.id, slot)"
                 >
-                  {{ t('aiConfig.testConnection') }}
-                </van-button>
-                <van-button
-                  size="mini"
-                  plain
-                  @click="openEditProvider(cfg)"
-                >
-                  {{ t('common.edit') }}
+                  {{ t('aiConfig.testModel') }}
                 </van-button>
               </div>
+            </template>
+            <div v-if="!cfg.model_id && !cfg.model_2_id && !cfg.model_3_id" class="no-models">
+              {{ t('aiConfig.noModels') }}
             </div>
           </div>
-        </template>
-      </draggable>
 
-      <!-- Save order button -->
-      <div v-if="orderChanged" class="actions">
-        <van-button block type="primary" :loading="savingOrder" @click="onSaveOrder">
-          {{ t('aiConfig.saveOrder') }}
-        </van-button>
+          <!-- Card actions -->
+          <div class="card-actions">
+            <van-button
+              size="mini"
+              plain
+              icon="edit"
+              @click="onEdit(cfg)"
+            >
+              {{ t('common.edit') }}
+            </van-button>
+            <van-button
+              size="mini"
+              type="danger"
+              plain
+              icon="delete-o"
+              :loading="deletingId === cfg.id"
+              @click="onDelete(cfg)"
+            >
+              {{ t('common.delete') }}
+            </van-button>
+            <van-button
+              v-if="cfg.circuit_open"
+              size="mini"
+              type="warning"
+              plain
+              @click="onResetCircuit(cfg.id)"
+            >
+              {{ t('aiConfig.resetCircuit') }}
+            </van-button>
+          </div>
+        </div>
       </div>
 
       <!-- Add provider button -->
-      <div class="actions">
-        <van-button block plain icon="plus" @click="openAddProvider">
+      <div class="page-actions">
+        <van-button block plain icon="plus" @click="onAdd">
           {{ t('aiConfig.addProvider') }}
         </van-button>
       </div>
@@ -144,110 +112,15 @@
       </div>
     </template>
 
-    <!-- Add/Edit Provider Popup -->
-    <van-popup
-      v-model:show="showProviderForm"
-      round
-      position="bottom"
-      :style="{ height: '90%' }"
-    >
-      <div class="provider-form">
-        <div class="form-header">
-          <h3>{{ editingConfig ? t('aiConfig.editProvider') : t('aiConfig.addProvider') }}</h3>
-          <van-icon name="cross" size="20" @click="showProviderForm = false" />
-        </div>
-
-        <van-cell-group inset>
-          <van-field
-            v-model="form.provider_name"
-            :label="t('aiConfig.providerName')"
-            :placeholder="t('aiConfig.providerNamePlaceholder')"
-          />
-          <van-cell
-            :title="t('aiConfig.aiProvider')"
-            :value="providerLabel(form.provider)"
-            is-link
-            @click="showProviderPicker = true"
-          />
-          <van-field
-            v-model="form.api_key"
-            :label="t('aiConfig.apiKey')"
-            :placeholder="editingConfig ? t('aiConfig.apiKeyPlaceholder') : t('aiConfig.apiKeyPlaceholder')"
-            type="password"
-            autocomplete="off"
-          />
-          <van-field
-            v-model="form.base_url"
-            :label="t('aiConfig.baseUrl')"
-            :placeholder="t('aiConfig.baseUrlPlaceholderOpenAI')"
-            clearable
-          />
-          <van-field
-            v-model="form.timeout_seconds"
-            :label="t('aiConfig.apiTimeout')"
-            :placeholder="t('aiConfig.timeoutPlaceholder')"
-            type="digit"
-          />
-        </van-cell-group>
-
-        <!-- Model slots -->
-        <div v-for="slot in [1, 2, 3]" :key="slot" class="model-slot-form">
-          <div class="slot-title">{{ t('aiConfig.modelN', { n: slot }) }}</div>
-          <van-cell-group inset>
-            <van-field
-              v-model="formModels[slot - 1].id"
-              :label="t('aiConfig.modelId')"
-              :placeholder="t('aiConfig.modelIdPlaceholder')"
-              clearable
-            />
-            <van-cell :title="t('aiConfig.capabilities')">
-              <template #value>
-                <div class="cap-checkboxes">
-                  <van-checkbox
-                    v-model="formModels[slot - 1].cap_text"
-                    shape="square"
-                    icon-size="18px"
-                  >📝</van-checkbox>
-                  <van-checkbox
-                    v-model="formModels[slot - 1].cap_thinking"
-                    shape="square"
-                    icon-size="18px"
-                  >🧠</van-checkbox>
-                  <van-checkbox
-                    v-model="formModels[slot - 1].cap_vision"
-                    shape="square"
-                    icon-size="18px"
-                  >🖼️</van-checkbox>
-                </div>
-              </template>
-            </van-cell>
-          </van-cell-group>
-        </div>
-
-        <div class="form-actions">
-          <van-button block type="primary" :loading="formSaving" @click="onSaveProvider">
-            {{ t('common.save') }}
-          </van-button>
-        </div>
-      </div>
-    </van-popup>
-
-    <!-- Provider type picker -->
-    <van-popup v-model:show="showProviderPicker" round position="bottom">
-      <van-picker
-        :columns="providerOptions"
-        @confirm="onProviderConfirm"
-        @cancel="showProviderPicker = false"
-      />
-    </van-popup>
+    <!-- Test result toast is handled inline; no extra popup needed -->
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, defineComponent, h } from 'vue'
 import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
-import draggable from 'vuedraggable'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useAIStore } from '@/stores/ai'
 import * as aiApi from '@/api/ai'
@@ -255,55 +128,58 @@ import type { ProviderConfig } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 const aiStore = useAIStore()
 
 const isOwner = computed(() => authStore.user?.role === 'owner')
-
-// Local copy of configs for drag-and-drop
-const localConfigs = ref<ProviderConfig[]>([])
-const originalOrder = ref<string[]>([])
-const orderChanged = computed(() => {
-  const current = localConfigs.value.map((c) => c.id)
-  return current.length === originalOrder.value.length && current.some((id, i) => id !== originalOrder.value[i])
-})
-
-const savingOrder = ref(false)
 const deletingId = ref<string | null>(null)
-const testingId = ref<string | null>(null)
+const testingKey = ref<string | null>(null)
 
-// Provider form state
-const showProviderForm = ref(false)
-const editingConfig = ref<ProviderConfig | null>(null)
-const formSaving = ref(false)
-const showProviderPicker = ref(false)
+// ── SVG capability icons ──────────────────────────────────────────────────────
 
-const form = reactive({
-  provider_name: '',
-  provider: 'anthropic',
-  api_key: '',
-  base_url: '',
-  timeout_seconds: '60',
+const TextSvg = defineComponent({
+  render: () =>
+    h('svg', { width: 12, height: 12, viewBox: '0 0 28 28', fill: 'none' }, [
+      h('rect', { x: 4, y: 6, width: 20, height: 3, rx: 1.5, fill: 'currentColor' }),
+      h('rect', { x: 4, y: 12, width: 16, height: 3, rx: 1.5, fill: 'currentColor', opacity: 0.7 }),
+      h('rect', { x: 4, y: 18, width: 12, height: 3, rx: 1.5, fill: 'currentColor', opacity: 0.4 }),
+    ]),
 })
 
-const formModels = reactive([
-  { id: '', cap_text: true, cap_thinking: false, cap_vision: false },
-  { id: '', cap_text: false, cap_thinking: false, cap_vision: false },
-  { id: '', cap_text: false, cap_thinking: false, cap_vision: false },
-])
+const ThinkingSvg = defineComponent({
+  render: () =>
+    h('svg', { width: 12, height: 12, viewBox: '0 0 28 28', fill: 'none' }, [
+      h('circle', { cx: 14, cy: 12, r: 7, stroke: 'currentColor', 'stroke-width': 2 }),
+      h('path', { d: 'M10.5 12C10.5 10.067 12.067 8.5 14 8.5', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linecap': 'round' }),
+      h('circle', { cx: 14, cy: 12, r: 2, fill: 'currentColor' }),
+      h('rect', { x: 11, y: 20, width: 6, height: 2, rx: 1, fill: 'currentColor' }),
+      h('rect', { x: 12.5, y: 22, width: 3, height: 2, rx: 1, fill: 'currentColor' }),
+    ]),
+})
 
-const providerOptions = [
-  { text: `💬 ${t('aiConfig.providerAnthropic')}`, value: 'anthropic' },
-  { text: `🤖 ${t('aiConfig.providerOpenAI')}`, value: 'openai' },
-  { text: `🔌 ${t('aiConfig.providerOpenAICompatible')}`, value: 'openai_compatible' },
-]
+const VisionSvg = defineComponent({
+  render: () =>
+    h('svg', { width: 12, height: 12, viewBox: '0 0 28 28', fill: 'none' }, [
+      h('path', { d: 'M4 14C4 14 7.5 7 14 7C20.5 7 24 14 24 14C24 14 20.5 21 14 21C7.5 21 4 14 4 14Z', stroke: 'currentColor', 'stroke-width': 2, 'stroke-linejoin': 'round' }),
+      h('circle', { cx: 14, cy: 14, r: 3.5, stroke: 'currentColor', 'stroke-width': 2 }),
+      h('circle', { cx: 14, cy: 14, r: 1.5, fill: 'currentColor' }),
+    ]),
+})
 
-function providerLabel(provider: string): string {
-  if (provider === 'anthropic') return `💬 ${t('aiConfig.providerAnthropic')}`
-  if (provider === 'openai') return `🤖 ${t('aiConfig.providerOpenAI')}`
-  if (provider === 'openai_compatible') return `🔌 ${t('aiConfig.providerOpenAICompatible')}`
-  return provider
+function capIcon(cap: string) {
+  if (cap === 'text_generation') return TextSvg
+  if (cap === 'deep_thinking') return ThinkingSvg
+  return VisionSvg
 }
+
+function capShortLabel(cap: string): string {
+  if (cap === 'text_generation') return t('aiConfig.capabilityText')
+  if (cap === 'deep_thinking') return t('aiConfig.capabilityThinking')
+  return t('aiConfig.capabilityVision')
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getModelId(cfg: ProviderConfig, slot: number): string | null {
   if (slot === 1) return cfg.model_id
@@ -312,115 +188,23 @@ function getModelId(cfg: ProviderConfig, slot: number): string | null {
   return null
 }
 
-function hasCapability(cfg: ProviderConfig, slot: number, cap: string): boolean {
-  const caps = slot === 1 ? cfg.model_1_capabilities : slot === 2 ? cfg.model_2_capabilities : cfg.model_3_capabilities
-  return caps.includes(cap)
+function getCapabilities(cfg: ProviderConfig, slot: number): string[] {
+  if (slot === 1) return cfg.model_1_capabilities
+  if (slot === 2) return cfg.model_2_capabilities
+  return cfg.model_3_capabilities
 }
 
-function onProviderConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  form.provider = selectedOptions[0].value
-  showProviderPicker.value = false
+// ── Actions ───────────────────────────────────────────────────────────────────
+
+function onAdd() {
+  router.push({ name: 'AIProviderCreate' })
 }
 
-function openAddProvider() {
-  editingConfig.value = null
-  form.provider_name = ''
-  form.provider = 'anthropic'
-  form.api_key = ''
-  form.base_url = ''
-  form.timeout_seconds = '60'
-  formModels.forEach((m) => {
-    m.id = ''
-    m.cap_text = false
-    m.cap_thinking = false
-    m.cap_vision = false
-  })
-  formModels[0].cap_text = true
-  showProviderForm.value = true
+function onEdit(cfg: ProviderConfig) {
+  router.push({ name: 'AIProviderEdit', params: { id: cfg.id } })
 }
 
-function openEditProvider(cfg: ProviderConfig) {
-  editingConfig.value = cfg
-  form.provider_name = cfg.provider_name
-  form.provider = cfg.provider
-  form.api_key = ''
-  form.base_url = cfg.base_url || ''
-  form.timeout_seconds = String(cfg.timeout_seconds)
-  formModels[0].id = cfg.model_id || ''
-  formModels[0].cap_text = cfg.model_1_capabilities.includes('text_generation')
-  formModels[0].cap_thinking = cfg.model_1_capabilities.includes('deep_thinking')
-  formModels[0].cap_vision = cfg.model_1_capabilities.includes('vision_understanding')
-  formModels[1].id = cfg.model_2_id || ''
-  formModels[1].cap_text = cfg.model_2_capabilities.includes('text_generation')
-  formModels[1].cap_thinking = cfg.model_2_capabilities.includes('deep_thinking')
-  formModels[1].cap_vision = cfg.model_2_capabilities.includes('vision_understanding')
-  formModels[2].id = cfg.model_3_id || ''
-  formModels[2].cap_text = cfg.model_3_capabilities.includes('text_generation')
-  formModels[2].cap_thinking = cfg.model_3_capabilities.includes('deep_thinking')
-  formModels[2].cap_vision = cfg.model_3_capabilities.includes('vision_understanding')
-  showProviderForm.value = true
-}
-
-async function onSaveProvider() {
-  formSaving.value = true
-  try {
-    const caps1: string[] = []
-    if (formModels[0].cap_text) caps1.push('text_generation')
-    if (formModels[0].cap_thinking) caps1.push('deep_thinking')
-    if (formModels[0].cap_vision) caps1.push('vision_understanding')
-    const caps2: string[] = []
-    if (formModels[1].cap_text) caps2.push('text_generation')
-    if (formModels[1].cap_thinking) caps2.push('deep_thinking')
-    if (formModels[1].cap_vision) caps2.push('vision_understanding')
-    const caps3: string[] = []
-    if (formModels[2].cap_text) caps3.push('text_generation')
-    if (formModels[2].cap_thinking) caps3.push('deep_thinking')
-    if (formModels[2].cap_vision) caps3.push('vision_understanding')
-
-    if (editingConfig.value) {
-      const payload: aiApi.ProviderConfigUpdate = {
-        provider_name: form.provider_name,
-        provider: form.provider,
-        base_url: form.base_url || null,
-        timeout_seconds: parseInt(form.timeout_seconds) || 60,
-        model_id: formModels[0].id || null,
-        model_2_id: formModels[1].id || null,
-        model_3_id: formModels[2].id || null,
-        model_1_capabilities: caps1,
-        model_2_capabilities: caps2,
-        model_3_capabilities: caps3,
-      }
-      if (form.api_key.trim()) payload.ai_api_key = form.api_key.trim()
-      await aiApi.updateProviderConfig(editingConfig.value.id, payload)
-      showToast(t('toast.aiConfigSaved'))
-    } else {
-      const payload: aiApi.ProviderConfigCreate = {
-        name: form.provider_name,
-        provider: form.provider,
-        ai_api_key: form.api_key.trim() || undefined,
-        base_url: form.base_url || undefined,
-        timeout_seconds: parseInt(form.timeout_seconds) || 60,
-        model_id: formModels[0].id || undefined,
-        model_2_id: formModels[1].id || undefined,
-        model_3_id: formModels[2].id || undefined,
-        model_1_capabilities: caps1,
-        model_2_capabilities: caps2,
-        model_3_capabilities: caps3,
-      }
-      await aiApi.createAIConfig(payload)
-      showToast(t('toast.aiConfigSaved'))
-    }
-    await aiStore.fetchConfigs()
-    showProviderForm.value = false
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : t('toast.saveFailedGeneric')
-    showToast(msg)
-  } finally {
-    formSaving.value = false
-  }
-}
-
-async function onDeleteProvider(cfg: ProviderConfig) {
+async function onDelete(cfg: ProviderConfig) {
   try {
     await showConfirmDialog({
       title: t('aiConfig.deleteProvider'),
@@ -431,7 +215,7 @@ async function onDeleteProvider(cfg: ProviderConfig) {
     await aiStore.fetchConfigs()
     showToast(t('toast.deleted'))
   } catch {
-    // user cancelled or error
+    // user cancelled
   } finally {
     deletingId.value = null
   }
@@ -446,45 +230,21 @@ async function onResetCircuit(id: string) {
   }
 }
 
-async function onTestProvider(id: string) {
-  testingId.value = id
+async function onTestModel(configId: string, slot: number) {
+  const key = `${configId}-${slot}`
+  testingKey.value = key
   try {
-    const res = await aiApi.testAIConfig(id)
-    const connected = res.data.connected
-    showToast(connected ? t('toast.aiConnectionSuccess') : `❌ ${res.data.message || t('toast.aiConnectionFailed')}`)
+    const res = await aiApi.testProviderConfig(configId)
+    showToast(res.data.connected ? t('aiConfig.testSuccess') : `${t('aiConfig.testFailed')}: ${res.data.message ?? ''}`)
   } catch {
-    showToast(t('toast.aiTestFailed'))
+    showToast(t('aiConfig.testFailed'))
   } finally {
-    testingId.value = null
-  }
-}
-
-function onDragEnd() {
-  // Local order updated, user needs to click save
-}
-
-async function onSaveOrder() {
-  savingOrder.value = true
-  try {
-    const order = localConfigs.value.map((c) => c.id)
-    await aiStore.reorderConfigs(order)
-    showToast(t('toast.aiConfigSaved'))
-  } catch {
-    showToast(t('toast.operationFailed2'))
-  } finally {
-    savingOrder.value = false
+    testingKey.value = null
   }
 }
 
 onMounted(async () => {
   await aiStore.fetchConfigs()
-  localConfigs.value = [...aiStore.configs]
-  originalOrder.value = aiStore.configs.map((c) => c.id)
-})
-
-watch(() => aiStore.configs, (newConfigs) => {
-  localConfigs.value = [...newConfigs]
-  originalOrder.value = newConfigs.map((c) => c.id)
 })
 </script>
 
@@ -492,11 +252,7 @@ watch(() => aiStore.configs, (newConfigs) => {
 .ai-config-page {
   background: var(--bg-secondary);
   min-height: 100vh;
-  padding-bottom: 20px;
-}
-
-.section {
-  margin-top: 12px;
+  padding-bottom: 24px;
 }
 
 .empty-state {
@@ -504,131 +260,144 @@ watch(() => aiStore.configs, (newConfigs) => {
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 40px 20px;
+  padding: 48px 20px;
   color: var(--text-secondary);
   font-size: 14px;
+}
+
+.provider-list {
+  padding: 12px 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .provider-card {
   background: var(--bg-card);
   border-radius: 12px;
-  margin: 12px 16px;
-  overflow: hidden;
   border: 1px solid var(--border-light);
+  overflow: hidden;
 }
 
-.card-header {
+.card-top {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 12px 16px;
-  background: var(--bg-primary);
+  padding: 12px 14px 10px;
   border-bottom: 1px solid var(--border-light);
 }
 
-.drag-handle {
-  cursor: grab;
-  font-size: 20px;
-  color: var(--text-secondary);
-  padding: 8px;
-  user-select: none;
+.card-index {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 10%, transparent);
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.2px;
+  flex-shrink: 0;
 }
 
-.provider-name {
-  font-size: 16px;
+.card-name {
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   flex: 1;
+  letter-spacing: -0.2px;
 }
 
 .circuit-badge {
-  font-size: 16px;
+  font-size: 15px;
 }
 
-.card-body {
-  padding: 12px 0;
-}
-
-.model-slots {
-  padding: 0 16px;
-  margin-top: 8px;
-}
-
-.model-slot {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-light);
-}
-
-.model-slot:last-child {
-  border-bottom: none;
-}
-
-.slot-header {
+.model-rows {
+  padding: 10px 14px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.slot-label {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.slot-model-id {
-  font-size: 14px;
-  color: var(--text-primary);
-  word-break: break-all;
-}
-
-.capability-badges {
-  display: flex;
+  flex-direction: column;
   gap: 8px;
 }
 
-.cap-badge {
-  font-size: 18px;
-  transition: opacity 0.2s, filter 0.2s;
-}
-
-.cap-badge.active {
-  opacity: 1;
-}
-
-.cap-badge.inactive {
-  opacity: 0.4;
-  filter: grayscale(100%);
-}
-
-.card-footer {
+.model-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-light);
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.status-row {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.circuit-status {
-  font-size: 14px;
-  color: var(--text-primary);
-}
-
-.failure-count {
+.model-id {
   font-size: 12px;
   color: var(--text-secondary);
+  font-family: monospace;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.actions {
-  padding: 16px 16px 0;
+.model-caps {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.cap-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.cap-chip__icon {
+  flex-shrink: 0;
+}
+
+.cap-chip__label {
+  white-space: nowrap;
+}
+
+.cap-chip--text_generation {
+  background: color-mix(in srgb, #4f8ef7 12%, transparent);
+  color: #4f8ef7;
+}
+
+.cap-chip--deep_thinking {
+  background: color-mix(in srgb, #9b59f7 12%, transparent);
+  color: #9b59f7;
+}
+
+.cap-chip--vision_understanding {
+  background: color-mix(in srgb, #2ec4b6 12%, transparent);
+  color: #2ec4b6;
+}
+
+.test-btn {
+  flex-shrink: 0;
+}
+
+.no-models {
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border-light);
+  flex-wrap: wrap;
+}
+
+.page-actions {
+  padding: 16px 16px 0;
+}
+
+.section {
+  margin-top: 12px;
 }
 
 .tip {
@@ -638,50 +407,5 @@ watch(() => aiStore.configs, (newConfigs) => {
   padding: 16px;
   color: var(--text-secondary);
   font-size: 13px;
-}
-
-/* Provider form popup */
-.provider-form {
-  padding: 20px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.form-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.form-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.model-slot-form {
-  margin-top: 16px;
-}
-
-.slot-title {
-  font-size: 15px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  padding-left: 16px;
-}
-
-.cap-checkboxes {
-  display: flex;
-  gap: 12px;
-}
-
-.form-actions {
-  margin-top: 24px;
-}
-
-/* Ghost class for drag */
-.ghost {
-  opacity: 0.5;
-  background: var(--bg-secondary);
 }
 </style>

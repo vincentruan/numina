@@ -86,6 +86,18 @@ export const reorderAIConfigs = (order: string[]) =>
 export const resetCircuitBreaker = (id: string) =>
   http.post<{ ok: boolean }>(`/ai/config/${id}/reset-circuit`)
 
+export const deleteAIConfig = (id: string) =>
+  http.delete(`/ai/config/${id}`)
+
+export interface ModelTestResult {
+  connected: boolean
+  message: string | null
+  latency_ms: number | null
+}
+
+export const testProviderConfig = (id: string) =>
+  http.post<ModelTestResult>(`/ai/config/${id}/test`)
+
 // ── Legacy flat config shape (kept for backward compat) ───────────────────────
 export interface AIConfig {
   id: string | null
