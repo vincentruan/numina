@@ -75,6 +75,7 @@ app = FastAPI(
 
 
 from apps.agent.app.routers import cache as cache_router
+from apps.agent.app.routers import gateway as gateway_router
 from apps.agent.routers import alerts as alerts_router
 from apps.agent.routers import allocation as allocation_router
 from apps.agent.routers import capabilities as capabilities_router
@@ -99,6 +100,7 @@ app.include_router(chat_router.router)
 app.include_router(spending_leak_router.router)
 app.include_router(time_machine_router.router)
 app.include_router(cache_router.router)
+app.include_router(gateway_router.router)
 app.include_router(import_parse_router.router)
 app.include_router(capabilities_router.router)
 app.include_router(model_test_router.router)

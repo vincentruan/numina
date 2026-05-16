@@ -248,7 +248,9 @@ class TestFamilyAdapterCache:
         assert stats["cached_families"] == 100
         # First entry should be evicted
         assert ("family_0", "cfg-000") not in _adapter_cache
-        assert ("family_100", "cfg-100") in _adapter_cache
+        assert ("family_100", "cfg-100") not in _adapter_cache
+        assert ("family_0", "cfg-000", False, False) not in _adapter_cache
+        assert ("family_100", "cfg-100", False, False) in _adapter_cache
 
         clear_cache()
 
@@ -269,7 +271,7 @@ class TestFamilyAdapterCache:
 
         stats = get_cache_stats()
         assert stats["cached_families"] == 0
-        assert ("family_1", "cfg-001") not in _adapter_cache
+        assert ("family_1", "cfg-001", False, False) not in _adapter_cache
 
     def test_invalidate_nonexistent_family(self):
         """Should handle invalidation of non-cached family gracefully."""
@@ -371,8 +373,8 @@ class TestIU6CacheKeyAndCapabilities:
             client_b = get_family_adapter("family_x", cfg_b, base_config_dir)
 
         assert client_a is not client_b
-        assert ("family_x", "cfg-aaa") in _adapter_cache
-        assert ("family_x", "cfg-bbb") in _adapter_cache
+        assert ("family_x", "cfg-aaa", False, False) in _adapter_cache
+        assert ("family_x", "cfg-bbb", False, False) in _adapter_cache
         assert get_cache_stats()["cached_families"] == 2
         clear_cache()
 
@@ -395,8 +397,8 @@ class TestIU6CacheKeyAndCapabilities:
             client_new = get_family_adapter("family_y", cfg_new, base_config_dir)
 
         assert client_old is not client_new
-        assert ("family_y", "cfg-old") in _adapter_cache
-        assert ("family_y", "cfg-new") in _adapter_cache
+        assert ("family_y", "cfg-old", False, False) in _adapter_cache
+        assert ("family_y", "cfg-new", False, False) in _adapter_cache
         clear_cache()
 
     def test_thinking_supported_from_model_1_capabilities(self, base_config_dir):
@@ -469,9 +471,9 @@ class TestIU6CacheKeyAndCapabilities:
         # Batch invalidate family_z only
         invalidate_family_adapter_cache("family_z")
 
-        assert ("family_z", "cfg-z1") not in _adapter_cache
-        assert ("family_z", "cfg-z2") not in _adapter_cache
-        assert ("family_other", "cfg-o1") in _adapter_cache
+        assert ("family_z", "cfg-z1", False, False) not in _adapter_cache
+        assert ("family_z", "cfg-z2", False, False) not in _adapter_cache
+        assert ("family_other", "cfg-o1", False, False) in _adapter_cache
         assert get_cache_stats()["cached_families"] == 1
         clear_cache()
 
@@ -492,8 +494,8 @@ class TestIU6CacheKeyAndCapabilities:
 
         invalidate_family_adapter_cache("family_w", config_id="cfg-w1")
 
-        assert ("family_w", "cfg-w1") not in _adapter_cache
-        assert ("family_w", "cfg-w2") in _adapter_cache
+        assert ("family_w", "cfg-w1", False, False) not in _adapter_cache
+        assert ("family_w", "cfg-w2", False, False) in _adapter_cache
         clear_cache()
 
 class TestCacheFixes:

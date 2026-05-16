@@ -112,13 +112,14 @@ class TestSessionJournalService:
 
     def test_write_session_start_creates_event(self, tmp_path):
         svc = SessionJournalService(tmp_path)
+        jsonl_path = str(tmp_path / "f1" / "s1.jsonl")
         svc.write_session_start(
             family_id="f1",
             session_id="s1",
             user_id="u1",
             capability="chat",
             model_name="claude-3",
-            jsonl_path="data/sessions/f1/s1.jsonl",
+            jsonl_path=jsonl_path,
         )
         events = svc.read_events("f1", "s1")
         assert len(events) == 1

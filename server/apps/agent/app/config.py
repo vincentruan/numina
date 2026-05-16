@@ -27,6 +27,16 @@ class AgentSettings(BaseSettings):
     # 会话 JSONL 文件存储目录（按 family_id 隔离）
     SESSIONS_DATA_DIR: str = "data/sessions"
 
+    # Agent 数据根目录（memory、session JSONL 等按家庭隔离的文件均存放于此）
+    AGENT_DATA_DIR: str = "data/workspace"
+
+    # DeerFlow 并发与超时
+    DEERFLOW_CONCURRENCY: int = 8
+    DEERFLOW_DEFAULT_TIMEOUT: int = 120
+
+    # DeerFlow Gateway API 地址（内部代理端点使用）
+    DEERFLOW_GATEWAY_URL: str = "http://localhost:8001"
+
     model_config = {"env_file": ".env", "extra": "ignore"}
 
     def validate_required(self) -> None:

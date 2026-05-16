@@ -10,6 +10,8 @@ input_mode: trigger
 allowed_roles: [member, admin]
 thinking: false
 mcp_tools: []
+subagent_enabled: false
+plan_mode: false
 max_tokens: 1000
 placeholder: null
 examples:

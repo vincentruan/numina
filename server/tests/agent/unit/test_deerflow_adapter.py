@@ -46,8 +46,19 @@ class TestDeerFlowAdapterDispatch:
         assert isinstance(result, str)
 
     def test_dispatch_collects_stream_events(self):
+        from dataclasses import dataclass
+        from typing import Any
+
+        @dataclass
+        class FakeEvent:
+            type: str
+            data: Any
+
         mock_client = MagicMock()
-        mock_client.stream.return_value = iter(["第一段", "第二段"])
+        mock_client.stream.return_value = iter([
+            FakeEvent(type="messages-tuple", data={"type": "ai", "content": "第一段"}),
+            FakeEvent(type="messages-tuple", data={"type": "ai", "content": "第二段"}),
+        ])
         adapter = self._make_adapter(mock_client)
         result = asyncio.run(adapter.dispatch("family-asset-checkup", _make_redacted(), "thread-1"))
         assert "第一段" in result or "第二段" in result

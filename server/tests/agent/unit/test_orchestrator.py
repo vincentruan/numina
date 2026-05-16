@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from apps.agent.schemas.response import AgentResponse
+from apps.agent.services.deerflow_adapter.adapter import StreamChunk
 from apps.agent.services.orchestrator import Orchestrator
 from apps.agent.services.stream_events import EventStreamBuilder
 
@@ -254,7 +255,7 @@ class TestOrchestratorEventStreaming:
         }
 
         async def _deerflow_stream(*args, **kwargs):
-            yield "DeerFlow answer"
+            yield StreamChunk(type="text", content="DeerFlow answer")
 
         mock_df = MagicMock()
         mock_df.stream_dispatch = _deerflow_stream
@@ -616,7 +617,7 @@ class TestIU5CircuitEvents:
         ai_configs = self._make_ai_configs()
 
         async def _ok_stream(*args, **kwargs):
-            yield "[TEXT]answer"
+            yield StreamChunk(type="text", content="answer")
 
         mock_df = MagicMock()
         mock_df.stream_dispatch = _ok_stream
@@ -652,7 +653,7 @@ class TestIU5CircuitEvents:
         ai_configs = self._make_ai_configs()
 
         async def _ok_stream(*args, **kwargs):
-            yield "[TEXT]done"
+            yield StreamChunk(type="text", content="done")
 
         mock_df = MagicMock()
         mock_df.stream_dispatch = _ok_stream

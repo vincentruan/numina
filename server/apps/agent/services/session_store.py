@@ -57,6 +57,27 @@ class AiSessionRepository:
             logger.warning("session get_title failed for %s: %s", session_id, e)
         return None
 
+    async def get_session(self, session_id: str, family_id: str | None = None) -> dict | None:
+        """Return session metadata dict, or None if not found or on error."""
+        try:
+            return await self._client.get_session(session_id)
+        except Exception as e:
+            logger.warning("session get failed for %s: %s", session_id, e)
+            return None
+
+    async def list_sessions(
+        self,
+        family_id: str,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[dict], int]:
+        """Return (sessions, total) for the family, or ([], 0) on error."""
+        try:
+            return await self._client.list_sessions(family_id, limit=limit, offset=offset)
+        except Exception as e:
+            logger.warning("session list failed for family %s: %s", family_id, e)
+            return [], 0
+
     async def update_summary(
         self,
         *,
