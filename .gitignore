@@ -178,3 +178,7 @@ tests/screenshot/screenshots/*-after-*.png
 data/chat/
 data/sessions/
 server/apps/agent/data/sessions
+
+# Runtime data directory (SQLite DBs, DeerFlow checkpoints, WAL files)
+data/*.db-shm
+data/*.db-wal
