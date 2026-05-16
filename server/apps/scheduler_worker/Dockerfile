@@ -8,10 +8,8 @@ RUN useradd -r -u 1001 -s /sbin/nologin appuser
 
 WORKDIR /app
 
-# DeerFlow harness must be present before uv sync (workspace member)
-COPY apps/agent/vendor/deerflow-harness ./apps/agent/vendor/deerflow-harness
-
 # Install dependencies from server/ root (cached layer)
+# DeerFlow harness will be fetched from GitHub automatically via uv
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --extra worker
 
