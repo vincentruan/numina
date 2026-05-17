@@ -279,16 +279,16 @@ const savingRates = ref(false)
 const coinRatesExpanded = ref(false)
 const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 
-const themeColorOptions = [
-  { name: '蓝色', value: '#007aff' },
-  { name: '紫色', value: '#5856d6' },
-  { name: '靛蓝', value: '#3634a3' },
-  { name: '橙色', value: '#ff9500' },
-  { name: '红色', value: '#ff3b30' },
-  { name: '粉色', value: '#ff2d55' },
-  { name: '深绿', value: '#248a3d' },
-  { name: '深青', value: '#0071a4' },
-]
+const themeColorOptions = computed(() => [
+  { name: t('settings.colorBlue'), value: '#007aff' },
+  { name: t('settings.colorPurple'), value: '#5856d6' },
+  { name: t('settings.colorIndigo'), value: '#3634a3' },
+  { name: t('settings.colorOrange'), value: '#ff9500' },
+  { name: t('settings.colorRed'), value: '#ff3b30' },
+  { name: t('settings.colorPink'), value: '#ff2d55' },
+  { name: t('settings.colorGreen'), value: '#248a3d' },
+  { name: t('settings.colorTeal'), value: '#0071a4' },
+])
 
 const currentThemeColor = ref(localStorage.getItem('theme-primary') || '#007aff')
 

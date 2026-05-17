@@ -79,7 +79,7 @@ class WebDAVStorageBackend(StorageBackend):
                     f"MKCOL {url} 返回 {response.status_code}"
                 )
 
-    async def save(self, content: bytes, filename: str, date_dir: str) -> str:
+    async def save(self, content: bytes, filename: str, date_dir: str, family_id: str = "", user_id: str = "") -> str:
         """Upload content via PUT and return the remote_path."""
         remote_path = f"{date_dir}/{filename}"
         await self._ensure_path(date_dir)

@@ -279,6 +279,11 @@ const router = createRouter({
           component: () => import('@/pages/BabyDayDetailPage.vue')
         },
         {
+          path: 'baby/chores/new',
+          name: 'BabyChoreCreate',
+          component: () => import('@/pages/BabyChoreCreatePage.vue')
+        },
+        {
           path: 'family/chore-approvals',
           name: 'ChoreApprovals',
           component: () => import('@/pages/ChoreApprovalsPage.vue')

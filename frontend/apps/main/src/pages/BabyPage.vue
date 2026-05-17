@@ -136,6 +136,15 @@
                   </div>
                 </div>
 
+                <!-- Card meta: reward + streak -->
+                <div class="chore-card-meta">
+                  <span class="chore-reward">+{{ chore.coin_reward }}⭐</span>
+                  <template v-if="chore.streak_count > 0">
+                    <span class="meta-sep">·</span>
+                    <span class="chore-streak">{{ t('baby.choreStreak', { count: chore.streak_count }) }}</span>
+                  </template>
+                </div>
+
                 <!-- Action row -->
                 <div
                   v-if="chore.status === 'available'"
@@ -148,6 +157,7 @@
                       :disabled="assigningId === chore.id"
                       @click="openAssignPicker(chore)"
                     >
+                      <van-icon name="friends" size="16" />
                       <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
                       <span v-else>{{ t('baby.choreAssign') }}</span>
                     </button>
@@ -159,6 +169,7 @@
                       :disabled="assigningId === chore.id || voidingId === chore.id"
                       @click="openAssignPicker(chore)"
                     >
+                      <van-icon name="exchange" size="16" />
                       <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
                       <span v-else>{{ t('baby.choreReassign') }}</span>
                     </button>
@@ -167,6 +178,7 @@
                       :disabled="assigningId === chore.id || voidingId === chore.id"
                       @click="doVoidChore(chore)"
                     >
+                      <van-icon name="close" size="16" />
                       <span v-if="voidingId === chore.id">{{ t('baby.choreVoiding') }}</span>
                       <span v-else>{{ t('baby.choreVoid') }}</span>
                     </button>
@@ -174,6 +186,11 @@
                 </div>
               </div>
               <van-empty v-if="filteredChores.length === 0" :description="t('baby.noChores')" image-size="60" />
+            </div>
+
+            <!-- FAB: create new chore -->
+            <div class="fab" :aria-label="t('baby.addChore')" @click="$router.push('/baby/chores/new')">
+              <van-icon name="plus" size="22" />
             </div>
           </van-tab>
         </van-tabs>
@@ -224,7 +241,7 @@
 
         <!-- Assign chore picker popup -->
         <van-popup v-model:show="showAssignPicker" position="bottom" round style="padding: 24px 16px 40px">
-          <p class="sheet-title">{{ t('baby.choreAssign') }}</p>
+          <p class="sheet-title">{{ assigningChore?.is_pool_unclaimed ? t('baby.assignPickerTitle') : t('baby.reassignPickerTitle') }}</p>
           <van-cell
             v-for="child in childMembers.filter(c => c.is_active)"
             :key="child.id"
@@ -452,6 +469,7 @@ function openAssignPicker(chore: ChoreInstance) {
 
 async function selectChildForAssign(child: { id: string | number; display_name?: string | null }) {
   if (!assigningChore.value) return
+  const isReassign = !assigningChore.value.is_pool_unclaimed
   showAssignPicker.value = false
   assigningId.value = assigningChore.value.id
   try {
@@ -461,9 +479,9 @@ async function selectChildForAssign(child: { id: string | number; display_name?:
     if (idx >= 0) {
       allChores.value[idx] = updated
     }
-    showToast(t('baby.choreAssignSuccess'))
+    showToast(isReassign ? t('baby.choreReassignSuccess') : t('baby.choreAssignSuccess'))
   } catch {
-    showToast(t('baby.choreAssignFailed'))
+    showToast(isReassign ? t('baby.choreReassignFailed') : t('baby.choreAssignFailed'))
   } finally {
     assigningId.value = null
     assigningChore.value = null
@@ -813,5 +831,74 @@ onMounted(async () => {
 
 .action-btn--danger {
   color: var(--van-danger-color, #ee0a24);
+}
+
+/* Chore card meta row */
+.chore-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.chore-reward {
+  color: var(--van-warning-color, #ff976a);
+  font-weight: 500;
+}
+
+.meta-sep {
+  color: var(--van-text-color-3, #c8c8cc);
+}
+
+.chore-streak {
+  color: var(--van-text-color-2, #969799);
+}
+
+/* FAB */
+.fab {
+  position: fixed;
+  right: 16px;
+  bottom: 72px;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--van-primary-color);
+  color: var(--color-on-primary, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-elevated);
+  z-index: 10;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  cursor: pointer;
+  border: none;
+}
+
+.fab:active {
+  transform: scale(0.93);
+  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.2);
+}
+
+[data-theme='dark'] .fab {
+  background: var(--color-lavender);
+  color: #010120;
+  box-shadow: 0 4px 16px rgba(189, 187, 255, 0.3);
+}
+
+/* Dark mode: content-tabs panel background */
+[data-theme='dark'] .content-tabs :deep(.van-tabs__content),
+.dark .content-tabs :deep(.van-tabs__content) {
+  background: transparent;
+}
+
+[data-theme='dark'] .content-tabs :deep(.van-tab),
+.dark .content-tabs :deep(.van-tab) {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme='dark'] .content-tabs :deep(.van-tab--active),
+.dark .content-tabs :deep(.van-tab--active) {
+  color: #fff;
 }
 </style>

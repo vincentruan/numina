@@ -21,8 +21,14 @@
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn-realize" :disabled="actioningId === wish.id" @click="openRealize(wish)">{{ t('wishReview.btn.realize') }}</button>
-              <button class="btn-defer" :disabled="actioningId === wish.id" @click="defer(wish.id)">{{ t('wishReview.btn.defer') }}</button>
+              <button class="action-btn action-btn--success" :disabled="actioningId === wish.id" @click="openRealize(wish)">
+                <van-icon name="gift-o" size="16" />
+                <span>{{ t('wishReview.btn.realize') }}</span>
+              </button>
+              <button class="action-btn action-btn--muted" :disabled="actioningId === wish.id" @click="defer(wish.id)">
+                <van-icon name="clock-o" size="16" />
+                <span>{{ t('wishReview.btn.defer') }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -41,8 +47,14 @@
               </div>
             </div>
             <div class="card-actions">
-              <button class="btn-approve" :disabled="actioningId === wish.id" @click="openApprove(wish)">{{ t('wishReview.btn.approve') }}</button>
-              <button class="btn-reject" :disabled="actioningId === wish.id" @click="openReject(wish)">{{ t('wishReview.btn.reject') }}</button>
+              <button class="action-btn action-btn--primary" :disabled="actioningId === wish.id" @click="openApprove(wish)">
+                <van-icon name="passed" size="16" />
+                <span>{{ t('wishReview.btn.approve') }}</span>
+              </button>
+              <button class="action-btn action-btn--danger" :disabled="actioningId === wish.id" @click="openReject(wish)">
+                <van-icon name="close" size="16" />
+                <span>{{ t('wishReview.btn.reject') }}</span>
+              </button>
             </div>
           </div>
         </div>
@@ -56,19 +68,16 @@
     <!-- Approve dialog -->
     <div v-if="approveTarget" class="dialog-overlay" @click.self="approveTarget = null">
       <div class="dialog">
-        <h3>{{ t('wishReview.dialog.approveTitle') }}</h3>
+        <h3 class="dialog-title"><van-icon name="passed" size="20" color="#28a745" /> {{ t('wishReview.dialog.approveTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.approveDesc', { name: approveTarget.name }) }}</p>
-        <input
-          v-model.number="costInput"
-          type="number"
-          class="input"
-          :placeholder="t('wishReview.dialog.costPlaceholder')"
-          min="1"
-        />
+        <div class="cost-readonly">
+          <span class="cost-label">{{ t('wishReview.dialog.costLabel') }}</span>
+          <span class="cost-value">{{ approveTarget.star_coin_cost ?? '-' }} ⭐</span>
+        </div>
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
         <div class="dialog-actions">
           <button class="btn-cancel" @click="approveTarget = null">{{ t('wishReview.btn.cancel') }}</button>
-          <button class="btn-submit" :disabled="actioning || !costInput || costInput < 1" @click="approve">{{ t('wishReview.btn.confirmApprove') }}</button>
+          <button class="btn-submit" :disabled="actioning" @click="approve">{{ t('wishReview.btn.confirmApprove') }}</button>
         </div>
       </div>
     </div>
@@ -76,8 +85,8 @@
     <!-- Reject dialog -->
     <div v-if="rejectTarget" class="dialog-overlay" @click.self="rejectTarget = null">
       <div class="dialog">
-        <h3>{{ t('wishReview.dialog.rejectTitle') }}</h3>
-        <p class="dialog-desc">{{ t('wishReview.dialog.rejectTitle') }}「{{ rejectTarget.name }}」</p>
+        <h3 class="dialog-title"><van-icon name="close" size="20" color="#dc3545" /> {{ t('wishReview.dialog.rejectTitle') }}</h3>
+        <p class="dialog-desc">{{ t('wishReview.dialog.rejectDesc', { name: rejectTarget.name }) }}</p>
         <input v-model="rejectReason" class="input" :placeholder="t('wishReview.dialog.rejectReasonPlaceholder')" maxlength="200" />
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
         <div class="dialog-actions">
@@ -121,7 +130,6 @@ const actioningId = ref<string | null>(null)
 const approveTarget = ref<ParentWish | null>(null)
 const rejectTarget = ref<ParentWish | null>(null)
 const realizeTarget = ref<ParentWish | null>(null)
-const costInput = ref<number | null>(null)
 const rejectReason = ref('')
 const actioning = ref(false)
 const dialogError = ref('')
@@ -147,7 +155,6 @@ async function load() {
 
 function openApprove(wish: ParentWish) {
   approveTarget.value = wish
-  costInput.value = null
   dialogError.value = ''
 }
 
@@ -163,11 +170,13 @@ function openRealize(wish: ParentWish) {
 }
 
 async function approve() {
-  if (!approveTarget.value || !costInput.value || costInput.value < 1) return
+  if (!approveTarget.value) return
+  const cost = approveTarget.value.star_coin_cost
+  if (!cost || cost < 1) return
   actioning.value = true
   dialogError.value = ''
   try {
-    await approveChildWish(approveTarget.value.id, costInput.value)
+    await approveChildWish(approveTarget.value.id, cost)
     approveTarget.value = null
     await load()
   } catch {
@@ -224,55 +233,51 @@ onMounted(load)
 
 <style scoped>
 .review-page {
-  background: var(--bg-secondary, #f8f9fa);
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding: 16px 16px 80px;
 }
 .loading, .empty {
   text-align: center;
   margin-top: 60px;
-  color: var(--text-tertiary, #999);
+  color: var(--text-tertiary);
   font-size: 16px;
 }
 .section { margin-bottom: 20px; }
 .section-title {
   font-size: 14px;
   font-weight: 600;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
   margin: 0 0 8px;
 }
 .wish-card {
-  background: var(--card-bg, #fff);
+  background: var(--card-bg);
   border-radius: 12px;
   padding: 16px;
-  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.06);
+  box-shadow: var(--shadow-elevated, 0 2px 8px rgba(1, 1, 32, 0.06));
   margin-bottom: 10px;
 }
-[data-theme='dark'] .wish-card {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
-}
-.wish-card.redemption { border-left: 4px solid #28a745; }
+.wish-card.redemption { border-left: 4px solid var(--color-success); }
 .card-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
 .wish-emoji { font-size: 28px; flex-shrink: 0; }
 .wish-info { flex: 1; }
 .wish-name {
   font-size: 16px;
   font-weight: 600;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   margin: 0 0 2px;
 }
 .child-name {
   font-size: 13px;
-  color: var(--text-tertiary, #888);
+  color: var(--text-tertiary);
   margin: 0 0 2px;
 }
 .wish-desc {
   font-size: 13px;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
   margin: 2px 0;
 }
-.cost { font-size: 13px; color: #f5a623; font-weight: 600; margin: 2px 0 0; }
-[data-theme='dark'] .cost { color: #ffc04d; }
+.cost { font-size: 13px; color: var(--color-cost, #f5a623); font-weight: 600; margin: 2px 0 0; }
 .priority-badge {
   font-size: 12px;
   padding: 2px 8px;
@@ -280,28 +285,61 @@ onMounted(load)
   display: inline-block;
   margin-top: 4px;
 }
-.priority-badge.high { background: #ffe0e0; color: #c0392b; }
-.priority-badge.medium { background: #fff3cd; color: #856404; }
-.priority-badge.low { background: #e8f4fd; color: #1a6fa8; }
-[data-theme='dark'] .priority-badge.high { background: rgba(192, 57, 43, 0.2); color: #e57373; }
-[data-theme='dark'] .priority-badge.medium { background: rgba(133, 100, 4, 0.2); color: #ffb74d; }
-[data-theme='dark'] .priority-badge.low { background: rgba(26, 111, 168, 0.2); color: #64b5f6; }
-.card-actions { display: flex; gap: 8px; }
-.card-actions button {
-  flex: 1;
-  padding: 8px 0;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+.priority-badge.high { background: var(--badge-high-bg, #ffe0e0); color: var(--badge-high-text, #c0392b); }
+.priority-badge.medium { background: var(--badge-medium-bg, #fff3cd); color: var(--badge-medium-text, #856404); }
+.priority-badge.low { background: var(--badge-low-bg, #e8f4fd); color: var(--badge-low-text, #1a6fa8); }
+/* Piano-key action buttons */
+.card-actions {
+  display: flex;
+  border-top: 1px solid var(--separator);
+  margin-top: 12px;
+  overflow: hidden;
 }
-.card-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-approve { background: #28a745; color: #fff; }
-.btn-reject { background: #dc3545; color: #fff; }
-.btn-realize { background: linear-gradient(135deg, #f9ca24, #f0932b); color: #fff; }
-.btn-defer { background: #6c757d; color: #fff; }
-[data-theme='dark'] .btn-defer { background: rgba(108, 117, 125, 0.6); }
+.action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: none;
+  background: transparent;
+  color: var(--van-text-color-2, #969799);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+  min-height: 36px;
+}
+.action-btn + .action-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: var(--separator);
+}
+.action-btn:active {
+  background: rgba(128, 128, 128, 0.08);
+}
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.action-btn--primary {
+  color: var(--van-primary-color, #1989fa);
+}
+.action-btn--success {
+  color: var(--color-success);
+}
+.action-btn--danger {
+  color: var(--van-danger-color, #ee0a24);
+}
+.action-btn--muted {
+  color: var(--van-text-color-3, #c8c9cc);
+}
 
 /* Dialogs */
 .dialog-overlay {
@@ -313,7 +351,7 @@ onMounted(load)
   z-index: 100;
 }
 .dialog {
-  background: var(--card-bg, #fff);
+  background: var(--card-bg);
   border-radius: 20px 20px 0 0;
   padding: 24px 20px 32px;
   width: 100%;
@@ -321,58 +359,67 @@ onMounted(load)
   flex-direction: column;
   gap: 12px;
 }
-[data-theme='dark'] .dialog {
-  background: #1a1a2e;
-}
 .dialog h3 {
   font-size: 18px;
   font-weight: 700;
-  color: var(--text-primary, #333);
+  color: var(--text-primary);
   margin: 0;
+}
+.dialog-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.cost-readonly {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.cost-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+.cost-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-cost, #f5a623);
 }
 .dialog-desc {
   font-size: 14px;
-  color: var(--text-secondary, #666);
+  color: var(--text-secondary);
   margin: 0;
 }
 .input {
-  border: 1px solid var(--separator, #e0e0e0);
+  border: 1px solid var(--separator);
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 15px;
   outline: none;
   width: 100%;
   box-sizing: border-box;
-  background: var(--bg-secondary, #f8f8f8);
-  color: var(--text-primary, #333);
-}
-[data-theme='dark'] .input {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #ffffff;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
 }
 .dialog-actions { display: flex; gap: 10px; }
 .btn-cancel {
   flex: 1;
   padding: 12px;
-  border: 1px solid var(--separator, #e0e0e0);
+  border: 1px solid var(--separator);
   border-radius: 10px;
-  background: var(--bg-secondary, #f8f8f8);
-  color: var(--text-primary, #333);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-size: 15px;
   cursor: pointer;
-}
-[data-theme='dark'] .btn-cancel {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.8);
 }
 .btn-submit {
   flex: 2;
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: #28a745;
+  background: var(--color-success);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -404,14 +451,10 @@ onMounted(load)
 }
 .btn-realize-confirm:disabled { opacity: 0.5; cursor: not-allowed; }
 .error-msg {
-  background: #f8d7da;
-  color: #721c24;
+  background: var(--error-bg, #f8d7da);
+  color: var(--error-text, #721c24);
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 14px;
-}
-[data-theme='dark'] .error-msg {
-  background: rgba(220, 53, 69, 0.15);
-  color: #f1aeb5;
 }
 </style>

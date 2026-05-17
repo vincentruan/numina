@@ -1,5 +1,4 @@
 import logging
-import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -25,11 +24,15 @@ from apps.backend.app.middleware.family_context import FamilyContextMiddleware
 from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
 from apps.backend.app.middleware.request_id import RequestIDMiddleware
 from apps.backend.app.models.activity import Activity  # noqa: F401
-from apps.backend.app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
+from apps.backend.app.models.ai_allocation_target import (
+    AIAllocationTarget,  # noqa: F401
+)
 from apps.backend.app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from apps.backend.app.models.ai_chat_message import AIChatMessage  # noqa: F401
 from apps.backend.app.models.ai_chat_session import AIChatSession  # noqa: F401
-from apps.backend.app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
+from apps.backend.app.models.ai_disposal_suggestion import (
+    AIDisposalSuggestion,  # noqa: F401
+)
 from apps.backend.app.models.ai_report import AIReport  # noqa: F401
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
 from apps.backend.app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
@@ -40,7 +43,9 @@ from apps.backend.app.models.blind_box_gift import BlindBoxGift  # noqa: F401
 from apps.backend.app.models.bonus_draw import BonusDraw  # noqa: F401
 from apps.backend.app.models.cached_file import CachedFile  # noqa: F401
 from apps.backend.app.models.category import Category  # noqa: F401
-from apps.backend.app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
+from apps.backend.app.models.category_financial_default import (
+    CategoryFinancialDefault,  # noqa: F401
+)
 from apps.backend.app.models.child_milestone import ChildMilestone  # noqa: F401
 from apps.backend.app.models.child_wish import ChildWish  # noqa: F401
 from apps.backend.app.models.chore import ChoreInstance, ChoreTemplate  # noqa: F401
@@ -48,11 +53,17 @@ from apps.backend.app.models.coin_transaction import CoinTransaction  # noqa: F4
 from apps.backend.app.models.currency import Currency  # noqa: F401
 from apps.backend.app.models.exchange_rate import ExchangeRate  # noqa: F401
 from apps.backend.app.models.family import Family  # noqa: F401
-from apps.backend.app.models.file_remote_location import FileRemoteLocation  # noqa: F401
+from apps.backend.app.models.file_remote_location import (
+    FileRemoteLocation,  # noqa: F401
+)
 from apps.backend.app.models.liability import Liability  # noqa: F401
-from apps.backend.app.models.notification_channel import NotificationChannel  # noqa: F401
+from apps.backend.app.models.notification_channel import (
+    NotificationChannel,  # noqa: F401
+)
 from apps.backend.app.models.notification_config import NotificationConfig  # noqa: F401
-from apps.backend.app.models.notification_subscription import NotificationSubscription  # noqa: F401
+from apps.backend.app.models.notification_subscription import (
+    NotificationSubscription,  # noqa: F401
+)
 from apps.backend.app.models.payment_record import PaymentRecord  # noqa: F401
 from apps.backend.app.models.reminder import Reminder  # noqa: F401
 from apps.backend.app.models.revoked_token import RevokedToken  # noqa: F401
@@ -110,7 +121,9 @@ from apps.backend.app.routers import files as files_router
 from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
 from apps.backend.app.routers import milestones as milestones_router
-from apps.backend.app.routers import notification_channels as notification_channels_router
+from apps.backend.app.routers import (
+    notification_channels as notification_channels_router,
+)
 from apps.backend.app.routers import notification_config as notification_config_router
 from apps.backend.app.routers import notifications as notifications_router
 from apps.backend.app.routers import reminders as reminders_router
@@ -389,9 +402,11 @@ app.include_router(ai_mcp_router.router, prefix="/api/v1")
 app.include_router(ai_skills_router.router, prefix="/api/v1")
 
 # Serve uploaded files
-upload_dir = Path(os.getenv("UPLOAD_DIR", "./data/uploads"))
-upload_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(upload_dir)), name="uploads")
+# Serve uploaded files — mount only the uploads subtree, not the entire workspace
+# (workspace also contains chat JSONL which must not be publicly accessible)
+upload_static_dir = Path(settings.UPLOAD_DIR) / "uploads"
+upload_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(upload_static_dir)), name="uploads")
 
 
 @app.get("/api/health")

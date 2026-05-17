@@ -16,7 +16,9 @@ async def lifespan(app: FastAPI):
     settings.validate_required()
     from apps.agent.app.scheduler import scheduler, setup_schedules
     from apps.agent.core.backend_client import close_shared_client
+    from apps.agent.services.audit_logger import setup_audit_logger
 
+    setup_audit_logger()
     setup_schedules()
     scheduler.start()
 
@@ -25,6 +27,7 @@ async def lifespan(app: FastAPI):
     # via DEERFLOW_DB_URL env var.
     try:
         import os
+        from pathlib import Path
 
         from deerflow.persistence.engine import init_engine
 
@@ -33,13 +36,13 @@ async def lifespan(app: FastAPI):
             # Postgres or explicit URL (cluster deployments)
             await init_engine(backend="postgres" if db_url.startswith("postgres") else "sqlite", url=db_url)
         else:
-            # Default: local SQLite for single-node deployments
-            db_dir = ".deer-flow/data"
-            db_path = os.path.join(db_dir, "deerflow.db")
+            # Default: local SQLite using settings.DEERFLOW_DB_PATH
+            db_path = settings.DEERFLOW_DB_PATH
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
             await init_engine(
                 backend="sqlite",
                 url=f"sqlite+aiosqlite:///{db_path}",
-                sqlite_dir=db_dir,
+                sqlite_dir=str(Path(db_path).parent),
             )
     except Exception as _e:
         import logging

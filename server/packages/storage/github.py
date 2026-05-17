@@ -39,7 +39,7 @@ class GitHubStorageBackend(StorageBackend):
             reset_at = int(response.headers.get("x-ratelimit-reset", 0))
             raise StorageRateLimitError(reset_at=reset_at)
 
-    async def save(self, content: bytes, filename: str, date_dir: str) -> str:
+    async def save(self, content: bytes, filename: str, date_dir: str, family_id: str = "", user_id: str = "") -> str:
         remote_path = f"{date_dir}/{filename}"
         b64 = base64.b64encode(content).decode()
 

@@ -15,7 +15,7 @@
               <p class="event-name">{{ c.chore_name }}</p>
               <p class="event-sub">
                 +{{ c.coin_reward + c.streak_bonus }} ⭐
-                <span v-if="c.streak_bonus > 0" class="streak-badge">连击+{{ c.streak_bonus }}</span>
+                <span v-if="c.streak_bonus > 0" class="streak-badge">{{ t('baby.dayDetail.streakBadge', { bonus: c.streak_bonus }) }}</span>
               </p>
             </div>
             <span class="status-tag" :class="c.status === 'approved' ? 'approved' : 'pending'">
@@ -33,7 +33,7 @@
             <span class="event-emoji">{{ w.emoji || '🎁' }}</span>
             <div class="event-info">
               <p class="event-name">{{ w.name }}</p>
-              <p v-if="w.star_coin_cost" class="event-sub">花费 {{ w.star_coin_cost }} ⭐</p>
+              <p v-if="w.star_coin_cost" class="event-sub">{{ t('baby.dayDetail.wishCost', { cost: w.star_coin_cost }) }}</p>
             </div>
             <span class="status-tag realized">{{ t('baby.dayDetail.status.realized') }}</span>
           </div>
@@ -49,7 +49,7 @@
             <div class="event-info">
               <p class="event-name">{{ milestoneLabel(m.milestone_type) }}</p>
             </div>
-            <span class="status-tag milestone">{{ t('baby.dayDetail.status.newAchievement') }}</span>
+            <span class="status-tag milestone">{{ t('baby.dayDetail.status.milestone') }}</span>
           </div>
         </div>
       </section>
@@ -85,11 +85,11 @@ const isParentView = computed(() => !!childId)
 const pageTitle = computed(() => {
   if (!date) return t('baby.dayDetail.pageTitle')
   const d = new Date(date + 'T00:00:00')
-  return `${d.getMonth() + 1}月${d.getDate()}日`
+  return t('baby.dayDetail.dateTitle', { month: d.getMonth() + 1, day: d.getDate() })
 })
 
 function milestoneLabel(type: string): string {
-  const key = `milestone.${type.replace('_', '')}`
+  const key = `milestone.${type.replace(/_/g, '')}`
   return t(key)
 }
 
@@ -125,14 +125,14 @@ onMounted(async () => {
 
 <style scoped>
 .day-detail-page {
-  background: #f7f7f7;
+  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 24px;
 }
 
 .hint {
   text-align: center;
-  color: #999;
+  color: var(--text-tertiary);
   padding: 40px 0;
   font-size: 14px;
 }
@@ -144,7 +144,7 @@ onMounted(async () => {
 .section-title {
   font-size: 13px;
   font-weight: 600;
-  color: #888;
+  color: var(--text-tertiary);
   margin: 0 0 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -160,7 +160,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px;
   padding: 12px 14px;
 }
@@ -178,7 +178,7 @@ onMounted(async () => {
 .event-name {
   font-size: 14px;
   font-weight: 500;
-  color: #1a1a1a;
+  color: var(--text-primary);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -187,7 +187,7 @@ onMounted(async () => {
 
 .event-sub {
   font-size: 12px;
-  color: #f5a623;
+  color: var(--color-cost, #f5a623);
   margin: 2px 0 0;
   display: flex;
   align-items: center;
@@ -195,8 +195,8 @@ onMounted(async () => {
 }
 
 .streak-badge {
-  background: #fff3e0;
-  color: #f5a623;
+  background: var(--badge-medium-bg, #fff3e0);
+  color: var(--color-cost, #f5a623);
   border-radius: 4px;
   padding: 1px 5px;
   font-size: 11px;
@@ -209,8 +209,8 @@ onMounted(async () => {
   flex-shrink: 0;
   font-weight: 500;
 }
-.status-tag.approved  { background: #e8f5e9; color: #4caf50; }
-.status-tag.pending   { background: #fff8e1; color: #f5a623; }
-.status-tag.realized  { background: #fff3e0; color: #f5a623; }
-.status-tag.milestone { background: #f3e5f5; color: #9c27b0; }
+.status-tag.approved  { background: var(--tag-approved-bg, #e8f5e9); color: var(--tag-approved-text, #4caf50); }
+.status-tag.pending   { background: var(--badge-medium-bg, #fff8e1); color: var(--color-cost, #f5a623); }
+.status-tag.realized  { background: var(--badge-medium-bg, #fff3e0); color: var(--color-cost, #f5a623); }
+.status-tag.milestone { background: var(--tag-milestone-bg, #f3e5f5); color: var(--tag-milestone-text, #9c27b0); }
 </style>

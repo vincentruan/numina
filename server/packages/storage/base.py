@@ -34,7 +34,7 @@ class StorageBackend(ABC):
         return (0.2, 1.0)
 
     @abstractmethod
-    async def save(self, content: bytes, filename: str, date_dir: str) -> str:
+    async def save(self, content: bytes, filename: str, date_dir: str, family_id: str = "", user_id: str = "") -> str:
         """Persist file content and return the remote_path string."""
 
     @abstractmethod

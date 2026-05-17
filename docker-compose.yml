@@ -6,12 +6,13 @@ services:
     container_name: numina-backend
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./data}:/app/.numina/data
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - DATA_ROOT=/app/.numina/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -19,7 +20,6 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
-      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -34,10 +34,10 @@ services:
     container_name: numina-agent
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
-      - agent_logs:/app/logs  # OD-7: persist audit logs across container restarts
+      - ${NUMINA_DATA_DIR:-./data}:/app/.numina/data
     environment:
       - TZ=Asia/Shanghai
+      - DATA_ROOT=/app/.numina/data
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
@@ -62,12 +62,13 @@ services:
     container_name: numina-scheduler-worker
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./data}:/app/.numina/data
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - DATA_ROOT=/app/.numina/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -183,4 +184,3 @@ services:
 volumes:
   mysql_data:
   postgres_data:
-  agent_logs:  # OD-7: named volume for agent audit logs — persists across container restarts

@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from apps.backend.app.config import settings
 from apps.backend.app.models.cached_file import CachedFile
 from apps.backend.app.models.file_remote_location import FileRemoteLocation
-from apps.backend.app.models.storage_backend import StorageBackend as StorageBackendModel
+from apps.backend.app.models.storage_backend import (
+    StorageBackend as StorageBackendModel,
+)
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.file_record import FileRecordResponse
 from apps.backend.app.services.storage.local import LocalStorageBackend
@@ -46,7 +48,7 @@ class StorageService:
             if existing.deleted_at is None:
                 # Active duplicate — return existing record
                 remote_path = str(
-                    Path(existing.local_path).relative_to(settings.UPLOAD_DIR)
+                    Path(existing.local_path).relative_to(Path(settings.UPLOAD_DIR) / "uploads")
                 )
                 return FileRecordResponse(
                     file_id=existing.id,
@@ -61,7 +63,7 @@ class StorageService:
                 existing.original_filename = original_filename
                 db.commit()
                 remote_path = str(
-                    Path(existing.local_path).relative_to(settings.UPLOAD_DIR)
+                    Path(existing.local_path).relative_to(Path(settings.UPLOAD_DIR) / "uploads")
                 )
                 return FileRecordResponse(
                     file_id=existing.id,
@@ -73,8 +75,8 @@ class StorageService:
         # New file — persist to disk
         filename = f"{uuid4().hex}{ext}"
         date_dir = datetime.now().strftime("%Y%m%d")
-        remote_path = await backend.save(content, filename, date_dir)
-        local_path = str(Path(settings.UPLOAD_DIR) / remote_path)
+        remote_path = await backend.save(content, filename, date_dir, family_id=str(user.family_id), user_id=str(user.id))
+        local_path = str(Path(settings.UPLOAD_DIR) / "uploads" / remote_path)
 
         mime_type = _MIME_MAP.get(ext.lower(), "application/octet-stream")
 
