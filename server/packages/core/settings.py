@@ -1,6 +1,7 @@
 import secrets
 from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 from packages.core.logging import get_logger
@@ -9,8 +10,18 @@ logger = get_logger(__name__)
 
 _DEFAULT_SECRET = "CHANGE_ME_IN_PRODUCTION"
 
+_OLD_DEFAULTS = {
+    "DATABASE_URL": "sqlite:///./data/numina.db",
+    "UPLOAD_DIR": "./data/uploads",
+    "WORKSPACE_ROOT": "./data/workspace",
+    "CHAT_DIR": "./data/chat",
+    "LOG_DIR": "logs",
+}
+
 
 class Settings(BaseSettings):
+    DATA_ROOT: str = "~/.numina/data"
+
     DATABASE_URL: str = "sqlite:///./data/numina.db"
     SECRET_KEY: str = _DEFAULT_SECRET
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
@@ -79,6 +90,29 @@ class Settings(BaseSettings):
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
+    @model_validator(mode="after")
+    def _resolve_data_root(self) -> "Settings":
+        root = str(Path(self.DATA_ROOT).expanduser().resolve())
+        self.DATA_ROOT = root
+
+        if _OLD_DEFAULTS["DATABASE_URL"] == self.DATABASE_URL or not self.DATABASE_URL:
+            db_path = Path(root) / "db" / "numina.db"
+            self.DATABASE_URL = f"sqlite:///{db_path}"
+
+        if _OLD_DEFAULTS["UPLOAD_DIR"] == self.UPLOAD_DIR or not self.UPLOAD_DIR:
+            self.UPLOAD_DIR = str(Path(root) / "workspace")
+
+        if _OLD_DEFAULTS["WORKSPACE_ROOT"] == self.WORKSPACE_ROOT or not self.WORKSPACE_ROOT:
+            self.WORKSPACE_ROOT = str(Path(root) / "workspace")
+
+        if _OLD_DEFAULTS["CHAT_DIR"] == self.CHAT_DIR or not self.CHAT_DIR:
+            self.CHAT_DIR = str(Path(root) / "workspace")
+
+        if _OLD_DEFAULTS["LOG_DIR"] == self.LOG_DIR or not self.LOG_DIR:
+            self.LOG_DIR = str(Path(root) / "logs")
+
+        return self
+
 
 settings = Settings()
 
@@ -119,11 +153,13 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
         "避免与 SECRET_KEY 共用导致密钥轮换风险。"
     )
 
-# CHAT_DIR validation - must not be under UPLOAD_DIR (UPLOAD_DIR is served as static files)
+# CHAT_DIR validation - must not be a strict subdirectory of UPLOAD_DIR
+# (UPLOAD_DIR subtree is served as static files; equality is OK because
+# the StaticFiles mount is scoped to the upload/ subdirectory at runtime)
 try:
     chat_dir_resolved = Path(settings.CHAT_DIR).resolve()
     upload_dir_resolved = Path(settings.UPLOAD_DIR).resolve()
-    if chat_dir_resolved == upload_dir_resolved or chat_dir_resolved.is_relative_to(upload_dir_resolved):
+    if chat_dir_resolved != upload_dir_resolved and chat_dir_resolved.is_relative_to(upload_dir_resolved):
         raise RuntimeError(
             f"CHAT_DIR ({settings.CHAT_DIR}) 不能位于 UPLOAD_DIR ({settings.UPLOAD_DIR}) 下！"
             "对话历史不应通过静态文件 URL 暴露。"

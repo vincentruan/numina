@@ -16,7 +16,6 @@ import logging
 import time
 import uuid
 from collections.abc import AsyncGenerator
-from datetime import date
 
 from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
@@ -229,9 +228,8 @@ class Orchestrator:
         error_type: str | None = None
         answer_parts: list[str] = []
         model_name: str | None = None
-        today = date.today().strftime("%Y-%m-%d")
         user_segment = user_id if user_id else "_shared"
-        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{user_segment}/{today}/{effective_thread_id}.jsonl"
+        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/agent/{capability}/{user_segment}/{effective_thread_id}.jsonl"
         session_started = False
 
         # ── 1. Fetch AI config & build policy ──────────────────────────
@@ -510,9 +508,8 @@ class Orchestrator:
         redacted_answer: str = ""
         selected_provider: dict = {}
         session_started = False
-        today = date.today().strftime("%Y-%m-%d")
         user_segment = user_id if user_id else "_shared"
-        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/{user_segment}/{today}/{effective_thread_id}.jsonl"
+        jsonl_path = f"{settings.SESSIONS_DATA_DIR}/{family_id}/agent/{capability}/{user_segment}/{effective_thread_id}.jsonl"
 
         yield builder.phase("connecting").to_ndjson()
 

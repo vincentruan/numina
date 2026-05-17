@@ -77,13 +77,15 @@ class SessionJournalService:
         # changing every write_* method signature.
         self._path_cache: dict[str, Path] = {}
 
-    def _session_path(self, family_id: str, session_id: str) -> Path:
+    def _session_path(self, family_id: str, session_id: str, capability: str = "_default", user_id: str = "_shared") -> Path:
         _validate_id(family_id, "family_id")
         _validate_id(session_id, "session_id")
+        _validate_id(capability, "capability")
+        _validate_id(user_id, "user_id")
         # Use cached path if available (set by write_session_start)
         if session_id in self._path_cache:
             return self._path_cache[session_id]
-        return self._base_dir / family_id / f"{session_id}.jsonl"
+        return self._base_dir / family_id / "agent" / capability / user_id / f"{session_id}.jsonl"
 
     def append_event(self, family_id: str, session_id: str, event: dict[str, Any]) -> None:
         """Append one event line. Failures are logged and swallowed."""

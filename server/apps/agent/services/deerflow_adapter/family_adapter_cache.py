@@ -102,24 +102,13 @@ def _get_shared_checkpointer(base_config_dir: str | None = None):
 
 
 def _read_checkpointer_path(base_config_dir: str) -> str:
-    """Extract the checkpointer DB path from base/config.yaml.
+    """Return the checkpointer DB path from settings.
 
-    Returns the configured path, or a safe default if the config is missing
-    or the checkpointer section is absent.
+    Uses settings.DEERFLOW_DB_PATH which derives from DATA_ROOT.
     """
-    default = "/app/data/deerflow-checkpoints.db"
-    try:
-        import yaml  # type: ignore[import-untyped]
+    from apps.agent.app.config import settings
 
-        config_path = Path(base_config_dir) / "base" / "config.yaml"
-        if not config_path.exists():
-            return default
-        with open(config_path, encoding="utf-8") as f:
-            cfg = yaml.safe_load(f)
-        path = cfg.get("checkpointer", {}).get("path", default)
-        return path or default
-    except Exception:
-        return default
+    return settings.DEERFLOW_DB_PATH
 
 
 def close_shared_checkpointer() -> None:
@@ -257,7 +246,7 @@ def _generate_temp_config(
     # 注入家庭级 memory 隔离路径：每家庭独立文件，防止跨家庭 facts 污染
     # Context7 确认 DeerFlow memory 配置键为 storage_path（非 path）
     from apps.agent.app.config import settings
-    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "memory.json"
+    memory_path = Path(settings.AGENT_DATA_DIR) / family_id / "agent" / "memory.json"
     memory_path.parent.mkdir(parents=True, exist_ok=True)
     if "memory" not in config:
         config["memory"] = {}
