@@ -837,7 +837,7 @@ export default {
     hideApiKey: 'Hide API Key',
     showApiKey: 'Show API Key',
     copyApiKey: 'Copy API Key',
-    currentApiKey: 'Current Key',
+    currentApiKey: 'API Key',
     revealFailed: '❌ Failed to reveal key',
     aiFeatures: 'AI Features',
     enableAI: 'Enable AI Assistant',

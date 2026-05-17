@@ -84,7 +84,7 @@
                     v-for="cap in getCapabilities(cfg, slot)"
                     :key="cap"
                     class="cap-chip"
-                    :class="`cap-chip--${cap}`"
+                    :class="[`cap-chip--${cap}`, { 'cap-chip--untested': !testPassedKeys.has(`${cfg.id}-${slot}`) }]"
                     :title="capShortLabel(cap)"
                   >
                     <!-- text_generation -->
@@ -205,6 +205,7 @@ const aiStore = useAIStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const deletingId = ref<string | null>(null)
 const testingKey = ref<string | null>(null)
+const testPassedKeys = ref<Set<string>>(new Set())
 const revealedKeys = ref<Record<string, string>>({})
 const revealingId = ref<string | null>(null)
 
@@ -312,8 +313,15 @@ async function onTestModel(configId: string, slot: number) {
   testingKey.value = key
   try {
     const res = await aiApi.testProviderConfig(configId)
-    showToast(res.data.connected ? t('aiConfig.testSuccess') : `${t('aiConfig.testFailed')}: ${res.data.message ?? ''}`)
+    if (res.data.connected) {
+      testPassedKeys.value = new Set([...testPassedKeys.value, key])
+      showToast(t('aiConfig.testSuccess'))
+    } else {
+      testPassedKeys.value.delete(key)
+      showToast(`${t('aiConfig.testFailed')}: ${res.data.message ?? ''}`)
+    }
   } catch {
+    testPassedKeys.value.delete(key)
     showToast(t('aiConfig.testFailed'))
   } finally {
     testingKey.value = null
@@ -571,6 +579,10 @@ onMounted(async () => {
 .cap-chip--vision_understanding {
   background: color-mix(in srgb, #2ec4b6 12%, transparent);
   color: #2ec4b6;
+}
+.cap-chip--untested {
+  background: color-mix(in srgb, #999 10%, transparent);
+  color: #999;
 }
 
 /* ── Test button ── */
