@@ -166,7 +166,8 @@ function severityLabel(severity: string) {
 async function loadLeaks() {
   loading.value = true
   try {
-    leaks.value = await getSpendingLeaks()
+    const res = await getSpendingLeaks()
+    leaks.value = res.data
   } catch {
     showToast(t('toast.loadFailed'))
   } finally {

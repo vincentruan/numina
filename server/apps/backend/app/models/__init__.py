@@ -1,9 +1,11 @@
 from apps.backend.app.models.activity import Activity  # noqa: F401
+from apps.backend.app.models.ai_allocation_drift_result import AIAllocationDriftResult  # noqa: F401
 from apps.backend.app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from apps.backend.app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
 from apps.backend.app.models.ai_chat_message import AIChatMessage  # noqa: F401
 from apps.backend.app.models.ai_chat_session import AIChatSession  # noqa: F401
 from apps.backend.app.models.ai_disposal_suggestion import AIDisposalSuggestion  # noqa: F401
+from apps.backend.app.models.ai_liability_result import AILiabilityResult  # noqa: F401
 from apps.backend.app.models.ai_provider_config import (  # noqa: F401
     AIProviderConfig,
     AIProviderTestResult,

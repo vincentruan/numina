@@ -13,6 +13,7 @@ from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.models.ai_allocation_drift_result import AIAllocationDriftResult
 from apps.backend.app.models.ai_allocation_target import AIAllocationTarget
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
@@ -81,6 +82,29 @@ def set_target(
         db.add(target)
     db.commit()
     return {"ok": True}
+
+
+@router.get("/check/result")
+def get_drift_result(
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """获取最近一次配置漂移分析结果（从 DB 读取）。"""
+    result = (
+        db.query(AIAllocationDriftResult)
+        .filter(AIAllocationDriftResult.family_id == current_user.family_id)
+        .order_by(AIAllocationDriftResult.generated_at.desc())
+        .first()
+    )
+    if not result:
+        return {"has_result": False}
+    return {
+        "has_result": True,
+        "has_significant_drift": result.has_significant_drift,
+        "narrative": result.narrative,
+        "drifts": result.drifts_json,
+        "generated_at": result.generated_at.isoformat(),
+    }
 
 
 @router.get("/check")
