@@ -90,6 +90,7 @@ async def events_liability_advice(
         # 已有运行中任务（从排队提升）— 直接接续，不重复创建
         task = existing
         session_id = str(task.session_id) if task.session_id else str(task.id)
+        task_id = str(task.id)
         session = (
             db.query(AIChatSession)
             .filter_by(id=session_id, family_id=current_user.family_id)
@@ -112,6 +113,7 @@ async def events_liability_advice(
                 session_id=session.id,
                 db=db,
             )
+            task_id = str(task.id)
             return JSONResponse(
                 status_code=202,
                 content={
@@ -126,9 +128,9 @@ async def events_liability_advice(
             session_id=session.id,
             db=db,
         )
+        task_id = str(task.id)
         session_id = str(session.id)
 
-    task_id = str(task.id)
     family_id = current_user.family_id
 
     return StreamingResponse(
