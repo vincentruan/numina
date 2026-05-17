@@ -10,6 +10,17 @@ export default {
     retry: 'Retry',
     delete: 'Delete',
     edit: 'Edit',
+    pullRefresh: {
+      pulling: 'Pull to refresh',
+      loosing: 'Release to refresh',
+      loading: 'Loading...',
+      success: 'Refreshed',
+    },
+    coinUnit: {
+      gold: 'G',
+      silver: 'S',
+      copper: 'C',
+    },
   },
   nav: {
     home: 'Home',
@@ -71,6 +82,9 @@ export default {
     childGrantedStars: '✅ Gifted {amount} ⭐ to {name}',
   },
   chore: {
+    prevDay: 'Previous Day',
+    nextDay: 'Next Day',
+    today: 'Today',
     complete: 'Complete',
     pendingApproval: 'Pending',
     approved: '✅ Earned',
@@ -81,6 +95,9 @@ export default {
     streakBonus: 'Streak +{bonus}',
     claim: 'Claim',
     claiming: 'Claiming...',
+    completeTitle: 'Mark this task as done?',
+    completeConfirm: 'Yes, Done!',
+    completeCancel: 'Not Yet',
     abandon: 'Give Up',
     abandonTitle: 'Give up this task?',
     abandonKeepGoing: 'Keep Going',
@@ -212,6 +229,9 @@ export default {
     statsRate: '{rate}% completion',
     monthTitle: '{year}/{month}',
     weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    dayLabel: '{month}/{day}, {count} activities',
   },
   dayDetail: {
     sectionChores: '📋 Tasks',

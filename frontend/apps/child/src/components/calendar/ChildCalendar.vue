@@ -2,9 +2,9 @@
   <div class="child-calendar">
     <!-- Month navigation -->
     <div class="cal-header">
-      <button class="nav-btn" @click="prevMonth">‹</button>
+      <button class="nav-btn" :aria-label="t('calendar.prevMonth')" @click="prevMonth">‹</button>
       <span class="cal-title">{{ t('calendar.monthTitle', { year, month }) }}</span>
-      <button class="nav-btn" @click="nextMonth">›</button>
+      <button class="nav-btn" :aria-label="t('calendar.nextMonth')" @click="nextMonth">›</button>
     </div>
 
     <!-- Weekday labels -->
@@ -31,6 +31,7 @@
           streak: streakDates.has(day.date),
         }"
         :style="{ background: heatColor(day) }"
+        :aria-label="t('calendar.dayLabel', { month: parseInt(day.date.slice(5, 7), 10), day: dayNum(day.date), count: dayTotal(day) })"
         @click="onDayClick(day)"
       >
         <span class="day-num">{{ dayNum(day.date) }}</span>
