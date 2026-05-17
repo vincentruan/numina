@@ -1,8 +1,27 @@
 <template>
   <div class="chores-page">
-    <!-- Date hero band — pink feature card -->
-    <div class="date-hero">
-      <p class="date-label">{{ todayLabel }}</p>
+    <!-- Date navigation — flat card -->
+    <div class="date-nav-card">
+      <button
+        class="nav-btn prev"
+        :aria-label="t('chore.prevDay')"
+        @click="prevDay"
+      >
+        <van-icon name="arrow-left" size="18" />
+      </button>
+      <div class="date-display">
+        <p class="date-text">{{ dateLabel }}</p>
+        <p v-if="isToday" class="today-badge">{{ t('chore.today') }}</p>
+      </div>
+      <button
+        v-if="!isToday"
+        class="nav-btn next"
+        :aria-label="t('chore.nextDay')"
+        @click="nextDay"
+      >
+        <van-icon name="arrow-right" size="18" />
+      </button>
+      <div v-else class="nav-btn-placeholder" />
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -39,7 +58,7 @@
             <button
               class="btn-complete"
               :disabled="submittingId === chore.id"
-              @click.stop="complete(chore.id)"
+              @click.stop="showCompleteConfirm(chore)"
             >{{ t('chore.complete') }}</button>
             <button
               class="btn-abandon"
@@ -53,6 +72,32 @@
         </div>
       </div>
     </div>
+
+    <!-- Complete confirmation sheet -->
+    <van-popup
+      v-model:show="completeSheetVisible"
+      position="bottom"
+      round
+      :style="{ padding: '24px 20px 40px' }"
+    >
+      <p class="abandon-sheet-title">{{ t('chore.completeTitle') }}</p>
+      <div v-if="completeTarget" class="abandon-sheet-chore">
+        <span class="abandon-sheet-emoji">{{ completeTarget.chore_emoji || '📋' }}</span>
+        <div>
+          <p class="abandon-sheet-name">{{ completeTarget.chore_name }}</p>
+          <p class="abandon-sheet-reward">+{{ completeTarget.coin_reward }} ⭐</p>
+        </div>
+      </div>
+      <button class="btn-keep-going" @click="doComplete">
+        {{ t('chore.completeConfirm') }}
+      </button>
+      <button
+        class="btn-abandon-confirm"
+        @click="completeSheetVisible = false; completeTarget = null"
+      >
+        {{ t('chore.completeCancel') }}
+      </button>
+    </van-popup>
 
     <!-- Motivational abandon sheet -->
     <van-popup
@@ -135,6 +180,8 @@ const error = ref('')
 const submittingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
 const abandoningId = ref<string | null>(null)
+const completeSheetVisible = ref(false)
+const completeTarget = ref<ChoreInstance | null>(null)
 const abandonSheetVisible = ref(false)
 const abandonTarget = ref<ChoreInstance | null>(null)
 const balance = ref(0)
@@ -146,9 +193,38 @@ const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
 let pollCancelled = false
 
-const now = new Date()
-const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-const todayLabel = computed(() => now.toLocaleDateString(locale.value, { month: 'long', day: 'numeric', weekday: 'short' }))
+const selectedDate = ref(new Date())
+
+function formatDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+const currentDateString = computed(() => formatDate(selectedDate.value))
+
+const isToday = computed(() => {
+  const now = new Date()
+  return formatDate(selectedDate.value) === formatDate(now)
+})
+
+const dateLabel = computed(() => selectedDate.value.toLocaleDateString(locale.value, { month: 'long', day: 'numeric', weekday: 'short' }))
+
+function prevDay() {
+  const d = new Date(selectedDate.value)
+  d.setDate(d.getDate() - 1)
+  selectedDate.value = d
+  load()
+}
+
+function nextDay() {
+  if (isToday.value) return
+  const d = new Date(selectedDate.value)
+  d.setDate(d.getDate() + 1)
+  // Don't go past today
+  const today = new Date()
+  if (d > today) return
+  selectedDate.value = d
+  load()
+}
 
 const SEEN_KEY = `seen_milestones_${getUser()?.id ?? 'anon'}`
 
@@ -234,12 +310,25 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    chores.value = await getMyChores(today)
+    chores.value = await getMyChores(currentDateString.value)
   } catch {
     error.value = t('toast.loadFailed')
   } finally {
     loading.value = false
   }
+}
+
+function showCompleteConfirm(chore: ChoreInstance) {
+  completeTarget.value = chore
+  completeSheetVisible.value = true
+}
+
+async function doComplete() {
+  if (!completeTarget.value) return
+  const instanceId = completeTarget.value.id
+  completeSheetVisible.value = false
+  completeTarget.value = null
+  await complete(instanceId)
 }
 
 async function complete(instanceId: string) {
@@ -329,21 +418,62 @@ onUnmounted(() => {
   min-height: 100vh;
 }
 
-/* ── Date hero — pink feature card ── */
-.date-hero {
-  background: var(--color-brand-pink);
-  border-radius: var(--radius-xl);
-  padding: 20px 20px;
-  text-align: center;
+/* ── Date navigation — flat card ── */
+.date-nav-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-surface-soft);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
   margin-bottom: var(--space-lg);
+  border: 1px solid var(--color-hairline);
+  min-height: 48px;
 }
-[data-theme="dark"] .date-hero .date-label { color: var(--color-on-feature-pink); }
-.date-label {
+
+.date-display {
+  flex: 1;
+  text-align: center;
+}
+
+.date-text {
   font-family: Inter, sans-serif;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--color-on-dark);
+  color: var(--color-ink);
   margin: 0;
+}
+
+.today-badge {
+  font-family: Inter, sans-serif;
+  font-size: 12px;
+  color: var(--color-brand-ochre);
+  margin: 4px 0 0;
+  font-weight: 500;
+}
+
+.nav-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-card);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-muted);
+  transition: all 0.15s;
+}
+
+.nav-btn:active {
+  transform: scale(0.95);
+  background: var(--color-surface-strong);
+}
+
+.nav-btn-placeholder {
+  width: 36px;
+  height: 36px;
 }
 
 .loading, .empty {
