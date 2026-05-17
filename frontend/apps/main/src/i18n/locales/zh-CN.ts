@@ -360,9 +360,11 @@ export default {
     },
     dialog: {
       approveTitle: '批准心愿',
-      approveDesc: '「{name}」需要多少星星币？',
+      approveDesc: '确认批准「{name}」？',
+      costLabel: '所需积分',
       costPlaceholder: '积分数量（≥1）',
       rejectTitle: '拒绝心愿',
+      rejectDesc: '确认拒绝「{name}」？',
       rejectReasonPlaceholder: '拒绝原因（可选）',
       realizeTitle: '兑现心愿 🎊',
       realizeDesc: '确认兑现「{name}」？将扣除 {cost} ⭐ 并创建资产。',
