@@ -84,6 +84,12 @@
   --radius-lg:   16px;
   --radius-xl:   24px;
   --radius-pill: 9999px;
+
+  /* ── Vant toast (light mode) ── */
+  --van-toast-background: rgba(50, 50, 51, 0.88);
+  --van-toast-text-color: #ffffff;
+  --van-toast-border-radius: 12px;
+  --van-toast-font-size: 14px;
 }
 
 /* ── Dark mode overrides ── */
@@ -183,6 +189,8 @@
   --van-button-default-color: #f0ece0;
   --van-toast-background: #1a3030;
   --van-toast-text-color: #f0ece0;
+  --van-toast-border-radius: 12px;
+  --van-toast-font-size: 14px;
   --van-overlay-background: rgba(0, 0, 0, 0.7);
 }
 
