@@ -10,13 +10,22 @@
       </div>
 
       <div v-else class="provider-list">
+        <draggable
+          v-model="draggableConfigs"
+          item-key="id"
+          handle=".drag-handle"
+          animation="200"
+          @end="onDragEnd"
+        >
+          <template #item="{ element: cfg, index }">
         <div
-          v-for="(cfg, index) in aiStore.configs"
-          :key="cfg.id"
           class="provider-card"
         >
           <!-- Card header: logo + index + title + circuit -->
           <div class="card-header">
+            <div class="drag-handle" :title="t('aiConfig.dragToReorder')">
+              <van-icon name="wap-nav" size="18" />
+            </div>
             <div class="card-logo" :class="`logo--${cfg.provider}`">
               <!-- anthropic -->
               <svg v-if="cfg.provider === 'anthropic'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -145,6 +154,8 @@
             </button>
           </div>
         </div>
+          </template>
+        </draggable>
       </div>
 
       <!-- Add provider button -->
@@ -179,6 +190,7 @@ import { ref, computed, onMounted } from 'vue'
 import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import draggable from 'vuedraggable'
 import { useAuthStore } from '@/stores/auth'
 import { useAIStore } from '@/stores/ai'
 import * as aiApi from '@/api/ai'
@@ -195,6 +207,13 @@ const deletingId = ref<string | null>(null)
 const testingKey = ref<string | null>(null)
 const revealedKeys = ref<Record<string, string>>({})
 const revealingId = ref<string | null>(null)
+
+const draggableConfigs = computed({
+  get: () => aiStore.configs,
+  set: (val: ProviderConfig[]) => {
+    aiStore.configs = val
+  },
+})
 
 function capShortLabel(cap: string): string {
   if (cap === 'text_generation') return t('aiConfig.capabilityText')
@@ -215,6 +234,15 @@ function getCapabilities(cfg: ProviderConfig, slot: number): string[] {
   if (slot === 1) return cfg.model_1_capabilities
   if (slot === 2) return cfg.model_2_capabilities
   return cfg.model_3_capabilities
+}
+
+async function onDragEnd() {
+  try {
+    await aiStore.reorderConfigs(aiStore.configs.map((c) => c.id))
+    showToast(t('aiConfig.saveOrder'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -319,6 +347,23 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ── Drag handle ── */
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: var(--text-tertiary);
+  cursor: grab;
+  flex-shrink: 0;
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 /* ── Card ── */
@@ -585,11 +630,11 @@ onMounted(async () => {
 .action-btn {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 12px 4px;
+  gap: 5px;
+  padding: 10px 4px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
