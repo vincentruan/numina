@@ -24,7 +24,7 @@
           <!-- Card header: logo + index + title + circuit -->
           <div class="card-header">
             <div class="drag-handle" :title="t('aiConfig.dragToReorder')">
-              <van-icon name="wap-nav" size="18" />
+              <span class="drag-icon">⠿</span>
             </div>
             <div class="card-logo" :class="`logo--${cfg.provider}`">
               <!-- anthropic -->
@@ -372,6 +372,12 @@ onMounted(async () => {
 
 .drag-handle:active {
   cursor: grabbing;
+}
+
+.drag-icon {
+  font-size: 20px;
+  line-height: 1;
+  user-select: none;
 }
 
 /* ── Card ── */
