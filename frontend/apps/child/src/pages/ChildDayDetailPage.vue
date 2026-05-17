@@ -88,16 +88,6 @@ const pageTitle = computed(() => {
   return t('dayDetail.dateTitle', { month: d.getMonth() + 1, day: d.getDate() })
 })
 
-const MILESTONE_EMOJI: Record<string, string> = {
-  first_chore: '🌱',
-  first_wish_realized: '🎉',
-  coins_50: '💰',
-  coins_200: '💎',
-  streak_7: '🔥',
-  streak_14: '⚡',
-  streak_30: '🏆',
-}
-
 function milestoneLabel(type: string): string {
   const key = `milestone.${type}` as Parameters<typeof t>[0]
   const result = t(key)
@@ -105,7 +95,9 @@ function milestoneLabel(type: string): string {
 }
 
 function milestoneEmoji(type: string): string {
-  return MILESTONE_EMOJI[type] ?? '🏅'
+  const key = `milestone.icons.${type}` as Parameters<typeof t>[0]
+  const result = t(key)
+  return result !== key ? result : '🏅'
 }
 
 onMounted(async () => {

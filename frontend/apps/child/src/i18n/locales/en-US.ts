@@ -10,6 +10,17 @@ export default {
     retry: 'Retry',
     delete: 'Delete',
     edit: 'Edit',
+    pullRefresh: {
+      pulling: 'Pull to refresh',
+      loosing: 'Release to refresh',
+      loading: 'Loading...',
+      success: 'Refreshed',
+    },
+    coinUnit: {
+      gold: 'G',
+      silver: 'S',
+      copper: 'C',
+    },
   },
   nav: {
     home: 'Home',
@@ -212,6 +223,9 @@ export default {
     statsRate: '{rate}% completion',
     monthTitle: '{year}/{month}',
     weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    prevMonth: 'Previous month',
+    nextMonth: 'Next month',
+    dayLabel: '{month}/{day}, {count} activities',
   },
   dayDetail: {
     sectionChores: '📋 Tasks',

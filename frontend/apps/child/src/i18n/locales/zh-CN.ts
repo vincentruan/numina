@@ -11,6 +11,17 @@ export default {
     retry: '重试',
     delete: '删除',
     edit: '编辑',
+    pullRefresh: {
+      pulling: '下拉即可刷新',
+      loosing: '释放即可刷新',
+      loading: '加载中...',
+      success: '刷新成功',
+    },
+    coinUnit: {
+      gold: '金',
+      silver: '银',
+      copper: '铜',
+    },
   },
   nav: {
     home: '首页',
@@ -213,6 +224,9 @@ export default {
     statsRate: '完成率 {rate}%',
     monthTitle: '{year}年{month}月',
     weekdays: ['日', '一', '二', '三', '四', '五', '六'],
+    prevMonth: '上个月',
+    nextMonth: '下个月',
+    dayLabel: '{month}月{day}日，{count}项活动',
   },
   dayDetail: {
     sectionChores: '📋 打卡任务',

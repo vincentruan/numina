@@ -1,6 +1,13 @@
 <template>
   <div class="wishes-page">
-    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+    <van-pull-refresh
+      v-model="refreshing"
+      :pulling-text="t('common.pullRefresh.pulling')"
+      :loosing-text="t('common.pullRefresh.loosing')"
+      :loading-text="t('common.pullRefresh.loading')"
+      :success-text="t('common.pullRefresh.success')"
+      @refresh="onRefresh"
+    >
       <!-- Hero stats banner — peach feature card -->
       <div v-if="stats" class="hero-banner">
         <div class="hero-balance">

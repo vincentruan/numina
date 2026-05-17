@@ -27,10 +27,10 @@ export function splitCoinTiers(
  * 格式化显示（只显示非零面值）
  * 例：{ gold: 1, silver: 2, copper: 5 } → "1金 2银 5铜"
  */
-export function formatCoinTiers(tiers: CoinTier): string {
+export function formatCoinTiers(tiers: CoinTier, labels: { gold: string; silver: string; copper: string }): string {
   const parts: string[] = []
-  if (tiers.gold > 0) parts.push(`${tiers.gold}金`)
-  if (tiers.silver > 0) parts.push(`${tiers.silver}银`)
-  if (tiers.copper > 0 || parts.length === 0) parts.push(`${tiers.copper}铜`)
+  if (tiers.gold > 0) parts.push(`${tiers.gold}${labels.gold}`)
+  if (tiers.silver > 0) parts.push(`${tiers.silver}${labels.silver}`)
+  if (tiers.copper > 0 || parts.length === 0) parts.push(`${tiers.copper}${labels.copper}`)
   return parts.join(' ')
 }
