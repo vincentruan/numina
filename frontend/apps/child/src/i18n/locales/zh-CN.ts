@@ -11,6 +11,17 @@ export default {
     retry: '重试',
     delete: '删除',
     edit: '编辑',
+    pullRefresh: {
+      pulling: '下拉即可刷新',
+      loosing: '释放即可刷新',
+      loading: '加载中...',
+      success: '刷新成功',
+    },
+    coinUnit: {
+      gold: '金',
+      silver: '银',
+      copper: '铜',
+    },
   },
   nav: {
     home: '首页',
@@ -72,6 +83,9 @@ export default {
     childGrantedStars: '✅ 已赠送 {amount} ⭐ 给 {name}',
   },
   chore: {
+    prevDay: '前一天',
+    nextDay: '后一天',
+    today: '今天',
     complete: '完成',
     pendingApproval: '审批中',
     approved: '✅ 已获得',
@@ -82,6 +96,9 @@ export default {
     streakBonus: '连击+{bonus}',
     claim: '认领',
     claiming: '认领中...',
+    completeTitle: '确定完成这个任务吗？',
+    completeConfirm: '确认完成',
+    completeCancel: '再想想',
     abandon: '放弃',
     abandonTitle: '确定放弃这个任务吗？',
     abandonKeepGoing: '继续完成',
@@ -213,6 +230,9 @@ export default {
     statsRate: '完成率 {rate}%',
     monthTitle: '{year}年{month}月',
     weekdays: ['日', '一', '二', '三', '四', '五', '六'],
+    prevMonth: '上个月',
+    nextMonth: '下个月',
+    dayLabel: '{month}月{day}日，{count}项活动',
   },
   dayDetail: {
     sectionChores: '📋 打卡任务',

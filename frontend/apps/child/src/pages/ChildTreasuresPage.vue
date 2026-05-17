@@ -32,7 +32,7 @@
         <div v-else class="placeholder-img">🎁</div>
         <div class="card-body">
           <p class="card-name">{{ item.name }}</p>
-          <p v-if="item.purchase_date" class="card-date">{{ item.purchase_date }}</p>
+          <p v-if="item.purchase_date" class="card-date">{{ formatDate(item.purchase_date) }}</p>
           <p v-if="item.coins_spent != null" class="card-coins">⭐ {{ item.coins_spent }}</p>
         </div>
       </div>
@@ -45,7 +45,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
 const error = ref<string>('')
@@ -53,6 +53,10 @@ const error = ref<string>('')
 const totalCoins = computed(() =>
   treasures.value.reduce((sum, t) => sum + (t.coins_spent ?? 0), 0),
 )
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: 'short', day: 'numeric' })
+}
 
 async function load() {
   loading.value = true

@@ -59,7 +59,14 @@
 
     <!-- History Tab -->
     <div v-if="activeTab === 'history'">
-      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+      <van-pull-refresh
+        v-model="refreshing"
+        :pulling-text="t('common.pullRefresh.pulling')"
+        :loosing-text="t('common.pullRefresh.loosing')"
+        :loading-text="t('common.pullRefresh.loading')"
+        :success-text="t('common.pullRefresh.success')"
+        @refresh="onRefresh"
+      >
         <DrawHistoryList :draws="draws" />
       </van-pull-refresh>
     </div>
