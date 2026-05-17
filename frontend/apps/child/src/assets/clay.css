@@ -156,9 +156,10 @@
 /* ── Vant dark mode overrides ── */
 [data-theme="dark"] {
   --van-tabbar-background: #0f2020;
-  --van-tabbar-item-text-color: #606060;
+  --van-tabbar-item-text-color: #8a8a80;
   --van-tabbar-item-active-color: #d4a83a;
   --van-tabbar-item-active-background: #0f2020;
+  --van-border-color: #1e3030;
   --van-nav-bar-background: #0f2020;
   --van-nav-bar-title-text-color: #f0ece0;
   --van-nav-bar-icon-color: #f0ece0;
