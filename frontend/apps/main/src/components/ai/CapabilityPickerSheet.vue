@@ -23,7 +23,23 @@
           @click="toggle(cap.key)"
         >
           <div class="cap-item__icon" :class="`cap-item__icon--${cap.key}`">
-            <component :is="cap.icon" />
+            <svg v-if="cap.key === 'text_generation'" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="4" y="6" width="20" height="3" rx="1.5" fill="currentColor" />
+              <rect x="4" y="12" width="16" height="3" rx="1.5" fill="currentColor" opacity="0.7" />
+              <rect x="4" y="18" width="12" height="3" rx="1.5" fill="currentColor" opacity="0.4" />
+            </svg>
+            <svg v-else-if="cap.key === 'deep_thinking'" width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="14" cy="12" r="7" stroke="currentColor" stroke-width="2" />
+              <path d="M10.5 12C10.5 10.067 12.067 8.5 14 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+              <circle cx="14" cy="12" r="2" fill="currentColor" />
+              <rect x="11" y="20" width="6" height="2" rx="1" fill="currentColor" />
+              <rect x="12.5" y="22" width="3" height="2" rx="1" fill="currentColor" />
+            </svg>
+            <svg v-else width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M4 14C4 14 7.5 7 14 7C20.5 7 24 14 24 14C24 14 20.5 21 14 21C7.5 21 4 14 4 14Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+              <circle cx="14" cy="14" r="3.5" stroke="currentColor" stroke-width="2" />
+              <circle cx="14" cy="14" r="1.5" fill="currentColor" />
+            </svg>
           </div>
           <div class="cap-item__text">
             <span class="cap-item__label">{{ cap.label }}</span>
@@ -51,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineComponent, h } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -71,63 +87,10 @@ const visible = computed({
   set: (v) => emit('update:show', v),
 })
 
-// SVG icon components
-const TextIcon = defineComponent({
-  render: () =>
-    h(
-      'svg',
-      { width: 28, height: 28, viewBox: '0 0 28 28', fill: 'none', xmlns: 'http://www.w3.org/2000/svg' },
-      [
-        h('rect', { x: 4, y: 6, width: 20, height: 3, rx: 1.5, fill: 'currentColor' }),
-        h('rect', { x: 4, y: 12, width: 16, height: 3, rx: 1.5, fill: 'currentColor', opacity: 0.7 }),
-        h('rect', { x: 4, y: 18, width: 12, height: 3, rx: 1.5, fill: 'currentColor', opacity: 0.4 }),
-      ],
-    ),
-})
-
-const ThinkingIcon = defineComponent({
-  render: () =>
-    h(
-      'svg',
-      { width: 28, height: 28, viewBox: '0 0 28 28', fill: 'none', xmlns: 'http://www.w3.org/2000/svg' },
-      [
-        h('circle', { cx: 14, cy: 12, r: 7, stroke: 'currentColor', 'stroke-width': 2 }),
-        h('path', {
-          d: 'M10.5 12C10.5 10.067 12.067 8.5 14 8.5',
-          stroke: 'currentColor',
-          'stroke-width': 2,
-          'stroke-linecap': 'round',
-        }),
-        h('circle', { cx: 14, cy: 12, r: 2, fill: 'currentColor' }),
-        h('rect', { x: 11, y: 20, width: 6, height: 2, rx: 1, fill: 'currentColor' }),
-        h('rect', { x: 12.5, y: 22, width: 3, height: 2, rx: 1, fill: 'currentColor' }),
-      ],
-    ),
-})
-
-const VisionIcon = defineComponent({
-  render: () =>
-    h(
-      'svg',
-      { width: 28, height: 28, viewBox: '0 0 28 28', fill: 'none', xmlns: 'http://www.w3.org/2000/svg' },
-      [
-        h('path', {
-          d: 'M4 14C4 14 7.5 7 14 7C20.5 7 24 14 24 14C24 14 20.5 21 14 21C7.5 21 4 14 4 14Z',
-          stroke: 'currentColor',
-          'stroke-width': 2,
-          'stroke-linejoin': 'round',
-        }),
-        h('circle', { cx: 14, cy: 14, r: 3.5, stroke: 'currentColor', 'stroke-width': 2 }),
-        h('circle', { cx: 14, cy: 14, r: 1.5, fill: 'currentColor' }),
-      ],
-    ),
-})
-
 interface Capability {
   key: string
   label: string
   subtitle: string
-  icon: ReturnType<typeof defineComponent>
   disabled: boolean
 }
 
@@ -136,21 +99,18 @@ const capabilities = computed<Capability[]>(() => [
     key: 'text_generation',
     label: t('aiConfig.capabilityTextDesc'),
     subtitle: t('aiConfig.capabilityTextSubtitle'),
-    icon: TextIcon,
     disabled: props.modelValue.includes('deep_thinking'),
   },
   {
     key: 'deep_thinking',
     label: t('aiConfig.capabilityThinkingDesc'),
     subtitle: t('aiConfig.capabilityThinkingSubtitle'),
-    icon: ThinkingIcon,
     disabled: false,
   },
   {
     key: 'vision_understanding',
     label: t('aiConfig.capabilityVisionDesc'),
     subtitle: t('aiConfig.capabilityVisionSubtitle'),
-    icon: VisionIcon,
     disabled: false,
   },
 ])

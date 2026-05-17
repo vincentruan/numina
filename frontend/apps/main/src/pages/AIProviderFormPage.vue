@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -112,7 +112,10 @@ const route = useRoute()
 const router = useRouter()
 const aiStore = useAIStore()
 
-const configId = computed(() => route.params.id as string | undefined)
+const configId = computed(() => {
+  const v = route.params.id
+  return Array.isArray(v) ? v[0] : v
+})
 const isEdit = computed(() => !!configId.value)
 
 const saving = ref(false)
@@ -239,15 +242,23 @@ async function onSave() {
   }
 }
 
+let unmounted = false
+onUnmounted(() => { unmounted = true })
+
 onMounted(async () => {
   if (isEdit.value && configId.value) {
-    // Try to find in store first, otherwise fetch
     let cfg = aiStore.configs.find((c) => c.id === configId.value)
     if (!cfg) {
       await aiStore.fetchConfigs()
+      if (unmounted) return
       cfg = aiStore.configs.find((c) => c.id === configId.value)
     }
-    if (cfg) loadConfig(cfg)
+    if (cfg) {
+      loadConfig(cfg)
+    } else {
+      showToast(t('toast.operationFailed2'))
+      router.replace({ name: 'AIConfig' })
+    }
   }
 })
 </script>

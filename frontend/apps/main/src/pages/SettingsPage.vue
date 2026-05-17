@@ -252,11 +252,10 @@ async function onToggleAI(val: boolean) {
     showToast(t('settings.enableAINoModel'))
     return
   }
+  const target = aiStore.configs.find((c) => c.model_id || c.model_2_id || c.model_3_id)
+  if (!target) return
   togglingAI.value = true
   try {
-    // Toggle is_active on the first provider that has a model
-    const target = aiStore.configs.find((c) => c.model_id || c.model_2_id || c.model_3_id)
-    if (!target) return
     await aiApi.updateProviderConfig(target.id, { is_active: val })
     await aiStore.fetchConfigs()
     showToast(val ? t('toast.aiEnabled') : t('toast.aiDisabled'))
