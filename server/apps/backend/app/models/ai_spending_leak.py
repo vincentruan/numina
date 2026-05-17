@@ -21,7 +21,7 @@ class AISpendingLeak(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False, index=True)
-    asset_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=False)
+    asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
     asset_name: Mapped[str] = mapped_column(String(200), nullable=False)
     leak_type: Mapped[str] = mapped_column(String(50), nullable=False)
     # leak_type: high_idle_cost | redundant | high_maintenance

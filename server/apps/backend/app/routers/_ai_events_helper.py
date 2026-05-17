@@ -95,7 +95,29 @@ async def proxy_capability_events(
                     await ChatSessionService.append_message(
                         session_obj, "assistant", answer, user, gen_db
                     )
+        # Task completion semantics:
+        # Task is marked complete BEFORE result persistence. This is intentional:
+        # "completed" means "agent stream finished successfully" not "results persisted".
+        # If persistence fails, user can still view the text answer in session history.
+        # The writer's rollback ensures no partial/corrupted data remains in DB.
         AITaskService.complete_task(task_id, gen_db)
+
+        # Extract structured results from answer and persist to DB
+        # This is a best-effort operation — failure is logged but not fatal
+        from apps.backend.app.services.ai_result_parser import parse_capability_result
+        from apps.backend.app.services.ai_result_writer import write_capability_results
+
+        try:
+            results = parse_capability_result(capability, answer, family_id, gen_db)
+            if results:
+                write_capability_results(capability, family_id, results, gen_db)
+        except Exception as result_error:
+            logger.error(
+                f"[{capability}] failed to parse/write results for family {family_id}: {result_error}"
+            )
+            # Result persistence failed, but task completed successfully
+            # The writer's rollback handles DB cleanup; log and continue
+
         next_task = AITaskService.get_next_queued_task(family_id, gen_db)
         if next_task:
             AITaskService.promote_queued_task(next_task.id, gen_db)

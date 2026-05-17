@@ -13,13 +13,45 @@ from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.ai_liability_result import AILiabilityResult
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.schemas.ai_results import (
+    LiabilityResultPayload,
+    NoResultPayload,
+)
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/liability-advice", tags=["ai-liability"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/result", response_model=LiabilityResultPayload | NoResultPayload)
+def get_liability_result(
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """获取最近一次负债分析结果（从 DB 读取）。"""
+    result = (
+        db.query(AILiabilityResult)
+        .filter(AILiabilityResult.family_id == current_user.family_id)
+        .order_by(AILiabilityResult.generated_at.desc())
+        .first()
+    )
+    if not result:
+        return NoResultPayload()
+    return LiabilityResultPayload(
+        has_result=True,
+        has_liabilities=result.has_liabilities,
+        total_remaining=result.total_remaining,
+        total_monthly_payment=result.total_monthly_payment,
+        liability_count=result.liability_count,
+        narrative=result.narrative,
+        recommended_strategy=result.recommended_strategy,
+        strategies=result.strategies_json,
+        generated_at=result.generated_at.isoformat(),
+    )
 
 
 @router.get("")
@@ -58,6 +90,7 @@ async def events_liability_advice(
         # 已有运行中任务（从排队提升）— 直接接续，不重复创建
         task = existing
         session_id = str(task.session_id) if task.session_id else str(task.id)
+        task_id = str(task.id)
         session = (
             db.query(AIChatSession)
             .filter_by(id=session_id, family_id=current_user.family_id)
@@ -80,6 +113,7 @@ async def events_liability_advice(
                 session_id=session.id,
                 db=db,
             )
+            task_id = str(task.id)
             return JSONResponse(
                 status_code=202,
                 content={
@@ -94,9 +128,9 @@ async def events_liability_advice(
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        task_id = str(task.id)
+        session_id = str(session.id)
 
-    task_id = task.id
     family_id = current_user.family_id
 
     return StreamingResponse(

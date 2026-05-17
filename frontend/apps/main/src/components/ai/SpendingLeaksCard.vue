@@ -166,7 +166,8 @@ function severityLabel(severity: string) {
 async function loadLeaks() {
   loading.value = true
   try {
-    leaks.value = await getSpendingLeaks()
+    const res = await getSpendingLeaks()
+    leaks.value = res.data
   } catch {
     showToast(t('toast.loadFailed'))
   } finally {
@@ -178,7 +179,7 @@ async function onRefresh() {
   await startStream()
 }
 
-async function onDismiss(id: number) {
+async function onDismiss(id: string) {
   try {
     await dismissSpendingLeak(id)
     leaks.value = leaks.value.filter(l => l.id !== id)

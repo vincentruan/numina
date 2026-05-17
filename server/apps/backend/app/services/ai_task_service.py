@@ -159,14 +159,14 @@ class AITaskService:
 
     @staticmethod
     def get_next_queued_task(family_id: int | str, db: Session) -> AITask | None:
-        """返回该家庭下排队最靠前的任务（按 queue_position 升序）。"""
+        """返回该家庭下排队最靠前的任务（按 started_at 升序，FIFO）。"""
         return (
             db.query(AITask)
             .filter(
                 AITask.family_id == int(family_id),
                 AITask.status == "queued",
             )
-            .order_by(AITask.queue_position)
+            .order_by(AITask.started_at)
             .first()
         )
 
