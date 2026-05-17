@@ -242,6 +242,18 @@ a {
   font-weight: 600;
 }
 
+[data-theme='dark'] .van-tabs__line {
+  background: #bdbbff !important;
+}
+
+[data-theme='dark'] .van-tab--active {
+  color: #bdbbff !important;
+}
+
+[data-theme='dark'] .van-tab {
+  color: rgba(255, 255, 255, 0.6);
+}
+
 /* Cell groups — hairline borders */
 .van-cell-group--inset {
   border-radius: var(--radius-sm) !important;
