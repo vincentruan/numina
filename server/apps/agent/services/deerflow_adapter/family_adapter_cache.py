@@ -151,9 +151,14 @@ def _generate_temp_config(
     with open(base_config_path, encoding="utf-8") as f:
         config = yaml.safe_load(f)
 
-    # 提取家庭的 AI 配置
+    # 提取家庭的 AI 配置 — 缺少关键字段时趁早报错
     api_key = ai_config.get("api_key", "")
-    model_id = ai_config.get("ai_model_id", "claude-haiku-4-5")
+    model_id = ai_config.get("ai_model_id")
+    if not model_id:
+        raise ValueError(
+            f"ai_model_id is required but not configured for family={family_id}. "
+            "请在 AI 配置中填写模型 ID。"
+        )
     base_url = ai_config.get("ai_base_url", "")
     provider = ai_config.get("ai_provider", "openai")
 
@@ -360,7 +365,7 @@ def get_family_adapter(
                 client = DeerFlowClient(
                     config_path=str(temp_config_path),
                     checkpointer=checkpointer,
-                    model_name=ai_config.get("ai_model_id"),
+                    model_name=None,
                     thinking_enabled=bool(ai_config.get("thinking_supported", False)),
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,

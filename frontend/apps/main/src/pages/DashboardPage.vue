@@ -33,27 +33,41 @@
           @select-status="onStatusSelect"
         />
 
-        <!-- Analytics: Trend + Allocation -->
-        <van-cell-group inset class="chart-section">
-          <van-collapse v-model="analyticsExpanded" @change="toggleAnalytics">
-            <van-collapse-item :title="t('dashboard.chart.analyticsTitle')" name="analytics">
-              <div class="chart-subsection-label">{{ t('dashboard.chart.trendTitle') }}</div>
-              <TrendLineChart
+        <!-- Analytics: Trend + Allocation as separate cards -->
+        <div class="analytics-cards">
+          <!-- Asset Trend Card -->
+          <van-cell-group inset class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-card-title">{{ t('dashboard.chart.trendTitle') }}</span>
+              <van-tabs v-model:active="trendPeriod" type="card" shrink @change="onTrendPeriodChange">
+                <van-tab title="月" name="month" />
+                <van-tab title="季" name="quarter" />
+                <van-tab title="年" name="year" />
+              </van-tabs>
+            </div>
+            <div class="analytics-card-content">
+              <TrendLineChartSimple
                 v-if="dashboardStore.trend.length"
                 :data="dashboardStore.trend"
-                @period-change="onTrendPeriodChange"
               />
               <van-empty v-else :description="t('common.noData')" image-size="60" />
+            </div>
+          </van-cell-group>
 
-              <div class="chart-subsection-label chart-subsection-label--spaced">{{ t('dashboard.chart.allocationTitle') }}</div>
+          <!-- Asset Allocation Card -->
+          <van-cell-group inset class="analytics-card">
+            <div class="analytics-card-header">
+              <span class="analytics-card-title">{{ t('dashboard.chart.allocationTitle') }}</span>
+            </div>
+            <div class="analytics-card-content">
               <AllocationTreemapChart
                 v-if="dashboardStore.allocation.length"
                 :data="dashboardStore.allocation"
               />
               <van-empty v-else :description="t('common.noData')" image-size="60" />
-            </van-collapse-item>
-          </van-collapse>
-        </van-cell-group>
+            </div>
+          </van-cell-group>
+        </div>
 
         <!-- Sticky Filter Bar: Status + Category -->
         <div ref="filterBarRef" class="filter-bar-sticky">
@@ -305,7 +319,7 @@ import StatusSummaryGrid from '@/components/dashboard/StatusSummaryGrid.vue'
 import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
-import TrendLineChart from '@/components/charts/TrendLineChart.vue'
+import TrendLineChartSimple from '@/components/charts/TrendLineChartSimple.vue'
 import AllocationTreemapChart from '@/components/charts/AllocationTreemapChart.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
 
@@ -319,9 +333,9 @@ const viewMode = computed(() => authStore.user?.view_mode || 'card')
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 
-// Chart collapse state (van-collapse v-model expects array of active names)
-const analyticsExpanded = ref<string[]>(
-  localStorage.getItem('dashboard_analytics_expanded') === 'false' ? [] : ['analytics'],
+// Trend period state
+const trendPeriod = ref<'month' | 'quarter' | 'year'>(
+  (localStorage.getItem('dashboard_trend_period') as 'month' | 'quarter' | 'year') || 'month',
 )
 
 // Pagination state
@@ -569,15 +583,9 @@ async function onMoreActionSelect(action: { value: string }) {
 }
 
 function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
+  trendPeriod.value = period
+  localStorage.setItem('dashboard_trend_period', period)
   dashboardStore.fetchTrend(period)
-}
-
-function toggleAnalytics() {
-  analyticsExpanded.value = analyticsExpanded.value.includes('analytics') ? [] : ['analytics']
-  localStorage.setItem(
-    'dashboard_analytics_expanded',
-    analyticsExpanded.value.length > 0 ? 'true' : 'false',
-  )
 }
 
 async function onLoadMore() {
@@ -998,22 +1006,69 @@ onUnmounted(() => {
   color: var(--color-lavender);
 }
 
-.chart-section {
+/* Analytics Cards */
+.analytics-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 12px;
+  padding: 0 12px;
 }
 
-.chart-section :deep(.van-collapse-item__content) {
-  padding: 12px;
+.analytics-card {
+  background: var(--card-bg);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.chart-subsection-label {
-  font-size: 13px;
+.analytics-card :deep(.van-cell-group__inset) {
+  margin: 0;
+  border-radius: 8px;
+}
+
+.analytics-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px 8px;
+}
+
+.analytics-card-title {
+  font-size: 14px;
   font-weight: 500;
-  color: var(--text-secondary);
-  margin-bottom: 8px;
+  color: var(--text-primary);
 }
 
-.chart-subsection-label--spaced {
-  margin-top: 16px;
+.analytics-card-content {
+  padding: 0 12px 12px;
+}
+
+/* Period tabs inside card header */
+.analytics-card-header :deep(.van-tabs--card) {
+  .van-tabs__nav {
+    height: 26px;
+    background: var(--van-background-2);
+    border-radius: 4px;
+  }
+  .van-tab {
+    font-size: 11px;
+    padding: 0 8px;
+    line-height: 26px;
+    border-radius: 4px;
+  }
+  .van-tab--active {
+    background: var(--van-primary-color);
+    color: var(--color-on-primary);
+  }
+}
+
+[data-theme='dark'] .analytics-card-header :deep(.van-tabs--card) {
+  .van-tabs__nav {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .van-tab--active {
+    background: var(--color-lavender);
+    color: #010120;
+  }
 }
 </style>
