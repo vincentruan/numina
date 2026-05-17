@@ -40,18 +40,18 @@ def get_liability_result(
         .first()
     )
     if not result:
-        return {"has_result": False}
-    return {
-        "has_result": True,
-        "has_liabilities": result.has_liabilities,
-        "total_remaining": result.total_remaining,
-        "total_monthly_payment": result.total_monthly_payment,
-        "liability_count": result.liability_count,
-        "narrative": result.narrative,
-        "recommended_strategy": result.recommended_strategy,
-        "strategies": result.strategies_json,
-        "generated_at": result.generated_at.isoformat(),
-    }
+        return NoResultPayload()
+    return LiabilityResultPayload(
+        has_result=True,
+        has_liabilities=result.has_liabilities,
+        total_remaining=result.total_remaining,
+        total_monthly_payment=result.total_monthly_payment,
+        liability_count=result.liability_count,
+        narrative=result.narrative,
+        recommended_strategy=result.recommended_strategy,
+        strategies=result.strategies_json,
+        generated_at=result.generated_at.isoformat(),
+    )
 
 
 @router.get("")
@@ -126,9 +126,9 @@ async def events_liability_advice(
             session_id=session.id,
             db=db,
         )
-        session_id = session.id
+        session_id = str(session.id)
 
-    task_id = task.id
+    task_id = str(task.id)
     family_id = current_user.family_id
 
     return StreamingResponse(
