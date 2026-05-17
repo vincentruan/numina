@@ -31,6 +31,7 @@ CAPABILITY_SCHEMAS = {
             "type": "object",
             "required": ["asset_name", "alert_type", "severity"],
             "properties": {
+                "asset_id": {"type": "integer"},
                 "asset_name": {"type": "string"},
                 "alert_type": {"type": "string", "enum": ["aging", "high_maintenance", "idle_cost"]},
                 "severity": {"type": "string", "enum": ["low", "medium", "high"]},
@@ -46,6 +47,7 @@ CAPABILITY_SCHEMAS = {
             "type": "object",
             "required": ["asset_name", "inefficiency_score"],
             "properties": {
+                "asset_id": {"type": "integer"},
                 "asset_name": {"type": "string"},
                 "category_name": {"type": "string"},
                 "inefficiency_score": {"type": "integer", "minimum": 0, "maximum": 100},
@@ -62,6 +64,7 @@ CAPABILITY_SCHEMAS = {
             "type": "object",
             "required": ["asset_name", "leak_type", "severity"],
             "properties": {
+                "asset_id": {"type": "integer"},
                 "asset_name": {"type": "string"},
                 "leak_type": {"type": "string", "enum": ["high_idle_cost", "redundant", "high_maintenance"]},
                 "severity": {"type": "string", "enum": ["low", "medium", "high"]},
@@ -207,7 +210,7 @@ async def _llm_fallback_extract(
         .filter(
             AIProviderConfig.family_id == family_id,
             AIProviderConfig.api_key_encrypted.isnot(None),
-            AIProviderConfig.is_active == True,
+            AIProviderConfig.is_active.is_(True),
         )
         .order_by(AIProviderConfig.display_order.asc())
         .all()

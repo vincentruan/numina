@@ -16,6 +16,10 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_liability_result import AILiabilityResult
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.schemas.ai_results import (
+    LiabilityResultPayload,
+    NoResultPayload,
+)
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -23,7 +27,7 @@ router = APIRouter(prefix="/ai/liability-advice", tags=["ai-liability"])
 logger = logging.getLogger(__name__)
 
 
-@router.get("/result")
+@router.get("/result", response_model=LiabilityResultPayload | NoResultPayload)
 def get_liability_result(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),

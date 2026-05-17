@@ -101,9 +101,16 @@ async def proxy_capability_events(
         from apps.backend.app.services.ai_result_parser import parse_capability_result
         from apps.backend.app.services.ai_result_writer import write_capability_results
 
-        results = parse_capability_result(capability, answer, family_id, gen_db)
-        if results:
-            write_capability_results(capability, family_id, results, gen_db)
+        try:
+            results = parse_capability_result(capability, answer, family_id, gen_db)
+            if results:
+                write_capability_results(capability, family_id, results, gen_db)
+        except Exception as result_error:
+            logger.error(
+                f"[{capability}] failed to parse/write results for family {family_id}: {result_error}"
+            )
+            # Result persistence failed, but task completed successfully
+            # The writer's rollback handles DB cleanup; log and continue
 
         next_task = AITaskService.get_next_queued_task(family_id, gen_db)
         if next_task:

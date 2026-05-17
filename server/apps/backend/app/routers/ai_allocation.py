@@ -18,6 +18,11 @@ from apps.backend.app.models.ai_allocation_target import AIAllocationTarget
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.schemas.ai_results import (
+    AllocationDriftResultPayload,
+    AllocationDriftResultResponse,
+    NoResultPayload,
+)
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -84,11 +89,11 @@ def set_target(
     return {"ok": True}
 
 
-@router.get("/check/result")
+@router.get("/check/result", response_model=AllocationDriftResultPayload | NoResultPayload)
 def get_drift_result(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
-):
+) -> AllocationDriftResultPayload | NoResultPayload:
     """获取最近一次配置漂移分析结果（从 DB 读取）。"""
     result = (
         db.query(AIAllocationDriftResult)
@@ -97,14 +102,16 @@ def get_drift_result(
         .first()
     )
     if not result:
-        return {"has_result": False}
-    return {
-        "has_result": True,
-        "has_significant_drift": result.has_significant_drift,
-        "narrative": result.narrative,
-        "drifts": result.drifts_json,
-        "generated_at": result.generated_at.isoformat(),
-    }
+        return NoResultPayload()
+    # Use response schema to serialize with SnowflakeBase for bigint IDs
+    response = AllocationDriftResultResponse.model_validate(result)
+    return AllocationDriftResultPayload(
+        has_result=True,
+        has_significant_drift=response.has_significant_drift,
+        narrative=response.narrative,
+        drifts=response.drifts_json,
+        generated_at=response.generated_at.isoformat(),
+    )
 
 
 @router.get("/check")

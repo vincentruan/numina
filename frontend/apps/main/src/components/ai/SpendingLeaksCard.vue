@@ -179,7 +179,7 @@ async function onRefresh() {
   await startStream()
 }
 
-async function onDismiss(id: number) {
+async function onDismiss(id: string) {
   try {
     await dismissSpendingLeak(id)
     leaks.value = leaks.value.filter(l => l.id !== id)
