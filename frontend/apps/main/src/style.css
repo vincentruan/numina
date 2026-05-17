@@ -120,6 +120,20 @@
   --color-card-border: rgba(255, 255, 255, 0.08);
   --color-hairline: rgba(255, 255, 255, 0.08);
   --color-success: #2f9e44;
+  --color-cost: #ffc04d;
+  --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.28);
+  --badge-high-bg: rgba(192, 57, 43, 0.2);
+  --badge-high-text: #e57373;
+  --badge-medium-bg: rgba(133, 100, 4, 0.2);
+  --badge-medium-text: #ffb74d;
+  --badge-low-bg: rgba(26, 111, 168, 0.2);
+  --badge-low-text: #64b5f6;
+  --error-bg: rgba(220, 53, 69, 0.15);
+  --error-text: #f1aeb5;
+  --tag-approved-bg: rgba(76, 175, 80, 0.15);
+  --tag-approved-text: #66bb6a;
+  --tag-milestone-bg: rgba(156, 39, 176, 0.15);
+  --tag-milestone-text: #ce93d8;
 
   --van-primary-color: #bdbbff;
   --van-button-primary-background: #bdbbff;
