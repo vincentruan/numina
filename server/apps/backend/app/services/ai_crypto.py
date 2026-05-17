@@ -40,7 +40,8 @@ def decrypt_api_key(encrypted: str) -> str | None:
 
 
 def mask_api_key(api_key: str) -> str:
-    """脱敏展示 API Key，如 sk-abc1********xyz9。"""
-    if len(api_key) <= 14:
+    """脱敏展示 API Key，如 sk-2b353***********************6acb。"""
+    if len(api_key) <= 11:
         return "****"
-    return api_key[:6] + "********" + api_key[-4:]
+    hidden_len = len(api_key) - 7 - 4
+    return api_key[:7] + "*" * hidden_len + api_key[-4:]

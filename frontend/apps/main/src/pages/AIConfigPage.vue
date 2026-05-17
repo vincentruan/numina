@@ -42,6 +42,29 @@
             </div>
           </div>
 
+          <!-- API Key row -->
+          <div v-if="cfg.ai_api_key_masked" class="api-key-row">
+            <span class="api-key-label">{{ t('aiConfig.currentApiKey') }}</span>
+            <span class="api-key-value">{{ revealedKeys[cfg.id] || cfg.ai_api_key_masked }}</span>
+            <button class="icon-btn" :title="t('aiConfig.copyApiKey')" @click="onCopyKey(cfg)">
+              <van-icon name="description" size="16" />
+            </button>
+            <button
+              class="icon-btn"
+              :title="revealedKeys[cfg.id] ? t('aiConfig.hideApiKey') : t('aiConfig.showApiKey')"
+              :disabled="revealingId === cfg.id"
+              @click="onToggleReveal(cfg)"
+            >
+              <van-icon
+                v-if="revealingId === cfg.id"
+                name="loading"
+                size="16"
+                class="icon-spinning"
+              />
+              <van-icon v-else :name="revealedKeys[cfg.id] ? 'eye-o' : 'closed-eye'" size="16" />
+            </button>
+          </div>
+
           <!-- Model rows -->
           <div class="model-rows">
             <template v-for="slot in [1, 2, 3]" :key="slot">
@@ -170,6 +193,8 @@ const aiStore = useAIStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 const deletingId = ref<string | null>(null)
 const testingKey = ref<string | null>(null)
+const revealedKeys = ref<Record<string, string>>({})
+const revealingId = ref<string | null>(null)
 
 function capShortLabel(cap: string): string {
   if (cap === 'text_generation') return t('aiConfig.capabilityText')
@@ -193,6 +218,32 @@ function getCapabilities(cfg: ProviderConfig, slot: number): string[] {
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
+
+async function onCopyKey(cfg: ProviderConfig) {
+  const text = revealedKeys.value[cfg.id] || cfg.ai_api_key_masked || ''
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast(t('toast.copied'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
+
+async function onToggleReveal(cfg: ProviderConfig) {
+  if (revealedKeys.value[cfg.id]) {
+    delete revealedKeys.value[cfg.id]
+    return
+  }
+  revealingId.value = cfg.id
+  try {
+    const res = await aiApi.revealAIKey(cfg.id)
+    revealedKeys.value[cfg.id] = res.data.api_key
+  } catch {
+    showToast(t('aiConfig.revealFailed'))
+  } finally {
+    revealingId.value = null
+  }
+}
 
 function onAdd() {
   router.push({ name: 'AIProviderCreate' })
@@ -362,6 +413,65 @@ onMounted(async () => {
 .circuit-badge {
   font-size: 15px;
   flex-shrink: 0;
+}
+
+/* ── API Key row ── */
+.api-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.api-key-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.api-key-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+
+.icon-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='dark'] .icon-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.icon-spinning {
+  animation: spin 1s linear infinite;
 }
 
 /* ── Model rows ── */

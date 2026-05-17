@@ -17,12 +17,46 @@
         @click="showProviderPicker = true"
       />
       <van-field
+        v-if="!isEdit"
         v-model="form.api_key"
         :label="t('aiConfig.apiKey')"
         :placeholder="t('aiConfig.apiKeyPlaceholder')"
         type="password"
         autocomplete="off"
       />
+      <template v-else>
+        <van-cell v-if="maskedKey" :title="t('aiConfig.currentApiKey')">
+          <template #value>
+            <div class="key-reveal-row">
+              <span class="key-reveal-value">{{ revealedKey || maskedKey }}</span>
+              <button class="key-icon-btn" :title="t('aiConfig.copyApiKey')" @click="onCopyKey">
+                <van-icon name="description" size="16" />
+              </button>
+              <button
+                class="key-icon-btn"
+                :title="revealedKey ? t('aiConfig.hideApiKey') : t('aiConfig.showApiKey')"
+                :disabled="revealing"
+                @click="onToggleReveal"
+              >
+                <van-icon
+                  v-if="revealing"
+                  name="loading"
+                  size="16"
+                  class="key-icon-spinning"
+                />
+                <van-icon v-else :name="revealedKey ? 'eye-o' : 'closed-eye'" size="16" />
+              </button>
+            </div>
+          </template>
+        </van-cell>
+        <van-field
+          v-model="form.api_key"
+          :label="t('aiConfig.apiKey')"
+          :placeholder="t('aiConfig.apiKeyPlaceholder')"
+          type="password"
+          autocomplete="off"
+        />
+      </template>
       <van-field
         v-model="form.base_url"
         :label="t('aiConfig.baseUrl')"
@@ -122,6 +156,9 @@ const saving = ref(false)
 const showProviderPicker = ref(false)
 const showCapPicker = ref(false)
 const activeSlotIndex = ref(0)
+const maskedKey = ref<string | null>(null)
+const revealedKey = ref<string | null>(null)
+const revealing = ref(false)
 
 interface ModelSlot {
   id: string
@@ -190,6 +227,34 @@ function loadConfig(cfg: ProviderConfig) {
   formModels[1].capabilities = [...cfg.model_2_capabilities]
   formModels[2].id = cfg.model_3_id || ''
   formModels[2].capabilities = [...cfg.model_3_capabilities]
+  maskedKey.value = cfg.ai_api_key_masked
+}
+
+async function onCopyKey() {
+  const text = revealedKey.value || maskedKey.value || ''
+  try {
+    await navigator.clipboard.writeText(text)
+    showToast(t('toast.copied'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
+
+async function onToggleReveal() {
+  if (revealedKey.value) {
+    revealedKey.value = null
+    return
+  }
+  if (!configId.value) return
+  revealing.value = true
+  try {
+    const res = await aiApi.revealAIKey(configId.value)
+    revealedKey.value = res.data.api_key
+  } catch {
+    showToast(t('aiConfig.revealFailed'))
+  } finally {
+    revealing.value = false
+  }
 }
 
 async function onSave() {
@@ -324,5 +389,60 @@ onMounted(async () => {
 
 .form-actions {
   padding: 24px 16px 0;
+}
+
+.key-reveal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-reveal-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+
+.key-icon-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='dark'] .key-icon-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.key-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.key-icon-spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 </style>
