@@ -172,3 +172,142 @@ def child_login_two_phase(client, username: str, password: str, pin_sequence: li
     })
     assert step2.status_code == 200, f"step2 failed: {step2.text}"
     return step2.json()["data"]["access_token"]
+
+
+# Fixtures for AI result writer tests
+@pytest.fixture
+def db_session(db):
+    """Alias for db fixture for clarity in test naming."""
+    return db
+
+
+@pytest.fixture
+def test_family(db):
+    """Create a test family."""
+    from apps.backend.app.models.family import Family
+    from apps.backend.app.utils.snowflake import next_id
+
+    family = Family(id=next_id(), name="Test Family for AI Results", created_by=next_id())
+    db.add(family)
+    db.commit()
+    db.refresh(family)
+    return family
+
+
+@pytest.fixture
+def test_user(db, test_family):
+    """Create a test user in the test family."""
+    from apps.backend.app.models.user import User
+    from apps.backend.app.utils.snowflake import next_id
+
+    user = User(
+        id=next_id(),
+        username="ai_test_user",
+        display_name="AI Test User",
+        password_hash="test_hash",
+        family_id=test_family.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@pytest.fixture
+def test_asset(db, test_family, test_user):
+    """Create a test asset owned by the test family."""
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.utils.snowflake import next_id
+
+    # Get a valid category_id from seeded categories
+    from apps.backend.app.models.category import Category
+    category = db.query(Category).first()
+
+    asset = Asset(
+        id=next_id(),
+        family_id=test_family.id,
+        user_id=test_user.id,
+        category_id=category.id,
+        name="Test Asset",
+        asset_type="physical",
+        is_archived=False,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+@pytest.fixture
+def other_family(db):
+    """Create another family for cross-family isolation tests."""
+    from apps.backend.app.models.family import Family
+    from apps.backend.app.models.user import User
+    from apps.backend.app.utils.snowflake import next_id
+
+    family = Family(id=next_id(), name="Other Family", created_by=next_id())
+    db.add(family)
+    db.commit()
+    db.refresh(family)
+
+    user = User(
+        id=next_id(),
+        username="other_user",
+        display_name="Other User",
+        password_hash="test_hash",
+        family_id=family.id,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return family
+
+
+@pytest.fixture
+def other_family_asset(db, other_family):
+    """Create an asset owned by another family."""
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.models.user import User
+    from apps.backend.app.models.category import Category
+    from apps.backend.app.utils.snowflake import next_id
+
+    user = db.query(User).filter(User.family_id == other_family.id).first()
+    category = db.query(Category).first()
+
+    asset = Asset(
+        id=next_id(),
+        family_id=other_family.id,
+        user_id=user.id,
+        category_id=category.id,
+        name="Other Family Asset",
+        asset_type="physical",
+        is_archived=False,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+@pytest.fixture
+def archived_asset(db, test_family, test_user):
+    """Create an archived asset owned by the test family."""
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.models.category import Category
+    from apps.backend.app.utils.snowflake import next_id
+
+    category = db.query(Category).first()
+
+    asset = Asset(
+        id=next_id(),
+        family_id=test_family.id,
+        user_id=test_user.id,
+        category_id=category.id,
+        name="Archived Asset",
+        asset_type="physical",
+        is_archived=True,
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
