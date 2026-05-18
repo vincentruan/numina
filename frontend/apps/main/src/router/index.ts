@@ -202,10 +202,12 @@ const router = createRouter({
         },
         {
           path: 'settings/notifications',
+          name: 'NotificationConfig',
           component: () => import('@/pages/NotificationConfigPage.vue'),
         },
         {
           path: 'settings/notifications/threshold',
+          name: 'NotificationThreshold',
           component: () => import('@/pages/NotificationThresholdPage.vue'),
         },
         {

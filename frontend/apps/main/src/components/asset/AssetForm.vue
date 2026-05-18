@@ -54,6 +54,7 @@
         readonly
         label="分类"
         placeholder="请选择分类"
+        :rules="[{ required: true, message: '请选择分类' }]"
         @click="showCategoryPicker = true"
       />
       <van-popup v-model:show="showCategoryPicker" position="bottom" round>
@@ -117,6 +118,7 @@
         readonly
         label="购入日期"
         placeholder="选择日期"
+        :rules="[{ required: true, message: '请选择购入日期' }]"
         @click="showDatePicker = true"
       />
       <van-popup v-model:show="showDatePicker" position="bottom" round>
@@ -715,7 +717,7 @@ function onSubmit() {
   fill: currentColor;
 }
 .cat-name {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--van-text-color-2);
   margin-top: 4px;
   text-align: center;

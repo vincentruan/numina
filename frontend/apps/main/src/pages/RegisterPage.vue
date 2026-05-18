@@ -44,10 +44,10 @@
             v-model="form.password"
             :type="showPassword ? 'text' : 'password'"
             label="密码"
-            placeholder="请输入密码(至少6位)"
+            placeholder="请输入密码(至少8位)"
             :rules="[
               { required: true, message: '请输入密码' },
-              { validator: validatePassword, message: '密码至少6位' }
+              { validator: validatePassword, message: '密码至少8位' }
             ]"
             :error-message="getError('password')?.msg"
             @blur="validateField('password')"
@@ -133,16 +133,11 @@ function formatInvitationCode(value: string): string {
 
 // Real-time validation functions
 function validatePassword(value: string): boolean {
-  return value.length >= 6
+  return value.length >= 8
 }
 
 function validateConfirmPassword(value: string): boolean {
   return value === form.value.password
-}
-
-function validateField(_field: string) {
-  // Trigger real-time validation feedback
-  // Vant's van-field handles this via :rules prop
 }
 
 async function onSubmit() {

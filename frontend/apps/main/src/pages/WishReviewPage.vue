@@ -66,8 +66,8 @@
     </template>
 
     <!-- Approve dialog -->
-    <div v-if="approveTarget" class="dialog-overlay" @click.self="approveTarget = null">
-      <div class="dialog">
+    <div v-if="approveTarget" class="dialog-overlay" @click.self="approveTarget = null" @keydown.escape="approveTarget = null">
+      <div class="dialog" role="dialog" aria-modal="true">
         <h3 class="dialog-title"><van-icon name="passed" size="20" color="#28a745" /> {{ t('wishReview.dialog.approveTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.approveDesc', { name: approveTarget.name }) }}</p>
         <div class="cost-readonly">
@@ -83,8 +83,8 @@
     </div>
 
     <!-- Reject dialog -->
-    <div v-if="rejectTarget" class="dialog-overlay" @click.self="rejectTarget = null">
-      <div class="dialog">
+    <div v-if="rejectTarget" class="dialog-overlay" @click.self="rejectTarget = null" @keydown.escape="rejectTarget = null">
+      <div class="dialog" role="dialog" aria-modal="true">
         <h3 class="dialog-title"><van-icon name="close" size="20" color="#dc3545" /> {{ t('wishReview.dialog.rejectTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.rejectDesc', { name: rejectTarget.name }) }}</p>
         <input v-model="rejectReason" class="input" :placeholder="t('wishReview.dialog.rejectReasonPlaceholder')" maxlength="200" />
@@ -97,8 +97,8 @@
     </div>
 
     <!-- Realize dialog -->
-    <div v-if="realizeTarget" class="dialog-overlay" @click.self="realizeTarget = null">
-      <div class="dialog">
+    <div v-if="realizeTarget" class="dialog-overlay" @click.self="realizeTarget = null" @keydown.escape="realizeTarget = null">
+      <div class="dialog" role="dialog" aria-modal="true">
         <h3>{{ t('wishReview.dialog.realizeTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.realizeDesc', { name: realizeTarget.name, cost: realizeTarget.star_coin_cost }) }}</p>
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
@@ -210,7 +210,7 @@ async function realize() {
     realizeTarget.value = null
     await load()
   } catch {
-    dialogError.value = t('wishReview.error.insufficientCoins')
+    dialogError.value = t('wishReview.error.operationFailed')
   } finally {
     actioning.value = false
   }
@@ -302,7 +302,7 @@ onMounted(load)
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 8px 4px;
+  padding: 12px 4px;
   border: none;
   background: transparent;
   color: var(--van-text-color-2, #969799);
@@ -310,7 +310,7 @@ onMounted(load)
   cursor: pointer;
   transition: background 0.15s;
   position: relative;
-  min-height: 36px;
+  min-height: 44px;
 }
 .action-btn + .action-btn::before {
   content: '';

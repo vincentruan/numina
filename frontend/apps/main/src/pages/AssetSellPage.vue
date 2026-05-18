@@ -1,69 +1,69 @@
 <template>
   <div class="asset-sell-page">
-    <PageHeader title="出售资产" />
+    <PageHeader :title="t('assetSell.pageTitle')" />
 
     <template v-if="asset">
       <div class="asset-summary">
         <div class="asset-name">{{ asset.name }}</div>
-        <div class="asset-value">当前价值 ¥{{ (asset.current_value || 0).toLocaleString() }}</div>
+        <div class="asset-value">{{ t('assetSell.currentValue', { value: (asset.current_value || 0).toLocaleString() }) }}</div>
       </div>
 
-      <van-cell-group inset title="出售信息">
+      <van-cell-group inset :title="t('assetSell.sectionSellInfo')">
         <van-field
           v-model="form.sell_price"
           type="number"
-          label="出售价格"
-          placeholder="请输入出售价格"
+          :label="t('assetSell.sellPrice')"
+          :placeholder="t('assetSell.sellPricePlaceholder')"
           required
           input-align="right"
         >
-          <template #button>元</template>
+          <template #button>{{ t('assetSell.unit') }}</template>
         </van-field>
         <van-field
           v-model="form.sell_fee"
           type="number"
-          label="手续费"
-          placeholder="0"
+          :label="t('assetSell.sellFee')"
+          :placeholder="t('assetSell.sellFeePlaceholder')"
           input-align="right"
         >
-          <template #button>元</template>
+          <template #button>{{ t('assetSell.unit') }}</template>
         </van-field>
         <van-field
           v-model="form.sell_channel"
-          label="出售渠道"
-          placeholder="如：闲鱼、转转、自售"
+          :label="t('assetSell.sellChannel')"
+          :placeholder="t('assetSell.sellChannelPlaceholder')"
           input-align="right"
         />
         <van-field
           v-model="form.notes"
-          label="备注"
-          placeholder="可选"
+          :label="t('assetSell.notes')"
+          :placeholder="t('assetSell.notesPlaceholder')"
           input-align="right"
         />
       </van-cell-group>
 
       <!-- Preview -->
-      <van-cell-group v-if="sellPrice > 0" inset title="收益预览">
-        <van-cell title="净回收金额">
+      <van-cell-group v-if="sellPrice > 0" inset :title="t('assetSell.sectionPreview')">
+        <van-cell :title="t('assetSell.netRecovery')">
           <template #value>
             <span class="highlight">¥{{ netRecovery.toLocaleString() }}</span>
           </template>
         </van-cell>
-        <van-cell title="盈亏">
+        <van-cell :title="t('assetSell.profitLoss')">
           <template #value>
             <span :class="profitLoss >= 0 ? 'positive' : 'negative'">
               {{ profitLoss >= 0 ? '+' : '' }}¥{{ profitLoss.toLocaleString() }}
             </span>
           </template>
         </van-cell>
-        <van-cell v-if="asset.purchase_date" title="持有天数" :value="`${daysHeld} 天`" />
+        <van-cell v-if="asset.purchase_date" :title="t('assetSell.daysHeld')" :value="t('assetSell.daysUnit', { days: daysHeld })" />
       </van-cell-group>
 
       <div class="actions">
         <van-button block type="warning" :loading="submitting" @click="onSubmit">
-          确认出售
+          {{ t('assetSell.confirmBtn') }}
         </van-button>
-        <van-button block plain @click="$router.back()">取消</van-button>
+        <van-button block plain @click="$router.back()">{{ t('assetSell.cancelBtn') }}</van-button>
       </div>
     </template>
 
@@ -72,32 +72,32 @@
     <!-- Result Dialog -->
     <van-dialog
       v-model:show="showResult"
-      title="出售成功"
-      confirm-button-text="返回列表"
+      :title="t('assetSell.resultTitle')"
+      :confirm-button-text="t('assetSell.resultConfirmBtn')"
       :before-close="onResultClose"
     >
       <div v-if="sellResult" class="result-dialog">
         <div class="result-row">
-          <span>净回收</span>
+          <span>{{ t('assetSell.resultNetRecovery') }}</span>
           <span class="highlight">¥{{ sellResult.net_recovery.toLocaleString() }}</span>
         </div>
         <div class="result-row">
-          <span>总盈亏</span>
+          <span>{{ t('assetSell.resultProfitLoss') }}</span>
           <span :class="sellResult.total_profit_loss >= 0 ? 'positive' : 'negative'">
             {{ sellResult.total_profit_loss >= 0 ? '+' : '' }}¥{{ sellResult.total_profit_loss.toLocaleString() }}
           </span>
         </div>
         <div class="result-row">
-          <span>实际日耗</span>
-          <span>¥{{ sellResult.actual_daily_cost }}/天</span>
+          <span>{{ t('assetSell.resultDailyCost') }}</span>
+          <span>¥{{ sellResult.actual_daily_cost }}{{ t('assetSell.perDay') }}</span>
         </div>
         <div v-if="sellResult.target_daily_cost" class="result-row">
-          <span>目标日耗</span>
-          <span>¥{{ sellResult.target_daily_cost }}/天</span>
+          <span>{{ t('assetSell.resultTargetDailyCost') }}</span>
+          <span>¥{{ sellResult.target_daily_cost }}{{ t('assetSell.perDay') }}</span>
         </div>
         <div class="result-row">
-          <span>持有天数</span>
-          <span>{{ sellResult.days_held }} 天</span>
+          <span>{{ t('assetSell.resultDaysHeld') }}</span>
+          <span>{{ t('assetSell.daysUnit', { days: sellResult.days_held }) }}</span>
         </div>
       </div>
     </van-dialog>
@@ -107,7 +107,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -149,6 +149,18 @@ const daysHeld = computed(() => {
 async function onSubmit() {
   if (sellPrice.value <= 0) {
     showToast(t('toast.assetSellPriceRequired'))
+    return
+  }
+  try {
+    await showConfirmDialog({
+      title: t('assetSell.confirmTitle'),
+      message: t('assetSell.confirmMessage', {
+        name: asset.value?.name,
+        price: sellPrice.value,
+      }),
+    })
+  } catch {
+    // User cancelled
     return
   }
   submitting.value = true
