@@ -289,4 +289,18 @@ export default {
     dismissBtn: '太棒了！',
     overlayLabel: '成就解锁',
   },
+  celebration: {
+    phrases: [
+      '太棒了！',
+      '厉害！',
+      '真行！',
+      '继续加油！',
+      '做得好！',
+      '你真棒！',
+      '加油加油！',
+    ],
+    singleTask: '获得 {stars} ⭐！',
+    multipleTasks: '{count}个任务通过！获得 {stars} ⭐',
+    overlayLabel: '任务通过庆祝',
+  },
 }
