@@ -674,6 +674,10 @@ export default {
     dangerZone: '危险操作',
     disableTitle: '禁用二阶段验证',
     disableLabel: '禁用后登录将不再需要 PIN 验证',
+    emojiPinHint: '请输入图形密码完成验证',
+    digitalPinHint: '请输入数字 PIN 码完成验证',
+    numpadClear: '清空',
+    numpadDelete: '⌫',
   },
   settings: {
     title: '设置',
@@ -815,6 +819,9 @@ export default {
     fetchFailed: '汇率获取失败，使用缓存数据',
     originalAmount: '原始金额',
     exchangeRate: '汇率',
+    amountLabel: '金额',
+    amountPlaceholder: '请输入金额',
+    deselectAll: '取消全选',
   },
   errors: {
     // Auth
