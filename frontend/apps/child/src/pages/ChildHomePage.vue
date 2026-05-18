@@ -138,6 +138,14 @@
         </button>
       </div>
     </div>
+
+    <!-- Celebration animation -->
+    <CelebrationAnimation
+      :visible="celebrationVisible"
+      :task-count="celebrationTaskCount"
+      :stars-earned="celebrationStarsEarned"
+      @dismiss="onCelebrationDismiss"
+    />
   </div>
 </template>
 
@@ -152,9 +160,11 @@ import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
+import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
+import { findPendingCelebrations, markCelebrated } from '@/utils/celebrationState'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
@@ -174,6 +184,12 @@ const abandonSheetVisible = ref(false)
 const abandonTarget = ref<ChoreInstance | null>(null)
 const topWish = ref<ChildWish | null>(null)
 const settingsExpanded = ref(false)
+
+// Celebration state
+const celebrationVisible = ref(false)
+const celebrationTaskCount = ref(0)
+const celebrationStarsEarned = ref(0)
+const celebrationTaskIds = ref<string[]>([])
 
 const themeOptions = computed(() => [
   { value: 'system' as const, label: t('home.themeSystem') },
@@ -276,6 +292,21 @@ function fetchChildMonth(year: number, month: number) {
   return getChildCalendar(year, month)
 }
 
+function triggerCelebration(tasks: ChoreInstance[]) {
+  if (tasks.length === 0) return
+  celebrationTaskCount.value = tasks.length
+  celebrationStarsEarned.value = tasks.reduce((sum, t) => sum + (t.coin_reward ?? 0) + (t.streak_bonus ?? 0), 0)
+  celebrationTaskIds.value = tasks.map((t) => t.id)
+  celebrationVisible.value = true
+}
+
+function onCelebrationDismiss() {
+  celebrationVisible.value = false
+  if (celebrationTaskIds.value.length > 0) {
+    markCelebrated(celebrationTaskIds.value)
+  }
+}
+
 onMounted(async () => {
   const [bal, chores, wishData] = await Promise.all([
     getCoinBalance().catch(() => 0),
@@ -287,6 +318,12 @@ onMounted(async () => {
   loadingChores.value = false
   const active = wishData?.active ?? []
   topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
+
+  // Check for pending celebrations after data loads
+  const pending = findPendingCelebrations(chores)
+  if (pending.length > 0) {
+    triggerCelebration(pending)
+  }
 })
 </script>
 

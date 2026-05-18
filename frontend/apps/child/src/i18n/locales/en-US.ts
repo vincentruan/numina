@@ -288,4 +288,18 @@ export default {
     dismissBtn: 'Awesome!',
     overlayLabel: 'Achievement Unlocked',
   },
+  celebration: {
+    phrases: [
+      'Awesome!',
+      'Great job!',
+      'Amazing!',
+      'Keep it up!',
+      'Well done!',
+      'You\'re amazing!',
+      'Go, go, go!',
+    ],
+    singleTask: 'Earned {stars} ⭐!',
+    multipleTasks: '{count} tasks approved! Earned {stars} ⭐',
+    overlayLabel: 'Task approval celebration',
+  },
 }

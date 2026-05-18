@@ -154,6 +154,14 @@
         {{ t('blindBox.autoTriggeredClose') }}
       </button>
     </div>
+
+    <!-- Celebration animation -->
+    <CelebrationAnimation
+      :visible="celebrationVisible"
+      :task-count="celebrationTaskCount"
+      :stars-earned="celebrationStarsEarned"
+      @dismiss="onCelebrationDismiss"
+    />
   </div>
 </template>
 
@@ -167,10 +175,12 @@ import { getMyMilestones } from '@/api/milestones'
 import { getCoinBalance } from '@/api/coins'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
+import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import { childBlindBoxApi } from '@/api/blindBox'
 import type { BlindBoxDraw } from '@/types/blindBox'
 import http from '@/api/index'
+import { findPendingCelebrations, markCelebrated } from '@/utils/celebrationState'
 
 const { t, locale } = useI18n()
 
@@ -191,6 +201,12 @@ const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
+
+// Celebration state
+const celebrationVisible = ref(false)
+const celebrationTaskCount = ref(0)
+const celebrationStarsEarned = ref(0)
+const celebrationTaskIds = ref<string[]>([])
 let pollCancelled = false
 
 const selectedDate = ref(new Date())
@@ -403,7 +419,28 @@ onMounted(async () => {
   } catch {
     // non-blocking
   }
+
+  // Check for pending celebrations after data loads
+  const pending = findPendingCelebrations(chores.value)
+  if (pending.length > 0) {
+    triggerCelebration(pending)
+  }
 })
+
+function triggerCelebration(tasks: ChoreInstance[]) {
+  if (tasks.length === 0) return
+  celebrationTaskCount.value = tasks.length
+  celebrationStarsEarned.value = tasks.reduce((sum, t) => sum + (t.coin_reward ?? 0) + (t.streak_bonus ?? 0), 0)
+  celebrationTaskIds.value = tasks.map((t) => t.id)
+  celebrationVisible.value = true
+}
+
+function onCelebrationDismiss() {
+  celebrationVisible.value = false
+  if (celebrationTaskIds.value.length > 0) {
+    markCelebrated(celebrationTaskIds.value)
+  }
+}
 
 onUnmounted(() => {
   pollCancelled = true
