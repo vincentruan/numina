@@ -66,7 +66,7 @@
     </template>
 
     <!-- Approve dialog -->
-    <div v-if="approveTarget" class="dialog-overlay" @click.self="approveTarget = null" @keydown.escape="approveTarget = null">
+    <div v-if="approveTarget" class="dialog-overlay" tabindex="-1" autofocus @click.self="approveTarget = null" @keydown.escape="approveTarget = null">
       <div class="dialog" role="dialog" aria-modal="true">
         <h3 class="dialog-title"><van-icon name="passed" size="20" color="#28a745" /> {{ t('wishReview.dialog.approveTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.approveDesc', { name: approveTarget.name }) }}</p>
@@ -83,7 +83,7 @@
     </div>
 
     <!-- Reject dialog -->
-    <div v-if="rejectTarget" class="dialog-overlay" @click.self="rejectTarget = null" @keydown.escape="rejectTarget = null">
+    <div v-if="rejectTarget" class="dialog-overlay" tabindex="-1" autofocus @click.self="rejectTarget = null" @keydown.escape="rejectTarget = null">
       <div class="dialog" role="dialog" aria-modal="true">
         <h3 class="dialog-title"><van-icon name="close" size="20" color="#dc3545" /> {{ t('wishReview.dialog.rejectTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.rejectDesc', { name: rejectTarget.name }) }}</p>
@@ -97,7 +97,7 @@
     </div>
 
     <!-- Realize dialog -->
-    <div v-if="realizeTarget" class="dialog-overlay" @click.self="realizeTarget = null" @keydown.escape="realizeTarget = null">
+    <div v-if="realizeTarget" class="dialog-overlay" tabindex="-1" autofocus @click.self="realizeTarget = null" @keydown.escape="realizeTarget = null">
       <div class="dialog" role="dialog" aria-modal="true">
         <h3>{{ t('wishReview.dialog.realizeTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.realizeDesc', { name: realizeTarget.name, cost: realizeTarget.star_coin_cost }) }}</p>

@@ -39,7 +39,7 @@
         v-model="form.name"
         label="名称"
         placeholder="请输入资产名称"
-        :rules="[{ required: true, message: '请输入名称' }]"
+        :rules="[{ required: true, message: t('assetForm.nameRequired') }]"
         @blur="onNameBlur"
       >
         <template v-if="aiSuggesting" #right-icon>
@@ -54,7 +54,7 @@
         readonly
         label="分类"
         placeholder="请选择分类"
-        :rules="[{ required: true, message: '请选择分类' }]"
+        :rules="[{ required: true, message: t('assetForm.categoryRequired') }]"
         @click="showCategoryPicker = true"
       />
       <van-popup v-model:show="showCategoryPicker" position="bottom" round>
@@ -82,7 +82,7 @@
         type="number" inputmode="decimal"
         label="购入价格"
         placeholder="请输入购入价格"
-        :rules="[{ required: true, message: '请输入购入价格' }]"
+        :rules="[{ required: true, message: t('assetForm.purchasePriceRequired') }]"
       >
         <template #left-icon>
           <CurrencyButton v-model="form.currency" />
@@ -95,7 +95,7 @@
         type="number" inputmode="decimal"
         label="当前价值"
         placeholder="请输入当前价值"
-        :rules="[{ required: true, message: '请输入当前价值' }]"
+        :rules="[{ required: true, message: t('assetForm.currentValueRequired') }]"
       >
         <template #left-icon>
           <span class="field-prefix">{{ currencySymbol }}</span>
@@ -118,7 +118,7 @@
         readonly
         label="购入日期"
         placeholder="选择日期"
-        :rules="[{ required: true, message: '请选择购入日期' }]"
+        :rules="[{ required: true, message: t('assetForm.purchaseDateRequired') }]"
         @click="showDatePicker = true"
       />
       <van-popup v-model:show="showDatePicker" position="bottom" round>
@@ -251,6 +251,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Asset, Category, Tag } from '@/types'
 import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
@@ -261,6 +262,8 @@ import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
 import { getIconId } from '@/utils/icon'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
