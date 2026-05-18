@@ -138,6 +138,9 @@ async function onRefresh() {
 }
 
 async function onToggle(template: ChoreTemplate) {
+  // Prevent toggle while another is in progress
+  if (togglingId.value) return
+
   togglingId.value = template.id
   // Optimistic update
   const prevActive = template.is_active

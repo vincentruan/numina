@@ -110,10 +110,18 @@ async function loadData() {
   loading.value = true
   try {
     await familyStore.fetchFamily()
+  } catch {
+    showToast(t('toast.loadFailed'))
+    router.back()
+    loading.value = false
+    return
+  }
+
+  try {
     const templates = await listChoreTemplates()
     const found = templates.find(t => t.id === templateId.value)
     if (!found) {
-      showToast(t('toast.loadFailed'))
+      showToast(t('choreTemplate.listEmpty'))
       router.back()
       return
     }
