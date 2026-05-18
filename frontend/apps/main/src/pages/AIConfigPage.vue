@@ -249,8 +249,12 @@ async function onDragEnd() {
 // ── Actions ───────────────────────────────────────────────────────────────────
 
 async function onCopyKey(cfg: ProviderConfig) {
-  const text = revealedKeys.value[cfg.id] || cfg.ai_api_key_masked || ''
   try {
+    let text = revealedKeys.value[cfg.id]
+    if (!text) {
+      const res = await aiApi.revealAIKey(cfg.id)
+      text = res.data.api_key
+    }
     await navigator.clipboard.writeText(text)
     showToast(t('toast.copied'))
   } catch {

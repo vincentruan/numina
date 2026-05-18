@@ -231,8 +231,13 @@ function loadConfig(cfg: ProviderConfig) {
 }
 
 async function onCopyKey() {
-  const text = revealedKey.value || maskedKey.value || ''
   try {
+    let text = revealedKey.value
+    if (!text && configId.value) {
+      const res = await aiApi.revealAIKey(configId.value)
+      text = res.data.api_key
+    }
+    if (!text) return
     await navigator.clipboard.writeText(text)
     showToast(t('toast.copied'))
   } catch {
