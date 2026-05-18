@@ -243,7 +243,7 @@
 
     <div class="form-actions">
       <van-button round block type="primary" native-type="submit" :loading="loading">
-        {{ isEdit ? '保存修改' : '添加资产' }}
+        {{ isEdit ? t('asset.editAsset') : t('asset.addAsset') }}
       </van-button>
     </div>
   </van-form>
@@ -498,14 +498,14 @@ const datePickerValue = ref([
 const maturityPickerValue = ref([...datePickerValue.value])
 const warrantyPickerValue = ref([...datePickerValue.value])
 
-const statusColumns = [
-  { text: '服役中', value: 'in_use' },
-  { text: '闲置', value: 'idle' },
-  { text: '已出售', value: 'sold' },
-  { text: '已退役', value: 'retired' }
-]
+const statusColumns = computed(() => [
+  { text: t('asset.inUse'), value: 'in_use' },
+  { text: t('asset.idle'), value: 'idle' },
+  { text: t('asset.sold'), value: 'sold' },
+  { text: t('asset.retired'), value: 'retired' }
+])
 const statusDisplayMap: Record<string, string> = {
-  in_use: '服役中', idle: '闲置', sold: '已出售', retired: '已退役'
+  in_use: t('asset.inUse'), idle: t('asset.idle'), sold: t('asset.sold'), retired: t('asset.retired')
 }
 const statusDisplay = computed(() => statusDisplayMap[form.value.status] || '')
 
@@ -541,7 +541,7 @@ async function afterRead(file: { file: File; url?: string; content?: string; sta
     form.value.image_url = res.data.url
   } catch {
     file.status = 'failed'
-    file.message = '上传失败'
+    file.message = t('assetForm.uploadFailed')
   }
 }
 

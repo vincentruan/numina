@@ -208,6 +208,7 @@ export default {
     nameRequired: '⚠️ 请输入名称',
     purchasePriceRequired: '⚠️ 请输入购入价格',
     currentValueRequired: '⚠️ 请输入当前价值',
+    uploadFailed: '❌ 上传失败',
   },
   assetSell: {
     pageTitle: '出售资产',
@@ -790,6 +791,15 @@ export default {
       passwordMismatch: '⚠️ 两次密码不一致',
     },
   },
+  captcha: {
+    label: '点击验证',
+    labelVerified: '验证通过',
+    labelVerifying: '验证中...',
+    labelLoading: '加载中...',
+    error: '验证失败，请重试',
+    loadFailed: '验证组件加载失败，请刷新页面重试',
+    expired: '验证码已过期，请重新验证',
+  },
   currency: {
     searchPlaceholder: '搜索币种名称或代码',
     favorites: '常用货币',
@@ -1141,6 +1151,12 @@ export default {
     expiringSoonEmpty: '暂无即将到期资产',
     smartRemindersEmpty: '暂无智能提醒',
     dismiss: '忽略',
+    expiredDays: '已过期 {days} 天',
+    dueToday: '今天到期',
+    dueInDays: '{days} 天后到期',
+    dueInMonths: '{months} 个月后到期',
+    financialExpiryHint: '💡 金融资产到期建议关注，及时续期或转存',
+    physicalExpiryHint: '💡 实物资产到期是正常生命周期，可按需更换',
     types: {
       large_purchase: '大额消费',
       allocation_drift: '配置失衡',
