@@ -1,6 +1,6 @@
 <template>
   <div class="asset-form-page">
-    <PageHeader :title="isEdit ? '编辑资产' : '添加资产'" />
+    <PageHeader :title="isEdit ? t('asset.editAsset') : t('asset.addAsset')" />
     <AssetForm
       :initial-data="initialData"
       :categories="categoryStore.categories"

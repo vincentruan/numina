@@ -193,7 +193,7 @@ const categoryChips = computed(() => {
   const filtered = type
     ? categoryStore.categories.filter(c => c.asset_type === type)
     : categoryStore.categories
-  return [{ id: '' as string, icon: '', name: '全部' }, ...filtered]
+  return [{ id: '' as string, icon: '', name: t('asset.all') }, ...filtered]
 })
 
 function onCategoryChipClick(id: string) {

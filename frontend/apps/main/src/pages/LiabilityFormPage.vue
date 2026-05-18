@@ -1,6 +1,6 @@
 <template>
   <div class="liability-form-page">
-    <PageHeader :title="isEdit ? '编辑负债' : '添加负债'" />
+    <PageHeader :title="isEdit ? t('liability.editLiability') : t('liability.addLiability')" />
     <LiabilityForm
       :initial-data="initialData"
       :is-edit="isEdit"
