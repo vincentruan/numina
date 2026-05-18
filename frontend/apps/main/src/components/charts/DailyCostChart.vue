@@ -13,6 +13,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -21,6 +22,8 @@ import { CanvasRenderer } from 'echarts/renderers'
 import type { CallbackDataParams } from 'echarts/types/dist/shared'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, MarkLineComponent])
+
+const { t } = useI18n()
 
 const props = defineProps<{
   purchasePrice: number
@@ -73,7 +76,7 @@ const chartOption = computed(() => {
   // Add current point
   if (totalDays > 0) {
     points.push({
-      date: '今天',
+      date: t('common.today'),
       cost: Math.round((props.purchasePrice / totalDays) * 100) / 100
     })
   }
@@ -95,7 +98,7 @@ const chartOption = computed(() => {
     const futureDays = Math.floor((futureDate.getTime() - purchase.getTime()) / (1000 * 60 * 60 * 24))
     if (futureDays > 0) {
       points.push({
-        date: `+${m}月`,
+        date: t('common.monthsSuffix', { months: m }),
         cost: Math.round((props.purchasePrice / futureDays) * 100) / 100
       })
     }

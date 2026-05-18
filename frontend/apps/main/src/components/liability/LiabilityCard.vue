@@ -121,9 +121,9 @@ const repaidPercent = computed(() => {
 })
 
 function formatAmountDisplay(amount: number): string {
-  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + '亿'
-  if (amount >= 10000) return (amount / 10000).toFixed(1) + '万'
-  if (amount >= 1000) return (amount / 1000).toFixed(1) + 'k'
+  if (amount >= 100000000) return (amount / 100000000).toFixed(2) + t('common.unitHundredMillion')
+  if (amount >= 10000) return (amount / 10000).toFixed(1) + t('common.unitTenThousand')
+  if (amount >= 1000) return (amount / 1000).toFixed(1) + t('common.unitThousand')
   return amount.toLocaleString('zh-CN')
 }
 

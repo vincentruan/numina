@@ -68,10 +68,10 @@
 
         <!-- Right: label text -->
         <div class="captcha-label">
-          <span v-if="state === 'idle'" class="captcha-label__text" @click="triggerVerification">点击验证</span>
-          <span v-else-if="state === 'verifying'" class="captcha-label__text captcha-label__text--muted">验证中...</span>
-          <span v-else-if="state === 'verified'" class="captcha-label__text captcha-label__text--success">验证通过</span>
-          <span v-else-if="state === 'error'" class="captcha-label__text captcha-label__text--error">验证失败，点击重试</span>
+          <span v-if="state === 'idle'" class="captcha-label__text" @click="triggerVerification">{{ t('captcha.label') }}</span>
+          <span v-else-if="state === 'verifying'" class="captcha-label__text captcha-label__text--muted">{{ t('captcha.labelVerifying') }}</span>
+          <span v-else-if="state === 'verified'" class="captcha-label__text captcha-label__text--success">{{ t('captcha.labelVerified') }}</span>
+          <span v-else-if="state === 'error'" class="captcha-label__text captcha-label__text--error">{{ t('captcha.error') }}</span>
         </div>
 
         <!-- Altcha branding (minimal) -->
@@ -94,6 +94,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue?: string
@@ -114,6 +117,13 @@ const state = ref<CaptchaState>('idle')
 const widgetHtml = computed(() => {
   if (!isMounted.value) return ''
   const endpointParam = props.endpoint ? `?endpoint=${props.endpoint}` : ''
+  const strings = JSON.stringify({
+    label: t('captcha.label'),
+    labelVerified: t('captcha.labelVerified'),
+    labelVerifying: t('captcha.labelVerifying'),
+    labelLoading: t('captcha.labelLoading'),
+    error: t('captcha.error')
+  })
   return `
     <altcha-widget
       challengeurl="/api/v1/captcha/challenge${endpointParam}"
@@ -122,7 +132,7 @@ const widgetHtml = computed(() => {
       hidefooter
       auto="onload"
       tabindex="-1"
-      strings='{"label":"点击验证","labelVerified":"验证通过","labelVerifying":"验证中...","labelLoading":"加载中...","error":"验证失败，请重试"}'
+      strings='${strings}'
     ></altcha-widget>
   `
 })
@@ -149,7 +159,7 @@ const setupWidgetListeners = (retries = 0) => {
     } else {
       // altcha script failed to load — treat as error so user sees feedback
       state.value = 'error'
-      errorMessage.value = '验证组件加载失败，请刷新页面重试'
+      errorMessage.value = t('captcha.loadFailed')
     }
     return
   }
@@ -172,7 +182,7 @@ const setupWidgetListeners = (retries = 0) => {
       }, 50)
     } else if (s === 'ERROR' || s === 'EXPIRED') {
       state.value = 'error'
-      errorMessage.value = s === 'EXPIRED' ? '验证码已过期，请重新验证' : '验证失败，请重试'
+      errorMessage.value = s === 'EXPIRED' ? t('captcha.expired') : t('captcha.error')
     } else if (s === 'UNVERIFIED') {
       state.value = 'idle'
     }

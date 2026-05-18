@@ -33,11 +33,11 @@
 
       <div class="numpad">
         <button
-          v-for="n in [1,2,3,4,5,6,7,8,9,'清空',0,'⌫']"
+          v-for="n in [1,2,3,4,5,6,7,8,9,t('secondFactor.numpadClear'),0,t('secondFactor.numpadDelete')]"
           :key="n"
           class="numpad-btn"
           :class="{
-            'numpad-action': n === '清空' || n === '⌫',
+            'numpad-action': n === t('secondFactor.numpadClear') || n === t('secondFactor.numpadDelete'),
             flash: flashKey === n,
           }"
           :disabled="saving"
@@ -120,13 +120,13 @@ function onNumpadPress(key: number | string) {
   setTimeout(() => { flashKey.value = null }, 150)
   errorMsg.value = ''
 
-  if (key === '⌫') {
+  if (key === t('secondFactor.numpadDelete') || key === '⌫') {
     if (step.value === 'old') oldPin.value = oldPin.value.slice(0, -1)
     else if (step.value === 'new') newPin.value = newPin.value.slice(0, -1)
     else confirmPin.value = confirmPin.value.slice(0, -1)
     return
   }
-  if (key === '清空') {
+  if (key === t('secondFactor.numpadClear')) {
     if (step.value === 'old') oldPin.value = ''
     else if (step.value === 'new') newPin.value = ''
     else confirmPin.value = ''

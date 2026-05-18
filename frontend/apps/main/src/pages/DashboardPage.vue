@@ -183,14 +183,6 @@
               <van-icon name="delete-o" size="18" />
               <span>{{ t('dashboard.actionDelete') }}</span>
             </button>
-            <button class="action-btn" @click="handleBatchCategory">
-              <van-icon name="apps-o" size="18" />
-              <span>{{ t('dashboard.actionCategory') }}</span>
-            </button>
-            <button class="action-btn" @click="handleBatchTag">
-              <van-icon name="label-o" size="18" />
-              <span>{{ t('dashboard.actionTag') }}</span>
-            </button>
             <button class="action-btn" @click="showMoreActions = true">
               <van-icon name="ellipsis" size="18" />
               <span>{{ t('dashboard.actionMore') }}</span>
@@ -516,23 +508,6 @@ async function handleBatchDelete() {
   } catch {
     // User cancelled
   }
-}
-
-async function handleBatchCategory() {
-  if (selectedIds.value.length === 0) {
-    showToast(t('toast.assetSelectFirst'))
-    return
-  }
-  // Show category picker - simplified version
-  showToast(t('toast.assetEditCategoryHint'))
-}
-
-async function handleBatchTag() {
-  if (selectedIds.value.length === 0) {
-    showToast(t('toast.assetSelectFirst'))
-    return
-  }
-  showToast(t('toast.assetEditTagHint'))
 }
 
 async function onMoreActionSelect(action: { value: string }) {

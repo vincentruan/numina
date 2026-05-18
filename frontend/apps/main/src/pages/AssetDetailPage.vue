@@ -1,6 +1,6 @@
 <template>
   <div class="asset-detail-page">
-    <PageHeader title="资产详情" />
+    <PageHeader :title="t('assetDetail.pageTitle')" />
 
     <template v-if="asset">
       <!-- Hero Card -->
@@ -19,16 +19,16 @@
           </div>
           <div class="hero-info">
             <div class="hero-name">{{ asset.name }}</div>
-            <div class="hero-category">{{ asset.category?.name || '未分类' }}</div>
+            <div class="hero-category">{{ asset.category?.name || t('asset.uncategorized') }}</div>
             <div class="hero-usage">
-              <span v-if="daysUsed > 0" class="usage-badge">已使用 {{ daysUsed }} 天</span>
-              <span v-if="asset.expected_lifespan_days" class="usage-badge lifespan">预计 {{ asset.expected_lifespan_days }} 天</span>
+              <span v-if="daysUsed > 0" class="usage-badge">{{ t('asset.daysUsed', { days: daysUsed }) }}</span>
+              <span v-if="asset.expected_lifespan_days" class="usage-badge lifespan">{{ t('asset.expectedLifespan', { days: asset.expected_lifespan_days }) }}</span>
             </div>
           </div>
         </div>
         <div class="hero-values">
           <div class="hero-value-item">
-            <div class="hero-value-label">{{ asset.status === 'sold' ? '出售价格' : '当前价值' }}</div>
+            <div class="hero-value-label">{{ asset.status === 'sold' ? t('assetDetail.sellPrice') : t('asset.currentValue') }}</div>
             <MoneyDisplay
             :amount="asset.status === 'sold' ? (asset.sell_price || 0) : (asset.current_value || 0)"
             size="large"
@@ -37,7 +37,7 @@
           />
           </div>
           <div class="hero-value-item">
-            <div class="hero-value-label">购入价格</div>
+            <div class="hero-value-label">{{ t('asset.purchasePrice') }}</div>
             <MoneyDisplay
               :amount="asset.purchase_price"
               :source-currency="asset.currency"
@@ -45,7 +45,7 @@
             />
           </div>
           <div v-if="asset.daily_cost != null && asset.daily_cost > 0" class="hero-value-item">
-            <div class="hero-value-label">日均成本</div>
+            <div class="hero-value-label">{{ t('asset.dailyCostLabel') }}</div>
             <div class="hero-daily-cost">¥{{ asset.daily_cost.toFixed(2) }}</div>
           </div>
         </div>
@@ -53,7 +53,7 @@
           {{ returnText }}
         </div>
         <div v-if="asset.status === 'sold'" class="sell-summary">
-          净回收 ¥{{ (asset.sell_price! - (asset.sell_fee || 0)).toLocaleString() }}
+          {{ t('assetDetail.netRecovery', { amount: (asset.sell_price! - (asset.sell_fee || 0)).toLocaleString() }) }}
           <span v-if="asset.sell_date"> · {{ asset.sell_date }}</span>
         </div>
       </div>
@@ -67,17 +67,17 @@
       />
 
       <!-- Basic Info -->
-      <van-cell-group inset title="基本信息">
-        <van-cell title="名称" :value="asset.name" />
-        <van-cell title="类型" :value="typeText" />
-        <van-cell title="分类" :value="asset.category?.name || '未分类'">
+      <van-cell-group inset :title="t('assetDetail.sectionBasicInfo')">
+        <van-cell :title="t('assetDetail.fieldName')" :value="asset.name" />
+        <van-cell :title="t('assetDetail.fieldType')" :value="typeText" />
+        <van-cell :title="t('assetDetail.fieldCategory')" :value="asset.category?.name || t('asset.uncategorized')">
           <template #icon>
             <svg class="cat-icon-svg" aria-hidden="true">
               <use :href="`#${getIconId(asset.category?.icon)}`" />
             </svg>
           </template>
         </van-cell>
-        <van-cell title="购入价格">
+        <van-cell :title="t('assetDetail.fieldPurchasePrice')">
           <template #value>
             <MoneyDisplay
               :amount="asset.purchase_price"
@@ -86,8 +86,8 @@
             />
           </template>
         </van-cell>
-        <van-cell title="购入日期" :value="asset.purchase_date" />
-        <van-cell title="状态">
+        <van-cell :title="t('assetDetail.fieldPurchaseDate')" :value="asset.purchase_date" />
+        <van-cell :title="t('assetDetail.fieldStatus')">
           <template #value>
             <van-tag :type="statusType">{{ statusText }}</van-tag>
           </template>
@@ -95,31 +95,31 @@
       </van-cell-group>
 
       <!-- Physical Info -->
-      <van-cell-group v-if="asset.asset_type === 'physical'" inset title="实物信息">
-        <van-cell v-if="asset.location" title="存放位置" :value="asset.location" />
-        <van-cell v-if="asset.expected_lifespan_days" title="预期寿命" :value="`${asset.expected_lifespan_days} 天`" />
-        <van-cell v-if="asset.annual_maintenance_cost" title="年维护费">
+      <van-cell-group v-if="asset.asset_type === 'physical'" inset :title="t('assetDetail.sectionPhysicalInfo')">
+        <van-cell v-if="asset.location" :title="t('assetDetail.fieldLocation')" :value="asset.location" />
+        <van-cell v-if="asset.expected_lifespan_days" :title="t('assetDetail.fieldExpectedLifespan')" :value="t('assetDetail.lifespanDays', { days: asset.expected_lifespan_days })" />
+        <van-cell v-if="asset.annual_maintenance_cost" :title="t('assetDetail.fieldAnnualMaintenance')">
           <template #value><MoneyDisplay :amount="asset.annual_maintenance_cost" /></template>
         </van-cell>
-        <van-cell v-if="asset.usage_frequency" title="使用频率" :value="usageText" />
-        <van-cell v-if="asset.daily_cost" title="日耗">
+        <van-cell v-if="asset.usage_frequency" :title="t('assetDetail.fieldUsageFrequency')" :value="usageText" />
+        <van-cell v-if="asset.daily_cost" :title="t('assetDetail.fieldDailyCost')">
           <template #value>
-            <span class="daily-cost">¥{{ asset.daily_cost.toFixed(2) }}/天</span>
+            <span class="daily-cost">¥{{ asset.daily_cost.toFixed(2) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
-        <van-cell v-if="asset.target_daily_cost" title="目标日耗">
+        <van-cell v-if="asset.target_daily_cost" :title="t('assetDetail.fieldTargetDailyCost')">
           <template #value>
-            <span class="target-cost">¥{{ asset.target_daily_cost.toFixed(2) }}/天</span>
+            <span class="target-cost">¥{{ asset.target_daily_cost.toFixed(2) }}{{ t('assetDetail.perDay') }}</span>
           </template>
         </van-cell>
       </van-cell-group>
 
       <!-- Financial Info -->
-      <van-cell-group v-if="asset.asset_type === 'financial'" inset title="金融信息">
-        <van-cell v-if="asset.institution" title="金融机构" :value="asset.institution" />
-        <van-cell v-if="asset.interest_rate" title="利率" :value="`${asset.interest_rate}%`" />
-        <van-cell v-if="asset.maturity_date" title="到期日期" :value="asset.maturity_date" />
-        <van-cell v-if="asset.return_rate !== undefined" title="收益率">
+      <van-cell-group v-if="asset.asset_type === 'financial'" inset :title="t('assetDetail.sectionFinancialInfo')">
+        <van-cell v-if="asset.institution" :title="t('assetDetail.fieldInstitution')" :value="asset.institution" />
+        <van-cell v-if="asset.interest_rate" :title="t('assetDetail.fieldInterestRate')" :value="`${asset.interest_rate}%`" />
+        <van-cell v-if="asset.maturity_date" :title="t('assetDetail.fieldMaturityDate')" :value="asset.maturity_date" />
+        <van-cell v-if="asset.return_rate !== undefined" :title="t('assetDetail.fieldReturnRate')">
           <template #value>
             <span :class="(asset.return_rate || 0) >= 0 ? 'positive' : 'negative'">
               {{ (asset.return_rate || 0) >= 0 ? '+' : '' }}{{ (asset.return_rate || 0).toFixed(2) }}%
@@ -129,19 +129,19 @@
       </van-cell-group>
 
       <!-- Sell Info (when sold) -->
-      <van-cell-group v-if="asset.status === 'sold'" inset title="出售信息">
-        <van-cell title="出售价格">
+      <van-cell-group v-if="asset.status === 'sold'" inset :title="t('assetDetail.sectionSellInfo')">
+        <van-cell :title="t('assetDetail.fieldSellPrice')">
           <template #value><MoneyDisplay :amount="asset.sell_price || 0" /></template>
         </van-cell>
-        <van-cell v-if="asset.sell_fee" title="手续费">
+        <van-cell v-if="asset.sell_fee" :title="t('assetDetail.fieldSellFee')">
           <template #value><MoneyDisplay :amount="asset.sell_fee" /></template>
         </van-cell>
-        <van-cell v-if="asset.sell_channel" title="出售渠道" :value="asset.sell_channel" />
-        <van-cell v-if="asset.sell_date" title="出售日期" :value="asset.sell_date" />
+        <van-cell v-if="asset.sell_channel" :title="t('assetDetail.fieldSellChannel')" :value="asset.sell_channel" />
+        <van-cell v-if="asset.sell_date" :title="t('assetDetail.fieldSellDate')" :value="asset.sell_date" />
       </van-cell-group>
 
       <!-- Tags -->
-      <van-cell-group v-if="asset.tags?.length" inset title="标签">
+      <van-cell-group v-if="asset.tags?.length" inset :title="t('assetDetail.sectionTags')">
         <van-cell>
           <template #value>
             <div class="tags">
@@ -154,12 +154,12 @@
       </van-cell-group>
 
       <!-- Notes -->
-      <van-cell-group v-if="asset.notes" inset title="备注">
+      <van-cell-group v-if="asset.notes" inset :title="t('assetDetail.sectionNotes')">
         <van-cell :title="asset.notes" />
       </van-cell-group>
 
       <!-- Valuation History -->
-      <van-cell-group v-if="valuations.length" inset title="估值历史">
+      <van-cell-group v-if="valuations.length" inset :title="t('assetDetail.sectionValuationHistory')">
         <van-cell
           v-for="v in valuations"
           :key="v.id"
@@ -178,30 +178,30 @@
       <div class="actions">
         <template v-if="asset.status === 'in_use' || asset.status === 'idle'">
           <van-button block type="primary" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
-            编辑
+            {{ t('assetDetail.btnEdit') }}
           </van-button>
           <van-button block type="warning" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/sell`)">
-            出售资产
+            {{ t('assetDetail.btnSell') }}
           </van-button>
           <van-button block type="default" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onRetire">
-            报废/退役
+            {{ t('assetDetail.btnRetire') }}
           </van-button>
         </template>
         <template v-else-if="asset.status === 'retired'">
           <van-button block type="success" plain :loading="acting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : onReactivate">
-            恢复服役
+            {{ t('assetDetail.btnReactivate') }}
           </van-button>
           <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
-            编辑
+            {{ t('assetDetail.btnEdit') }}
           </van-button>
         </template>
         <template v-else-if="asset.status === 'sold'">
           <van-button block type="primary" plain :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" @click="syncing ? null : $router.push(`/assets/${asset.id}/edit`)">
-            编辑
+            {{ t('assetDetail.btnEdit') }}
           </van-button>
         </template>
         <van-button block type="danger" plain :loading="deleting" :disabled="syncing" :aria-disabled="syncing ? 'true' : undefined" class="delete-btn" @click="syncing ? null : onDelete">
-          删除
+          {{ t('assetDetail.btnDelete') }}
         </van-button>
       </div>
     </template>
@@ -259,23 +259,44 @@ const daysUsed = computed(() => {
   return diff > 0 ? diff : 0
 })
 
-const statusMap: Record<string, { text: string; type: 'primary' | 'success' | 'warning' | 'danger' | 'default' }> = {
-  in_use: { text: '服役中', type: 'success' },
-  idle: { text: '闲置', type: 'warning' },
-  sold: { text: '已出售', type: 'default' },
-  retired: { text: '已退役', type: 'danger' }
-}
+const statusText = computed(() => {
+  const status = asset.value?.status || ''
+  const map: Record<string, string> = {
+    in_use: t('asset.inUse'),
+    idle: t('asset.idle'),
+    sold: t('asset.sold'),
+    retired: t('asset.retired'),
+  }
+  return map[status] || ''
+})
+const statusType = computed(() => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'default'> = {
+    in_use: 'success',
+    idle: 'warning',
+    sold: 'default',
+    retired: 'danger',
+  }
+  return map[asset.value?.status || ''] || 'default'
+})
 
-const statusText = computed(() => statusMap[asset.value?.status || '']?.text || '')
-const statusType = computed(() => statusMap[asset.value?.status || '']?.type || 'default')
+const typeText = computed(() => {
+  const map: Record<string, string> = {
+    physical: t('asset.typePhysical'),
+    financial: t('asset.typeFinancial'),
+  }
+  return map[asset.value?.asset_type || ''] || ''
+})
 
-const typeMap: Record<string, string> = { physical: '实物资产', financial: '金融资产' }
-const typeText = computed(() => typeMap[asset.value?.asset_type || ''] || '')
-
-const usageMap: Record<string, string> = {
-  daily: '每天', weekly: '每周', monthly: '每月', rarely: '很少', idle: '闲置'
-}
-const usageText = computed(() => usageMap[asset.value?.usage_frequency || ''] || '')
+const usageText = computed(() => {
+  const map: Record<string, string> = {
+    daily: t('asset.usageDaily'),
+    weekly: t('asset.usageWeekly'),
+    monthly: t('asset.usageMonthly'),
+    rarely: t('asset.usageRarely'),
+    idle: t('asset.usageIdle'),
+  }
+  return map[asset.value?.usage_frequency || ''] || ''
+})
 
 const returnClass = computed(() => {
   const rate = asset.value?.return_rate || 0
@@ -332,7 +353,7 @@ async function onDelete() {
     deleting.value = true
     await assetStore.deleteAsset(asset.value!.id)
     showToast(t('toast.deleteSuccess'))
-    router.back()
+    router.replace('/')
   } catch {
     // cancelled
   } finally {

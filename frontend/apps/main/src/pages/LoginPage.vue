@@ -164,7 +164,7 @@ d="M 39,12 C 55,0 90,-4 130,-1 C 170,2 205,-2 225,10 C 240,18 244,34 238,46 C 23
           </div>
         </div>
         <p v-else class="pin-username">{{ form.username }}</p>
-        <p class="pin-hint">{{ secondFactorType === 'emoji_pin' ? '请输入图形密码完成验证' : '请输入数字 PIN 码完成验证' }}</p>
+        <p class="pin-hint">{{ secondFactorType === 'emoji_pin' ? t('secondFactor.emojiPinHint') : t('secondFactor.digitalPinHint') }}</p>
 
         <!-- Numeric PIN mode -->
         <div v-if="secondFactorType !== 'emoji_pin'" class="pin-display" :class="{ shake: shaking }">
@@ -181,12 +181,12 @@ d="M 39,12 C 55,0 90,-4 130,-1 C 170,2 205,-2 225,10 C 240,18 244,34 238,46 C 23
         <!-- Numeric keypad -->
         <div v-if="secondFactorType !== 'emoji_pin'" class="numpad">
           <button
-            v-for="n in [1,2,3,4,5,6,7,8,9,'清空',0,'⌫']"
+            v-for="n in [1,2,3,4,5,6,7,8,9,t('secondFactor.numpadClear'),0,t('secondFactor.numpadDelete')]"
             :key="n"
             class="numpad-btn"
             :class="{
-              'numpad-action': n === '清空' || n === '⌫',
-              'numpad-action--delete': n === '⌫',
+              'numpad-action': n === t('secondFactor.numpadClear') || n === t('secondFactor.numpadDelete'),
+              'numpad-action--delete': n === t('secondFactor.numpadDelete'),
               flash: flashKey === n,
             }"
             :disabled="loading"
@@ -376,12 +376,12 @@ function onNumpadPress(key: number | string) {
   flashKey.value = key
   setTimeout(() => { flashKey.value = null }, 150)
 
-  if (key === '⌫') {
+  if (key === t('secondFactor.numpadDelete') || key === '⌫') {
     pinInput.value = pinInput.value.slice(0, -1)
     pinError.value = ''
     return
   }
-  if (key === '清空') {
+  if (key === t('secondFactor.numpadClear')) {
     pinInput.value = ''
     pinError.value = ''
     return

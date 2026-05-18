@@ -39,7 +39,7 @@
         v-model="form.name"
         label="名称"
         placeholder="请输入资产名称"
-        :rules="[{ required: true, message: '请输入名称' }]"
+        :rules="[{ required: true, message: t('assetForm.nameRequired') }]"
         @blur="onNameBlur"
       >
         <template v-if="aiSuggesting" #right-icon>
@@ -54,6 +54,7 @@
         readonly
         label="分类"
         placeholder="请选择分类"
+        :rules="[{ required: true, message: t('assetForm.categoryRequired') }]"
         @click="showCategoryPicker = true"
       />
       <van-popup v-model:show="showCategoryPicker" position="bottom" round>
@@ -81,7 +82,7 @@
         type="number" inputmode="decimal"
         label="购入价格"
         placeholder="请输入购入价格"
-        :rules="[{ required: true, message: '请输入购入价格' }]"
+        :rules="[{ required: true, message: t('assetForm.purchasePriceRequired') }]"
       >
         <template #left-icon>
           <CurrencyButton v-model="form.currency" />
@@ -94,7 +95,7 @@
         type="number" inputmode="decimal"
         label="当前价值"
         placeholder="请输入当前价值"
-        :rules="[{ required: true, message: '请输入当前价值' }]"
+        :rules="[{ required: true, message: t('assetForm.currentValueRequired') }]"
       >
         <template #left-icon>
           <span class="field-prefix">{{ currencySymbol }}</span>
@@ -117,6 +118,7 @@
         readonly
         label="购入日期"
         placeholder="选择日期"
+        :rules="[{ required: true, message: t('assetForm.purchaseDateRequired') }]"
         @click="showDatePicker = true"
       />
       <van-popup v-model:show="showDatePicker" position="bottom" round>
@@ -241,7 +243,7 @@
 
     <div class="form-actions">
       <van-button round block type="primary" native-type="submit" :loading="loading">
-        {{ isEdit ? '保存修改' : '添加资产' }}
+        {{ isEdit ? t('asset.editAsset') : t('asset.addAsset') }}
       </van-button>
     </div>
   </van-form>
@@ -249,6 +251,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { Asset, Category, Tag } from '@/types'
 import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
@@ -259,6 +262,8 @@ import CurrencyButton from '@/components/common/CurrencyButton.vue'
 import UsageFreqSelector from './UsageFreqSelector.vue'
 import TagSelector from './TagSelector.vue'
 import { getIconId } from '@/utils/icon'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   initialData?: Partial<Asset>
@@ -493,14 +498,14 @@ const datePickerValue = ref([
 const maturityPickerValue = ref([...datePickerValue.value])
 const warrantyPickerValue = ref([...datePickerValue.value])
 
-const statusColumns = [
-  { text: '服役中', value: 'in_use' },
-  { text: '闲置', value: 'idle' },
-  { text: '已出售', value: 'sold' },
-  { text: '已退役', value: 'retired' }
-]
+const statusColumns = computed(() => [
+  { text: t('asset.inUse'), value: 'in_use' },
+  { text: t('asset.idle'), value: 'idle' },
+  { text: t('asset.sold'), value: 'sold' },
+  { text: t('asset.retired'), value: 'retired' }
+])
 const statusDisplayMap: Record<string, string> = {
-  in_use: '服役中', idle: '闲置', sold: '已出售', retired: '已退役'
+  in_use: t('asset.inUse'), idle: t('asset.idle'), sold: t('asset.sold'), retired: t('asset.retired')
 }
 const statusDisplay = computed(() => statusDisplayMap[form.value.status] || '')
 
@@ -536,7 +541,7 @@ async function afterRead(file: { file: File; url?: string; content?: string; sta
     form.value.image_url = res.data.url
   } catch {
     file.status = 'failed'
-    file.message = '上传失败'
+    file.message = t('assetForm.uploadFailed')
   }
 }
 
@@ -715,7 +720,7 @@ function onSubmit() {
   fill: currentColor;
 }
 .cat-name {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--van-text-color-2);
   margin-top: 4px;
   text-align: center;

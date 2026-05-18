@@ -44,16 +44,16 @@
     <!-- Selection Mode Bar -->
     <div v-if="selectionMode" class="selection-bar" role="toolbar" aria-label="批量操作工具栏">
       <span class="selection-count" aria-live="polite">
-        已选择 {{ selectedAssets.length }} 项
+        {{ t('dashboard.selectedCount', { count: selectedAssets.length }) }}
       </span>
       <van-button size="small" aria-label="全选" @click="selectAll">
-        {{ isAllSelected ? '取消全选' : '全选' }}
+        {{ isAllSelected ? t('currency.deselectAll') : t('dashboard.selectAll') }}
       </van-button>
       <van-button size="small" type="danger" :disabled="selectedAssets.length === 0" aria-label="批量删除" @click="confirmBatchDelete">
-        删除
+        {{ t('common.delete') }}
       </van-button>
       <van-button size="small" aria-label="退出选择模式" @click="exitSelectionMode">
-        取消
+        {{ t('common.cancel') }}
       </van-button>
     </div>
 
@@ -193,7 +193,7 @@ const categoryChips = computed(() => {
   const filtered = type
     ? categoryStore.categories.filter(c => c.asset_type === type)
     : categoryStore.categories
-  return [{ id: '' as string, icon: '', name: '全部' }, ...filtered]
+  return [{ id: '' as string, icon: '', name: t('asset.all') }, ...filtered]
 })
 
 function onCategoryChipClick(id: string) {

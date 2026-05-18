@@ -77,7 +77,7 @@
             <div class="item-name">{{ item.name }}</div>
             <div class="item-meta">
               <span class="item-category">{{ item.category_name }}</span>
-              <span class="item-type">{{ item.asset_type === 'financial' ? '金融' : '实物' }}</span>
+              <span class="item-type">{{ item.asset_type === 'financial' ? t('asset.financial') : t('asset.physical') }}</span>
             </div>
           </div>
           <div class="item-remaining" :class="getRemainingClass(item)">
@@ -88,10 +88,10 @@
       
       <div class="sheet-hint">
         <p v-if="hasFinancialExpiring" class="hint-financial">
-          💡 金融资产到期建议关注，及时续期或转存
+          {{ t('reminders.financialExpiryHint') }}
         </p>
         <p v-else class="hint-physical">
-          💡 实物资产到期是正常生命周期，可按需更换
+          {{ t('reminders.physicalExpiryHint') }}
         </p>
       </div>
     </van-popup>
@@ -101,8 +101,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem } from '@/api/dashboard'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   idleAssets: LowUsageItem[]
@@ -146,10 +149,10 @@ function toggleCollapsed() {
 
 function formatRemaining(days: number | null): string {
   if (days === null) return '-'
-  if (days < 0) return `已过期 ${Math.abs(days)} 天`
-  if (days === 0) return '今天到期'
-  if (days < 30) return `${days} 天后到期`
-  return `${Math.round(days / 30)} 个月后到期`
+  if (days < 0) return t('reminders.expiredDays', { days: Math.abs(days) })
+  if (days === 0) return t('reminders.dueToday')
+  if (days < 30) return t('reminders.dueInDays', { days })
+  return t('reminders.dueInMonths', { months: Math.round(days / 30) })
 }
 
 function getRemainingClass(item: ExpiringSoonItem): string {

@@ -23,9 +23,9 @@
             </div>
           </div>
           <div class="card-actions">
-            <button class="btn-approve" :disabled="actioningId === item.id" @click="approve(item.id)">{{ t('chore.btn.approve') }}</button>
-            <button class="btn-redo" :disabled="actioningId === item.id" @click="reject(item.id, true)">{{ t('chore.btn.redo') }}</button>
-            <button class="btn-reject" :disabled="actioningId === item.id" @click="reject(item.id, false)">{{ t('chore.btn.reject') }}</button>
+            <van-button size="small" type="success" :disabled="actioningId === item.id" @click="approve(item.id)">{{ t('chore.btn.approve') }}</van-button>
+            <van-button size="small" type="warning" :disabled="actioningId === item.id" @click="reject(item.id, true)">{{ t('chore.btn.redo') }}</van-button>
+            <van-button size="small" type="danger" :disabled="actioningId === item.id" @click="reject(item.id, false)">{{ t('chore.btn.reject') }}</van-button>
           </div>
         </div>
       </div>
@@ -130,19 +130,10 @@ onMounted(load)
   display: flex;
   gap: 8px;
 }
-.card-actions button {
+.card-actions .van-button {
   flex: 1;
-  padding: 8px 0;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
+  min-height: 44px;
 }
-.btn-approve { background: #28a745; color: #fff; }
-.btn-redo { background: #ffc107; color: #333; }
-.btn-reject { background: #dc3545; color: #fff; }
-.card-actions button:disabled { opacity: 0.5; cursor: not-allowed; }
 .error-msg { background: #f8d7da; color: #721c24; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 14px; }
 .bonus-toast {
   position: fixed;

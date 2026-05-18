@@ -25,9 +25,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import CurrencyPicker from './CurrencyPicker.vue'
 import { useCurrencyStore } from '@/stores/currency'
 import { useAuthStore } from '@/stores/auth'
+
+const { t } = useI18n()
 
 interface CurrencyAmount {
   amount: number | null
@@ -39,8 +42,8 @@ const props = withDefaults(defineProps<{
   label?: string
   placeholder?: string
 }>(), {
-  label: '金额',
-  placeholder: '请输入金额',
+  label: () => t('currency.amountLabel'),
+  placeholder: () => t('currency.amountPlaceholder'),
 })
 
 const emit = defineEmits<{

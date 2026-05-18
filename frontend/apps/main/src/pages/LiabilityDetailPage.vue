@@ -36,7 +36,7 @@
         <van-cell title="状态">
           <template #value>
             <van-tag :type="liability.is_active ? 'primary' : 'success'" size="medium">
-              {{ liability.is_active ? '还款中' : '已结清' }}
+              {{ liability.is_active ? t('liability.active') : t('liability.inactive') }}
             </van-tag>
           </template>
         </van-cell>
@@ -123,11 +123,11 @@ const paymentAmount = ref('')
 const liability = computed(() => liabilityStore.currentLiability)
 
 const categoryMap: Record<string, { text: string; icon: string }> = {
-  mortgage: { text: '房贷', icon: 'icon-mortgage' },
-  car_loan: { text: '车贷', icon: 'icon-car-loan' },
-  credit_card: { text: '信用卡', icon: 'icon-credit-card' },
-  personal_loan: { text: '个人贷款', icon: 'icon-personal-loan' },
-  other: { text: '其他', icon: 'icon-other-liability' }
+  mortgage: { text: t('liability.mortgage'), icon: 'icon-mortgage' },
+  car_loan: { text: t('liability.carLoan'), icon: 'icon-car-loan' },
+  credit_card: { text: t('liability.creditCard'), icon: 'icon-credit-card' },
+  personal_loan: { text: t('liability.personalLoan'), icon: 'icon-personal-loan' },
+  other: { text: t('liability.other'), icon: 'icon-other-liability' }
 }
 
 const categoryText = computed(() => categoryMap[liability.value?.category || '']?.text || '')

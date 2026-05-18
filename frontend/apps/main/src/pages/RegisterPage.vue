@@ -14,43 +14,39 @@
           maxlength="6"
           :formatter="formatInvitationCode"
           format-trigger="onBlur"
-          :rules="[{ required: true, message: '请输入邀请码' }]"
+          :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
         />
         <van-field
           v-model="form.family_name"
           label="家庭名称"
           placeholder="请输入家庭名称"
-          :rules="[{ required: true, message: '请输入家庭名称' }]"
+          :rules="[{ required: true, message: t('auth.form.familyNameRequired') }]"
           :error-message="getError('family_name')?.msg"
-          @blur="validateField('family_name')"
         />
         <van-field
           v-model="form.username"
           label="用户名"
           placeholder="请输入用户名"
-          :rules="[{ required: true, message: '请输入用户名' }]"
+          :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
           :error-message="getError('username')?.msg"
-          @blur="validateField('username')"
         />
         <van-field
           v-model="form.display_name"
           label="显示名称"
           placeholder="请输入显示名称"
-          :rules="[{ required: true, message: '请输入显示名称' }]"
-          @blur="validateField('display_name')"
+          :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
         />
         <div class="password-field-wrapper">
           <van-field
             v-model="form.password"
             :type="showPassword ? 'text' : 'password'"
             label="密码"
-            placeholder="请输入密码(至少6位)"
+            placeholder="请输入密码(至少8位)"
             :rules="[
-              { required: true, message: '请输入密码' },
-              { validator: validatePassword, message: '密码至少6位' }
+              { required: true, message: t('auth.form.passwordRequired') },
+              { validator: validatePassword, message: t('auth.form.passwordMin8') }
             ]"
             :error-message="getError('password')?.msg"
-            @blur="validateField('password')"
           >
             <template #right-icon>
               <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
@@ -65,10 +61,9 @@
             label="确认密码"
             placeholder="请再次输入密码"
             :rules="[
-              { required: true, message: '请确认密码' },
-              { validator: validateConfirmPassword, message: '两次密码不一致' }
+              { required: true, message: t('auth.form.confirmPasswordRequired') },
+              { validator: validateConfirmPassword, message: t('auth.form.passwordMismatch') }
             ]"
-            @blur="validateField('confirm')"
           >
             <template #right-icon>
               <van-icon :name="showConfirmPassword ? 'eye-o' : 'closed-eye'" @click="showConfirmPassword = !showConfirmPassword" />
@@ -133,16 +128,11 @@ function formatInvitationCode(value: string): string {
 
 // Real-time validation functions
 function validatePassword(value: string): boolean {
-  return value.length >= 6
+  return value.length >= 8
 }
 
 function validateConfirmPassword(value: string): boolean {
   return value === form.value.password
-}
-
-function validateField(_field: string) {
-  // Trigger real-time validation feedback
-  // Vant's van-field handles this via :rules prop
 }
 
 async function onSubmit() {
