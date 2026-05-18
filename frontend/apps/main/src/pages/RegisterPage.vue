@@ -14,27 +14,27 @@
           maxlength="6"
           :formatter="formatInvitationCode"
           format-trigger="onBlur"
-          :rules="[{ required: true, message: '请输入邀请码' }]"
+          :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
         />
         <van-field
           v-model="form.family_name"
           label="家庭名称"
           placeholder="请输入家庭名称"
-          :rules="[{ required: true, message: '请输入家庭名称' }]"
+          :rules="[{ required: true, message: t('auth.form.familyNameRequired') }]"
           :error-message="getError('family_name')?.msg"
         />
         <van-field
           v-model="form.username"
           label="用户名"
           placeholder="请输入用户名"
-          :rules="[{ required: true, message: '请输入用户名' }]"
+          :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
           :error-message="getError('username')?.msg"
         />
         <van-field
           v-model="form.display_name"
           label="显示名称"
           placeholder="请输入显示名称"
-          :rules="[{ required: true, message: '请输入显示名称' }]"
+          :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
         />
         <div class="password-field-wrapper">
           <van-field
@@ -43,8 +43,8 @@
             label="密码"
             placeholder="请输入密码(至少8位)"
             :rules="[
-              { required: true, message: '请输入密码' },
-              { validator: validatePassword, message: '密码至少8位' }
+              { required: true, message: t('auth.form.passwordRequired') },
+              { validator: validatePassword, message: t('auth.form.passwordMin8') }
             ]"
             :error-message="getError('password')?.msg"
           >
@@ -61,8 +61,8 @@
             label="确认密码"
             placeholder="请再次输入密码"
             :rules="[
-              { required: true, message: '请确认密码' },
-              { validator: validateConfirmPassword, message: '两次密码不一致' }
+              { required: true, message: t('auth.form.confirmPasswordRequired') },
+              { validator: validateConfirmPassword, message: t('auth.form.passwordMismatch') }
             ]"
           >
             <template #right-icon>

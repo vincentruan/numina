@@ -777,7 +777,18 @@ export default {
     familyName: '家庭名称',
     displayName: '显示名称',
     password: '密码',
-    inviteCode: '邀请码'
+    inviteCode: '邀请码',
+    form: {
+      inviteCodeRequired: '⚠️ 请输入邀请码',
+      familyNameRequired: '⚠️ 请输入家庭名称',
+      usernameRequired: '⚠️ 请输入用户名',
+      displayNameRequired: '⚠️ 请输入显示名称',
+      passwordRequired: '⚠️ 请输入密码',
+      passwordMin8: '⚠️ 密码至少8位',
+      passwordMin6: '⚠️ 密码至少6位',
+      confirmPasswordRequired: '⚠️ 请确认密码',
+      passwordMismatch: '⚠️ 两次密码不一致',
+    },
   },
   currency: {
     searchPlaceholder: '搜索币种名称或代码',

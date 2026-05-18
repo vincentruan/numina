@@ -11,19 +11,19 @@
           v-model="form.invite_code"
           label="邀请码"
           placeholder="请输入家庭邀请码"
-          :rules="[{ required: true, message: '请输入邀请码' }]"
+          :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
         />
         <van-field
           v-model="form.username"
           label="用户名"
           placeholder="请输入用户名"
-          :rules="[{ required: true, message: '请输入用户名' }]"
+          :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
         />
         <van-field
           v-model="form.display_name"
           label="显示名称"
           placeholder="请输入显示名称"
-          :rules="[{ required: true, message: '请输入显示名称' }]"
+          :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
         />
         <div class="password-field-wrapper">
           <van-field
@@ -32,8 +32,8 @@
             label="密码"
             placeholder="请输入密码(至少6位)"
             :rules="[
-              { required: true, message: '请输入密码' },
-              { validator: (v: string) => v.length >= 6, message: '密码至少6位' }
+              { required: true, message: t('auth.form.passwordRequired') },
+              { validator: (v: string) => v.length >= 6, message: t('auth.form.passwordMin6') }
             ]"
           >
             <template #right-icon>
@@ -48,8 +48,8 @@
             label="确认密码"
             placeholder="请再次输入密码"
             :rules="[
-              { required: true, message: '请确认密码' },
-              { validator: (v: string) => v === form.password, message: '两次密码不一致' }
+              { required: true, message: t('auth.form.confirmPasswordRequired') },
+              { validator: (v: string) => v === form.password, message: t('auth.form.passwordMismatch') }
             ]"
           >
             <template #right-icon>
