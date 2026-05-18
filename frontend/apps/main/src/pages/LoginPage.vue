@@ -381,7 +381,7 @@ function onNumpadPress(key: number | string) {
     pinError.value = ''
     return
   }
-  if (key === t('secondFactor.numpadClear') || key === '清空') {
+  if (key === t('secondFactor.numpadClear')) {
     pinInput.value = ''
     pinError.value = ''
     return

@@ -126,7 +126,7 @@ function onNumpadPress(key: number | string) {
     else confirmPin.value = confirmPin.value.slice(0, -1)
     return
   }
-  if (key === t('secondFactor.numpadClear') || key === '清空') {
+  if (key === t('secondFactor.numpadClear')) {
     if (step.value === 'old') oldPin.value = ''
     else if (step.value === 'new') newPin.value = ''
     else confirmPin.value = ''
