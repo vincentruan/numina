@@ -203,7 +203,6 @@ const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
 
 // Celebration state
-const celebrationVisible = ref(false)
 const celebrationTaskCount = ref(0)
 const celebrationStarsEarned = ref(0)
 const celebrationTaskIds = ref<string[]>([])
@@ -256,7 +255,11 @@ function markSeen(id: string) {
   const seen = getSeenIds()
   seen.add(id)
   const pruned = [...seen].slice(-200)
-  localStorage.setItem(SEEN_KEY, JSON.stringify(pruned))
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(pruned))
+  } catch {
+    // Silently fail on quota/private browsing error
+  }
 }
 
 async function checkNewMilestones() {
@@ -279,6 +282,8 @@ function showNextMilestone() {
   celebrationVisible.value = true
 }
 
+let dismissTimer: ReturnType<typeof setTimeout> | null = null
+
 function dismissCelebration() {
   if (!celebrationVisible.value) return
   celebrationVisible.value = false
@@ -287,7 +292,7 @@ function dismissCelebration() {
     milestoneQueue.value = milestoneQueue.value.slice(1)
   }
   if (milestoneQueue.value.length > 0) {
-    setTimeout(showNextMilestone, 300)
+    dismissTimer = setTimeout(showNextMilestone, 300)
   }
 }
 
@@ -444,6 +449,10 @@ function onCelebrationDismiss() {
 
 onUnmounted(() => {
   pollCancelled = true
+  if (dismissTimer) {
+    clearTimeout(dismissTimer)
+    dismissTimer = null
+  }
 })
 </script>
 

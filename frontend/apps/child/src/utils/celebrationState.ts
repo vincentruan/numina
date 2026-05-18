@@ -36,7 +36,11 @@ export function markCelebrated(ids: string[]): void {
   }
   // Prune if exceeding max
   const pruned = pruneToMax(existing, MAX_CACHED_IDS)
-  localStorage.setItem(CELEBRATION_STORAGE_KEY, JSON.stringify(pruned))
+  try {
+    localStorage.setItem(CELEBRATION_STORAGE_KEY, JSON.stringify(pruned))
+  } catch {
+    // Silently fail on quota exceeded or private browsing mode
+  }
 }
 
 /**

@@ -64,7 +64,8 @@ const randomPhrase = computed(() => {
   if (Array.isArray(phrases) && phrases.length > 0) {
     return phrases[Math.floor(Math.random() * phrases.length)]
   }
-  return '太棒了！'
+  // Fallback: use first phrase key if array empty or invalid
+  return t('celebration.phrases[0]') as string
 })
 
 // Star count: cap at 6-8 for visual
@@ -86,7 +87,7 @@ function starStyle(i: number) {
 }
 
 // Animation choreography
-let animationTimer: ReturnType<typeof setTimeout> | null = null
+let timers: ReturnType<typeof setTimeout>[] = []
 
 function startAnimation() {
   animationPhase.value = 1
@@ -94,34 +95,32 @@ function startAnimation() {
   showSummary.value = false
 
   // Phase 2: Phrase appear (0.2s)
-  animationTimer = setTimeout(() => {
+  timers.push(setTimeout(() => {
     showPhrase.value = true
     animationPhase.value = 2
-  }, 200)
+  }, 200))
 
   // Phase 3-4: Stars launch + balance pulse (1.5s)
-  animationTimer = setTimeout(() => {
+  timers.push(setTimeout(() => {
     animationPhase.value = 3
-  }, 1500)
+  }, 1500))
 
   // Phase 5: Summary card (1.8s)
-  animationTimer = setTimeout(() => {
+  timers.push(setTimeout(() => {
     showSummary.value = true
     animationPhase.value = 4
-  }, 1800)
+  }, 1800))
 
   // Phase 6: Fade out + dismiss (2.5-3s)
-  animationTimer = setTimeout(() => {
+  timers.push(setTimeout(() => {
     animationPhase.value = 5
     dismiss()
-  }, 2800)
+  }, 2800))
 }
 
 function dismiss() {
-  if (animationTimer) {
-    clearTimeout(animationTimer)
-    animationTimer = null
-  }
+  timers.forEach(clearTimeout)
+  timers = []
   showPhrase.value = false
   showSummary.value = false
   animationPhase.value = 0
@@ -133,10 +132,8 @@ watch(() => props.visible, (newVal) => {
   if (newVal) {
     startAnimation()
   } else {
-    if (animationTimer) {
-      clearTimeout(animationTimer)
-      animationTimer = null
-    }
+    timers.forEach(clearTimeout)
+    timers = []
     showPhrase.value = false
     showSummary.value = false
     animationPhase.value = 0
@@ -144,9 +141,8 @@ watch(() => props.visible, (newVal) => {
 })
 
 onUnmounted(() => {
-  if (animationTimer) {
-    clearTimeout(animationTimer)
-  }
+  timers.forEach(clearTimeout)
+  timers = []
 })
 </script>
 
