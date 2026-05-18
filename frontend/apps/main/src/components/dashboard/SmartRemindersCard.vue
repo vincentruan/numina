@@ -31,7 +31,7 @@
                 <van-icon name="clock-o" class="expiring-icon" />
                 <div class="expiring-content">
                   <div class="expiring-name">{{ item.name }}</div>
-                  <div class="expiring-meta">{{ item.category_name }} · {{ item.asset_type === 'financial' ? '金融' : '实物' }}</div>
+                  <div class="expiring-meta">{{ item.category_name }} · {{ item.asset_type === 'financial' ? t('asset.financial') : t('asset.physical') }}</div>
                 </div>
                 <div class="expiring-remaining" :class="getRemainingClass(item)">
                   {{ formatRemaining(item.remaining_days) }}
@@ -162,10 +162,10 @@ function severityIcon(severity: string): string {
 
 function formatRemaining(days: number | null): string {
   if (days === null) return '-'
-  if (days < 0) return `已过期 ${Math.abs(days)} 天`
-  if (days === 0) return '今天到期'
-  if (days < 30) return `${days} 天后到期`
-  return `${Math.round(days / 30)} 个月后到期`
+  if (days < 0) return t('reminders.expiredDays', { days: Math.abs(days) })
+  if (days === 0) return t('reminders.dueToday')
+  if (days < 30) return t('reminders.dueInDays', { days })
+  return t('reminders.dueInMonths', { months: Math.round(days / 30) })
 }
 
 function getRemainingClass(item: ExpiringSoonItem): string {

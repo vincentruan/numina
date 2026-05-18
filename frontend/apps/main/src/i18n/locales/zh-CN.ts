@@ -21,6 +21,11 @@ export default {
     timeJustNow: '刚刚',
     timeHoursAgo: '{hours} 小时前',
     timeDaysAgo: '{days} 天前',
+    today: '今天',
+    netWorth: '净资产',
+    totalAssets: '总资产',
+    totalLiabilities: '总负债',
+    monthsSuffix: '+{months}月',
   },
   nav: {
     dashboard: '总览',

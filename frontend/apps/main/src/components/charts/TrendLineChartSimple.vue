@@ -6,6 +6,7 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import VChart from 'vue-echarts'
 import { use } from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -15,6 +16,8 @@ import type { CallbackDataParams } from 'echarts/types/dist/shared'
 import type { TrendPoint } from '@/types'
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent, LegendComponent])
+
+const { t } = useI18n()
 
 const props = defineProps<{
   data: TrendPoint[]
@@ -62,7 +65,7 @@ const chartOption = computed(() => {
       }
     },
     legend: {
-      data: ['净资产', '总资产', '总负债'],
+      data: [t('common.netWorth'), t('common.totalAssets'), t('common.totalLiabilities')],
       bottom: 0,
       textStyle: { fontSize: 11, color: textColor }
     },
@@ -85,7 +88,7 @@ const chartOption = computed(() => {
         fontSize: 10,
         color: textColor,
         formatter: (val: number) => {
-          if (val >= 10000) return `${(val / 10000).toFixed(0)}万`
+          if (val >= 10000) return `${(val / 10000).toFixed(0)}${t('common.unitTenThousand')}`
           return val.toString()
         }
       },
@@ -93,7 +96,7 @@ const chartOption = computed(() => {
     },
     series: [
       {
-        name: '净资产',
+        name: t('common.netWorth'),
         type: 'line',
         data: props.data.map(d => d.net_worth),
         smooth: true,
@@ -108,7 +111,7 @@ const chartOption = computed(() => {
         }
       },
       {
-        name: '总资产',
+        name: t('common.totalAssets'),
         type: 'line',
         data: props.data.map(d => d.total_assets),
         smooth: true,
@@ -116,7 +119,7 @@ const chartOption = computed(() => {
         itemStyle: { color: assetColor }
       },
       {
-        name: '总负债',
+        name: t('common.totalLiabilities'),
         type: 'line',
         data: props.data.map(d => d.total_liabilities),
         smooth: true,
