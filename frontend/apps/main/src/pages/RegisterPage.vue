@@ -22,7 +22,6 @@
           placeholder="请输入家庭名称"
           :rules="[{ required: true, message: '请输入家庭名称' }]"
           :error-message="getError('family_name')?.msg"
-          @blur="validateField('family_name')"
         />
         <van-field
           v-model="form.username"
@@ -30,14 +29,12 @@
           placeholder="请输入用户名"
           :rules="[{ required: true, message: '请输入用户名' }]"
           :error-message="getError('username')?.msg"
-          @blur="validateField('username')"
         />
         <van-field
           v-model="form.display_name"
           label="显示名称"
           placeholder="请输入显示名称"
           :rules="[{ required: true, message: '请输入显示名称' }]"
-          @blur="validateField('display_name')"
         />
         <div class="password-field-wrapper">
           <van-field
@@ -50,7 +47,6 @@
               { validator: validatePassword, message: '密码至少8位' }
             ]"
             :error-message="getError('password')?.msg"
-            @blur="validateField('password')"
           >
             <template #right-icon>
               <van-icon :name="showPassword ? 'eye-o' : 'closed-eye'" @click="showPassword = !showPassword" />
@@ -68,7 +64,6 @@
               { required: true, message: '请确认密码' },
               { validator: validateConfirmPassword, message: '两次密码不一致' }
             ]"
-            @blur="validateField('confirm')"
           >
             <template #right-icon>
               <van-icon :name="showConfirmPassword ? 'eye-o' : 'closed-eye'" @click="showConfirmPassword = !showConfirmPassword" />
