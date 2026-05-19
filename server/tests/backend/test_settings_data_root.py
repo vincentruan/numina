@@ -16,7 +16,13 @@ def _make_settings(**overrides):
         "STORAGE_ENCRYPTION_KEY": "test-storage-key",
         **overrides,
     }
-    with patch.dict(os.environ, env, clear=False):
+    # Remove vars that would prevent derivation logic from running
+    # (conftest sets DATABASE_URL for lifespan safety; tests that check
+    # derivation need it absent so the validator re-derives from DATA_ROOT)
+    remove_keys = {"DATABASE_URL", "UPLOAD_DIR", "WORKSPACE_ROOT", "CHAT_DIR", "LOG_DIR"} - set(overrides)
+    cleaned_env = {k: v for k, v in os.environ.items() if k not in remove_keys}
+    cleaned_env.update(env)
+    with patch.dict(os.environ, cleaned_env, clear=True):
         from packages.core.settings import Settings
 
         return Settings()
