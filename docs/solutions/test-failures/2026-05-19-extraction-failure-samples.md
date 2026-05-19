@@ -1,8 +1,8 @@
 # Async Agent Result Extraction — Production Sample Diagnostic Protocol (U10)
 
-**Status:** Pending production deploy of PR 1–4 (U1–U9)
-**Date:** 2026-05-19 (placeholder; actual sampling occurs 1-3 days post-deploy)
-**Decision:** TBD — populate after sampling
+**Status:** Resolved via static analysis (2026-05-19)
+**Date:** 2026-05-19
+**Decision:** **U11 NO-GO** (skill_loader.py:127 prompt-fix is unnecessary)
 
 ## Purpose
 
@@ -10,7 +10,47 @@ Determine whether the SKILL.md prompt content is reaching the LLM as intended.
 This is the **R4 conditional trigger**: U11 (skill_loader.py prompt fix) only
 runs if this diagnostic confirms the prompt is **not** entering the LLM.
 
-## Procedure
+## Resolution: Static analysis short-circuits the sampling
+
+A code-path trace in the agent service makes live production sampling unnecessary
+because the brainstorm's hypothesis #5 is structurally impossible:
+
+### Trace
+
+1. `orchestrator.py:348/601` — calls `skill_loader.load(capability)` to get
+   `SkillConfig`, but only reads `.thinking`, `.subagent_enabled`, `.plan_mode`.
+2. `orchestrator.py:357` — calls `adapter.stream_dispatch(capability, redacted_context, ...)`
+   passing only the **capability name** (a string), not `SkillConfig.prompt`.
+3. `deerflow_adapter/adapter.py:273` — `_build_message()` constructs the payload
+   sent to DeerFlow as `{skill, context, thinking}`. It does NOT include any
+   prompt body.
+4. DeerFlow harness independently loads `/app/skills/custom/{skill_name}/SKILL.md`
+   per `deerflow_config/base/config.yaml:48` (`- /app/skills/custom`).
+
+A grep for `\.prompt\b` outside `skill_loader.py` returns **zero results** in
+`apps/agent/`. `SkillConfig.prompt` is dead data — never read by any consumer.
+
+### Implication
+
+The brainstorm's failure-point #5 ("`base.prompt = ""` clears SKILL.md content")
+cannot be the cause of empty extraction results: the prompt that enters the LLM
+comes from DeerFlow's own SKILL.md loader, not from `SkillConfig.prompt`. The
+four `skills/custom/{alerts,disposal,spending_leak,allocation}/SKILL.md` files
+all contain `STRUCTURED_DATA` instructions, which DeerFlow loads directly.
+
+### Side observation (out of R4 scope)
+
+Per-family custom prompts (`entry.prompt` at line 127) currently go into
+`SkillConfig.prompt` but are silently dropped because nothing reads that field.
+This is a real but unrelated bug. Tracked separately if the family-override
+feature ever needs to actually function.
+
+## Procedure (deferred — only run if static analysis is later contradicted)
+
+If at any point production data shows the LLM producing answers without
+`STRUCTURED_DATA` blocks despite `skills/custom/{capability}/SKILL.md`
+containing the directive, run the procedure below to investigate alternative
+hypotheses (DeerFlow harness skill-load failure, file packaging in Docker, etc).
 
 ### 1. Wait for production traffic
 
@@ -47,37 +87,32 @@ For each row with `method='failed'` or `method='llm_fallback_hit'`:
 
 ### 4. Decision
 
-| Observation                                     | U11 Decision |
-|-------------------------------------------------|--------------|
-| ≥80% of samples mention `STRUCTURED_DATA`       | NO-GO        |
-| <50% of samples mention `STRUCTURED_DATA`       | GO           |
-| Mixed (50–80%)                                  | Investigate  |
+| Observation                                     | Action                              |
+|-------------------------------------------------|-------------------------------------|
+| ≥80% of samples mention `STRUCTURED_DATA`       | Confirms current diagnosis (NO-GO)  |
+| <50% of samples mention `STRUCTURED_DATA`       | Investigate DeerFlow skill loading  |
+| Mixed (50–80%)                                  | Investigate model compliance        |
 
-A NO-GO means the prompt is reaching the LLM and the issue is model
-compliance — fixed by the existing regex tolerance (U3) + LLM fallback (U4).
-
-A GO means the prompt is being lost somewhere (most likely `skill_loader.py:127`
-when `base.prompt = ""` and family override is also empty) — proceed with U11.
-
-## Sample data (to populate)
-
-| Sample | family_id | capability | method | mentions STRUCTURED_DATA? |
-|--------|-----------|------------|--------|---------------------------|
-| 1 | TBD | TBD | TBD | TBD |
-| 2 | TBD | TBD | TBD | TBD |
-| 3 | TBD | TBD | TBD | TBD |
-| 4 | TBD | TBD | TBD | TBD |
-| 5 | TBD | TBD | TBD | TBD |
+If `<50%` mention `STRUCTURED_DATA`, do NOT default to U11 (skill_loader.py)
+without first confirming DeerFlow's `/app/skills/custom/` directory contents
+in production (the file may not be packaged in the Docker image, or the path
+may be misconfigured).
 
 ## Final decision
 
-**Decision:** TBD
-**Decided by:** TBD
-**Date:** TBD
-**Rationale:** TBD
+**Decision:** U11 NO-GO (skill_loader.py:127 prompt-fix is not needed)
+**Decided by:** Static analysis of orchestrator → adapter → DeerFlow path
+**Date:** 2026-05-19
+**Rationale:** `SkillConfig.prompt` is dead data — never read by any agent
+consumer. DeerFlow loads `skills/custom/{capability}/SKILL.md` independently
+from its own configured path. The brainstorm's failure-point #5 is
+structurally impossible.
 
 ## References
 
 - Plan: `docs/plans/2026-05-19-002-feat-async-agent-task-result-persistence-v2-plan.md` §U10
 - Brainstorm: `docs/brainstorms/2026-05-19-async-agent-task-result-persistence-v2-requirements.md` §R4
 - Skill loader: `server/apps/agent/services/deerflow_adapter/skill_loader.py:127`
+- Adapter (no prompt sent): `server/apps/agent/services/deerflow_adapter/adapter.py:273`
+- DeerFlow skills path: `server/apps/agent/deerflow_config/base/config.yaml:48`
+
