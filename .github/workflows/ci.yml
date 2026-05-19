@@ -151,7 +151,12 @@ jobs:
           docker ps -a || true
 
       - name: Seed test accounts
-        run: bash tests/data/seed-data.sh --skip-demo
+        run: |
+          # The backend image doesn't bundle tests/, so copy the seed script
+          # into the running container before invoking seed-data.sh (which
+          # auto-detects the Docker container and execs into it).
+          docker cp tests numina-backend:/app/tests
+          bash tests/data/seed-data.sh --skip-demo
 
       - name: Run Playwright tests
         working-directory: tests
