@@ -114,8 +114,8 @@ jobs:
       - name: Start Docker stack
         run: |
           # Build only essential services (skip agent which requires vendor/deerflow-harness)
-          docker compose build backend frontend nginx
-          docker compose up -d backend frontend nginx
+          docker compose build backend frontend-main frontend-child nginx
+          docker compose up -d backend frontend-main frontend-child nginx
 
       - name: Wait for backend health
         run: |
