@@ -76,6 +76,9 @@
       </button>
     </van-popup>
 
+    <!-- Active challenges -->
+    <ChallengeCard ref="challengeCard" />
+
     <!-- Top active wish progress -->
     <router-link v-if="topWish" to="/wishes" class="wish-preview">
       <div class="wish-preview-header">
@@ -160,6 +163,7 @@ import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
+import ChallengeCard from '@/components/ChallengeCard.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'

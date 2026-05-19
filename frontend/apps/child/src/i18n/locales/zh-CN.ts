@@ -110,6 +110,18 @@ export default {
   tasks: {
     myStars: '我的星星币 ⭐',
   },
+  challenge: {
+    taskCount: '累计任务',
+    streakLength: '连续打卡',
+    specificChore: '指定家务',
+    starEarnings: '星币累计',
+    progress: '进度',
+    daysLeft: '剩余 {n} 天',
+    completed: '🎉 挑战完成！',
+    expired: '挑战已过期',
+    active: '进行中',
+    emptyState: '暂无挑战任务',
+  },
   home: {
     myStars: '我的星星币 ⭐',
     todayTasks: '📋 今日任务',

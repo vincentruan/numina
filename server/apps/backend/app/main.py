@@ -109,6 +109,7 @@ from apps.backend.app.routers import (
 from apps.backend.app.routers import assets_analysis as assets_analysis_router
 from apps.backend.app.routers import blind_box as blind_box_router
 from apps.backend.app.routers import calendar as calendar_router
+from apps.backend.app.routers import challenge_grants as challenge_grants_router
 from apps.backend.app.routers import child_blind_box as child_blind_box_router
 from apps.backend.app.routers import child_wishes as child_wishes_router
 from apps.backend.app.routers import children as children_router
@@ -391,6 +392,8 @@ app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(blind_box_router.router, prefix="/api/v1")
 app.include_router(child_blind_box_router.router, prefix="/api/v1")
+app.include_router(challenge_grants_router.router, prefix="/api/v1")
+app.include_router(challenge_grants_router.child_router, prefix="/api/v1")
 app.include_router(device_router.router, prefix="/api/v1")
 app.include_router(assets_analysis_router.router, prefix="/api/v1")
 app.include_router(ai_tasks_router.router, prefix="/api/v1")
