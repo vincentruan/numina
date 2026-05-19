@@ -24,6 +24,12 @@
       <div v-else class="nav-btn-placeholder" />
     </div>
 
+    <!-- Balance hero — ochre feature card -->
+    <div class="balance-card">
+      <p class="balance-label">{{ t('tasks.myStars') }}</p>
+      <CoinDisplay :amount="balance" :icon-size="28" class="balance-display" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+    </div>
+
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-else-if="error" class="error-msg">{{ error }}</div>
@@ -172,17 +178,20 @@ import { showToast } from 'vant'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
-import { getCoinBalance } from '@/api/coins'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
+import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import { childBlindBoxApi } from '@/api/blindBox'
 import type { BlindBoxDraw } from '@/types/blindBox'
 import http from '@/api/index'
 import { useCelebration } from '@/composables/useCelebration'
+import { useBalancePolling } from '@/composables/useBalancePolling'
+import { useFamilyStore } from '@/stores/family'
 
 const { t, locale } = useI18n()
+const familyStore = useFamilyStore()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -194,13 +203,15 @@ const completeSheetVisible = ref(false)
 const completeTarget = ref<ChoreInstance | null>(null)
 const abandonSheetVisible = ref(false)
 const abandonTarget = ref<ChoreInstance | null>(null)
-const balance = ref(0)
 const topWish = ref<ChildWish | null>(null)
 const celebrationVisible = ref(false)
 const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
+
+// Balance polling via composable
+const { balance, refresh: refreshBalance } = useBalancePolling()
 
 // Celebration state via composable (renamed to avoid conflict with milestone celebrationVisible)
 const {
@@ -419,11 +430,7 @@ onMounted(async () => {
   await load()
   await checkNewMilestones()
   try {
-    const [bal, wishData] = await Promise.all([
-      getCoinBalance().catch(() => 0),
-      listChildWishes().catch(() => null),
-    ])
-    balance.value = bal
+    const wishData = await listChildWishes().catch(() => null)
     const active = wishData?.active ?? []
     topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
   } catch {
@@ -462,6 +469,29 @@ onUnmounted(() => {
   margin-bottom: var(--space-lg);
   border: 1px solid var(--color-hairline);
   min-height: 48px;
+}
+
+/* ── Balance hero — ochre feature card ── */
+.balance-card {
+  background: linear-gradient(135deg, var(--color-brand-ochre), var(--color-brand-peach));
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  margin-bottom: var(--space-lg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.balance-label {
+  font-family: Inter, sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-on-dark);
+  margin: 0;
+}
+
+.balance-display {
+  flex-shrink: 0;
 }
 
 .date-display {

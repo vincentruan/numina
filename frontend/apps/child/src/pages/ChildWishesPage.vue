@@ -11,7 +11,7 @@
       <!-- Hero stats banner — peach feature card -->
       <div v-if="stats" class="hero-banner">
         <div class="hero-balance">
-          <span class="hero-balance-num">{{ stats.balance }}</span>
+          <span class="hero-balance-num">{{ polledBalance }}</span>
           <span class="hero-balance-unit">{{ t('wishes.starUnit') }}</span>
         </div>
         <div class="hero-divider" />
@@ -154,9 +154,13 @@ import {
   type ChildWishList, type ChildWishStats
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
+import { useBalancePolling } from '@/composables/useBalancePolling'
 
 const { t } = useI18n()
 const router = useRouter()
+
+// Balance polling via composable (separate from wish stats)
+const { balance: polledBalance } = useBalancePolling()
 
 const wishList = ref<ChildWishList | null>(null)
 const stats = ref<ChildWishStats | null>(null)

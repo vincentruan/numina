@@ -1,5 +1,6 @@
 """Service layer for chore templates and instances."""
 
+import logging
 from datetime import datetime, timedelta
 from typing import cast
 
@@ -19,6 +20,8 @@ from apps.backend.app.models.family import Family
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.chore import ChoreTemplateCreate, ChoreTemplateUpdate
 from apps.backend.app.services.notification_bus import fire_notification
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Template CRUD
@@ -322,6 +325,11 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
         narrative_emoji=emoji,
         streak_bonus=bonus,
     )
+    # Increment cumulative task counter for milestone thresholds
+    try:
+        child.total_approved_count += 1
+    except Exception:
+        logger.warning("Failed to increment total_approved_count for child %s — ignoring", coin_recipient_id)
     try:
         db.add(tx)
         db.commit()
@@ -334,9 +342,17 @@ async def approve_instance_async(db: Session, parent_user: User, instance_id: st
     from apps.backend.app.services.milestones import check_and_record_milestones
     milestone = check_and_record_milestones(
         db, coin_recipient_id, parent_user.family_id,
-        {"instance": instance},
+        {"instance": instance, "total_approved_count": child.total_approved_count},
     )
     instance._milestone_triggered = milestone  # transient attr for response
+
+    # Check challenge progress after primary transaction — failure never blocks approval
+    from apps.backend.app.services.challenge_grants import check_challenge_progress
+    try:
+        check_challenge_progress(db, coin_recipient_id, parent_user.family_id, instance)
+    except Exception:
+        logger.warning("Challenge progress check failed for child %s — ignoring", coin_recipient_id)
+
     instance._is_pool_unclaimed = (
         instance.child_user_id == instance.family_id
         and instance.assigned_by_user_id is None

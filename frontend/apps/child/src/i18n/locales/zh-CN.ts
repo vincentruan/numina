@@ -107,6 +107,9 @@ export default {
     claimFailed: '❌ 认领失败，任务可能已被认领',
     abandonFailed: '❌ 放弃失败，请重试',
   },
+  tasks: {
+    myStars: '我的星星币 ⭐',
+  },
   home: {
     myStars: '我的星星币 ⭐',
     todayTasks: '📋 今日任务',

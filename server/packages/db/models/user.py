@@ -77,6 +77,9 @@ class User(Base):
     birthday: Mapped[date | None] = mapped_column(Date, nullable=True)
     birthday_is_lunar: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    # 累计完成任务数（用于里程碑触发）
+    total_approved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     family = relationship("Family", back_populates="members")
     assets = relationship("Asset", back_populates="user")
     liabilities = relationship("Liability", back_populates="user")
