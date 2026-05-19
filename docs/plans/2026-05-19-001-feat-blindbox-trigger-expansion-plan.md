@@ -1,18 +1,21 @@
 ---
 date: 2026-05-19
-status: active
+status: completed
 origin: docs/brainstorms/2026-05-19-blindbox-trigger-expansion-requirements.md
+deepened: 2026-05-19
 ---
 
 # BlindBox Trigger Expansion — Implementation Plan
 
-Extends the blindBox reward system with two new trigger types: (1) streak/cumulative task milestone triggers, and (2) parent challenge grants with conditional targets and deadlines.
+Extends the blindBox reward system with two new trigger types: (1) streak/cumulative task milestone triggers, and (2) parent challenge grants with conditional targets and deadlines. **NEW:** Adds long polling for balance refresh on child pages to ensure timely feedback when parent approves tasks.
 
 ## Problem Frame
 
 Kids currently only receive blind box draws via manual coin spending or probabilistic `base_draw_prob` on approval. This misses two key motivation moments:
 1. Celebrating sustained effort patterns (streak milestones, cumulative task counts)
 2. Parent-initiated goal challenges (active incentive channel, not just passive wish responses)
+
+**Additional problem:** When a parent approves a chore, the child's balance increases but the child app doesn't refresh the balance display automatically. The child must manually navigate or pull-to-refresh to see updated points. This creates a disconnect in the reward feedback loop.
 
 **Design constraints from origin doc:**
 - Reuse existing milestone infrastructure, no new scheduler
@@ -33,6 +36,8 @@ Kids currently only receive blind box draws via manual coin spending or probabil
 - Cancel endpoint for parents
 - Child app: active challenge progress display
 - Parent app: challenge creation form
+- **NEW:** Balance display on Tasks page
+- **NEW:** Long polling for balance refresh (1-minute interval) on home, wishes, tasks, ledger pages
 
 ### Deferred
 - Challenge completion push notifications (await notification infrastructure)
@@ -75,7 +80,7 @@ total_approved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=F
 2. Add `"streak_3"` to `_PER_CYCLE` set (re-triggers each new cycle)
 3. Update `_VALID_MILESTONE_TYPES` to include new type
 
-**Pattern reference:** Existing `streak_7/14/30` logic in `_try_record_streak_cycle_cached()` handles cycle detection via `prev_instance.streak_count` comparison.
+**Pattern reference:** Existing `_STREAK_MILESTONES` dict in `milestones.py` maps thresholds to type strings: `{7: "streak_7", 14: "streak_14", 30: "streak_30"}`. Add `{3: "streak_3"` entry following same pattern.
 
 **Test scenarios:**
 - Child with streak 3 triggers `streak_3` milestone
@@ -111,10 +116,12 @@ total_approved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=F
 
 **File:** `server/apps/backend/app/services/chores.py`
 
-**Change in `approve_instance_async()`:** After successful approval, increment:
+**Change in `approve_instance_async()`:** Increment counter BEFORE the existing `db.commit()` at line 327:
 
 ```python
+# Before line 327 commit
 child.total_approved_count += 1
+db.commit()  # existing commit includes counter change
 ```
 
 Wrap in try/except — failure to increment should not block (log warning, continue).
@@ -139,7 +146,7 @@ Add `_create_milestone_draw()` helper that creates `BlindBoxDraw` with:
 - `status="pending_fulfillment"`
 - Gift from surprise pool (`value_score >= 7`)
 
-Reuse existing pool selection logic from `blind_box.py:should_upgrade_surprise()` — milestone draws always use surprise pool.
+Use the pool filtering pattern from `blind_box.py` lines 103-105 with `surprise=True` forced: `pool = [g for g in gifts if g.value_score >= 7]`; if empty, fall back to full pool. Milestone draws always use surprise pool.
 
 **Integration:** After `_insert_milestone()` flush, call `_create_milestone_draw()` for the triggered milestone.
 
@@ -196,9 +203,10 @@ class ChallengeGrant(Base):
 **Functions:**
 
 1. `create_challenge(db, parent, child_id, target_type, target_value, deadline, message, chore_template_id)`:
-   - Validate child belongs to family
+   - Validate child belongs to family AND `is_active=True`
    - Check `count(active) < 3` for child
-   - Validate `chore_template_id` when `specific_chore`
+   - Validate `target_value > 0` and `deadline > now()`
+   - Validate `chore_template_id` exists AND belongs to family when `specific_chore`
 
 2. `check_challenge_progress(db, child_user_id, family_id, instance)`:
    - Lazy expiration: mark `status="expired"` for any `deadline < now()` AND `status="active"`
@@ -207,7 +215,7 @@ class ChallengeGrant(Base):
 
 3. `_update_progress_for_type(challenge, instance, child)`:
    - `task_count`: `current_progress += 1`
-   - `streak_length`: check `instance.streak_count >= target_value` (binary, not cumulative)
+   - `streak_length`: `current_progress = min(instance.streak_count, target_value)` (progress tracks actual streak)
    - `specific_chore`: `current_progress += 1` only if `instance.template_id == challenge.chore_template_id`
    - `star_earnings`: `current_progress += (coin_reward + streak_bonus)`
 
@@ -216,7 +224,7 @@ class ChallengeGrant(Base):
    - Only `status="active"` can cancel
    - Set `status="cancelled"`
 
-**Integration:** Call `check_challenge_progress()` in `approve_instance_async()` after milestone check.
+**Integration:** Call `check_challenge_progress()` in `approve_instance_async()` after the existing `db.commit()` at line 327, following the same pattern as milestone checks (try/except wrapper after commit). This aligns with the "failure never blocks approval" principle — challenge progress updates are best-effort, not transactional.
 
 **Error handling:** All challenge operations wrapped in try/except, logged, never block approval.
 
@@ -258,11 +266,12 @@ source_challenge_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("
 - `frontend/apps/child/src/i18n/locales/zh-CN.ts` (i18n keys)
 
 **ChallengeCard.vue design:**
-- Show target type icon (task/streak/chore/star)
-- Progress bar: `current_progress / target_value`
-- Deadline countdown
-- Encouragement message if set
-- Vant progress bar component
+- Loading state: `van-loading` skeleton while fetching `/api/v1/child/challenges/active`
+- Empty state: `暂无挑战任务` message when zero active challenges (i18n: `challenge.emptyState`)
+- Error state: Show existing `toast.loadFailed` pattern with retry button
+- Active challenge display: target type icon, progress bar (`current_progress / target_value`), deadline countdown
+- Completed state: celebration styling with `🎉 挑战完成！` label
+- Expired state: grey styling with `挑战已过期` label
 
 **Integration:** Fetch active challenges on page load, display in section below chore list.
 
@@ -289,12 +298,13 @@ challenge: {
 
 ---
 
-### U10. Parent app challenge creation
+### U10. Parent app challenge management
 
 **Files:**
 - `frontend/apps/main/src/types/challengeGrant.ts` (types)
 - `frontend/apps/main/src/api/challengeGrant.ts` (API client)
 - `frontend/apps/main/src/components/ChallengeCreator.vue` (creation form)
+- `frontend/apps/main/src/components/ChallengeList.vue` (list + cancel UI)
 - `frontend/apps/main/src/pages/BlindBoxConfigPage.vue` (integration)
 - `frontend/apps/main/src/i18n/locales/zh-CN.ts` (i18n keys)
 
@@ -304,7 +314,14 @@ challenge: {
 - Target value input (number)
 - Deadline picker (Vant datetime picker)
 - Message input (optional, max 100 chars)
-- Template picker when `specific_chore` type
+- Template picker when `specific_chore` type (van-popup + van-picker, pre-fetch templates on mount)
+- "Create" button; disabled + toast when child has 3 active challenges
+
+**ChallengeList.vue design:**
+- List all family's active challenges via GET `/api/v1/challenges`
+- Each card: child name, target type icon, progress bar, deadline countdown
+- Cancel button per challenge → van-dialog confirmation ("确认取消挑战?")
+- On cancel success: remove from list, show toast `✅ 挑战已取消`
 
 **i18n keys:**
 ```ts
@@ -318,6 +335,9 @@ challenge: {
   selectChore: '选择家务',
   maxChallengesReached: '⚠️ 该孩子已有3个进行中的挑战',
   createdSuccess: '✅ 挑战创建成功',
+  cancelConfirm: '确认取消挑战?',
+  cancelled: '✅ 挑战已取消',
+  sectionTitle: '挑战管理',
 }
 ```
 
@@ -330,15 +350,133 @@ challenge: {
 
 ---
 
+### U11. Balance polling composable
+
+**New file:** `frontend/apps/child/src/composables/useBalancePolling.ts`
+
+Create a reusable composable for long polling the coin balance:
+
+```ts
+interface UseBalancePollingOptions {
+  intervalMs?: number  // Default: 60000 (1 minute)
+  enabled?: boolean    // Default: true
+}
+
+interface UseBalancePollingReturn {
+  balance: Ref<number>
+  isLoading: Ref<boolean>
+  error: Ref<string | null>
+  start: () => void
+  stop: () => void
+  refresh: () => Promise<void>
+}
+
+export function useBalancePolling(options?: UseBalancePollingOptions): UseBalancePollingReturn
+```
+
+**Behavior:**
+- Calls `getCoinBalance()` API on mount if `enabled`
+- Sets up `setInterval` with configurable interval (default 1 minute)
+- Pauses polling when `document.visibilityState === 'hidden'`, resumes on `'visible'` (Page Visibility API)
+- Provides `start()` / `stop()` methods for lifecycle control
+- `refresh()` allows manual immediate refresh
+- Automatically stops polling when component unmounts (cleanup in `onUnmounted`)
+- Uses a shared singleton pattern so multiple pages can share the same polling instance (avoid duplicate intervals)
+
+**Pattern reference:** The existing `pollForApproval()` in ChildTasksPage uses a similar interval pattern with cleanup. Adapt for balance polling.
+
+**Test scenarios:**
+- Polling starts on mount when enabled
+- Balance updates after interval
+- Multiple consumers share single polling instance
+- `stop()` halts polling, `start()` resumes
+- `refresh()` triggers immediate fetch
+- Cleanup on unmount stops interval
+
+---
+
+### U12. Add balance display to Tasks page
+
+**File:** `frontend/apps/child/src/pages/ChildTasksPage.vue`
+
+Add a balance hero card similar to ChildHomePage's ochre card:
+
+**Layout:** Between the date-nav-card and the chore list, add:
+```vue
+<van-cell-group inset class="balance-card">
+  <div class="balance-content">
+    <span class="balance-label">{{ t('tasks.myStars') }}</span>
+    <CoinDisplay :amount="balance" />
+  </div>
+</van-cell-group>
+```
+
+**Styling:** Match the ochre feature card styling from ChildHomePage (gradient background, star icon).
+
+**Integration with polling:** Use `useBalancePolling()` composable instead of one-shot `getCoinBalance()` call.
+
+**i18n additions:**
+```ts
+tasks: {
+  myStars: '我的星币 *',
+}
+```
+
+**Test scenarios:**
+- Balance card renders between date nav and chore list
+- CoinDisplay shows correct tiers (gold/silver/copper)
+- Balance updates via polling without manual refresh
+- Styling matches home page hero card
+
+---
+
+### U13. Integrate polling on balance-displaying pages
+
+**Files:**
+- `frontend/apps/child/src/pages/ChildHomePage.vue`
+- `frontend/apps/child/src/pages/ChildWishesPage.vue`
+- `frontend/apps/child/src/pages/ChildTasksPage.vue` (U12)
+- `frontend/apps/child/src/pages/ChildLedgerPage.vue`
+
+**Changes for each page:**
+
+Replace existing balance-fetching patterns on each page with `useBalancePolling()` composable. See special-handling table for per-page details:
+
+```ts
+// Pattern replacement
+const { balance, refresh } = useBalancePolling({ intervalMs: 60000 })
+```
+
+**Special handling per page:**
+
+| Page | Current pattern | Integration note |
+|------|-----------------|------------------|
+| ChildHomePage | `getCoinBalance()` in `Promise.all` on mount | Replace with polling; keep `refresh()` call after `complete()` action |
+| ChildWishesPage | Uses `getChildWishStats().balance` | Poll balance separately; wish stats refresh on pull-to-refresh only |
+| ChildTasksPage | `getCoinBalance()` for abandon hint only | Replace with polling + add U12 display card |
+| ChildLedgerPage | `getCoinBalance()` in `load()` | Replace with polling; call `refresh()` after `doGift()` action |
+
+**Singleton behavior:** The composable ensures only one polling interval runs across all pages, so navigating between pages doesn't create duplicate intervals.
+
+**Test scenarios:**
+- Home: balance updates every minute; manual refresh after complete still works
+- Wishes: balance updates; stats refresh on pull-to-refresh separate
+- Tasks: new balance card updates via polling
+- Ledger: balance updates; refresh after gift still works
+- Navigating between pages: no duplicate polling intervals
+- App backgrounded/hidden: polling continues (Vue lifecycle handles visibility)
+
+---
+
 ## Backend API Endpoints
 
-### Parent endpoints (in new router `challenge_grant.py`)
-- `GET ""` — list all family challenges
-- `POST ""` — create challenge (status 201)
-- `POST "/{id}/cancel"` — cancel active challenge
+### Parent endpoints (in new router `challenge_grant.py` at `/api/v1/challenges`)
+- `GET ""` — list all family challenges (auth: `Depends(require_adult)`)
+- `POST ""` — create challenge (status 201, auth: `Depends(require_owner)`)
+- `POST "/{id}/cancel"` — cancel active challenge (auth: `Depends(require_adult)`, only `status="active"`)
 
-### Child endpoints (child-facing router)
-- `GET "/active"` — list child's active challenges with progress
+### Child endpoints (child-facing router at `/api/v1/child/challenges`)
+- `GET "/active"` — list child's active challenges with progress (auth: `Depends(get_current_child_user)`, filter: `child_user_id=current_user.id AND status='active'`)
 
 **URL convention:** No trailing slashes (per CLAUDE.md `redirect_slashes=False` rule).
 
@@ -349,9 +487,10 @@ challenge: {
 1. U1 (total_approved_count) → U3 (task milestones) → U4 (increment)
 2. U2 (streak_3) → U5 (milestone draw)
 3. U6 (ChallengeGrant model) → U7 (service) → U8 (BonusDraw FK)
-4. U6 + U7 → U9 (child UI) → U10 (parent UI)
+4. U6 + U7 + U8 → U9 (child UI) → U10 (parent UI)
+5. **U11 (polling composable) → U12 (tasks balance display) → U13 (page integration)**
 
-**Recommended sequence:** U1 → U6 → U8 (models+migrations) → U2 → U3 → U4 → U5 → U7 → U9 → U10
+**Recommended sequence:** U1 → U6 → U8 (models+migrations) → U2 → U3 → U4 → U5 → U7 → U11 → U12 → U13 → U9 → U10
 
 ---
 
@@ -363,6 +502,11 @@ challenge: {
 | Surprise pool empty | Fallback to full pool (existing behavior in blind_box.py) |
 | Migration conflict with BonusDraw | Add column nullable, backfill NULL for existing |
 | 3-challenge limit bypass via direct API | Enforce in service layer, not just UI |
+| Polling battery drain | 1-minute interval conservative; Page Visibility API pauses when hidden |
+| Duplicate polling intervals | Singleton pattern in composable prevents multiple intervals |
+| Stale balance on network error | Composable retries silently; error state surfaced for UI if persistent |
+| BlindBoxDraw vs BonusDraw terminology | BlindBoxDraw is existing model in `app/models/blind_box_draw.py`; BonusDraw for challenge rewards |
+| streak_length progress bar jumps | Progress tracks actual streak_count toward target (not binary) |
 
 ---
 
@@ -373,10 +517,11 @@ After implementation:
 2. `cd frontend/apps/child && npm run typecheck`
 3. `cd frontend/apps/main && npm run typecheck`
 4. `cd server/apps/backend && uv run pytest tests/ -v -k challenge`
+5. `cd frontend/apps/child && npm run test:run` (if polling composable tests added)
 
 ---
 
-## Success Criteria (from origin doc)
+## Success Criteria (from origin doc + new)
 
 1. Child with 3-day streak triggers milestone draw
 2. Child with 10/25/50/100 cumulative tasks triggers milestone draw
@@ -385,3 +530,6 @@ After implementation:
 5. Challenge completion grants 7-day BonusDraw
 6. Expired challenges do not grant reward
 7. All operations non-blocking on approval flow
+8. **NEW:** Tasks page displays balance card with CoinDisplay
+9. **NEW:** Balance refreshes automatically every 1 minute on home, wishes, tasks, ledger pages
+10. **NEW:** Child sees updated balance within 1 minute after parent approves chore
