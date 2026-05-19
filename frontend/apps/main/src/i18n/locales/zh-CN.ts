@@ -493,8 +493,8 @@ export default {
     },
   },
   milestone: {
-    firstChore: '完成第一个任务',
-    firstWishRealized: '第一个心愿实现',
+    firstchore: '完成第一个任务',
+    firstwishrealized: '第一个心愿实现',
     coins50: '累计获得50⭐',
     coins200: '累计获得200⭐',
     streak7: '连续打卡7天',

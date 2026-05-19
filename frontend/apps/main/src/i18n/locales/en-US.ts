@@ -289,6 +289,8 @@ export default {
     },
     grantBtn: 'Give⭐',
     grantSelectChild: 'Select a child to give stars',
+    blindBoxGifts: '🎁 Gift Pool',
+    blindBoxDraws: '🎀 Pending Redemption',
     choreTemplates: '📋 Chore Templates',
     grantSheetTitle: '⭐ Give stars to {name}',
     grantAmountLabel: 'Amount',
