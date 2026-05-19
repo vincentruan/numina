@@ -313,7 +313,9 @@ const router = createRouter({
       ]
     },
     {
-      path: '/child',
+      // Match /child and any sub-path so navigation from inside the adult app
+      // (e.g. via test fixtures) lands on a route that can hand off to the child SPA.
+      path: '/child/:pathMatch(.*)*',
       redirect: () => {
         // Nginx routes /child/* to frontend/apps/child container.
         // This redirect handles any stale in-app navigation to /child/* paths.
@@ -326,6 +328,16 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   useLoadingOverlay().show()
+
+  // /child/* paths belong to the child SPA (nginx routes /child/* to frontend-child).
+  // The /child route handler does window.location.replace('/child/') to bounce
+  // any stale in-app navigation. Skip the adult-app auth checks so unauthenticated
+  // and stale adult sessions still hand off to the child SPA correctly.
+  if (to.path === '/child' || to.path.startsWith('/child/')) {
+    next()
+    return
+  }
+
   const user = getUser()
   const isLoggedIn = !!user
   const isChild = user?.role === 'child'

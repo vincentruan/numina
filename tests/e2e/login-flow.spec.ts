@@ -44,6 +44,11 @@ async function uiLogin(page: import('@playwright/test').Page, pin = '123456') {
 test.describe('login flow — production', () => {
   test.setTimeout(90000)
 
+  // These tests hit the live production deployment and depend on prod-specific
+  // fixtures (demouser numeric PIN, testchild emoji PIN). They cannot run in
+  // CI against the local docker-compose stack. Set RUN_PROD_TESTS=1 to enable.
+  test.skip(!process.env.RUN_PROD_TESTS, 'production-only test — set RUN_PROD_TESTS=1 to run')
+
   test('demouser: phase 1 shows PIN pad, phase 2 succeeds → dashboard', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', e => errors.push(e.message))
