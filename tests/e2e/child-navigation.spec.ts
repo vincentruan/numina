@@ -48,22 +48,23 @@ test.describe('child navigation guards', () => {
   })
 
   test.describe('unauthenticated access to child routes', () => {
-    test('unauthenticated → /child redirects to child SPA (/child/)', async ({ page }) => {
+    test('unauthenticated → /child redirects to child SPA (/child/) or /login', async ({ page }) => {
       await page.goto('/')
       await page.evaluate(() => localStorage.removeItem('numina_user'))
       await page.context().clearCookies()
       await page.goto('/child')
-      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
-      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
+      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA.
+      // Child SPA's own auth guard then either renders the unauth landing or redirects to /login.
+      await expect(page).toHaveURL(/\/(child\/|login)/, { timeout: 8_000 })
     })
 
-    test('unauthenticated → /child/tasks redirects to child SPA (/child/)', async ({ page }) => {
+    test('unauthenticated → /child/tasks redirects to child SPA (/child/) or /login', async ({ page }) => {
       await page.goto('/')
       await page.evaluate(() => localStorage.removeItem('numina_user'))
       await page.context().clearCookies()
       await page.goto('/child/tasks')
-      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
-      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
+      // Same hand-off as above; child SPA decides based on its own session.
+      await expect(page).toHaveURL(/\/(child\/|login)/, { timeout: 8_000 })
     })
   })
 })

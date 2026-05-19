@@ -315,12 +315,18 @@ const router = createRouter({
     {
       // Match /child and any sub-path so navigation from inside the adult app
       // (e.g. via test fixtures) lands on a route that can hand off to the child SPA.
+      // Use beforeEnter so we can call window.location.replace without Vue Router
+      // racing us to a /'fallback' route in the same tick.
       path: '/child/:pathMatch(.*)*',
-      redirect: () => {
+      // Component is a no-op placeholder; beforeEnter does the hand-off.
+      component: { template: '<div />' },
+      beforeEnter: () => {
         // Nginx routes /child/* to frontend/apps/child container.
-        // This redirect handles any stale in-app navigation to /child/* paths.
+        // window.location.replace forces a full reload, bypassing the SPA router.
         window.location.replace('/child/')
-        return '/'
+        // Return false to abort the in-SPA navigation so the URL doesn't briefly
+        // change to /child before the full reload lands.
+        return false
       }
     }
   ]

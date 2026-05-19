@@ -137,5 +137,7 @@ function isKnownNoise(msg: string): boolean {
   if (msg.includes('AxiosError: Request failed with status code 500')) return true
   // Generic 500 network errors (likely from currencies endpoint in CI)
   if (msg.match(/Failed to load resource.*500|status of 500/i)) return true
+  // 403 errors from AI endpoints when family has no AI provider configured (empty family default)
+  if (msg.match(/Failed to load resource.*403|status of 403/i)) return true
   return false
 }
