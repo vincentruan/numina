@@ -1,6 +1,7 @@
 """Database engine factory for multiple backends (SQLite, PostgreSQL)."""
 
 from abc import ABC, abstractmethod
+from pathlib import Path
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine.url import make_url
@@ -29,6 +30,14 @@ class _SQLiteBackend(_DatabaseBackend):
 
     def get_pool_config(self) -> dict:
         return {}
+
+    def create_engine(self, url: str) -> Engine:
+        # SQLite doesn't auto-create the parent directory. Ensure it exists
+        # so first-boot from a freshly mounted empty volume doesn't crash.
+        parsed = make_url(url)
+        if parsed.database and parsed.database != ":memory:":
+            Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
+        return super().create_engine(url)
 
 
 class _PostgreSQLBackend(_DatabaseBackend):
