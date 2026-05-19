@@ -1,6 +1,6 @@
 """场景: test_rich — 完整数据（多资产 + 负债 + 心愿 + 儿童）。"""
 
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy.orm import Session
 
@@ -123,6 +123,21 @@ def seed_full_scenario(db: Session, verbose: bool = False) -> None:
     ChoreFactory.get_or_create_instance(
         db, template=tmpl, family_id=fam.id,
         child_user_id=child.id, date_bucket="2024-01-15", status="approved",
+    )
+
+    # E2E test fixture: 「测试家务」 with today's instance for chore-approval / milestone tests
+    test_chore_tmpl, _ = ChoreFactory.get_or_create_template(
+        db, family_id=fam.id, created_by=user.id,
+        name="测试家务", emoji="🧪", coin_reward=5,
+        frequency="daily", assignment_type="assigned",
+        assigned_child_ids=[child.id],
+    )
+    ChoreFactory.get_or_create_instance(
+        db, template=test_chore_tmpl, family_id=fam.id,
+        child_user_id=child.id,
+        date_bucket=datetime.utcnow().strftime("%Y-%m-%d"),
+        status="available",
+        submitted_at=None, approved_at=None,
     )
 
     # 初始星星币

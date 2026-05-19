@@ -52,8 +52,8 @@ const EMPTY_STATE_PAGES = [
   {
     name: 'AIHub',
     path: '/ai',
-    // AIHub 无报告时显示 .report-empty-card
-    emptySelector: '.report-empty-card',
+    // AIHub 无报告时显示 .report-empty-card；未配置 AI 提供商时显示 .ai-disabled-card
+    emptySelector: '.report-empty-card, .ai-disabled-card',
     description: 'AI 中心显示空报告引导卡片',
   },
 ]

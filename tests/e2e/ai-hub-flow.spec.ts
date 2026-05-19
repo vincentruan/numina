@@ -195,6 +195,7 @@ test.describe('AI hub and features', () => {
   })
 
   test('AI hub navigates to sub-pages', async ({ page }) => {
+    test.skip(!process.env.RUN_AI_TESTS, 'AI capabilities API requires a configured provider — set RUN_AI_TESTS=1 to run')
     await richFamily(page)
     await page.goto('/ai')
     await page.waitForLoadState('domcontentloaded')

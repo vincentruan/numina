@@ -2,6 +2,11 @@ import { test, expect } from '@playwright/test'
 import { loginAs } from '../lib/auth'
 
 test.describe('AI chat entry flow', () => {
+  // Requires demouser (only seeded without --skip-demo) and an active AI
+  // provider. CI seeds with --skip-demo and has no LLM access, so skip
+  // unless RUN_DEMOUSER_TESTS=1 is set.
+  test.skip(!process.env.RUN_DEMOUSER_TESTS, 'demouser-only test — set RUN_DEMOUSER_TESTS=1 to run')
+
   test('demouser can hand off AI hub input state into chat streaming UI', async ({ page }) => {
     const consoleErrors: string[] = []
     page.on('console', (msg) => {

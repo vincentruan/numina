@@ -32,15 +32,14 @@ def seed_single_asset_scenario(db: Session, verbose: bool = False) -> None:
         db,
         user_id=user.id,
         family_id=fam.id,
-        name="MacBook Pro 16寸",
+        name="测试房产",
         asset_type="physical",
-        category_name="数码",
-        purchase_price=19999,
-        current_value=15000,
-        purchase_date=date(2023, 6, 1),
+        category_name="房产",
+        purchase_price=3500000,
+        current_value=4000000,
+        purchase_date=date(2020, 6, 1),
         usage_frequency="daily",
-        expected_lifespan_days=1825,
-        location="家庭办公室",
+        location="测试地址",
     )
 
     print("  [ok] test_asset — 单资产账号已创建")
