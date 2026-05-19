@@ -41,4 +41,7 @@ export interface AgentEvent {
     message: string
     code: string
   }
+  // capability.error may also be sent as a flat object: { type, code, message }
+  code?: string
+  message?: string
 }

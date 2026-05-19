@@ -46,6 +46,7 @@ export function useAITask(
   const sessionId = ref<string | null>(null)
   const isConsoleOpen = ref(false)
   const queuePosition = ref<number | null>(null)
+  const errorCode = ref<string | null>(null)
 
   let abortController: AbortController | null = null
   let timer: ReturnType<typeof setInterval> | null = null
@@ -54,6 +55,7 @@ export function useAITask(
   let startTime: number | null = null
   let thinkStartTime: number | null = null
   let completedFired = false
+  let postProcessingPollTimer: ReturnType<typeof setTimeout> | null = null
 
   // ── Elapsed timer ──────────────────────────────────────────────────────────
 
@@ -103,7 +105,7 @@ export function useAITask(
           queuePosition.value = task.queue_position ?? null
           return
         }
-        if (task.status === 'running') {
+        if (task.status === 'running' || task.status === 'post_processing') {
           // Queued task was promoted — stop polling and reconnect to the stream
           stopPolling()
           await resumeStream(task)
@@ -162,10 +164,21 @@ export function useAITask(
         // summary may be in result.summary — already accumulated via token.stream
         break
       case 'capability.error':
+        // R6.1: 不清空 thinkContent / answerContent — 保留对话文本以便用户阅读
         status.value = 'failed'
         phase.value = null
+        // Backend emits flat shape: { type, code, message }; legacy nested: { error: { code, message } }
+        {
+          const rawCode = event.code ?? event.error?.code ?? 'extraction_failed'
+          const normalized = rawCode.startsWith('circuit_blocked:')
+            ? rawCode.slice('circuit_blocked:'.length)
+            : rawCode
+          errorCode.value = normalized
+        }
         stopTimer()
         stopThinkTimer()
+        // R6.4: do not collapse the console on failure
+        // do NOT call onComplete() — task did not actually finish
         break
     }
   }
@@ -196,17 +209,15 @@ export function useAITask(
         if (text) parser.push(text)
       }
       parser.flush()
-      status.value = 'completed'
-      phase.value = null
-      thinkDone.value = true
+      // Stream ended — but task may still be in post_processing on backend.
+      // R1.3: Don't claim 'completed' until backend confirms via getAITask.
+      // If a capability.error event already set status='failed', skip the post-processing wait.
+      if (status.value !== 'failed') {
+        await waitForTerminalStatus()
+      }
       stopTimer()
       stopThinkTimer()
       stopPolling()
-      isConsoleOpen.value = false
-      if (!completedFired) {
-        completedFired = true
-        onComplete?.()
-      }
     } catch (err: unknown) {
       // Cancel reader on abort to signal backend
       if (err instanceof Error && err.name === 'AbortError') {
@@ -224,11 +235,58 @@ export function useAITask(
         // Ignore
       }
       status.value = 'failed'
+      errorCode.value = errorCode.value ?? 'stream_error'
       phase.value = null
       stopTimer()
       stopThinkTimer()
       stopPolling()
     }
+  }
+
+  // ── Post-stream terminal-status wait ───────────────────────────────────────
+  // After the agent NDJSON stream ends, the backend transitions through
+  // post_processing → completed/failed. Poll briefly until we see a terminal
+  // state, with a hard ceiling of POST_PROCESSING_MAX_MS to avoid hanging UI.
+
+  const POST_PROCESSING_POLL_INTERVAL_MS = 200
+  const POST_PROCESSING_MAX_MS = 8000
+
+  async function waitForTerminalStatus() {
+    const deadline = Date.now() + POST_PROCESSING_MAX_MS
+    while (Date.now() < deadline) {
+      try {
+        const task = await getAITask(capability)
+        if (task.status === 'completed') {
+          status.value = 'completed'
+          phase.value = null
+          thinkDone.value = true
+          isConsoleOpen.value = false
+          if (!completedFired) {
+            completedFired = true
+            onComplete?.()
+          }
+          return
+        }
+        if (task.status === 'failed' || task.status === 'timeout' || task.status === 'cancelled') {
+          status.value = task.status
+          if (status.value === 'failed' && !errorCode.value) {
+            errorCode.value = 'extraction_failed'
+          }
+          phase.value = null
+          return
+        }
+        // running / post_processing → keep polling
+      } catch {
+        // transient — keep polling
+      }
+      await new Promise((resolve) => {
+        postProcessingPollTimer = setTimeout(resolve, POST_PROCESSING_POLL_INTERVAL_MS)
+      })
+    }
+    // Hit the ceiling without a terminal state — surface as failed
+    status.value = 'failed'
+    errorCode.value = errorCode.value ?? 'post_processing_timeout'
+    phase.value = null
   }
 
   // ── Start stream ───────────────────────────────────────────────────────────
@@ -242,6 +300,7 @@ export function useAITask(
     answerContent.value = ''
     thinkDone.value = false
     thinkSeconds.value = 0
+    errorCode.value = null
     phase.value = 'connecting'
     status.value = 'running'
     isConsoleOpen.value = true
@@ -295,6 +354,7 @@ export function useAITask(
     answerContent.value = ''
     thinkDone.value = false
     thinkSeconds.value = 0
+    errorCode.value = null
     completedFired = false
 
     const elapsed = existingTask.started_at
@@ -337,7 +397,7 @@ export function useAITask(
   async function checkAndResume() {
     try {
       const task = await getAITask(capability)
-      if (task.status === 'running') {
+      if (task.status === 'running' || task.status === 'post_processing') {
         await resumeStream(task)
       } else if (task.status === 'queued') {
         status.value = 'queued'
@@ -400,7 +460,7 @@ export function useAITask(
       stopPolling()
       stopTimer()
       stopThinkTimer()
-    } else if (status.value === 'running' || status.value === 'queued') {
+    } else if (status.value === 'running' || status.value === 'queued' || status.value === 'post_processing') {
       // Resume when tab becomes visible again
       checkAndResume()
     }
@@ -416,6 +476,10 @@ export function useAITask(
     stopTimer()
     stopThinkTimer()
     stopPolling()
+    if (postProcessingPollTimer) {
+      clearTimeout(postProcessingPollTimer)
+      postProcessingPollTimer = null
+    }
     document.removeEventListener('visibilitychange', onVisibilityChange)
   })
 
@@ -431,6 +495,7 @@ export function useAITask(
     sessionId,
     isConsoleOpen,
     queuePosition,
+    errorCode,
     startStream,
     cancelTask,
   }
