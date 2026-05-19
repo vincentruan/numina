@@ -1,36 +1,36 @@
 <template>
   <div class="join-page">
     <div class="join-header">
-      <h1 class="app-title">加入家庭</h1>
-      <p class="app-subtitle">使用邀请码加入已有家庭</p>
+      <h1 class="app-title">{{ t('auth.joinFamilyTitle') }}</h1>
+      <p class="app-subtitle">{{ t('auth.joinFamilySubtitle') }}</p>
     </div>
 
     <van-form class="join-form" @submit="onSubmit">
       <van-cell-group inset>
         <van-field
           v-model="form.invite_code"
-          label="邀请码"
-          placeholder="请输入家庭邀请码"
+          :label="t('auth.inviteCodeLabel')"
+          :placeholder="t('auth.inviteCodePlaceholder')"
           :rules="[{ required: true, message: t('auth.form.inviteCodeRequired') }]"
         />
         <van-field
           v-model="form.username"
-          label="用户名"
-          placeholder="请输入用户名"
+          :label="t('auth.usernameLabel')"
+          :placeholder="t('auth.usernamePlaceholder')"
           :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
         />
         <van-field
           v-model="form.display_name"
-          label="显示名称"
-          placeholder="请输入显示名称"
+          :label="t('auth.displayNameLabel')"
+          :placeholder="t('auth.displayNamePlaceholder')"
           :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
         />
         <div class="password-field-wrapper">
           <van-field
             v-model="form.password"
             :type="showPassword ? 'text' : 'password'"
-            label="密码"
-            placeholder="请输入密码(至少6位)"
+            :label="t('auth.passwordLabel')"
+            :placeholder="t('auth.passwordPlaceholder')"
             :rules="[
               { required: true, message: t('auth.form.passwordRequired') },
               { validator: (v: string) => v.length >= 6, message: t('auth.form.passwordMin6') }
@@ -45,8 +45,8 @@
           <van-field
             v-model="confirmPassword"
             :type="showConfirmPassword ? 'text' : 'password'"
-            label="确认密码"
-            placeholder="请再次输入密码"
+            :label="t('auth.confirmPasswordLabel')"
+            :placeholder="t('auth.confirmPasswordPlaceholder')"
             :rules="[
               { required: true, message: t('auth.form.confirmPasswordRequired') },
               { validator: (v: string) => v === form.password, message: t('auth.form.passwordMismatch') }
@@ -64,15 +64,15 @@
 
       <div class="form-actions">
         <van-button round block type="primary" native-type="submit" :loading="loading">
-          加入家庭
+          {{ t('auth.joinFamilyButton') }}
         </van-button>
       </div>
     </van-form>
 
     <div class="join-links">
-      <router-link to="/login">已有账号？去登录</router-link>
+      <router-link to="/login">{{ t('auth.hasAccountLogin') }}</router-link>
       <span class="divider">|</span>
-      <router-link to="/register">创建新家庭</router-link>
+      <router-link to="/register">{{ t('auth.createNewFamily') }}</router-link>
     </div>
   </div>
 </template>
