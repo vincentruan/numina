@@ -101,6 +101,8 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
+    total_approved_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     family = relationship("Family", back_populates="members", foreign_keys=[family_id])
     assets = relationship("Asset", back_populates="user")
     liabilities = relationship("Liability", back_populates="user")
