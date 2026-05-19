@@ -35,16 +35,22 @@
         </van-field>
         <van-field :label="t('baby.choreForm.frequencyLabel')" name="frequency" readonly>
           <template #input>
-            <van-tag type="primary" size="medium">
-              {{ template?.frequency === 'daily' ? t('choreTemplate.frequencyDaily') : t('choreTemplate.frequencyWeekly') }}
-            </van-tag>
+            <div class="immutable-field">
+              <van-tag type="primary" size="medium">
+                {{ template?.frequency === 'daily' ? t('choreTemplate.frequencyDaily') : t('choreTemplate.frequencyWeekly') }}
+              </van-tag>
+              <span class="immutable-hint">{{ t('choreTemplate.immutableHint') }}</span>
+            </div>
           </template>
         </van-field>
         <van-field :label="t('baby.choreForm.assignTypeLabel')" name="assignment_type" readonly>
           <template #input>
-            <van-tag :type="template?.assignment_type === 'assigned' ? 'success' : 'warning'" size="medium">
-              {{ template?.assignment_type === 'assigned' ? t('choreTemplate.assignmentAssigned') : t('choreTemplate.assignmentPool') }}
-            </van-tag>
+            <div class="immutable-field">
+              <van-tag :type="template?.assignment_type === 'assigned' ? 'success' : 'warning'" size="medium">
+                {{ template?.assignment_type === 'assigned' ? t('choreTemplate.assignmentAssigned') : t('choreTemplate.assignmentPool') }}
+              </van-tag>
+              <span class="immutable-hint">{{ t('choreTemplate.immutableHint') }}</span>
+            </div>
           </template>
         </van-field>
         <van-field
@@ -53,7 +59,11 @@
           name="assignees"
         >
           <template #input>
-            <van-checkbox-group v-model="form.assignee_ids" direction="horizontal">
+            <van-checkbox-group
+              v-model="form.assignee_ids"
+              direction="horizontal"
+              :aria-label="t('baby.choreForm.assigneesLabel')"
+            >
               <van-checkbox
                 v-for="child in childMembers"
                 :key="child.id"
@@ -177,5 +187,16 @@ onMounted(loadData)
   display: flex;
   justify-content: center;
   padding: 40px 0;
+}
+
+.immutable-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.immutable-hint {
+  font-size: 12px;
+  color: var(--van-text-color-3, rgba(0, 0, 0, 0.4));
 }
 </style>

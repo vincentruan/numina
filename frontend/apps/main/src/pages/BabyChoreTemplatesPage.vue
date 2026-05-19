@@ -116,9 +116,16 @@ const deletingId = ref<string | null>(null)
 
 const childMembers = computed(() => familyStore.members.filter(m => m.role === 'child'))
 
+const childColorMap = computed(() => {
+  const map = new Map<string, string>()
+  for (const child of childMembers.value) {
+    map.set(String(child.id), child.avatar_color || '#FF6B6B')
+  }
+  return map
+})
+
 function getChildColor(childId: string): string {
-  const child = childMembers.value.find(c => String(c.id) === childId)
-  return child?.avatar_color || '#FF6B6B'
+  return childColorMap.value.get(childId) || '#FF6B6B'
 }
 
 async function loadData() {

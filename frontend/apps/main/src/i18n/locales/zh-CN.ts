@@ -1690,5 +1690,6 @@ export default {
     toggleFailed: '❌ 操作失败，请重试',
     deleteSuccess: '🗑️ 模板已删除',
     poolLabel: '公共池',
+    immutableHint: '创建后不可修改',
   },
 }

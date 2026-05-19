@@ -1353,5 +1353,6 @@ export default {
     toggleFailed: '❌ Operation failed, please retry',
     deleteSuccess: '🗑️ Template deleted',
     poolLabel: 'Open Pool',
+    immutableHint: 'Cannot change after creation',
   },
 }
