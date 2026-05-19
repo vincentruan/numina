@@ -29,23 +29,23 @@ def _mock_streaming_client(chunks: list[str] | None = None):
         for chunk in chunks:
             yield chunk
 
-    mock_resp = AsyncMock()
+    # The innermost object: the response returned by `async with client.stream(...) as resp`
+    mock_resp = MagicMock()
     mock_resp.aiter_text = _aiter_text
-    mock_resp.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_resp.__aexit__ = AsyncMock(return_value=False)
 
-    mock_stream_ctx = AsyncMock()
-    mock_stream_ctx.__aenter__ = AsyncMock(return_value=mock_resp)
-    mock_stream_ctx.__aexit__ = AsyncMock(return_value=False)
+    # The context manager returned by client.stream(...)
+    mock_stream_cm = MagicMock()
+    mock_stream_cm.__aenter__ = AsyncMock(return_value=mock_resp)
+    mock_stream_cm.__aexit__ = AsyncMock(return_value=False)
 
-    mock_client = AsyncMock()
-    mock_client.stream = MagicMock(return_value=mock_stream_ctx)
+    # The client returned by `async with httpx.AsyncClient(...) as client`
+    mock_client = MagicMock()
+    mock_client.stream = MagicMock(return_value=mock_stream_cm)
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
 
+    # The class itself: httpx.AsyncClient(...)
     mock_cls = MagicMock(return_value=mock_client)
-    mock_cls.__aenter__ = AsyncMock(return_value=mock_client)
-    mock_cls.__aexit__ = AsyncMock(return_value=False)
     return mock_cls
 
 
@@ -125,6 +125,9 @@ def test_refresh_spending_leaks(client, auth_headers, db):
 
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/plain")
+
+    # Consume full body so the streaming generator finishes and calls complete_task.
+    _ = resp.content
 
     db.expire_all()
     task = db.query(AITask).filter_by(family_id=family_id, capability="spending_leak").first()

@@ -31,19 +31,19 @@ class TestLocalStorageBackend:
     def test_save_creates_file_at_correct_path(self, backend, upload_dir):
         remote_path = run(backend.save(b"hello", "photo.jpg", "20260410"))
         assert remote_path == "images/20260410/photo.jpg"
-        full_path = os.path.join(upload_dir, "images", "20260410", "photo.jpg")
+        full_path = os.path.join(upload_dir, "uploads", "images", "20260410", "photo.jpg")
         assert os.path.exists(full_path)
         with open(full_path, "rb") as f:
             assert f.read() == b"hello"
 
     def test_save_creates_nested_directories(self, backend, upload_dir):
         run(backend.save(b"data", "file.png", "20260101"))
-        assert os.path.isdir(os.path.join(upload_dir, "images", "20260101"))
+        assert os.path.isdir(os.path.join(upload_dir, "uploads", "images", "20260101"))
 
     def test_save_overwrites_existing_file(self, backend, upload_dir):
         run(backend.save(b"original", "photo.jpg", "20260410"))
         run(backend.save(b"updated", "photo.jpg", "20260410"))
-        full_path = os.path.join(upload_dir, "images", "20260410", "photo.jpg")
+        full_path = os.path.join(upload_dir, "uploads", "images", "20260410", "photo.jpg")
         with open(full_path, "rb") as f:
             assert f.read() == b"updated"
 

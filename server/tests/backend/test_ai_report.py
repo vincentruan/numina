@@ -35,8 +35,14 @@ def _make_streaming_mock(chunks: list[str] | None = None):
     import json
 
     if chunks is None:
-        # Default: emit capability.end event
-        chunks = [json.dumps({"type": "capability.end", "result": {"summary": "报告生成完成。"}})]
+        # Default: emit capability.end event with parseable structured data
+        summary = (
+            "报告生成完成。\n"
+            "<!-- STRUCTURED_DATA "
+            '{"overall_score": 75, "data_completeness_score": 0.8, "narrative": "示例", "sections": {}}'
+            " -->"
+        )
+        chunks = [json.dumps({"type": "capability.end", "result": {"summary": summary}})]
 
     async def _aiter_lines():
         for chunk in chunks:

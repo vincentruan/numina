@@ -179,7 +179,7 @@ def test_get_history_returns_messages_in_order(client, auth_headers, db, tmp_pat
         )
 
     assert resp.status_code == 200
-    messages = resp.json()["data"]
+    messages = resp.json()["data"]["messages"]
     assert len(messages) == 2
     assert messages[0]["role"] == "user"
     assert messages[1]["role"] == "assistant"
@@ -197,7 +197,7 @@ def test_get_history_without_session_id_uses_latest(client, auth_headers, db, tm
         resp = client.get("/api/v1/ai/chat/history", headers=auth_headers)
 
     assert resp.status_code == 200
-    assert len(resp.json()["data"]) == 2
+    assert len(resp.json()["data"]["messages"]) == 2
 
 
 def test_get_history_empty_when_no_sessions(client, auth_headers, db):
@@ -206,7 +206,7 @@ def test_get_history_empty_when_no_sessions(client, auth_headers, db):
 
     resp = client.get("/api/v1/ai/chat/history", headers=auth_headers)
     assert resp.status_code == 200
-    assert resp.json()["data"] == []
+    assert resp.json()["data"]["messages"] == []
 
 
 def test_get_history_invalid_session_id_returns_404(client, auth_headers, db):
@@ -243,7 +243,7 @@ def test_get_history_limit_applied(client, auth_headers, db, tmp_path):
         )
 
     assert resp.status_code == 200
-    assert len(resp.json()["data"]) == 2
+    assert len(resp.json()["data"]["messages"]) == 2
 
 
 # ── GET /ai/chat/sessions ──────────────────────────────────────────────────────

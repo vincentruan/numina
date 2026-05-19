@@ -6,20 +6,20 @@ def test_mask_api_key_empty():
 
 
 def test_mask_api_key_short():
-    # len <= 14 → "****"
+    # len <= 11 → "****"
     assert mask_api_key("sk-short") == "****"
-    assert mask_api_key("a" * 14) == "****"
+    assert mask_api_key("a" * 11) == "****"
 
 
 def test_mask_api_key_boundary():
-    # len == 15 → first 6 + ******** + last 4
-    key = "abcdefghijklmno"  # 15 chars: prefix=abcdef, suffix=lmno
-    assert mask_api_key(key) == "abcdef********lmno"
+    # len == 12 → first 7 + * + last 4
+    key = "abcdefghijkl"  # 12 chars: prefix=abcdefg, suffix=ijkl, hidden=1
+    assert mask_api_key(key) == "abcdefg*ijkl"
 
 
 def test_mask_api_key_typical():
-    key = "sk-abc123def456ghi789"  # 21 chars: prefix=sk-abc, suffix=i789
-    assert mask_api_key(key) == "sk-abc********i789"
+    key = "sk-abc123def456ghi789"  # 21 chars: prefix=sk-abc1, suffix=i789, hidden=10
+    assert mask_api_key(key) == "sk-abc1**********i789"
 
 
 def test_mask_api_key_exact_10():
@@ -27,12 +27,13 @@ def test_mask_api_key_exact_10():
 
 
 def test_mask_api_key_exact_14():
-    assert mask_api_key("a" * 14) == "****"
+    # len 14 > 11 → masked: prefix=7, suffix=4, hidden=3
+    assert mask_api_key("a" * 14) == "aaaaaaa***aaaa"
 
 
 def test_mask_api_key_long():
     key = "sk-" + "x" * 50
     result = mask_api_key(key)
-    assert result.startswith("sk-xxx")
+    assert result.startswith("sk-xxxx")
     assert "********" in result
     assert result.endswith("xxxx")
