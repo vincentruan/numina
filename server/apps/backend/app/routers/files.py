@@ -60,7 +60,9 @@ async def delete_file(
     # Delete from local disk
     local_backend = LocalStorageBackend(settings.UPLOAD_DIR)
     try:
-        remote_path = _safe_relative_path(cached_file.local_path, settings.UPLOAD_DIR)
+        remote_path = _safe_relative_path(
+            cached_file.local_path, str(Path(settings.UPLOAD_DIR) / "uploads")
+        )
         await local_backend.delete(remote_path)
     except HTTPException:
         raise

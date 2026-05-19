@@ -79,8 +79,12 @@ async def refresh_leaks(
     )
 
     async def proxy_stream():
+        # Import SessionLocal lazily so test fixtures can patch the module-level
+        # binding (see tests/backend/conftest.py).
+        from apps.backend.app.database import SessionLocal as _SessionLocal
+
         buffer: list[str] = []
-        with SessionLocal() as stream_db:
+        with _SessionLocal() as stream_db:
             try:
                 async with (
                     httpx.AsyncClient(timeout=None) as client,
