@@ -100,6 +100,11 @@ describe('AIChatPage tool events', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
+    const toggle = wrapper.find('.think-toggle')
+    if (toggle.exists()) {
+      await toggle.trigger('click')
+    }
+
     expect(wrapper.text()).toContain('资产查询')
     expect(wrapper.text()).toContain('房产')
     expect(wrapper.text()).toContain('找到 2 条')

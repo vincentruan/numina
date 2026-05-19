@@ -39,6 +39,7 @@ vi.mock('../../src/utils/storage', () => ({
 vi.mock('../../src/api/ai', () => ({
   getAIConfig: vi.fn(() => Promise.resolve({ data: { ai_enabled: true } })),
   getAIReport: vi.fn(() => Promise.resolve({ data: { report: null } })),
+  getAITask: vi.fn(() => Promise.resolve({ status: 'idle' })),
   getAICapabilities,
 }))
 
