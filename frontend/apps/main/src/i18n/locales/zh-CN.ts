@@ -1734,4 +1734,17 @@ export default {
     poolLabel: '公共池',
     immutableHint: '创建后不可修改',
   },
+  analyticsPage: {
+    title: '资产分析',
+    trendCard: '资产趋势',
+    allocationCard: '资产分布',
+    pieCard: '分类占比',
+    dailyCostCard: '日均成本排行',
+    lowUsageCard: '低使用率资产',
+    netWorthChangeCard: '净值变化',
+    changeUp: '较上月上涨',
+    changeDown: '较上月下跌',
+    noChange: '持平',
+    trendEntry: '趋势',
+  },
 }

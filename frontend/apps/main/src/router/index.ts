@@ -51,6 +51,11 @@ const router = createRouter({
           component: () => import('@/pages/DashboardPage.vue')
         },
         {
+          path: 'dashboard/analytics',
+          name: 'AssetAnalytics',
+          component: () => import('@/pages/AssetAnalyticsPage.vue')
+        },
+        {
           path: 'assets',
           name: 'AssetList',
           component: () => import('@/pages/AssetListPage.vue')

@@ -4,6 +4,13 @@
       <div class="ov-label">总资产</div>
       <div class="ov-amount">
         <MoneyDisplay :amount="totalAssets" size="large" />
+        <router-link to="/dashboard/analytics" class="trend-entry" :aria-label="t('analyticsPage.trendEntry')">
+          <svg class="trend-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 12L5.5 8.5L8 11L14 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10 4H14V8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span class="trend-text">{{ t('analyticsPage.trendEntry') }}</span>
+        </router-link>
       </div>
       <div class="ov-sub-row">
         <span v-if="totalDailyCost > 0" class="ov-daily">日均 {{ currency.format(totalDailyCost) }}</span>
@@ -33,8 +40,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import { useCurrency } from '@/composables/useCurrency'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   netWorth: number
@@ -122,6 +132,9 @@ const changeText = computed(() => {
 
 .ov-amount {
   margin: 6px 0 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
 }
 
 /* Display number: large, tight negative tracking per design system */
@@ -134,6 +147,57 @@ const changeText = computed(() => {
 }
 [data-theme='dark'] .ov-amount :deep(.money-display) {
   color: #ffffff;
+}
+
+/* Trend entry: icon + text, flex item aligned right */
+.trend-entry {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  text-decoration: none;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: background 0.15s ease;
+}
+[data-theme='dark'] .trend-entry {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.trend-entry:active {
+  transform: scale(0.95);
+}
+
+.trend-icon {
+  width: 16px;
+  height: 16px;
+  color: rgba(0, 0, 0, 0.55);
+}
+[data-theme='dark'] .trend-icon {
+  color: rgba(255, 255, 255, 0.60);
+}
+
+.trend-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.65);
+}
+[data-theme='dark'] .trend-text {
+  color: rgba(255, 255, 255, 0.70);
+}
+
+/* Responsive fallback: stack on narrow screens */
+@media (max-width: 320px) {
+  .ov-amount {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .trend-entry {
+    align-self: flex-end;
+  }
 }
 
 .ov-sub-row {

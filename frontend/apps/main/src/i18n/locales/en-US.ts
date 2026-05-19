@@ -1397,4 +1397,17 @@ export default {
     poolLabel: 'Open Pool',
     immutableHint: 'Cannot change after creation',
   },
+  analyticsPage: {
+    title: 'Asset Analytics',
+    trendCard: 'Asset Trend',
+    allocationCard: 'Asset Allocation',
+    pieCard: 'Category Distribution',
+    dailyCostCard: 'Daily Cost Ranking',
+    lowUsageCard: 'Low Usage Assets',
+    netWorthChangeCard: 'Net Worth Change',
+    changeUp: 'Up from last month',
+    changeDown: 'Down from last month',
+    noChange: 'No change',
+    trendEntry: 'Trend',
+  },
 }
