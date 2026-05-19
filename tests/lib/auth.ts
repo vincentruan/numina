@@ -81,14 +81,15 @@ export async function loginAs(page: Page, username: string, password: string): P
 }
 
 /**
- * Log in as a child user via PIN auth and establish a child browser session.
+ * Log in as a child user via two-phase auth and establish a child browser session.
  *
- * Child auth uses a different flow from adult auth:
- *   1. POST /api/v1/auth/login as parent → get parentToken
- *   2. GET /api/v1/family/children → find child by display_name, extract child_id
- *   3. POST /api/v1/auth/child/login with { child_id, pin_sequence } → get child token
- *   4. GET /api/v1/auth/me with child Bearer token → get child user object
- *   5. Navigate to / and inject localStorage['numina_user'] with child user object
+ * Child auth uses the unified two-phase login flow:
+ *   1. POST /api/v1/auth/login as parent → get parentToken (only used to look up child username)
+ *   2. GET /api/v1/family/children → find child by display_name, extract username
+ *   3. POST /api/v1/auth/login/step1 with { username: child_username, password } → temp_token
+ *   4. POST /api/v1/auth/login/step2 with { temp_token, factor_type: "emoji_pin", payload: { pin_sequence } } → child token
+ *   5. GET /api/v1/auth/me with child Bearer token → get child user object
+ *   6. Navigate to / and inject localStorage['numina_user'] with child user object
  *
  * Returns { childId, parentToken } for specs that need both contexts.
  */
@@ -112,7 +113,7 @@ export async function loginAsChild(
   const parentLoginData = await parentLoginResp.json()
   const parentToken: string = parentLoginData.data?.access_token ?? parentLoginData.access_token
 
-  // 2. Find child by display_name
+  // 2. Find child by display_name (need both id and username for the two-phase login)
   const childrenResp = await context.request.get('/api/v1/family/children', {
     headers: { Authorization: `Bearer ${parentToken}` },
   })
@@ -120,7 +121,7 @@ export async function loginAsChild(
     throw new Error(`loginAsChild: GET /family/children failed: HTTP ${childrenResp.status()}`)
   }
   const childrenData = await childrenResp.json()
-  const children: Array<{ id: string; display_name: string }> = Array.isArray(childrenData)
+  const children: Array<{ id: string; display_name: string; username?: string | null }> = Array.isArray(childrenData)
     ? childrenData
     : (childrenData.data ?? [])
   const child = children.find((c) => c.display_name === childDisplayName)
@@ -130,41 +131,62 @@ export async function loginAsChild(
     )
   }
   const childId = child.id
-
-  // 3. Child PIN login via context.request
-  const childLoginResp = await context.request.post('/api/v1/auth/child/login', {
-    data: { child_id: childId, pin_sequence: pin },
-  })
-  if (!childLoginResp.ok()) {
-    const body = await childLoginResp.text()
-    throw new Error(`loginAsChild: child PIN login failed: HTTP ${childLoginResp.status()} — ${body}`)
+  if (!child.username) {
+    throw new Error(`loginAsChild: child "${childDisplayName}" has no username; cannot perform password login`)
   }
-  const childLoginData = await childLoginResp.json()
+
+  // 3. Two-phase login — step1 verifies password and returns temp_token
+  const step1Resp = await context.request.post('/api/v1/auth/login/step1', {
+    data: { username: child.username, password: parentPassword },
+  })
+  if (!step1Resp.ok()) {
+    const body = await step1Resp.text()
+    throw new Error(`loginAsChild: step1 failed: HTTP ${step1Resp.status()} — ${body}`)
+  }
+  const step1Data = await step1Resp.json()
+  const tempToken: string = step1Data.data?.temp_token ?? step1Data.temp_token
+  if (!tempToken) {
+    throw new Error(`loginAsChild: step1 returned no temp_token (response: ${JSON.stringify(step1Data)})`)
+  }
+
+  // 4. step2 verifies emoji PIN and returns full tokens
+  const step2Resp = await context.request.post('/api/v1/auth/login/step2', {
+    data: {
+      temp_token: tempToken,
+      factor_type: 'emoji_pin',
+      payload: { pin_sequence: pin },
+    },
+  })
+  if (!step2Resp.ok()) {
+    const body = await step2Resp.text()
+    throw new Error(`loginAsChild: step2 (PIN) failed: HTTP ${step2Resp.status()} — ${body}`)
+  }
+  const childLoginData = await step2Resp.json()
   const childToken: string = childLoginData.data?.access_token ?? childLoginData.access_token
 
-  // 4. Sync cookies from APIRequestContext to BrowserContext
+  // 5. Sync cookies from APIRequestContext to BrowserContext
   const cookies = await context.request.storageState()
   if (cookies.cookies && cookies.cookies.length > 0) {
     await context.addCookies(cookies.cookies)
   }
 
-  // 5. Fetch child user object (using child-specific endpoint)
-  let meResp = await context.request.get('/api/v1/auth/child/me', {
+  // 6. Fetch child user object
+  let meResp = await context.request.get('/api/v1/auth/me', {
     headers: { Authorization: `Bearer ${childToken}` },
   })
   if (meResp.status() === 429) {
     await page.waitForTimeout(2000)
-    meResp = await context.request.get('/api/v1/auth/child/me', {
+    meResp = await context.request.get('/api/v1/auth/me', {
       headers: { Authorization: `Bearer ${childToken}` },
     })
   }
   if (!meResp.ok()) {
-    throw new Error(`loginAsChild: GET /auth/child/me failed: HTTP ${meResp.status()}`)
+    throw new Error(`loginAsChild: GET /auth/me failed: HTTP ${meResp.status()}`)
   }
   const meBody = await meResp.json()
   const childUser = meBody.data ?? meBody
 
-  // 5. Navigate to root and inject child session into localStorage
+  // 7. Navigate to root and inject child session into localStorage
   await page.goto('/')
   await page.evaluate((u) => {
     localStorage.setItem('numina_user', JSON.stringify(u))
