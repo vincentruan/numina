@@ -79,6 +79,7 @@ from apps.backend.app.models.valuation import AssetValuation  # noqa: F401
 from apps.backend.app.models.wish import Wish  # noqa: F401
 from apps.backend.app.responses import EnvelopeResponse
 from apps.backend.app.routers import activities as activities_router
+from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_router
 from apps.backend.app.routers import ai_alerts as ai_alerts_router
 from apps.backend.app.routers import ai_allocation as ai_allocation_router
 from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
@@ -370,6 +371,7 @@ app.include_router(captcha.router, prefix="/api/v1")
 app.include_router(files_router.router, prefix="/api/v1")
 # Register more specific AI routes first to avoid prefix conflicts
 app.include_router(ai_capabilities_router.router, prefix="/api/v1")
+app.include_router(admin_ai_extraction_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
