@@ -138,5 +138,7 @@ def get_file_url(
 
     # Fall back to local URL
     local_backend = LocalStorageBackend(settings.UPLOAD_DIR)
-    remote_path = _safe_relative_path(cached_file.local_path, settings.UPLOAD_DIR)
+    remote_path = _safe_relative_path(
+        cached_file.local_path, str(Path(settings.UPLOAD_DIR) / "uploads")
+    )
     return {"url": local_backend.get_url(remote_path), "source": "local"}

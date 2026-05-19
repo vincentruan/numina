@@ -124,7 +124,9 @@ class StorageService:
                 .first()
             )
             if winner is not None:
-                winner_path = str(Path(winner.local_path).relative_to(settings.UPLOAD_DIR))
+                winner_path = str(
+                    Path(winner.local_path).relative_to(Path(settings.UPLOAD_DIR) / "uploads")
+                )
                 return FileRecordResponse(
                     file_id=winner.id,
                     url=backend.get_url(winner_path),

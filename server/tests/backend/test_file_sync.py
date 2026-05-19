@@ -345,7 +345,9 @@ class TestGetFileUrlEndpoint:
         user_id, family_id, token = _register_and_get_ids(client)
         headers = {"Authorization": f"Bearer {token}"}
 
-        local_file = tmp_path / "photo.jpg"
+        local_dir = tmp_path / "uploads"
+        local_dir.mkdir()
+        local_file = local_dir / "photo.jpg"
         local_file.write_bytes(b"data")
 
         cf = _make_cached_file(db, family_id=family_id, user_id=user_id, local_path=str(local_file))
