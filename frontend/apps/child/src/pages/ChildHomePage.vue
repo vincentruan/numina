@@ -138,6 +138,14 @@
         </button>
       </div>
     </div>
+
+    <!-- Celebration animation -->
+    <CelebrationAnimation
+      :visible="celebrationVisible"
+      :task-count="celebrationTaskCount"
+      :stars-earned="celebrationStarsEarned"
+      @dismiss="onCelebrationDismiss"
+    />
   </div>
 </template>
 
@@ -152,9 +160,11 @@ import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
+import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
+import { useCelebration } from '@/composables/useCelebration'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
@@ -174,6 +184,15 @@ const abandonSheetVisible = ref(false)
 const abandonTarget = ref<ChoreInstance | null>(null)
 const topWish = ref<ChildWish | null>(null)
 const settingsExpanded = ref(false)
+
+// Celebration state via composable
+const {
+  celebrationVisible,
+  celebrationTaskCount,
+  celebrationStarsEarned,
+  onCelebrationDismiss,
+  checkAndTriggerCelebration,
+} = useCelebration()
 
 const themeOptions = computed(() => [
   { value: 'system' as const, label: t('home.themeSystem') },
@@ -287,6 +306,9 @@ onMounted(async () => {
   loadingChores.value = false
   const active = wishData?.active ?? []
   topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
+
+  // Check for pending celebrations after data loads
+  checkAndTriggerCelebration(chores)
 })
 </script>
 

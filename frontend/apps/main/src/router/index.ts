@@ -294,6 +294,16 @@ const router = createRouter({
           path: 'family/wish-review',
           name: 'WishReview',
           component: () => import('@/pages/WishReviewPage.vue')
+        },
+        {
+          path: 'baby/chore-templates',
+          name: 'ChoreTemplates',
+          component: () => import('@/pages/BabyChoreTemplatesPage.vue')
+        },
+        {
+          path: 'baby/chore-templates/:id/edit',
+          name: 'ChoreTemplateEdit',
+          component: () => import('@/pages/BabyChoreTemplateEditPage.vue')
         }
       ]
     },

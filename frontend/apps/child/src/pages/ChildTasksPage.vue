@@ -154,6 +154,14 @@
         {{ t('blindBox.autoTriggeredClose') }}
       </button>
     </div>
+
+    <!-- Celebration animation -->
+    <CelebrationAnimation
+      :visible="taskCelebrationVisible"
+      :task-count="celebrationTaskCount"
+      :stars-earned="celebrationStarsEarned"
+      @dismiss="onCelebrationDismiss"
+    />
   </div>
 </template>
 
@@ -167,10 +175,12 @@ import { getMyMilestones } from '@/api/milestones'
 import { getCoinBalance } from '@/api/coins'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
+import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import { childBlindBoxApi } from '@/api/blindBox'
 import type { BlindBoxDraw } from '@/types/blindBox'
 import http from '@/api/index'
+import { useCelebration } from '@/composables/useCelebration'
 
 const { t, locale } = useI18n()
 
@@ -191,6 +201,16 @@ const celebrationMilestone = ref('')
 const milestoneQueue = ref<{ id: string; milestone_type: string }[]>([])
 const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
+
+// Celebration state via composable (renamed to avoid conflict with milestone celebrationVisible)
+const {
+  celebrationVisible: taskCelebrationVisible,
+  celebrationTaskCount,
+  celebrationStarsEarned,
+  onCelebrationDismiss,
+  checkAndTriggerCelebration,
+} = useCelebration()
+
 let pollCancelled = false
 
 const selectedDate = ref(new Date())
@@ -240,7 +260,11 @@ function markSeen(id: string) {
   const seen = getSeenIds()
   seen.add(id)
   const pruned = [...seen].slice(-200)
-  localStorage.setItem(SEEN_KEY, JSON.stringify(pruned))
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(pruned))
+  } catch {
+    // Silently fail on quota/private browsing error
+  }
 }
 
 async function checkNewMilestones() {
@@ -263,6 +287,8 @@ function showNextMilestone() {
   celebrationVisible.value = true
 }
 
+let dismissTimer: ReturnType<typeof setTimeout> | null = null
+
 function dismissCelebration() {
   if (!celebrationVisible.value) return
   celebrationVisible.value = false
@@ -271,7 +297,7 @@ function dismissCelebration() {
     milestoneQueue.value = milestoneQueue.value.slice(1)
   }
   if (milestoneQueue.value.length > 0) {
-    setTimeout(showNextMilestone, 300)
+    dismissTimer = setTimeout(showNextMilestone, 300)
   }
 }
 
@@ -403,10 +429,17 @@ onMounted(async () => {
   } catch {
     // non-blocking
   }
+
+  // Check for pending celebrations after data loads
+  checkAndTriggerCelebration(chores.value)
 })
 
 onUnmounted(() => {
   pollCancelled = true
+  if (dismissTimer) {
+    clearTimeout(dismissTimer)
+    dismissTimer = null
+  }
 })
 </script>
 

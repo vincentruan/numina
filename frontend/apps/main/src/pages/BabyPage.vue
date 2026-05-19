@@ -57,6 +57,7 @@
               <van-badge :content="pendingDrawCount" />
             </template>
           </van-cell>
+          <van-cell :title="t('baby.choreTemplates')" is-link @click="$router.push('/baby/chore-templates')" />
         </van-cell-group>
 
         <!-- Content Tabs -->
