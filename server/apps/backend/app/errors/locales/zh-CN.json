@@ -86,5 +86,7 @@
   "NOTIFICATION_NO_CHANNEL": "未配置通知渠道",
   "CHORE_INSTANCE_NOT_FOUND": "家务实例不存在",
   "CHORE_INSTANCE_STATUS_CONFLICT": "家务实例当前状态不允许此操作",
-  "CHORE_ASSIGN_TARGET_INVALID": "目标用户不是该家庭的孩子"
+  "CHORE_ASSIGN_TARGET_INVALID": "目标用户不是该家庭的孩子",
+  "CHORE_ALREADY_CLAIMED": "该家务已被认领",
+  "CHORE_NOT_YOURS": "该家务不属于你"
 }

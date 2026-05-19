@@ -86,5 +86,7 @@
   "NOTIFICATION_NO_CHANNEL": "No notification channel configured",
   "CHORE_INSTANCE_NOT_FOUND": "Chore instance not found",
   "CHORE_INSTANCE_STATUS_CONFLICT": "Chore instance status does not allow this operation",
-  "CHORE_ASSIGN_TARGET_INVALID": "Target user is not a child in this family"
+  "CHORE_ASSIGN_TARGET_INVALID": "Target user is not a child in this family",
+  "CHORE_ALREADY_CLAIMED": "This chore has already been claimed",
+  "CHORE_NOT_YOURS": "This chore does not belong to you"
 }
