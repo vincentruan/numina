@@ -115,7 +115,10 @@ jobs:
         run: |
           # Build only essential services (skip agent which requires vendor/deerflow-harness)
           docker compose build backend frontend-main frontend-child nginx
-          docker compose up -d backend frontend-main frontend-child nginx
+          # Bring up core services without strict dependency wait so we can capture logs
+          # if backend fails to become healthy in time (the next step polls /api/health).
+          docker compose up -d --no-deps backend frontend-main frontend-child
+          docker compose up -d --no-deps nginx
 
       - name: Wait for backend health
         run: |
@@ -132,6 +135,20 @@ jobs:
             fi
             sleep 2
           done
+
+      - name: Dump backend logs on failure
+        if: failure()
+        run: |
+          echo "==== backend logs ===="
+          docker compose logs backend || true
+          echo "==== frontend-main logs ===="
+          docker compose logs frontend-main || true
+          echo "==== frontend-child logs ===="
+          docker compose logs frontend-child || true
+          echo "==== nginx logs ===="
+          docker compose logs nginx || true
+          echo "==== docker ps ===="
+          docker ps -a || true
 
       - name: Seed test accounts
         run: bash tests/data/seed-data.sh --skip-demo --invite-codes CI0001,CI0002,CI0003,CI0004,CI0005,CI0006,CI0007,CI0008
