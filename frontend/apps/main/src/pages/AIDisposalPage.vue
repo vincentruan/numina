@@ -35,6 +35,8 @@
           :answer-content="taskAnswerContent"
           :elapsed-seconds="taskElapsed"
           :queue-position="taskQueuePosition"
+          :error-code="taskErrorCode"
+          @retry="onRefresh"
         />
         <van-button
           v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
@@ -178,6 +180,7 @@ const {
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   queuePosition: taskQueuePosition,
+  errorCode: taskErrorCode,
   startStream,
   cancelTask,
 } = useAITask('disposal', '/ai/disposal-suggestions/refresh/events', onScanComplete)

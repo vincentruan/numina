@@ -2,7 +2,7 @@
   <div v-if="status !== 'idle'" class="task-console">
     <!-- Header bar -->
     <div class="console-header" @click="toggleOpen">
-      <span class="console-status-icon" :class="{ 'icon-spin': status === 'running' }" aria-hidden="true">
+      <span class="console-status-icon" :class="{ 'icon-spin': status === 'running' || status === 'post_processing' }" aria-hidden="true">
         {{ statusIcon }}
       </span>
       <span class="console-title">{{ title }}</span>
@@ -15,6 +15,15 @@
 
     <!-- Body (collapsible) -->
     <div v-show="isOpen" class="console-body">
+      <!-- Failed warning bar (R6.4) -->
+      <div v-if="status === 'failed'" class="console-error-bar" role="alert">
+        <span class="error-bar-icon" aria-hidden="true">⚠️</span>
+        <span class="error-bar-text">{{ failureMessage }}</span>
+        <button class="error-bar-retry" @click.stop="$emit('retry')">
+          {{ t('aiTask.retry') }}
+        </button>
+      </div>
+
       <!-- Queued state -->
       <div v-if="status === 'queued'" class="console-queued">
         <van-loading size="16" type="spinner" class="queue-spinner" />
@@ -22,7 +31,7 @@
       </div>
 
       <!-- Phase indicator -->
-      <div v-else-if="status === 'running' && phase" class="console-phase">
+      <div v-else-if="(status === 'running' || status === 'post_processing') && phase" class="console-phase">
         <span class="phase-dot" :class="`phase-dot--${phase}`" aria-hidden="true"></span>
         <span class="phase-label">{{ phaseLabel }}</span>
       </div>
@@ -60,9 +69,9 @@
       </div>
 
       <!-- Empty running state (no content yet) -->
-      <div v-else-if="status === 'running' && !thinkContent" class="console-empty-running">
+      <div v-else-if="(status === 'running' || status === 'post_processing') && !thinkContent" class="console-empty-running">
         <van-loading size="14" type="spinner" />
-        <span>{{ t('aiTask.phase.connecting') }}</span>
+        <span>{{ status === 'post_processing' ? t('aiTask.phase.postProcessing') : t('aiTask.phase.connecting') }}</span>
       </div>
     </div>
   </div>
@@ -76,7 +85,7 @@ import DOMPurify from 'dompurify'
 import type { AITaskPhase } from '@/composables/useAITask'
 
 const props = defineProps<{
-  status: 'idle' | 'running' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
+  status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
   phase?: AITaskPhase
   thinkContent?: string
   thinkDone?: boolean
@@ -84,11 +93,13 @@ const props = defineProps<{
   answerContent?: string
   elapsedSeconds: number
   queuePosition?: number | null
+  errorCode?: string | null
   modelValue?: boolean // isOpen
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
+  retry: []
 }>()
 
 const { t } = useI18n()
@@ -110,12 +121,13 @@ function toggleOpen() {
   isOpen.value = !isOpen.value
 }
 
-// Auto-open on running/queued edge, auto-close on completed
+// Auto-open on running/queued edge, auto-close on completed.
+// R6.4: failed status keeps console open so user can read the natural-language text
 watch(
   () => props.status,
   (val, prev) => {
     if (val === 'completed' && prev !== 'completed') isOpen.value = false
-    if ((val === 'running' || val === 'queued') && (prev === 'idle' || prev === 'queued')) isOpen.value = true
+    if ((val === 'running' || val === 'queued' || val === 'failed') && (prev === 'idle' || prev === 'queued')) isOpen.value = true
   },
 )
 
@@ -152,6 +164,7 @@ onUnmounted(() => {
 const statusIcon = computed(() => {
   const icons: Partial<Record<typeof props.status, string>> = {
     running: '⏳',
+    post_processing: '⏳',
     queued: '🕐',
     completed: '✅',
     failed: '❌',
@@ -184,6 +197,24 @@ const renderedAnswer = computed(() => {
     return DOMPurify.sanitize(html)
   } catch {
     return DOMPurify.sanitize(props.answerContent)
+  }
+})
+
+const failureMessage = computed(() => {
+  switch (props.errorCode) {
+    case 'rate_limited':
+      return t('aiTask.error.rateLimited')
+    case 'circuit_open':
+      return t('aiTask.error.circuitOpen')
+    case 'extraction_failed':
+    case 'structured_extraction_failed':
+      return t('aiTask.error.extractionFailed')
+    case 'agent_stream_error':
+      return t('aiTask.error.streamError')
+    case 'post_processing_timeout':
+      return t('aiTask.error.postProcessingTimeout')
+    default:
+      return t('aiTask.error.generic')
   }
 })
 </script>
@@ -385,5 +416,45 @@ const renderedAnswer = computed(() => {
   font-size: 13px;
   color: var(--text-secondary);
   padding: 4px 0;
+}
+
+/* Failure warning bar (R6.4) */
+.console-error-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(220, 38, 38, 0.08);
+  border-left: 3px solid #dc2626;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.error-bar-icon {
+  flex-shrink: 0;
+  font-size: 16px;
+}
+
+.error-bar-text {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.error-bar-retry {
+  flex-shrink: 0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: none;
+  background: #dc2626;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.error-bar-retry:hover {
+  background: #b91c1c;
 }
 </style>
