@@ -422,7 +422,7 @@ export const createWsTicket = () =>
 // ── AI Task Status ──────────────────────────────────────────────────────────
 
 export interface AITaskStatus {
-  status: 'idle' | 'running' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
+  status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
   task_id?: string
   session_id?: string
   started_at?: string

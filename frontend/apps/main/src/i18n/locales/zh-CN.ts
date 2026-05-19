@@ -1117,11 +1117,27 @@ export default {
   aiTask: {
     status: {
       running: '分析中',
+      post_processing: '正在落库',
       completed: '已完成',
       failed: '分析失败',
       timeout: '任务超时',
       cancelled: '已终止',
     },
+    phase: {
+      connecting: '正在连接模型',
+      thinking: '思考中',
+      answering: '正在生成正文',
+      postProcessing: '正在落库',
+    },
+    error: {
+      generic: '⚠️ 分析失败，请稍后重试',
+      extractionFailed: '⚠️ 分析已完成，但结构化结果落库失败，可参考上方文本',
+      rateLimited: '⚠️ AI 输出格式异常，已暂停自动修复 30 分钟',
+      circuitOpen: '⚠️ 该功能已被熔断保护，请联系管理员重置',
+      streamError: '⚠️ 与 AI 服务通信失败，请稍后重试',
+      postProcessingTimeout: '⚠️ 结构化结果处理超时，请稍后重试',
+    },
+    retry: '重试',
     inProgress: '⏳ 任务进行中，请稍后',
     startBtn: '立即生成',
     regenBtn: '重新生成',
@@ -1141,6 +1157,19 @@ export default {
     rescanLeaks: '重新分析',
     alertsSummary: '共 {count} 条预警',
     leaksSummary: '共 {count} 条泄漏',
+    queuePosition: '排队中 (#{n})',
+    queueWaiting: '正在等待前置任务完成…',
+  },
+  admin: {
+    extractionCircuit: {
+      title: '提取熔断管理',
+      desc: '当 AI 结构化提取连续失败时，系统会自动限流或熔断。此处可查看和重置。',
+      allOk: '所有 capability 状态正常',
+      openedAt: '触发时间',
+      expiresAt: '恢复时间',
+      reset: '手动重置',
+      resetSuccess: '已重置',
+    },
   },
   timeMachine: {
     title: '资产时光机',

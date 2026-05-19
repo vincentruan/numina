@@ -48,6 +48,8 @@
         :answer-content="taskAnswerContent"
         :elapsed-seconds="taskElapsed"
         :queue-position="taskQueuePosition"
+        :error-code="taskErrorCode"
+        @retry="onCheck"
       />
       <van-button
         v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
@@ -177,6 +179,7 @@ const {
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   queuePosition: taskQueuePosition,
+  errorCode: taskErrorCode,
   startStream,
   cancelTask,
 } = useAITask('allocation', '/ai/allocation-target/check/events', onScanComplete)

@@ -5,12 +5,16 @@ import logging
 from collections.abc import AsyncGenerator
 
 import httpx
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.config import settings
+from apps.backend.app.models.ai_extraction_audit import AIExtractionAudit
 from apps.backend.app.models.user import User
+from apps.backend.app.services.ai_extraction_circuit_service import AIExtractionCircuitService
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
+from apps.backend.app.utils.snowflake import next_id
 
 logger = logging.getLogger(__name__)
 
@@ -30,25 +34,14 @@ async def proxy_capability_events(
     Yields raw NDJSON lines (with trailing newline) to the caller.
     Promotes the next queued task after completion or failure.
 
-    Args:
-        agent_path: Agent endpoint path, e.g. "/alerts/events".
-        capability: Capability name for task service calls.
-        task_id: Running task ID (captured before generator starts).
-        session_id: Chat session ID (captured before generator starts).
-        family_id: Family ID (captured before generator starts).
-        current_user: Authenticated user (for append_message).
-        db: Database session from the request context (used for initial query only).
-        extra_json: Optional extra JSON body fields for the agent request.
+    Task state machine (R1):
+      running → [stream ends] → post_processing → [parse+write success] → completed
+                                                 → [parse+write fail]    → failed + capability.error
     """
-    # Capture session_id and user_id before streaming (don't use detached session_obj)
     user_id = current_user.id
 
-    # Import SessionLocal inside generator to respect test overrides
-    # (Test fixtures override SessionLocal after module imports are cached)
     from apps.backend.app.database import SessionLocal
 
-    # Create a NEW db session for the generator (will be closed when generator ends)
-    # This avoids using the request's db session after FastAPI closes it
     gen_db = SessionLocal()
 
     answer_parts: list[str] = []
@@ -83,54 +76,126 @@ async def proxy_capability_events(
                 except (json.JSONDecodeError, AttributeError):
                     pass
 
-        # Success path - use generator's own db session
+        # Stream ended — enter post_processing (R1.1)
+        AITaskService.mark_post_processing(task_id, gen_db)
+
         answer = "".join(answer_parts)
         if answer:
-            # Fetch session in generator's db (fresh query, not detached instance)
             session_obj = ChatSessionService.get_session(session_id, family_id, gen_db)
             if session_obj:
-                # Fetch user in generator's db
                 user = gen_db.query(User).filter(User.id == user_id).first()
                 if user:
                     await ChatSessionService.append_message(
                         session_obj, "assistant", answer, user, gen_db
                     )
-        # Task completion semantics:
-        # Task is marked complete BEFORE result persistence. This is intentional:
-        # "completed" means "agent stream finished successfully" not "results persisted".
-        # If persistence fails, user can still view the text answer in session history.
-        # The writer's rollback ensures no partial/corrupted data remains in DB.
-        AITaskService.complete_task(task_id, gen_db)
 
-        # Extract structured results from answer and persist to DB
-        # This is a best-effort operation — failure is logged but not fatal
+        # Parse + write structured results (R1.2)
         from apps.backend.app.services.ai_result_parser import parse_capability_result
         from apps.backend.app.services.ai_result_writer import write_capability_results
 
-        try:
-            results = parse_capability_result(capability, answer, family_id, gen_db)
-            if results:
-                write_capability_results(capability, family_id, results, gen_db)
-        except Exception as result_error:
-            logger.error(
-                f"[{capability}] failed to parse/write results for family {family_id}: {result_error}"
-            )
-            # Result persistence failed, but task completed successfully
-            # The writer's rollback handles DB cleanup; log and continue
+        data, method = await parse_capability_result(capability, answer, family_id, gen_db)
 
-        next_task = AITaskService.get_next_queued_task(family_id, gen_db)
-        if next_task:
-            AITaskService.promote_queued_task(next_task.id, gen_db)
+        # Write audit record (R2.4 / R5.1)
+        _write_audit(
+            gen_db,
+            family_id=family_id,
+            capability=capability,
+            task_id=task_id,
+            method=method,
+            error_msg=None if data is not None else "extraction_failed",
+            answer_excerpt=answer[:500] if answer else None,
+        )
+
+        if data is not None:
+            try:
+                write_capability_results(capability, family_id, data, gen_db)
+            except Exception as write_err:
+                logger.error(
+                    f"[{capability}] write_capability_results failed for family {family_id}: {write_err}"
+                )
+                AITaskService.fail_task(task_id, "structured_write_failed", gen_db)
+                yield _error_event("structured_write_failed")
+                # Evaluate circuit after failure
+                AIExtractionCircuitService.evaluate(family_id, capability, gen_db)
+                _promote_next(family_id, gen_db)
+                return
+
+            # All good → completed (R1.2)
+            AITaskService.complete_task(task_id, gen_db)
+        else:
+            # Extraction failed (regex + fallback both missed)
+            logger.error(
+                f"[{capability}] structured extraction failed for family {family_id}, "
+                f"method={method}, answer[:200]={answer[:200] if answer else ''}"
+            )
+            AITaskService.fail_task(task_id, "structured_extraction_failed", gen_db)
+            # Evaluate circuit breaker (may transition to rate_limited/circuit_open)
+            AIExtractionCircuitService.evaluate(family_id, capability, gen_db)
+            yield _error_event("extraction_failed")
+
+        _promote_next(family_id, gen_db)
     except Exception as e:
         logger.error(f"[{capability}] proxy_capability_events failed: {e}")
-        # Error path - use generator's own db session
         AITaskService.fail_task(task_id, "agent_stream_error", gen_db)
-        next_task = AITaskService.get_next_queued_task(family_id, gen_db)
-        if next_task:
-            AITaskService.promote_queued_task(next_task.id, gen_db)
-        yield (
-            json.dumps({"type": "capability.error", "message": "agent_stream_error"}) + "\n"
-        ).encode("utf-8")
+        _promote_next(family_id, gen_db)
+        yield _error_event("agent_stream_error")
     finally:
-        # ALWAYS close the generator's db session
         gen_db.close()
+
+
+def _promote_next(family_id: int, db: Session) -> None:
+    next_task = AITaskService.get_next_queued_task(family_id, db)
+    if next_task:
+        AITaskService.promote_queued_task(next_task.id, db)
+
+
+def _error_event(code: str) -> bytes:
+    return (
+        json.dumps({"type": "capability.error", "code": code, "message": code}) + "\n"
+    ).encode("utf-8")
+
+
+def _write_audit(
+    db: Session,
+    family_id: int,
+    capability: str,
+    task_id: str,
+    method: str,
+    error_msg: str | None,
+    answer_excerpt: str | None,
+) -> None:
+    """Best-effort audit write — never raises."""
+    try:
+        audit = AIExtractionAudit(
+            id=next_id(),
+            family_id=family_id,
+            capability=capability,
+            task_id=task_id,
+            method=method,
+            error_msg=error_msg,
+            answer_excerpt=answer_excerpt,
+        )
+        db.add(audit)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"[{capability}] audit write failed: {e}")
+
+
+def check_circuit_blocked(family_id: int, capability: str, db: Session) -> StreamingResponse | None:
+    """Check if the circuit breaker blocks this capability for the family.
+
+    Returns a StreamingResponse with a single capability.error NDJSON line if blocked,
+    or None if the request should proceed normally.
+    """
+    blocked, reason = AIExtractionCircuitService.is_open(family_id, capability, db)
+    if not blocked:
+        return None
+
+    async def _blocked_stream():
+        yield _error_event(f"circuit_blocked:{reason}")
+
+    return StreamingResponse(
+        _blocked_stream(),
+        media_type="application/x-ndjson",
+    )

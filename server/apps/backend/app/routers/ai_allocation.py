@@ -17,7 +17,7 @@ from apps.backend.app.models.ai_allocation_drift_result import AIAllocationDrift
 from apps.backend.app.models.ai_allocation_target import AIAllocationTarget
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
 from apps.backend.app.schemas.ai_results import (
     AllocationDriftResultPayload,
     AllocationDriftResultResponse,
@@ -156,6 +156,10 @@ async def events_check_drift(
     db: Session = Depends(get_db),
 ):
     """检测当前配置与目标的漂移（NDJSON 事件流）。"""
+    blocked_resp = check_circuit_blocked(current_user.family_id, "allocation", db)
+    if blocked_resp is not None:
+        return blocked_resp
+
     target = (
         db.query(AIAllocationTarget)
         .filter(AIAllocationTarget.family_id == current_user.family_id)

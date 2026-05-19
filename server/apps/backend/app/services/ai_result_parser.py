@@ -1,10 +1,13 @@
 """AI capability result parser — extract structured data from LLM answer text.
 
 Strategy:
-1. Regex extraction: Look for `<!-- STRUCTURED_DATA ... -->` delimiter
+1. Regex extraction: Look for `<!-- STRUCTURED_DATA ... -->` delimiter, then
+   markdown ```json fence, then bare balanced JSON at tail.
 2. LLM fallback: Use cheapest available model from family's provider config
+   to coerce the answer into JSON.
 """
 
+import asyncio
 import json
 import logging
 import re
@@ -17,9 +20,19 @@ from apps.backend.app.services.ai_crypto import decrypt_api_key
 
 logger = logging.getLogger(__name__)
 
-# Regex pattern for structured data block
+LLM_FALLBACK_MAX_TOKENS = 800
+LLM_FALLBACK_TEMPERATURE = 0.1
+LLM_FALLBACK_TIMEOUT_SECONDS = 5.0
+
+# Regex patterns for structured data extraction (priority order)
+# 1. HTML comment: <!-- STRUCTURED_DATA ... -->
 STRUCTURED_DATA_PATTERN = re.compile(
     r'<!-- STRUCTURED_DATA\s*\n?(.*?)\n?\s*-->',
+    re.DOTALL
+)
+# 2. Markdown JSON fence: ```json ... ```
+JSON_FENCE_PATTERN = re.compile(
+    r'```json\s*\n(.*?)\n\s*```',
     re.DOTALL
 )
 
@@ -120,12 +133,79 @@ CAPABILITY_SCHEMAS = {
 }
 
 
-def _extract_structured_block(answer_text: str) -> str | None:
-    """Extract the STRUCTURED_DATA block from answer text."""
+def _extract_bare_json(answer_text: str) -> str | None:
+    """Find the longest balanced JSON object/array in the text.
+
+    Scans all `{` and `[` openers from left to right, returning the longest
+    balanced match. Tracks string boundaries so brackets inside string literals
+    do not corrupt depth counting.
+    """
+    if not answer_text:
+        return None
+
+    best: str | None = None
+    for i, ch in enumerate(answer_text):
+        if ch in ('{', '['):
+            block = _balanced_walk(answer_text, i)
+            if block is not None and (best is None or len(block) > len(best)):
+                best = block
+    return best
+
+
+def _balanced_walk(text: str, start: int) -> str | None:
+    """Walk from `start` forward, returning the balanced substring or None."""
+    open_ch = text[start]
+    close_ch = ']' if open_ch == '[' else '}'
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if ch == '\\' and in_string:
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == open_ch:
+            depth += 1
+        elif ch == close_ch:
+            depth -= 1
+            if depth == 0:
+                return text[start:i + 1]
+    return None
+
+
+def _extract_structured_block(answer_text: str) -> tuple[str | None, str]:
+    """Extract a structured JSON block from answer text using three carriers.
+
+    Priority order:
+    1. ``<!-- STRUCTURED_DATA ... -->`` HTML comment (current protocol)
+    2. ```` ```json ... ``` ```` markdown fence
+    3. Bare JSON at tail (balanced bracket walk)
+
+    Returns:
+        (block_str, method_label) where method_label is one of:
+        ``regex_html`` | ``regex_fence`` | ``regex_bare`` | ``regex_failed``.
+    """
     match = STRUCTURED_DATA_PATTERN.search(answer_text)
     if match:
-        return match.group(1).strip()
-    return None
+        return match.group(1).strip(), "regex_html"
+
+    match = JSON_FENCE_PATTERN.search(answer_text)
+    if match:
+        return match.group(1).strip(), "regex_fence"
+
+    bare = _extract_bare_json(answer_text)
+    if bare is not None:
+        return bare, "regex_bare"
+
+    return None, "regex_failed"
 
 
 def _validate_json(data: Any, capability: str) -> bool:
@@ -152,12 +232,12 @@ def _validate_json(data: Any, capability: str) -> bool:
     return True
 
 
-def parse_capability_result(
+async def parse_capability_result(
     capability: str,
     answer_text: str,
     family_id: int,
     db: Session,
-) -> list[dict] | dict | None:
+) -> tuple[list[dict] | dict | None, str]:
     """Parse structured results from LLM answer text.
 
     Args:
@@ -167,30 +247,44 @@ def parse_capability_result(
         db: Database session
 
     Returns:
-        - For array-type capabilities (alerts, disposal, spending_leak): list[dict]
-        - For object-type capabilities (report, allocation, liability): dict
-        - None if extraction fails
+        (data, method) where:
+        - data: parsed structured data or None if extraction fails
+        - method: extraction method label for audit
     """
-    # Step 1: Regex extraction
-    block = _extract_structured_block(answer_text)
+    # Step 1: Regex extraction (three carriers)
+    block, method = _extract_structured_block(answer_text)
     if block:
         try:
             data = json.loads(block)
             if _validate_json(data, capability):
-                logger.info(f"[{capability}] regex extraction succeeded, got {len(data) if isinstance(data, list) else 1} items")
-                return data
+                logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(data) if isinstance(data, list) else 1} items")
+                return data, method
             else:
-                logger.warning(f"[{capability}] regex extracted JSON but validation failed")
+                logger.warning(f"[{capability}] regex extracted JSON via {method} but validation failed")
         except json.JSONDecodeError as e:
-            logger.warning(f"[{capability}] regex found block but JSON parse failed: {e}")
+            logger.warning(f"[{capability}] regex found block via {method} but JSON parse failed: {e}")
 
-    # Step 2: LLM fallback (not implemented yet — will be added in Phase 2)
-    # For now, return None and log warning
+    # Step 2: LLM fallback
+    fallback_data = await _llm_fallback_extract(capability, answer_text, family_id, db)
+    if fallback_data is not None:
+        return fallback_data, "llm_fallback_hit"
+
     logger.warning(f"[{capability}] structured data extraction failed, no results persisted")
-    return None
+    return None, "failed"
 
 
-# Placeholder for LLM fallback (to be implemented)
+def _build_extraction_prompt(capability: str, answer_text: str) -> str:
+    schema = CAPABILITY_SCHEMAS.get(capability, {})
+    schema_str = json.dumps(schema, ensure_ascii=False, indent=2)
+    truncated = answer_text[:3000]
+    return (
+        f"以下是 {capability} 分析文本，请提取其中的结构化信息为 JSON。\n"
+        f"Schema：\n{schema_str}\n\n"
+        f"分析文本：\n{truncated}\n\n"
+        f"仅输出 JSON，不输出任何解释。"
+    )
+
+
 async def _llm_fallback_extract(
     capability: str,
     answer_text: str,
@@ -199,12 +293,10 @@ async def _llm_fallback_extract(
 ) -> list[dict] | dict | None:
     """Use lightweight LLM to extract structured data from answer text.
 
-    TODO: Implement in Phase 2. This requires:
-    1. Fetch family's cheapest provider config
-    2. Call LLM with extraction prompt
-    3. Parse and validate response
+    Picks family's cheapest active provider (by display_order ASC NULLS LAST),
+    calls LLM with extraction prompt under a 5s timeout, parses and validates.
+    Returns None on any failure.
     """
-    # Get cheapest provider config for this family
     configs = (
         db.query(AIProviderConfig)
         .filter(
@@ -212,22 +304,105 @@ async def _llm_fallback_extract(
             AIProviderConfig.api_key_encrypted.isnot(None),
             AIProviderConfig.is_active.is_(True),
         )
-        .order_by(AIProviderConfig.display_order.asc())
+        .order_by(AIProviderConfig.display_order.asc().nulls_last())
         .all()
     )
 
     if not configs:
-        logger.warning(f"[{capability}] LLM fallback failed: no provider config for family {family_id}")
+        logger.warning(f"[{capability}] LLM fallback: no active provider for family {family_id}")
         return None
 
-    # Pick first (cheapest) config
     config = configs[0]
     api_key = decrypt_api_key(config.api_key_encrypted)
     if not api_key:
-        logger.warning(f"[{capability}] LLM fallback failed: could not decrypt API key")
+        logger.warning(f"[{capability}] LLM fallback: could not decrypt API key")
         return None
 
-    # TODO: Call LLM with extraction prompt
-    # This will be implemented in a follow-up task
+    prompt = _build_extraction_prompt(capability, answer_text)
 
+    try:
+        raw = await asyncio.wait_for(
+            _call_llm(
+                provider=config.provider,
+                api_key=api_key,
+                model_id=config.model_id or "gpt-4o-mini",
+                base_url=config.base_url,
+                prompt=prompt,
+            ),
+            timeout=LLM_FALLBACK_TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s")
+        return None
+    except Exception as e:
+        logger.warning(f"[{capability}] LLM fallback call failed: {e}")
+        return None
+
+    if not raw:
+        return None
+
+    cleaned = _strip_markdown_fence(raw)
+
+    try:
+        data = json.loads(cleaned)
+    except json.JSONDecodeError as e:
+        logger.warning(f"[{capability}] LLM fallback JSON parse failed: {e}")
+        return None
+
+    if _validate_json(data, capability):
+        logger.info(f"[{capability}] LLM fallback extraction succeeded")
+        return data
+
+    logger.warning(f"[{capability}] LLM fallback JSON validation failed")
     return None
+
+
+def _strip_markdown_fence(text: str) -> str:
+    """If LLM output is wrapped in ```...``` fences, strip them."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        lines = cleaned.split("\n")
+        lines = [ln for ln in lines if not ln.strip().startswith("```")]
+        cleaned = "\n".join(lines).strip()
+    return cleaned
+
+
+async def _call_llm(
+    provider: str,
+    api_key: str,
+    model_id: str,
+    base_url: str | None,
+    prompt: str,
+) -> str | None:
+    if provider == "anthropic":
+        import anthropic
+        kwargs: dict[str, Any] = {"api_key": api_key, "timeout": LLM_FALLBACK_TIMEOUT_SECONDS}
+        if base_url:
+            kwargs["base_url"] = base_url
+        client = anthropic.AsyncAnthropic(**kwargs)
+        try:
+            msg = await client.messages.create(
+                model=model_id,
+                max_tokens=LLM_FALLBACK_MAX_TOKENS,
+                temperature=LLM_FALLBACK_TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return msg.content[0].text if msg.content else None
+        finally:
+            await client.close()
+    else:
+        from openai import AsyncOpenAI
+        kwargs = {"api_key": api_key, "timeout": LLM_FALLBACK_TIMEOUT_SECONDS}
+        if base_url:
+            kwargs["base_url"] = base_url
+        client = AsyncOpenAI(**kwargs)
+        try:
+            resp = await client.chat.completions.create(
+                model=model_id,
+                max_tokens=LLM_FALLBACK_MAX_TOKENS,
+                temperature=LLM_FALLBACK_TEMPERATURE,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            return resp.choices[0].message.content if resp.choices else None
+        finally:
+            await client.close()

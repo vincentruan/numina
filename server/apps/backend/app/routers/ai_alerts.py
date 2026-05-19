@@ -14,7 +14,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_asset_alert import AIAssetAlert
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -62,6 +62,11 @@ async def refresh_alerts_events(
     若家庭已有其他 capability 运行，则排队等待（返回 202 + queued task）。
     若同 capability 已在运行（从排队提升），则接续该任务启动 agent 流。
     """
+    # 0. 熔断短路：rate_limited / circuit_open 直接返回 capability.error，不调 agent
+    blocked_resp = check_circuit_blocked(current_user.family_id, "alerts", db)
+    if blocked_resp is not None:
+        return blocked_resp
+
     # 1. 检查同 capability 是否已在运行（可能是从排队提升的）
     existing = AITaskService.get_running_task(current_user.family_id, "alerts", db)
     if existing:
