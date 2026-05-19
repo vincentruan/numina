@@ -129,6 +129,7 @@ from apps.backend.app.routers import notification_config as notification_config_
 from apps.backend.app.routers import notifications as notifications_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import treasures as treasures_router
+from apps.backend.app.seed.categories import seed_categories
 from apps.backend.app.seed.currencies import seed_currencies
 from apps.backend.app.seed.invitation_codes import seed_invitation_codes
 from apps.backend.app.seed.storage_backends import seed_storage_backends
@@ -179,6 +180,7 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
+        seed_categories(db)
         seed_currencies(db)
         seed_invitation_codes(db)
         seed_storage_backends(db)
