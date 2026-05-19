@@ -1,7 +1,7 @@
 <template>
   <div class="overview-card">
     <div class="ov-main">
-      <div class="ov-label">总资产</div>
+      <div class="ov-label">{{ t('dashboard.totalAssets') }}</div>
       <div class="ov-amount">
         <MoneyDisplay :amount="totalAssets" size="large" />
         <router-link to="/dashboard/analytics" class="trend-entry" :aria-label="t('analyticsPage.trendEntry')">
@@ -13,23 +13,23 @@
         </router-link>
       </div>
       <div class="ov-sub-row">
-        <span v-if="totalDailyCost > 0" class="ov-daily">日均 {{ currency.format(totalDailyCost) }}</span>
-        <span class="ov-count">共 {{ assetCount }} 件</span>
+        <span v-if="totalDailyCost > 0" class="ov-daily">{{ t('dashboard.dailyCost') }} {{ currency.format(totalDailyCost) }}</span>
+        <span class="ov-count">{{ t('dashboard.assetCount', { count: assetCount }) }}</span>
         <span v-if="monthOverMonthChange != null" class="ov-change" :class="changeClass">
-          {{ changeText }} vs 上月
+          {{ changeText }} {{ t('dashboard.monthChange') }}
         </span>
       </div>
     </div>
     <div class="ov-detail">
       <div class="ov-detail-item">
-        <div class="ov-detail-label">净资产</div>
+        <div class="ov-detail-label">{{ t('dashboard.netWorth') }}</div>
         <div class="ov-detail-value">
           <MoneyDisplay :amount="netWorth" />
         </div>
       </div>
       <div class="ov-detail-divider" />
       <div class="ov-detail-item">
-        <div class="ov-detail-label">总负债</div>
+        <div class="ov-detail-label">{{ t('dashboard.totalLiabilities') }}</div>
         <div class="ov-detail-value">
           <MoneyDisplay :amount="totalLiabilities" />
         </div>
