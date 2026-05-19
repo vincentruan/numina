@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.middleware.base import BaseHTTPMiddleware
 
 from apps.backend.app.config import settings
 from apps.backend.app.core.logging_config import setup_logging
@@ -109,6 +108,7 @@ from apps.backend.app.routers import (
 from apps.backend.app.routers import assets_analysis as assets_analysis_router
 from apps.backend.app.routers import blind_box as blind_box_router
 from apps.backend.app.routers import calendar as calendar_router
+from apps.backend.app.routers import challenge_grants as challenge_grants_router
 from apps.backend.app.routers import child_blind_box as child_blind_box_router
 from apps.backend.app.routers import child_wishes as child_wishes_router
 from apps.backend.app.routers import children as children_router
@@ -250,87 +250,82 @@ async def catch_all_exception_handler(request: Request, exc: Exception) -> JSONR
 app.add_exception_handler(Exception, catch_all_exception_handler)
 
 
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+class SecurityHeadersMiddleware:
     """Add security headers to all responses (defense in depth).
 
     These headers provide additional protection even when Nginx/Cloudflare
     handles the primary security layer.
+
+    Uses pure ASGI middleware (not BaseHTTPMiddleware) to avoid buffering
+    StreamingResponse bodies. BaseHTTPMiddleware consumes the entire response
+    before sending, which breaks SSE/NDJSON streaming.
     """
 
-    async def dispatch(self, request, call_next):
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        headers_sent = False
+
+        async def send_with_headers(message):
+            nonlocal headers_sent
+            if message["type"] == "http.response.start" and not headers_sent:
+                headers_sent = True
+                # Skip for health check (minimal overhead)
+                path = scope.get("path", "")
+                if path != "/api/health":
+                    headers = list(message.get("headers", []))
+                    headers.append((b"X-Content-Type-Options", b"nosniff"))
+                    headers.append((b"X-Frame-Options", b"DENY"))
+                    headers.append((b"X-XSS-Protection", b"1; mode=block"))
+                    headers.append((b"Referrer-Policy", b"strict-origin-when-cross-origin"))
+                    headers.append((b"Permissions-Policy", b"geolocation=(), microphone=(), camera=()"))
+
+                    # CSP policy
+                    connect_src = (
+                        b"'self' http://localhost:8000 http://127.0.0.1:8000"
+                        if settings.ENVIRONMENT == "development"
+                        else b"'self'"
+                    )
+                    csp = (
+                        b"default-src 'self'; "
+                        b"script-src 'self' 'unsafe-inline'; "
+                        b"style-src 'self' 'unsafe-inline'; "
+                        b"img-src 'self' data: https:; "
+                        b"font-src 'self'; "
+                        b"connect-src " + connect_src + b"; "
+                        b"frame-ancestors 'none'; "
+                        b"base-uri 'self'; "
+                        b"form-action 'self';"
+                    )
+                    headers.append((b"Content-Security-Policy", csp))
+
+                    # HSTS in production
+                    if settings.ENVIRONMENT == "production":
+                        headers.append((b"Strict-Transport-Security", b"max-age=31536000; includeSubDomains"))
+
+                    # Cache-Control for API endpoints (except cacheable ones)
+                    # These paths are reference data that changes infrequently and can be cached briefly
+                    _CACHEABLE_API_PATHS = {
+                        "/api/v1/categories",
+                        "/api/v1/family/members",
+                        "/api/v1/family/info",
+                        "/api/v1/family",  # Root path for family info (no trailing slash per redirect_slashes=False)
+                    }
+                    if path.startswith("/api/") and path not in _CACHEABLE_API_PATHS:
+                        headers.append((b"Cache-Control", b"no-store, no-cache, must-revalidate"))
+
+                    message["headers"] = headers
+            await send(message)
+
         try:
-            response = await call_next(request)
-
-            # Skip for health check (minimal overhead)
-            if request.url.path == "/api/health":
-                return response
-
-            # X-Content-Type-Options: Prevent MIME type sniffing
-            response.headers["X-Content-Type-Options"] = "nosniff"
-
-            # X-Frame-Options: Prevent clickjacking
-            response.headers["X-Frame-Options"] = "DENY"
-
-            # X-XSS-Protection: Legacy XSS filter (modern browsers use CSP)
-            response.headers["X-XSS-Protection"] = "1; mode=block"
-
-            # Referrer-Policy: Control referrer information
-            response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-
-            # Permissions-Policy: Disable unnecessary browser features
-            response.headers["Permissions-Policy"] = (
-                "geolocation=(), microphone=(), camera=()"
-            )
-
-            # Content-Security-Policy: XSS protection
-            # Note: Vue SPA requires 'unsafe-inline' for styles/scripts
-            # This is a trade-off: CSP strictness vs SPA functionality
-            # Future: use nonce-based CSP for stricter protection
-            # In development, allow cross-origin API calls (e.g. Vite dev server → backend)
-            connect_src = "'self' http://localhost:8000 http://127.0.0.1:8000" if settings.ENVIRONMENT == "development" else "'self'"
-            csp_policy = (
-                "default-src 'self'; "
-                "script-src 'self' 'unsafe-inline'; "  # Vue SPA needs inline scripts
-                "style-src 'self' 'unsafe-inline'; "  # shareImage.ts needs inline styles
-                "img-src 'self' data: https:; "  # Allow base64 and HTTPS images
-                "font-src 'self'; "
-                f"connect-src {connect_src}; "
-                "frame-ancestors 'none'; "  # Equivalent to X-Frame-Options: DENY
-                "base-uri 'self'; "
-                "form-action 'self'; "
-            )
-            response.headers["Content-Security-Policy"] = csp_policy
-
-            # HSTS: Force HTTPS (only in production with HTTPS)
-            # Note: Cloudflare handles HTTPS, but this adds defense in depth
-            if settings.ENVIRONMENT == "production":
-                response.headers["Strict-Transport-Security"] = (
-                    "max-age=31536000; includeSubDomains"
-                )
-
-            # Cache-Control: Prevent sensitive data caching
-            # Only apply to API endpoints (static files handled by Nginx)
-            # Exclude stable read-only endpoints that intentionally use private, max-age=300
-            # to allow browser caching (data changes rarely and is family-scoped).
-            _CACHEABLE_API_PATHS = {
-                "/api/v1/categories",
-                "/api/v1/family/members",
-                "/api/v1/family/info",
-                "/api/v1/family/",
-            }
-            if (
-                request.url.path.startswith("/api/")
-                and request.url.path not in _CACHEABLE_API_PATHS
-            ):
-                response.headers["Cache-Control"] = (
-                    "no-store, no-cache, must-revalidate"
-                )
-
-            return response
+            await self.app(scope, receive, send_with_headers)
         except Exception as e:
-            logger.exception(
-                f"SecurityHeadersMiddleware error on {request.url.path}: {e}"
-            )
+            logger.exception(f"SecurityHeadersMiddleware error on {scope.get('path', '')}: {e}")
             raise
 
 
@@ -391,6 +386,8 @@ app.include_router(treasures_router.router, prefix="/api/v1")
 app.include_router(calendar_router.router, prefix="/api/v1")
 app.include_router(blind_box_router.router, prefix="/api/v1")
 app.include_router(child_blind_box_router.router, prefix="/api/v1")
+app.include_router(challenge_grants_router.router, prefix="/api/v1")
+app.include_router(challenge_grants_router.child_router, prefix="/api/v1")
 app.include_router(device_router.router, prefix="/api/v1")
 app.include_router(assets_analysis_router.router, prefix="/api/v1")
 app.include_router(ai_tasks_router.router, prefix="/api/v1")

@@ -93,6 +93,11 @@ lerna-debug.log*
 *.bak
 *.orig
 # ===========================
+# Compound Engineering
+# ===========================
+.compound-engineering/*.local.yaml
+
+# ===========================
 # Claude Code / Antigravity
 # ===========================
 # Ignore Claude local config and history, but track skills and commands

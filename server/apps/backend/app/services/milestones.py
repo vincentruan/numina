@@ -20,13 +20,16 @@ logger = logging.getLogger(__name__)
 _audit_logger = logging.getLogger("audit.milestones")
 
 # Milestone types that can only trigger once per child (lifetime)
-_ONCE_PER_CHILD = {"first_chore", "first_wish_realized", "coins_50", "coins_200"}
+_ONCE_PER_CHILD = {"first_chore", "first_wish_realized", "coins_50", "coins_200", "tasks_10", "tasks_25", "tasks_50", "tasks_100"}
 
 # Milestone types that re-trigger each new streak cycle
-_PER_CYCLE = {"streak_7", "streak_14", "streak_30"}
+_PER_CYCLE = {"streak_3", "streak_7", "streak_14", "streak_30"}
 
 # Streak thresholds for per-cycle milestones
-_STREAK_MILESTONES = {7: "streak_7", 14: "streak_14", 30: "streak_30"}
+_STREAK_MILESTONES = {3: "streak_3", 7: "streak_7", 14: "streak_14", 30: "streak_30"}
+
+# Task count thresholds for once-per-child milestones
+_TASK_MILESTONES = {10: "tasks_10", 25: "tasks_25", 50: "tasks_50", 100: "tasks_100"}
 
 
 def check_and_record_milestones(
@@ -114,7 +117,22 @@ def _check_milestones(
                 ):
                     triggered.append(mtype)
 
-    # 3. coins_50 / coins_200 — triggered by chore approval or wish realize
+    # 3. task count milestones — once per child, triggered by chore approval
+    if instance is not None:
+        total_approved = context.get("total_approved_count")
+        if total_approved is None:
+            # Query User if not in context
+            from packages.db.models.user import User
+            user = db.query(User).filter(User.id == child_user_id).first()
+            total_approved = getattr(user, "total_approved_count", 0) if user else 0
+        eligible_tasks = [mtype for threshold, mtype in sorted(_TASK_MILESTONES.items()) if total_approved >= threshold]
+        for mtype in eligible_tasks:
+            if _try_record_once_cached(
+                db, child_user_id, family_id, mtype, instance.id, "chore_instance", existing_once_per_child
+            ):
+                triggered.append(mtype)
+
+    # 4. coins_50 / coins_200 — triggered by chore approval or wish realize
     if instance is not None or wish is not None:
         ref_id = instance.id if instance else wish.id
         ref_type = "chore_instance" if instance else "child_wish"
@@ -134,9 +152,14 @@ def _check_milestones(
             triggered.append("first_wish_realized")
 
     # Return the most notable milestone for the UI toast (priority order)
-    _priority = ["first_chore", "streak_7", "streak_14", "streak_30", "coins_50", "coins_200", "first_wish_realized"]
+    _priority = ["first_chore", "streak_3", "streak_7", "streak_14", "streak_30", "tasks_10", "tasks_25", "tasks_50", "tasks_100", "coins_50", "coins_200", "first_wish_realized"]
     if triggered:
         db.commit()  # single commit for all milestone inserts
+        # Create milestone-triggered draws for streak and task milestones (best-effort, non-blocking)
+        draw_milestone_types = {"streak_3", "streak_7", "streak_14", "streak_30", "tasks_10", "tasks_25", "tasks_50", "tasks_100"}
+        for mtype in triggered:
+            if mtype in draw_milestone_types:
+                _create_milestone_draw(db, child_user_id, family_id, mtype)
     for m in _priority:
         if m in triggered:
             return m
@@ -308,3 +331,65 @@ def list_milestones(db: Session, child_user_id: str, family_id: str | None = Non
     if family_id is not None:
         q = q.filter(ChildMilestone.family_id == family_id)
     return q.order_by(ChildMilestone.triggered_at.desc()).all()
+
+
+def _create_milestone_draw(
+    db: Session,
+    child_user_id: str,
+    family_id: str,
+    milestone_type: str,
+) -> None:
+    """Create a milestone-triggered BlindBoxDraw using surprise pool.
+
+    Called after milestone flush. Wrapped in try/except — failure logs but never blocks.
+    """
+    try:
+        from apps.backend.app.models.blind_box_config import BlindBoxConfig
+        from apps.backend.app.models.blind_box_draw import BlindBoxDraw
+        from apps.backend.app.models.blind_box_gift import BlindBoxGift
+        from apps.backend.app.utils.snowflake import next_id
+
+        # Check config enabled
+        config = db.query(BlindBoxConfig).filter(BlindBoxConfig.family_id == family_id).first()
+        if not config or not config.enabled:
+            return
+
+        # Get all active gifts
+        gifts = db.query(BlindBoxGift).filter(
+            BlindBoxGift.family_id == family_id,
+            BlindBoxGift.is_active == True,  # noqa: E712
+        ).all()
+        if not gifts:
+            return
+
+        # Milestone draws always use surprise pool (value_score >= 7)
+        pool = [g for g in gifts if g.value_score >= 7]
+        if not pool:
+            pool = gifts  # fallback to full pool
+
+        # Pick highest-value gift from pool (milestone draws are celebratory)
+        gift = max(pool, key=lambda g: g.value_score)
+
+        draw = BlindBoxDraw(
+            id=next_id(),
+            family_id=family_id,
+            child_user_id=child_user_id,
+            coins_spent=0,
+            gift_id=gift.id,
+            is_surprise=True,
+            is_bonus=False,
+            is_auto_triggered=True,
+            shown_to_child=False,
+            status="pending_fulfillment",
+        )
+        db.add(draw)
+        db.flush()
+        _audit_logger.info(
+            "milestone_draw_created | child=%s family=%s milestone=%s draw_id=%s gift_id=%s",
+            child_user_id, family_id, milestone_type, draw.id, gift.id,
+        )
+    except Exception:
+        _audit_logger.exception(
+            "milestone_draw_failed | child=%s family=%s milestone=%s — ignoring",
+            child_user_id, family_id, milestone_type,
+        )

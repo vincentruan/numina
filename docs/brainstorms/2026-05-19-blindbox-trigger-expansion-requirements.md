@@ -23,11 +23,12 @@ status: confirmed
 
 **现有基础设施：**
 - `User.total_approved_count` — 累计完成任务数
-- `_STREAK_MILESTONES = {7, 14, 30}` — 连续打卡阈值
+- `_STREAK_MILESTONES = {7: "streak_7", 14: "streak_14", 30: "streak_30"}` — 连续打卡阈值（dict映射）
 - `_ONCE_PER_CHILD` — 一次性里程碑集合
+- `BlindBoxDraw` — 盲盒抽奖记录（status: pending_fulfillment → fulfilled）
+- `BonusDraw` — 免费抽奖机会（status: available → used → expired），`used_draw_id` FK to BlindBoxDraw
 - `should_upgrade_surprise()` — 惊喜池升级判断
 - `ChildMilestone` — 里程碑记录表
-- `BonusDraw` — 免费抽奖机会
 
 ---
 

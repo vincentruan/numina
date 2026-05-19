@@ -72,14 +72,16 @@
 import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { getCoinBalance, getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
+import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import { useFamilyStore } from '@/stores/family'
+import { useBalancePolling } from '@/composables/useBalancePolling'
 
 const { t } = useI18n()
 
 const familyStore = useFamilyStore()
-const balance = ref(0)
+// Balance polling via composable
+const { balance, refresh: refreshBalance } = useBalancePolling()
 const transactions = ref<CoinTransaction[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -94,8 +96,7 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [bal, txs, sibs] = await Promise.all([getCoinBalance(), getCoinLedger(), getSiblings()])
-    balance.value = bal
+    const [txs, sibs] = await Promise.all([getCoinLedger(), getSiblings()])
     transactions.value = txs
     siblings.value = sibs
   } catch {
@@ -114,6 +115,7 @@ async function doGift() {
     showGiftSheet.value = false
     selectedSiblingId.value = ''
     giftAmountStr.value = ''
+    await refreshBalance()
     await load()
   } catch {
     showToast(t('toast.grantBalanceFailed'))

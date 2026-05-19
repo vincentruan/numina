@@ -23,6 +23,7 @@ from apps.backend.app.models.bonus_draw import BonusDraw  # noqa: F401
 from apps.backend.app.models.cached_file import CachedFile  # noqa: F401
 from apps.backend.app.models.category import Category  # noqa: F401
 from apps.backend.app.models.category_financial_default import CategoryFinancialDefault  # noqa: F401
+from apps.backend.app.models.challenge_grant import ChallengeGrant  # noqa: F401
 from apps.backend.app.models.child_economy_config import ChildEconomyConfig  # noqa: F401
 from apps.backend.app.models.child_milestone import ChildMilestone  # noqa: F401
 from apps.backend.app.models.child_wish import ChildWish  # noqa: F401

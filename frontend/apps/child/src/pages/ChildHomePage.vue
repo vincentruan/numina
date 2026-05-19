@@ -76,6 +76,9 @@
       </button>
     </van-popup>
 
+    <!-- Active challenges -->
+    <ChallengeCard ref="challengeCard" />
+
     <!-- Top active wish progress -->
     <router-link v-if="topWish" to="/wishes" class="wish-preview">
       <div class="wish-preview-header">
@@ -154,17 +157,18 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
-import { getCoinBalance } from '@/api/coins'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
+import ChallengeCard from '@/components/ChallengeCard.vue'
 import { useFamilyStore } from '@/stores/family'
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
 import { useCelebration } from '@/composables/useCelebration'
+import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
@@ -174,7 +178,8 @@ const { themeMode, setMode } = useDarkMode()
 const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
 
-const balance = ref(0)
+// Balance polling via composable
+const { balance, refresh: refreshBalance } = useBalancePolling()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
 const submittingId = ref<string | null>(null)
@@ -222,7 +227,7 @@ async function complete(instanceId: string) {
     const idx = todayChores.value.findIndex(c => c.id === instanceId)
     if (idx !== -1) todayChores.value[idx] = updated
     // Refresh balance after completing a chore
-    balance.value = await getCoinBalance()
+    await refreshBalance()
   } catch {
     showToast(t('toast.submitFailed'))
   } finally {

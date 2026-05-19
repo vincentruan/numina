@@ -21,6 +21,7 @@ class BonusDraw(Base):
     family_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("families.id"), nullable=False)
     child_user_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=False)
     source_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("child_wishes.id"), nullable=True)
+    source_challenge_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("challenge_grants.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="available")
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     used_draw_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("blind_box_draws.id"), nullable=True)
