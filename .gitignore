@@ -171,7 +171,9 @@ tests/test-results/
 tests/screenshot/screenshots/audit-*.png
 tests/screenshot/screenshots/live-*.png
 tests/screenshot/screenshots/*-after-*.png
+.claude/worktrees/
 .gstack/
+.worktrees/
 .worktrees
 
 # Runtime chat data (user-generated, not source code)
@@ -180,5 +182,4 @@ data/sessions/
 server/apps/agent/data/sessions
 
 # Runtime data directory (SQLite DBs, DeerFlow checkpoints, WAL files)
-data/*.db-shm
-data/*.db-wal
+data/
