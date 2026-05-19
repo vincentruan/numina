@@ -5,6 +5,7 @@ import logging
 from collections.abc import AsyncGenerator
 
 import httpx
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.config import settings
@@ -179,3 +180,22 @@ def _write_audit(
     except Exception as e:
         db.rollback()
         logger.warning(f"[{capability}] audit write failed: {e}")
+
+
+def check_circuit_blocked(family_id: int, capability: str, db: Session) -> StreamingResponse | None:
+    """Check if the circuit breaker blocks this capability for the family.
+
+    Returns a StreamingResponse with a single capability.error NDJSON line if blocked,
+    or None if the request should proceed normally.
+    """
+    blocked, reason = AIExtractionCircuitService.is_open(family_id, capability, db)
+    if not blocked:
+        return None
+
+    async def _blocked_stream():
+        yield _error_event(f"circuit_blocked:{reason}")
+
+    return StreamingResponse(
+        _blocked_stream(),
+        media_type="application/x-ndjson",
+    )

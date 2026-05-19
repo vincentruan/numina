@@ -16,7 +16,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -128,6 +128,10 @@ async def refresh_leaks_events(
     db: Session = Depends(get_db),
 ):
     """触发 agent 扫描并刷新消费漏洞（NDJSON 事件流）。"""
+    blocked_resp = check_circuit_blocked(current_user.family_id, "spending_leak", db)
+    if blocked_resp is not None:
+        return blocked_resp
+
     # Check if there's already a running task - resume it instead of 409
     existing = AITaskService.get_running_task(
         current_user.family_id, "spending_leak", db
