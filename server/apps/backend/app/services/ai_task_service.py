@@ -171,9 +171,20 @@ class AITaskService:
         )
 
     @staticmethod
+    def mark_post_processing(task_id: int | str, db: Session) -> None:
+        """流结束后切到 post_processing；仅当当前是 running 时生效。"""
+        task = db.query(AITask).filter(AITask.id == int(task_id)).first()
+        if task and task.status == "running":
+            task.status = "post_processing"
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
+
+    @staticmethod
     def complete_task(task_id: int | str, db: Session) -> None:
         task = db.query(AITask).filter(AITask.id == int(task_id)).first()
-        if task and task.status in ("running", "queued"):
+        if task and task.status in ("running", "post_processing", "queued"):
             task.status = "completed"
             task.completed_at = datetime.utcnow()
             db.commit()
@@ -181,7 +192,7 @@ class AITaskService:
     @staticmethod
     def fail_task(task_id: int | str, error_message: str, db: Session) -> None:
         task = db.query(AITask).filter(AITask.id == int(task_id)).first()
-        if task and task.status in ("running", "queued"):
+        if task and task.status in ("running", "post_processing", "queued"):
             task.status = "failed"
             task.completed_at = datetime.utcnow()
             task.error_message = error_message[:500] if error_message else None
@@ -199,7 +210,7 @@ class AITaskService:
             .filter(
                 AITask.family_id == int(family_id),
                 AITask.capability == capability,
-                AITask.status.in_(["running", "queued"]),
+                AITask.status.in_(["running", "post_processing", "queued"]),
             )
             .first()
         )
