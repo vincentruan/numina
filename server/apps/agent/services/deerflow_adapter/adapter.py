@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import threading
+import traceback
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
@@ -23,9 +24,11 @@ from apps.agent.services.deerflow_adapter.exceptions import (
     DeerFlowTimeoutError,
 )
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+    _init_lock,
     get_family_adapter,
     invalidate_family_adapter,
 )
+from deerflow.config.app_config import reload_app_config
 
 logger = logging.getLogger(__name__)
 
@@ -100,10 +103,11 @@ class DeerFlowAdapter:
         self._timeout = timeout_seconds
         self._family_id = family_id
         self._ai_config = ai_config
+        self._config_path: str | None = None  # Store config_path for reloading before stream
 
         if family_id and ai_config:
-            # 家庭级配置模式：从缓存获取 DeerFlowClient
-            self._client = get_family_adapter(
+            # 家庭级配置模式：从缓存获取 DeerFlowClient 和 config_path
+            self._client, self._config_path = get_family_adapter(
                 family_id, ai_config,
                 subagent_enabled=subagent_enabled,
                 plan_mode=plan_mode,
@@ -185,37 +189,62 @@ class DeerFlowAdapter:
         # Queue carries StreamChunk chunks, None for clean end, or BaseException for errors.
         queue: asyncio.Queue[StreamChunk | BaseException | None] = asyncio.Queue()
 
+        def _process_event(event) -> None:
+            """Process a single stream event and put chunks into queue."""
+            if not (
+                hasattr(event, "type")
+                and event.type == "messages-tuple"
+                and isinstance(event.data, dict)
+                and event.data.get("type") == "ai"
+            ):
+                return
+            additional_kwargs = event.data.get("additional_kwargs") or {}
+            content = event.data.get("content")
+            reasoning = additional_kwargs.get("reasoning_content")
+            if isinstance(reasoning, str) and reasoning:
+                loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", reasoning))
+            if isinstance(content, list):
+                text_parts: list[str] = []
+                for block in content:
+                    if isinstance(block, dict):
+                        if block.get("type") == "thinking" and block.get("thinking"):
+                            loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", block["thinking"]))
+                        elif block.get("type") == "text" and block.get("text"):
+                            text_parts.append(block["text"])
+                if text_parts:
+                    loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", "".join(text_parts)))
+            elif isinstance(content, str) and content:
+                loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", content))
+
         def _produce() -> None:
             """Run in thread pool — puts StreamChunk objects into queue, None signals end."""
             try:
-                message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
-                for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
-                    if not (
-                        hasattr(event, "type")
-                        and event.type == "messages-tuple"
-                        and isinstance(event.data, dict)
-                        and event.data.get("type") == "ai"
-                    ):
-                        continue
-                    additional_kwargs = event.data.get("additional_kwargs") or {}
-                    content = event.data.get("content")
-                    reasoning = additional_kwargs.get("reasoning_content")
-                    if isinstance(reasoning, str) and reasoning:
-                        loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", reasoning))
-                    if isinstance(content, list):
-                        text_parts: list[str] = []
-                        for block in content:
-                            if isinstance(block, dict):
-                                if block.get("type") == "thinking" and block.get("thinking"):
-                                    loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", block["thinking"]))
-                                elif block.get("type") == "text" and block.get("text"):
-                                    text_parts.append(block["text"])
-                        if text_parts:
-                            loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", "".join(text_parts)))
-                    elif isinstance(content, str) and content:
-                        loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", content))
+                # For family-mode adapters, hold _init_lock for the entire stream to prevent
+                # concurrent requests from corrupting the global DeerFlow config singleton.
+                # This serializes family requests but guarantees config correctness.
+                if self._config_path:
+                    with _init_lock:
+                        # Set DEER_FLOW_CONFIG_PATH env var so get_app_config() resolves to our temp config
+                        prev_config_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
+                        os.environ["DEER_FLOW_CONFIG_PATH"] = str(self._config_path)
+                        try:
+                            reload_app_config(str(self._config_path))
+                            message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
+                            for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                                _process_event(event)
+                        finally:
+                            # Restore previous value (or remove if it wasn't set)
+                            if prev_config_path is not None:
+                                os.environ["DEER_FLOW_CONFIG_PATH"] = prev_config_path
+                            else:
+                                os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+                else:
+                    # Global config mode - no serialization needed
+                    message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
+                    for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                        _process_event(event)
             except Exception as e:
-                logger.error("[deerflow] stream_chunks failed: %s", e)
+                logger.error("[deerflow] stream_chunks failed: %s\n%s", e, traceback.format_exc())
                 loop.call_soon_threadsafe(queue.put_nowait, e)
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, None)

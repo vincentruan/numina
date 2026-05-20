@@ -273,7 +273,7 @@ def get_family_adapter(
     timeout_seconds: int = 120,
     subagent_enabled: bool = False,
     plan_mode: bool = False,
-) -> DeerFlowClient:
+) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
     Each client receives the shared checkpointer so multi-turn conversation
@@ -313,10 +313,10 @@ def get_family_adapter(
     with _cache_lock:
         entry = _adapter_cache.get(cache_key)
         if entry is not None:
-            client, _ = entry
+            client, config_path = entry
             _adapter_cache.move_to_end(cache_key)
             logger.debug("[deerflow_cache] reuse cached adapter for family=%s config_id=%s subagent=%s plan=%s", family_id, config_id, subagent_enabled, plan_mode)
-            return client
+            return client, config_path
 
         # Reserve the slot with a placeholder to prevent concurrent initialisations
         # for the same key (TOCTOU fix). Also evict the oldest entry if at capacity.
@@ -347,12 +347,12 @@ def get_family_adapter(
             with _cache_lock:
                 entry = _adapter_cache.get(cache_key)
                 if entry is not None:
-                    client, _ = entry
+                    client, cached_config_path = entry
                     _adapter_cache.move_to_end(cache_key)
                     # Clean up the temp config we generated but won't use
                     with contextlib.suppress(Exception):
                         shutil.rmtree(temp_config_path.parent, ignore_errors=True)
-                    return client
+                    return client, cached_config_path
 
             # Set DEER_FLOW_CONFIG_PATH inside the init lock so concurrent
             # threads for different families don't overwrite each other's path.
@@ -365,7 +365,7 @@ def get_family_adapter(
                 client = DeerFlowClient(
                     config_path=str(temp_config_path),
                     checkpointer=checkpointer,
-                    model_name=None,
+                    model_name="main",  # Use explicit model name to avoid config.models[0] IndexError
                     thinking_enabled=bool(ai_config.get("thinking_supported", False)),
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
@@ -386,7 +386,7 @@ def get_family_adapter(
             config_id,
             ai_config.get("ai_model_id"),
         )
-        return client
+        return client, temp_config_path
     except Exception as e:
         # Remove placeholder and clean up temp config on failure
         with _cache_lock:
