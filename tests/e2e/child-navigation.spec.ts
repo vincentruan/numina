@@ -32,18 +32,19 @@ test.describe('child navigation guards', () => {
   })
 
   test.describe('adult session blocked from child routes', () => {
-    test('adult → /child redirects to child SPA (/child/)', async ({ page }) => {
+    test('adult → /child redirects to child SPA (/child/) or /login', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child')
-      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
-      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
+      // nginx redirects /child → /child/ → child SPA. Child SPA's auth guard
+      // sees the adult session as not-a-child and redirects to /login.
+      await expect(page).toHaveURL(/\/(child\/|login)/, { timeout: 8_000 })
     })
 
-    test('adult → /child/tasks redirects to child SPA (/child/)', async ({ page }) => {
+    test('adult → /child/tasks redirects to child SPA (/child/) or /login', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child/tasks')
-      // Main app does window.location.replace('/child/') — nginx routes /child/* to child SPA
-      await expect(page).toHaveURL(/\/child\//, { timeout: 8_000 })
+      // Same hand-off as above; child SPA decides based on its own session.
+      await expect(page).toHaveURL(/\/(child\/|login)/, { timeout: 8_000 })
     })
   })
 
