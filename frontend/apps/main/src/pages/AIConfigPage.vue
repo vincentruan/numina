@@ -46,7 +46,8 @@
                 <span class="card-index">{{ t('aiConfig.providerIndex', { n: index + 1 }) }}</span>
                 <span class="card-name">{{ cfg.name }}</span>
                 <span class="card-provider-fmt">({{ cfg.provider }})</span>
-                <span v-if="cfg.circuit_open" class="circuit-badge">⚠️</span>
+                <span v-if="cfg.circuit_state === 'open'" class="circuit-badge">🔴</span>
+                <span v-if="cfg.circuit_state === 'half_open'" class="circuit-badge">🟡</span>
               </div>
             </div>
           </div>
@@ -145,11 +146,12 @@
               <span>{{ t('common.delete') }}</span>
             </button>
             <button
-              v-if="cfg.circuit_open"
+              v-if="cfg.circuit_state === 'open'"
               class="action-btn action-btn--warn"
+              :disabled="resettingCircuitId === cfg.id"
               @click="onResetCircuit(cfg.id)"
             >
-              <van-icon name="replay" size="18" />
+              <van-icon :name="resettingCircuitId === cfg.id ? 'loading' : 'replay'" size="18" />
               <span>{{ t('aiConfig.resetCircuit') }}</span>
             </button>
           </div>
@@ -208,6 +210,7 @@ const testingKey = ref<string | null>(null)
 const testPassedKeys = ref<Set<string>>(new Set())
 const revealedKeys = ref<Record<string, string>>({})
 const revealingId = ref<string | null>(null)
+const resettingCircuitId = ref<string | null>(null)
 
 const draggableConfigs = computed({
   get: () => aiStore.configs,
@@ -304,11 +307,14 @@ async function onDelete(cfg: ProviderConfig) {
 }
 
 async function onResetCircuit(id: string) {
+  resettingCircuitId.value = id
   try {
     await aiStore.resetCircuit(id)
     showToast(t('toast.aiConfigSaved'))
   } catch {
     showToast(t('toast.operationFailed2'))
+  } finally {
+    resettingCircuitId.value = null
   }
 }
 
