@@ -36,7 +36,17 @@ class AIConfigResponse(SnowflakeBase):
     model_1_capabilities: list[str] = []
     model_2_capabilities: list[str] = []
     model_3_capabilities: list[str] = []
-    # Circuit breaker fields
+    # Circuit breaker fields (three-state model)
+    circuit_state: str = "closed"
+    # circuit_state: closed | open | half_open
+    circuit_reason: str | None = None
+    # circuit_reason: transient | permanent_auth | permanent_account
+    recovery_schedule: str | None = None
+    # recovery_schedule: comma-separated time patterns like ":01,:31"
+    last_failure_type: str | None = None
+    # last_failure_type: transient_rate_limit | transient_server | transient_timeout | transient_network | permanent_auth | permanent_account
+    half_open_window_start: datetime | None = None
+    # Legacy circuit breaker fields (retained for backward compatibility)
     circuit_open: bool = False
     circuit_open_until: datetime | None = None
     failure_count: int = 0
@@ -64,6 +74,8 @@ class AIConfigCreate(BaseModel):
     model_1_capabilities: list[str] | None = None
     model_2_capabilities: list[str] | None = None
     model_3_capabilities: list[str] | None = None
+    # Circuit breaker config
+    recovery_schedule: str | None = None  # e.g., ":01,:31" for DashScope quota resets
 
     @field_validator("provider")
     @classmethod
@@ -90,6 +102,8 @@ class AIConfigUpdate(BaseModel):
     model_1_capabilities: list[str] | None = None
     model_2_capabilities: list[str] | None = None
     model_3_capabilities: list[str] | None = None
+    # Circuit breaker config
+    recovery_schedule: str | None = None  # e.g., ":01,:31" for DashScope quota resets
 
     @field_validator("provider")
     @classmethod

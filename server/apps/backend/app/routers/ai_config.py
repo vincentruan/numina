@@ -75,6 +75,13 @@ def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: 
         model_1_capabilities=_deserialize_capabilities(cfg.model_1_capabilities),
         model_2_capabilities=_deserialize_capabilities(cfg.model_2_capabilities),
         model_3_capabilities=_deserialize_capabilities(cfg.model_3_capabilities),
+        # Circuit breaker fields (three-state model)
+        circuit_state=cfg.circuit_state,
+        circuit_reason=cfg.circuit_reason,
+        recovery_schedule=cfg.recovery_schedule,
+        last_failure_type=cfg.last_failure_type,
+        half_open_window_start=cfg.half_open_window_start,
+        # Legacy circuit breaker fields
         circuit_open=cfg.circuit_open,
         circuit_open_until=cfg.circuit_open_until,
         failure_count=cfg.failure_count,
@@ -116,12 +123,7 @@ def create_ai_config(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> AIConfigResponse:
-    """创建新 AI 配置（仅 owner）。"""
-    if payload.is_active:
-        db.query(AIProviderConfig).filter(
-            AIProviderConfig.family_id == current_user.family_id
-        ).update({"is_active": False})
-
+    """创建新 AI 配置（仅 owner）。is_active 表示该供应商是否启用参与调用。"""
     encrypted = None
     if payload.ai_api_key:
         encrypted = encrypt_api_key(payload.ai_api_key)
@@ -155,6 +157,7 @@ def create_ai_config(
         model_1_capabilities=_serialize_capabilities(payload.model_1_capabilities),
         model_2_capabilities=_serialize_capabilities(payload.model_2_capabilities),
         model_3_capabilities=_serialize_capabilities(payload.model_3_capabilities),
+        recovery_schedule=payload.recovery_schedule,
     )
     db.add(cfg)
     db.commit()
@@ -177,7 +180,7 @@ def update_ai_config(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> AIConfigResponse:
-    """更新 AI 配置（仅 owner）。"""
+    """更新 AI 配置（仅 owner）。is_active 表示该供应商是否启用参与调用。"""
     cfg = (
         db.query(AIProviderConfig)
         .filter(
@@ -188,12 +191,6 @@ def update_ai_config(
     )
     if not cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
-
-    if payload.is_active is True:
-        db.query(AIProviderConfig).filter(
-            AIProviderConfig.family_id == current_user.family_id,
-            AIProviderConfig.id != config_id,
-        ).update({"is_active": False})
 
     if payload.name is not None:
         cfg.name = payload.name
@@ -233,6 +230,8 @@ def update_ai_config(
         cfg.model_2_capabilities = _serialize_capabilities(payload.model_2_capabilities)
     if payload.model_3_capabilities is not None:
         cfg.model_3_capabilities = _serialize_capabilities(payload.model_3_capabilities)
+    if payload.recovery_schedule is not None:
+        cfg.recovery_schedule = payload.recovery_schedule
 
     db.commit()
     db.refresh(cfg)
@@ -328,9 +327,16 @@ def reset_circuit_breaker(
     if not cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
-    cfg.circuit_open = False
+    # Clear all circuit breaker state (three-state model)
+    cfg.circuit_state = "closed"
+    cfg.circuit_reason = None
     cfg.failure_count = 0
+    cfg.circuit_open = False
     cfg.circuit_open_until = None
+    cfg.last_failure_type = None
+    cfg.half_open_success_count = 0
+    cfg.half_open_failure_count = 0
+    cfg.half_open_window_start = None
     db.commit()
     return AICircuitResetResponse(ok=True)
 

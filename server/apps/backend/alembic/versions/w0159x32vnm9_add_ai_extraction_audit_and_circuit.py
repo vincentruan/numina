@@ -1,6 +1,6 @@
 """add ai_extraction_audit and ai_extraction_circuit tables
 
-Revision ID: s0158t32umn8
+Revision ID: w0159x32vnm9
 Revises: r9047s21tlm7
 Create Date: 2026-05-19
 
@@ -15,7 +15,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = 's0158t32umn8'
+revision: str = 'w0159x32vnm9'
 down_revision: Union[str, None] = 'r9047s21tlm7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None

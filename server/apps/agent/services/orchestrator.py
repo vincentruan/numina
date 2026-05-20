@@ -13,12 +13,13 @@ There is no silent fallback to a direct LLM path.
 
 import asyncio
 import logging
+import random
 import time
 import uuid
 from collections.abc import AsyncGenerator
 
 from apps.agent.app.config import settings
-from apps.agent.core.backend_client import BackendClient
+from apps.agent.core.backend_client import BackendClient, classify_error_type
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.schemas.policy import CapabilityPolicy
 from apps.agent.schemas.response import AgentResponse
@@ -92,6 +93,94 @@ def _select_model(providers: list[dict], task_type: str) -> tuple[dict, str, lis
         fallback_model_id,
     )
     return first_provider, fallback_model_id, fallback_caps
+
+
+def _is_transient_error(error_type: str) -> bool:
+    """Check if error type is transient (can cascade to next provider)."""
+    return error_type.startswith("transient_") or error_type in (
+        "DeerFlowTimeoutError",
+        "ConnectionError",
+        "TimeoutError",
+    )
+
+
+def _should_route_to_half_open() -> bool:
+    """Decide whether to route traffic to a half-open provider (10% chance).
+
+    Callers must filter providers to those with circuit_state == 'half_open'
+    before invoking this function.
+    """
+    return random.random() < 0.1
+
+
+def _select_provider_with_retry(
+    providers: list[dict],
+    task_type: str,
+    attempted_config_ids: set[str],
+) -> tuple[dict, str, list[str]] | None:
+    """Select next provider for retry, considering half-open routing.
+
+    Args:
+        providers: List of providers sorted by display_order
+        task_type: Model task type (thinking/vision/text)
+        attempted_config_ids: Set of config_ids already tried
+
+    Returns:
+        (provider, model_id, capabilities) when a provider with the required
+        capability is found, otherwise None. Returns None rather than falling
+        back to a capability-mismatched provider, so the caller fails cleanly
+        instead of silently degrading the task.
+    """
+    required_capability: str
+    if task_type == "thinking":
+        required_capability = "deep_thinking"
+    elif task_type == "vision":
+        required_capability = "vision_understanding"
+    else:
+        required_capability = "text_generation"
+
+    # Filter providers not yet attempted
+    available_providers = [
+        p for p in providers if p.get("config_id") not in attempted_config_ids
+    ]
+
+    if not available_providers:
+        return None
+
+    # Prefer half_open providers for recovery testing (10% chance)
+    half_open_providers = [
+        p for p in available_providers if p.get("circuit_state") == "half_open"
+    ]
+    if half_open_providers and _should_route_to_half_open():
+        # Use half_open provider for 10% traffic
+        for provider in half_open_providers:
+            caps = provider.get("model_1_capabilities", [])
+            if required_capability in caps and provider.get("ai_model_id"):
+                return provider, provider["ai_model_id"], caps
+
+    # Normal selection: check each provider's capabilities
+    for provider in available_providers:
+        # Skip providers with permanent circuit state
+        circuit_state = provider.get("circuit_state", "closed")
+        if circuit_state == "open":
+            # Open provider should not be in list, but check anyway
+            continue
+
+        caps_1 = provider.get("model_1_capabilities", [])
+        if required_capability in caps_1 and provider.get("ai_model_id"):
+            return provider, provider["ai_model_id"], caps_1
+
+        caps_2 = provider.get("model_2_capabilities", [])
+        if required_capability in caps_2 and provider.get("model_2_id"):
+            return provider, provider["model_2_id"], caps_2
+
+        caps_3 = provider.get("model_3_capabilities", [])
+        if required_capability in caps_3 and provider.get("model_3_id"):
+            return provider, provider["model_3_id"], caps_3
+
+    # No provider with required capability — fail cleanly so caller can return
+    # an error message rather than silently degrading to a mismatched provider.
+    return None
 
 
 def _fire_and_forget(coro: "asyncio.Coroutine") -> None:  # type: ignore[type-arg]
@@ -353,69 +442,142 @@ class Orchestrator:
             else skill_config.thinking and thinking_supported
         )
 
-        # ── 7. DeerFlow stream dispatch ────────────────────────────────
+        # ── 7. DeerFlow stream dispatch with cascade retry ────────────────────────
+        attempted_config_ids: set[str] = set()
+        max_attempts = len(providers)
+        attempt_count = 0
+
         try:
-            adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
-            async for chunk in adapter.stream_dispatch(
-                capability,
-                redacted_context,
-                effective_thread_id,
-                enable_thinking=enable_thinking,
-            ):
-                text = chunk.content if chunk.type == "text" else None
-                if text:
-                    answer_parts.append(text)
-                    yield text
-            # Success: reset circuit failure count
-            if config_id:
-                _fire_and_forget(client.reset_circuit_success(config_id))
-            audit_logger.log_call(
-                AuditEntry(
-                    audit_id=audit_id,
-                    capability=capability,
-                    family_id=family_id,
-                    user_id=user_id,
-                    success=True,
-                    skill_triggered=capability,
-                    deerflow_attempted=True,
-                    duration_ms=int(time.monotonic() * 1000) - start_ms,
-                )
-            )
-        except DeerFlowTimeoutError:
-            logger.warning("[orchestrator] stream_dispatch timed out family=%s", family_id)
-            error_type = "DeerFlowTimeoutError"
-            yield "AI 响应超时，请稍后重试。"
-            audit_logger.log_call(
-                AuditEntry(
-                    audit_id=audit_id,
-                    capability=capability,
-                    family_id=family_id,
-                    user_id=user_id,
-                    success=False,
-                    deerflow_attempted=True,
-                    duration_ms=int(time.monotonic() * 1000) - start_ms,
-                    error_type="DeerFlowTimeoutError",
-                )
-            )
-        except Exception as e:
-            logger.error("[orchestrator] stream_dispatch DeerFlow failed: %s", e)
-            error_type = type(e).__name__
-            # Report circuit event for provider errors
-            if config_id:
-                _fire_and_forget(client.report_circuit_event(config_id, 500))
-            yield "AI 服务暂时不可用，请稍后重试。"
-            audit_logger.log_call(
-                AuditEntry(
-                    audit_id=audit_id,
-                    capability=capability,
-                    family_id=family_id,
-                    user_id=user_id,
-                    success=False,
-                    deerflow_attempted=True,
-                    duration_ms=int(time.monotonic() * 1000) - start_ms,
-                    error_type=error_type,
-                )
-            )
+            while attempt_count < max_attempts and config_id not in attempted_config_ids:
+                attempt_count += 1
+                attempted_config_ids.add(config_id)
+
+                try:
+                    adapter = _create_family_adapter(
+                        family_id,
+                        selected_provider,
+                        timeout_seconds=selected_provider.get("timeout_seconds", 60),
+                        subagent_enabled=skill_config.subagent_enabled,
+                        plan_mode=skill_config.plan_mode,
+                    )
+                    async for chunk in adapter.stream_dispatch(
+                        capability,
+                        redacted_context,
+                        effective_thread_id,
+                        enable_thinking=enable_thinking,
+                    ):
+                        text = chunk.content if chunk.type == "text" else None
+                        if text:
+                            answer_parts.append(text)
+                            yield text
+
+                    # Success: reset circuit failure count or report half-open success
+                    circuit_state = selected_provider.get("circuit_state", "closed")
+                    if circuit_state == "half_open":
+                        _fire_and_forget(client.report_half_open_result(config_id, success=True))
+                    elif config_id:
+                        _fire_and_forget(client.reset_circuit_success(config_id))
+
+                    audit_logger.log_call(
+                        AuditEntry(
+                            audit_id=audit_id,
+                            capability=capability,
+                            family_id=family_id,
+                            user_id=user_id,
+                            success=True,
+                            skill_triggered=capability,
+                            deerflow_attempted=True,
+                            duration_ms=int(time.monotonic() * 1000) - start_ms,
+                        )
+                    )
+                    break  # Success, exit retry loop
+
+                except DeerFlowTimeoutError:
+                    logger.warning("[orchestrator] stream_dispatch timeout attempt=%d family=%s", attempt_count, family_id)
+                    error_type = "transient_timeout"
+                    # Report failure based on circuit state
+                    circuit_state = selected_provider.get("circuit_state", "closed")
+                    if circuit_state == "half_open":
+                        _fire_and_forget(client.report_half_open_result(config_id, success=False))
+                    elif config_id:
+                        _fire_and_forget(client.report_circuit_event(config_id, 0, error_type=error_type))
+
+                    # Try next provider on transient error
+                    next_provider = _select_provider_with_retry(providers, task_type, attempted_config_ids)
+                    if next_provider and _is_transient_error(error_type):
+                        selected_provider, model_id, selected_caps = next_provider
+                        config_id = selected_provider.get("config_id", "")
+                        logger.info("[orchestrator] cascade retry attempt=%d config_id=%s", attempt_count + 1, config_id)
+                        continue
+                    else:
+                        yield "AI 响应超时，请稍后重试。"
+                        audit_logger.log_call(
+                            AuditEntry(
+                                audit_id=audit_id,
+                                capability=capability,
+                                family_id=family_id,
+                                user_id=user_id,
+                                success=False,
+                                deerflow_attempted=True,
+                                duration_ms=int(time.monotonic() * 1000) - start_ms,
+                                error_type="DeerFlowTimeoutError",
+                            )
+                        )
+                        break
+
+                except Exception as e:
+                    logger.error("[orchestrator] stream_dispatch DeerFlow failed attempt=%d: %s", attempt_count, e)
+                    error_type = type(e).__name__
+                    # Classify error type for circuit reporting
+                    classified_error_type = classify_error_type(500, str(e))
+
+                    # Report failure based on circuit state
+                    circuit_state = selected_provider.get("circuit_state", "closed")
+                    if circuit_state == "half_open":
+                        _fire_and_forget(client.report_half_open_result(config_id, success=False))
+                    elif config_id:
+                        _fire_and_forget(client.report_circuit_event(config_id, 500, error_type=classified_error_type))
+
+                    # Check if permanent error (no cascade)
+                    if classified_error_type in ("permanent_auth", "permanent_account"):
+                        yield "AI 服务暂时不可用，请稍后重试。"
+                        audit_logger.log_call(
+                            AuditEntry(
+                                audit_id=audit_id,
+                                capability=capability,
+                                family_id=family_id,
+                                user_id=user_id,
+                                success=False,
+                                deerflow_attempted=True,
+                                duration_ms=int(time.monotonic() * 1000) - start_ms,
+                                error_type=classified_error_type,
+                            )
+                        )
+                        break
+
+                    # Transient error: cascade to next provider
+                    next_provider = _select_provider_with_retry(providers, task_type, attempted_config_ids)
+                    if next_provider and _is_transient_error(classified_error_type):
+                        selected_provider, model_id, selected_caps = next_provider
+                        config_id = selected_provider.get("config_id", "")
+                        logger.info("[orchestrator] cascade retry attempt=%d config_id=%s", attempt_count + 1, config_id)
+                        continue
+                    else:
+                        # All providers exhausted
+                        yield "AI 服务暂时不可用，请稍后重试。"
+                        audit_logger.log_call(
+                            AuditEntry(
+                                audit_id=audit_id,
+                                capability=capability,
+                                family_id=family_id,
+                                user_id=user_id,
+                                success=False,
+                                deerflow_attempted=True,
+                                duration_ms=int(time.monotonic() * 1000) - start_ms,
+                                error_type=error_type,
+                            )
+                        )
+                        break
         finally:
             if session_started:
                 duration_ms = int(time.monotonic() * 1000) - start_ms
