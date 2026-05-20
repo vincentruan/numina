@@ -522,6 +522,11 @@ async function submitEmojiPin() {
 .login-page {
   min-height: 100vh;
   background: #010120;
+  /* DeerFlow-style grid overlay */
+  background-image:
+    linear-gradient(rgba(0, 200, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 200, 255, 0.08) 1px, transparent 1px);
+  background-size: 50px 50px;
   display: flex;
   flex-direction: column;
   align-items: center;
