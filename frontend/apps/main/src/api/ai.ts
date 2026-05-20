@@ -175,6 +175,51 @@ export interface AICapability {
   harness_config: Record<string, unknown>
 }
 
+// ── Skill Management types ────────────────────────────────────────────────────
+
+export interface SkillDefinition {
+  id: string
+  skill_type: 'fixed' | 'builtin' | 'custom'
+  name?: string
+  description?: string
+  icon?: string
+  color?: string
+  route?: string | null
+  input_mode?: 'free_text' | 'trigger'
+  examples?: string[]
+  is_enabled: boolean
+  display_order: number
+  can_edit: boolean
+  can_delete: boolean
+}
+
+export interface SkillListResponse {
+  fixed: SkillDefinition[]
+  builtin: SkillDefinition[]
+  custom: SkillDefinition[]
+}
+
+export interface CustomSkillCreate {
+  skill_id: string
+  name: string
+  description?: string
+  icon: string
+  color: string
+  input_mode: 'trigger' | 'free_text'
+  examples?: string[]
+  prompt_content: string
+}
+
+export interface CustomSkillUpdate {
+  name?: string
+  description?: string
+  icon?: string
+  color?: string
+  input_mode?: 'trigger' | 'free_text'
+  examples?: string[]
+  prompt_content?: string
+}
+
 // Backend response shapes
 interface _BackendTestResult {
   id: string
@@ -572,3 +617,23 @@ export const updateSkill = (capability: string, data: SkillConfigUpdate) =>
   http.put<SkillConfig>(`/ai/skills/${capability}`, data)
 export const resetSkillPrompt = (capability: string) =>
   http.delete<SkillConfig>(`/ai/skills/${capability}/prompt`)
+
+// ── Skill Management ──────────────────────────────────────────────────────────
+
+export const getSkillsGrouped = () =>
+  http.get<SkillListResponse>('/ai/skills')
+
+export const createCustomSkill = (payload: CustomSkillCreate) =>
+  http.post<SkillDefinition>('/ai/skills', payload)
+
+export const updateCustomSkill = (skillId: string, payload: CustomSkillUpdate) =>
+  http.put<SkillDefinition>(`/ai/skills/${skillId}`, payload)
+
+export const deleteCustomSkill = (skillId: string) =>
+  http.delete<{ ok: boolean }>(`/ai/skills/${skillId}`)
+
+export const toggleSkill = (skillId: string, isEnabled: boolean) =>
+  http.put<SkillDefinition>(`/ai/skills/${skillId}/toggle`, { is_enabled: isEnabled })
+
+export const reorderSkills = (skillIds: string[]) =>
+  http.put<{ ok: boolean }>('/ai/skills/reorder', { skill_ids: skillIds })
