@@ -66,8 +66,8 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   { name: 'DataStats', path: '/stats' },
   // Family — chore & wish management
   { name: 'ChildReset', path: '/family/children/1/reset' },
-  { name: 'ChoreApprovals', path: '/chore-approvals' },
-  { name: 'WishReview', path: '/wish-review' },
+  { name: 'ChoreApprovals', path: '/family/chore-approvals' },
+  { name: 'WishReview', path: '/family/wish-review' },
   { name: 'AISpendingLeaks', path: '/ai/spending-leaks' },
   { name: 'BabyDayDetail', path: '/baby/calendar/day' },
 ]

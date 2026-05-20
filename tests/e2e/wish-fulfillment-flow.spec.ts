@@ -58,7 +58,7 @@ test.describe('wish fulfillment flow', () => {
         (resp) => resp.url().includes('/api/v1/family/child-wishes') && resp.status() === 200,
         { timeout: 10_000 },
       )
-      await pageParent.goto('/wish-review')
+      await pageParent.goto('/family/wish-review')
       await queueResp
       await expect(pageParent.locator(`text=${wishName}`).first()).toBeVisible({ timeout: 10_000 })
 
