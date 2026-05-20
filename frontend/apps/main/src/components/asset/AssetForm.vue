@@ -13,7 +13,7 @@
         <template #default>
           <div v-if="!fileList.length" class="image-placeholder">
             <van-icon name="photograph" size="32" color="var(--van-text-color-3)" />
-            <span class="image-hint">点击添加图片</span>
+            <span class="image-hint">{{ t('assetForm.imageUploadHint') }}</span>
           </div>
         </template>
       </van-uploader>
@@ -25,20 +25,20 @@
         class="type-option"
         :class="{ active: form.asset_type === 'physical' }"
         @click="onTypeChange('physical')"
-      >实物资产</div>
+      >{{ t('assetForm.typePhysical') }}</div>
       <div
         class="type-option"
         :class="{ active: form.asset_type === 'financial' }"
         @click="onTypeChange('financial')"
-      >金融资产</div>
+      >{{ t('assetForm.typeFinancial') }}</div>
     </div>
 
     <!-- Basic info -->
-    <van-cell-group inset title="基本信息">
+    <van-cell-group inset :title="t('assetForm.sectionBasicInfo')">
       <van-field
         v-model="form.name"
-        label="名称"
-        placeholder="请输入资产名称"
+        :label="t('assetForm.nameLabel')"
+        :placeholder="t('assetForm.namePlaceholder')"
         :rules="[{ required: true, message: t('assetForm.nameRequired') }]"
         @blur="onNameBlur"
       >
@@ -52,14 +52,14 @@
         :model-value="selectedCategoryName"
         is-link
         readonly
-        label="分类"
-        placeholder="请选择分类"
+        :label="t('assetForm.categoryLabel')"
+        :placeholder="t('assetForm.categoryPlaceholder')"
         :rules="[{ required: true, message: t('assetForm.categoryRequired') }]"
         @click="showCategoryPicker = true"
       />
       <van-popup v-model:show="showCategoryPicker" position="bottom" round>
         <div class="category-popup">
-          <div v-if="filteredCategories.length === 0" class="category-empty">暂无分类</div>
+          <div v-if="filteredCategories.length === 0" class="category-empty">{{ t('assetForm.categoryEmpty') }}</div>
           <div v-else class="category-grid-popup">
             <div
               v-for="cat in filteredCategories"
@@ -80,8 +80,8 @@
       <van-field
         v-model="form.purchase_price"
         type="number" inputmode="decimal"
-        label="购入价格"
-        placeholder="请输入购入价格"
+        :label="t('assetForm.purchasePriceLabel')"
+        :placeholder="t('assetForm.purchasePricePlaceholder')"
         :rules="[{ required: true, message: t('assetForm.purchasePriceRequired') }]"
       >
         <template #left-icon>
@@ -93,8 +93,8 @@
       <van-field
         v-model="form.current_value"
         type="number" inputmode="decimal"
-        label="当前价值"
-        placeholder="请输入当前价值"
+        :label="t('assetForm.currentValueLabel')"
+        :placeholder="t('assetForm.currentValuePlaceholder')"
         :rules="[{ required: true, message: t('assetForm.currentValueRequired') }]"
       >
         <template #left-icon>
@@ -108,7 +108,7 @@
             :disabled="!form.purchase_price"
             class="same-price-btn"
             @click.stop="syncPurchasePrice"
-          >同购入价</van-button>
+          >{{ t('assetForm.samePriceBtn') }}</van-button>
         </template>
       </van-field>
 
@@ -116,15 +116,15 @@
         v-model="form.purchase_date"
         is-link
         readonly
-        label="购入日期"
-        placeholder="选择日期"
+        :label="t('assetForm.purchaseDateLabel')"
+        :placeholder="t('assetForm.purchaseDatePlaceholder')"
         :rules="[{ required: true, message: t('assetForm.purchaseDateRequired') }]"
         @click="showDatePicker = true"
       />
       <van-popup v-model:show="showDatePicker" position="bottom" round>
         <van-date-picker
           v-model="datePickerValue"
-          title="选择日期"
+          :title="t('assetForm.datePickerTitle')"
           @confirm="onDateConfirm"
           @cancel="showDatePicker = false"
         />
@@ -136,8 +136,8 @@
           v-model="statusDisplay"
           is-link
           readonly
-          label="状态"
-          placeholder="选择状态"
+          :label="t('assetForm.statusLabel')"
+          :placeholder="t('assetForm.statusPlaceholder')"
           @click="showStatusPicker = true"
         />
         <van-popup v-model:show="showStatusPicker" position="bottom" round>
@@ -151,22 +151,22 @@
     </van-cell-group>
 
     <!-- Physical asset fields — reordered: freq → lifespan → location → maintenance -->
-    <van-cell-group v-if="form.asset_type === 'physical'" inset title="实物资产信息">
+    <van-cell-group v-if="form.asset_type === 'physical'" inset :title="t('assetForm.sectionPhysicalInfo')">
 
       <!-- P1: Usage frequency — icon button group -->
-      <van-cell title="使用频率" />
+      <van-cell :title="t('assetForm.usageFreqLabel')" />
       <UsageFreqSelector v-model="form.usage_frequency" />
 
       <!-- P0: Expected lifespan — unit years + "不限" -->
       <van-field
         v-model="expectedLifeYears"
         type="digit"
-        label="预期寿命"
-        placeholder="请输入年限"
+        :label="t('assetForm.lifespanLabel')"
+        :placeholder="t('assetForm.lifespanPlaceholder')"
         :class="{ 'ai-fill': aiFilledFields.has('expected_lifespan_years') }"
       >
         <template #extra>
-          <span class="unit-label">年</span>
+          <span class="unit-label">{{ t('assetForm.lifespanUnitYears') }}</span>
         </template>
         <template #right-icon>
           <van-button
@@ -174,33 +174,33 @@
             plain
             class="same-price-btn"
             @click.stop="expectedLifeYears = ''"
-          >不限</van-button>
+          >{{ t('assetForm.lifespanUnlimited') }}</van-button>
         </template>
       </van-field>
 
-      <van-field v-model="form.location" label="存放位置" placeholder="可选，如：书房" />
+      <van-field v-model="form.location" :label="t('assetForm.locationLabel')" :placeholder="t('assetForm.locationPlaceholder')" />
 
-      <van-field v-model="form.annual_maintenance_cost" type="number" inputmode="decimal" label="年维护费" placeholder="可选，单位：元">
+      <van-field v-model="form.annual_maintenance_cost" type="number" inputmode="decimal" :label="t('assetForm.maintenanceLabel')" :placeholder="t('assetForm.maintenancePlaceholder')">
         <template #left-icon><span class="field-prefix">{{ currencySymbol }}</span></template>
       </van-field>
     </van-cell-group>
 
     <!-- Financial asset fields -->
-    <van-cell-group v-if="form.asset_type === 'financial'" inset title="金融资产信息">
-      <van-field v-model="form.institution" label="金融机构" placeholder="请输入金融机构" />
-      <van-field v-model="form.interest_rate" type="number" inputmode="decimal" label="利率(%)" placeholder="请输入利率" />
+    <van-cell-group v-if="form.asset_type === 'financial'" inset :title="t('assetForm.sectionFinancialInfo')">
+      <van-field v-model="form.institution" :label="t('assetForm.institutionLabel')" :placeholder="t('assetForm.institutionPlaceholder')" />
+      <van-field v-model="form.interest_rate" type="number" inputmode="decimal" :label="t('assetForm.interestRateLabel')" :placeholder="t('assetForm.interestRatePlaceholder')" />
       <van-field
         v-model="form.maturity_date"
         is-link
         readonly
-        label="到期日期"
-        placeholder="选择到期日期"
+        :label="t('assetForm.maturityDateLabel')"
+        :placeholder="t('assetForm.maturityDatePlaceholder')"
         @click="showMaturityPicker = true"
       />
       <van-popup v-model:show="showMaturityPicker" position="bottom" round>
         <van-date-picker
           v-model="maturityPickerValue"
-          title="选择到期日期"
+          :title="t('assetForm.maturityPickerTitle')"
           @confirm="onMaturityConfirm"
           @cancel="showMaturityPicker = false"
         />
@@ -208,19 +208,19 @@
     </van-cell-group>
 
     <!-- Physical asset: warranty expiry date -->
-    <van-cell-group v-if="form.asset_type === 'physical'" inset title="保修信息">
+    <van-cell-group v-if="form.asset_type === 'physical'" inset :title="t('assetForm.sectionWarrantyInfo')">
       <van-field
         v-model="form.warranty_expiry_date"
         is-link
         readonly
-        label="保修到期日"
-        placeholder="选择保修到期日"
+        :label="t('assetForm.warrantyExpiryLabel')"
+        :placeholder="t('assetForm.warrantyExpiryPlaceholder')"
         @click="showWarrantyPicker = true"
       />
       <van-popup v-model:show="showWarrantyPicker" position="bottom" round>
         <van-date-picker
           v-model="warrantyPickerValue"
-          title="保修到期日"
+          :title="t('assetForm.warrantyPickerTitle')"
           @confirm="onWarrantyConfirm"
           @cancel="showWarrantyPicker = false"
         />
@@ -228,8 +228,8 @@
     </van-cell-group>
 
     <!-- P1: Tags + notes -->
-    <van-cell-group inset title="标签与备注">
-      <van-cell title="标签">
+    <van-cell-group inset :title="t('assetForm.sectionTagsNotes')">
+      <van-cell :title="t('assetForm.tagsLabel')">
         <template #value>
           <TagSelector
             v-model="selectedTagIds"
@@ -238,7 +238,7 @@
           />
         </template>
       </van-cell>
-      <van-field v-model="form.notes" type="textarea" label="备注" placeholder="可选" rows="2" autosize :class="{ 'ai-fill': aiFilledFields.has('notes') }" />
+      <van-field v-model="form.notes" type="textarea" :label="t('assetForm.notesLabel')" :placeholder="t('assetForm.notesPlaceholder')" rows="2" autosize :class="{ 'ai-fill': aiFilledFields.has('notes') }" />
     </van-cell-group>
 
     <div class="form-actions">
