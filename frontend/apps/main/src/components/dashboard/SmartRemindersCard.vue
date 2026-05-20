@@ -3,15 +3,15 @@
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="reminders">
         <template #title>
-          <span>🔔 提醒</span>
+          <span>🔔 {{ t('alertCards.reminder') }}</span>
           <span v-if="totalCount > 0" class="reminder-summary">
-            <template v-if="expiringAssets.length > 0">到期 {{ expiringAssets.length }}</template>
-            <template v-if="idleAssets.length > 0"> · 闲置 {{ idleAssets.length }}</template>
-            <template v-if="store.summary.maturity > 0"> · 理财 {{ store.summary.maturity }}</template>
-            <template v-if="store.summary.allocation_drift > 0"> · 失衡 {{ store.summary.allocation_drift }}</template>
-            <template v-if="store.summary.large_purchase > 0"> · 冷静期 {{ store.summary.large_purchase }}</template>
+            <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
+            <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
+            <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
+            <template v-if="store.summary.allocation_drift > 0"> · {{ t('reminders.types.allocation_drift') }} {{ store.summary.allocation_drift }}</template>
+            <template v-if="store.summary.large_purchase > 0"> · {{ t('reminders.types.large_purchase') }} {{ store.summary.large_purchase }}</template>
           </span>
-          <span v-else class="reminder-summary reminder-summary--empty">暂无提醒</span>
+          <span v-else class="reminder-summary reminder-summary--empty">{{ t('reminders.empty') }}</span>
         </template>
 
         <!-- Dynamic section order: 有数据的在前，都有/都无时智能提醒在前 -->

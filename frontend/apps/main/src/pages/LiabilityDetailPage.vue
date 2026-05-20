@@ -1,14 +1,14 @@
 <template>
   <div class="liability-detail-page">
-    <PageHeader title="负债详情" />
+    <PageHeader :title="t('liability.liabilityDetail')" />
 
     <template v-if="liability">
       <!-- Value Card -->
       <div class="value-card">
-        <div class="value-label">剩余本金</div>
+        <div class="value-label">{{ t('liability.detailRemainingPrincipal') }}</div>
         <MoneyDisplay :amount="liability.remaining_amount" size="large" />
         <div class="progress-info">
-          已还 ¥{{ paidAmount.toLocaleString() }} / 共 ¥{{ liability.original_amount.toLocaleString() }}
+          {{ t('liability.detailPaidAmount') }} ¥{{ paidAmount.toLocaleString() }} / {{ t('liability.detailTotalAmount') }} ¥{{ liability.original_amount.toLocaleString() }}
         </div>
         <van-progress
           :percentage="paidPercent"
@@ -21,9 +21,9 @@
       </div>
 
       <!-- Basic Info -->
-      <van-cell-group inset title="基本信息">
-        <van-cell title="名称" :value="liability.name" />
-        <van-cell title="类型">
+      <van-cell-group inset :title="t('liability.detailSectionBasicInfo')">
+        <van-cell :title="t('liability.detailFieldName')" :value="liability.name" />
+        <van-cell :title="t('liability.detailFieldType')">
           <template #value>
             <span>{{ categoryText }}</span>
           </template>
@@ -33,45 +33,45 @@
             </svg>
           </template>
         </van-cell>
-        <van-cell title="状态">
+        <van-cell :title="t('liability.detailFieldStatus')">
           <template #value>
             <van-tag :type="liability.is_active ? 'primary' : 'success'" size="medium">
               {{ liability.is_active ? t('liability.active') : t('liability.inactive') }}
             </van-tag>
           </template>
         </van-cell>
-        <van-cell title="原始金额">
+        <van-cell :title="t('liability.detailFieldOriginalAmount')">
           <template #value><MoneyDisplay :amount="liability.original_amount" /></template>
         </van-cell>
-        <van-cell v-if="liability.monthly_payment" title="月供">
+        <van-cell v-if="liability.monthly_payment" :title="t('liability.detailFieldMonthlyPayment')">
           <template #value><MoneyDisplay :amount="liability.monthly_payment" /></template>
         </van-cell>
-        <van-cell v-if="liability.interest_rate" title="年利率" :value="`${liability.interest_rate}%`" />
+        <van-cell v-if="liability.interest_rate" :title="t('liability.detailFieldAnnualRate')" :value="`${liability.interest_rate}%`" />
       </van-cell-group>
 
       <!-- Detail Info -->
-      <van-cell-group inset title="详细信息">
-        <van-cell v-if="liability.institution" title="贷款机构" :value="liability.institution" />
-        <van-cell v-if="liability.start_date" title="起始日期" :value="liability.start_date" />
-        <van-cell v-if="liability.end_date" title="预计还清" :value="liability.end_date" />
-        <van-cell v-if="liability.linked_asset_id" title="关联资产" value="查看关联资产" is-link @click="goToAsset" />
+      <van-cell-group inset :title="t('liability.detailSectionDetailInfo')">
+        <van-cell v-if="liability.institution" :title="t('liability.detailFieldInstitution')" :value="liability.institution" />
+        <van-cell v-if="liability.start_date" :title="t('liability.detailFieldStartDate')" :value="liability.start_date" />
+        <van-cell v-if="liability.end_date" :title="t('liability.detailFieldEndDate')" :value="liability.end_date" />
+        <van-cell v-if="liability.linked_asset_id" :title="t('liability.detailFieldLinkedAsset')" :value="t('liability.detailLinkedAssetHint')" is-link @click="goToAsset" />
       </van-cell-group>
 
       <!-- Notes -->
-      <van-cell-group v-if="liability.notes" inset title="备注">
+      <van-cell-group v-if="liability.notes" inset :title="t('liability.detailSectionNotes')">
         <van-cell :title="liability.notes" />
       </van-cell-group>
 
       <!-- Actions -->
       <div class="actions">
         <van-button v-if="liability.is_active" block type="success" @click="showPayment = true">
-          记录还款
+          {{ t('liability.detailBtnRecordPayment') }}
         </van-button>
         <van-button block type="primary" plain @click="$router.push(`/liabilities/${liability.id}/edit`)">
-          编辑
+          {{ t('liability.detailBtnEdit') }}
         </van-button>
         <van-button block type="danger" plain :loading="deleting" @click="onDelete">
-          删除
+          {{ t('liability.detailBtnDelete') }}
         </van-button>
       </div>
     </template>
@@ -81,21 +81,21 @@
     <!-- Payment Dialog -->
     <van-dialog
       v-model:show="showPayment"
-      title="记录还款"
+      :title="t('liability.detailPaymentDialogTitle')"
       show-cancel-button
-      confirm-button-text="确认还款"
+      :confirm-button-text="t('liability.detailPaymentConfirmBtn')"
       :before-close="onPaymentConfirm"
     >
       <div class="payment-dialog">
-        <div class="payment-hint">剩余本金 ¥{{ liability?.remaining_amount.toLocaleString() }}</div>
+        <div class="payment-hint">{{ t('liability.detailPaymentRemainingHint', { amount: liability?.remaining_amount.toLocaleString() }) }}</div>
         <van-field
           v-model="paymentAmount"
           type="number"
-          label="还款金额"
-          placeholder="请输入还款金额"
+          :label="t('liability.detailPaymentAmountLabel')"
+          :placeholder="t('liability.detailPaymentAmountPlaceholder')"
           input-align="right"
         >
-          <template #button>元</template>
+          <template #button>{{ t('liability.detailPaymentUnit') }}</template>
         </van-field>
       </div>
     </van-dialog>

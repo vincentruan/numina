@@ -2,7 +2,7 @@
   <div class="alert-cards-container">
     <!-- Collapse Toggle Button -->
     <div v-if="hasAlerts" class="alert-toggle" @click="toggleCollapsed">
-      <span class="toggle-label">提醒</span>
+      <span class="toggle-label">{{ t('alertCards.reminder') }}</span>
       <span class="toggle-count">{{ totalAlertCount }}</span>
       <van-icon :name="isCollapsed ? 'arrow-down' : 'arrow-up'" class="toggle-icon" />
     </div>
@@ -21,8 +21,8 @@
           </svg>
         </div>
         <div class="card-content">
-          <div class="card-title">闲置资产</div>
-          <div class="card-value">{{ idleCount }} 项未使用</div>
+          <div class="card-title">{{ t('alertCards.idleAssets') }}</div>
+          <div class="card-value">{{ t('alertCards.idleHint', { count: idleCount }) }}</div>
         </div>
         <van-icon name="arrow" class="card-arrow" />
       </div>
@@ -40,10 +40,10 @@
           </svg>
         </div>
         <div class="card-content">
-          <div class="card-title">即将到期</div>
+          <div class="card-title">{{ t('alertCards.expiringSoon') }}</div>
           <div class="card-value">
-            {{ expiringAssets.length }} 项资产
-            <span v-if="expiredCount > 0" class="expired-hint">({{ expiredCount }} 已过期)</span>
+            {{ t('alertCards.expiringHint', { count: expiringAssets.length }) }}
+            <span v-if="expiredCount > 0" class="expired-hint">{{ t('alertCards.expiredHint', { count: expiredCount }) }}</span>
           </div>
         </div>
         <van-icon name="arrow" class="card-arrow" />
@@ -53,7 +53,7 @@
     <!-- Expiring Soon Sheet -->
     <van-popup v-model:show="showExpiringSheet" position="bottom" round :style="{ maxHeight: '70%' }">
       <div class="sheet-header">
-        <span class="sheet-title">即将到期资产</span>
+        <span class="sheet-title">{{ t('alertCards.sheetTitle') }}</span>
         <van-icon name="cross" @click="showExpiringSheet = false" />
       </div>
       
