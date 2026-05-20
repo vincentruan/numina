@@ -13,11 +13,11 @@ from apps.agent.services.orchestrator import orchestrator
 router = APIRouter(prefix="/disposal", tags=["disposal"])
 logger = logging.getLogger(__name__)
 
-_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.IGNORECASE)
+_ID_RE = re.compile(r"^\d+$")
 
 
-def _validate_uuid(value: str, name: str) -> None:
-    if not _UUID_RE.match(value):
+def _validate_id(value: str, name: str) -> None:
+    if not _ID_RE.match(value):
         raise HTTPException(status_code=400, detail=f"invalid {name}")
 
 
@@ -49,8 +49,8 @@ async def scan_disposal_stream(
     """流式生成处置建议（由 backend 调用）。已废弃，请使用 /events。"""
     if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(x_agent_token, settings.AGENT_INTERNAL_TOKEN):
         raise HTTPException(status_code=401, detail="invalid token")
-    _validate_uuid(x_task_id, "X-Task-Id")
-    _validate_uuid(x_thread_id, "X-Thread-Id")
+    _validate_id(x_task_id, "X-Task-Id")
+    _validate_id(x_thread_id, "X-Thread-Id")
     logger.warning("Deprecated endpoint /disposal/stream called; migrate to /disposal/events")
 
     async def event_stream():
@@ -77,8 +77,8 @@ async def scan_disposal_events(
     """NDJSON 事件流（由 backend 调用）。"""
     if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(x_agent_token, settings.AGENT_INTERNAL_TOKEN):
         raise HTTPException(status_code=401, detail="invalid token")
-    _validate_uuid(x_task_id, "X-Task-Id")
-    _validate_uuid(x_thread_id, "X-Thread-Id")
+    _validate_id(x_task_id, "X-Task-Id")
+    _validate_id(x_thread_id, "X-Thread-Id")
 
     async def event_stream():
         async for line in orchestrator.stream_dispatch_events(
