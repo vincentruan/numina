@@ -477,3 +477,25 @@ def internal_get_session(
     if row is None or row.family_id != int(family_id):
         raise AppError(ErrorCode.NOT_FOUND)
     return _session_to_dict(row)
+
+
+@router.get("/users/{user_id}")
+def internal_get_user(
+    user_id: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Get user info by user_id for title generation."""
+    try:
+        user_id_int = int(user_id)
+    except ValueError:
+        raise AppError(ErrorCode.NOT_FOUND) from None
+    user = db.query(User).filter(User.id == user_id_int).first()
+    if user is None or str(user.family_id) != family_id:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return {
+        "user_id": str(user.id),
+        "username": user.username,
+        "display_name": user.display_name,
+        "family_id": str(user.family_id),
+    }

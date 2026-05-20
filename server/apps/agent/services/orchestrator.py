@@ -456,6 +456,8 @@ class Orchestrator:
                         family_id=family_id,
                         first_user_message=redacted_free_text,
                         ai_config=selected_provider,
+                        capability=capability,
+                        user_id=user_id,
                     ))
 
     async def stream_dispatch_events(
@@ -774,13 +776,18 @@ class Orchestrator:
         family_id: str,
         first_user_message: str,
         ai_config: dict,
+        capability: str = "chat",
+        user_id: str | None = None,
     ) -> None:
-        """Fire-and-forget: generate a short session title via LLM and persist it.
+        """Fire-and-forget: generate a short session title and persist it.
+
+        For chat: use LLM to summarize the first user message.
+        For other AI capabilities: use format "日期+AI功能名+用户名".
 
         Skips generation if the session already has a title (multi-turn continuation).
         """
         try:
-            logger.info("[orchestrator] title generation starting session=%s", session_id)
+            logger.info("[orchestrator] title generation starting session=%s capability=%s", session_id, capability)
             from apps.agent.services.session_store import AiSessionRepository
             repo = AiSessionRepository(family_id)
             # Check if title already exists — skip for multi-turn continuations
@@ -788,6 +795,37 @@ class Orchestrator:
             if existing:
                 logger.info("[orchestrator] title already exists session=%s, skipping", session_id)
                 return
+
+            # For non-chat capabilities, generate title directly without LLM
+            if capability != "chat":
+                from apps.agent.services.capability_registry import CapabilityRegistry
+                registry = CapabilityRegistry()
+                cap_def = registry.get(capability)
+                cap_name = cap_def.name if cap_def else capability
+                # Format: "YYYY-MM-DD 功能名 用户名"
+                date_str = time.strftime("%Y-%m-%d", time.localtime())
+                # Fetch user display name if available
+                user_name = "匿名用户"
+                if user_id:
+                    try:
+                        client = BackendClient(family_id=family_id)
+                        user_info = await client.get_user(user_id)
+                        if user_info:
+                            user_name = user_info.get("display_name") or user_info.get("username") or "匿名用户"
+                    except Exception as e:
+                        logger.warning("[orchestrator] failed to fetch user name: %s", e)
+                title = f"{date_str} {cap_name} {user_name}"
+                title = title[:50]  # Truncate to max length
+                logger.info("[orchestrator] non-chat title generated session=%s title=%s", session_id, title)
+                await repo.update_summary(
+                    session_id=session_id,
+                    family_id=family_id,
+                    summary=None,
+                    title=title,
+                )
+                return
+
+            # For chat: use LLM summarization
             from apps.agent.core.llm import LLMClient
             provider = ai_config.get("ai_provider", "")
             api_key = ai_config.get("api_key", "")
