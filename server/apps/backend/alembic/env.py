@@ -32,6 +32,7 @@ from apps.backend.app.models.payment_record import PaymentRecord  # noqa: F401
 from apps.backend.app.models.tag import Tag  # noqa: F401
 
 # Import all models
+from apps.backend.app.models.skill_registry import SkillRegistry  # noqa: F401
 from apps.backend.app.models.valuation import AssetValuation  # noqa: F401
 from apps.backend.app.models.wish import Wish  # noqa: F401
 
