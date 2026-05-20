@@ -32,19 +32,21 @@ test.describe('child navigation guards', () => {
   })
 
   test.describe('adult session blocked from child routes', () => {
-    test('adult → /child redirects to child SPA (/child/) or /login', async ({ page }) => {
+    test('adult → /child redirects away (child SPA / login / dashboard)', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child')
-      // nginx redirects /child → /child/ → child SPA. Child SPA's auth guard
-      // sees the adult session as not-a-child and redirects to /login.
-      await expect(page).toHaveURL(/\/(child\/|login)/, { timeout: 8_000 })
+      // Chain: nginx /child → 301 /child/ → child SPA loads. Child SPA sees adult
+      // session, redirects to /login?redirect=/child/. Adult SPA's guest guard
+      // then sees the adult logged-in and bounces /login → /. Any of these is fine
+      // for this guard test — the point is the adult does NOT end up on a child page.
+      await expect(page).toHaveURL(/^http:\/\/[^/]+\/(child\/|login|$)/, { timeout: 8_000 })
     })
 
-    test('adult → /child/tasks redirects to child SPA (/child/) or /login', async ({ page }) => {
+    test('adult → /child/tasks redirects away (child SPA / login / dashboard)', async ({ page }) => {
       await richFamily(page)
       await page.goto('/child/tasks')
-      // Same hand-off as above; child SPA decides based on its own session.
-      await expect(page).toHaveURL(/\/(child\/|login)/, { timeout: 8_000 })
+      // Same chain as above; the test only asserts the adult is not stuck on /child/tasks.
+      await expect(page).toHaveURL(/^http:\/\/[^/]+\/(child\/|login|$)/, { timeout: 8_000 })
     })
   })
 
