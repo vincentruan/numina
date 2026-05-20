@@ -2,71 +2,161 @@
   <div class="skills-manage-page">
     <PageHeader :title="t('skills.title')" />
 
+    <!-- Fixed capabilities (read-only) -->
+    <van-cell-group inset :title="t('skills.fixedSkills')" class="section">
+      <van-cell
+        v-for="skill in groupedSkills?.fixed ?? []"
+        :key="skill.id"
+        :title="t(`skills.capability.${skill.id}.name`)"
+        :label="t(`skills.capability.${skill.id}.description`)"
+        center
+      />
+    </van-cell-group>
+
+    <!-- Builtin skills (toggle) -->
     <van-cell-group inset :title="t('skills.builtinSkills')" class="section">
       <van-cell
-        v-for="skill in skills"
-        :key="skill.capability"
-        :title="t(`skills.capability.${skill.capability}`)"
-        :label="skill.custom_prompt ? t('skills.customPromptActive') : t('skills.defaultPrompt')"
+        v-for="skill in allBuiltinSkills"
+        :key="skill.id"
+        :title="t(`skills.capability.${skill.id}.name`)"
+        :label="t(`skills.capability.${skill.id}.description`)"
         center
-        is-link
-        @click="onEditSkill(skill)"
       >
         <template #value>
           <van-switch
             :model-value="skill.is_enabled"
             size="20px"
             :disabled="!isOwner"
-            @change="(v: boolean) => onToggle(skill, v)"
+            @change="(v: boolean) => onToggle(skill.id, v)"
             @click.stop
           />
         </template>
       </van-cell>
     </van-cell-group>
 
-    <!-- Prompt editor popup -->
+    <!-- Custom skills (toggle + edit + delete) -->
+    <van-cell-group inset :title="t('skills.customSkills')" class="section">
+      <van-cell
+        v-for="skill in groupedSkills?.custom ?? []"
+        :key="skill.id"
+        :title="`${skill.icon || '✨'} ${skill.name || skill.id}`"
+        :label="skill.description"
+        center
+      >
+        <template #value>
+          <div class="custom-skill-actions">
+            <van-switch
+              :model-value="skill.is_enabled"
+              size="20px"
+              :disabled="!isOwner"
+              @change="(v: boolean) => onToggle(skill.id, v)"
+              @click.stop
+            />
+            <van-icon v-if="isOwner" name="edit" size="18" class="action-icon" @click.stop="onEditSkill(skill)" />
+            <van-icon v-if="isOwner" name="delete-o" size="18" class="action-icon delete-icon" @click.stop="onDeleteSkill(skill)" />
+          </div>
+        </template>
+      </van-cell>
+      <van-cell v-if="!groupedSkills?.custom?.length" :title="t('common.noData')" />
+    </van-cell-group>
+
+    <!-- Add skill button -->
+    <div v-if="isOwner" class="add-skill-section">
+      <van-button block type="primary" icon="plus" @click="onCreateSkill">
+        {{ t('skills.form.createBtn') }}
+      </van-button>
+    </div>
+
+    <!-- Create/Edit form popup -->
     <van-popup
-      v-model:show="showEditor"
+      v-model:show="showForm"
       position="bottom"
       round
-      :style="{ height: '80%', display: 'flex', flexDirection: 'column' }"
+      :style="{ height: '90%', display: 'flex', flexDirection: 'column' }"
     >
-      <div class="editor-header">
-        <span class="editor-title">{{ editingSkill ? t(`skills.capability.${editingSkill.capability}`) : '' }}</span>
-        <van-button size="small" type="primary" :loading="saving" @click="onSavePrompt">
-          {{ t('common.save') }}
+      <div class="form-header">
+        <span class="form-title">{{ isEditing ? t('skills.form.updateBtn') : t('skills.form.createBtn') }}</span>
+        <van-button size="small" type="primary" :loading="saving" :disabled="!formValid" @click="onSubmitForm">
+          {{ isEditing ? t('skills.form.updateBtn') : t('skills.form.createBtn') }}
         </van-button>
       </div>
 
-      <div class="editor-body">
-        <p class="editor-hint">{{ t('skills.promptHint') }}</p>
+      <div class="form-body">
+        <!-- Skill ID (only for create) -->
         <van-field
-          v-model="promptDraft"
-          type="textarea"
-          :placeholder="activePlaceholder"
-          :autosize="{ minHeight: 200 }"
-          class="prompt-field"
+          v-if="!isEditing"
+          v-model="formDraft.skill_id"
+          :label="t('skills.form.skillId')"
+          :placeholder="t('skills.form.skillIdPlaceholder')"
+          :error-message="skillIdError"
+          @update:model-value="validateSkillId"
         />
-        <div v-if="editingSkill?.default_prompt" class="default-prompt-section">
-          <button type="button" class="default-prompt-toggle" @click="showDefaultPrompt = !showDefaultPrompt">
-            <van-icon :name="showDefaultPrompt ? 'arrow-up' : 'arrow-down'" size="12" />
-            {{ showDefaultPrompt ? t('skills.hideDefault') : t('skills.viewDefault') }}
-          </button>
-          <div v-if="showDefaultPrompt" class="default-prompt-box">
-            <p class="default-prompt-label">{{ t('skills.defaultPromptLabel') }}</p>
-            <pre class="default-prompt-content">{{ editingSkill.default_prompt }}</pre>
-          </div>
-        </div>
-        <van-button
-          v-if="editingSkill?.custom_prompt"
-          size="small"
-          plain
-          type="danger"
-          class="reset-btn"
-          @click="onResetPrompt"
-        >
-          {{ t('skills.resetToDefault') }}
-        </van-button>
+
+        <!-- Name -->
+        <van-field
+          v-model="formDraft.name"
+          :label="t('skills.form.skillName')"
+          :placeholder="t('skills.form.skillNamePlaceholder')"
+          required
+        />
+
+        <!-- Description -->
+        <van-field
+          v-model="formDraft.description"
+          :label="t('skills.form.skillDescription')"
+          :placeholder="t('skills.form.skillDescriptionPlaceholder')"
+        />
+
+        <!-- Icon -->
+        <van-field :label="t('skills.form.skillIcon')">
+          <template #input>
+            <div class="icon-picker">
+              <span
+                v-for="emoji in emojiOptions"
+                :key="emoji"
+                class="icon-option"
+                :class="{ active: formDraft.icon === emoji }"
+                @click="formDraft.icon = emoji"
+              >{{ emoji }}</span>
+            </div>
+          </template>
+        </van-field>
+
+        <!-- Color -->
+        <van-field :label="t('skills.form.skillColor')">
+          <template #input>
+            <div class="color-picker">
+              <span
+                v-for="color in colorOptions"
+                :key="color"
+                class="color-option"
+                :class="{ active: formDraft.color === color }"
+                :style="{ backgroundColor: color }"
+                @click="formDraft.color = color"
+              />
+            </div>
+          </template>
+        </van-field>
+
+        <!-- Input Mode -->
+        <van-field :label="t('skills.form.skillInputMode')">
+          <template #input>
+            <van-radio-group v-model="formDraft.input_mode" direction="horizontal">
+              <van-radio name="trigger">{{ t('skills.form.inputModeTrigger') }}</van-radio>
+              <van-radio name="free_text">{{ t('skills.form.inputModeFreeText') }}</van-radio>
+            </van-radio-group>
+          </template>
+        </van-field>
+
+        <!-- Prompt Content -->
+        <van-field
+          v-model="formDraft.prompt_content"
+          type="textarea"
+          :label="t('skills.form.skillPrompt')"
+          :placeholder="t('skills.form.skillPromptPlaceholder')"
+          :autosize="{ minHeight: 150 }"
+          required
+        />
       </div>
     </van-popup>
   </div>
@@ -74,166 +164,290 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import { getSkills, updateSkill, resetSkillPrompt, type SkillConfig } from '@/api/ai'
+import {
+  getSkillsGrouped,
+  createCustomSkill,
+  updateCustomSkill,
+  deleteCustomSkill,
+  toggleSkill,
+  type SkillDefinition,
+  type SkillListResponse,
+} from '@/api/ai'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 const isOwner = computed(() => authStore.user?.role === 'owner')
 
-const skills = ref<SkillConfig[]>([])
-const showEditor = ref(false)
-const editingSkill = ref<SkillConfig | null>(null)
-const promptDraft = ref('')
+// State
+const groupedSkills = ref<SkillListResponse | null>(null)
+const loading = ref(false)
+const showForm = ref(false)
+const isEditing = ref(false)
+const editingSkillId = ref<string | null>(null)
 const saving = ref(false)
-const showDefaultPrompt = ref(false)
+const skillIdError = ref('')
 
-const activePlaceholder = computed(() => {
-  if (!editingSkill.value) return ''
-  return editingSkill.value.default_prompt ?? t('skills.enterPrompt')
+// All builtin skills (including disabled ones for toggle display)
+const allBuiltinSkills = ref<SkillDefinition[]>([])
+
+// Form draft
+const formDraft = ref({
+  skill_id: '',
+  name: '',
+  description: '',
+  icon: '✨',
+  color: '#6366f1',
+  input_mode: 'trigger' as 'trigger' | 'free_text',
+  prompt_content: '',
 })
 
-async function load() {
+// Options
+const emojiOptions = ['✨', '📊', '🔔', '💡', '🎯', '📈', '🔍', '💰', '🏠', '📋', '⚡', '🛡️', '🎨', '📦', '🔧', '💳', '📱', '🌐', '🤖', '📝']
+const colorOptions = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#a855f7']
+
+// Builtin IDs for validation
+const builtinIds = ['alerts', 'allocation', 'chat', 'disposal', 'liability', 'report', 'spending_leak', 'time_machine']
+
+// Computed
+const formValid = computed(() => {
+  if (!isEditing.value && !formDraft.value.skill_id) return false
+  if (!isEditing.value && skillIdError.value) return false
+  if (!formDraft.value.name) return false
+  if (!formDraft.value.prompt_content) return false
+  return true
+})
+
+// Methods
+async function loadSkills() {
+  loading.value = true
   try {
-    const res = await getSkills()
-    skills.value = res.data
+    const res = await getSkillsGrouped()
+    groupedSkills.value = res.data
+    // For builtin toggle display, we need all builtin skills including disabled
+    // The API returns only enabled ones, so we construct the full list
+    const builtinSkillIds = builtinIds.filter(id => id !== 'chat' && id !== 'time_machine')
+    allBuiltinSkills.value = builtinSkillIds.map(id => {
+      const found = res.data.builtin.find(s => s.id === id)
+      return found || { id, skill_type: 'builtin' as const, is_enabled: false, display_order: 100, can_edit: false, can_delete: false }
+    })
   } catch {
     showToast(t('toast.loadFailed'))
+  } finally {
+    loading.value = false
   }
 }
 
-onMounted(load)
+function validateSkillId(value: string) {
+  skillIdError.value = ''
+  if (!value) return
 
-function onEditSkill(skill: SkillConfig) {
-  if (!isOwner.value) return
-  editingSkill.value = skill
-  promptDraft.value = skill.custom_prompt ?? ''
-  showDefaultPrompt.value = false
-  showEditor.value = true
+  if (!/^[a-z][a-z0-9_-]*$/.test(value)) {
+    skillIdError.value = t('skills.form.skillIdInvalid')
+    return
+  }
+  if (value.length > 64) {
+    skillIdError.value = t('skills.form.skillIdInvalid')
+    return
+  }
+  if (builtinIds.includes(value)) {
+    skillIdError.value = t('skills.form.skillIdConflict')
+    return
+  }
+  if (groupedSkills.value?.custom.some(s => s.id === value)) {
+    skillIdError.value = t('skills.form.skillIdExists')
+    return
+  }
 }
 
-async function onToggle(skill: SkillConfig, enabled: boolean) {
-  const prev = skill.is_enabled
-  skill.is_enabled = enabled
+async function onToggle(skillId: string, enabled: boolean) {
+  if (!isOwner.value) return
   try {
-    await updateSkill(skill.capability, { is_enabled: enabled })
-    showToast(enabled ? t('toast.enabled') : t('toast.disabled'))
+    await toggleSkill(skillId, enabled)
+    await loadSkills()
   } catch {
-    skill.is_enabled = prev
     showToast(t('toast.operationFailed'))
   }
 }
 
-async function onSavePrompt() {
-  if (!editingSkill.value) return
+function onCreateSkill() {
+  isEditing.value = false
+  editingSkillId.value = null
+  formDraft.value = {
+    skill_id: '',
+    name: '',
+    description: '',
+    icon: '✨',
+    color: '#6366f1',
+    input_mode: 'trigger',
+    prompt_content: '',
+  }
+  skillIdError.value = ''
+  showForm.value = true
+}
+
+function onEditSkill(skill: SkillDefinition) {
+  if (!isOwner.value) return
+  isEditing.value = true
+  editingSkillId.value = skill.id
+  formDraft.value = {
+    skill_id: skill.id,
+    name: skill.name || '',
+    description: skill.description || '',
+    icon: skill.icon || '✨',
+    color: skill.color || '#6366f1',
+    input_mode: (skill.input_mode as 'trigger' | 'free_text') || 'trigger',
+    prompt_content: '',
+  }
+  showForm.value = true
+}
+
+async function onSubmitForm() {
+  if (!formValid.value) return
   saving.value = true
   try {
-    const res = await updateSkill(editingSkill.value.capability, {
-      custom_prompt: promptDraft.value || '',
-    })
-    // Update local state
-    const idx = skills.value.findIndex((s) => s.capability === editingSkill.value!.capability)
-    if (idx !== -1) skills.value[idx] = res.data
-    showToast(t('toast.saved'))
-    showEditor.value = false
+    if (isEditing.value && editingSkillId.value) {
+      await updateCustomSkill(editingSkillId.value, {
+        name: formDraft.value.name,
+        description: formDraft.value.description || undefined,
+        icon: formDraft.value.icon,
+        color: formDraft.value.color,
+        input_mode: formDraft.value.input_mode,
+        prompt_content: formDraft.value.prompt_content || undefined,
+      })
+      showToast(t('skills.form.updateSuccess'))
+    } else {
+      await createCustomSkill({
+        skill_id: formDraft.value.skill_id,
+        name: formDraft.value.name,
+        description: formDraft.value.description || undefined,
+        icon: formDraft.value.icon,
+        color: formDraft.value.color,
+        input_mode: formDraft.value.input_mode,
+        prompt_content: formDraft.value.prompt_content,
+      })
+      showToast(t('skills.form.createSuccess'))
+    }
+    showForm.value = false
+    await loadSkills()
+  } catch {
+    showToast(t('toast.operationFailed'))
   } finally {
     saving.value = false
   }
 }
 
-async function onResetPrompt() {
-  if (!editingSkill.value) return
-  saving.value = true
+async function onDeleteSkill(skill: SkillDefinition) {
+  if (!isOwner.value) return
   try {
-    const res = await resetSkillPrompt(editingSkill.value.capability)
-    const idx = skills.value.findIndex((s) => s.capability === editingSkill.value!.capability)
-    if (idx !== -1) skills.value[idx] = res.data
-    promptDraft.value = ''
-    showToast(t('skills.promptReset'))
-    showEditor.value = false
-  } finally {
-    saving.value = false
+    await showConfirmDialog({
+      title: t('common.confirm'),
+      message: t('skills.form.deleteConfirm', { name: skill.name || skill.id }),
+    })
+    await deleteCustomSkill(skill.id)
+    showToast(t('skills.form.deleteSuccess'))
+    await loadSkills()
+  } catch {
+    // cancelled
   }
 }
+
+onMounted(loadSkills)
 </script>
 
 <style scoped>
 .skills-manage-page {
-  min-height: 100vh;
-  background: var(--van-background);
+  padding-bottom: 80px;
 }
+
 .section {
   margin-top: 12px;
 }
-.editor-header {
+
+.custom-skill-actions {
   display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.action-icon {
+  color: var(--van-text-color-2);
+  cursor: pointer;
+}
+
+.delete-icon {
+  color: var(--van-danger-color);
+}
+
+.add-skill-section {
+  padding: 16px;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--van-background);
+  border-top: 1px solid var(--van-border-color);
+}
+
+.form-header {
+  display: flex;
   justify-content: space-between;
+  align-items: center;
   padding: 16px;
   border-bottom: 1px solid var(--van-border-color);
-  flex-shrink: 0;
 }
-.editor-title {
+
+.form-title {
   font-size: 16px;
   font-weight: 600;
 }
-.editor-body {
-  padding: 12px 16px;
-  overflow-y: auto;
+
+.form-body {
   flex: 1;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
-.editor-hint {
-  font-size: 12px;
-  color: var(--van-text-color-3);
-  margin: 0 0 8px;
+
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
-.prompt-field :deep(.van-field__control) {
-  font-family: monospace;
-  font-size: 13px;
-}
-.reset-btn {
-  margin-top: 12px;
-}
-.default-prompt-section {
-  margin-top: 12px;
-}
-.default-prompt-toggle {
+
+.icon-option {
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  padding: 0;
-  font-size: 12px;
-  color: var(--van-primary-color);
-  cursor: pointer;
-}
-.default-prompt-box {
-  margin-top: 8px;
-  border: 1px solid var(--van-border-color);
+  justify-content: center;
   border-radius: 6px;
-  overflow: hidden;
+  cursor: pointer;
+  font-size: 18px;
+  border: 2px solid transparent;
 }
-.default-prompt-label {
-  font-size: 11px;
-  color: var(--van-text-color-3);
-  background: var(--van-background);
-  padding: 6px 10px;
-  margin: 0;
-  border-bottom: 1px solid var(--van-border-color);
+
+.icon-option.active {
+  border-color: var(--van-primary-color);
+  background: var(--van-primary-color-light);
 }
-.default-prompt-content {
-  font-family: monospace;
-  font-size: 12px;
-  color: var(--van-text-color-2);
-  background: var(--van-background);
-  padding: 10px;
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 240px;
-  overflow-y: auto;
+
+.color-picker {
+  display: flex;
+  gap: 8px;
+}
+
+.color-option {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+}
+
+.color-option.active {
+  border-color: var(--van-text-color);
+  box-shadow: 0 0 0 2px var(--van-background);
 }
 </style>
