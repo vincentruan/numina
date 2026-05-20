@@ -1704,6 +1704,15 @@ export default {
     physical: '实物资产',
     financial: '金融资产',
   },
+  alertCards: {
+    reminder: '提醒',
+    idleAssets: '闲置资产',
+    idleHint: '{count} 项未使用',
+    expiringSoon: '即将到期',
+    expiringHint: '{count} 项资产',
+    expiredHint: '({count} 已过期)',
+    sheetTitle: '即将到期资产',
+  },
   blindBoxDraw: {
     tapHint: '点击抽奖',
     drawing: '抽奖中...',
