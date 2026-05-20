@@ -45,7 +45,7 @@ sandbox:
 # Skills 路径
 skills:
   paths:
-    - /app/apps/agent/skills
+    - /app/apps/agent/skills/builtin
 
 # 子代理设置（默认关闭，按 skill 按需开启）
 subagents:
