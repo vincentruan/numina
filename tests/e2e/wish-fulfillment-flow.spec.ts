@@ -63,8 +63,10 @@ test.describe('wish fulfillment flow', () => {
       await expect(pageParent.locator(`text=${wishName}`).first()).toBeVisible({ timeout: 10_000 })
 
       // ── Step 6: Parent realizes wish via UI ───────────────────────────────
-      // Clicking "兑现" opens a confirmation dialog
-      const realizeBtn = pageParent.locator('.btn-realize').first()
+      // Clicking "兑现" opens a confirmation dialog. The button now uses the
+      // generic .action-btn--success class. Use exact name "兑现" so it matches
+      // the action button but not the dialog "确认兑现" / "兑现心愿".
+      const realizeBtn = pageParent.locator('.action-btn--success').first()
       await expect(realizeBtn, '兑现 button should be visible').toBeVisible({ timeout: 5_000 })
       await realizeBtn.click()
 
