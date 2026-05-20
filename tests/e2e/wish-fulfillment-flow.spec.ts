@@ -52,7 +52,14 @@ test.describe('wish fulfillment flow', () => {
       const balanceBefore = await getChildBalance(pageChild)
 
       // ── Step 5: Parent sees redemption request in UI ──────────────────────
+      // Wait for the WishReview API response so the assertion below isn't
+      // racing with the initial page load.
+      const queueResp = pageParent.waitForResponse(
+        (resp) => resp.url().includes('/api/v1/family/child-wishes') && resp.status() === 200,
+        { timeout: 10_000 },
+      )
       await pageParent.goto('/wish-review')
+      await queueResp
       await expect(pageParent.locator(`text=${wishName}`).first()).toBeVisible({ timeout: 10_000 })
 
       // ── Step 6: Parent realizes wish via UI ───────────────────────────────
