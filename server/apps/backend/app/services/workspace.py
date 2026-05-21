@@ -83,3 +83,36 @@ def delete_custom_skill(family_id: str, skill_id: str) -> None:
     skill_dir = skills_custom_dir(family_id) / skill_id
     if skill_dir.exists():
         shutil.rmtree(skill_dir)
+
+
+def chat_prompt_file(family_id: str) -> Path:
+    """Return the path to the family's chat prompt override file."""
+    return prompts_dir(family_id) / "chat.md"
+
+
+def get_chat_prompt(family_id: str) -> str | None:
+    """Return family's chat prompt override content (body only, no frontmatter), or None."""
+    f = chat_prompt_file(family_id)
+    if not f.exists():
+        return None
+    return _strip_frontmatter(f.read_text(encoding="utf-8"))
+
+
+def save_chat_prompt(family_id: str, content: str) -> None:
+    """Write family's chat prompt override file."""
+    chat_prompt_file(family_id).write_text(content, encoding="utf-8")
+
+
+def delete_chat_prompt(family_id: str) -> None:
+    """Remove family's chat prompt override file (no-op if absent)."""
+    chat_prompt_file(family_id).unlink(missing_ok=True)
+
+
+def _strip_frontmatter(content: str) -> str:
+    """Strip YAML frontmatter from a markdown string, return body only."""
+    if not content.startswith("---"):
+        return content.strip()
+    end = content.find("---", 3)
+    if end == -1:
+        return content.strip()
+    return content[end + 3 :].strip()
