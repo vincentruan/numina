@@ -13,7 +13,6 @@ const FLICKER_RATE = 0.06
 // ── Stellar particle constants ────────────────────────────────────────────────
 const SPRITE_SIZE = 64
 const SPRITE_DPR_MAX = 2
-const SPRITE_COUNT = 15
 
 const FAR_RATIO = 0.50
 const MID_RATIO = 0.35
@@ -481,7 +480,7 @@ export function useDeerField(
     if (!paused && bgCtx && deerCtx && grid && sprites.length > 0) {
       const dt = lastTime === 0 ? 0.016 : Math.min((ts - lastTime) / 1000, 0.1)
       lastTime = ts
-      animTime += dt
+      animTime = (animTime + dt) % 3600
 
       updateParticles(particles, dt, vpW, vpH, animTime)
       drawParticles(bgCtx, particles, sprites, bgDpr)
@@ -501,7 +500,7 @@ export function useDeerField(
 
   function start() {
     resize()
-    sprites = buildSprites(bgDpr)
+    sprites = buildSprites(SPRITE_DPR_MAX)
 
     fetch('/images/deer.svg')
       .then((r) => r.blob())
