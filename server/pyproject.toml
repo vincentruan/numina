@@ -39,6 +39,8 @@ backend = [
     "pdfplumber>=0.11",
     # Cache
     "redis>=5.0.0",
+    # MCP (Model Context Protocol) server
+    "mcp>=1.0.0,<2.0.0",
 ]
 agent = [
     # AI/ML

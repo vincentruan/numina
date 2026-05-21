@@ -184,6 +184,51 @@ export interface AICapability {
   harness_config: Record<string, unknown>
 }
 
+// ── Skill Management types ────────────────────────────────────────────────────
+
+export interface SkillDefinition {
+  id: string
+  skill_type: 'fixed' | 'builtin' | 'custom'
+  name?: string
+  description?: string
+  icon?: string
+  color?: string
+  route?: string | null
+  input_mode?: 'free_text' | 'trigger'
+  examples?: string[]
+  is_enabled: boolean
+  display_order: number
+  can_edit: boolean
+  can_delete: boolean
+}
+
+export interface SkillListResponse {
+  fixed: SkillDefinition[]
+  builtin: SkillDefinition[]
+  custom: SkillDefinition[]
+}
+
+export interface CustomSkillCreate {
+  skill_id: string
+  name: string
+  description?: string
+  icon: string
+  color: string
+  input_mode: 'trigger' | 'free_text'
+  examples?: string[]
+  prompt_content: string
+}
+
+export interface CustomSkillUpdate {
+  name?: string
+  description?: string
+  icon?: string
+  color?: string
+  input_mode?: 'trigger' | 'free_text'
+  examples?: string[]
+  prompt_content?: string
+}
+
 // Backend response shapes
 interface _BackendTestResult {
   id: string
@@ -377,12 +422,13 @@ export const sendChatMessage = (question: string, signal?: AbortSignal) =>
 export async function sendChatMessageStream(
   question: string,
   deepThink: boolean,
+  webSearch: boolean,
   signal?: AbortSignal,
   sessionId?: string,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
-  const body = JSON.stringify({ question, deep_think: deepThink })
+  const body = JSON.stringify({ question, deep_think: deepThink, web_search: webSearch })
 
   let res = await fetch('/api/v1/ai/chat/stream', {
     method: 'POST',
@@ -581,3 +627,23 @@ export const updateSkill = (capability: string, data: SkillConfigUpdate) =>
   http.put<SkillConfig>(`/ai/skills/${capability}`, data)
 export const resetSkillPrompt = (capability: string) =>
   http.delete<SkillConfig>(`/ai/skills/${capability}/prompt`)
+
+// ── Skill Management ──────────────────────────────────────────────────────────
+
+export const getSkillsGrouped = () =>
+  http.get<SkillListResponse>('/ai/skills/grouped')
+
+export const createCustomSkill = (payload: CustomSkillCreate) =>
+  http.post<SkillDefinition>('/ai/skills/custom', payload)
+
+export const updateCustomSkill = (skillId: string, payload: CustomSkillUpdate) =>
+  http.put<SkillDefinition>(`/ai/skills/custom/${skillId}`, payload)
+
+export const deleteCustomSkill = (skillId: string) =>
+  http.delete<{ ok: boolean }>(`/ai/skills/custom/${skillId}`)
+
+export const toggleSkill = (skillId: string, isEnabled: boolean) =>
+  http.put<SkillDefinition>(`/ai/skills/${skillId}/toggle`, { is_enabled: isEnabled })
+
+export const reorderSkills = (skillIds: string[]) =>
+  http.put<{ ok: boolean }>('/ai/skills/reorder', { skill_ids: skillIds })

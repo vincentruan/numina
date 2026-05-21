@@ -120,7 +120,7 @@
       <h2 class="feature-section-title">{{ t('aiHub.capabilities') }}</h2>
       <div class="feature-grid" role="list">
         <button
-          v-for="cap in capabilities"
+          v-for="cap in allCapabilities"
           :key="cap.id"
           class="feature-card"
           :class="{
@@ -129,12 +129,12 @@
           }"
           role="listitem"
           :data-testid="`capability-${cap.id}`"
-          :aria-label="cap.name + '：' + cap.description"
+          :aria-label="getSkillName(cap) + '：' + getSkillDescription(cap)"
           @click="startCapability(cap)"
         >
-          <span class="feature-icon" aria-hidden="true">{{ capabilityEmoji(cap.id) }}</span>
-          <span class="feature-title">{{ cap.name }}</span>
-          <span class="feature-desc">{{ cap.description }}</span>
+          <span class="feature-icon" aria-hidden="true">{{ getSkillIcon(cap) }}</span>
+          <span class="feature-title">{{ getSkillName(cap) }}</span>
+          <span class="feature-desc">{{ getSkillDescription(cap) }}</span>
           <!-- Task status badge -->
           <span
             v-if="capTaskStatus[cap.id] === 'running'"
@@ -175,7 +175,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
-import { getAIReport, getAITask } from '@/api/ai'
+import { getAIReport, getAITask, getSkillsGrouped, type SkillDefinition, type SkillListResponse } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
 import { useCapabilityStore } from '@/stores/capability'
 import { showToast } from 'vant'
@@ -196,7 +196,23 @@ const reportLoading = ref(false)
 const chatInput = ref('')
 const deepThink = ref(false)
 const webSearch = ref(false)
-const capabilities = computed(() => capabilityStore.capabilities)
+const groupedSkills = ref<SkillListResponse | null>(null)
+
+const allCapabilities = computed(() => {
+  if (!groupedSkills.value) {
+    // fallback: 使用旧的 capabilityStore
+    return capabilityStore.capabilities.map(cap => ({
+      ...cap,
+      skill_type: 'builtin' as const,
+      is_enabled: true,
+      display_order: 0,
+      can_edit: false,
+      can_delete: false,
+    }))
+  }
+  const { fixed, builtin, custom } = groupedSkills.value
+  return [...fixed, ...builtin, ...custom]
+})
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
@@ -267,11 +283,13 @@ async function loadReport() {
   }
 }
 
-async function loadCapabilities() {
+async function loadGroupedSkills() {
   try {
-    await capabilityStore.loadCapabilities()
+    const res = await getSkillsGrouped()
+    groupedSkills.value = res.data
   } catch {
-    // keep empty grid if discovery fails
+    // fallback to legacy capability store
+    await capabilityStore.loadCapabilities()
   }
 }
 
@@ -325,22 +343,38 @@ function startChat(q: string) {
   })
 }
 
-function capabilityEmoji(id: string) {
-  const map: Record<string, string> = {
-    report: '📊',
-    chat: '💬',
-    alerts: '🔔',
-    allocation: '⚖️',
-    disposal: '🗑️',
-    liability: '💳',
-    spending_leak: '🔍',
-    time_machine: '⏰',
+function getSkillIcon(cap: SkillDefinition) {
+  if (cap.skill_type !== 'custom') {
+    const nameKey = t(`skills.capability.${cap.id}.name`)
+    const emojiMatch = nameKey.match(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u)
+    return emojiMatch ? emojiMatch[0] : '✨'
   }
-  return map[id] ?? '✨'
+  return cap.icon || '✨'
 }
 
-function startCapability(cap: { id: string; ui?: { route?: string | null } }) {
-  router.push(cap.ui?.route ?? '/ai/chat')
+function getSkillName(cap: SkillDefinition) {
+  if (cap.skill_type !== 'custom') {
+    const nameKey = t(`skills.capability.${cap.id}.name`)
+    // 去掉 emoji 前缀
+    return nameKey.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/u, '')
+  }
+  return cap.name || cap.id
+}
+
+function getSkillDescription(cap: SkillDefinition) {
+  if (cap.skill_type !== 'custom') {
+    return t(`skills.capability.${cap.id}.description`)
+  }
+  return cap.description || ''
+}
+
+function startCapability(cap: SkillDefinition) {
+  if (cap.route) {
+    router.push(cap.route)
+  } else {
+    // 自定义技能跳转到 chat 页面，带 skill_id 参数
+    router.push(`/ai/chat?skill=${cap.id}`)
+  }
 }
 
 // ── Capability task status badges ──────────────────────────────────────────
@@ -377,7 +411,7 @@ onMounted(async () => {
   if (aiStore.config?.ai_test_thinking_success === true) {
     deepThink.value = true
   }
-  await loadCapabilities()
+  await loadGroupedSkills()
   await loadReport()
   startCapabilityPolling()
 })

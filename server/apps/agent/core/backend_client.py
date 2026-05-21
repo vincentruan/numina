@@ -194,6 +194,10 @@ class BackendClient:
     async def reset_circuit_success(self, config_id: str) -> dict:
         return await reset_circuit_success(self.family_id, config_id)
 
+    async def get_user(self, user_id: str) -> dict | None:
+        """Get user info by user_id for title generation."""
+        return await get_user(self.family_id, user_id)
+
 
 def classify_error_type(error_code: int, error_message: str | None = None) -> str:
     """根据 HTTP 错误码和错误消息分类错误类型。
@@ -596,6 +600,21 @@ async def reset_circuit_success(family_id: str, config_id: str) -> dict:
         )
         resp.raise_for_status()
         return _unwrap(resp)
+
+
+async def get_user(family_id: str, user_id: str) -> dict | None:
+    """Get user info by user_id for title generation."""
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    try:
+        resp = await client.get(
+            f"/api/v1/internal/users/{user_id}",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)
+    except httpx.HTTPStatusError:
+        return None
 
 
 async def report_half_open_result(

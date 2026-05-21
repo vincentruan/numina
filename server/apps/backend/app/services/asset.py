@@ -478,3 +478,30 @@ def batch_export_assets(db: Session, user: User, asset_ids: list[str]) -> dict:
         "data": assets_data,
         "count": len(assets_data),
     }
+
+
+def list_assets_for_family(
+    db: Session,
+    family_id: str,
+    category: str | None = None,
+    limit: int = 20,
+) -> list[dict]:
+    """List assets for a family, filtered by category if provided."""
+    from apps.backend.app.models.asset import Asset
+
+    q = (
+        db.query(Asset)
+        .filter(Asset.family_id == family_id, Asset.is_archived.is_(False))
+    )
+    if category:
+        q = q.filter(Asset.category == category)
+    rows = q.limit(limit).all()
+    return [
+        {
+            "id": str(a.id),
+            "name": a.name,
+            "category": a.category,
+            "current_value": float(a.current_value or 0),
+        }
+        for a in rows
+    ]

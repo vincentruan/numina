@@ -504,13 +504,13 @@ def get_home_assets_page(
 def get_expiring_soon_assets(db: Session, user: User, days_threshold: int = 90) -> list[ExpiringSoonItem]:
     """
     Get assets approaching end of expected lifespan.
-    
+
     For physical assets (electronics), expiration is normal lifecycle - show with muted color.
     For financial assets (accounts, subscriptions), expiration needs attention - show with alert color.
     """
     default_currency = user.default_currency or "CNY"
     today = date.today()
-    
+
     # Query assets with expected lifespan
     assets = (
         db.query(Asset)
@@ -524,23 +524,23 @@ def get_expiring_soon_assets(db: Session, user: User, days_threshold: int = 90) 
         )
         .all()
     )
-    
+
     items = []
     for a in assets:
         if not a.purchase_date or not a.expected_lifespan_days:
             continue
-            
+
         # Calculate remaining days
         expiry_date = a.purchase_date + timedelta(days=a.expected_lifespan_days)
         remaining_days = (expiry_date - today).days
-        
+
         # Only include assets within threshold (including already expired)
         if remaining_days <= days_threshold:
             asset_currency = a.currency or "CNY"
             current_value_converted = ExchangeRateService.convert(
                 a.current_value or 0, asset_currency, default_currency, db
             )
-            
+
             items.append(
                 ExpiringSoonItem(
                     id=a.id,
@@ -556,7 +556,33 @@ def get_expiring_soon_assets(db: Session, user: User, days_threshold: int = 90) 
                     original_value=a.current_value or 0,
                 )
             )
-    
+
     # Sort by remaining days (most urgent first)
     items.sort(key=lambda x: x.remaining_days)
     return items
+
+
+def get_recent_alerts(db: Session, user: User, limit: int = 10) -> list[dict]:
+    """Get recent alerts for a family."""
+    from packages.db.models.reminder import Reminder
+
+    rows = (
+        db.query(Reminder)
+        .filter(
+            Reminder.family_id == user.family_id,
+            Reminder.status == "active",
+        )
+        .order_by(Reminder.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": str(r.id),
+            "title": r.title,
+            "body": r.body,
+            "severity": r.severity,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]

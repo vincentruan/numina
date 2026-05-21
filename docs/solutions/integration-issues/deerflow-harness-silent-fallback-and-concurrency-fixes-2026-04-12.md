@@ -58,7 +58,7 @@ A review of Numina's DeerFlow AI agent harness integration (`agent/` module, Pyt
 
 `adapter.py` only defined the `DeerFlowAdapter` class. The orchestrator's import of `deerflow_adapter` failed silently, leaving `_deerflow_adapter = None` and permanently routing all requests through legacy fallback.
 
-**Fix:** add a factory function and module-level singleton at the bottom of `adapter.py`:
+**Fix:** add a factory function and lazy-initialized singleton at the bottom of `adapter.py`:
 
 ```python
 def _make_adapter() -> DeerFlowAdapter | None:
@@ -69,10 +69,23 @@ def _make_adapter() -> DeerFlowAdapter | None:
         logger.warning(f"DeerFlow adapter init failed: {e}")
         return None
 
-deerflow_adapter: DeerFlowAdapter | None = _make_adapter()
+def get_global_adapter() -> DeerFlowAdapter | None:
+    """获取全局单例（延迟初始化，仅用于向后兼容）。"""
+    global _deerflow_adapter_singleton
+    if _deerflow_adapter_singleton is _UNINITIALIZED:
+        _deerflow_adapter_singleton = _make_adapter()
+    return _deerflow_adapter_singleton
+
+# 向后兼容的模块属性访问（延迟初始化）
+def __getattr__(name: str) -> Any:
+    if name == "deerflow_adapter":
+        return get_global_adapter()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 ```
 
-The orchestrator's existing `try/except` import now resolves correctly when the config is present, and degrades gracefully (with a warning) when it isn't.
+The `__getattr__` hook provides backward-compatible lazy initialization — the singleton is created on first access rather than at import time, avoiding circular imports and allowing test overrides.
+
+> **Note (2026-05):** Production code now uses the family-level adapter mode via `create_family_adapter()` and the `ChatAdapter` pattern. The global singleton exists only for backward compatibility. See [`docs/solutions/architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md`](../architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) for the current architecture.
 
 ---
 

@@ -52,7 +52,7 @@
             v-for="f in capabilityFilters"
             :key="f.value ?? 'all'"
             class="filter-tab"
-            :class="{ 'filter-tab--active': selectedCapability === f.value }"
+            :class="{ 'filter-tab--active': f.value === null ? selectedCapability === 'all' : selectedCapability === f.value }"
             @click="onSelectCapability(f.value)"
           >{{ f.label }}</button>
         </div>
@@ -803,18 +803,29 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
 }
 
 // Load session list when history panel opens (lazy, once per mount)
-const selectedCapability = ref<string | null>(null)
+const selectedCapability = ref<string>('chat')  // Default to 'chat' filter
+
+// Capability metadata from skills/*.md - icons, colors, display names, and AI flag
+const capabilityMeta: Record<string, { icon: string; color: string; name: string; isAI: boolean }> = {
+  chat: { icon: '💬', color: '#06b6d4', name: '智能问答', isAI: true },
+  alerts: { icon: '🔔', color: '#f59e0b', name: '资产老化预警', isAI: true },
+  disposal: { icon: '🗑️', color: '#ef4444', name: '闲置资产处置', isAI: true },
+  report: { icon: '📋', color: '#6366f1', name: '家庭资产体检', isAI: true },
+  allocation: { icon: '📊', color: '#8b5cf6', name: '资产配置分析', isAI: true },
+  liability: { icon: '💳', color: '#f97316', name: '负债健康分析', isAI: true },
+  spending_leak: { icon: '💧', color: '#10b981', name: '消费漏洞扫描', isAI: true },
+  time_machine: { icon: '⏰', color: '#a855f7', name: '财务时光机', isAI: false },  // simulation, not AI chat
+}
 
 const capabilityFilters = computed(() => [
   { label: t('aiChat.filterAll'), value: null },
-  { label: t('aiChat.filterChat'), value: 'chat' },
-  { label: t('aiChat.filterAlerts'), value: 'alerts' },
-  { label: t('aiChat.filterDisposal'), value: 'disposal' },
-  { label: t('aiChat.filterReport'), value: 'report' },
-  { label: t('aiChat.filterAllocation'), value: 'allocation' },
-  { label: t('aiChat.filterLiability'), value: 'liability' },
-  { label: t('aiChat.filterSpendingLeak'), value: 'spending_leak' },
-  { label: t('aiChat.filterTimeMachine'), value: 'time_machine' },
+  // Filter tabs for AI capabilities only (skip time_machine which doesn't generate chat history)
+  ...Object.entries(capabilityMeta)
+    .filter(([_, meta]) => meta.isAI)
+    .map(([key, meta]) => ({
+      label: `${meta.icon} ${meta.name}`,
+      value: key,
+    })),
 ])
 
 async function loadSessions() {
@@ -822,7 +833,9 @@ async function loadSessions() {
   sessionsOffset.value = 0
   sessionsAllLoaded.value = false
   try {
-    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, selectedCapability.value ?? undefined)
+    // Pass capability filter - use null for "all" (when user explicitly selects filterAll)
+    const capabilityParam = selectedCapability.value === 'all' ? undefined : selectedCapability.value
+    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, capabilityParam)
     sessions.value = res.data.sessions
     sessionsLoaded.value = true
     if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
@@ -842,7 +855,8 @@ async function loadMoreSessions() {
   // Capture the capability at call time; discard results if it changed mid-flight
   const capAtCall = selectedCapability.value
   try {
-    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, capAtCall ?? undefined)
+    const capabilityParam = capAtCall === 'all' ? undefined : capAtCall
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, capabilityParam)
     if (selectedCapability.value !== capAtCall) return // stale response
     sessions.value = [...sessions.value, ...res.data.sessions]
     sessionsOffset.value += res.data.sessions.length
@@ -857,7 +871,8 @@ async function loadMoreSessions() {
 }
 
 async function onSelectCapability(cap: string | null) {
-  selectedCapability.value = cap
+  // null means "全部" (all) - store as 'all' for consistency
+  selectedCapability.value = cap ?? 'all'
   sessions.value = []
   sessionsOffset.value = 0
   sessionsAllLoaded.value = false
@@ -998,7 +1013,7 @@ async function onSend() {
   let thinkingDone = false
 
   try {
-    const reader = await sendChatEventStream(q, deepThink.value, abortController.signal, currentSessionId.value ?? undefined)
+    const reader = await sendChatEventStream(q, deepThink.value, webSearch.value, abortController.signal, currentSessionId.value ?? undefined)
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation

@@ -91,6 +91,7 @@ class DeerFlowAdapter:
         ai_config: dict[str, Any] | None = None,
         subagent_enabled: bool = False,
         plan_mode: bool = False,
+        mcp_servers: list[dict[str, Any]] | None = None,
     ) -> None:
         """Initialize adapter.
 
@@ -99,10 +100,12 @@ class DeerFlowAdapter:
             timeout_seconds: DeerFlow 调用超时时间
             family_id: 家庭 ID（家庭级配置模式）
             ai_config: 家庭的 AI 配置（api_key, ai_provider, ai_model_id 等）
+            mcp_servers: MCP server configs to inject into DeerFlow config YAML
         """
         self._timeout = timeout_seconds
         self._family_id = family_id
         self._ai_config = ai_config
+        self._mcp_servers = mcp_servers
         self._config_path: str | None = None  # Store config_path for reloading before stream
 
         if family_id and ai_config:
@@ -111,6 +114,7 @@ class DeerFlowAdapter:
                 family_id, ai_config,
                 subagent_enabled=subagent_enabled,
                 plan_mode=plan_mode,
+                mcp_servers=mcp_servers,
             )
             self._is_family_mode = True
         elif config_path:
@@ -370,6 +374,7 @@ def create_family_adapter(
     timeout_seconds: int = 120,
     subagent_enabled: bool = False,
     plan_mode: bool = False,
+    mcp_servers: list[dict[str, Any]] | None = None,
 ) -> "DeerFlowAdapter":
     """创建家庭级的 DeerFlowAdapter（动态注入 AI 配置）。
 
@@ -379,6 +384,7 @@ def create_family_adapter(
         timeout_seconds: DeerFlow 调用超时时间
         subagent_enabled: 是否启用子 agent 委托（init-time 参数）
         plan_mode: 是否启用 TodoList 规划中间件（init-time 参数）
+        mcp_servers: MCP server configs to inject into DeerFlow config YAML
 
     Returns:
         DeerFlowAdapter 实例（缓存复用）
@@ -389,6 +395,7 @@ def create_family_adapter(
         timeout_seconds=timeout_seconds,
         subagent_enabled=subagent_enabled,
         plan_mode=plan_mode,
+        mcp_servers=mcp_servers,
     )
 
 

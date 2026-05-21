@@ -39,7 +39,7 @@ _MAX_CACHE_SIZE = 100
 # Values are either (DeerFlowClient, Path) for a live entry, or None as a
 # placeholder while a new client is being initialised (prevents TOCTOU races
 # where two threads both pass the size check and both insert).
-_adapter_cache: OrderedDict[tuple[str, str, bool, bool], tuple[DeerFlowClient, Path] | None] = OrderedDict()
+_adapter_cache: OrderedDict[tuple[str, str, bool, bool, str], tuple[DeerFlowClient, Path] | None] = OrderedDict()
 # Thread lock to prevent concurrent cache mutations (works in sync context)
 _cache_lock = threading.Lock()
 # Per-key init lock: serialises reload_app_config + DeerFlowClient() for the
@@ -122,10 +122,21 @@ def close_shared_checkpointer() -> None:
         _shared_checkpointer = None
 
 
+def _mcp_cache_key(mcp_servers: list[dict[str, Any]] | None) -> str:
+    """Return a short hash fingerprint for an mcp_servers list, or '' if empty."""
+    if not mcp_servers:
+        return ""
+    import hashlib
+    import json
+    blob = json.dumps(mcp_servers, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:8]  # noqa: S324 — non-crypto use
+
+
 def _generate_temp_config(
     base_config_dir: str,
     ai_config: dict[str, Any],
     family_id: str = "",
+    mcp_servers: list[dict[str, Any]] | None = None,
 ) -> Path:
     """生成临时配置文件，动态注入家庭的 AI 配置到 models 列表。
 
@@ -257,6 +268,9 @@ def _generate_temp_config(
         config["memory"] = {}
     config["memory"]["storage_path"] = str(memory_path)
 
+    if mcp_servers:
+        config["mcp_servers"] = mcp_servers
+
     # 写入临时文件
     temp_dir = Path(tempfile.mkdtemp(prefix="deerflow_config_"))
     temp_config_path = temp_dir / "config.yaml"
@@ -273,6 +287,7 @@ def get_family_adapter(
     timeout_seconds: int = 120,
     subagent_enabled: bool = False,
     plan_mode: bool = False,
+    mcp_servers: list[dict[str, Any]] | None = None,
 ) -> tuple[DeerFlowClient, Path]:
     """获取家庭的 DeerFlowClient 实例（带缓存）。
 
@@ -307,16 +322,17 @@ def get_family_adapter(
         base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
 
     config_id: str = ai_config.get("config_id", "")
-    cache_key: tuple[str, str, bool, bool] = (family_id, config_id, subagent_enabled, plan_mode)
+    cache_key: tuple[str, str, bool, bool, str] = (
+        family_id, config_id, subagent_enabled, plan_mode, _mcp_cache_key(mcp_servers),
+    )
 
     # Fast path: return cached client
     with _cache_lock:
         entry = _adapter_cache.get(cache_key)
         if entry is not None:
-            client, config_path = entry
             _adapter_cache.move_to_end(cache_key)
             logger.debug("[deerflow_cache] reuse cached adapter for family=%s config_id=%s subagent=%s plan=%s", family_id, config_id, subagent_enabled, plan_mode)
-            return client, config_path
+            return entry
 
         # Reserve the slot with a placeholder to prevent concurrent initialisations
         # for the same key (TOCTOU fix). Also evict the oldest entry if at capacity.
@@ -333,7 +349,7 @@ def get_family_adapter(
     # Serialise reload_app_config() + DeerFlowClient() to prevent concurrent
     # threads from interleaving global DeerFlow config state. File I/O for
     # _generate_temp_config happens outside this lock to minimise contention.
-    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id)
+    temp_config_path = _generate_temp_config(base_config_dir, ai_config, family_id=family_id, mcp_servers=mcp_servers)
 
     # Obtain the shared checkpointer before reload_app_config() so the
     # checkpointer DB path is read from the base config, not the per-family
@@ -347,12 +363,11 @@ def get_family_adapter(
             with _cache_lock:
                 entry = _adapter_cache.get(cache_key)
                 if entry is not None:
-                    client, cached_config_path = entry
                     _adapter_cache.move_to_end(cache_key)
                     # Clean up the temp config we generated but won't use
                     with contextlib.suppress(Exception):
                         shutil.rmtree(temp_config_path.parent, ignore_errors=True)
-                    return client, cached_config_path
+                    return entry
 
             # Set DEER_FLOW_CONFIG_PATH inside the init lock so concurrent
             # threads for different families don't overwrite each other's path.
@@ -378,7 +393,8 @@ def get_family_adapter(
                     os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
 
         with _cache_lock:
-            _adapter_cache[cache_key] = (client, temp_config_path)
+            stored_entry: tuple[DeerFlowClient, Path] = (client, temp_config_path)
+            _adapter_cache[cache_key] = stored_entry
 
         logger.info(
             "[deerflow_cache] created new adapter for family=%s config_id=%s model=%s",
@@ -386,7 +402,7 @@ def get_family_adapter(
             config_id,
             ai_config.get("ai_model_id"),
         )
-        return client, temp_config_path
+        return stored_entry
     except Exception as e:
         # Remove placeholder and clean up temp config on failure
         with _cache_lock:

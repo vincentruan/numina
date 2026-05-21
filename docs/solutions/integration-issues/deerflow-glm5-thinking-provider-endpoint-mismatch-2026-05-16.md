@@ -120,7 +120,7 @@ if thinking_supported:
 
 ### 3. Code Improvement in `adapter.py`
 
-Added Anthropic-style thinking content block handling alongside the existing `reasoning_content` extraction. This supports native Claude models (which return thinking as content blocks) in addition to OpenAI-compatible models (which return `reasoning_content` in `additional_kwargs`):
+Added Anthropic-style thinking content block handling alongside the existing `reasoning_content` extraction. This supports native Claude models (which return thinking as content blocks) in addition to OpenAI-compatible models (which return `reasoning_content` in `additional_kwargs`). Both paths now emit `StreamChunk` dataclass objects (replacing the older `[THINK]`/`[TEXT]` string prefix convention):
 
 ```python
 # Emit reasoning/thinking content before the answer text
@@ -128,21 +128,23 @@ additional_kwargs = event.data.get("additional_kwargs") or {}
 content = event.data.get("content")
 reasoning = additional_kwargs.get("reasoning_content")
 if isinstance(reasoning, str) and reasoning:
-    loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{reasoning}")
+    loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", reasoning))
 # Also handle Anthropic-style thinking content blocks (native Claude models)
 if isinstance(content, list):
     text_parts: list[str] = []
     for block in content:
         if isinstance(block, dict):
             if block.get("type") == "thinking" and block.get("thinking"):
-                loop.call_soon_threadsafe(queue.put_nowait, f"[THINK]{block['thinking']}")
+                loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", block["thinking"]))
             elif block.get("type") == "text" and block.get("text"):
                 text_parts.append(block["text"])
     if text_parts:
-        loop.call_soon_threadsafe(queue.put_nowait, "".join(text_parts))
+        loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", "".join(text_parts)))
 elif isinstance(content, str) and content:
-    loop.call_soon_threadsafe(queue.put_nowait, content)
+    loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("text", content))
 ```
+
+`StreamChunk` is a `@dataclass` with `type: Literal["thinking", "text"]` and `content: str`. The orchestrator dispatches on `chunk.type` — `stream_dispatch()` yields only `chunk.content` (str) for raw-text routers, while `stream_dispatch_events()` uses `_chunk_to_event_lines()` to emit structured NDJSON events with `is_thinking` flags.
 
 ## Why This Works
 
@@ -216,3 +218,4 @@ Expected NDJSON event sequence for `deep_think=true`:
 ## Related Issues
 
 - [`deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md`](./deerflow-harness-silent-fallback-and-concurrency-fixes-2026-04-12.md) — DeerFlow adapter initialization, singleton export, and concurrency patterns
+- [`mcp-chat-adapter-architecture-2026-05-21.md`](../architecture-patterns/mcp-chat-adapter-architecture-2026-05-21.md) — Current chat architecture with MCP integration, ChatAdapter pattern, and family_adapter_cache 5-tuple key extension

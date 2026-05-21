@@ -8,11 +8,12 @@ import json
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import verify_agent_token
+from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_provider_config import (
@@ -20,6 +21,7 @@ from apps.backend.app.models.ai_provider_config import (
 )
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_skill_config import FamilySkillConfig
+from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.user import User
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
@@ -494,6 +496,37 @@ def internal_get_skill_config(
     }
 
 
+@router.get("/skill-registry/{family_id}")
+def get_skill_registry(
+    family_id: int,
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Internal endpoint for agent to fetch family skill registry."""
+    if x_internal_token != settings.INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+    records = (
+        db.query(SkillRegistry)
+        .filter(SkillRegistry.family_id == family_id)
+        .all()
+    )
+    return [
+        {
+            "skill_id": r.skill_id,
+            "skill_type": r.skill_type,
+            "name": r.name,
+            "description": r.description,
+            "icon": r.icon,
+            "color": r.color,
+            "input_mode": r.input_mode,
+            "is_enabled": r.is_enabled,
+            "display_order": r.display_order,
+        }
+        for r in records
+    ]
+
+
 @router.get("/ai/mcp-servers")
 def internal_get_mcp_servers(
     family_id: str = Depends(verify_agent_token),
@@ -663,3 +696,38 @@ def internal_get_session(
     if row is None or row.family_id != int(family_id):
         raise AppError(ErrorCode.NOT_FOUND)
     return _session_to_dict(row)
+
+
+@router.get("/prompts/{family_id_path}/chat")
+def internal_get_chat_prompt(
+    family_id_path: str,
+    family_id: str = Depends(verify_agent_token),
+):
+    """Return family's custom chat system prompt (or null if not set)."""
+    if family_id_path != str(family_id):
+        raise HTTPException(status_code=403, detail="family_id mismatch")
+    from apps.backend.app.services import workspace
+    content = workspace.get_chat_prompt(family_id)
+    return {"content": content}
+
+
+@router.get("/users/{user_id}")
+def internal_get_user(
+    user_id: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Get user info by user_id for title generation."""
+    try:
+        user_id_int = int(user_id)
+    except ValueError:
+        raise AppError(ErrorCode.NOT_FOUND) from None
+    user = db.query(User).filter(User.id == user_id_int).first()
+    if user is None or str(user.family_id) != family_id:
+        raise AppError(ErrorCode.NOT_FOUND)
+    return {
+        "user_id": str(user.id),
+        "username": user.username,
+        "display_name": user.display_name,
+        "family_id": str(user.family_id),
+    }

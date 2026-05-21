@@ -49,6 +49,7 @@ class ChatRequest(BaseModel):
 class ChatStreamRequest(BaseModel):
     question: str
     deep_think: bool = False
+    web_search: bool = False
     session_id: str | None = None
 
     @field_validator("question")
@@ -218,7 +219,7 @@ async def chat_stream(
                 client.stream(
                     "POST",
                     f"{settings.AGENT_BASE_URL}/chat/ask/stream",
-                    json={"question": body.question, "deep_think": body.deep_think},
+                    json={"question": body.question, "deep_think": body.deep_think, "web_search": body.web_search},
                     headers={
                         "X-Family-Id": str(current_user.family_id),
                         "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
