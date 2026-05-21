@@ -249,8 +249,8 @@ class TestFamilyAdapterCache:
         # First entry should be evicted
         assert ("family_0", "cfg-000") not in _adapter_cache
         assert ("family_100", "cfg-100") not in _adapter_cache
-        assert ("family_0", "cfg-000", False, False) not in _adapter_cache
-        assert ("family_100", "cfg-100", False, False) in _adapter_cache
+        assert ("family_0", "cfg-000", False, False, "") not in _adapter_cache
+        assert ("family_100", "cfg-100", False, False, "") in _adapter_cache
 
         clear_cache()
 
@@ -271,7 +271,7 @@ class TestFamilyAdapterCache:
 
         stats = get_cache_stats()
         assert stats["cached_families"] == 0
-        assert ("family_1", "cfg-001", False, False) not in _adapter_cache
+        assert ("family_1", "cfg-001", False, False, "") not in _adapter_cache
 
     def test_invalidate_nonexistent_family(self):
         """Should handle invalidation of non-cached family gracefully."""
@@ -373,8 +373,8 @@ class TestIU6CacheKeyAndCapabilities:
             client_b = get_family_adapter("family_x", cfg_b, base_config_dir)
 
         assert client_a is not client_b
-        assert ("family_x", "cfg-aaa", False, False) in _adapter_cache
-        assert ("family_x", "cfg-bbb", False, False) in _adapter_cache
+        assert ("family_x", "cfg-aaa", False, False, "") in _adapter_cache
+        assert ("family_x", "cfg-bbb", False, False, "") in _adapter_cache
         assert get_cache_stats()["cached_families"] == 2
         clear_cache()
 
@@ -397,8 +397,8 @@ class TestIU6CacheKeyAndCapabilities:
             client_new = get_family_adapter("family_y", cfg_new, base_config_dir)
 
         assert client_old is not client_new
-        assert ("family_y", "cfg-old", False, False) in _adapter_cache
-        assert ("family_y", "cfg-new", False, False) in _adapter_cache
+        assert ("family_y", "cfg-old", False, False, "") in _adapter_cache
+        assert ("family_y", "cfg-new", False, False, "") in _adapter_cache
         clear_cache()
 
     def test_thinking_supported_from_model_1_capabilities(self, base_config_dir):
@@ -471,9 +471,9 @@ class TestIU6CacheKeyAndCapabilities:
         # Batch invalidate family_z only
         invalidate_family_adapter_cache("family_z")
 
-        assert ("family_z", "cfg-z1", False, False) not in _adapter_cache
-        assert ("family_z", "cfg-z2", False, False) not in _adapter_cache
-        assert ("family_other", "cfg-o1", False, False) in _adapter_cache
+        assert ("family_z", "cfg-z1", False, False, "") not in _adapter_cache
+        assert ("family_z", "cfg-z2", False, False, "") not in _adapter_cache
+        assert ("family_other", "cfg-o1", False, False, "") in _adapter_cache
         assert get_cache_stats()["cached_families"] == 1
         clear_cache()
 
@@ -494,8 +494,8 @@ class TestIU6CacheKeyAndCapabilities:
 
         invalidate_family_adapter_cache("family_w", config_id="cfg-w1")
 
-        assert ("family_w", "cfg-w1", False, False) not in _adapter_cache
-        assert ("family_w", "cfg-w2", False, False) in _adapter_cache
+        assert ("family_w", "cfg-w1", False, False, "") not in _adapter_cache
+        assert ("family_w", "cfg-w2", False, False, "") in _adapter_cache
         clear_cache()
 
 class TestCacheFixes:
@@ -573,3 +573,54 @@ class TestCacheFixes:
         # Must not raise
         invalidate_family_adapter("fam-ph2")
         assert get_cache_stats()["cached_families"] == 0
+
+
+class TestMCPServersInjection:
+    """Tests for mcp_servers injection into generated config YAML."""
+
+    def test_temp_config_includes_mcp_servers_when_provided(self, tmp_path):
+        """_generate_temp_config writes mcp_servers list into config YAML when provided."""
+        import yaml
+        from pathlib import Path
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+
+        base_config_dir = str(Path(__file__).resolve().parents[3] / "apps" / "agent" / "deerflow_config")
+        ai_config = {
+            "api_key": "sk-x",
+            "ai_model_id": "gpt-4",
+            "ai_provider": "openai",
+        }
+        mcp_servers = [
+            {
+                "name": "numina-family-data",
+                "url": "http://backend:8000/api/v1/internal/mcp/100/sse",
+                "transport": "sse",
+                "headers": {"X-Agent-Token": "secret"},
+            }
+        ]
+        path = _generate_temp_config(
+            base_config_dir,
+            ai_config,
+            family_id="100",
+            mcp_servers=mcp_servers,
+        )
+        with open(path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        assert cfg.get("mcp_servers") == mcp_servers
+
+    def test_temp_config_omits_mcp_servers_when_not_provided(self, tmp_path):
+        """_generate_temp_config doesn't add mcp_servers key when None/empty."""
+        import yaml
+        from pathlib import Path
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import _generate_temp_config
+
+        base_config_dir = str(Path(__file__).resolve().parents[3] / "apps" / "agent" / "deerflow_config")
+        ai_config = {
+            "api_key": "sk-x",
+            "ai_model_id": "gpt-4",
+            "ai_provider": "openai",
+        }
+        path = _generate_temp_config(base_config_dir, ai_config, family_id="100")
+        with open(path, encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        assert "mcp_servers" not in cfg
