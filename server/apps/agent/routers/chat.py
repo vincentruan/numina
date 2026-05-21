@@ -22,6 +22,7 @@ class ChatRequest(BaseModel):
 class ChatStreamRequest(BaseModel):
     question: str
     deep_think: bool = False
+    web_search: bool = False
 
 
 @router.post("/ask")
@@ -69,6 +70,7 @@ async def ask_stream(
                 thread_id=x_thread_id,
                 free_text=body.question,
                 enable_thinking_override=body.deep_think,
+                web_search=body.web_search,
             ):
                 yield event_line
 
