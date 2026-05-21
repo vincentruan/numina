@@ -39,32 +39,10 @@
       <van-cell
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.coinRate')"
-        :value="coinRatesExpanded ? '' : t('settings.coinRateValue', { c2s: copperToSilverStr, s2g: silverToGoldStr })"
+        :value="t('settings.coinRateValue', { c2s: familyStore.coinCopperToSilver, s2g: familyStore.coinSilverToGold })"
         is-link
-        :arrow-direction="coinRatesExpanded ? 'up' : 'down'"
-        @click="coinRatesExpanded = !coinRatesExpanded"
+        to="/settings/family/coin-rates"
       />
-      <template v-if="coinRatesExpanded && authStore.user?.role === 'owner'">
-        <van-field
-          v-model="copperToSilverStr"
-          :label="t('settings.coinCopperToSilver')"
-          type="digit"
-          :placeholder="t('settings.coinRateDefault', { n: 10 })"
-        />
-        <van-field
-          v-model="silverToGoldStr"
-          :label="t('settings.coinSilverToGold')"
-          type="digit"
-          :placeholder="t('settings.coinRateDefault', { n: 10 })"
-        />
-        <van-cell>
-          <template #title>
-            <van-button size="small" type="primary" :loading="savingRates" @click="saveCoinRates">
-              {{ t('common.save') }}
-            </van-button>
-          </template>
-        </van-cell>
-      </template>
     </van-cell-group>
 
     <!-- 账户安全 -->
@@ -207,7 +185,6 @@ import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
 import { updateSettings } from '@/api/auth'
-import { updateFamilySettings } from '@/api/family'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
@@ -225,8 +202,6 @@ onMounted(() => {
     familyStore.fetchFamily()
   }
   authStore.fetchMe()
-  copperToSilverStr.value = String(familyStore.coinCopperToSilver)
-  silverToGoldStr.value = String(familyStore.coinSilverToGold)
   // Initialize theme color from localStorage
   const savedColor = localStorage.getItem('theme-primary')
   if (savedColor) {
@@ -273,10 +248,6 @@ const showViewModePicker = ref(false)
 const showThemeColorPicker = ref(false)
 const showTitleDialog = ref(false)
 const editTitleValue = ref('')
-const copperToSilverStr = ref(String(familyStore.coinCopperToSilver))
-const silverToGoldStr = ref(String(familyStore.coinSilverToGold))
-const savingRates = ref(false)
-const coinRatesExpanded = ref(false)
 const selectedCurrency = ref(authStore.user?.default_currency || 'CNY')
 
 const themeColorOptions = computed(() => [
@@ -362,26 +333,6 @@ function onEditFamilyTitle() {
   }
   editTitleValue.value = familyStore.family?.custom_title || familyStore.family?.name || ''
   showTitleDialog.value = true
-}
-
-async function saveCoinRates() {
-  const c2s = parseInt(copperToSilverStr.value)
-  const s2g = parseInt(silverToGoldStr.value)
-  if (isNaN(c2s) || c2s < 1 || c2s > 100 || isNaN(s2g) || s2g < 1 || s2g > 100) {
-    showToast(t('toast.coinRateInvalid'))
-    return
-  }
-  savingRates.value = true
-  try {
-    await updateFamilySettings({ coinCopperToSilver: c2s, coinSilverToGold: s2g })
-    familyStore.coinCopperToSilver = c2s
-    familyStore.coinSilverToGold = s2g
-    showToast(t('toast.saveSuccess'))
-  } catch {
-    showToast(t('toast.saveFailed'))
-  } finally {
-    savingRates.value = false
-  }
 }
 
 async function onTitleConfirm() {
