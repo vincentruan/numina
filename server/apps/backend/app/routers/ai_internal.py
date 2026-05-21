@@ -512,6 +512,19 @@ def internal_get_session(
     return _session_to_dict(row)
 
 
+@router.get("/prompts/{family_id_path}/chat")
+def internal_get_chat_prompt(
+    family_id_path: str,
+    family_id: str = Depends(verify_agent_token),
+):
+    """Return family's custom chat system prompt (or null if not set)."""
+    if family_id_path != str(family_id):
+        raise HTTPException(status_code=403, detail="family_id mismatch")
+    from apps.backend.app.services import workspace
+    content = workspace.get_chat_prompt(family_id)
+    return {"content": content}
+
+
 @router.get("/users/{user_id}")
 def internal_get_user(
     user_id: str,
