@@ -106,6 +106,7 @@ const categoryMap = computed<Record<string, { text: string; icon: string; color:
   mortgage: { text: t('liability.mortgage'), icon: 'icon-mortgage', color: '#d97706' },
   car_loan: { text: t('liability.carLoan'), icon: 'icon-car-loan', color: '#0891b2' },
   credit_card: { text: t('liability.creditCard'), icon: 'icon-credit-card', color: '#dc2626' },
+  consumer_loan: { text: t('liability.consumerLoan'), icon: 'icon-personal-loan', color: '#7c3aed' },
   personal_loan: { text: t('liability.personalLoan'), icon: 'icon-personal-loan', color: '#ea580c' },
   other: { text: t('liability.other'), icon: 'icon-other-liability', color: '#64748b' },
 }))

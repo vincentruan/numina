@@ -164,6 +164,7 @@ const categories = computed(() => [
   { value: 'mortgage', label: t('liability.mortgage') },
   { value: 'car_loan', label: t('liability.carLoan') },
   { value: 'credit_card', label: t('liability.creditCard') },
+  { value: 'consumer_loan', label: t('liability.consumerLoan') },
   { value: 'personal_loan', label: t('liability.personalLoan') },
   { value: 'other', label: t('liability.other') },
 ])

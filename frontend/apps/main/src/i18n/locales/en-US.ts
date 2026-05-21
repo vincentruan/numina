@@ -242,6 +242,7 @@ export default {
     carLoan: 'Car Loan',
     creditCard: 'Credit Card',
     personalLoan: 'Personal Loan',
+    consumerLoan: 'Consumer Loan',
     other: 'Other',
     noLiabilityDesc: 'No active liabilities, finances are healthy ✅',
     analyzePrompt: 'Click to analyze liabilities',
