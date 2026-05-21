@@ -896,7 +896,7 @@ export default {
     switchFailed: '❌ Switch failed, please try again',
     familyTitleUpdated: '✅ Family name updated',
     ownerOnlyWarning: '⚠️ Only the family owner can change the name',
-    coinRateInvalid: '⚠️ Please enter an integer between 1 and 100',
+    coinRateInvalid: '⚠️ Please enter an integer between 1 and 10',
     // Settings
     themeChanged: '🎨 Theme color updated',
     // Dynamic messages

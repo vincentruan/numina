@@ -16,6 +16,7 @@
             type="digit"
             class="rate-input"
             :error="copperToSilverError"
+            :error-message="copperToSilverError ? t('toast.coinRateInvalid') : ''"
             @update:model-value="onCopperInput"
           />
         </div>
@@ -35,6 +36,7 @@
             type="digit"
             class="rate-input"
             :error="silverToGoldError"
+            :error-message="silverToGoldError ? t('toast.coinRateInvalid') : ''"
             @update:model-value="onSilverInput"
           />
         </div>
