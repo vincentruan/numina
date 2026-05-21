@@ -16,6 +16,14 @@ from typing import Any
 
 import httpx
 
+from apps.agent.schemas.context import RedactedContext
+from apps.agent.services.deerflow_adapter.adapter import (
+    StreamChunk,
+)
+from apps.agent.services.deerflow_adapter.adapter import (
+    create_family_adapter as _create_family_adapter,
+)
+
 logger = logging.getLogger(__name__)
 
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
@@ -73,10 +81,44 @@ class ChatAdapter:
         deep_think: bool = False,
         web_search: bool = False,
         enable_thinking: bool = False,
-    ) -> AsyncGenerator:
-        """Implemented in Task 8 — orchestrator integration."""
-        raise NotImplementedError("stream() implemented in Task 8")
-        yield  # make it a generator
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Stream chat response via DeerFlow with family MCP server injected.
+
+        system_prompt is prepended to the user question in free_text because
+        DeerFlow has no separate system_prompt config key — the skill file body
+        and the message content are the only injection points available.
+        """
+        system_prompt = await self._resolve_prompt(family_id)
+        mcp_servers = [
+            {
+                "name": "numina-family-data",
+                "url": self._mcp_url(family_id),
+                "transport": "sse",
+                "headers": {"X-Agent-Token": self._internal_token},
+            }
+        ]
+
+        adapter = _create_family_adapter(
+            family_id=family_id,
+            ai_config=ai_config,
+            timeout_seconds=int(ai_config.get("timeout_seconds", 60)),
+            subagent_enabled=deep_think,
+            plan_mode=deep_think,
+            mcp_servers=mcp_servers,
+        )
+
+        # Prepend system_prompt to the question — DeerFlow has no separate
+        # system_prompt config key; this is the cleanest injection point.
+        augmented_text = f"{system_prompt}\n\n{question}" if system_prompt else question
+        context = RedactedContext(family_id=family_id, free_text=augmented_text)
+
+        async for chunk in adapter.stream_dispatch(
+            "chat",
+            context,
+            thread_id,
+            enable_thinking=enable_thinking or deep_think,
+        ):
+            yield chunk
 
 
 def _strip_frontmatter(content: str) -> str:

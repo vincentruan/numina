@@ -50,3 +50,74 @@ def test_mcp_url_contains_family_id(adapter):
 def test_mcp_url_rejects_unsafe_family_id(adapter):
     with pytest.raises(ValueError):
         adapter._mcp_url("../etc/passwd")
+
+
+@pytest.mark.asyncio
+async def test_stream_injects_mcp_server_into_adapter():
+    """ChatAdapter.stream() must call create_family_adapter with mcp_servers list."""
+    from apps.agent.services.deerflow_adapter.adapter import StreamChunk
+
+    adapter = ChatAdapter("http://backend:8000", "secret-token")
+    captured: dict = {}
+
+    def fake_create(*args, **kwargs):
+        captured["kwargs"] = kwargs
+        mock_adapter = AsyncMock()
+
+        async def fake_stream(*a, **kw):
+            yield StreamChunk(type="text", content="hello")
+        mock_adapter.stream_dispatch = fake_stream
+        return mock_adapter
+
+    with (
+        patch("apps.agent.services.chat_adapter._create_family_adapter", side_effect=fake_create),
+        patch.object(adapter, "_resolve_prompt", new=AsyncMock(return_value="sys")),
+    ):
+        chunks: list = []
+        async for c in adapter.stream(
+            family_id="100",
+            question="hi",
+            thread_id="t1",
+            ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
+            deep_think=False,
+            web_search=False,
+        ):
+            chunks.append(c)
+
+    assert len(chunks) == 1 and chunks[0].content == "hello"
+    mcp_servers = captured["kwargs"].get("mcp_servers")
+    assert mcp_servers and mcp_servers[0]["url"].endswith("/internal/mcp/100/sse")
+    assert mcp_servers[0]["headers"]["X-Agent-Token"] == "secret-token"
+
+
+@pytest.mark.asyncio
+async def test_stream_deep_think_enables_subagent_and_plan_mode():
+    adapter = ChatAdapter("http://backend:8000", "secret-token")
+    captured: dict = {}
+
+    def fake_create(*args, **kwargs):
+        captured["kwargs"] = kwargs
+        mock_adapter = AsyncMock()
+
+        async def fake_stream(*a, **kw):
+            yield  # empty generator
+        mock_adapter.stream_dispatch = fake_stream
+        return mock_adapter
+
+    with (
+        patch("apps.agent.services.chat_adapter._create_family_adapter", side_effect=fake_create),
+        patch.object(adapter, "_resolve_prompt", new=AsyncMock(return_value="sys")),
+    ):
+        async for _ in adapter.stream(
+            family_id="100",
+            question="hi",
+            thread_id="t1",
+            ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
+            deep_think=True,
+            web_search=False,
+        ):
+            break
+
+    kw = captured["kwargs"]
+    assert kw.get("subagent_enabled") is True
+    assert kw.get("plan_mode") is True
