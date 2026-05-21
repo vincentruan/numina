@@ -23,6 +23,7 @@ from apps.agent.schemas.context import FamilyContext
 from apps.agent.schemas.policy import CapabilityPolicy
 from apps.agent.schemas.response import AgentResponse
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
+from apps.agent.services.chat_adapter import ChatAdapter
 from apps.agent.services.deerflow_adapter.adapter import (
     DeerFlowTimeoutError,
     StreamChunk,
@@ -112,6 +113,12 @@ _deerflow_adapter = None
 
 class Orchestrator:
     """Routes a capability request through the full dispatch pipeline."""
+
+    def __init__(self) -> None:
+        self._chat_adapter = ChatAdapter(
+            backend_base_url=settings.BACKEND_BASE_URL,
+            internal_token=settings.AGENT_INTERNAL_TOKEN,
+        )
 
     async def dispatch(
         self,
@@ -469,6 +476,7 @@ class Orchestrator:
         thread_id: str | None = None,
         free_text: str | None = None,
         enable_thinking_override: bool | None = None,
+        web_search: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Stream structured NDJSON events."""
         try:
@@ -480,6 +488,7 @@ class Orchestrator:
                 thread_id=thread_id,
                 free_text=free_text,
                 enable_thinking_override=enable_thinking_override,
+                web_search=web_search,
             ):
                 yield event_line
         except Exception as e:
@@ -496,6 +505,7 @@ class Orchestrator:
         thread_id: str | None = None,
         free_text: str | None = None,
         enable_thinking_override: bool | None = None,
+        web_search: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Normalize DeerFlow output into the AgentEvent NDJSON contract."""
         builder = EventStreamBuilder(capability, task_id)
@@ -569,6 +579,49 @@ class Orchestrator:
                 error_type = "PolicyDenied"
                 yield builder.error(decision.reason, code="policy_denied").to_ndjson()
                 return
+
+            # CHAT BRANCH: skip _build_context, use ChatAdapter
+            if capability == "chat":
+                redacted_free_text = pii_redactor.redact_text(free_text or "")[0]
+                if redacted_free_text:
+                    session_journal.write_user_message(
+                        family_id=family_id,
+                        session_id=effective_thread_id,
+                        user_id=user_id,
+                        content=redacted_free_text,
+                    )
+                try:
+                    async for chunk in self._chat_adapter.stream(
+                        family_id=family_id,
+                        question=redacted_free_text,
+                        thread_id=effective_thread_id,
+                        ai_config=selected_provider,
+                        deep_think=bool(enable_thinking_override),
+                        web_search=web_search,
+                        enable_thinking=("deep_thinking" in selected_caps and bool(enable_thinking_override)),
+                    ):
+                        async for event_line in self._chunk_to_event_lines(
+                            builder, chunk, answer_parts, family_id, effective_thread_id
+                        ):
+                            yield event_line
+                    elapsed_ms = int(time.monotonic() * 1000) - start_ms
+                    yield builder.end("".join(answer_parts), execution_time_ms=elapsed_ms).to_ndjson()
+                    if config_id:
+                        _fire_and_forget(client.reset_circuit_success(config_id))
+                    return
+                except DeerFlowTimeoutError:
+                    success = False
+                    error_type = "DeerFlowTimeoutError"
+                    yield builder.error("AI 响应超时，请稍后重试。", code="deerflow_timeout").to_ndjson()
+                    return
+                except Exception as e:
+                    logger.error("[orchestrator] chat stream failed: %s", e)
+                    success = False
+                    error_type = type(e).__name__
+                    if config_id:
+                        _fire_and_forget(client.report_circuit_event(config_id, 500))
+                    yield builder.error("AI 服务暂时不可用，请稍后重试。", code="deerflow_error").to_ndjson()
+                    return
 
             context = await self._build_context(client, family_id, free_text=free_text)
             redacted_context = pii_redactor.redact(context)

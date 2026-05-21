@@ -275,7 +275,7 @@ class TestOrchestratorEventStreaming:
             lines = [
                 line
                 async for line in orchestrator.stream_dispatch_events(
-                    capability="chat",
+                    capability="report",
                     family_id="fam-1",
                     task_id="task-1",
                     free_text="问题",
