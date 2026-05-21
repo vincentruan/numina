@@ -121,6 +121,7 @@ from apps.backend.app.routers import export as export_router
 from apps.backend.app.routers import files as files_router
 from apps.backend.app.routers import import_ as import_router
 from apps.backend.app.routers import import_report as import_report_router
+from apps.backend.app.routers import mcp_internal as mcp_internal_router
 from apps.backend.app.routers import milestones as milestones_router
 from apps.backend.app.routers import (
     notification_channels as notification_channels_router,
@@ -371,6 +372,7 @@ app.include_router(ai_capabilities_router.router, prefix="/api/v1")
 app.include_router(admin_ai_extraction_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
+app.include_router(mcp_internal_router.router, prefix="/api/v1")
 app.include_router(ai_report_router.router, prefix="/api/v1")
 app.include_router(ai_suggest_router.router, prefix="/api/v1")
 app.include_router(ai_alerts_router.router, prefix="/api/v1")
