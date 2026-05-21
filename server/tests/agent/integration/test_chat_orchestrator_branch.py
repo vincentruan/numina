@@ -41,8 +41,13 @@ async def test_chat_branch_uses_chat_adapter_not_build_context(mock_orchestrator
     # Patch _build_context on orchestrator
     mock_orchestrator._build_context = fake_build_context
 
-    # Mock BackendClient and config fetch
-    with patch("apps.agent.services.orchestrator.BackendClient") as bc_cls:
+    # Mock BackendClient, config fetch, and session_journal
+    with patch("apps.agent.services.orchestrator.session_journal") as mock_journal, \
+         patch("apps.agent.services.orchestrator.BackendClient") as bc_cls:
+        mock_journal.write_session_start = MagicMock()
+        mock_journal.write_user_message = MagicMock()
+        mock_journal.write_assistant_message = MagicMock()
+        mock_journal.write_session_end = MagicMock()
         bc = bc_cls.return_value
         bc.get_family_ai_configs = AsyncMock(return_value={
             "ai_enabled": True,

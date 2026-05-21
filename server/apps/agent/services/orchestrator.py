@@ -583,6 +583,17 @@ class Orchestrator:
             # CHAT BRANCH: skip _build_context, use ChatAdapter
             if capability == "chat":
                 redacted_free_text = pii_redactor.redact_text(free_text or "")[0]
+
+                # Session lifecycle — must happen before streaming so finally block handles cleanup
+                session_journal.write_session_start(
+                    family_id=family_id,
+                    session_id=effective_thread_id,
+                    user_id=user_id,
+                    capability=capability,
+                    model_name=model_name,
+                    jsonl_path=jsonl_path,
+                )
+                session_started = True
                 if redacted_free_text:
                     session_journal.write_user_message(
                         family_id=family_id,
@@ -590,6 +601,15 @@ class Orchestrator:
                         user_id=user_id,
                         content=redacted_free_text,
                     )
+                _fire_and_forget(self._upsert_session(
+                    session_id=effective_thread_id,
+                    family_id=family_id,
+                    user_id=user_id,
+                    capability=capability,
+                    jsonl_path=jsonl_path,
+                    model_name=model_name,
+                ))
+
                 try:
                     async for chunk in self._chat_adapter.stream(
                         family_id=family_id,
