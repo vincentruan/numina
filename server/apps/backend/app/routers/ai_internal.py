@@ -7,11 +7,12 @@
 import json
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import verify_agent_token
+from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_provider_config import (
@@ -19,6 +20,7 @@ from apps.backend.app.models.ai_provider_config import (
 )
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_skill_config import FamilySkillConfig
+from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.user import User
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
@@ -306,6 +308,37 @@ def internal_get_skill_config(
         "custom_prompt": row.custom_prompt,
         "updated_at": row.updated_at.isoformat() if row.updated_at else None,
     }
+
+
+@router.get("/skill-registry/{family_id}")
+def get_skill_registry(
+    family_id: int,
+    x_internal_token: str = Header(..., alias="X-Internal-Token"),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    """Internal endpoint for agent to fetch family skill registry."""
+    if x_internal_token != settings.INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+    records = (
+        db.query(SkillRegistry)
+        .filter(SkillRegistry.family_id == family_id)
+        .all()
+    )
+    return [
+        {
+            "skill_id": r.skill_id,
+            "skill_type": r.skill_type,
+            "name": r.name,
+            "description": r.description,
+            "icon": r.icon,
+            "color": r.color,
+            "input_mode": r.input_mode,
+            "is_enabled": r.is_enabled,
+            "display_order": r.display_order,
+        }
+        for r in records
+    ]
 
 
 @router.get("/ai/mcp-servers")

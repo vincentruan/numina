@@ -55,7 +55,12 @@ class SkillLoader:
         if capability in self._cache:
             return self._cache[capability]
 
-        path = SKILLS_DIR / f"{capability}.md"
+        # New path: skills/builtin/{capability}/SKILL.md
+        path = SKILLS_DIR / "builtin" / capability / "SKILL.md"
+        if not path.exists():
+            # Fallback old path: skills/{capability}.md
+            path = SKILLS_DIR / f"{capability}.md"
+
         if not path.exists():
             return SkillConfig(capability=capability, prompt="", thinking=False)
 

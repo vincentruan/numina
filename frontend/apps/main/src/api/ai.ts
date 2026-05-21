@@ -621,16 +621,16 @@ export const resetSkillPrompt = (capability: string) =>
 // ── Skill Management ──────────────────────────────────────────────────────────
 
 export const getSkillsGrouped = () =>
-  http.get<SkillListResponse>('/ai/skills')
+  http.get<SkillListResponse>('/ai/skills/grouped')
 
 export const createCustomSkill = (payload: CustomSkillCreate) =>
-  http.post<SkillDefinition>('/ai/skills', payload)
+  http.post<SkillDefinition>('/ai/skills/custom', payload)
 
 export const updateCustomSkill = (skillId: string, payload: CustomSkillUpdate) =>
-  http.put<SkillDefinition>(`/ai/skills/${skillId}`, payload)
+  http.put<SkillDefinition>(`/ai/skills/custom/${skillId}`, payload)
 
 export const deleteCustomSkill = (skillId: string) =>
-  http.delete<{ ok: boolean }>(`/ai/skills/${skillId}`)
+  http.delete<{ ok: boolean }>(`/ai/skills/custom/${skillId}`)
 
 export const toggleSkill = (skillId: string, isEnabled: boolean) =>
   http.put<SkillDefinition>(`/ai/skills/${skillId}/toggle`, { is_enabled: isEnabled })
