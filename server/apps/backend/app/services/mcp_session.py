@@ -7,6 +7,7 @@ from mcp.server import Server
 from mcp.types import TextContent, Tool
 from sqlalchemy.orm import Session
 
+from apps.backend.app.database import SessionLocal
 from apps.backend.app.models.user import User
 
 logger = logging.getLogger(__name__)
@@ -38,11 +39,10 @@ class MCPSession:
     - Tool handlers NEVER read family_id from tool args — only from self
     """
 
-    __slots__ = ("_family_id", "_db", "_server")
+    __slots__ = ("_family_id", "_server")
 
-    def __init__(self, family_id: str, db: Session) -> None:
+    def __init__(self, family_id: str) -> None:
         self._family_id = family_id
-        self._db = db
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
@@ -115,42 +115,43 @@ class MCPSession:
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
         # SECURITY: ignore any family_id in arguments — always use bound self._family_id
-        user = _get_owner_user(self._family_id, self._db)
         from apps.backend.app.services import asset as asset_service
         from apps.backend.app.services import dashboard as dashboard_service
         from apps.backend.app.services import family as family_service
         from apps.backend.app.services import liability as liability_service
 
-        try:
-            if name == "get_family_overview":
-                data = dashboard_service.get_overview(self._db, user)
-            elif name == "get_assets":
-                category = arguments.get("category")
-                limit = int(arguments.get("limit", 20))
-                data = asset_service.list_assets_for_family(
-                    self._db, self._family_id, category=category, limit=limit
-                )
-            elif name == "get_liabilities":
-                limit = int(arguments.get("limit", 20))
-                data = liability_service.list_liabilities_for_family(
-                    self._db, self._family_id, limit=limit
-                )
-            elif name == "get_members":
-                data = family_service.list_members(self._db, self._family_id)
-            elif name == "get_recent_alerts":
-                limit = int(arguments.get("limit", 10))
-                data = dashboard_service.get_recent_alerts(self._db, user, limit=limit)
-            else:
-                raise ValueError(f"Unknown tool: {name}")
+        with SessionLocal() as db:
+            user = _get_owner_user(self._family_id, db)
+            try:
+                if name == "get_family_overview":
+                    data = dashboard_service.get_overview(db, user)
+                elif name == "get_assets":
+                    category = arguments.get("category")
+                    limit = int(arguments.get("limit", 20))
+                    data = asset_service.list_assets_for_family(
+                        db, self._family_id, category=category, limit=limit
+                    )
+                elif name == "get_liabilities":
+                    limit = int(arguments.get("limit", 20))
+                    data = liability_service.list_liabilities_for_family(
+                        db, self._family_id, limit=limit
+                    )
+                elif name == "get_members":
+                    data = family_service.list_members(db, self._family_id)
+                elif name == "get_recent_alerts":
+                    limit = int(arguments.get("limit", 10))
+                    data = dashboard_service.get_recent_alerts(db, user, limit=limit)
+                else:
+                    raise ValueError(f"Unknown tool: {name}")
 
-            logger.info(
-                "[mcp_session] family=%s tool=%s args=%s ok",
-                self._family_id, name, arguments,
-            )
-            return [TextContent(type="text", text=json.dumps(data, ensure_ascii=False, default=str))]
-        except Exception as e:
-            logger.error(
-                "[mcp_session] family=%s tool=%s failed: %s",
-                self._family_id, name, e,
-            )
-            return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
+                logger.info(
+                    "[mcp_session] family=%s tool=%s args=%s ok",
+                    self._family_id, name, arguments,
+                )
+                return [TextContent(type="text", text=json.dumps(data, ensure_ascii=False, default=str))]
+            except Exception as e:
+                logger.error(
+                    "[mcp_session] family=%s tool=%s failed: %s",
+                    self._family_id, name, e,
+                )
+                return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
