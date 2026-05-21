@@ -56,3 +56,16 @@ def remove_member(db: Session, owner: User, member_id: str) -> None:
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     member.is_active = False
     db.commit()
+
+
+def list_members(db: Session, family_id: str) -> list[dict]:
+    """List members for a family."""
+    rows = db.query(User).filter(User.family_id == family_id, User.is_active == True).all()
+    return [
+        {
+            "id": str(u.id),
+            "username": u.username,
+            "role": u.role,
+        }
+        for u in rows
+    ]

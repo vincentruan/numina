@@ -84,3 +84,28 @@ def get_payments(db: Session, user: User, liability_id: str) -> list:
         .order_by(PaymentRecord.paid_at.desc())
         .all()
     )
+
+
+def list_liabilities_for_family(
+    db: Session,
+    family_id: str,
+    limit: int = 20,
+) -> list[dict]:
+    """List liabilities for a family."""
+    from apps.backend.app.models.liability import Liability
+
+    rows = (
+        db.query(Liability)
+        .filter(Liability.family_id == family_id, Liability.is_active == True)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": str(l.id),
+            "name": l.name,
+            "category": l.category,
+            "remaining_amount": float(l.remaining_amount or 0),
+        }
+        for l in rows
+    ]
