@@ -629,6 +629,9 @@ export default {
     tagColorPlaceholder: '#1989fa',
     tagEmptyDesc: 'No tags yet, create your first one',
     tagAddFirstBtn: '＋ Add Tag',
+    coinRatesPageTitle: 'Coin Exchange Rates',
+    copperToSilverRate: 'Copper to Silver Rate',
+    silverToGoldRate: 'Silver to Gold Rate',
   },
   changePassword: {
     title: 'Account Password',

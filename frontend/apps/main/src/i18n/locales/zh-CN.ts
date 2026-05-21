@@ -830,6 +830,9 @@ export default {
     tagColorPlaceholder: '#1989fa',
     tagEmptyDesc: '暂无标签，快来创建第一个吧',
     tagAddFirstBtn: '＋ 添加标签',
+    coinRatesPageTitle: '星币汇率设置',
+    copperToSilverRate: '铜币兑换银币',
+    silverToGoldRate: '银币兑换金币',
   },
   changePassword: {
     title: '账户密码',
