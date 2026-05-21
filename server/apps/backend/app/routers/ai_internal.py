@@ -6,6 +6,7 @@
 
 import json
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel
@@ -130,13 +131,45 @@ def internal_get_liabilities(
     ]
 
 
+def _check_recovery_schedule_match(recovery_schedule: str | None, now: datetime) -> bool:
+    """Check if current time matches recovery schedule pattern.
+
+    Recovery schedule format: comma-separated time patterns like ":01,:31"
+    Pattern matches when the current minute equals the specified value exactly.
+    """
+    if not recovery_schedule:
+        return False
+    current_minute = now.strftime("%M")
+    for pattern in recovery_schedule.split(","):
+        pattern = pattern.strip()
+        if pattern.startswith(":") and current_minute == pattern[1:].zfill(2):
+            return True
+    return False
+
+
+def _calculate_half_open_success_rate(cfg: AIProviderConfig) -> float:
+    """Calculate success rate during half-open window."""
+    total = cfg.half_open_success_count + cfg.half_open_failure_count
+    if total == 0:
+        return 0.0
+    return cfg.half_open_success_count / total
+
+
 @router.get("/ai/config")
 def internal_get_ai_config(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    """返回家庭 AI 供应商列表（按 display_order 排序，已过滤熔断中的供应商）。"""
-    from datetime import UTC
+    """返回家庭已启用的 AI 供应商列表（按 display_order 排序）。
+
+    三态熔断逻辑：
+    - closed: 正常供应商，包含在列表中
+    - half_open: 探测恢复，包含在列表中（agent 决定路由概率）
+    - open: 熔断中，排除列表（除非恢复时间匹配触发 half_open）
+
+    返回 circuit_state 和 circuit_reason 供 agent 路由决策。
+    """
+    from datetime import UTC, timedelta
 
     now = datetime.now(UTC).replace(tzinfo=None)
 
@@ -144,6 +177,7 @@ def internal_get_ai_config(
         db.query(AIProviderConfig)
         .filter(
             AIProviderConfig.family_id == family_id,
+            AIProviderConfig.is_active == True,  # noqa: E712
             AIProviderConfig.api_key_encrypted.isnot(None),
         )
         .order_by(AIProviderConfig.display_order.asc().nulls_last(), AIProviderConfig.created_at.asc())
@@ -154,17 +188,59 @@ def internal_get_ai_config(
         return {"ai_enabled": False, "providers": []}
 
     providers = []
+    state_changed = False
     for cfg in all_cfgs:
-        # Half-open: circuit expired — clear state and include
-        if cfg.circuit_open and cfg.circuit_open_until and cfg.circuit_open_until <= now:
-            cfg.circuit_open = False
-            cfg.failure_count = 0
-            cfg.circuit_open_until = None
-            db.commit()
+        # Handle state transitions based on three-state model
+        if cfg.circuit_state == "open":
+            # Check recovery schedule to trigger half_open transition
+            if _check_recovery_schedule_match(cfg.recovery_schedule, now):
+                cfg.circuit_state = "half_open"
+                cfg.half_open_window_start = now
+                cfg.half_open_success_count = 0
+                cfg.half_open_failure_count = 0
+                state_changed = True
+            elif cfg.circuit_open_until and cfg.circuit_open_until <= now:
+                # Legacy: expired circuit_open_until → half_open
+                cfg.circuit_state = "half_open"
+                cfg.half_open_window_start = now
+                cfg.half_open_success_count = 0
+                cfg.half_open_failure_count = 0
+                cfg.circuit_open_until = None
+                state_changed = True
+            else:
+                # Still in open state, skip provider
+                continue
 
-        # Skip providers still in circuit-open state
-        if cfg.circuit_open and cfg.circuit_open_until and cfg.circuit_open_until > now:
-            continue
+        elif cfg.circuit_state == "half_open":
+            # Check if 5-minute window expired and calculate success rate
+            window_start = cfg.half_open_window_start
+            if window_start and (now - window_start).total_seconds() >= 300:
+                success_rate = _calculate_half_open_success_rate(cfg)
+                # Success: close circuit (>=80% success)
+                # Failure: re-open circuit (<80% success)
+                if success_rate >= 0.8:
+                    cfg.circuit_state = "closed"
+                    cfg.circuit_reason = None
+                    cfg.failure_count = 0
+                    cfg.circuit_open = False
+                    cfg.half_open_window_start = None
+                    cfg.half_open_success_count = 0
+                    cfg.half_open_failure_count = 0
+                    state_changed = True
+                else:
+                    cfg.circuit_state = "open"
+                    cfg.circuit_reason = "transient"
+                    cfg.circuit_open = True
+                    cfg.circuit_open_until = now + timedelta(hours=1)
+                    cfg.half_open_window_start = None
+                    state_changed = True
+                    continue  # Skip provider
+
+        # Legacy boolean migration: sync circuit_open with circuit_state
+        new_circuit_open = cfg.circuit_state in ("open", "half_open")
+        if cfg.circuit_open != new_circuit_open:
+            cfg.circuit_open = new_circuit_open
+            state_changed = True
 
         api_key = decrypt_api_key(cfg.api_key_encrypted)
         if not api_key:
@@ -183,7 +259,15 @@ def internal_get_ai_config(
             "model_2_capabilities": _parse_capabilities(cfg.model_2_capabilities),
             "model_3_capabilities": _parse_capabilities(cfg.model_3_capabilities),
             "timeout_seconds": cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
+            # Circuit breaker metadata for agent routing decisions
+            "circuit_state": cfg.circuit_state,
+            "circuit_reason": cfg.circuit_reason,
+            "recovery_schedule": cfg.recovery_schedule,
         })
+
+    # Single commit for all state transitions across all providers
+    if state_changed:
+        db.commit()
 
     return {"ai_enabled": bool(providers), "providers": providers}
 
@@ -199,6 +283,15 @@ def _parse_capabilities(cap_str: str | None) -> list[str]:
 
 class CircuitEventRequest(BaseModel):
     error_code: int
+    error_type: Literal[
+        "transient_rate_limit",
+        "transient_server",
+        "transient_timeout",
+        "transient_network",
+        "permanent_auth",
+        "permanent_account",
+    ]
+    error_message: str | None = None
 
 
 @router.post("/ai/config/{config_id}/circuit-event")
@@ -208,7 +301,13 @@ def internal_circuit_event(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    """记录供应商调用失败，达到阈值时触发熔断。"""
+    """记录供应商调用失败，根据错误类型触发熔断逻辑。
+
+    错误类型分类：
+    - permanent_auth (401/403): 立即熔断，无自动恢复时间
+    - permanent_account (410/账号删除): 立即熔断，无自动恢复时间
+    - transient_*: 累计失败次数，达到阈值后熔断，设置恢复时间
+    """
     from datetime import UTC, timedelta
 
     cfg = (
@@ -223,15 +322,37 @@ def internal_circuit_event(
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
     now = datetime.now(UTC).replace(tzinfo=None)
-    cfg.failure_count = (cfg.failure_count or 0) + 1
     cfg.last_failure_at = now
+    cfg.last_failure_type = body.error_type
 
-    if cfg.failure_count >= 5:
+    # Permanent errors: immediate circuit open, no scheduled recovery
+    if body.error_type in ("permanent_auth", "permanent_account"):
+        cfg.circuit_state = "open"
+        cfg.circuit_reason = body.error_type
         cfg.circuit_open = True
-        cfg.circuit_open_until = now + timedelta(hours=1)
+        cfg.circuit_open_until = None  # Manual recovery only
+        cfg.failure_count = 0  # Reset for clean state
+    else:
+        # Transient errors: increment failure count
+        cfg.failure_count = (cfg.failure_count or 0) + 1
+
+        if cfg.failure_count >= 5:
+            cfg.circuit_state = "open"
+            cfg.circuit_reason = "transient"
+            cfg.circuit_open = True
+            # Align recovery to schedule or default 1 hour
+            if cfg.recovery_schedule:
+                # Recovery schedule handled by U3 (internal_get_ai_config)
+                cfg.circuit_open_until = now + timedelta(hours=1)
+            else:
+                cfg.circuit_open_until = now + timedelta(hours=1)
 
     db.commit()
-    return {"circuit_open": cfg.circuit_open, "failure_count": cfg.failure_count}
+    return {
+        "circuit_state": cfg.circuit_state,
+        "circuit_reason": cfg.circuit_reason,
+        "failure_count": cfg.failure_count,
+    }
 
 
 @router.post("/ai/config/{config_id}/circuit-reset")
@@ -240,7 +361,7 @@ def internal_circuit_reset(
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
-    """成功调用后重置熔断计数。"""
+    """成功调用后重置熔断计数，或手动重置熔断状态。"""
     cfg = (
         db.query(AIProviderConfig)
         .filter(
@@ -252,11 +373,76 @@ def internal_circuit_reset(
     if not cfg:
         raise AppError(ErrorCode.FAMILY_NOT_FOUND)
 
+    # Clear all circuit breaker state
+    cfg.circuit_state = "closed"
+    cfg.circuit_reason = None
     cfg.failure_count = 0
     cfg.circuit_open = False
     cfg.circuit_open_until = None
+    cfg.last_failure_type = None
+    cfg.half_open_success_count = 0
+    cfg.half_open_failure_count = 0
+    cfg.half_open_window_start = None
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "circuit_state": "closed"}
+
+
+class HalfOpenResultRequest(BaseModel):
+    success: bool
+
+
+@router.post("/ai/config/{config_id}/half-open-result")
+def internal_half_open_result(
+    config_id: int,
+    body: HalfOpenResultRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """记录 half-open 状态下的调用结果（成功或失败）。
+
+    Agent 在 half_open 状态调用供应商后，通过此端点报告结果。
+    Backend 累计计数，下次 /ai/config 请求时计算成功率决定是否关闭熔断。
+    """
+    from datetime import UTC, timedelta
+
+    cfg = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.id == config_id,
+            AIProviderConfig.family_id == family_id,
+        )
+        .first()
+    )
+    if not cfg:
+        raise AppError(ErrorCode.FAMILY_NOT_FOUND)
+
+    # Only accept results when in half_open state — return 409 Conflict otherwise
+    # so the caller can distinguish "recorded" from "ignored" rather than
+    # treating an ignored result as success.
+    if cfg.circuit_state != "half_open":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Provider not in half_open state (current: {cfg.circuit_state})",
+        )
+
+    if body.success:
+        cfg.half_open_success_count = (cfg.half_open_success_count or 0) + 1
+    else:
+        cfg.half_open_failure_count = (cfg.half_open_failure_count or 0) + 1
+        # Immediate re-open on failure during half_open
+        cfg.circuit_state = "open"
+        cfg.circuit_reason = "transient"
+        cfg.circuit_open = True
+        cfg.circuit_open_until = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=1)
+        cfg.half_open_window_start = None
+
+    db.commit()
+    return {
+        "ok": True,
+        "half_open_success_count": cfg.half_open_success_count,
+        "half_open_failure_count": cfg.half_open_failure_count,
+        "circuit_state": cfg.circuit_state,
+    }
 
 
 @router.get("/ai/enabled-families")

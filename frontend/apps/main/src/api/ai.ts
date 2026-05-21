@@ -29,6 +29,13 @@ export interface ProviderConfig {
   model_1_capabilities: string[]
   model_2_capabilities: string[]
   model_3_capabilities: string[]
+  // Circuit breaker fields (three-state model)
+  circuit_state: 'closed' | 'open' | 'half_open'
+  circuit_reason: string | null  // transient | permanent_auth | permanent_account
+  recovery_schedule: string | null  // comma-separated time patterns like ":01,:31"
+  last_failure_type: string | null
+  half_open_window_start: string | null
+  // Legacy circuit breaker fields (retained for backward compatibility)
   circuit_open: boolean
   circuit_open_until: string | null
   failure_count: number
@@ -51,6 +58,7 @@ export interface ProviderConfigCreate {
   model_1_capabilities?: string[] | null
   model_2_capabilities?: string[] | null
   model_3_capabilities?: string[] | null
+  recovery_schedule?: string | null  // e.g., ":01,:31" for DashScope quota resets
 }
 
 export interface ProviderConfigUpdate {
@@ -69,6 +77,7 @@ export interface ProviderConfigUpdate {
   model_1_capabilities?: string[] | null
   model_2_capabilities?: string[] | null
   model_3_capabilities?: string[] | null
+  recovery_schedule?: string | null  // e.g., ":01,:31" for DashScope quota resets
 }
 
 export const getAIConfigs = () =>

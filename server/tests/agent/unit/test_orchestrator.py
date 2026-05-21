@@ -608,7 +608,7 @@ class TestIU5CircuitEvents:
             ]
 
         # report_circuit_event must have been scheduled (fire-and-forget)
-        mock_client.report_circuit_event.assert_called_once_with("cfg-001", 500)
+        mock_client.report_circuit_event.assert_called_once_with("cfg-001", 500, error_type="transient_server")
         mock_client.reset_circuit_success.assert_not_called()
         assert any("不可用" in c or "重试" in c for c in chunks)
 

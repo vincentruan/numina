@@ -106,6 +106,21 @@ export default {
     claimFailed: '❌ Claim failed, task may already be taken',
     abandonFailed: '❌ Failed to give up, please try again',
   },
+  tasks: {
+    myStars: 'My Star Coins ⭐',
+  },
+  challenge: {
+    taskCount: 'Total Tasks',
+    streakLength: 'Daily Streak',
+    specificChore: 'Specific Task',
+    starEarnings: 'Stars Earned',
+    progress: 'Progress',
+    daysLeft: '{n} days left',
+    completed: '🎉 Challenge completed!',
+    expired: 'Challenge expired',
+    active: 'In Progress',
+    emptyState: 'No challenges right now',
+  },
   home: {
     myStars: 'My Star Coins ⭐',
     todayTasks: '📋 Today\'s Tasks',

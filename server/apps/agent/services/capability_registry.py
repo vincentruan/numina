@@ -25,6 +25,47 @@ logger = logging.getLogger(__name__)
 
 FIXED_CAPABILITIES = ["chat", "time_machine"]
 
+# Hard-coded fixed capability definitions (not loaded from SKILL.md files).
+# These are non-skill capabilities managed independently of skill_registry:
+# - chat: General Q&A handled by /chat router
+# - time_machine: Pure-computation simulation handled by /time-machine router
+FIXED_CAPABILITY_DEFS: list[CapabilityDefinition] = [
+    CapabilityDefinition(
+        id="chat",
+        name="智能问答",
+        description="回答关于净资产、资产配置、负债、趋势等问题",
+        category="chat",
+        ui=CapabilityUISchema(
+            icon="message-circle",
+            color="#06b6d4",
+            route="/ai/chat",
+            input_mode="free_text",
+        ),
+        policy=CapabilityPolicy(
+            allowed_roles=["member", "admin"],
+            enable_thinking=True,
+        ),
+        skill_id="chat",
+    ),
+    CapabilityDefinition(
+        id="time_machine",
+        name="资产时光机",
+        description="模拟 What-if 消费场景和财务推演",
+        category="simulation",
+        ui=CapabilityUISchema(
+            icon="clock",
+            color="#a855f7",
+            route="/ai/time-machine",
+            input_mode="free_text",
+        ),
+        policy=CapabilityPolicy(
+            allowed_roles=["member", "admin"],
+            enable_thinking=True,
+        ),
+        skill_id="time_machine",
+    ),
+]
+
 BUILTIN_DEFAULT_ORDER = {
     "report": 100,
     "alerts": 101,
@@ -43,10 +84,15 @@ class CapabilityRegistry:
         self._capabilities: dict[str, CapabilityDefinition] | None = None
 
     def list_capabilities(self) -> list[CapabilityDefinition]:
-        """List all builtin capabilities (backward compat)."""
+        """List all capabilities (backward compat) - merges fixed + builtin."""
         if self._capabilities is None:
             self._capabilities = self._load()
-        return list(self._capabilities.values())
+        # Merge: builtin from files + fixed hard-coded
+        result = list(FIXED_CAPABILITY_DEFS)
+        for cap_id, cap in self._capabilities.items():
+            if cap_id not in FIXED_CAPABILITIES:  # avoid duplicate
+                result.append(cap)
+        return result
 
     def get(self, capability_id: str) -> CapabilityDefinition | None:
         if self._capabilities is None:
@@ -67,12 +113,8 @@ class CapabilityRegistry:
         db_configs = self._fetch_skill_registry(family_id, backend_base_url, internal_token)
         db_map = {c["skill_id"]: c for c in db_configs}
 
-        # Fixed capabilities (always included)
-        fixed: list[CapabilityDefinition] = []
-        for cap_id in FIXED_CAPABILITIES:
-            cap = self.get(cap_id)
-            if cap:
-                fixed.append(cap)
+        # Fixed capabilities (hard-coded, not from SKILL.md files)
+        fixed: list[CapabilityDefinition] = list(FIXED_CAPABILITY_DEFS)
 
         # Builtin capabilities (filter is_enabled=false)
         builtin: list[CapabilityDefinition] = []

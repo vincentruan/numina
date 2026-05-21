@@ -176,8 +176,20 @@ class BackendClient:
     async def get_session(self, session_id: str) -> dict | None:
         return await get_session(self.family_id, session_id)
 
-    async def report_circuit_event(self, config_id: str, error_code: int) -> dict:
-        return await report_circuit_event(self.family_id, config_id, error_code)
+    async def report_circuit_event(
+        self,
+        config_id: str,
+        error_code: int,
+        error_type: str,
+        error_message: str | None = None,
+    ) -> dict:
+        return await report_circuit_event(
+            self.family_id, config_id, error_code, error_type, error_message
+        )
+
+    async def report_half_open_result(self, config_id: str, success: bool) -> dict:
+        """报告 half-open 状态下的调用结果。"""
+        return await report_half_open_result(self.family_id, config_id, success)
 
     async def reset_circuit_success(self, config_id: str) -> dict:
         return await reset_circuit_success(self.family_id, config_id)
@@ -185,6 +197,46 @@ class BackendClient:
     async def get_user(self, user_id: str) -> dict | None:
         """Get user info by user_id for title generation."""
         return await get_user(self.family_id, user_id)
+
+
+def classify_error_type(error_code: int, error_message: str | None = None) -> str:
+    """根据 HTTP 错误码和错误消息分类错误类型。
+
+    Args:
+        error_code: HTTP 状态码或异常标识
+        error_message: 错误消息（可选，用于检测账号删除等特殊错误）
+
+    Returns:
+        错误类型字符串：
+        - permanent_auth: 401, 403 (认证错误，需手动恢复)
+        - permanent_account: 410 或账号删除相关消息
+        - transient_rate_limit: 429 (速率限制)
+        - transient_server: 500, 502, 503, 504 (服务器错误)
+        - transient_timeout: timeout 异常 (error_code = 0 或特殊标识)
+        - transient_network: 其他网络错误
+    """
+    if error_code in (401, 403):
+        return "permanent_auth"
+    if error_code == 410:
+        return "permanent_account"
+    if error_message and any(
+        keyword in error_message.lower()
+        for keyword in ["invalid key", "invalid api key", "api key expired"]
+    ):
+        return "permanent_auth"
+    if error_message and any(
+        keyword in error_message.lower()
+        for keyword in ["deleted", "suspended", "account"]
+    ):
+        return "permanent_account"
+    if error_code == 429:
+        return "transient_rate_limit"
+    if error_code in (500, 502, 503, 504):
+        return "transient_server"
+    if error_code == 0 or error_code == -1:  # Timeout or connection error
+        return "transient_timeout"
+    # Default to transient for unknown codes
+    return "transient_network"
 
 
 def _make_headers(family_id: str) -> dict[str, str]:
@@ -501,15 +553,35 @@ async def get_session(family_id: str, session_id: str) -> dict | None:
     return _unwrap(resp)
 
 
-async def report_circuit_event(family_id: str, config_id: str, error_code: int) -> dict:
-    """报告供应商调用失败，触发熔断计数。"""
+async def report_circuit_event(
+    family_id: str,
+    config_id: str,
+    error_code: int,
+    error_type: str,
+    error_message: str | None = None,
+) -> dict:
+    """报告供应商调用失败，触发熔断计数。
+
+    Args:
+        family_id: 家庭 ID（自动验证格式）
+        config_id: AI 配置 ID
+        error_code: HTTP 错误码或异常类型
+        error_type: 错误类型分类（permanent_auth, transient_rate_limit 等），必填
+        error_message: 错误消息（可选）
+
+    Returns:
+        熔断状态响应
+    """
     validated_id = _validate_family_id(family_id)
     async with httpx.AsyncClient(
         timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
     ) as client:
+        payload: dict = {"error_code": error_code, "error_type": error_type}
+        if error_message:
+            payload["error_message"] = error_message
         resp = await client.post(
             f"/api/v1/internal/ai/config/{config_id}/circuit-event",
-            json={"error_code": error_code},
+            json=payload,
             headers=_make_headers(validated_id),
         )
         resp.raise_for_status()
@@ -543,3 +615,31 @@ async def get_user(family_id: str, user_id: str) -> dict | None:
         return _unwrap(resp)
     except httpx.HTTPStatusError:
         return None
+
+
+async def report_half_open_result(
+    family_id: str,
+    config_id: str,
+    success: bool,
+) -> dict:
+    """报告 half-open 状态下的调用结果（成功或失败）。
+
+    Args:
+        family_id: 家庭 ID（自动验证格式）
+        config_id: AI 配置 ID
+        success: 调用是否成功
+
+    Returns:
+        熔断状态响应，包含累计计数
+    """
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+    ) as client:
+        resp = await client.post(
+            f"/api/v1/internal/ai/config/{config_id}/half-open-result",
+            json={"success": success},
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)
