@@ -1,7 +1,7 @@
 import { onMounted, onUnmounted, type Ref } from 'vue'
 
 // Two-layer background system:
-//   bgCanvas  — stellar pulsation particles (85% normal + 15% stars with rays)
+//   bgCanvas  — stellar pulsation particles (85% normal + 15% stars, brightness pulsation only)
 //   deerCanvas — dim lavender pixel grid masked to deer SVG silhouette
 
 // ── Deer pixel grid constants ──────────────────────────────────────────────
@@ -12,7 +12,7 @@ const FLICKER_RATE = 0.06
 
 // ── Stellar pulsation particle constants ───────────────────────────────────
 // Particle system: 85% normal particles (steady) + 15% stars (dramatic pulsation)
-// Stars expand slowly to peak brightness with radiating spikes, then contract
+// Stars expand slowly to peak brightness, then contract — pure size + glow, no rays
 const PARTICLE_COUNT_BASE = 40
 const REFERENCE_AREA = 2_073_600 // 1080×1920
 const STAR_RATIO = 0.15 // 15% of particles are stars
@@ -211,7 +211,7 @@ function updateParticles(particles: Particle[], dt: number, w: number, h: number
     p.x += p.vx * dt
     p.y += p.vy * dt
 
-    // Wrap edges — use star halo extent as margin so spikes don't pop in/out
+    // Wrap edges — use star halo extent as margin so glow doesn't pop in/out
     const margin = p.isStar ? p.currentRadius * STAR_HALO_MULTIPLIER : p.currentRadius * 3
     if (p.x < -margin) p.x = w + margin
     else if (p.x > w + margin) p.x = -margin
@@ -248,7 +248,7 @@ function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[], dpr
     drawNormalParticle(ctx, p, dpr)
   }
 
-  // Pass 2: star particles with halo + rays
+  // Pass 2: star particles (halo + bright core, on top of normal particles)
   for (const p of particles) {
     if (!p.isStar) continue
     drawStarParticle(ctx, p, dpr)
