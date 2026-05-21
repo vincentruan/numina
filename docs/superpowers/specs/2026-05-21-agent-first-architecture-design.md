@@ -915,9 +915,114 @@ skills:
 
 ---
 
-## 8. Migration Strategy
+## 8. Management Consistency
 
-### 8.1 Phase Overview
+### 8.1 Unified Management Pattern
+
+新增 Agent 管理保持与现有 Provider/MCP/Skill 完全一致的管理模式：
+
+| 资源 | DB 表 | 租户键 | 内置数据 | 读权限 | 写权限 | 配置页路由 |
+|------|-------|--------|---------|--------|--------|-----------|
+| AI Provider | `ai_provider_configs` | `family_id` | 无 | adult | owner | `/settings/ai` |
+| MCP Server | `family_mcp_servers` | `family_id` | 无 | adult | owner | `/settings/ai/mcp` |
+| Skill | `skill_registry` | `family_id` | fixed+builtin | adult | owner | `/settings/ai/skills` |
+| **Agent** | **`agent_registry`** | **`family_id`** | **builtin (family_id=0)** | **adult** | **owner** | **`/settings/ai/agents`** |
+
+### 8.2 Settings Navigation (完整)
+
+`SettingsPage.vue` 的"AI 设置"cell group 结构：
+
+```
+AI 设置
+├── AI 服务商  → /settings/ai          (Provider 配置)
+├── MCP 服务器 → /settings/ai/mcp      (MCP 管理)
+├── 技能管理   → /settings/ai/skills   (Skill 管理，保留不变)
+└── 智能体管理 → /settings/ai/agents   (新增：Agent CRUD)
+```
+
+对应 router 新增路由：
+```
+/settings/ai/agents            → AgentsManage (name: 'AgentsManage')
+/settings/ai/agents/new        → AgentCreate (name: 'AgentCreate')
+/settings/ai/agents/:id/edit   → AgentEdit (name: 'AgentEdit')
+```
+
+### 8.3 Agent ↔ Skill 关系
+
+Agent 升级后，**Skill 管理页保留不变**：
+
+```
+┌─────────────────────────┐        ┌─────────────────────────┐
+│     agent_registry       │        │     skill_registry       │
+│                          │  引用   │                          │
+│  skills: ["report",     │───────→│  skill_id: "report"      │
+│           "alerts"]      │        │  skill_type: "builtin"   │
+│                          │        │  is_enabled: true        │
+└─────────────────────────┘        └─────────────────────────┘
+```
+
+- Skill 是独立的能力模块，有自己的 CRUD（`/settings/ai/skills`）
+- Agent 通过 `skills` JSONB 字段引用 skill（按 `skill_id` 列表关联）
+- Agent 创建/编辑表单中 "可用技能" 勾选框的选项来源：当前家庭已启用的 skill 列表（`GET /ai/skills/grouped` 中 `is_enabled=true` 的项）
+- Agent 不拥有 skill，只声明"我可以用哪些 skill"
+- Skill 的启用/禁用、自定义创建仍在 `/settings/ai/skills` 页面管理
+
+### 8.4 Agent ↔ MCP 关系
+
+MCP server 管理维度不变（按 `family_id` 隔离）：
+
+- Agent 执行时，orchestrator 通过 `_generate_temp_config()` 将该家庭**所有已启用** MCP server 注入 DeerFlow 配置
+- Agent 不直接管理 MCP server，Agent 通过 `tool_groups` 字段控制工具范围（影响 harness 的 `get_available_tools(groups=...)` 过滤）
+- MCP server 的启用/禁用仍在 `/settings/ai/mcp` 管理
+- 如果 Agent 的 `tool_groups` 为 null，则该 Agent 可使用所有 MCP 工具；如果指定了 `tool_groups`，则只能使用匹配 group 的工具
+
+### 8.5 Agent ↔ Provider 关系
+
+Agent 的 `model` 字段只是模型偏好声明，实际 provider 由运行时选择：
+
+- `model = null` → 继承家庭默认（orchestrator 的 `_select_model()` 从 `ai_provider_configs` 中按 capability 选择）
+- `model = "claude-sonnet-4-6"` → orchestrator 在该家庭的 `ai_provider_configs` 中找到支持该 model 的 provider
+- Provider 管理仍在 `/settings/ai`（AI 服务商页面）
+- 电路熔断、负载选择等逻辑不受 Agent 层影响
+
+### 8.6 内置数据管理模式对比
+
+| 资源 | 内置类型 | 内置数据来源 | 用户可控范围 |
+|------|---------|-------------|-------------|
+| Skill (`fixed`) | 硬编码 | 代码中定义（chat, time_machine） | 不可禁用/编辑/删除 |
+| Skill (`builtin`) | 文件+DB | `skills/builtin/*/SKILL.md` + `skill_registry` | 可启用/禁用，可覆盖 prompt |
+| Skill (`custom`) | DB+文件 | `skill_registry` + `skills/custom/{family_id}/` | 完全 CRUD |
+| **Agent (`builtin`)** | **DB** | **`agent_registry` (family_id=0, seed migration)** | **可修改 icon/color/order，不可删除** |
+| **Agent (`custom`)** | **DB** | **`agent_registry` (family_id>0)** | **完全 CRUD** |
+
+### 8.7 配置管理页面完整结构
+
+升级后的 AI 配置管理页面体系：
+
+```
+/settings/ai                    ← AI 服务商（Provider 列表 + 拖拽排序）
+├── /settings/ai/provider/new   ← 新增 Provider
+├── /settings/ai/provider/:id/edit ← 编辑 Provider
+│
+/settings/ai/mcp                ← MCP 服务器（列表 + 弹窗编辑）
+│
+/settings/ai/skills             ← 技能管理（Fixed/Builtin/Custom 三段式列表）
+│                                  - Fixed: 只读
+│                                  - Builtin: toggle 启用/禁用
+│                                  - Custom: toggle + 编辑 + 删除 + 底部创建按钮
+│
+/settings/ai/agents             ← 智能体管理（新增）
+├── /settings/ai/agents/new     ← 创建智能体（表单页）
+├── /settings/ai/agents/:id/edit← 编辑智能体（表单页）
+│                                  - Builtin agents: 只允许修改 icon/color/order
+│                                  - Custom agents: 完整编辑 + 删除
+```
+
+---
+
+## 9. Migration Strategy
+
+### 9.1 Phase Overview
 
 | Phase | 名称 | 目标 | 时间估计 |
 |-------|------|------|----------|
@@ -927,7 +1032,7 @@ skills:
 | P3 | Agent 创建功能 | 创建表单、SOUL.md 编辑器 | 2-3 天 |
 | P4 | 清理与文档 | 移除旧 router、更新 CLAUDE.md | 1-2 天 |
 
-### 8.2 Phase P0: Data Layer
+### 9.2 Phase P0: Data Layer
 
 **Tasks**:
 1. 创建 `agent_registry` 表的 Alembic migration
@@ -942,7 +1047,7 @@ skills:
 - owner 可以创建/编辑/删除自定义 Agent
 - 非 owner 只能使用，不能修改
 
-### 8.3 Phase P1: Execution Refactor
+### 9.3 Phase P1: Execution Refactor
 
 **Tasks**:
 1. 重构 `orchestrator.py`：新增 `stream_agent_dispatch()`
@@ -957,7 +1062,7 @@ skills:
 - 事件流包含：thinking、text、tool_call、tool_result、artifact
 - 多轮追问走同一个 thread_id，Agent 有记忆
 
-### 8.4 Phase P2: Frontend Hub
+### 9.4 Phase P2: Frontend Hub
 
 **Tasks**:
 1. 改造 `AIHubPage.vue`：Agent 卡片网格替代 capability grid
@@ -974,7 +1079,7 @@ skills:
 - 点击内置 Agent → 执行 → 显示结构化结果页
 - 结果页底部可追问，追问内容嵌入对话区域
 
-### 8.5 Phase P3: Agent Create
+### 9.5 Phase P3: Agent Create
 
 **Tasks**:
 1. 实现 `AgentCreatePage.vue`
@@ -990,7 +1095,7 @@ skills:
 - 创建成功后 Agent 卡片出现在 Hub
 - 编辑/删除功能正常
 
-### 8.6 Phase P4: Cleanup
+### 9.6 Phase P4: Cleanup
 
 **Tasks**:
 1. 删除旧 router（alerts.py、allocation.py、disposal.py、liability.py、report.py、spending_leak.py）
@@ -1008,9 +1113,9 @@ skills:
 
 ---
 
-## 9. API Summary
+## 10. API Summary
 
-### 9.1 New APIs
+### 10.1 New APIs
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -1022,7 +1127,7 @@ skills:
 | `/ai/agents/{id}/toggle` | PUT | 启用/禁用 Agent |
 | `/agent/{id}/stream` | POST | Agent 执行（NDJSON） |
 
-### 9.2 Deprecated APIs (to remove in P4)
+### 10.2 Deprecated APIs (to remove in P4)
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -1033,7 +1138,7 @@ skills:
 | `/report` | POST | 家庭资产体检（被 Agent 取代） |
 | `/spending_leak` | POST | 消费漏洞扫描（被 Agent 取代） |
 
-### 9.3 Retained APIs
+### 10.3 Retained APIs
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
@@ -1045,7 +1150,7 @@ skills:
 
 ---
 
-## 10. Risks and Mitigations
+## 11. Risks and Mitigations
 
 | Risk | Mitigation |
 |------|------------|
@@ -1057,7 +1162,7 @@ skills:
 
 ---
 
-## 11. Resolved Decisions
+## 12. Resolved Decisions
 
 1. **内置 Agent 的结构化结果格式**
    - **决策**：每个 skill 的 SKILL.md 中定义输出格式（包含 `<!-- STRUCTURED_DATA -->` 块），前端根据 Agent 类型选择渲染器组件（如 `AgentResultPanel.vue` 按 `agent_name` 分支渲染）
@@ -1070,7 +1175,7 @@ skills:
 
 ---
 
-## 12. Appendix: SOUL.md Templates
+## 13. Appendix: SOUL.md Templates
 
 ### A. 财务顾问模板
 
