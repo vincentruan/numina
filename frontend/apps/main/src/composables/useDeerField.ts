@@ -1,54 +1,73 @@
 import { onMounted, onUnmounted, type Ref } from 'vue'
 
 // Two-layer background system:
-//   bgCanvas  — firefly particles with depth layers (near/far size + brightness variation)
-//   deerCanvas — dim lavender pixel grid masked to deer SVG silhouette
+//   bgCanvas  — stellar particles with bright cores + irregular halos
+//   deerCanvas — dim lavender pixel grid masked to deer SVG silhouette (unchanged)
 
-// ── Deer pixel grid constants ──────────────────────────────────────────────
+// ── Deer pixel grid constants (unchanged) ──────────────────────────────────────
 const CELL_SIZE = 4
 const CELL_GAP = 1
 const MAX_ALPHA = 0.45
 const FLICKER_RATE = 0.06
 
-// ── Firefly depth-layer constants ─────────────────────────────────────────
-// 4 depth layers (0=far/dim/slow, 3=near/bright/fast) — inspired by Galaxy shader
-const NUM_LAYERS = 4
-// Base particles per layer at 1080×1920 reference area (~2M px²).
-// Actual count scales linearly with viewport area so mobile/desktop feel equally dense.
-const PARTICLES_PER_LAYER_BASE = [30, 25, 12, 6]
-const REFERENCE_AREA = 2_073_600  // 1080×1920
-// Outer glow radius per layer (CSS px)
-// Layer 0: large diffuse far halos; Layer 3: large bright near orbs with spikes
-const LAYER_RADIUS_MIN = [55, 30, 22, 35]
-const LAYER_RADIUS_MAX = [100, 55, 40, 70]
-// Core radius fraction of glow radius
-const CORE_RATIO = 0.12
-// Speed (px/s): near layers move faster
-const LAYER_SPEED_MIN = [3, 7, 13, 18]
-const LAYER_SPEED_MAX = [8, 16, 26, 35]
-// Peak opacity per layer
-const LAYER_BASE_ALPHA_MIN = [0.35, 0.42, 0.55, 0.72]
-const LAYER_BASE_ALPHA_MAX = [0.60, 0.68, 0.80, 0.98]
-// Glow center opacity multiplier per layer
-const LAYER_GLOW_CENTER = [0.25, 0.40, 0.60, 0.80]
-// Twinkle speed (cycles/s)
-const LAYER_TWINKLE_MIN = [0.10, 0.20, 0.40, 0.60]
-const LAYER_TWINKLE_MAX = [0.22, 0.42, 0.75, 1.20]
-// Twinkle depth per layer
-const LAYER_TWINKLE_DEPTH = [0.18, 0.32, 0.52, 0.70]
-// Wander interval (s)
-const WANDER_MIN = 2.0
-const WANDER_MAX = 5.5
-const WANDER_ANGLE = Math.PI * 0.65
-// Lifecycle duration (s) — near layers cycle faster
-const LIFECYCLE_DURATION_MIN = [6.0, 4.5, 3.0, 2.5]
-const LIFECYCLE_DURATION_MAX = [12.0, 8.0, 5.5, 4.5]
-// Star spike: layers 2 and 3 (near/mid-near) get diffraction spikes
-const SPIKE_LAYERS = [false, false, true, true]
-// Spike arm half-length (CSS px) — scales with the larger near-layer glow radii
-const SPIKE_LENGTH_PX = [0, 0, 35, 60]
-// Spike arm width (CSS px)
-const SPIKE_WIDTH = [0, 0, 1.5, 2.0]
+// ── Stellar particle constants ────────────────────────────────────────────────
+const SPRITE_SIZE = 64
+const SPRITE_DPR_MAX = 2
+
+const FAR_RATIO = 0.50
+const MID_RATIO = 0.35
+const NEAR_RATIO = 0.15
+
+const FAR_RADIUS_MIN = 0.6
+const FAR_RADIUS_MAX = 1.5
+const FAR_OPACITY_MIN = 0.25
+const FAR_OPACITY_MAX = 0.45
+const FAR_SPEED_MIN = 3
+const FAR_SPEED_MAX = 6
+
+const MID_RADIUS_MIN = 1.5
+const MID_RADIUS_MAX = 2.8
+const MID_OPACITY_MIN = 0.45
+const MID_OPACITY_MAX = 0.65
+const MID_SPEED_MIN = 8
+const MID_SPEED_MAX = 14
+
+const NEAR_RADIUS_MIN = 2.8
+const NEAR_RADIUS_MAX = 4.8
+const NEAR_OPACITY_MIN = 0.65
+const NEAR_OPACITY_MAX = 0.90
+const NEAR_SPEED_MIN = 15
+const NEAR_SPEED_MAX = 25
+
+const BREATH_SPEED_MIN = 0.15
+const BREATH_SPEED_MAX = 0.35
+const BREATH_SIZE_AMP_MIN = 0.25
+const BREATH_SIZE_AMP_MAX = 0.50
+const BREATH_OPACITY_AMP_MIN = 0.30
+const BREATH_OPACITY_AMP_MAX = 0.55
+
+const CCW_BIAS_MIN = 30
+const CCW_BIAS_MAX = 60
+const NOISE_ANGLE_DELTA = 15
+const TURN_RATE = 0.08
+
+const HALO_MARGIN_MULTIPLIER = 5
+
+const STELLAR_COLORS: Array<{ core: [number, number, number]; halo: [number, number, number]; ratio: number }> = [
+  { core: [255, 255, 255], halo: [180, 210, 255], ratio: 0.15 },
+  { core: [255, 255, 255], halo: [230, 235, 255], ratio: 0.30 },
+  { core: [255, 250, 235], halo: [255, 230, 180], ratio: 0.30 },
+  { core: [255, 235, 210], halo: [255, 200, 150], ratio: 0.20 },
+  { core: [255, 220, 200], halo: [255, 170, 120], ratio: 0.05 },
+]
+
+const INTENSITY_LEVELS = ['soft', 'medium', 'bright'] as const
+type IntensityLevel = typeof INTENSITY_LEVELS[number]
+
+const PARTICLE_COUNT_BASE = 180
+const REFERENCE_AREA = 375 * 668
+const PARTICLE_COUNT_MIN = 90
+const PARTICLE_COUNT_MAX = 420
 
 interface Grid {
   cols: number
@@ -57,28 +76,30 @@ interface Grid {
   dpr: number
 }
 
-interface Firefly {
+interface Particle {
   x: number
   y: number
-  glowR: number      // outer glow radius (CSS px)
-  coreR: number      // bright core radius
-  baseAlpha: number  // peak opacity at lifecycle peak
-  alpha: number      // current opacity (lifecycle × twinkle)
-  twinklePhase: number
-  twinkleSpeed: number
-  twinkleDepth: number
+  depth: 'far' | 'mid' | 'near'
+  baseRadius: number
+  baseOpacity: number
+  driftSpeed: number
+  spriteIndex: number
+  breathPhase: number
+  breathSpeed: number
+  breathSizeAmp: number
+  breathOpacityAmp: number
   vx: number
   vy: number
-  wanderTimer: number
-  wanderInterval: number
-  layer: number
-  glowCenter: number
-  rTint: number
-  bTint: number
-  // Lifecycle: 0→1 over lifecycleDuration, then respawn
-  lifecyclePhase: number  // 0..1
-  lifecycleDuration: number  // seconds for one full birth→death cycle
-  spikeAngle: number  // rotation of the 4-arm star spike (radians)
+  noiseOffsetX: number
+  noiseOffsetY: number
+  currentRadius: number
+  currentOpacity: number
+}
+
+interface StarSprite {
+  canvas: HTMLCanvasElement
+  colorTempIndex: number
+  intensityIndex: number
 }
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
@@ -91,12 +112,6 @@ function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number):
 
 function rand(min: number, max: number) {
   return min + Math.random() * (max - min)
-}
-
-// Triangle wave: oscillates 0→1→0 smoothly (no discontinuity at peak/trough)
-function triWave(phase: number): number {
-  const p = ((phase % 1) + 1) % 1  // 0..1
-  return p < 0.5 ? p * 2 : (1 - p) * 2
 }
 
 // ── Deer grid helpers ──────────────────────────────────────────────────────
@@ -142,225 +157,276 @@ function drawGrid(ctx: CanvasRenderingContext2D, grid: Grid) {
   }
 }
 
-// ── Firefly helpers ────────────────────────────────────────────────────────
+// ── Sprite generation helpers ───────────────────────────────────────────────
 
-function layerCount(layer: number, w: number, h: number): number {
-  const area = w * h
-  const scale = area / REFERENCE_AREA
-  // Clamp scale: mobile gets at least 50%, large monitors get at most 250%
-  const clamped = Math.max(0.5, Math.min(2.5, scale))
-  return Math.max(4, Math.round(PARTICLES_PER_LAYER_BASE[layer] * clamped))
+const SPRITE_INTERNAL_SIZE = SPRITE_SIZE * SPRITE_DPR_MAX
+
+function simpleNoise2D(x: number, y: number): number {
+  const v1 = Math.sin(x * 0.01) * Math.cos(y * 0.01)
+  const v2 = Math.sin(x * 0.02 + 1.5) * Math.cos(y * 0.015 + 0.7)
+  const v3 = Math.sin(x * 0.005 + y * 0.008)
+  return (v1 + v2 * 0.5 + v3 * 0.25) / 1.75
 }
 
-function buildFireflies(w: number, h: number): Firefly[] {
-  const flies: Firefly[] = []
+function generateStarSprite(
+  colorTempIndex: number,
+  intensityIndex: number,
+  dpr: number = SPRITE_DPR_MAX
+): HTMLCanvasElement {
+  const sprite = document.createElement('canvas')
+  const size = SPRITE_SIZE * dpr
+  sprite.width = size
+  sprite.height = size
+  const ctx = sprite.getContext('2d')!
+  const cx = size / 2
+  const cy = size / 2
 
-  for (let layer = 0; layer < NUM_LAYERS; layer++) {
-    const count = layerCount(layer, w, h)
-    for (let i = 0; i < count; i++) {
-      const glowR = rand(LAYER_RADIUS_MIN[layer], LAYER_RADIUS_MAX[layer])
-      const speed = rand(LAYER_SPEED_MIN[layer], LAYER_SPEED_MAX[layer])
-      const angle = Math.random() * Math.PI * 2
-      // Stagger lifecycle phases so particles don't all peak simultaneously
-      const lifecyclePhase = Math.random()
-      flies.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        glowR,
-        coreR: glowR * CORE_RATIO,
-        baseAlpha: rand(LAYER_BASE_ALPHA_MIN[layer], LAYER_BASE_ALPHA_MAX[layer]),
-        alpha: 0,
-        twinklePhase: Math.random(),
-        twinkleSpeed: rand(LAYER_TWINKLE_MIN[layer], LAYER_TWINKLE_MAX[layer]),
-        twinkleDepth: LAYER_TWINKLE_DEPTH[layer],
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        wanderTimer: Math.random() * WANDER_MAX,
-        wanderInterval: rand(WANDER_MIN, WANDER_MAX),
-        layer,
-        glowCenter: LAYER_GLOW_CENTER[layer],
-        rTint: Math.random() * 0.20,
-        bTint: Math.random() * 0.15,
-        lifecyclePhase,
-        lifecycleDuration: rand(LIFECYCLE_DURATION_MIN[layer], LIFECYCLE_DURATION_MAX[layer]),
-        spikeAngle: Math.random() * Math.PI * 0.25, // slight random rotation of spike arms
-      })
-    }
-  }
-  return flies
-}
+  const colorSpec = STELLAR_COLORS[colorTempIndex]
+  const [coreR, coreG, coreB] = colorSpec.core
+  const [haloR, haloG, haloB] = colorSpec.halo
 
-function updateFireflies(flies: Firefly[], dt: number, w: number, h: number) {
-  for (const f of flies) {
-    f.x += f.vx * dt
-    f.y += f.vy * dt
+  const intensityMult = intensityIndex === 2 ? 1.4 : intensityIndex === 1 ? 1.0 : 0.7
+  const rayCount = Math.floor((8 + Math.random() * 6) * intensityMult)
+  const baseHaloRadius = (size / 2 - 4) * intensityMult
 
-    // Wrap edges
-    if (f.x < -f.glowR * 2) f.x = w + f.glowR * 2
-    else if (f.x > w + f.glowR * 2) f.x = -f.glowR * 2
-    if (f.y < -f.glowR * 2) f.y = h + f.glowR * 2
-    else if (f.y > h + f.glowR * 2) f.y = -f.glowR * 2
+  // 1. Circular glow underlayer
+  const glowRadius = baseHaloRadius * 0.9
+  const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius)
+  glowGrad.addColorStop(0, `rgba(${haloR},${haloG},${haloB},0.35)`)
+  glowGrad.addColorStop(0.5, `rgba(${haloR},${haloG},${haloB},0.08)`)
+  glowGrad.addColorStop(1, `rgba(${haloR},${haloG},${haloB},0)`)
+  ctx.beginPath()
+  ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2)
+  ctx.fillStyle = glowGrad
+  ctx.fill()
 
-    // Wander: gradual direction change
-    f.wanderTimer += dt
-    if (f.wanderTimer >= f.wanderInterval) {
-      f.wanderTimer = 0
-      f.wanderInterval = rand(WANDER_MIN, WANDER_MAX)
-      const speed = rand(LAYER_SPEED_MIN[f.layer], LAYER_SPEED_MAX[f.layer])
-      const currentAngle = Math.atan2(f.vy, f.vx)
-      const newAngle = currentAngle + rand(-WANDER_ANGLE, WANDER_ANGLE)
-      f.vx = Math.cos(newAngle) * speed
-      f.vy = Math.sin(newAngle) * speed
-    }
-
-    // Lifecycle: advance phase 0→1, then respawn with new duration
-    f.lifecyclePhase += dt / f.lifecycleDuration
-    if (f.lifecyclePhase >= 1.0) {
-      f.lifecyclePhase = 0
-      f.lifecycleDuration = rand(LIFECYCLE_DURATION_MIN[f.layer], LIFECYCLE_DURATION_MAX[f.layer])
-    }
-
-    // Lifecycle envelope: fade in (0→0.3), peak (0.3→0.75), fade out (0.75→1.0)
-    // Mirrors deerflow's `depth * smoothstep(1.0, 0.9, depth)` pattern
-    const p = f.lifecyclePhase
-    let lifecycle: number
-    if (p < 0.3) {
-      lifecycle = p / 0.3  // 0→1 fade in
-    } else if (p < 0.75) {
-      lifecycle = 1.0       // peak
-    } else {
-      lifecycle = (1.0 - p) / 0.25  // 1→0 fade out
-    }
-
-    // Triangle-wave twinkle — modulates on top of lifecycle envelope
-    f.twinklePhase = (f.twinklePhase + f.twinkleSpeed * dt) % 1
-    const twinkle = triWave(f.twinklePhase)
-    const modulation = 1.0 + (twinkle - 0.5) * f.twinkleDepth
-
-    f.alpha = Math.min(f.baseAlpha * lifecycle * modulation, 1.0)
-  }
-}
-
-function drawSpikes(
-  ctx: CanvasRenderingContext2D,
-  x: number, y: number,
-  glowR: number, coreR: number,
-  r: number, g: number,
-  alpha: number, layer: number,
-  spikeAngle: number,
-  dpr: number,
-) {
-  // armLen in physical pixels (already DPR-scaled input coords)
-  const armLen = SPIKE_LENGTH_PX[layer] * dpr
-  const halfW = SPIKE_WIDTH[layer] * dpr
-  // 4 arms at 0°, 45°, 90°, 135° plus the particle's random rotation offset
-  const angles = [0, Math.PI * 0.5, Math.PI * 0.25, Math.PI * 0.75]
-
+  // 2. Irregular radiating rays
   ctx.save()
-  // Spike opacity: boost relative to particle alpha so spikes are visible even at mid-lifecycle
-  ctx.globalAlpha = Math.min(alpha * 1.4, 1.0)
-  ctx.translate(x, y)
-  ctx.rotate(spikeAngle)
+  ctx.translate(cx, cy)
 
-  for (const baseAngle of angles) {
-    ctx.save()
-    ctx.rotate(baseAngle)
-    const grad = ctx.createLinearGradient(0, 0, armLen, 0)
-    grad.addColorStop(0,    `rgba(${Math.min(r + 60, 255)},${Math.min(g + 55, 255)},255,1.0)`)
-    grad.addColorStop(0.12, `rgba(${Math.min(r + 40, 255)},${Math.min(g + 35, 255)},255,0.7)`)
-    grad.addColorStop(0.4,  `rgba(${r},${g},255,0.25)`)
-    grad.addColorStop(1,    `rgba(${r},${g},255,0)`)
+  for (let i = 0; i < rayCount; i++) {
+    const angle = (i / rayCount) * Math.PI * 2 + Math.random() * 0.3
+    const rayLength = baseHaloRadius * (0.6 + Math.random() * 0.8)
+    const rayWidth = (2 + Math.random() * 4) * dpr
+    const rayOpacity = 0.12 + Math.random() * 0.15
+
+    const endX = Math.cos(angle) * rayLength
+    const endY = Math.sin(angle) * rayLength
+    const rayGrad = ctx.createLinearGradient(0, 0, endX, endY)
+    rayGrad.addColorStop(0, `rgba(${haloR},${haloG},${haloB},0.25)`)
+    rayGrad.addColorStop(0.4, `rgba(${haloR},${haloG},${haloB},${rayOpacity.toFixed(3)})`)
+    rayGrad.addColorStop(0.8, `rgba(${haloR},${haloG},${haloB},0.03)`)
+    rayGrad.addColorStop(1, `rgba(${haloR},${haloG},${haloB},0)`)
 
     ctx.beginPath()
-    ctx.moveTo(-coreR * 0.5, 0)
-    ctx.bezierCurveTo(
-      armLen * 0.1, -halfW,
-      armLen * 0.4, -halfW * 0.4,
-      armLen, 0,
-    )
-    ctx.bezierCurveTo(
-      armLen * 0.4, halfW * 0.4,
-      armLen * 0.1, halfW,
-      -coreR * 0.5, 0,
-    )
-    ctx.fillStyle = grad
-    ctx.fill()
-
-    // Mirror arm in opposite direction
-    ctx.save()
-    ctx.rotate(Math.PI)
-    ctx.beginPath()
-    ctx.moveTo(-coreR * 0.5, 0)
-    ctx.bezierCurveTo(
-      armLen * 0.1, -halfW,
-      armLen * 0.4, -halfW * 0.4,
-      armLen, 0,
-    )
-    ctx.bezierCurveTo(
-      armLen * 0.4, halfW * 0.4,
-      armLen * 0.1, halfW,
-      -coreR * 0.5, 0,
-    )
-    ctx.fillStyle = grad
-    ctx.fill()
-    ctx.restore()
-
-    ctx.restore()
+    ctx.moveTo(0, 0)
+    ctx.lineTo(endX, endY)
+    ctx.strokeStyle = rayGrad
+    ctx.lineWidth = rayWidth
+    ctx.lineCap = 'round'
+    ctx.stroke()
   }
 
   ctx.restore()
+
+  // 3. Bright core
+  const coreRadius = 4 * dpr
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius)
+  coreGrad.addColorStop(0, `rgba(255,255,255,1.0)`)
+  coreGrad.addColorStop(0.3, `rgba(255,255,255,0.95)`)
+  coreGrad.addColorStop(0.6, `rgba(${coreR},${coreG},${coreB},0.7)`)
+  coreGrad.addColorStop(1, `rgba(${coreR},${coreG},${coreB},0)`)
+  ctx.beginPath()
+  ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2)
+  ctx.fillStyle = coreGrad
+  ctx.fill()
+
+  return sprite
 }
 
-function drawFireflies(ctx: CanvasRenderingContext2D, flies: Firefly[], dpr: number) {
-  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-
-  // Draw back-to-front (far layers first) for correct depth compositing
-  for (let layer = 0; layer < NUM_LAYERS; layer++) {
-    for (const f of flies) {
-      if (f.layer !== layer) continue
-      if (f.alpha < 0.005) continue
-
-      const x = f.x * dpr
-      const y = f.y * dpr
-      const gr = f.glowR * dpr
-      const cr = f.coreR * dpr
-      const a = f.alpha
-
-      // Color: lavender base with per-particle tint
-      const r = Math.round(189 + f.rTint * 40)
-      const g = Math.round(187 + Math.min(f.rTint, f.bTint) * 20)
-
-      // Use globalAlpha to scale the entire particle — far layers are genuinely dim
-      ctx.globalAlpha = a
-
-      // Outer glow — radial gradient with inverse-distance falloff
-      const gc = f.glowCenter
-      const glow = ctx.createRadialGradient(x, y, 0, x, y, gr)
-      glow.addColorStop(0,    `rgba(${r},${g},255,${gc.toFixed(3)})`)
-      glow.addColorStop(0.3,  `rgba(${r},${g},255,${(gc * 0.45).toFixed(3)})`)
-      glow.addColorStop(0.65, `rgba(${r},${g},255,${(gc * 0.12).toFixed(3)})`)
-      glow.addColorStop(1,    `rgba(${r},${g},255,0)`)
-      ctx.beginPath()
-      ctx.arc(x, y, gr, 0, Math.PI * 2)
-      ctx.fillStyle = glow
-      ctx.fill()
-
-      // Bright core
-      const coreAlpha = 0.5 + f.layer * 0.15
-      ctx.beginPath()
-      ctx.arc(x, y, cr, 0, Math.PI * 2)
-      ctx.fillStyle = `rgba(${Math.min(r + 30, 255)},${Math.min(g + 28, 255)},255,${coreAlpha.toFixed(3)})`
-      ctx.fill()
-
-      ctx.globalAlpha = 1
-
-      // Star spikes for near layers — drawn after resetting globalAlpha so they
-      // use their own alpha internally (avoids double-multiplying lifecycle fade)
-      if (SPIKE_LAYERS[layer]) {
-        drawSpikes(ctx, x, y, gr, cr, r, g, a, layer, f.spikeAngle, dpr)
-      }
+function buildSprites(dpr: number = SPRITE_DPR_MAX): StarSprite[] {
+  const sprites: StarSprite[] = []
+  for (let tempIdx = 0; tempIdx < STELLAR_COLORS.length; tempIdx++) {
+    for (let intIdx = 0; intIdx < INTENSITY_LEVELS.length; intIdx++) {
+      sprites.push({
+        canvas: generateStarSprite(tempIdx, intIdx, dpr),
+        colorTempIndex: tempIdx,
+        intensityIndex: intIdx,
+      })
     }
   }
+  return sprites
+}
+
+// ── Particle helpers ───────────────────────────────────────────────────────
+
+function computeParticleCount(w: number, h: number): number {
+  const area = w * h
+  const scale = Math.sqrt(area / REFERENCE_AREA)
+
+  if (w >= 1280) return Math.min(PARTICLE_COUNT_MAX, Math.round(PARTICLE_COUNT_BASE * scale))
+  if (w >= 768) return Math.min(320, Math.round(PARTICLE_COUNT_BASE * scale))
+
+  const heightFactor = h / 668
+  return Math.round(PARTICLE_COUNT_BASE * Math.max(0.85, Math.min(1.15, heightFactor)))
+}
+
+function assignDepthLayer(): 'far' | 'mid' | 'near' {
+  const r = Math.random()
+  if (r < FAR_RATIO) return 'far'
+  if (r < FAR_RATIO + MID_RATIO) return 'mid'
+  return 'near'
+}
+
+function assignColorTemp(): number {
+  const r = Math.random()
+  let cumulative = 0
+  for (let i = 0; i < STELLAR_COLORS.length; i++) {
+    cumulative += STELLAR_COLORS[i].ratio
+    if (r < cumulative) return i
+  }
+  return STELLAR_COLORS.length - 1
+}
+
+function getDepthParams(depth: 'far' | 'mid' | 'near') {
+  switch (depth) {
+    case 'far':
+      return {
+        radiusMin: FAR_RADIUS_MIN, radiusMax: FAR_RADIUS_MAX,
+        opacityMin: FAR_OPACITY_MIN, opacityMax: FAR_OPACITY_MAX,
+        speedMin: FAR_SPEED_MIN, speedMax: FAR_SPEED_MAX,
+      }
+    case 'mid':
+      return {
+        radiusMin: MID_RADIUS_MIN, radiusMax: MID_RADIUS_MAX,
+        opacityMin: MID_OPACITY_MIN, opacityMax: MID_OPACITY_MAX,
+        speedMin: MID_SPEED_MIN, speedMax: MID_SPEED_MAX,
+      }
+    case 'near':
+      return {
+        radiusMin: NEAR_RADIUS_MIN, radiusMax: NEAR_RADIUS_MAX,
+        opacityMin: NEAR_OPACITY_MIN, opacityMax: NEAR_OPACITY_MAX,
+        speedMin: NEAR_SPEED_MIN, speedMax: NEAR_SPEED_MAX,
+      }
+  }
+}
+
+function initParticleFlow(p: Particle, w: number, h: number): void {
+  const cx = w / 2
+  const cy = h / 2
+  const toCenterAngle = Math.atan2(cy - p.y, cx - p.x)
+  const biasOffset = (CCW_BIAS_MIN + Math.random() * (CCW_BIAS_MAX - CCW_BIAS_MIN)) * Math.PI / 180
+  const baseAngle = toCenterAngle + biasOffset + Math.PI
+  const noiseAngle = baseAngle + (Math.random() - 0.5) * 80 * Math.PI / 180
+
+  p.vx = Math.cos(noiseAngle) * p.driftSpeed
+  p.vy = Math.sin(noiseAngle) * p.driftSpeed
+  p.noiseOffsetX = Math.random() * 1000
+  p.noiseOffsetY = Math.random() * 1000
+}
+
+function buildParticles(w: number, h: number): Particle[] {
+  const particles: Particle[] = []
+  const count = computeParticleCount(w, h)
+
+  for (let i = 0; i < count; i++) {
+    const depth = assignDepthLayer()
+    const params = getDepthParams(depth)
+    const colorTempIdx = assignColorTemp()
+    const intensityIdx = Math.floor(Math.random() * INTENSITY_LEVELS.length)
+
+    const baseRadius = rand(params.radiusMin, params.radiusMax)
+    const baseOpacity = rand(params.opacityMin, params.opacityMax)
+    const driftSpeed = rand(params.speedMin, params.speedMax)
+
+    const p: Particle = {
+      x: Math.random() * w,
+      y: Math.random() * h,
+      depth,
+      baseRadius,
+      baseOpacity,
+      driftSpeed,
+      spriteIndex: colorTempIdx * INTENSITY_LEVELS.length + intensityIdx,
+      breathPhase: Math.random(),
+      breathSpeed: rand(BREATH_SPEED_MIN, BREATH_SPEED_MAX),
+      breathSizeAmp: rand(BREATH_SIZE_AMP_MIN, BREATH_SIZE_AMP_MAX),
+      breathOpacityAmp: rand(BREATH_OPACITY_AMP_MIN, BREATH_OPACITY_AMP_MAX),
+      vx: 0,
+      vy: 0,
+      noiseOffsetX: 0,
+      noiseOffsetY: 0,
+      currentRadius: baseRadius,
+      currentOpacity: baseOpacity,
+    }
+
+    initParticleFlow(p, w, h)
+    particles.push(p)
+  }
+
+  return particles
+}
+
+function updateBreathing(p: Particle, dt: number): void {
+  p.breathPhase = (p.breathPhase + p.breathSpeed * dt) % 1
+  const breathWave = (Math.sin(p.breathPhase * Math.PI * 2) + 1) / 2
+  p.currentRadius = p.baseRadius * (1 + p.breathSizeAmp * breathWave)
+  p.currentOpacity = p.baseOpacity * (1 + p.breathOpacityAmp * breathWave)
+}
+
+function updateFlowField(p: Particle, dt: number, time: number): void {
+  const noiseVal = simpleNoise2D(
+    p.noiseOffsetX + time * 0.05,
+    p.noiseOffsetY + time * 0.05
+  )
+  const noiseDelta = noiseVal * NOISE_ANGLE_DELTA * Math.PI / 180
+
+  const currentAngle = Math.atan2(p.vy, p.vx)
+  const targetAngle = currentAngle + noiseDelta
+  const newAngle = currentAngle + (targetAngle - currentAngle) * TURN_RATE
+
+  const newSpeed = p.driftSpeed * (0.95 + Math.random() * 0.1)
+
+  p.vx = Math.cos(newAngle) * newSpeed
+  p.vy = Math.sin(newAngle) * newSpeed
+  p.x += p.vx * dt
+  p.y += p.vy * dt
+}
+
+function wrapEdges(p: Particle, w: number, h: number): void {
+  const margin = p.currentRadius * HALO_MARGIN_MULTIPLIER
+  if (p.x < -margin) p.x = w + margin
+  else if (p.x > w + margin) p.x = -margin
+  if (p.y < -margin) p.y = h + margin
+  else if (p.y > h + margin) p.y = -margin
+}
+
+function updateParticles(particles: Particle[], dt: number, w: number, h: number, time: number): void {
+  for (const p of particles) {
+    updateBreathing(p, dt)
+    updateFlowField(p, dt, time)
+    wrapEdges(p, w, h)
+  }
+}
+
+function drawParticles(
+  ctx: CanvasRenderingContext2D,
+  particles: Particle[],
+  sprites: StarSprite[],
+  dpr: number
+): void {
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+  for (const p of particles) {
+    const sprite = sprites[p.spriteIndex]
+    const finalSize = p.currentRadius * dpr * SPRITE_DPR_MAX
+    const drawX = p.x * dpr - finalSize / 2
+    const drawY = p.y * dpr - finalSize / 2
+
+    ctx.globalAlpha = p.currentOpacity
+    ctx.drawImage(sprite.canvas, drawX, drawY, finalSize, finalSize)
+  }
+
+  ctx.globalAlpha = 1
 }
 
 // ── Main composable ────────────────────────────────────────────────────────
@@ -373,7 +439,9 @@ export function useDeerField(
   let bgCtx: CanvasRenderingContext2D | null = null
   let deerCtx: CanvasRenderingContext2D | null = null
   let grid: Grid | null = null
-  let flies: Firefly[] = []
+  let particles: Particle[] = []
+  let sprites: StarSprite[] = []
+  let animTime = 0
   let bgDpr = 1
   let vpW = 0
   let vpH = 0
@@ -405,16 +473,17 @@ export function useDeerField(
     deerCtx = deer.getContext('2d')
     deerCtx?.setTransform(1, 0, 0, 1, 0, 0)
 
-    flies = buildFireflies(vpW, vpH)
+    particles = buildParticles(vpW, vpH)
   }
 
   function loop(ts: number) {
-    if (!paused && bgCtx && deerCtx && grid) {
+    if (!paused && bgCtx && deerCtx && grid && sprites.length > 0) {
       const dt = lastTime === 0 ? 0.016 : Math.min((ts - lastTime) / 1000, 0.1)
       lastTime = ts
+      animTime = (animTime + dt) % 3600
 
-      updateFireflies(flies, dt, vpW, vpH)
-      drawFireflies(bgCtx, flies, bgDpr)
+      updateParticles(particles, dt, vpW, vpH, animTime)
+      drawParticles(bgCtx, particles, sprites, bgDpr)
 
       flickerGrid(grid.alphas, dt)
       drawGrid(deerCtx, grid)
@@ -431,9 +500,8 @@ export function useDeerField(
 
   function start() {
     resize()
+    sprites = buildSprites(SPRITE_DPR_MAX)
 
-    // Fetch SVG as blob URL so mobile browsers (iOS Safari) can use it as a CSS mask.
-    // External URL references in mask-image are unreliable on mobile WebKit.
     fetch('/images/deer.svg')
       .then((r) => r.blob())
       .then((blob) => {
@@ -441,7 +509,6 @@ export function useDeerField(
         applyMask(maskBlobUrl)
       })
       .catch(() => {
-        // Fallback to direct path if fetch fails
         applyMask('/images/deer.svg')
       })
 
@@ -474,6 +541,8 @@ export function useDeerField(
       URL.revokeObjectURL(maskBlobUrl)
       maskBlobUrl = null
     }
+    sprites = []
+    animTime = 0
   }
 
   onMounted(start)
