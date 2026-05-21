@@ -89,6 +89,11 @@ class ChatAdapter:
         and the message content are the only injection points available.
         """
         system_prompt = await self._resolve_prompt(family_id)
+        # Append web_search behavioral guidance so the LLM knows whether it may search
+        if web_search:
+            system_prompt += "\n\n## 联网搜索\n\n用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+        else:
+            system_prompt += "\n\n## 联网搜索\n\n用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
         mcp_servers = [
             {
                 "name": "numina-family-data",
@@ -107,9 +112,13 @@ class ChatAdapter:
             mcp_servers=mcp_servers,
         )
 
-        # Prepend system_prompt to the question — DeerFlow has no separate
-        # system_prompt config key; this is the cleanest injection point.
-        augmented_text = f"{system_prompt}\n\n{question}" if system_prompt else question
+        # Wrap system_prompt and question in XML tags for structural separation.
+        # DeerFlow has no separate system_prompt config key; this is the cleanest
+        # injection point. XML tags give the LLM clear authority boundaries.
+        augmented_text = (
+            f"<system_instructions>\n{system_prompt}\n</system_instructions>\n\n"
+            f"<user_question>\n{question}\n</user_question>"
+        )
         context = RedactedContext(family_id=family_id, free_text=augmented_text)
 
         async for chunk in adapter.stream_dispatch(

@@ -91,6 +91,78 @@ async def test_stream_injects_mcp_server_into_adapter():
 
 
 @pytest.mark.asyncio
+async def test_stream_web_search_true_appends_search_guidance():
+    from apps.agent.services.deerflow_adapter.adapter import StreamChunk
+
+    adapter = ChatAdapter("http://backend:8000", "secret-token")
+    captured_context: dict = {}
+
+    def fake_create(*args, **kwargs):
+        mock_adapter = AsyncMock()
+
+        async def fake_stream(skill, context, *a, **kw):
+            captured_context["text"] = context.free_text
+            yield StreamChunk(type="text", content="ok")
+
+        mock_adapter.stream_dispatch = fake_stream
+        return mock_adapter
+
+    with (
+        patch("apps.agent.services.chat_adapter._create_family_adapter", side_effect=fake_create),
+        patch.object(adapter, "_resolve_prompt", new=AsyncMock(return_value="You are a helper.")),
+    ):
+        async for _ in adapter.stream(
+            family_id="100",
+            question="hi",
+            thread_id="t1",
+            ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
+            web_search=True,
+        ):
+            pass
+
+    assert "联网搜索" in captured_context["text"]
+    assert "调用搜索工具" in captured_context["text"]
+    assert "<system_instructions>" in captured_context["text"]
+    assert "<user_question>" in captured_context["text"]
+
+
+@pytest.mark.asyncio
+async def test_stream_web_search_false_appends_no_search_constraint():
+    from apps.agent.services.deerflow_adapter.adapter import StreamChunk
+
+    adapter = ChatAdapter("http://backend:8000", "secret-token")
+    captured_context: dict = {}
+
+    def fake_create(*args, **kwargs):
+        mock_adapter = AsyncMock()
+
+        async def fake_stream(skill, context, *a, **kw):
+            captured_context["text"] = context.free_text
+            yield StreamChunk(type="text", content="ok")
+
+        mock_adapter.stream_dispatch = fake_stream
+        return mock_adapter
+
+    with (
+        patch("apps.agent.services.chat_adapter._create_family_adapter", side_effect=fake_create),
+        patch.object(adapter, "_resolve_prompt", new=AsyncMock(return_value="You are a helper.")),
+    ):
+        async for _ in adapter.stream(
+            family_id="100",
+            question="hi",
+            thread_id="t1",
+            ai_config={"api_key": "k", "ai_model_id": "m", "ai_provider": "openai"},
+            web_search=False,
+        ):
+            pass
+
+    assert "联网搜索" in captured_context["text"]
+    assert "不要尝试联网" in captured_context["text"]
+    assert "<system_instructions>" in captured_context["text"]
+    assert "<user_question>" in captured_context["text"]
+
+
+@pytest.mark.asyncio
 async def test_stream_deep_think_enables_subagent_and_plan_mode():
     adapter = ChatAdapter("http://backend:8000", "secret-token")
     captured: dict = {}
