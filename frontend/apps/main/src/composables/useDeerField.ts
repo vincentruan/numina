@@ -1,66 +1,74 @@
 import { onMounted, onUnmounted, type Ref } from 'vue'
 
 // Two-layer background system:
-//   bgCanvas  — stellar pulsation particles (85% normal + 15% stars, brightness pulsation only)
-//   deerCanvas — dim lavender pixel grid masked to deer SVG silhouette
+//   bgCanvas  — stellar particles with bright cores + irregular halos
+//   deerCanvas — dim lavender pixel grid masked to deer SVG silhouette (unchanged)
 
-// ── Deer pixel grid constants ──────────────────────────────────────────────
+// ── Deer pixel grid constants (unchanged) ──────────────────────────────────────
 const CELL_SIZE = 4
 const CELL_GAP = 1
 const MAX_ALPHA = 0.45
 const FLICKER_RATE = 0.06
 
-// ── Stellar pulsation particle constants ───────────────────────────────────
-// Particle system: 85% normal particles (steady) + 15% stars (dramatic pulsation)
-// Stars expand slowly to peak brightness, then contract — pure size + glow, no rays
-const PARTICLE_COUNT_BASE = 40
-const REFERENCE_AREA = 2_073_600 // 1080×1920
-const STAR_RATIO = 0.15 // 15% of particles are stars
+// ── Stellar particle constants ────────────────────────────────────────────────
+const SPRITE_SIZE = 64
+const SPRITE_DPR_MAX = 2
+const SPRITE_COUNT = 15
 
-// Normal particle size (steady, small)
-const NORMAL_RADIUS_MIN = 1.2
-const NORMAL_RADIUS_MAX = 2.4
+const FAR_RATIO = 0.50
+const MID_RATIO = 0.35
+const NEAR_RATIO = 0.15
 
-// Star particle size — at rest (trough) and peak (max expansion)
-const STAR_RADIUS_MIN = 1.8
-const STAR_RADIUS_MAX = 3.5
-// Star pulsation amplitude: peak size = base * (1 + amplitude)
-const STAR_SIZE_AMPLITUDE_MIN = 1.6
-const STAR_SIZE_AMPLITUDE_MAX = 2.4
+const FAR_RADIUS_MIN = 0.5
+const FAR_RADIUS_MAX = 1.2
+const FAR_OPACITY_MIN = 0.25
+const FAR_OPACITY_MAX = 0.45
+const FAR_SPEED_MIN = 3
+const FAR_SPEED_MAX = 6
 
-// Pulsation cycle: 4-6 seconds per full breath (slow stellar feel)
-const STAR_CYCLE_MIN = 4.0
-const STAR_CYCLE_MAX = 6.0
-// Normal particles breathe gently — slightly faster, less amplitude
-const NORMAL_CYCLE_MIN = 3.0
-const NORMAL_CYCLE_MAX = 5.0
-const NORMAL_BREATH_AMPLITUDE = 0.35 // gentle size/opacity variation
+const MID_RADIUS_MIN = 1.2
+const MID_RADIUS_MAX = 2.2
+const MID_OPACITY_MIN = 0.45
+const MID_OPACITY_MAX = 0.65
+const MID_SPEED_MIN = 8
+const MID_SPEED_MAX = 14
 
-// Opacity at rest (trough) and peak
-const NORMAL_OPACITY_MIN = 0.35
-const NORMAL_OPACITY_MAX = 0.65
-const STAR_OPACITY_MIN = 0.45
-const STAR_OPACITY_MAX = 0.85
+const NEAR_RADIUS_MIN = 2.2
+const NEAR_RADIUS_MAX = 3.8
+const NEAR_OPACITY_MIN = 0.65
+const NEAR_OPACITY_MAX = 0.90
+const NEAR_SPEED_MIN = 15
+const NEAR_SPEED_MAX = 25
 
-// Star halo extent
-const STAR_HALO_MULTIPLIER = 5 // halo radius = current radius * this
+const BREATH_SPEED_MIN = 0.15
+const BREATH_SPEED_MAX = 0.35
+const BREATH_SIZE_AMP_MIN = 0.20
+const BREATH_SIZE_AMP_MAX = 0.45
+const BREATH_OPACITY_AMP_MIN = 0.30
+const BREATH_OPACITY_AMP_MAX = 0.55
 
-// Drift speed (px/s) — gentle ambient movement
-const DRIFT_SPEED_MIN = 3
-const DRIFT_SPEED_MAX = 10
+const CCW_BIAS_MIN = 30
+const CCW_BIAS_MAX = 60
+const NOISE_ANGLE_DELTA = 15
+const TURN_RATE = 0.08
 
-// Wander: gradual direction changes
-const WANDER_INTERVAL_MIN = 2.5
-const WANDER_INTERVAL_MAX = 6.0
-const WANDER_ANGLE_MAX = Math.PI * 0.5
+const HALO_MARGIN_MULTIPLIER = 5
 
-// Color palette: cyan/teal/lavender variations
-const PARTICLE_COLORS: Array<[number, number, number]> = [
-  [0, 220, 255], // primary cyan
-  [80, 240, 240], // teal
-  [150, 220, 255], // light cyan-blue
-  [189, 187, 255], // lavender (brand accent)
+const STELLAR_COLORS: Array<{ core: [number, number, number]; halo: [number, number, number]; ratio: number }> = [
+  { core: [255, 255, 255], halo: [180, 210, 255], ratio: 0.15 },
+  { core: [255, 255, 255], halo: [230, 235, 255], ratio: 0.30 },
+  { core: [255, 250, 235], halo: [255, 230, 180], ratio: 0.30 },
+  { core: [255, 235, 210], halo: [255, 200, 150], ratio: 0.20 },
+  { core: [255, 220, 200], halo: [255, 170, 120], ratio: 0.05 },
 ]
+
+const INTENSITY_LEVELS = ['soft', 'medium', 'bright'] as const
+type IntensityLevel = typeof INTENSITY_LEVELS[number]
+
+const PARTICLE_COUNT_BASE = 180
+const REFERENCE_AREA = 375 * 668
+const PARTICLE_COUNT_MIN = 90
+const PARTICLE_COUNT_MAX = 420
 
 interface Grid {
   cols: number
@@ -72,19 +80,27 @@ interface Grid {
 interface Particle {
   x: number
   y: number
-  isStar: boolean
-  baseRadius: number // at trough
-  currentRadius: number // updated per frame
-  pulsePhase: number // 0..1 (cycle progress)
-  pulseSpeed: number // cycles/s
-  sizeAmplitude: number // peak = base * (1 + amplitude)
-  baseOpacity: number // at trough
-  peakOpacity: number // at peak
+  depth: 'far' | 'mid' | 'near'
+  baseRadius: number
+  baseOpacity: number
+  driftSpeed: number
+  spriteIndex: number
+  breathPhase: number
+  breathSpeed: number
+  breathSizeAmp: number
+  breathOpacityAmp: number
   vx: number
   vy: number
-  wanderTimer: number
-  wanderInterval: number
-  colorVariant: number
+  noiseOffsetX: number
+  noiseOffsetY: number
+  currentRadius: number
+  currentOpacity: number
+}
+
+interface StarSprite {
+  canvas: HTMLCanvasElement
+  colorTempIndex: number
+  intensityIndex: number
 }
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
@@ -142,176 +158,276 @@ function drawGrid(ctx: CanvasRenderingContext2D, grid: Grid) {
   }
 }
 
+// ── Sprite generation helpers ───────────────────────────────────────────────
+
+const SPRITE_INTERNAL_SIZE = SPRITE_SIZE * SPRITE_DPR_MAX
+
+function simpleNoise2D(x: number, y: number): number {
+  const v1 = Math.sin(x * 0.01) * Math.cos(y * 0.01)
+  const v2 = Math.sin(x * 0.02 + 1.5) * Math.cos(y * 0.015 + 0.7)
+  const v3 = Math.sin(x * 0.005 + y * 0.008)
+  return (v1 + v2 * 0.5 + v3 * 0.25) / 1.75
+}
+
+function generateStarSprite(
+  colorTempIndex: number,
+  intensityIndex: number,
+  dpr: number = SPRITE_DPR_MAX
+): HTMLCanvasElement {
+  const sprite = document.createElement('canvas')
+  const size = SPRITE_SIZE * dpr
+  sprite.width = size
+  sprite.height = size
+  const ctx = sprite.getContext('2d')!
+  const cx = size / 2
+  const cy = size / 2
+
+  const colorSpec = STELLAR_COLORS[colorTempIndex]
+  const [coreR, coreG, coreB] = colorSpec.core
+  const [haloR, haloG, haloB] = colorSpec.halo
+
+  const intensityMult = intensityIndex === 2 ? 1.4 : intensityIndex === 1 ? 1.0 : 0.7
+  const rayCount = Math.floor((8 + Math.random() * 6) * intensityMult)
+  const baseHaloRadius = (size / 2 - 4) * intensityMult
+
+  // 1. Circular glow underlayer
+  const glowRadius = baseHaloRadius * 0.9
+  const glowGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius)
+  glowGrad.addColorStop(0, `rgba(${haloR},${haloG},${haloB},0.35)`)
+  glowGrad.addColorStop(0.5, `rgba(${haloR},${haloG},${haloB},0.08)`)
+  glowGrad.addColorStop(1, `rgba(${haloR},${haloG},${haloB},0)`)
+  ctx.beginPath()
+  ctx.arc(cx, cy, glowRadius, 0, Math.PI * 2)
+  ctx.fillStyle = glowGrad
+  ctx.fill()
+
+  // 2. Irregular radiating rays
+  ctx.save()
+  ctx.translate(cx, cy)
+
+  for (let i = 0; i < rayCount; i++) {
+    const angle = (i / rayCount) * Math.PI * 2 + Math.random() * 0.3
+    const rayLength = baseHaloRadius * (0.6 + Math.random() * 0.8)
+    const rayWidth = (2 + Math.random() * 4) * dpr
+    const rayOpacity = 0.12 + Math.random() * 0.15
+
+    const endX = Math.cos(angle) * rayLength
+    const endY = Math.sin(angle) * rayLength
+    const rayGrad = ctx.createLinearGradient(0, 0, endX, endY)
+    rayGrad.addColorStop(0, `rgba(${haloR},${haloG},${haloB},0.25)`)
+    rayGrad.addColorStop(0.4, `rgba(${haloR},${haloG},${haloB},${rayOpacity.toFixed(3)})`)
+    rayGrad.addColorStop(0.8, `rgba(${haloR},${haloG},${haloB},0.03)`)
+    rayGrad.addColorStop(1, `rgba(${haloR},${haloG},${haloB},0)`)
+
+    ctx.beginPath()
+    ctx.moveTo(0, 0)
+    ctx.lineTo(endX, endY)
+    ctx.strokeStyle = rayGrad
+    ctx.lineWidth = rayWidth
+    ctx.lineCap = 'round'
+    ctx.stroke()
+  }
+
+  ctx.restore()
+
+  // 3. Bright core
+  const coreRadius = 4 * dpr
+  const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, coreRadius)
+  coreGrad.addColorStop(0, `rgba(255,255,255,1.0)`)
+  coreGrad.addColorStop(0.3, `rgba(255,255,255,0.95)`)
+  coreGrad.addColorStop(0.6, `rgba(${coreR},${coreG},${coreB},0.7)`)
+  coreGrad.addColorStop(1, `rgba(${coreR},${coreG},${coreB},0)`)
+  ctx.beginPath()
+  ctx.arc(cx, cy, coreRadius, 0, Math.PI * 2)
+  ctx.fillStyle = coreGrad
+  ctx.fill()
+
+  return sprite
+}
+
+function buildSprites(dpr: number = SPRITE_DPR_MAX): StarSprite[] {
+  const sprites: StarSprite[] = []
+  for (let tempIdx = 0; tempIdx < STELLAR_COLORS.length; tempIdx++) {
+    for (let intIdx = 0; intIdx < INTENSITY_LEVELS.length; intIdx++) {
+      sprites.push({
+        canvas: generateStarSprite(tempIdx, intIdx, dpr),
+        colorTempIndex: tempIdx,
+        intensityIndex: intIdx,
+      })
+    }
+  }
+  return sprites
+}
+
 // ── Particle helpers ───────────────────────────────────────────────────────
 
-function particleCount(w: number, h: number): number {
+function computeParticleCount(w: number, h: number): number {
   const area = w * h
-  const scale = area / REFERENCE_AREA
-  const clamped = Math.max(0.5, Math.min(2.5, scale))
-  return Math.max(20, Math.round(PARTICLE_COUNT_BASE * clamped))
+  const scale = Math.sqrt(area / REFERENCE_AREA)
+
+  if (w >= 1280) return Math.min(PARTICLE_COUNT_MAX, Math.round(PARTICLE_COUNT_BASE * scale))
+  if (w >= 768) return Math.min(320, Math.round(PARTICLE_COUNT_BASE * scale))
+
+  const heightFactor = h / 668
+  return Math.round(PARTICLE_COUNT_BASE * Math.max(0.85, Math.min(1.15, heightFactor)))
+}
+
+function assignDepthLayer(): 'far' | 'mid' | 'near' {
+  const r = Math.random()
+  if (r < FAR_RATIO) return 'far'
+  if (r < FAR_RATIO + MID_RATIO) return 'mid'
+  return 'near'
+}
+
+function assignColorTemp(): number {
+  const r = Math.random()
+  let cumulative = 0
+  for (let i = 0; i < STELLAR_COLORS.length; i++) {
+    cumulative += STELLAR_COLORS[i].ratio
+    if (r < cumulative) return i
+  }
+  return STELLAR_COLORS.length - 1
+}
+
+function getDepthParams(depth: 'far' | 'mid' | 'near') {
+  switch (depth) {
+    case 'far':
+      return {
+        radiusMin: FAR_RADIUS_MIN, radiusMax: FAR_RADIUS_MAX,
+        opacityMin: FAR_OPACITY_MIN, opacityMax: FAR_OPACITY_MAX,
+        speedMin: FAR_SPEED_MIN, speedMax: FAR_SPEED_MAX,
+      }
+    case 'mid':
+      return {
+        radiusMin: MID_RADIUS_MIN, radiusMax: MID_RADIUS_MAX,
+        opacityMin: MID_OPACITY_MIN, opacityMax: MID_OPACITY_MAX,
+        speedMin: MID_SPEED_MIN, speedMax: MID_SPEED_MAX,
+      }
+    case 'near':
+      return {
+        radiusMin: NEAR_RADIUS_MIN, radiusMax: NEAR_RADIUS_MAX,
+        opacityMin: NEAR_OPACITY_MIN, opacityMax: NEAR_OPACITY_MAX,
+        speedMin: NEAR_SPEED_MIN, speedMax: NEAR_SPEED_MAX,
+      }
+  }
+}
+
+function initParticleFlow(p: Particle, w: number, h: number): void {
+  const cx = w / 2
+  const cy = h / 2
+  const toCenterAngle = Math.atan2(cy - p.y, cx - p.x)
+  const biasOffset = (CCW_BIAS_MIN + Math.random() * (CCW_BIAS_MAX - CCW_BIAS_MIN)) * Math.PI / 180
+  const baseAngle = toCenterAngle + biasOffset + Math.PI
+  const noiseAngle = baseAngle + (Math.random() - 0.5) * 80 * Math.PI / 180
+
+  p.vx = Math.cos(noiseAngle) * p.driftSpeed
+  p.vy = Math.sin(noiseAngle) * p.driftSpeed
+  p.noiseOffsetX = Math.random() * 1000
+  p.noiseOffsetY = Math.random() * 1000
 }
 
 function buildParticles(w: number, h: number): Particle[] {
   const particles: Particle[] = []
-  const count = particleCount(w, h)
+  const count = computeParticleCount(w, h)
 
   for (let i = 0; i < count; i++) {
-    const isStar = Math.random() < STAR_RATIO
-    const speed = rand(DRIFT_SPEED_MIN, DRIFT_SPEED_MAX)
-    const angle = Math.random() * Math.PI * 2
+    const depth = assignDepthLayer()
+    const params = getDepthParams(depth)
+    const colorTempIdx = assignColorTemp()
+    const intensityIdx = Math.floor(Math.random() * INTENSITY_LEVELS.length)
 
-    if (isStar) {
-      const baseRadius = rand(STAR_RADIUS_MIN, STAR_RADIUS_MAX)
-      const cycleDuration = rand(STAR_CYCLE_MIN, STAR_CYCLE_MAX)
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        isStar: true,
-        baseRadius,
-        currentRadius: baseRadius,
-        pulsePhase: Math.random(),
-        pulseSpeed: 1 / cycleDuration,
-        sizeAmplitude: rand(STAR_SIZE_AMPLITUDE_MIN, STAR_SIZE_AMPLITUDE_MAX),
-        baseOpacity: STAR_OPACITY_MIN,
-        peakOpacity: STAR_OPACITY_MAX,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        wanderTimer: Math.random() * WANDER_INTERVAL_MAX,
-        wanderInterval: rand(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX),
-        colorVariant: Math.floor(Math.random() * PARTICLE_COLORS.length),
-      })
-    } else {
-      const baseRadius = rand(NORMAL_RADIUS_MIN, NORMAL_RADIUS_MAX)
-      const cycleDuration = rand(NORMAL_CYCLE_MIN, NORMAL_CYCLE_MAX)
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        isStar: false,
-        baseRadius,
-        currentRadius: baseRadius,
-        pulsePhase: Math.random(),
-        pulseSpeed: 1 / cycleDuration,
-        sizeAmplitude: NORMAL_BREATH_AMPLITUDE,
-        baseOpacity: NORMAL_OPACITY_MIN,
-        peakOpacity: NORMAL_OPACITY_MAX,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        wanderTimer: Math.random() * WANDER_INTERVAL_MAX,
-        wanderInterval: rand(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX),
-        colorVariant: Math.floor(Math.random() * PARTICLE_COLORS.length),
-      })
+    const baseRadius = rand(params.radiusMin, params.radiusMax)
+    const baseOpacity = rand(params.opacityMin, params.opacityMax)
+    const driftSpeed = rand(params.speedMin, params.speedMax)
+
+    const p: Particle = {
+      x: Math.random() * w,
+      y: Math.random() * h,
+      depth,
+      baseRadius,
+      baseOpacity,
+      driftSpeed,
+      spriteIndex: colorTempIdx * INTENSITY_LEVELS.length + intensityIdx,
+      breathPhase: Math.random(),
+      breathSpeed: rand(BREATH_SPEED_MIN, BREATH_SPEED_MAX),
+      breathSizeAmp: rand(BREATH_SIZE_AMP_MIN, BREATH_SIZE_AMP_MAX),
+      breathOpacityAmp: rand(BREATH_OPACITY_AMP_MIN, BREATH_OPACITY_AMP_MAX),
+      vx: 0,
+      vy: 0,
+      noiseOffsetX: 0,
+      noiseOffsetY: 0,
+      currentRadius: baseRadius,
+      currentOpacity: baseOpacity,
     }
+
+    initParticleFlow(p, w, h)
+    particles.push(p)
   }
+
   return particles
 }
 
-function updateParticles(particles: Particle[], dt: number, w: number, h: number) {
+function updateBreathing(p: Particle, dt: number): void {
+  p.breathPhase = (p.breathPhase + p.breathSpeed * dt) % 1
+  const breathWave = (Math.sin(p.breathPhase * Math.PI * 2) + 1) / 2
+  p.currentRadius = p.baseRadius * (1 + p.breathSizeAmp * breathWave)
+  p.currentOpacity = p.baseOpacity * (1 + p.breathOpacityAmp * breathWave)
+}
+
+function updateFlowField(p: Particle, dt: number, time: number): void {
+  const noiseVal = simpleNoise2D(
+    p.noiseOffsetX + time * 0.05,
+    p.noiseOffsetY + time * 0.05
+  )
+  const noiseDelta = noiseVal * NOISE_ANGLE_DELTA * Math.PI / 180
+
+  const currentAngle = Math.atan2(p.vy, p.vx)
+  const targetAngle = currentAngle + noiseDelta
+  const newAngle = currentAngle + (targetAngle - currentAngle) * TURN_RATE
+
+  const newSpeed = p.driftSpeed * (0.95 + Math.random() * 0.1)
+
+  p.vx = Math.cos(newAngle) * newSpeed
+  p.vy = Math.sin(newAngle) * newSpeed
+  p.x += p.vx * dt
+  p.y += p.vy * dt
+}
+
+function wrapEdges(p: Particle, w: number, h: number): void {
+  const margin = p.currentRadius * HALO_MARGIN_MULTIPLIER
+  if (p.x < -margin) p.x = w + margin
+  else if (p.x > w + margin) p.x = -margin
+  if (p.y < -margin) p.y = h + margin
+  else if (p.y > h + margin) p.y = -margin
+}
+
+function updateParticles(particles: Particle[], dt: number, w: number, h: number, time: number): void {
   for (const p of particles) {
-    // Drift movement
-    p.x += p.vx * dt
-    p.y += p.vy * dt
-
-    // Wrap edges — use star halo extent as margin so glow doesn't pop in/out
-    const margin = p.isStar ? p.currentRadius * STAR_HALO_MULTIPLIER : p.currentRadius * 3
-    if (p.x < -margin) p.x = w + margin
-    else if (p.x > w + margin) p.x = -margin
-    if (p.y < -margin) p.y = h + margin
-    else if (p.y > h + margin) p.y = -margin
-
-    // Wander: gradual direction changes
-    p.wanderTimer += dt
-    if (p.wanderTimer >= p.wanderInterval) {
-      p.wanderTimer = 0
-      p.wanderInterval = rand(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX)
-      const speed = rand(DRIFT_SPEED_MIN, DRIFT_SPEED_MAX)
-      const currentAngle = Math.atan2(p.vy, p.vx)
-      const newAngle = currentAngle + rand(-WANDER_ANGLE_MAX, WANDER_ANGLE_MAX)
-      p.vx = Math.cos(newAngle) * speed
-      p.vy = Math.sin(newAngle) * speed
-    }
-
-    // Pulsation: sinusoidal pulse for radius
-    p.pulsePhase = (p.pulsePhase + p.pulseSpeed * dt) % 1
-    const pulseWave = (Math.sin(p.pulsePhase * Math.PI * 2) + 1) / 2 // 0→1→0
-
-    // Radius expands during peak
-    p.currentRadius = p.baseRadius * (1 + p.sizeAmplitude * pulseWave)
+    updateBreathing(p, dt)
+    updateFlowField(p, dt, time)
+    wrapEdges(p, w, h)
   }
 }
 
-function drawParticles(ctx: CanvasRenderingContext2D, particles: Particle[], dpr: number) {
+function drawParticles(
+  ctx: CanvasRenderingContext2D,
+  particles: Particle[],
+  sprites: StarSprite[],
+  dpr: number
+): void {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
 
-  // Pass 1: normal particles (draw first so stars render on top)
   for (const p of particles) {
-    if (p.isStar) continue
-    drawNormalParticle(ctx, p, dpr)
+    const sprite = sprites[p.spriteIndex]
+    const finalSize = p.currentRadius * dpr * SPRITE_DPR_MAX
+    const drawX = p.x * dpr - finalSize / 2
+    const drawY = p.y * dpr - finalSize / 2
+
+    ctx.globalAlpha = p.currentOpacity
+    ctx.drawImage(sprite.canvas, drawX, drawY, finalSize, finalSize)
   }
 
-  // Pass 2: star particles (halo + bright core, on top of normal particles)
-  for (const p of particles) {
-    if (!p.isStar) continue
-    drawStarParticle(ctx, p, dpr)
-  }
-}
-
-function drawNormalParticle(ctx: CanvasRenderingContext2D, p: Particle, dpr: number) {
-  const x = p.x * dpr
-  const y = p.y * dpr
-  const r = p.currentRadius * dpr
-
-  const pulseWave = (Math.sin(p.pulsePhase * Math.PI * 2) + 1) / 2
-  const opacity = p.baseOpacity + (p.peakOpacity - p.baseOpacity) * pulseWave
-  const [cr, cg, cb] = PARTICLE_COLORS[p.colorVariant]
-
-  // Soft glow: small radial gradient
-  const haloRadius = r * 3
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, haloRadius)
-  gradient.addColorStop(0, `rgba(${cr},${cg},${cb},${opacity.toFixed(3)})`)
-  gradient.addColorStop(0.3, `rgba(${cr},${cg},${cb},${(opacity * 0.4).toFixed(3)})`)
-  gradient.addColorStop(0.7, `rgba(${cr},${cg},${cb},${(opacity * 0.1).toFixed(3)})`)
-  gradient.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
-
-  ctx.beginPath()
-  ctx.arc(x, y, haloRadius, 0, Math.PI * 2)
-  ctx.fillStyle = gradient
-  ctx.fill()
-}
-
-function drawStarParticle(ctx: CanvasRenderingContext2D, p: Particle, dpr: number) {
-  const x = p.x * dpr
-  const y = p.y * dpr
-  const r = p.currentRadius * dpr
-
-  const pulseWave = (Math.sin(p.pulsePhase * Math.PI * 2) + 1) / 2 // 0→1→0
-  const opacity = p.baseOpacity + (p.peakOpacity - p.baseOpacity) * pulseWave
-  const [cr, cg, cb] = PARTICLE_COLORS[p.colorVariant]
-
-  // Wide halo — expands with pulsation, creates the "star brightening" feel
-  const haloRadius = r * STAR_HALO_MULTIPLIER
-  const haloGradient = ctx.createRadialGradient(x, y, 0, x, y, haloRadius)
-  haloGradient.addColorStop(0, `rgba(${cr},${cg},${cb},${(opacity * 0.6).toFixed(3)})`)
-  haloGradient.addColorStop(0.15, `rgba(${cr},${cg},${cb},${(opacity * 0.3).toFixed(3)})`)
-  haloGradient.addColorStop(0.4, `rgba(${cr},${cg},${cb},${(opacity * 0.1).toFixed(3)})`)
-  haloGradient.addColorStop(0.7, `rgba(${cr},${cg},${cb},${(opacity * 0.03).toFixed(3)})`)
-  haloGradient.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
-  ctx.beginPath()
-  ctx.arc(x, y, haloRadius, 0, Math.PI * 2)
-  ctx.fillStyle = haloGradient
-  ctx.fill()
-
-  // Bright core — white center that intensifies at peak
-  const coreOpacity = Math.min(1, opacity * (0.7 + pulseWave * 0.5))
-  const coreRadius = r * (1.2 + pulseWave * 0.8)
-  const coreGradient = ctx.createRadialGradient(x, y, 0, x, y, coreRadius)
-  coreGradient.addColorStop(0, `rgba(255,255,255,${coreOpacity.toFixed(3)})`)
-  coreGradient.addColorStop(0.3, `rgba(${cr},${cg},${cb},${(coreOpacity * 0.7).toFixed(3)})`)
-  coreGradient.addColorStop(0.7, `rgba(${cr},${cg},${cb},${(coreOpacity * 0.2).toFixed(3)})`)
-  coreGradient.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
-  ctx.beginPath()
-  ctx.arc(x, y, coreRadius, 0, Math.PI * 2)
-  ctx.fillStyle = coreGradient
-  ctx.fill()
+  ctx.globalAlpha = 1
 }
 
 // ── Main composable ────────────────────────────────────────────────────────
@@ -325,6 +441,8 @@ export function useDeerField(
   let deerCtx: CanvasRenderingContext2D | null = null
   let grid: Grid | null = null
   let particles: Particle[] = []
+  let sprites: StarSprite[] = []
+  let animTime = 0
   let bgDpr = 1
   let vpW = 0
   let vpH = 0
@@ -360,12 +478,13 @@ export function useDeerField(
   }
 
   function loop(ts: number) {
-    if (!paused && bgCtx && deerCtx && grid) {
+    if (!paused && bgCtx && deerCtx && grid && sprites.length > 0) {
       const dt = lastTime === 0 ? 0.016 : Math.min((ts - lastTime) / 1000, 0.1)
       lastTime = ts
+      animTime += dt
 
-      updateParticles(particles, dt, vpW, vpH)
-      drawParticles(bgCtx, particles, bgDpr)
+      updateParticles(particles, dt, vpW, vpH, animTime)
+      drawParticles(bgCtx, particles, sprites, bgDpr)
 
       flickerGrid(grid.alphas, dt)
       drawGrid(deerCtx, grid)
@@ -382,9 +501,8 @@ export function useDeerField(
 
   function start() {
     resize()
+    sprites = buildSprites(bgDpr)
 
-    // Fetch SVG as blob URL so mobile browsers (iOS Safari) can use it as a CSS mask.
-    // External URL references in mask-image are unreliable on mobile WebKit.
     fetch('/images/deer.svg')
       .then((r) => r.blob())
       .then((blob) => {
@@ -392,7 +510,6 @@ export function useDeerField(
         applyMask(maskBlobUrl)
       })
       .catch(() => {
-        // Fallback to direct path if fetch fails
         applyMask('/images/deer.svg')
       })
 
@@ -425,6 +542,8 @@ export function useDeerField(
       URL.revokeObjectURL(maskBlobUrl)
       maskBlobUrl = null
     }
+    sprites = []
+    animTime = 0
   }
 
   onMounted(start)
