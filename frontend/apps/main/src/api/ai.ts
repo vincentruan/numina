@@ -413,12 +413,13 @@ export const sendChatMessage = (question: string, signal?: AbortSignal) =>
 export async function sendChatMessageStream(
   question: string,
   deepThink: boolean,
+  webSearch: boolean,
   signal?: AbortSignal,
   sessionId?: string,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
-  const body = JSON.stringify({ question, deep_think: deepThink })
+  const body = JSON.stringify({ question, deep_think: deepThink, web_search: webSearch })
 
   let res = await fetch('/api/v1/ai/chat/stream', {
     method: 'POST',

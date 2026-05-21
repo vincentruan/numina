@@ -1013,7 +1013,7 @@ async function onSend() {
   let thinkingDone = false
 
   try {
-    const reader = await sendChatEventStream(q, deepThink.value, abortController.signal, currentSessionId.value ?? undefined)
+    const reader = await sendChatEventStream(q, deepThink.value, webSearch.value, abortController.signal, currentSessionId.value ?? undefined)
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation
