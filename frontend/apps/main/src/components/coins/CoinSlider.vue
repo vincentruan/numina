@@ -30,8 +30,8 @@ import GoldenCoin from './GoldenCoin.vue'
 
 const props = withDefaults(
   defineProps<{
-    modelValue: number
-    coinType: 'silver' | 'gold'
+    modelValue?: number
+    coinType?: 'silver' | 'gold'
   }>(),
   {
     modelValue: 10,
