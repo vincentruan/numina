@@ -42,10 +42,7 @@ const NORMAL_OPACITY_MAX = 0.65
 const STAR_OPACITY_MIN = 0.45
 const STAR_OPACITY_MAX = 0.85
 
-// Star ray (spike) properties
-const STAR_RAY_COUNT = 4 // 4 main rays (cross pattern); diagonals added at peak
-const STAR_RAY_LENGTH_MULTIPLIER_MIN = 6 // peak ray length = radius * this
-const STAR_RAY_LENGTH_MULTIPLIER_MAX = 10
+// Star halo extent
 const STAR_HALO_MULTIPLIER = 5 // halo radius = current radius * this
 
 // Drift speed (px/s) — gentle ambient movement
@@ -88,9 +85,6 @@ interface Particle {
   wanderTimer: number
   wanderInterval: number
   colorVariant: number
-  rayCount: number // 4 (stars only; 0 for normal)
-  rayLengthMultiplier: number // peak ray length factor (stars only)
-  rayRotation: number // base rotation for ray pattern (stars only)
 }
 
 function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
@@ -185,9 +179,6 @@ function buildParticles(w: number, h: number): Particle[] {
         wanderTimer: Math.random() * WANDER_INTERVAL_MAX,
         wanderInterval: rand(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX),
         colorVariant: Math.floor(Math.random() * PARTICLE_COLORS.length),
-        rayCount: STAR_RAY_COUNT,
-        rayLengthMultiplier: rand(STAR_RAY_LENGTH_MULTIPLIER_MIN, STAR_RAY_LENGTH_MULTIPLIER_MAX),
-        rayRotation: Math.random() * Math.PI * 2,
       })
     } else {
       const baseRadius = rand(NORMAL_RADIUS_MIN, NORMAL_RADIUS_MAX)
@@ -208,9 +199,6 @@ function buildParticles(w: number, h: number): Particle[] {
         wanderTimer: Math.random() * WANDER_INTERVAL_MAX,
         wanderInterval: rand(WANDER_INTERVAL_MIN, WANDER_INTERVAL_MAX),
         colorVariant: Math.floor(Math.random() * PARTICLE_COLORS.length),
-        rayCount: 0,
-        rayLengthMultiplier: 0,
-        rayRotation: 0,
       })
     }
   }
@@ -299,64 +287,29 @@ function drawStarParticle(ctx: CanvasRenderingContext2D, p: Particle, dpr: numbe
   const opacity = p.baseOpacity + (p.peakOpacity - p.baseOpacity) * pulseWave
   const [cr, cg, cb] = PARTICLE_COLORS[p.colorVariant]
 
-  // 1. Wide halo (radial gradient)
+  // Wide halo — expands with pulsation, creates the "star brightening" feel
   const haloRadius = r * STAR_HALO_MULTIPLIER
   const haloGradient = ctx.createRadialGradient(x, y, 0, x, y, haloRadius)
-  haloGradient.addColorStop(0, `rgba(${cr},${cg},${cb},${(opacity * 0.5).toFixed(3)})`)
-  haloGradient.addColorStop(0.2, `rgba(${cr},${cg},${cb},${(opacity * 0.2).toFixed(3)})`)
-  haloGradient.addColorStop(0.5, `rgba(${cr},${cg},${cb},${(opacity * 0.06).toFixed(3)})`)
+  haloGradient.addColorStop(0, `rgba(${cr},${cg},${cb},${(opacity * 0.6).toFixed(3)})`)
+  haloGradient.addColorStop(0.15, `rgba(${cr},${cg},${cb},${(opacity * 0.3).toFixed(3)})`)
+  haloGradient.addColorStop(0.4, `rgba(${cr},${cg},${cb},${(opacity * 0.1).toFixed(3)})`)
+  haloGradient.addColorStop(0.7, `rgba(${cr},${cg},${cb},${(opacity * 0.03).toFixed(3)})`)
   haloGradient.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
   ctx.beginPath()
   ctx.arc(x, y, haloRadius, 0, Math.PI * 2)
   ctx.fillStyle = haloGradient
   ctx.fill()
 
-  // 2. Radiating rays — appear only at peak (pulseWave > threshold)
-  // Strong at peak, fade out as star contracts
-  const rayStrength = Math.max(0, pulseWave - 0.2) / 0.8 // 0 below 0.2, 1 at peak
-  if (rayStrength > 0.05) {
-    const rayLength = r * p.rayLengthMultiplier * rayStrength
-    const rayAlpha = opacity * rayStrength
-    const rayCount = p.rayCount
-    // At peak (rayStrength > 0.7), add diagonal rays for 8-point star feel
-    const addDiagonals = rayStrength > 0.7
-    const totalRays = addDiagonals ? rayCount * 2 : rayCount
-    const diagonalFalloff = addDiagonals ? (rayStrength - 0.7) / 0.3 : 0
-
-    for (let i = 0; i < totalRays; i++) {
-      const angle = p.rayRotation + (i / totalRays) * Math.PI * 2
-      const isDiagonal = addDiagonals && i % 2 === 1
-      const len = isDiagonal ? rayLength * 0.6 * diagonalFalloff : rayLength
-      if (len < 0.5) continue
-
-      const ex = x + Math.cos(angle) * len
-      const ey = y + Math.sin(angle) * len
-
-      const rayGradient = ctx.createLinearGradient(x, y, ex, ey)
-      const tipAlpha = isDiagonal ? rayAlpha * 0.6 : rayAlpha
-      rayGradient.addColorStop(0, `rgba(${cr},${cg},${cb},${tipAlpha.toFixed(3)})`)
-      rayGradient.addColorStop(0.3, `rgba(${cr},${cg},${cb},${(tipAlpha * 0.5).toFixed(3)})`)
-      rayGradient.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
-
-      // Use lineWidth proportional to radius for tapered look
-      ctx.beginPath()
-      ctx.strokeStyle = rayGradient
-      ctx.lineWidth = Math.max(0.6, r * 0.4) * dpr * 0.5
-      ctx.lineCap = 'round'
-      ctx.moveTo(x, y)
-      ctx.lineTo(ex, ey)
-      ctx.stroke()
-    }
-  }
-
-  // 3. Bright core (small radial gradient, peaks at maximum brightness)
-  const coreOpacity = Math.min(1, opacity * (0.8 + pulseWave * 0.4))
-  const coreGradient = ctx.createRadialGradient(x, y, 0, x, y, r * 1.5)
+  // Bright core — white center that intensifies at peak
+  const coreOpacity = Math.min(1, opacity * (0.7 + pulseWave * 0.5))
+  const coreRadius = r * (1.2 + pulseWave * 0.8)
+  const coreGradient = ctx.createRadialGradient(x, y, 0, x, y, coreRadius)
   coreGradient.addColorStop(0, `rgba(255,255,255,${coreOpacity.toFixed(3)})`)
-  coreGradient.addColorStop(0.4, `rgba(${cr},${cg},${cb},${(coreOpacity * 0.8).toFixed(3)})`)
+  coreGradient.addColorStop(0.3, `rgba(${cr},${cg},${cb},${(coreOpacity * 0.7).toFixed(3)})`)
+  coreGradient.addColorStop(0.7, `rgba(${cr},${cg},${cb},${(coreOpacity * 0.2).toFixed(3)})`)
   coreGradient.addColorStop(1, `rgba(${cr},${cg},${cb},0)`)
   ctx.beginPath()
-  ctx.arc(x, y, r * 1.5, 0, Math.PI * 2)
+  ctx.arc(x, y, coreRadius, 0, Math.PI * 2)
   ctx.fillStyle = coreGradient
   ctx.fill()
 }
