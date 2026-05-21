@@ -63,9 +63,12 @@ class MCPMessageResponse(Response):
 async def mcp_sse(
     family_id: str,
     x_agent_token: str | None = Header(None, alias="X-Agent-Token"),
+    x_family_id: str | None = Header(None, alias="X-Family-Id"),
 ):
     """SSE endpoint that speaks MCP protocol for the given family_id."""
     _verify_agent_token(x_agent_token)
+    if x_family_id and x_family_id != family_id:
+        raise HTTPException(status_code=403, detail="family_id mismatch")
     session = MCPSession(family_id=family_id)
     return MCPSSEResponse(session=session, family_id=family_id)
 

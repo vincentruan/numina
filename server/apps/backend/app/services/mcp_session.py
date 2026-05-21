@@ -154,4 +154,4 @@ class MCPSession:
                     "[mcp_session] family=%s tool=%s failed: %s",
                     self._family_id, name, e,
                 )
-                return [TextContent(type="text", text=json.dumps({"error": str(e)}, ensure_ascii=False))]
+                return [TextContent(type="text", text=json.dumps({"error": "查询失败，请稍后重试"}, ensure_ascii=False))]
