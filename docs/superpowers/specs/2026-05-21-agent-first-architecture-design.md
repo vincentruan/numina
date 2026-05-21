@@ -16,7 +16,7 @@
 
 1. **入口层级混乱** — 用户看到 6 个独立功能入口（alerts、allocation、disposal、liability、report、spending_leak），缺乏统一的服务角色感
 2. **Skill 与 Agent 概念模糊** — DeerFlow 2.0 的 Agent 架构（SOUL.md + config.yaml + ThreadState + tools + memory）未被充分利用
-3. **租户隔离不完整** — 现有 skill_registry 表支持按 family_id 启用/禁用，但缺乏完整的 Agent 级租户管理
+3. **租户隔离不完整** — 现有 ai_skills 表支持按 family_id 启用/禁用，但缺乏完整的 Agent 级租户管理
 4. **执行链路自建** — orchestrator 直接调用 DeerFlowClient.stream()，绕过了 harness 的 make_lead_agent、middleware 链、ThreadState 管理
 
 ### 1.2 Design Goals
@@ -63,11 +63,11 @@
 │  │  POST /ai/agents/{id}/stream                                     │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 │                                    │                                      │
-│                                    │ AgentRegistryService                 │
+│                                    │ AgentService                 │
 │                                    ▼                                      │
 │  ┌─────────────────────────────────────────────────────────────────┐    │
 │  │                      PostgreSQL                                  │    │
-│  │                    agent_registry 表                             │    │
+│  │                    ai_agents 表                             │    │
 │  └─────────────────────────────────────────────────────────────────┘    │
 └──────────────────────────────────────────────────────────────────────────┘
                                     │
@@ -124,8 +124,8 @@
 
 | Component | Responsibility |
 |-----------|---------------|
-| `agent_registry` DB 表 | Agent 元数据存储：SOUL.md 内容、skills 列表、model 选择、subagent 开关、租户隔离 |
-| `AgentRegistryService` | CRUD 操作、权限校验、内置 Agent 种子数据管理 |
+| `ai_agents` DB 表 | Agent 元数据存储：SOUL.md 内容、skills 列表、model 选择、subagent 开关、租户隔离 |
+| `AgentService` | CRUD 操作、权限校验、内置 Agent 种子数据管理 |
 | `orchestrator.stream_agent_dispatch()` | Agent 执行入口：读取配置 → 动态构建 → make_lead_agent → 流式返回 |
 | `DynamicAgentBuilder` | 临时 SOUL.md + config.yaml 生成、缓存管理 |
 | `make_lead_agent()` | DeerFlow harness 入口：构建 LangGraph agent、注入 middleware 链 |
@@ -136,10 +136,10 @@
 
 ## 3. Database Schema
 
-### 3.1 agent_registry 表
+### 3.1 ai_agents 表
 
 ```sql
-CREATE TABLE agent_registry (
+CREATE TABLE ai_agents (
     id              BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     family_id       BIGINT NOT NULL,           -- 租户隔离；内置 Agent family_id=0
     agent_name      VARCHAR(64) NOT NULL,      -- URL-safe identifier
@@ -169,9 +169,9 @@ CREATE TABLE agent_registry (
 );
 
 -- 索引
-CREATE INDEX idx_agent_registry_family ON agent_registry(family_id);
-CREATE INDEX idx_agent_registry_builtin ON agent_registry(is_builtin) WHERE is_builtin = TRUE;
-CREATE INDEX idx_agent_registry_enabled ON agent_registry(is_enabled) WHERE is_enabled = TRUE;
+CREATE INDEX idx_ai_agents_family ON ai_agents(family_id);
+CREATE INDEX idx_ai_agents_builtin ON ai_agents(is_builtin) WHERE is_builtin = TRUE;
+CREATE INDEX idx_ai_agents_enabled ON ai_agents(is_enabled) WHERE is_enabled = TRUE;
 ```
 
 ### 3.2 Skill List Field Semantics
@@ -194,7 +194,7 @@ CREATE INDEX idx_agent_registry_enabled ON agent_registry(is_enabled) WHERE is_e
 
 ```sql
 -- 内置 Agent 1: 资产健康顾问
-INSERT INTO agent_registry (
+INSERT INTO ai_agents (
     family_id, agent_name, display_name, description,
     icon, color, soul_md, skills, is_builtin, display_order
 ) VALUES (
@@ -228,7 +228,7 @@ INSERT INTO agent_registry (
 );
 
 -- 内置 Agent 2: 财务优化师
-INSERT INTO agent_registry (
+INSERT INTO ai_agents (
     family_id, agent_name, display_name, description,
     icon, color, soul_md, skills, is_builtin, display_order
 ) VALUES (
@@ -275,7 +275,7 @@ from ..schemas.agent import (
     AgentResponse, AgentListResponse, AgentCreateRequest,
     AgentUpdateRequest, AgentStreamRequest
 )
-from ..services.agent_registry_service import AgentRegistryService
+from ..services.agent_service import AgentService
 from ..auth import get_current_family, require_owner
 
 router = APIRouter(prefix="/ai/agents", tags=["AI Agents"])
@@ -283,7 +283,7 @@ router = APIRouter(prefix="/ai/agents", tags=["AI Agents"])
 @router.get("", response_model=AgentListResponse)
 async def list_agents(
     family_id: int = Depends(get_current_family),
-    service: AgentRegistryService = Depends(),
+    service: AgentService = Depends(),
 ) -> AgentListResponse:
     """
     列出所有可见 Agent。
@@ -297,7 +297,7 @@ async def list_agents(
 async def get_agent(
     agent_id: int,
     family_id: int = Depends(get_current_family),
-    service: AgentRegistryService = Depends(),
+    service: AgentService = Depends(),
 ) -> AgentResponse:
     """获取单个 Agent 详情"""
     return await service.get(agent_id, family_id)
@@ -308,7 +308,7 @@ async def create_agent(
     req: AgentCreateRequest,
     family_id: int = Depends(get_current_family),
     user_id: int = Depends(require_owner),
-    service: AgentRegistryService = Depends(),
+    service: AgentService = Depends(),
 ) -> AgentResponse:
     """
     创建自定义 Agent。
@@ -324,7 +324,7 @@ async def update_agent(
     req: AgentUpdateRequest,
     family_id: int = Depends(get_current_family),
     user_id: int = Depends(require_owner),
-    service: AgentRegistryService = Depends(),
+    service: AgentService = Depends(),
 ) -> AgentResponse:
     """
     更新 Agent 配置。
@@ -339,7 +339,7 @@ async def delete_agent(
     agent_id: int,
     family_id: int = Depends(get_current_family),
     user_id: int = Depends(require_owner),
-    service: AgentRegistryService = Depends(),
+    service: AgentService = Depends(),
 ) -> None:
     """
     删除自定义 Agent。
@@ -354,7 +354,7 @@ async def toggle_agent(
     enabled: bool,
     family_id: int = Depends(get_current_family),
     user_id: int = Depends(require_owner),
-    service: AgentRegistryService = Depends(),
+    service: AgentService = Depends(),
 ) -> AgentResponse:
     """启用/禁用 Agent"""
     return await service.toggle(agent_id, family_id, enabled)
@@ -923,10 +923,10 @@ skills:
 
 | 资源 | DB 表 | 租户键 | 内置数据 | 读权限 | 写权限 | 配置页路由 |
 |------|-------|--------|---------|--------|--------|-----------|
-| AI Provider | `ai_provider_configs` | `family_id` | 无 | adult | owner | `/settings/ai` |
-| MCP Server | `family_mcp_servers` | `family_id` | 无 | adult | owner | `/settings/ai/mcp` |
-| Skill | `skill_registry` | `family_id` | fixed+builtin | adult | owner | `/settings/ai/skills` |
-| **Agent** | **`agent_registry`** | **`family_id`** | **builtin (family_id=0)** | **adult** | **owner** | **`/settings/ai/agents`** |
+| AI Provider | `ai_providers` | `family_id` | 无 | adult | owner | `/settings/ai` |
+| MCP Server | `ai_mcp_servers` | `family_id` | 无 | adult | owner | `/settings/ai/mcp` |
+| Skill | `ai_skills` | `family_id` | fixed+builtin | adult | owner | `/settings/ai/skills` |
+| **Agent** | **`ai_agents`** | **`family_id`** | **builtin (family_id=0)** | **adult** | **owner** | **`/settings/ai/agents`** |
 
 ### 8.2 Settings Navigation (完整)
 
@@ -953,7 +953,7 @@ Agent 升级后，**Skill 管理页保留不变**：
 
 ```
 ┌─────────────────────────┐        ┌─────────────────────────┐
-│     agent_registry       │        │     skill_registry       │
+│     ai_agents       │        │     ai_skills       │
 │                          │  引用   │                          │
 │  skills: ["report",     │───────→│  skill_id: "report"      │
 │           "alerts"]      │        │  skill_type: "builtin"   │
@@ -980,8 +980,8 @@ MCP server 管理维度不变（按 `family_id` 隔离）：
 
 Agent 的 `model` 字段只是模型偏好声明，实际 provider 由运行时选择：
 
-- `model = null` → 继承家庭默认（orchestrator 的 `_select_model()` 从 `ai_provider_configs` 中按 capability 选择）
-- `model = "claude-sonnet-4-6"` → orchestrator 在该家庭的 `ai_provider_configs` 中找到支持该 model 的 provider
+- `model = null` → 继承家庭默认（orchestrator 的 `_select_model()` 从 `ai_providers` 中按 capability 选择）
+- `model = "claude-sonnet-4-6"` → orchestrator 在该家庭的 `ai_providers` 中找到支持该 model 的 provider
 - Provider 管理仍在 `/settings/ai`（AI 服务商页面）
 - 电路熔断、负载选择等逻辑不受 Agent 层影响
 
@@ -990,10 +990,10 @@ Agent 的 `model` 字段只是模型偏好声明，实际 provider 由运行时�
 | 资源 | 内置类型 | 内置数据来源 | 用户可控范围 |
 |------|---------|-------------|-------------|
 | Skill (`fixed`) | 硬编码 | 代码中定义（chat, time_machine） | 不可禁用/编辑/删除 |
-| Skill (`builtin`) | 文件+DB | `skills/builtin/*/SKILL.md` + `skill_registry` | 可启用/禁用，可覆盖 prompt |
-| Skill (`custom`) | DB+文件 | `skill_registry` + `skills/custom/{family_id}/` | 完全 CRUD |
-| **Agent (`builtin`)** | **DB** | **`agent_registry` (family_id=0, seed migration)** | **可修改 icon/color/order，不可删除** |
-| **Agent (`custom`)** | **DB** | **`agent_registry` (family_id>0)** | **完全 CRUD** |
+| Skill (`builtin`) | 文件+DB | `skills/builtin/*/SKILL.md` + `ai_skills` | 可启用/禁用，可覆盖 prompt |
+| Skill (`custom`) | DB+文件 | `ai_skills` + `skills/custom/{family_id}/` | 完全 CRUD |
+| **Agent (`builtin`)** | **DB** | **`ai_agents` (family_id=0, seed migration)** | **可修改 icon/color/order，不可删除** |
+| **Agent (`custom`)** | **DB** | **`ai_agents` (family_id>0)** | **完全 CRUD** |
 
 ### 8.7 配置管理页面完整结构
 
@@ -1026,21 +1026,74 @@ Agent 的 `model` 字段只是模型偏好声明，实际 provider 由运行时�
 
 | Phase | 名称 | 目标 | 时间估计 |
 |-------|------|------|----------|
-| P0 | 数据层准备 | agent_registry 表、种子数据、Backend CRUD API | 2-3 天 |
+| P-1 | 表名统一 | 重命名现有 3 张表 + 创建 ai_agents 表 | 1 天 |
+| P0 | 数据层准备 | ai_agents 种子数据、Backend CRUD API | 2-3 天 |
 | P1 | 执行链路重构 | orchestrator 改造、make_lead_agent 集成 | 3-4 天 |
 | P2 | 前端 Hub 改造 | Agent 卡片网格、Agent 结果页 | 3-4 天 |
 | P3 | Agent 创建功能 | 创建表单、SOUL.md 编辑器 | 2-3 天 |
 | P4 | 清理与文档 | 移除旧 router、更新 CLAUDE.md | 1-2 天 |
 
+### 9.1a Phase P-1: Table Name Unification
+
+本次重构统一所有 AI 相关表名为 `ai_` 前缀 + 复数形式：
+
+| 旧表名 | 新表名 | 影响范围 |
+|--------|--------|---------|
+| `ai_provider_configs` | `ai_providers` | Model + Router + Service + Frontend API |
+| `family_mcp_servers` | `ai_mcp_servers` | Model + Router + Service + Frontend API |
+| `skill_registry` | `ai_skills` | Model + Router + Service + CapabilityRegistry + Frontend API |
+| _(新建)_ | `ai_agents` | 新表，无旧数据迁移 |
+
+同时需要重命名关联表：
+- `family_skill_configs`（旧表，如仍在使用）→ 评估是否合并入 `ai_skills` 或删除
+
+**Alembic migration 步骤**：
+
+```python
+# alembic/versions/xxx_unify_ai_table_names.py
+
+def upgrade():
+    # 1. 重命名表
+    op.rename_table('ai_provider_configs', 'ai_providers')
+    op.rename_table('family_mcp_servers', 'ai_mcp_servers')
+    op.rename_table('skill_registry', 'ai_skills')
+
+    # 2. 重命名索引（如果索引名包含旧表名）
+    # PostgreSQL ALTER INDEX ... RENAME TO ...
+    # 具体索引名需在实现时从实际 DB schema 读取
+
+    # 3. 创建 ai_agents 表（见 Section 3.1）
+    op.create_table('ai_agents', ...)
+
+def downgrade():
+    op.drop_table('ai_agents')
+    op.rename_table('ai_skills', 'skill_registry')
+    op.rename_table('ai_mcp_servers', 'family_mcp_servers')
+    op.rename_table('ai_providers', 'ai_provider_configs')
+```
+
+**Backend 代码变更**：
+- `app/models/ai_provider_config.py` → `__tablename__ = 'ai_providers'`
+- `app/models/family_mcp_server.py` → `__tablename__ = 'ai_mcp_servers'`
+- `app/models/skill_registry.py` → `__tablename__ = 'ai_skills'`
+- 新建 `app/models/ai_agent.py` → `__tablename__ = 'ai_agents'`
+- 对应的 Service、Router 文件中的表名/model 引用同步更新
+
+**Frontend 变更**：无（前端通过 API path 访问，不直接引用表名）
+
+**验收标准**：
+- `alembic upgrade head` 成功执行
+- 所有现有单元测试通过（表名变更对 API 行为透明）
+- `alembic downgrade -1` 可回滚
+
 ### 9.2 Phase P0: Data Layer
 
 **Tasks**:
-1. 创建 `agent_registry` 表的 Alembic migration
-2. 实现种子数据 migration（插入 2 个内置 Agent）
-3. 实现 `AgentRegistryService`（CRUD + 权限校验）
-4. 实现 Backend router `ai_agents.py`
-5. 添加 `/internal/agents/{agent_id}` API（供 Agent Service 调用）
-6. 单元测试：Agent CRUD、权限校验
+1. 实现种子数据 migration（插入 2 个内置 Agent 到 `ai_agents` 表）
+2. 实现 `AgentService`（CRUD + 权限校验）
+3. 实现 Backend router `ai_agents.py`
+4. 添加 `/internal/agents/{agent_id}` API（供 Agent Service 调用）
+5. 单元测试：Agent CRUD、权限校验
 
 **验收标准**:
 - `GET /ai/agents` 返回内置 + 自定义 Agent 列表
