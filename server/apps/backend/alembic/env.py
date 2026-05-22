@@ -7,6 +7,7 @@ from alembic import context
 from apps.backend.app.config import settings
 from apps.backend.app.database import Base
 from apps.backend.app.db import get_engine
+from apps.backend.app.models.ai_agent import AIAgent  # noqa: F401
 from apps.backend.app.models.ai_provider_config import (  # noqa: F401
     AIProviderConfig,
     AIProviderTestResult,

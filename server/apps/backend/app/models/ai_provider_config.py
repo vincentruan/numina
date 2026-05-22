@@ -8,7 +8,7 @@ from apps.backend.app.utils.snowflake import next_id
 
 
 class AIProviderConfig(Base):
-    __tablename__ = "ai_provider_configs"
+    __tablename__ = "ai_providers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)

@@ -1,4 +1,5 @@
 from apps.backend.app.models.activity import Activity  # noqa: F401
+from apps.backend.app.models.ai_agent import AIAgent  # noqa: F401
 from apps.backend.app.models.ai_allocation_drift_result import (
     AIAllocationDriftResult,  # noqa: F401
 )

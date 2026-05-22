@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 FIXED_CAPABILITIES = ["chat", "time_machine"]
 
 # Hard-coded fixed capability definitions (not loaded from SKILL.md files).
-# These are non-skill capabilities managed independently of skill_registry:
+# These are non-skill capabilities managed independently of ai_skills table:
 # - chat: General Q&A handled by /chat router
 # - time_machine: Pure-computation simulation handled by /time-machine router
 FIXED_CAPABILITY_DEFS: list[CapabilityDefinition] = [
@@ -107,10 +107,10 @@ class CapabilityRegistry:
     ) -> list[CapabilityDefinition]:
         """Merge and filter capabilities for a specific family.
 
-        Fetches skill_registry from backend to determine enabled/disabled
+        Fetches ai_skills from backend to determine enabled/disabled
         status and display order, then scans builtin + custom directories.
         """
-        db_configs = self._fetch_skill_registry(family_id, backend_base_url, internal_token)
+        db_configs = self._fetch_ai_skills(family_id, backend_base_url, internal_token)
         db_map = {c["skill_id"]: c for c in db_configs}
 
         # Fixed capabilities (hard-coded, not from SKILL.md files)
@@ -190,13 +190,13 @@ class CapabilityRegistry:
 
         return fixed + builtin + custom
 
-    def _fetch_skill_registry(
+    def _fetch_ai_skills(
         self,
         family_id: int | str,
         backend_base_url: str,
         internal_token: str,
     ) -> list[dict[str, Any]]:
-        """Fetch skill_registry records from backend."""
+        """Fetch ai_skills records from backend."""
         try:
             url = f"{backend_base_url.rstrip('/')}/api/v1/internal/skill-registry/{family_id}"
             resp = httpx.get(url, headers={"X-Internal-Token": internal_token}, timeout=5.0)
@@ -204,10 +204,10 @@ class CapabilityRegistry:
             data = resp.json()
             if isinstance(data, list):
                 return data
-            logger.warning("Unexpected response type from skill_registry: %s", type(data))
+            logger.warning("Unexpected response type from ai_skills: %s", type(data))
             return []
         except Exception as exc:
-            logger.warning("Failed to fetch skill_registry for family %s: %s", family_id, exc)
+            logger.warning("Failed to fetch ai_skills for family %s: %s", family_id, exc)
             return []
 
     def _load(self) -> dict[str, CapabilityDefinition]:
