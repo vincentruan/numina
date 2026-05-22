@@ -5,22 +5,32 @@ from sqlalchemy import (
     Column,
     DateTime,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 
 from apps.backend.app.database import Base
-from packages.db.snowflake import next_id
+from apps.backend.app.utils.snowflake import next_id
+
+
+# SQLite does not support the PostgreSQL ~ regex operator used in the check
+# constraint. Skip it when the DDL is rendered against a SQLite engine.
+def _pg_only(compiler):
+    return compiler.dialect.name == "postgresql"
 
 
 class AIAgent(Base):
     __tablename__ = "ai_agents"
     __table_args__ = (
         UniqueConstraint("family_id", "agent_name", name="uq_ai_agents_family_name"),
-        CheckConstraint("agent_name ~ '^[a-z][a-z0-9_-]*$'", name="ck_ai_agents_name_format"),
+        CheckConstraint(
+            "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+            name="ck_ai_agents_name_format",
+            _create_rule=_pg_only,
+        ),
     )
 
     id = Column(BigInteger, primary_key=True, default=next_id)
@@ -32,10 +42,10 @@ class AIAgent(Base):
     color = Column(String(16), nullable=True)
 
     soul_md = Column(Text, nullable=False)
-    skills = Column(JSONB, nullable=True)
+    skills = Column(JSON, nullable=True)
     model = Column(String(64), nullable=True)
     subagent_enabled = Column(Boolean, nullable=False, default=False)
-    tool_groups = Column(JSONB, nullable=True)
+    tool_groups = Column(JSON, nullable=True)
 
     is_builtin = Column(Boolean, nullable=False, default=False)
     is_enabled = Column(Boolean, nullable=False, default=True)

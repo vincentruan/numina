@@ -19,14 +19,13 @@ router = APIRouter(prefix="/ai/agents", tags=["ai-agents"])
 
 def _to_response(agent: AIAgent, user: User) -> AgentResponse:
     is_owner = user.role == "owner"
-    return AgentResponse.model_validate(
-        agent,
-        from_attributes=True,
-        update={
-            "can_edit": is_owner if agent.is_builtin else (is_owner and agent.family_id == user.family_id),
-            "can_delete": False if agent.is_builtin else (is_owner and agent.family_id == user.family_id),
-        },
-    )
+    data = {
+        col.name: getattr(agent, col.name)
+        for col in agent.__table__.columns
+    }
+    data["can_edit"] = is_owner if agent.is_builtin else (is_owner and agent.family_id == user.family_id)
+    data["can_delete"] = False if agent.is_builtin else (is_owner and agent.family_id == user.family_id)
+    return AgentResponse.model_validate(data)
 
 
 @router.get("", response_model=AgentListResponse)

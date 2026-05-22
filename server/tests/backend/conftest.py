@@ -24,6 +24,7 @@ from sqlalchemy.pool import StaticPool
 from apps.backend.app.database import Base, get_db
 from apps.backend.app.main import app
 from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
+from apps.backend.app.models.ai_agent import AIAgent  # noqa: F401
 from apps.backend.app.models.ai_allocation_target import AIAllocationTarget  # noqa: F401
 from apps.backend.app.models.ai_chat_session import AIChatSession  # noqa: F401
 from apps.backend.app.models.ai_report import AIReport  # noqa: F401

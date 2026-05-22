@@ -7,12 +7,12 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Integer,
+    JSON,
     String,
     Text,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from apps.backend.app.database import Base
@@ -45,7 +45,7 @@ class SkillRegistry(Base):
     route: Mapped[str | None] = mapped_column(String(64), nullable=True)
     input_mode: Mapped[str | None] = mapped_column(String(16), nullable=True, default="trigger")
     placeholder: Mapped[str | None] = mapped_column(String(256), nullable=True)
-    examples: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    examples: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     # Configuration
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
