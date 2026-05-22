@@ -80,6 +80,7 @@ from apps.backend.app.responses import EnvelopeResponse
 from apps.backend.app.routers import activities as activities_router
 from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
+from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
 from apps.backend.app.routers import ai_alerts as ai_alerts_router
 from apps.backend.app.routers import ai_allocation as ai_allocation_router
 from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
@@ -405,6 +406,7 @@ app.include_router(reminders_router.router, prefix="/api/v1")
 app.include_router(ai_mcp_router.router, prefix="/api/v1")
 app.include_router(ai_skills_router.router, prefix="/api/v1")
 app.include_router(ai_agents_router.router, prefix="/api/v1")
+app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 # Serve uploaded files — mount only the uploads subtree, not the entire workspace
