@@ -201,6 +201,21 @@ const router = createRouter({
           component: () => import('@/pages/SkillsManagePage.vue')
         },
         {
+          path: 'settings/ai/agents',
+          name: 'AgentsManage',
+          component: () => import('@/pages/AgentsManagePage.vue')
+        },
+        {
+          path: 'settings/ai/agents/new',
+          name: 'AgentCreate',
+          component: () => import('@/pages/AgentFormPage.vue')
+        },
+        {
+          path: 'settings/ai/agents/:id/edit',
+          name: 'AgentEdit',
+          component: () => import('@/pages/AgentFormPage.vue')
+        },
+        {
           path: 'settings/devices',
           name: 'Devices',
           component: () => import('@/pages/DevicesPage.vue')
