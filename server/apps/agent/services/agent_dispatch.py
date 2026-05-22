@@ -6,6 +6,7 @@ Replaces the old DeerFlowAdapter path with:
 
 No global singleton mutation. No ContextVar. No reload_app_config().
 """
+import time
 import uuid
 from collections.abc import AsyncGenerator
 
@@ -33,11 +34,13 @@ except ImportError:
 async def stream_agent_dispatch(
     agent_id: int,
     family_id: str,
+    user_id: str,
     thread_id: str | None,
     message: str,
     enable_thinking: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Agent-first execution entry point. Streams NDJSON events."""
+    t_start = time.monotonic()
     task_id = str(uuid.uuid4())
     builder_events = EventStreamBuilder(capability_id=f"agent-{agent_id}", task_id=task_id)
 
@@ -55,12 +58,22 @@ async def stream_agent_dispatch(
 
     agent_name = agent_config["agent_name"]
 
-    # 2. Fetch AI provider config
+    # 2. Fetch AI provider config + skills + MCP in parallel-safe sequence
     try:
         ai_config = await client.get_family_ai_config()
     except Exception as e:
         yield builder_events.error(f"获取 AI 配置失败: {e}", code="AI_CONFIG_ERROR").to_ndjson()
         return
+
+    try:
+        enabled_skills = await client.get_enabled_skills()
+    except Exception:
+        enabled_skills = []
+
+    try:
+        mcp_servers = await client.get_enabled_mcp_servers()
+    except Exception:
+        mcp_servers = []
 
     # 3. Multi-slot provider selection
     providers = ai_config.get("providers", [])
@@ -75,14 +88,19 @@ async def stream_agent_dispatch(
     pm = get_path_manager()
     config_builder = EffectiveConfigBuilder(pm)
 
+    skill_entries = [
+        {"skill_name": s["skill_id"], "is_builtin": s.get("skill_type") == "builtin"}
+        for s in enabled_skills
+    ]
+
     try:
         effective = config_builder.build(
             family_id=int(family_id),
             agent_name=agent_name,
             ai_provider=selected_provider,
             agent_config=agent_config,
-            enabled_skills=[],
-            mcp_servers=[],
+            enabled_skills=skill_entries,
+            mcp_servers=mcp_servers,
         )
     except Exception as e:
         yield builder_events.error(f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR").to_ndjson()
@@ -97,7 +115,7 @@ async def stream_agent_dispatch(
         "configurable": {
             "thread_id": thread_id,
             "app_config": effective.config_dict,
-            "user_id": family_id,
+            "user_id": user_id,
         }
     }
 
@@ -124,7 +142,7 @@ async def stream_agent_dispatch(
     try:
         async for event in agent_graph.astream(state, runnable_config):
             if isinstance(event, dict):
-                for node_name, node_output in event.items():
+                for _node_name, node_output in event.items():
                     if isinstance(node_output, dict) and "messages" in node_output:
                         for msg in node_output["messages"]:
                             content = _extract_content(msg)
@@ -139,10 +157,11 @@ async def stream_agent_dispatch(
         return
 
     # 10. Emit end
+    elapsed_ms = int((time.monotonic() - t_start) * 1000)
     yield builder_events.end(
         summary="".join(answer_parts)[:200],
         tokens_used=0,
-        execution_time_ms=0,
+        execution_time_ms=elapsed_ms,
         tools_used=None,
     ).to_ndjson()
 

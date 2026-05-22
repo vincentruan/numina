@@ -139,6 +139,32 @@ class BackendClient:
         resp.raise_for_status()
         return _unwrap(resp)
 
+    async def get_enabled_skills(self) -> list[dict]:
+        """Fetch enabled skill registry records for the family."""
+        validated_id = _validate_family_id(self.family_id)
+        client = await get_shared_client()
+        resp = await client.get(
+            f"/api/v1/internal/skill-registry/{validated_id}",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        data = _unwrap(resp)
+        if isinstance(data, list):
+            return [s for s in data if s.get("is_enabled", True)]
+        return []
+
+    async def get_enabled_mcp_servers(self) -> list[dict]:
+        """Fetch enabled MCP servers for the family."""
+        validated_id = _validate_family_id(self.family_id)
+        client = await get_shared_client()
+        resp = await client.get(
+            "/api/v1/internal/ai/mcp-servers",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        data = _unwrap(resp)
+        return data if isinstance(data, list) else []
+
     async def get_family_ai_config(self) -> dict:
         return await get_family_ai_config(self.family_id)
 

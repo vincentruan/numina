@@ -21,6 +21,7 @@ async def stream_agent(
     agent_id: int,
     body: AgentStreamRequest,
     x_family_id: str = Header(..., alias="X-Family-Id"),
+    x_user_id: str = Header(..., alias="X-User-Id"),
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
     x_thread_id: str = Header(None, alias="X-Thread-Id"),
 ) -> StreamingResponse:
@@ -33,6 +34,7 @@ async def stream_agent(
         stream_agent_dispatch(
             agent_id=agent_id,
             family_id=x_family_id,
+            user_id=x_user_id,
             thread_id=thread_id,
             message=body.message,
             enable_thinking=body.enable_thinking,

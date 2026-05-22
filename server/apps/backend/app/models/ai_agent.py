@@ -1,11 +1,11 @@
 from sqlalchemy import (
+    JSON,
     BigInteger,
     Boolean,
     CheckConstraint,
     Column,
     DateTime,
     Integer,
-    JSON,
     String,
     Text,
     UniqueConstraint,
@@ -27,7 +27,7 @@ class AIAgent(Base):
     __table_args__ = (
         UniqueConstraint("family_id", "agent_name", name="uq_ai_agents_family_name"),
         CheckConstraint(
-            "agent_name ~ '^[a-z][a-z0-9_-]*$'",
+            "agent_name ~ '^[a-z][a-z0-9-]*$'",
             name="ck_ai_agents_name_format",
             _create_rule=_pg_only,
         ),

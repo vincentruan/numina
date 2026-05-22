@@ -44,7 +44,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("family_id", "agent_name", name="uq_ai_agents_family_name"),
-        sa.CheckConstraint("agent_name ~ '^[a-z][a-z0-9_-]*$'", name="ck_ai_agents_name_format"),
+        sa.CheckConstraint("agent_name ~ '^[a-z][a-z0-9-]*$'", name="ck_ai_agents_name_format"),
     )
     op.create_index("ix_ai_agents_family_id", "ai_agents", ["family_id"])
     op.create_index("ix_ai_agents_builtin", "ai_agents", ["is_builtin"], postgresql_where=sa.text("is_builtin = true"))

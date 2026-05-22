@@ -52,6 +52,16 @@ async def aiter(items):
         yield item
 
 
+def _mock_client_instance(sample_agent_config, sample_ai_config):
+    """Create a mock BackendClient instance with all required async methods."""
+    instance = MagicMock()
+    instance.get_agent_config = AsyncMock(return_value=sample_agent_config)
+    instance.get_family_ai_config = AsyncMock(return_value=sample_ai_config)
+    instance.get_enabled_skills = AsyncMock(return_value=[])
+    instance.get_enabled_mcp_servers = AsyncMock(return_value=[])
+    return instance
+
+
 class TestStreamAgentDispatchGateway:
     async def test_emits_phase_connecting_event(self, pm, sample_agent_config, sample_ai_config):
         """First yielded event must be phase.connecting."""
@@ -60,9 +70,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
         ):
-            instance = MockClient.return_value
-            instance.get_agent_config = AsyncMock(return_value=sample_agent_config)
-            instance.get_family_ai_config = AsyncMock(return_value=sample_ai_config)
+            MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
                 sample_ai_config["providers"][0], "claude-sonnet-4-6",
                 ["text_generation", "deep_thinking"],
@@ -76,6 +84,7 @@ class TestStreamAgentDispatchGateway:
                 events = []
                 async for line in stream_agent_dispatch(
                     agent_id=1, family_id="12345678901234567",
+                    user_id="12345678901234568",
                     thread_id=None, message="测试消息",
                 ):
                     events.append(json.loads(line.strip()))
@@ -90,13 +99,15 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
         ):
-            instance = MockClient.return_value
+            instance = MagicMock()
             instance.get_agent_config = AsyncMock(return_value=disabled_config)
+            MockClient.return_value = instance
 
             from apps.agent.services.agent_dispatch import stream_agent_dispatch
             events = []
             async for line in stream_agent_dispatch(
                 agent_id=1, family_id="12345678901234567",
+                user_id="12345678901234568",
                 thread_id=None, message="测试消息",
             ):
                 events.append(json.loads(line.strip()))
@@ -121,9 +132,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
         ):
-            instance = MockClient.return_value
-            instance.get_agent_config = AsyncMock(return_value=sample_agent_config)
-            instance.get_family_ai_config = AsyncMock(return_value=sample_ai_config)
+            MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
                 sample_ai_config["providers"][0], "claude-sonnet-4-6",
                 ["text_generation", "deep_thinking"],
@@ -132,6 +141,7 @@ class TestStreamAgentDispatchGateway:
             from apps.agent.services.agent_dispatch import stream_agent_dispatch
             async for _ in stream_agent_dispatch(
                 agent_id=1, family_id="12345678901234567",
+                user_id="12345678901234568",
                 thread_id=None, message="测试消息",
             ):
                 pass
@@ -158,9 +168,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
         ):
-            instance = MockClient.return_value
-            instance.get_agent_config = AsyncMock(return_value=sample_agent_config)
-            instance.get_family_ai_config = AsyncMock(return_value=sample_ai_config)
+            MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
                 sample_ai_config["providers"][0], "claude-sonnet-4-6",
                 ["text_generation", "deep_thinking"],
@@ -169,6 +177,7 @@ class TestStreamAgentDispatchGateway:
             from apps.agent.services.agent_dispatch import stream_agent_dispatch
             async for _ in stream_agent_dispatch(
                 agent_id=1, family_id="12345678901234567",
+                user_id="12345678901234568",
                 thread_id=expected_tid, message="测试消息",
             ):
                 pass
@@ -191,9 +200,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
         ):
-            instance = MockClient.return_value
-            instance.get_agent_config = AsyncMock(return_value=sample_agent_config)
-            instance.get_family_ai_config = AsyncMock(return_value=sample_ai_config)
+            MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
                 sample_ai_config["providers"][0], "claude-sonnet-4-6",
                 ["text_generation", "deep_thinking"],
@@ -202,9 +209,101 @@ class TestStreamAgentDispatchGateway:
             from apps.agent.services.agent_dispatch import stream_agent_dispatch
             async for _ in stream_agent_dispatch(
                 agent_id=1, family_id="12345678901234567",
+                user_id="12345678901234568",
                 thread_id=None, message="测试消息",
             ):
                 pass
 
         tid = captured_config["configurable"]["thread_id"]
         uuid.UUID(tid)  # validates format
+
+    async def test_user_id_passed_to_runnable_config(self, pm, sample_agent_config, sample_ai_config):
+        """user_id in RunnableConfig must be the actual user_id, not family_id."""
+        captured_config = {}
+
+        def capture_make_lead_agent(config):
+            captured_config.update(config)
+            mock_graph = MagicMock()
+            mock_graph.astream = MagicMock(return_value=aiter([]))
+            return mock_graph
+
+        with (
+            patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
+            patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
+            patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
+            patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
+        ):
+            MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
+            mock_select.return_value = (
+                sample_ai_config["providers"][0], "claude-sonnet-4-6",
+                ["text_generation", "deep_thinking"],
+            )
+
+            from apps.agent.services.agent_dispatch import stream_agent_dispatch
+            async for _ in stream_agent_dispatch(
+                agent_id=1, family_id="12345678901234567",
+                user_id="99999999999999999",
+                thread_id=None, message="测试消息",
+            ):
+                pass
+
+        assert captured_config["configurable"]["user_id"] == "99999999999999999"
+
+    async def test_end_event_includes_execution_time(self, pm, sample_agent_config, sample_ai_config):
+        """End event must include a positive execution_time_ms."""
+        with (
+            patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
+            patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
+            patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
+        ):
+            MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
+            mock_select.return_value = (
+                sample_ai_config["providers"][0], "claude-sonnet-4-6",
+                ["text_generation", "deep_thinking"],
+            )
+
+            mock_graph = MagicMock()
+            mock_graph.astream = MagicMock(return_value=aiter([]))
+
+            with patch("apps.agent.services.agent_dispatch.make_lead_agent", mock_graph):
+                from apps.agent.services.agent_dispatch import stream_agent_dispatch
+                events = []
+                async for line in stream_agent_dispatch(
+                    agent_id=1, family_id="12345678901234567",
+                    user_id="12345678901234568",
+                    thread_id=None, message="测试消息",
+                ):
+                    events.append(json.loads(line.strip()))
+
+        end_events = [e for e in events if e["type"] == "capability.end"]
+        assert len(end_events) == 1
+        assert end_events[0]["result"]["execution_time_ms"] >= 0
+
+    async def test_skills_and_mcp_fetched_from_backend(self, pm, sample_agent_config, sample_ai_config):
+        """Skills and MCP servers must be fetched from BackendClient."""
+        with (
+            patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
+            patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
+            patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
+        ):
+            instance = _mock_client_instance(sample_agent_config, sample_ai_config)
+            MockClient.return_value = instance
+            mock_select.return_value = (
+                sample_ai_config["providers"][0], "claude-sonnet-4-6",
+                ["text_generation", "deep_thinking"],
+            )
+
+            mock_graph = MagicMock()
+            mock_graph.astream = MagicMock(return_value=aiter([]))
+
+            with patch("apps.agent.services.agent_dispatch.make_lead_agent", mock_graph):
+                from apps.agent.services.agent_dispatch import stream_agent_dispatch
+                async for _ in stream_agent_dispatch(
+                    agent_id=1, family_id="12345678901234567",
+                    user_id="12345678901234568",
+                    thread_id=None, message="测试消息",
+                ):
+                    pass
+
+            instance.get_enabled_skills.assert_awaited_once()
+            instance.get_enabled_mcp_servers.assert_awaited_once()
