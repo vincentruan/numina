@@ -128,6 +128,17 @@ class BackendClient:
     async def get_assets_expiring_soon(self, days_threshold: int = 365) -> list:
         return await get_assets_expiring_soon(self.family_id, days_threshold)
 
+    async def get_agent_config(self, agent_id: int) -> dict:
+        """Fetch agent configuration from backend internal API."""
+        validated_id = _validate_family_id(self.family_id)
+        client = await get_shared_client()
+        resp = await client.get(
+            f"/api/v1/internal/ai/agents/{agent_id}",
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()
+        return _unwrap(resp)
+
     async def get_family_ai_config(self) -> dict:
         return await get_family_ai_config(self.family_id)
 
