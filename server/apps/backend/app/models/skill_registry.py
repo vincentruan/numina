@@ -27,9 +27,9 @@ class SkillRegistry(Base):
     custom skill metadata is user-provided.
     """
 
-    __tablename__ = "skill_registry"
+    __tablename__ = "ai_skills"
     __table_args__ = (
-        UniqueConstraint("family_id", "skill_id", name="uq_skill_registry_family_skill"),
+        UniqueConstraint("family_id", "skill_id", name="uq_ai_skills_family_skill"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)

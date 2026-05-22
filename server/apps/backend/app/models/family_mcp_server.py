@@ -8,7 +8,7 @@ from apps.backend.app.utils.snowflake import next_id
 
 
 class FamilyMCPServer(Base):
-    __tablename__ = "family_mcp_servers"
+    __tablename__ = "ai_mcp_servers"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, default=next_id)
     family_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
