@@ -55,8 +55,7 @@ components/ (reusable UI)
 
 ## Key Invariants
 
-- **i18n required for all UI strings** — every user-facing string (toasts, dialogs, labels, status text) must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings in `.vue` templates or `.ts` logic — not even in ternary expressions like `condition ? '已完成' : '待审批'`. Move all status labels to i18n keys.
-- **Emoji convention** — All user-facing toast messages, confirmation dialogs, and error messages MUST include an emoji prefix via i18n keys. Never hard-code strings directly in Vue files. See Patterns section.
+- **i18n** — see root `CLAUDE.md` cross-cutting conventions. Emoji convention and patterns below.
 - **Vant components are auto-imported** via `unplugin-vue-components`. Do not manually import them.
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly.
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`.
@@ -90,9 +89,7 @@ showToast('添加成功')
 
 ### Adding New Messages
 
-1. Add emoji-prefixed string to `src/i18n/locales/zh-CN.ts` and `en-US.ts` under `toast` or `errors`
-2. Use `t('key')` or `t('key', { param })` in the Vue file
-3. Run `npm run typecheck` to verify
+Add emoji-prefixed string to `src/i18n/locales/zh-CN.ts` + `en-US.ts`, use `t('key')` in Vue file, run `npm run typecheck`.
 
 ### Path Alias
 
@@ -132,70 +129,45 @@ This app is **mobile-first**. All design decisions must prioritize the phone vie
 
 ## Display Configuration Requirements
 
-The main app supports three user-configurable display preferences — language, theme mode, and theme color. All three are persisted server-side on the `User` model and applied reactively via `App.vue` watchers. **Every UI component must respect these settings.**
+Three user-configurable display preferences, all persisted server-side on `User` model and applied via `App.vue` watchers.
 
 ### i18n (Language Switching)
 
-User's language preference (`User.language`) drives `vue-i18n` locale. `App.vue` watches `authStore.user?.language` and sets `locale.value` reactively.
+**Source:** `App.vue` (watches `authStore.user?.language` → sets `locale.value`), `src/i18n/locales/zh-CN.ts` + `en-US.ts`
 
 **Rules:**
-
-1. All user-facing strings must use `t('key')` — never hardcode Chinese or English text in `.vue` or `.ts` files, including template ternaries and `toLocaleDateString()` calls
-2. Both `zh-CN.ts` and `en-US.ts` must stay in sync — every key added to one must exist in the other
-3. Arrays with `t()` labels must be `computed()`, not static — otherwise labels freeze at setup time and won't update on locale switch:
-   ```ts
-   // Wrong — labels frozen at component setup
-   const options = [{ label: t('foo'), value: 'a' }]
-
-   // Correct — labels re-evaluate reactively
-   const options = computed(() => [{ label: t('foo'), value: 'a' }])
-   ```
-4. Date/time formatting must use `locale.value` from `useI18n()`, never hardcode `'zh-CN'`:
-   ```ts
-   const { t, locale } = useI18n()
-   const label = computed(() =>
-     date.toLocaleDateString(locale.value, { month: 'long', day: 'numeric' })
-   )
-   ```
-5. Language option labels use self-identifying names identical in both locale files (e.g., `'🇨🇳 中文'`, `'🇺🇸 English'`) to solve the bootstrap problem
+1. All strings via `t('key')` — no hardcoded text, including template ternaries and `toLocaleDateString()` calls
+2. `zh-CN.ts` and `en-US.ts` must stay in sync
+3. Arrays with `t()` labels must be `computed()` — otherwise labels freeze at setup time
+4. Date formatting must use `locale.value` from `useI18n()`, never hardcode `'zh-CN'`
+5. Language option labels use self-identifying names identical in both locale files (e.g., `'🇨🇳 中文'`, `'🇺🇸 English'`)
 
 ### Dark/Light Mode (Theme Mode Switching)
 
-User's theme preference (`User.theme`) supports three values: `'light'`, `'dark'`, `'system'`. `App.vue` resolves `system` via `window.matchMedia('(prefers-color-scheme: dark)')` and sets `document.documentElement.setAttribute('data-theme', resolvedTheme)`.
+**Source:** `App.vue` (resolves `User.theme` → sets `data-theme` attribute), `src/style.css` (`:root` + `[data-theme='dark']` tokens)
 
 **Rules:**
-
-1. **Use CSS variables, never hardcode colors** — all colors must reference the semantic tokens defined in `style.css` (`:root` for light, `[data-theme='dark']` for dark). Components must never use raw hex/rgb values for backgrounds, text, or borders
-2. **Semantic tokens for layout colors:**
-   | Purpose | Variable |
-   |---------|----------|
-   | Page background | `var(--bg-primary)` or `var(--bg-secondary)` |
-   | Card background | `var(--card-bg)` |
-   | Primary text | `var(--text-primary)` |
-   | Secondary text | `var(--text-secondary)` |
-   | Borders/separators | `var(--separator)` or `var(--color-hairline)` |
-   | Surface canvas | `var(--color-canvas)` |
-3. **Dark mode overrides live in `style.css`** under `[data-theme='dark']` — do not scatter `@media (prefers-color-scheme: dark)` in component `<style>` blocks
-4. **Vant components are themed automatically** via `<van-config-provider :theme="resolvedTheme">` in `App.vue` plus CSS variable overrides in `style.css`. Do not manually override Vant colors in components unless there is no matching token
-5. **Test both modes** — after any visual change, verify the component in both light and dark mode before reporting done
+1. Use CSS variables from `style.css`, never hardcode colors
+2. Key tokens: `--bg-primary`, `--bg-secondary`, `--card-bg`, `--text-primary`, `--text-secondary`, `--separator`, `--color-canvas`
+3. Dark mode overrides live in `style.css` — no `@media (prefers-color-scheme: dark)` in components
+4. Vant theming is automatic via `<van-config-provider>` — don't manually override Vant colors
+5. Test both modes before reporting done
 
 ### Theme Color (Custom Primary Color)
 
-User selects a primary color from 8 predefined options. Currently stored in `localStorage('theme-primary')` and applied by setting `--van-primary-color` and `--theme-primary` CSS variables on `document.documentElement`.
+**Source:** `localStorage('theme-primary')` → sets `--van-primary-color` + `--theme-primary` on `documentElement`
 
 **Rules:**
-
-1. **Buttons and interactive elements must use `var(--van-primary-color)`** — never hardcode a specific color like `#010120` or `#bdbbff` for primary button backgrounds, active tabs, or checked states
-2. **Background colors derived from theme color must use a light tint** — when a component needs a themed background (e.g., a selected card, active section), derive a light-opacity version: `rgba(var(--theme-primary-rgb, 1, 1, 32), 0.06)` or use `var(--color-soft-stone)` as a safe neutral. Never use the full-intensity theme color as a background on content areas
-3. **Button style tokens in `style.css`** — primary buttons inherit from `--van-button-primary-background` and `--van-button-primary-border-color`. Both are set from `--color-primary` in light mode and `#bdbbff` in dark mode. If you add new button variants, follow this pattern
-4. **Dark mode interaction** — in dark mode, `style.css` overrides `--van-primary-color` to `#bdbbff` (lavender). Custom theme color is currently overridden by this CSS rule. Respect this behavior — dark mode has its own accent palette for readability against dark backgrounds
-5. The 8 predefined colors are: Blue `#007aff`, Purple `#5856d6`, Indigo `#3634a3`, Orange `#ff9500`, Red `#ff3b30`, Pink `#ff2d55`, Green `#248a3d`, Teal `#0071a4`. When adding new selectable colors, ensure they have sufficient contrast (WCAG AA) against both white text (for buttons) and dark backgrounds
+1. Interactive elements must use `var(--van-primary-color)` — never hardcode primary colors
+2. Themed backgrounds use light tint: `rgba(var(--theme-primary-rgb), 0.06)` or `var(--color-soft-stone)`
+3. In dark mode, `--van-primary-color` is overridden to `#bdbbff` (lavender) — respect this
+4. Predefined colors: Blue `#007aff`, Purple `#5856d6`, Indigo `#3634a3`, Orange `#ff9500`, Red `#ff3b30`, Pink `#ff2d55`, Green `#248a3d`, Teal `#0071a4` — new colors need WCAG AA contrast
 
 ### Cross-Cutting Display Rules
 
-- **Settings page** (`SettingsPage.vue`) is the single UI for all display preferences — language, theme mode, and theme color. Changes call `PUT /auth/me/settings` for server-persisted settings (language, theme) and `localStorage` for theme color
-- **No component should read display preferences directly from the API** — always go through `authStore.user` (for language/theme) or `localStorage` (for theme color). `App.vue` is the single point that applies these settings to the DOM
-- **When adding new visual components**, use the semantic CSS variable tokens above. If a needed token doesn't exist, add it to `style.css` in both `:root` and `[data-theme='dark']` blocks — don't inline colors in the component
+- `SettingsPage.vue` is the single UI for all display preferences
+- Read preferences via `authStore.user` (language/theme) or `localStorage` (theme color) — never from API directly
+- New visual components must use semantic CSS variables; add missing tokens to `style.css` in both `:root` and `[data-theme='dark']`
 
 ## Documented Solutions
 
