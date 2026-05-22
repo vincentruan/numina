@@ -7,6 +7,8 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
+from packages.core.path_manager import PathSecurityError  # noqa: E402
+
 
 @pytest.fixture
 def tmp_data_root(tmp_path):
@@ -193,3 +195,157 @@ class TestAssertTenantAccess:
         builtin_path.mkdir(parents=True, exist_ok=True)
         with pytest.raises(PathSecurityError):
             pm.assert_tenant_access(builtin_path, family_id=1)
+
+
+class TestGetPathManager:
+    def test_singleton_returns_same_instance(self):
+        """get_path_manager() must return the same PathManager on repeated calls."""
+        import packages.core as core_mod
+        original = getattr(core_mod, "_path_manager", None)
+        core_mod._path_manager = None
+        try:
+            from packages.core import get_path_manager
+            pm1 = get_path_manager()
+            pm2 = get_path_manager()
+            assert pm1 is pm2
+        finally:
+            core_mod._path_manager = original
+
+    def test_singleton_creates_path_manager_instance(self):
+        """get_path_manager() must return a PathManager instance."""
+        import packages.core as core_mod
+        original = getattr(core_mod, "_path_manager", None)
+        core_mod._path_manager = None
+        try:
+            from packages.core import get_path_manager
+            from packages.core.path_manager import PathManager
+            pm = get_path_manager()
+            assert isinstance(pm, PathManager)
+        finally:
+            core_mod._path_manager = original
+
+
+class TestTenantPaths:
+    def test_tenant_root(self, pm, tmp_data_root):
+        result = pm.tenant_root(12345)
+        assert result == tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+
+    def test_tenant_uploads_dir(self, pm, tmp_data_root):
+        result = pm.tenant_uploads_dir(12345, 67890)
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+            / "uploads" / "67890"
+        )
+
+    def test_tenant_agent_dir(self, pm, tmp_data_root):
+        result = pm.tenant_agent_dir(12345, "my-agent")
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+            / "agents" / "my-agent"
+        )
+
+    def test_tenant_session_dir(self, pm, tmp_data_root):
+        tid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        result = pm.tenant_session_dir(12345, "my-agent", tid)
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+            / "agents" / "my-agent" / "sessions" / tid
+        )
+
+    def test_tenant_session_events_file(self, pm):
+        tid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        result = pm.tenant_session_events_file(12345, "my-agent", tid)
+        assert result.name == "events.jsonl"
+        assert result.parent == pm.tenant_session_dir(12345, "my-agent", tid)
+
+    def test_tenant_session_artifacts_dir(self, pm):
+        tid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        result = pm.tenant_session_artifacts_dir(12345, "my-agent", tid)
+        assert result.name == "artifacts"
+        assert result.parent == pm.tenant_session_dir(12345, "my-agent", tid)
+
+    def test_tenant_memory_dir(self, pm, tmp_data_root):
+        result = pm.tenant_memory_dir(12345, "my-agent")
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+            / "agents" / "my-agent" / "memory"
+        )
+
+    def test_tenant_skills_dir(self, pm, tmp_data_root):
+        result = pm.tenant_skills_dir(12345)
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345" / "skills"
+        )
+
+    def test_tenant_skill_dir(self, pm, tmp_data_root):
+        result = pm.tenant_skill_dir(12345, "my-skill")
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+            / "skills" / "my-skill"
+        )
+
+    def test_tenant_mcp_dir(self, pm, tmp_data_root):
+        result = pm.tenant_mcp_dir(12345)
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345" / "mcp"
+        )
+
+    def test_tenant_tmp_dir(self, pm, tmp_data_root):
+        rid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        result = pm.tenant_tmp_dir(12345, 67890, rid)
+        assert result == (
+            tmp_data_root.resolve() / "workspaces" / "tenants" / "12345"
+            / "tmp" / "67890" / rid
+        )
+
+
+class TestTenantIsolation:
+    """Cross-tenant isolation: family A paths must not pass family B assertions."""
+
+    def test_family_a_path_rejected_by_family_b_assert(self, pm):
+        path_a = pm.tenant_root(11111) / "uploads" / "file.txt"
+        path_a.parent.mkdir(parents=True, exist_ok=True)
+        path_a.touch()
+        with pytest.raises(PathSecurityError, match="租户越界"):
+            pm.assert_tenant_access(path_a, 22222)
+
+    def test_different_families_get_different_roots(self, pm):
+        root_a = pm.tenant_root(11111)
+        root_b = pm.tenant_root(22222)
+        assert root_a != root_b
+        assert "11111" in str(root_a)
+        assert "22222" in str(root_b)
+
+    def test_session_dirs_isolated_between_families(self, pm):
+        tid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        dir_a = pm.tenant_session_dir(11111, "my-agent", tid)
+        dir_b = pm.tenant_session_dir(22222, "my-agent", tid)
+        assert dir_a != dir_b
+        assert "11111" in str(dir_a)
+        assert "22222" in str(dir_b)
+
+
+class TestEffectivePaths:
+    def test_effective_dir(self, pm, tmp_data_root):
+        result = pm.effective_dir(12345)
+        assert result == tmp_data_root.resolve() / "runtime" / "effective" / "12345"
+
+    def test_effective_agents_dir(self, pm):
+        result = pm.effective_agents_dir(12345)
+        assert result == pm.effective_dir(12345) / "agents"
+
+    def test_effective_agent_dir(self, pm):
+        result = pm.effective_agent_dir(12345, "my-agent")
+        assert result == pm.effective_dir(12345) / "agents" / "my-agent"
+
+    def test_effective_skills_dir(self, pm):
+        result = pm.effective_skills_dir(12345)
+        assert result == pm.effective_dir(12345) / "skills"
+
+    def test_effective_extensions_file(self, pm):
+        result = pm.effective_extensions_file(12345)
+        assert result == pm.effective_dir(12345) / "extensions_config.json"
+
+    def test_effective_agent_dir_validates_slug(self, pm):
+        with pytest.raises(PathSecurityError, match="無效的|无效的"):
+            pm.effective_agent_dir(12345, "../escape")
