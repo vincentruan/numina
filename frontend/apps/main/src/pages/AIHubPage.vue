@@ -115,47 +115,16 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Feature grid -->
+    <!-- Agent grid -->
     <div class="feature-section">
-      <h2 class="feature-section-title">{{ t('aiHub.capabilities') }}</h2>
-      <div class="feature-grid" role="list">
-        <button
-          v-for="cap in allCapabilities"
-          :key="cap.id"
-          class="feature-card"
-          :class="{
-            'feature-card--running': capTaskStatus[cap.id] === 'running',
-            'feature-card--queued': capTaskStatus[cap.id] === 'queued',
-          }"
-          role="listitem"
-          :data-testid="`capability-${cap.id}`"
-          :aria-label="getSkillName(cap) + '：' + getSkillDescription(cap)"
-          @click="startCapability(cap)"
-        >
-          <span class="feature-icon" aria-hidden="true">{{ getSkillIcon(cap) }}</span>
-          <span class="feature-title">{{ getSkillName(cap) }}</span>
-          <span class="feature-desc">{{ getSkillDescription(cap) }}</span>
-          <!-- Task status badge -->
-          <span
-            v-if="capTaskStatus[cap.id] === 'running'"
-            class="cap-status-badge cap-status-badge--running"
-            :aria-label="t('aiHub.capStatusRunning')"
-            aria-hidden="true"
-          >⏳</span>
-          <span
-            v-else-if="capTaskStatus[cap.id] === 'queued'"
-            class="cap-status-badge cap-status-badge--queued"
-            :aria-label="t('aiHub.capStatusQueued')"
-            aria-hidden="true"
-          >🕐</span>
-          <span
-            v-else-if="capTaskStatus[cap.id] === 'completed'"
-            class="cap-status-badge cap-status-badge--done"
-            :aria-label="t('aiHub.capStatusDone')"
-            aria-hidden="true"
-          >✅</span>
-        </button>
-      </div>
+      <AgentGrid
+        :builtin-agents="agentStore.builtinAgents.filter(a => a.is_enabled)"
+        :custom-agents="agentStore.customAgents.filter(a => a.is_enabled)"
+        :show-create="isOwner"
+        @consult="handleAgentConsult"
+        @edit="handleAgentEdit"
+        @create="router.push({ name: 'AgentCreate' })"
+      />
     </div>
 
     <!-- Chat input -->
@@ -172,23 +141,28 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
-import { getAIReport, getAITask, getSkillsGrouped, type SkillDefinition, type SkillListResponse } from '@/api/ai'
+import { getAIReport } from '@/api/ai'
 import { useAIStore } from '@/stores/ai'
-import { useCapabilityStore } from '@/stores/capability'
+import { useAgentStore } from '@/stores/agent'
+import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import AgentGrid from '@/components/agent/AgentGrid.vue'
+import type { Agent } from '@/types/agent'
 
 const { t } = useI18n()
 
 const router = useRouter()
 const aiStore = useAIStore()
-const capabilityStore = useCapabilityStore()
+const agentStore = useAgentStore()
+const authStore = useAuthStore()
 const ws = useAIReportWS()
+const isOwner = authStore.user?.role === 'owner'
 
 const currentReport = ref<Record<string, unknown> | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
@@ -196,23 +170,6 @@ const reportLoading = ref(false)
 const chatInput = ref('')
 const deepThink = ref(false)
 const webSearch = ref(false)
-const groupedSkills = ref<SkillListResponse | null>(null)
-
-const allCapabilities = computed(() => {
-  if (!groupedSkills.value) {
-    // fallback: 使用旧的 capabilityStore
-    return capabilityStore.capabilities.map(cap => ({
-      ...cap,
-      skill_type: 'builtin' as const,
-      is_enabled: true,
-      display_order: 0,
-      can_edit: false,
-      can_delete: false,
-    }))
-  }
-  const { fixed, builtin, custom } = groupedSkills.value
-  return [...fixed, ...builtin, ...custom]
-})
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
@@ -283,16 +240,6 @@ async function loadReport() {
   }
 }
 
-async function loadGroupedSkills() {
-  try {
-    const res = await getSkillsGrouped()
-    groupedSkills.value = res.data
-  } catch {
-    // fallback to legacy capability store
-    await capabilityStore.loadCapabilities()
-  }
-}
-
 async function generateReport() {
   reportLoading.value = true
   ws.reset()
@@ -343,66 +290,12 @@ function startChat(q: string) {
   })
 }
 
-function getSkillIcon(cap: SkillDefinition) {
-  if (cap.skill_type !== 'custom') {
-    const nameKey = t(`skills.capability.${cap.id}.name`)
-    const emojiMatch = nameKey.match(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]/u)
-    return emojiMatch ? emojiMatch[0] : '✨'
-  }
-  return cap.icon || '✨'
+function handleAgentConsult(agent: Agent) {
+  router.push({ name: 'AIChat', query: { agentId: agent.id } })
 }
 
-function getSkillName(cap: SkillDefinition) {
-  if (cap.skill_type !== 'custom') {
-    const nameKey = t(`skills.capability.${cap.id}.name`)
-    // 去掉 emoji 前缀
-    return nameKey.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/u, '')
-  }
-  return cap.name || cap.id
-}
-
-function getSkillDescription(cap: SkillDefinition) {
-  if (cap.skill_type !== 'custom') {
-    return t(`skills.capability.${cap.id}.description`)
-  }
-  return cap.description || ''
-}
-
-function startCapability(cap: SkillDefinition) {
-  if (cap.route) {
-    router.push(cap.route)
-  } else {
-    // 自定义技能跳转到 chat 页面，带 skill_id 参数
-    router.push(`/ai/chat?skill=${cap.id}`)
-  }
-}
-
-// ── Capability task status badges ──────────────────────────────────────────
-const CAP_POLL_CAPABILITIES = ['alerts', 'allocation', 'disposal', 'liability', 'spending_leak']
-const capTaskStatus = ref<Record<string, string>>({})
-let capPollTimer: ReturnType<typeof setInterval> | null = null
-
-async function pollCapabilityStatuses() {
-  const results = await Promise.allSettled(
-    CAP_POLL_CAPABILITIES.map(cap => getAITask(cap))
-  )
-  results.forEach((result, i) => {
-    if (result.status === 'fulfilled') {
-      capTaskStatus.value[CAP_POLL_CAPABILITIES[i]] = result.value.status
-    }
-  })
-}
-
-function startCapabilityPolling() {
-  pollCapabilityStatuses()
-  capPollTimer = setInterval(pollCapabilityStatuses, 5000)
-}
-
-function stopCapabilityPolling() {
-  if (capPollTimer) {
-    clearInterval(capPollTimer)
-    capPollTimer = null
-  }
+function handleAgentEdit(agent: Agent) {
+  router.push({ name: 'AgentEdit', params: { id: agent.id } })
 }
 
 onMounted(async () => {
@@ -411,13 +304,8 @@ onMounted(async () => {
   if (aiStore.config?.ai_test_thinking_success === true) {
     deepThink.value = true
   }
-  await loadGroupedSkills()
+  await agentStore.loadAgents()
   await loadReport()
-  startCapabilityPolling()
-})
-
-onUnmounted(() => {
-  stopCapabilityPolling()
 })
 </script>
 
@@ -849,126 +737,10 @@ onUnmounted(() => {
   letter-spacing: -0.12px;
 }
 
-/* ── Feature grid ── */
+/* ── Agent grid section ── */
 .feature-section {
   padding: 0 16px;
   margin-top: 4px;
-}
-
-.feature-section-title {
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.055px;
-  text-transform: uppercase;
-  color: rgba(0, 0, 0, 0.40);
-  font-family: 'Georgia', monospace;
-  margin: 0 0 10px;
-}
-
-[data-theme='dark'] .feature-section-title {
-  color: rgba(255, 255, 255, 0.40);
-}
-
-.feature-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.feature-card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  padding: 14px 10px 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  cursor: pointer;
-  transition: box-shadow 0.15s, transform 0.1s;
-  box-shadow: rgba(1, 1, 32, 0.05) 0px 1px 4px;
-  min-height: 88px;
-}
-
-[data-theme='dark'] .feature-card {
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: rgba(1, 1, 32, 0.3) 0px 1px 4px;
-}
-
-.feature-card:active {
-  transform: scale(0.96);
-  box-shadow: rgba(1, 1, 32, 0.10) 0px 4px 10px;
-}
-
-.feature-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(0, 0, 0, 0.55);
-  flex-shrink: 0;
-}
-
-[data-theme='dark'] .feature-icon {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.60);
-}
-
-.feature-title {
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: -0.12px;
-  color: var(--text-primary);
-  text-align: center;
-  line-height: 1.2;
-}
-
-.feature-desc {
-  font-size: 11px;
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: 1.3;
-  letter-spacing: -0.11px;
-}
-
-/* Capability task status badge */
-.feature-card {
-  position: relative;
-}
-
-.cap-status-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  font-size: 14px;
-  line-height: 1;
-}
-
-.cap-status-badge--running {
-  animation: badge-spin 2s linear infinite;
-  display: inline-block;
-}
-
-.cap-status-badge--queued {
-  opacity: 0.7;
-}
-
-@keyframes badge-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.feature-card--running {
-  border-color: rgba(var(--color-primary-rgb, 99, 102, 241), 0.3);
-}
-
-.feature-card--queued {
-  border-color: rgba(255, 149, 0, 0.3);
 }
 
 /* ── Chat entry ── */
@@ -1073,15 +845,13 @@ onUnmounted(() => {
 
 /* Focus rings */
 .report-summary-card:focus-visible,
-.report-empty-card:focus-visible,
-.feature-card:focus-visible {
+.report-empty-card:focus-visible {
   outline: 2px solid rgba(0, 0, 0, 0.5);
   outline-offset: 2px;
 }
 
 [data-theme='dark'] .report-summary-card:focus-visible,
-[data-theme='dark'] .report-empty-card:focus-visible,
-[data-theme='dark'] .feature-card:focus-visible {
+[data-theme='dark'] .report-empty-card:focus-visible {
   outline-color: rgba(255, 255, 255, 0.5);
 }
 </style>
