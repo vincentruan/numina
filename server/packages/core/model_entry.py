@@ -4,6 +4,7 @@ Extracted from family_adapter_cache._generate_temp_config() for reuse.
 Bug fix: uses PatchedChatOpenAI (not ReasoningChatOpenAI).
 """
 from __future__ import annotations
+
 from typing import Any
 
 _PROVIDER_CLASS_MAP: dict[str, str] = {
