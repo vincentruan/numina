@@ -1,11 +1,33 @@
+"""Agent-first execution entry point — Gateway path.
+
+Replaces the old DeerFlowAdapter path with:
+  BackendClient queries → EffectiveConfigBuilder → RunnableConfig
+  → make_lead_agent() → astream() → NDJSON events.
+
+No global singleton mutation. No ContextVar. No reload_app_config().
+"""
 import uuid
 from collections.abc import AsyncGenerator
 
 from apps.agent.core.backend_client import BackendClient
-from apps.agent.schemas.context import RedactedContext
-from apps.agent.services.agent_temp_cache import agent_temp_cache
-from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.stream_events import EventStreamBuilder
+from packages.core import get_path_manager
+from packages.core.effective_config import EffectiveConfigBuilder
+from packages.core.logging import get_logger
+
+logger = get_logger(__name__)
+
+# Lazy imports — deerflow and orchestrator may not be available in all environments.
+# Module-level names allow patching in tests.
+try:
+    from deerflow.agents.lead_agent.agent import make_lead_agent
+except ImportError:
+    make_lead_agent = None
+
+try:
+    from apps.agent.services.orchestrator import _select_model
+except ImportError:
+    _select_model = None
 
 
 async def stream_agent_dispatch(
@@ -17,92 +39,107 @@ async def stream_agent_dispatch(
 ) -> AsyncGenerator[str, None]:
     """Agent-first execution entry point. Streams NDJSON events."""
     task_id = str(uuid.uuid4())
-    builder = EventStreamBuilder(capability_id=f"agent-{agent_id}", task_id=task_id)
+    builder_events = EventStreamBuilder(capability_id=f"agent-{agent_id}", task_id=task_id)
 
-    # 1. Fetch agent config from backend
+    # 1. Fetch agent config
     client = BackendClient(family_id)
     try:
         agent_config = await client.get_agent_config(agent_id)
     except Exception as e:
-        yield builder.error(f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR").to_ndjson()
+        yield builder_events.error(f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR").to_ndjson()
         return
 
     if not agent_config.get("is_enabled", True):
-        yield builder.error("智能体已禁用", code="AGENT_DISABLED").to_ndjson()
+        yield builder_events.error("智能体已禁用", code="AGENT_DISABLED").to_ndjson()
         return
 
-    # 2. Fetch AI provider config for this family
+    agent_name = agent_config["agent_name"]
+
+    # 2. Fetch AI provider config
     try:
         ai_config = await client.get_family_ai_config()
     except Exception as e:
-        yield builder.error(f"获取 AI 配置失败: {e}", code="AI_CONFIG_ERROR").to_ndjson()
+        yield builder_events.error(f"获取 AI 配置失败: {e}", code="AI_CONFIG_ERROR").to_ndjson()
         return
 
-    # 3. Build temp directory via cache
-    config_data = {
-        "name": agent_config["agent_name"],
-        "model": agent_config.get("model") or "inherit",
-        "skills": agent_config.get("skills") or [],
-        "tool_groups": agent_config.get("tool_groups") or [],
-        "subagent_enabled": agent_config.get("subagent_enabled", False),
-    }
-    agent_temp_cache.get_or_create(
-        agent_id=agent_id,
-        family_id=int(family_id),
-        soul_md=agent_config["soul_md"],
-        config_data=config_data,
-    )
+    # 3. Multi-slot provider selection
+    providers = ai_config.get("providers", [])
+    if not providers:
+        yield builder_events.error("未配置 AI 供应商", code="NO_PROVIDER").to_ndjson()
+        return
 
-    # 4. Create DeerFlow adapter (reuses existing family adapter cache)
-    adapter = create_family_adapter(
-        family_id=family_id,
-        ai_config=ai_config,
-        subagent_enabled=agent_config.get("subagent_enabled", False),
-        mcp_servers=None,
-    )
+    task_type = "thinking" if enable_thinking else "text"
+    selected_provider, model_id, caps = _select_model(providers, task_type)
+
+    # 4. Build effective config
+    pm = get_path_manager()
+    config_builder = EffectiveConfigBuilder(pm)
+
+    try:
+        effective = config_builder.build(
+            family_id=int(family_id),
+            agent_name=agent_name,
+            ai_provider=selected_provider,
+            agent_config=agent_config,
+            enabled_skills=[],
+            mcp_servers=[],
+        )
+    except Exception as e:
+        yield builder_events.error(f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR").to_ndjson()
+        return
 
     # 5. Determine thread_id
     if not thread_id:
         thread_id = str(uuid.uuid4())
 
-    # 6. Build context from available skills
-    skills = agent_config.get("skills") or []
-    skill_name = skills[0] if len(skills) == 1 else "agent"
+    # 6. RunnableConfig with AppConfig injection
+    runnable_config = {
+        "configurable": {
+            "thread_id": thread_id,
+            "app_config": effective.config_dict,
+            "user_id": family_id,
+        }
+    }
 
     # 7. Emit session start
-    yield builder.phase("connecting", {"agent_name": agent_config["agent_name"]}).to_ndjson()
+    yield builder_events.phase("connecting", {"agent_name": agent_name}).to_ndjson()
 
-    # 8. Stream via adapter
-    answer_parts: list[str] = []
-    thinking_started = False
-    answering_started = False
-
-    context = _build_redacted_context(family_id, message, agent_config)
-
-    try:
-        async for chunk in adapter.stream_dispatch(
-            skill_name=skill_name,
-            context=context,
-            thread_id=thread_id,
-            enable_thinking=enable_thinking,
-        ):
-            if chunk.type == "thinking":
-                if not thinking_started:
-                    yield builder.phase("thinking").to_ndjson()
-                    thinking_started = True
-                yield builder.token(chunk.content, is_thinking=True).to_ndjson()
-            elif chunk.type == "text":
-                if not answering_started:
-                    yield builder.phase("answering").to_ndjson()
-                    answering_started = True
-                answer_parts.append(chunk.content)
-                yield builder.token(chunk.content, is_thinking=False).to_ndjson()
-    except Exception as e:
-        yield builder.error(str(e), code="STREAM_ERROR").to_ndjson()
+    # 8. Create agent graph and stream
+    if make_lead_agent is None:
+        yield builder_events.error("Agent 运行环境未就绪", code="RUNTIME_ERROR").to_ndjson()
         return
 
-    # 9. Emit end
-    yield builder.end(
+    try:
+        agent_graph = make_lead_agent(runnable_config)
+    except Exception as e:
+        yield builder_events.error(f"创建智能体失败: {e}", code="AGENT_CREATE_ERROR").to_ndjson()
+        return
+
+    # 9. Stream events
+    answer_parts: list[str] = []
+    answering_started = False
+
+    state = {"messages": [{"role": "user", "content": message}]}
+
+    try:
+        async for event in agent_graph.astream(state, runnable_config):
+            if isinstance(event, dict):
+                for node_name, node_output in event.items():
+                    if isinstance(node_output, dict) and "messages" in node_output:
+                        for msg in node_output["messages"]:
+                            content = _extract_content(msg)
+                            if content:
+                                if not answering_started:
+                                    yield builder_events.phase("answering").to_ndjson()
+                                    answering_started = True
+                                answer_parts.append(content)
+                                yield builder_events.token(content, is_thinking=False).to_ndjson()
+    except Exception as e:
+        yield builder_events.error(str(e), code="STREAM_ERROR").to_ndjson()
+        return
+
+    # 10. Emit end
+    yield builder_events.end(
         summary="".join(answer_parts)[:200],
         tokens_used=0,
         execution_time_ms=0,
@@ -110,10 +147,11 @@ async def stream_agent_dispatch(
     ).to_ndjson()
 
 
-def _build_redacted_context(family_id: str, message: str, agent_config: dict) -> RedactedContext:
-    """Build a minimal RedactedContext for the adapter."""
-    return RedactedContext(
-        family_id=family_id,
-        free_text=message,
-        redaction_log=[],
-    )
+def _extract_content(msg) -> str | None:
+    if isinstance(msg, dict):
+        return msg.get("content")
+    if hasattr(msg, "content"):
+        content = msg.content
+        if isinstance(content, str):
+            return content
+    return None
