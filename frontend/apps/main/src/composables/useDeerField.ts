@@ -69,6 +69,8 @@ const REFERENCE_AREA = 375 * 668
 const PARTICLE_COUNT_MIN = 90
 const PARTICLE_COUNT_MAX = 420
 
+const ANIMAL_SVGS = ['deer.svg', 'horse.svg', 'pig.svg', 'snake.svg']
+
 interface Grid {
   cols: number
   rows: number
@@ -502,14 +504,15 @@ export function useDeerField(
     resize()
     sprites = buildSprites(SPRITE_DPR_MAX)
 
-    fetch('/images/deer.svg')
+    const picked = ANIMAL_SVGS[Math.floor(Math.random() * ANIMAL_SVGS.length)]
+    fetch(`/images/${picked}`)
       .then((r) => r.blob())
       .then((blob) => {
         maskBlobUrl = URL.createObjectURL(blob)
         applyMask(maskBlobUrl)
       })
       .catch(() => {
-        applyMask('/images/deer.svg')
+        applyMask(`/images/${picked}`)
       })
 
     handleResize = debounce(resize, 150)
