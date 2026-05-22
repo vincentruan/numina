@@ -79,6 +79,7 @@ app = FastAPI(
 
 from apps.agent.app.routers import cache as cache_router
 from apps.agent.app.routers import gateway as gateway_router
+from apps.agent.routers import agent_stream as agent_stream_router
 from apps.agent.routers import alerts as alerts_router
 from apps.agent.routers import allocation as allocation_router
 from apps.agent.routers import capabilities as capabilities_router
@@ -108,6 +109,7 @@ app.include_router(import_parse_router.router)
 app.include_router(capabilities_router.router)
 app.include_router(model_test_router.router)
 app.include_router(sessions_router.router)
+app.include_router(agent_stream_router.router)
 
 
 @app.get("/health")
