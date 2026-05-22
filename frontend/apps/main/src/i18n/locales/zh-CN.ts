@@ -348,6 +348,7 @@ export default {
     carLoan: '车贷',
     creditCard: '信用卡',
     personalLoan: '个人贷款',
+    consumerLoan: '消费贷',
     other: '其他',
     pageTitle: '负债',
     tabActive: '还款中',

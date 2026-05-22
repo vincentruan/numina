@@ -67,9 +67,7 @@ This applies to:
 
 ### Adding New Messages
 
-1. Add the emoji-prefixed string to `src/i18n/locales/zh-CN.ts` under the appropriate section (`toast`, `errors`, `chore`, `blindBox`, etc.)
-2. Use `t('section.key')` in the Vue file
-3. Run `npm run typecheck` to verify
+Add emoji-prefixed string to `src/i18n/locales/zh-CN.ts` + `en-US.ts`, use `t('key')` in Vue file, run `npm run typecheck`. See section keys in `zh-CN.ts` for organization.
 
 ### Emoji Convention
 
@@ -80,52 +78,66 @@ This applies to:
 | Warning | ⚠️ | `⚠️ 余额不足`, `⚠️ 暂无机会` |
 | Lock | 🔒 | `🔒 账号已锁定` |
 
-### i18n Key Sections in `zh-CN.ts`
-
-| Section | Purpose |
-|---------|---------|
-| `common` | Shared labels (confirm, cancel, loading…) |
-| `nav` | Bottom nav labels |
-| `auth` | Login/PIN screen text |
-| `errors` | Error code → message mapping |
-| `toast` | All `showToast()` messages |
-| `chore` | Chore status labels (`approved`, `pending_approval`…) |
-| `blindBox` | Blind box draw messages |
-| `milestone` | Achievement/milestone label map |
-
 ## Path Alias
 
 `@/` maps to `src/` — configured in both `vite.config.ts` and `tsconfig.app.json`.
 
 ## Design System (DESIGN.md — mandatory)
 
-This app uses the **Clay** design system defined in [`DESIGN.md`](./DESIGN.md). All UI work **must** follow it. Do not invent colors, spacing, typography, or component styles — reference DESIGN.md exclusively.
+This app uses the **Clay** design system defined in [`DESIGN.md`](./DESIGN.md). All UI work **must** follow it — colors, typography, spacing, radius, components. Do not invent tokens; reference DESIGN.md exclusively.
 
-### Non-negotiable rules
+**Key gotchas** (commonly violated):
+- Canvas background is `#fffaf0`, not `#ffffff`
+- Use `ink: #0a0a0a`, never raw `#000000`
+- No hardcoded hex colors — use CSS variables from `clay.css`
 
-- **Colors** — use only tokens from `DESIGN.md colors`. Never hardcode hex values. Map to CSS variables or Tailwind tokens derived from that palette.
-- **Typography** — use only the type scale defined in `DESIGN.md typography` (display-xl → caption-uppercase). Match `fontFamily`, `fontSize`, `fontWeight`, `lineHeight`, `letterSpacing` exactly.
-- **Spacing** — use only the spacing scale (`xxs: 4px` → `section: 96px`). No arbitrary pixel values.
-- **Border radius** — use only `rounded` tokens (`xs: 6px` → `pill: 9999px`).
-- **Components** — buttons, cards, inputs, nav must match the component specs in `DESIGN.md components`. Use the correct variant (e.g. `button-primary` vs `button-secondary` vs `button-on-color`).
-- **Feature cards** — use the named color variants (`feature-card-pink`, `feature-card-teal`, `feature-card-lavender`, `feature-card-peach`, `feature-card-ochre`, `feature-card-cream`). Do not create ad-hoc card colors.
-- **Canvas background** — default page background is `canvas: #fffaf0`, not white (`#ffffff`).
-- **Dark surfaces** — use `surface-dark` / `surface-dark-elevated` for dark-mode or inverted sections; never plain black.
+## Display Configuration Requirements
 
-### Before writing any UI component
+Two user-configurable display preferences, both persisted client-side via `localStorage` and applied via module-level singleton composables.
 
-1. Open `DESIGN.md` and locate the relevant component spec.
-2. Apply the exact `backgroundColor`, `textColor`, `rounded`, `padding`, and `typography` values.
-3. If a component variant doesn't exist in DESIGN.md, use the closest existing variant and note the gap — do not freestyle.
+### i18n (Language Switching)
 
-### Anti-patterns (never do these)
+**Source:** `src/utils/locale.ts` (composable), `src/i18n/locales/zh-CN.ts` + `en-US.ts` (strings), side-effect import in `main.ts`
 
-- Hardcoded hex colors not in the DESIGN.md palette
-- Font sizes or weights outside the type scale
-- Arbitrary border-radius values
-- Inventing new component variants without a DESIGN.md entry
-- Using `#ffffff` as canvas (correct value is `#fffaf0`)
-- Using raw black (`#000000`) — use `ink: #0a0a0a` instead
+**Rules:**
+1. All strings via `t('key')` — no hardcoded text, including template ternaries and date formatting
+2. `zh-CN.ts` and `en-US.ts` must stay in sync
+3. Arrays with `t()` labels must be `computed()` — otherwise labels freeze at setup time
+4. Date formatting must use `locale.value`, never hardcode `'zh-CN'`
+5. Language option labels use self-identifying names identical in both locale files
+6. localStorage key is `child:locale` (namespaced to avoid collision with main app)
+
+### Dark/Light Mode (Theme Mode Switching)
+
+**Source:** `src/utils/darkMode.ts` (composable), `src/assets/clay.css` (`:root` + `[data-theme="dark"]` tokens)
+
+**Rules:**
+1. Use CSS variables from `clay.css`, never hardcode colors
+2. Key tokens: `--color-canvas`, `--color-surface-soft`, `--color-surface-card`, `--color-ink`, `--color-body`, `--color-muted`, `--color-hairline`, `--color-primary`, `--color-on-primary`
+3. Dark mode overrides live in `clay.css` — no `@media (prefers-color-scheme: dark)` in components
+4. Vant dark overrides are in `clay.css`'s second `[data-theme="dark"]` block — don't override Vant colors in components
+5. Dark mode primary is ochre (`#e8b94a`), not ink — interactive elements using `var(--color-primary)` adapt automatically
+6. Feature card text in dark mode uses `--color-on-feature-*` tokens
+7. Test both modes before reporting done
+
+### Cross-Cutting Display Rules
+
+- `ChildHomePage.vue` settings section is the single UI for both preferences
+- Read preferences via `useDarkMode()` / `useLocale()` composables — never read localStorage directly
+- New visual components must use semantic CSS variables; add missing tokens to `clay.css` in both `:root` and `[data-theme="dark"]`
+- Smooth transition is global in `clay.css` — don't add per-component theme transitions
+- Canvas is `#fffaf0` (warm cream), not `#ffffff`
+
+## Documented Solutions
+
+`docs/solutions/` contains documented fixes for past problems relevant to child frontend development:
+
+| Category | Example |
+|----------|---------|
+| `developer-experience/` | Vue 3 i18n locale switching with localStorage persistence (canonical pattern for this app) |
+| `ui-bugs/` | Vant 4 `:model-value` vs `:value` binding |
+
+Search by `module`, `tags`, or `problem_type` in YAML frontmatter. Relevant when debugging recurring issues or implementing patterns that have been solved before.
 
 ## Links
 
