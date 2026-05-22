@@ -57,7 +57,7 @@ def seed_minimal():
             return
 
         # Check existing AI config
-        result = db.execute(text("SELECT id, provider, model_id FROM ai_provider_configs WHERE family_id = :fid"), {"fid": family_id})
+        result = db.execute(text("SELECT id, provider, model_id FROM ai_providers WHERE family_id = :fid"), {"fid": family_id})
         config_row = result.fetchone()
 
         if config_row:
@@ -70,7 +70,7 @@ def seed_minimal():
 
             config_id = 123456789012347
             db.execute(text("""
-                INSERT INTO ai_provider_configs
+                INSERT INTO ai_providers
                 (id, family_id, name, provider, api_key_encrypted, model_id, vision_model_id, timeout_seconds, is_active, created_at, updated_at)
                 VALUES
                 (:cid, :fid, 'Claude Sonnet 4.6', 'anthropic', :key, 'claude-sonnet-4-6', 'claude-sonnet-4-6', 120, 1, :now, :now)
