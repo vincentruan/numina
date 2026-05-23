@@ -69,7 +69,7 @@ const REFERENCE_AREA = 375 * 668
 const PARTICLE_COUNT_MIN = 90
 const PARTICLE_COUNT_MAX = 420
 
-const ANIMAL_SVGS = ['deer.svg', 'horse.svg', 'pig.svg', 'snake.svg']
+const ANIMAL_SVGS = ['bomb.svg', 'bomb2.svg', 'bomb3.svg', 'deer.svg', 'horse.svg', 'king_pig.svg', 'mario.svg', 'pig.svg', 'snake.svg']
 
 interface Grid {
   cols: number
