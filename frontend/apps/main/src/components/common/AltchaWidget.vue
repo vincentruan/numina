@@ -239,23 +239,26 @@ defineExpose({
   pointer-events: none;
 }
 
-/* ── Captcha card — mirrors van-cell-group inset ── */
+/* ── Captcha card — dark glass style for login background ── */
 .captcha-card {
   display: flex;
   align-items: center;
   margin: 12px 16px;
   padding: 0 16px;
   height: 52px;
-  background: var(--card-bg);
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border-radius: 8px;
-  box-shadow: 0 0 0 1px var(--separator);
+  box-shadow: 0 0 0 1px rgba(189, 187, 255, 0.2);
   cursor: pointer;
   user-select: none;
   transition: box-shadow 0.2s ease;
+  color: rgba(255, 255, 255, 0.85);
 }
 
 .captcha-card:active {
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 0 0 1px rgba(189, 187, 255, 0.4);
 }
 
 .captcha-card--verified {
@@ -294,14 +297,14 @@ defineExpose({
 .checkbox-box {
   width: 18px;
   height: 18px;
-  border: 1.5px solid var(--separator);
+  border: 1.5px solid rgba(189, 187, 255, 0.4);
   border-radius: 3px;
-  background: var(--card-bg);
+  background: rgba(255, 255, 255, 0.06);
   transition: border-color 0.2s;
 }
 
 .captcha-card:hover .checkbox-box {
-  border-color: #969799;
+  border-color: rgba(189, 187, 255, 0.7);
 }
 
 /* Circular progress ring */
@@ -317,7 +320,7 @@ defineExpose({
 }
 
 .progress-ring__track {
-  stroke: var(--separator);
+  stroke: rgba(189, 187, 255, 0.2);
 }
 
 .progress-ring__arc {
@@ -396,12 +399,12 @@ defineExpose({
 
 .captcha-label__text {
   font-size: 14px;
-  color: var(--text-primary);
+  color: rgba(255, 255, 255, 0.85);
   line-height: 1;
 }
 
 .captcha-label__text--muted {
-  color: #969799;
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .captcha-label__text--success {
@@ -421,7 +424,7 @@ defineExpose({
 
 .captcha-brand__text {
   font-size: 10px;
-  color: var(--text-tertiary);
+  color: rgba(255, 255, 255, 0.35);
   letter-spacing: 0.5px;
   font-weight: 500;
 }
