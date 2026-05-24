@@ -60,12 +60,8 @@
             </div>
           </div>
           <div class="progress-info">
-            <span class="progress-target">{{
-              t('asset.progressTarget', { days: targetDays })
-            }}</span>
-            <span class="progress-remaining">{{
-              t('asset.progressRemaining', { days: remainingDays })
-            }}</span>
+            <span class="progress-target">{{ targetLabel }}</span>
+            <span class="progress-remaining">{{ remainingLabel }}</span>
           </div>
         </div>
       </div>
@@ -174,6 +170,20 @@ const progressPercent = computed(() => {
   if (!targetDays.value) return 0
   return Math.min(100, (daysUsed.value / targetDays.value) * 100)
 })
+
+const YEAR_THRESHOLD_DAYS = 5475
+
+const targetLabel = computed(() =>
+  targetDays.value >= YEAR_THRESHOLD_DAYS
+    ? t('asset.progressTargetYears', { years: Math.round(targetDays.value / 365) })
+    : t('asset.progressTarget', { days: targetDays.value }),
+)
+
+const remainingLabel = computed(() =>
+  targetDays.value >= YEAR_THRESHOLD_DAYS
+    ? t('asset.progressRemainingYears', { years: Math.round(remainingDays.value / 365) })
+    : t('asset.progressRemaining', { days: remainingDays.value }),
+)
 
 </script>
 
