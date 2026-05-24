@@ -30,10 +30,10 @@ interface UseBalancePollingReturn {
 
 // Singleton state shared across all consumers
 let _pollingInterval: ReturnType<typeof setInterval> | null = null
-let _balanceRef: Ref<number> = ref(0)
-let _isLoadingRef: Ref<boolean> = ref(false)
-let _errorRef: Ref<string | null> = ref(null)
-let _lastChangeRef: Ref<BalanceChange | null> = ref(null)
+const _balanceRef: Ref<number> = ref(0)
+const _isLoadingRef: Ref<boolean> = ref(false)
+const _errorRef: Ref<string | null> = ref(null)
+const _lastChangeRef: Ref<BalanceChange | null> = ref(null)
 let _hasFetchedOnce = false
 let _consumerCount = 0
 let _lastFetchTime = 0

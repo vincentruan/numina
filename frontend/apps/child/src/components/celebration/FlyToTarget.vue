@@ -9,9 +9,9 @@
       <span
         v-for="i in particleCount"
         :key="i"
+        :ref="(el) => setParticleRef(i - 1, el as HTMLElement | null)"
         class="particle"
         :class="cssFilter ? 'with-filter' : null"
-        :ref="(el) => setParticleRef(i - 1, el as HTMLElement | null)"
       >
         <slot name="particle" :index="i - 1">
           <span v-if="particleType === 'star'" class="glyph">⭐</span>
@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, watch, nextTick } from 'vue'
+import { onUnmounted, watch, nextTick } from 'vue'
 import { quadraticBezier, bezierControl, type Point } from '@/utils/bezier'
 
 type Resolvable = Point | HTMLElement | string | null | undefined
