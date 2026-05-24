@@ -51,7 +51,7 @@ describe('CelebrationAnimation orchestration shell', () => {
     clearBody()
   })
 
-  it('emits dismiss when popup overlay is canceled (self-click)', async () => {
+  it('does not emit dismiss when the popup backdrop is clicked (avoids skipping flight)', async () => {
     const wrapper = mount(CelebrationAnimation, {
       props: { visible: true, taskCount: 1, starsEarned: 5 },
       global: { plugins: [i18n] },
@@ -62,7 +62,8 @@ describe('CelebrationAnimation orchestration shell', () => {
     expect(overlay).not.toBeNull()
     overlay!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await flushPromises()
-    expect(wrapper.emitted('dismiss')).toBeTruthy()
+    expect(wrapper.emitted('dismiss')).toBeFalsy()
+    expect(document.body.querySelector('.popup-overlay')).not.toBeNull()
     clearBody()
   })
 

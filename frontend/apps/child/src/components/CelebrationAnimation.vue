@@ -14,7 +14,6 @@
           :stars-earned="starsEarned"
           @confirm="onPopupConfirm"
           @auto-dismiss="onPopupConfirm"
-          @cancel="onPopupCancel"
         />
 
         <FlyToTarget
@@ -38,6 +37,7 @@
         />
 
         <TrailResidue ref="trailRef" />
+        <LandingBurst ref="burstRef" />
       </div>
     </Transition>
   </Teleport>
@@ -51,6 +51,7 @@ import TreasureRevealPopup from '@/components/celebration/TreasureRevealPopup.vu
 import FlyToTarget from '@/components/celebration/FlyToTarget.vue'
 import StreakLayer from '@/components/celebration/StreakLayer.vue'
 import TrailResidue from '@/components/celebration/TrailResidue.vue'
+import LandingBurst from '@/components/celebration/LandingBurst.vue'
 import { useFlightChoreography } from '@/composables/useFlightChoreography'
 import type { Point } from '@/utils/bezier'
 
@@ -83,6 +84,7 @@ const { t } = useI18n()
 const popupVisible = ref(false)
 const flightActive = ref(false)
 const trailRef = ref<InstanceType<typeof TrailResidue> | null>(null)
+const burstRef = ref<InstanceType<typeof LandingBurst> | null>(null)
 
 const resolvedOrigins = ref<Point[]>([])
 const resolvedTarget = ref<Point | null>(null)
@@ -97,6 +99,16 @@ const starCount = computed(() => {
 function resolveElementCenter(el: HTMLElement): Point {
   const r = el.getBoundingClientRect()
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+}
+
+function clampToViewport(p: Point): Point {
+  const margin = 24
+  const w = window.innerWidth
+  const h = window.innerHeight
+  return {
+    x: Math.max(margin, Math.min(w - margin, p.x)),
+    y: Math.max(margin, Math.min(h - margin, p.y)),
+  }
 }
 
 function fallbackOrigin(): Point {
@@ -115,7 +127,7 @@ function resolvePositionsAtConfirm(): void {
       if (el && el.isConnected) {
         const r = el.getBoundingClientRect()
         if (r.width > 0 && r.height > 0) {
-          origins.push(resolveElementCenter(el))
+          origins.push(clampToViewport(resolveElementCenter(el)))
           continue
         }
       }
@@ -152,21 +164,21 @@ function onPopupConfirm(): void {
   })
 }
 
-function onPopupCancel(): void {
-  popupVisible.value = false
-  emit('dismiss')
-}
-
 function onParticleLanded(index: number): void {
   const origin = resolvedOrigins.value[index % resolvedOrigins.value.length] ?? null
   const target = resolvedTarget.value
   if (origin && target) {
     choreo.notifyLanding(origin, target)
+    burstRef.value?.spawnBurst(target.x, target.y)
   }
 }
 
 function onAllLanded(): void {
   choreo.notifyAllLanded()
+  const target = resolvedTarget.value
+  if (target && props.starsEarned > 0) {
+    burstRef.value?.spawnFloat(target.x, target.y, props.starsEarned)
+  }
 }
 
 watch(

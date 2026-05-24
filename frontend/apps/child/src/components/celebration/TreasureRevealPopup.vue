@@ -7,9 +7,8 @@
         role="dialog"
         aria-modal="true"
         :aria-label="t('celebration.overlayLabel')"
-        @click.self="onCancel"
       >
-        <div class="popup-card" @click.stop>
+        <div class="popup-card">
           <div class="popup-emoji">🎁</div>
           <h2 class="popup-title">
             {{ taskCount > 1
@@ -49,7 +48,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   confirm: []
   'auto-dismiss': []
-  cancel: []
 }>()
 
 const { t } = useI18n()
@@ -80,11 +78,6 @@ function clearTimers(): void {
 function onConfirm(): void {
   clearTimers()
   emit('confirm')
-}
-
-function onCancel(): void {
-  clearTimers()
-  emit('cancel')
 }
 
 watch(

@@ -130,12 +130,24 @@ onUnmounted(clearAnimations)
   font-weight: 600;
   font-size: 0.9em;
   margin-right: 4px;
-  transition: font-weight 100ms ease-out;
+  display: inline-block;
+  transform-origin: center;
+  transition: transform 180ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+              color 180ms ease-out,
+              font-weight 100ms ease-out;
 }
 .coin-count.is-counting {
   font-weight: 700;
+  transform: scale(1.35);
+  color: var(--color-brand-ochre);
+  text-shadow: 0 0 8px rgba(232, 185, 74, 0.55);
 }
 .coin-count.gold   { color: var(--color-coin-gold-text); }
 .coin-count.silver { color: var(--color-coin-silver-text); }
 .coin-count.copper { color: var(--color-coin-copper-text); }
+.coin-count.is-counting.gold,
+.coin-count.is-counting.silver,
+.coin-count.is-counting.copper {
+  color: var(--color-brand-ochre);
+}
 </style>

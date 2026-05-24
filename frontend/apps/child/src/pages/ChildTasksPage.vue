@@ -591,7 +591,8 @@ onUnmounted(() => {
 }
 
 .balance-card[data-reacting='pop'] {
-  animation: balance-pop 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  animation: balance-pop 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+             balance-glow 1500ms ease-out;
   box-shadow: 0 0 40px rgba(232, 185, 74, 0.6);
 }
 
@@ -603,6 +604,13 @@ onUnmounted(() => {
   0% { transform: scale(1); }
   50% { transform: scale(1.15); }
   100% { transform: scale(1); }
+}
+
+@keyframes balance-glow {
+  0%   { box-shadow: 0 0 0 rgba(232, 185, 74, 0); }
+  20%  { box-shadow: 0 0 48px rgba(232, 185, 74, 0.75); }
+  60%  { box-shadow: 0 0 32px rgba(232, 185, 74, 0.55); }
+  100% { box-shadow: 0 0 0 rgba(232, 185, 74, 0); }
 }
 
 @keyframes balance-color-invert {
