@@ -11,6 +11,7 @@ from apps.backend.app.schemas.dashboard import (
     ExpiringSoonItem,
     InvestmentReturnItem,
     LowUsageItem,
+    NewAssetsResponse,
     OverviewResponse,
     TopAssetItem,
     TrendResponse,
@@ -129,6 +130,15 @@ def get_home_assets_paginated(
             detail=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
     return dashboard_service.get_home_assets_page(db, user, status, page, page_size, category_id)
+
+
+@router.get("/new-assets", response_model=NewAssetsResponse)
+def get_new_assets(
+    period: str = Query("month"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    return dashboard_service.get_new_assets(db, user, period)
 
 
 @router.get("/expiring-soon", response_model=list[ExpiringSoonItem])
