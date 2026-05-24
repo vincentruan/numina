@@ -106,7 +106,7 @@ class NewAssetItem(SnowflakeBase):
     icon: str
     category_name: str
     current_value: float
-    currency: str
+    currency: str = "CNY"
     created_at: str  # ISO format
 
 
