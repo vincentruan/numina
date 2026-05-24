@@ -320,9 +320,7 @@ export default {
     treasureUnlocked: '宝藏解锁！',
     confirmButton: '太棒了！',
     sealTreasureChest: '锁住宝箱！',
-    chestLockedAwaiting: '🔒 宝箱已锁，等待爸妈开启 ⏳',
     reducedMotionToast: '✨ 任务通过！获得 {stars} ⭐',
     candleAriaLabel: '等待审批中',
-    streakBoostNotice: '🔥 连续 {days} 天！奖励翻倍',
   },
 }

@@ -529,14 +529,17 @@ watch(chores, (next) => {
 // Non-celebration balance changes (e.g., parent grant while child is on Tasks page):
 // fire a single C1 pulse on the balance card. Skip when a celebration is mid-flight
 // since the celebration owns the reaction.
+let popResetTimer: ReturnType<typeof setTimeout> | null = null
 watch(balanceLastChange, (change) => {
   if (!change) return
   if (taskCelebrationVisible.value) return
   balanceReactMode.value = 'pop'
-  setTimeout(() => {
+  if (popResetTimer) clearTimeout(popResetTimer)
+  popResetTimer = setTimeout(() => {
     if (balanceReactMode.value === 'pop') {
       balanceReactMode.value = null
     }
+    popResetTimer = null
   }, 600)
 })
 
@@ -545,6 +548,10 @@ onUnmounted(() => {
   if (dismissTimer) {
     clearTimeout(dismissTimer)
     dismissTimer = null
+  }
+  if (popResetTimer) {
+    clearTimeout(popResetTimer)
+    popResetTimer = null
   }
 })
 </script>

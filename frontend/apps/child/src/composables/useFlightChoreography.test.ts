@@ -156,6 +156,19 @@ describe('useFlightChoreography', () => {
     scope.stop()
   })
 
+  it('cancel() also unhooks the 10s watchdog so it cannot double-complete', async () => {
+    const scope = effectScope()
+    const choreo = scope.run(() => useFlightChoreography())!
+    const opts = makeOpts()
+    choreo.run(opts)
+    choreo.cancel()
+    expect(opts.onComplete).toHaveBeenCalledTimes(1)
+    // Advance past the watchdog horizon; onComplete must not be called a second time.
+    await vi.advanceTimersByTimeAsync(11000)
+    expect(opts.onComplete).toHaveBeenCalledTimes(1)
+    scope.stop()
+  })
+
   it('null target completes immediately without flight', () => {
     const scope = effectScope()
     const choreo = scope.run(() => useFlightChoreography())!

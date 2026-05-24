@@ -1,10 +1,9 @@
-import { ref, readonly, onScopeDispose, type Ref } from 'vue'
+import { ref, readonly, type Ref } from 'vue'
 
 const QUERY = '(prefers-reduced-motion: reduce)'
 
 let _mediaQuery: MediaQueryList | null = null
 let _state: Ref<boolean> | null = null
-let _listenerCount = 0
 
 function ensureState(): Ref<boolean> {
   if (_state) return _state
@@ -21,10 +20,5 @@ function ensureState(): Ref<boolean> {
 }
 
 export function useReducedMotion(): Readonly<Ref<boolean>> {
-  const state = ensureState()
-  _listenerCount++
-  onScopeDispose(() => {
-    _listenerCount = Math.max(0, _listenerCount - 1)
-  })
-  return readonly(state)
+  return readonly(ensureState())
 }

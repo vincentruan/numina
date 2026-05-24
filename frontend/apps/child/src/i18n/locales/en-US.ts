@@ -319,9 +319,7 @@ export default {
     treasureUnlocked: 'Treasure Unlocked!',
     confirmButton: 'Awesome!',
     sealTreasureChest: 'Seal the Treasure Chest!',
-    chestLockedAwaiting: '🔒 Chest locked — waiting for parents to open ⏳',
     reducedMotionToast: '✨ Task approved! Earned {stars} ⭐',
     candleAriaLabel: 'Awaiting approval',
-    streakBoostNotice: '🔥 {days}-day streak! Bonus doubled',
   },
 }
