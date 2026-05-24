@@ -33,6 +33,27 @@
           </div>
         </div>
 
+        <!-- Active wishes (cost editable when progress > 0) -->
+        <div v-if="activeItems.length > 0" class="section">
+          <h3 class="section-title">{{ t('wishReview.section.active') }}</h3>
+          <div v-for="wish in activeItems" :key="wish.id" class="wish-card">
+            <div class="card-top">
+              <span class="wish-emoji">{{ wish.emoji || '🌟' }}</span>
+              <div class="wish-info">
+                <p class="wish-name">{{ wish.name }}</p>
+                <p class="child-name">{{ wish.child_display_name }}</p>
+                <p class="cost">{{ t('wishReview.costLabel', { cost: wish.star_coin_cost }) }}</p>
+              </div>
+            </div>
+            <div class="card-actions">
+              <button class="action-btn action-btn--primary" @click="openEditCost(wish)">
+                <van-icon name="edit" size="16" />
+                <span>{{ t('wishCostEdit.entryBtn') }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Pending review -->
         <div v-if="pendingItems.length > 0" class="section">
           <h3 class="section-title">{{ t('wishReview.section.pendingReview') }}</h3>
@@ -59,7 +80,7 @@
           </div>
         </div>
 
-        <div v-if="pendingItems.length === 0 && redemptionItems.length === 0" class="empty">
+        <div v-if="pendingItems.length === 0 && redemptionItems.length === 0 && activeItems.length === 0" class="empty">
           <p>{{ t('wishReview.emptyState') }}</p>
         </div>
       </template>
@@ -108,6 +129,15 @@
         </div>
       </div>
     </div>
+
+    <!-- Cost-edit dialog -->
+    <WishCostEditDialog
+      v-if="editCostTarget"
+      :visible="editCostVisible"
+      :wish="editCostTarget"
+      @update:visible="editCostVisible = $event"
+      @saved="onCostEditSaved"
+    />
   </div>
 </template>
 
@@ -119,6 +149,7 @@ import {
   type ParentWish
 } from '@/api/childWishes'
 import PageHeader from '@/components/common/PageHeader.vue'
+import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 
 const { t } = useI18n()
 
@@ -136,6 +167,12 @@ const dialogError = ref('')
 
 const pendingItems = computed(() => wishes.value.filter(w => w.status === 'pending_review'))
 const redemptionItems = computed(() => wishes.value.filter(w => w.status === 'redemption_requested'))
+const activeItems = computed(() =>
+  wishes.value.filter(w => w.status === 'active' && (w.star_coin_cost ?? 0) > 0),
+)
+
+const editCostTarget = ref<ParentWish | null>(null)
+const editCostVisible = ref(false)
 
 function priorityLabel(p: string) {
   return p === 'high' ? t('wishReview.priority.high') : p === 'medium' ? t('wishReview.priority.medium') : t('wishReview.priority.low')
@@ -226,6 +263,16 @@ async function defer(wishId: string) {
   } finally {
     actioningId.value = null
   }
+}
+
+async function openEditCost(wish: ParentWish) {
+  editCostTarget.value = wish
+  editCostVisible.value = true
+}
+
+function onCostEditSaved() {
+  editCostTarget.value = null
+  load()
 }
 
 onMounted(load)

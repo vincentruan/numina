@@ -520,6 +520,7 @@ export default {
     section: {
       redemptionRequested: '待兑现 🎁',
       pendingReview: '待审核 ⏳',
+      active: '进行中 ✨',
     },
     dialog: {
       approveTitle: '批准心愿',
@@ -550,6 +551,25 @@ export default {
     error: {
       operationFailed: '操作失败，请重试',
       insufficientCoins: '积分不足或操作失败，请重试',
+    },
+  },
+  wishCostEdit: {
+    entryBtn: '调整星币',
+    title: '调整心愿星币',
+    currentLabel: '当前星币',
+    placeholder: '输入新的星币数量（≥1）',
+    next: '下一步',
+    cancel: '取消',
+    warningTitle: '孩子的等待时间会变化',
+    warningBodyDays: '这个心愿的预估时间会从 ≈ {before} 天变成 ≈ {after} 天，是否确认？',
+    warningBodyProgress: '心愿星币会从 {beforeCost} ⭐ 调整为 {afterCost} ⭐，孩子的进度会从 {beforePct}% 变为 {afterPct}%，是否确认？',
+    reconsider: '再想想',
+    confirm: '确认',
+    success: '✅ 已调整',
+    error: '❌ 调整失败，请稍后再试',
+    errors: {
+      invalid: '⚠️ 请输入正整数星币',
+      unchanged: '⚠️ 星币没有变化',
     },
   },
   chore: {
