@@ -805,16 +805,16 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
 // Load session list when history panel opens (lazy, once per mount)
 const selectedCapability = ref<string>('chat')  // Default to 'chat' filter
 
-// Capability metadata from skills/*.md - icons, colors, display names, and AI flag
-const capabilityMeta: Record<string, { icon: string; color: string; name: string; isAI: boolean }> = {
-  chat: { icon: '💬', color: '#06b6d4', name: '智能问答', isAI: true },
-  alerts: { icon: '🔔', color: '#f59e0b', name: '资产老化预警', isAI: true },
-  disposal: { icon: '🗑️', color: '#ef4444', name: '闲置资产处置', isAI: true },
-  report: { icon: '📋', color: '#6366f1', name: '家庭资产体检', isAI: true },
-  allocation: { icon: '📊', color: '#8b5cf6', name: '资产配置分析', isAI: true },
-  liability: { icon: '💳', color: '#f97316', name: '负债健康分析', isAI: true },
-  spending_leak: { icon: '💧', color: '#10b981', name: '消费漏洞扫描', isAI: true },
-  time_machine: { icon: '⏰', color: '#a855f7', name: '财务时光机', isAI: false },  // simulation, not AI chat
+// Capability metadata from skills/*.md - icons, colors, display name keys, and AI flag
+const capabilityMeta: Record<string, { icon: string; color: string; nameKey: string; isAI: boolean }> = {
+  chat: { icon: '💬', color: '#06b6d4', nameKey: 'aiChat.filterChat', isAI: true },
+  alerts: { icon: '🔔', color: '#f59e0b', nameKey: 'aiChat.filterAlerts', isAI: true },
+  disposal: { icon: '🗑️', color: '#ef4444', nameKey: 'aiChat.filterDisposal', isAI: true },
+  report: { icon: '📋', color: '#6366f1', nameKey: 'aiChat.filterReport', isAI: true },
+  allocation: { icon: '📊', color: '#8b5cf6', nameKey: 'aiChat.filterAllocation', isAI: true },
+  liability: { icon: '💳', color: '#f97316', nameKey: 'aiChat.filterLiability', isAI: true },
+  spending_leak: { icon: '💧', color: '#10b981', nameKey: 'aiChat.filterSpendingLeak', isAI: true },
+  time_machine: { icon: '⏰', color: '#a855f7', nameKey: 'aiChat.filterTimeMachine', isAI: false },  // simulation, not AI chat
 }
 
 const capabilityFilters = computed(() => [
@@ -823,7 +823,7 @@ const capabilityFilters = computed(() => [
   ...Object.entries(capabilityMeta)
     .filter(([_, meta]) => meta.isAI)
     .map(([key, meta]) => ({
-      label: `${meta.icon} ${meta.name}`,
+      label: `${meta.icon} ${t(meta.nameKey)}`,
       value: key,
     })),
 ])

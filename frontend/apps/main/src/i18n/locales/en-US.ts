@@ -969,11 +969,27 @@ export default {
   aiTask: {
     status: {
       running: 'Analyzing',
+      post_processing: 'Saving results',
       completed: 'Completed',
       failed: 'Analysis failed',
       timeout: 'Task timed out',
       cancelled: 'Cancelled',
     },
+    phase: {
+      connecting: 'Connecting to model',
+      thinking: 'Thinking',
+      answering: 'Generating response',
+      postProcessing: 'Saving results',
+    },
+    error: {
+      generic: '⚠️ Analysis failed, please try again later',
+      extractionFailed: '⚠️ Analysis completed but saving structured results failed; see text above',
+      rateLimited: '⚠️ AI output format issue, auto-recovery paused for 30 minutes',
+      circuitOpen: '⚠️ This feature is circuit-broken, please contact admin to reset',
+      streamError: '⚠️ Communication with AI service failed, please try again later',
+      postProcessingTimeout: '⚠️ Processing structured results timed out, please try again later',
+    },
+    retry: 'Retry',
     inProgress: '⏳ Task in progress, please wait',
     startBtn: 'Generate now',
     regenBtn: 'Regenerate',
@@ -993,6 +1009,8 @@ export default {
     rescanLeaks: 'Re-analyze',
     alertsSummary: '{count} alerts',
     leaksSummary: '{count} leaks',
+    queuePosition: 'Queued (#{n})',
+    queueWaiting: 'Waiting for previous tasks to finish…',
   },
   timeMachine: {
     title: 'Asset Time Machine',
