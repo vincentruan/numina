@@ -14,6 +14,8 @@ from apps.backend.app.schemas.dashboard import (
     ExpiringSoonItem,
     InvestmentReturnItem,
     LowUsageItem,
+    NewAssetItem,
+    NewAssetsResponse,
     OverviewResponse,
     TopAssetItem,
     TrendPoint,
@@ -586,3 +588,50 @@ def get_recent_alerts(db: Session, user: User, limit: int = 10) -> list[dict]:
         }
         for r in rows
     ]
+
+
+def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsResponse:
+    default_currency = user.default_currency or "CNY"
+    today = date.today()
+
+    if period == "year":
+        start_date = today - timedelta(days=365)
+    elif period == "quarter":
+        start_date = today - timedelta(days=90)
+    else:
+        start_date = today - timedelta(days=30)
+
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived == False,
+            Asset.created_at >= start_date,
+        )
+        .order_by(Asset.created_at.desc())
+        .all()
+    )
+
+    items_for_display = assets[:5]
+    return NewAssetsResponse(
+        count=len(assets),
+        period=period,
+        items=[
+            NewAssetItem(
+                id=a.id,
+                name=a.name,
+                icon=a.category.icon if a.category else "",
+                category_name=a.category.name if a.category else "",
+                current_value=round(
+                    ExchangeRateService.convert(
+                        a.current_value or 0, a.currency or "CNY", default_currency, db
+                    ),
+                    2,
+                ),
+                currency=default_currency,
+                created_at=a.created_at.isoformat() if a.created_at else "",
+            )
+            for a in items_for_display
+        ],
+    )
