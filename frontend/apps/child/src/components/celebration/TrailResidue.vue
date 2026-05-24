@@ -13,33 +13,57 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
+const MAX_TRAILS = 50
+const TRAIL_LIFETIME_MS = 60_000
+const REMOVAL_BUFFER_MS = 100
+
 const svgRef = ref<SVGSVGElement | null>(null)
 const vw = ref(typeof window !== 'undefined' ? window.innerWidth : 0)
 const vh = ref(typeof window !== 'undefined' ? window.innerHeight : 0)
 
-const pendingRemovals: Array<ReturnType<typeof setTimeout>> = []
+interface TrailEntry {
+  path: SVGPathElement
+  removalHandle: ReturnType<typeof setTimeout>
+}
+
+const trails: TrailEntry[] = []
 
 function onResize(): void {
   vw.value = window.innerWidth
   vh.value = window.innerHeight
 }
 
+function evictOldest(): void {
+  const oldest = trails.shift()
+  if (!oldest) return
+  clearTimeout(oldest.removalHandle)
+  if (oldest.path.parentNode) oldest.path.parentNode.removeChild(oldest.path)
+}
+
 function addPath(d: string): void {
   if (!svgRef.value) return
+  // FIFO bound: a child completing many tasks rapidly should not accumulate
+  // unbounded SVG nodes between the per-path 60s timer.
+  while (trails.length >= MAX_TRAILS) evictOldest()
   const ns = 'http://www.w3.org/2000/svg'
   const path = document.createElementNS(ns, 'path')
   path.setAttribute('d', d)
   path.setAttribute('class', 'trail-segment')
   svgRef.value.appendChild(path)
-  const handle = setTimeout(() => {
-    if (path.parentNode) path.parentNode.removeChild(path)
-  }, 60100)
-  pendingRemovals.push(handle)
+  const entry: TrailEntry = {
+    path,
+    removalHandle: setTimeout(() => {
+      const idx = trails.indexOf(entry)
+      if (idx !== -1) trails.splice(idx, 1)
+      if (path.parentNode) path.parentNode.removeChild(path)
+    }, TRAIL_LIFETIME_MS + REMOVAL_BUFFER_MS),
+  }
+  trails.push(entry)
 }
 
 function clearAll(): void {
-  pendingRemovals.forEach(clearTimeout)
-  pendingRemovals.length = 0
+  trails.forEach((e) => clearTimeout(e.removalHandle))
+  trails.length = 0
   if (svgRef.value) {
     while (svgRef.value.firstChild) {
       svgRef.value.removeChild(svgRef.value.firstChild)

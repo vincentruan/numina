@@ -100,6 +100,35 @@ describe('useFlightChoreography', () => {
     scope.stop()
   })
 
+  it('notifyLanding invokes onLandingTrail with a valid SVG path string', () => {
+    const scope = effectScope()
+    const choreo = scope.run(() => useFlightChoreography())!
+    const onLandingTrail = vi.fn()
+    const opts = makeOpts({ onLandingTrail })
+    choreo.run(opts)
+
+    choreo.notifyLanding({ x: 0, y: 0 }, { x: 100, y: 50 })
+    expect(onLandingTrail).toHaveBeenCalledTimes(1)
+    const path = onLandingTrail.mock.calls[0][0]
+    expect(path).toMatch(/^M /)
+    expect(path).toContain(' Q ')
+
+    choreo.notifyLanding({ x: 0, y: 0 }, { x: 100, y: 50 })
+    expect(onLandingTrail).toHaveBeenCalledTimes(2)
+    scope.stop()
+  })
+
+  it('notifyLanding skips onLandingTrail when callback omitted', () => {
+    const scope = effectScope()
+    const choreo = scope.run(() => useFlightChoreography())!
+    const opts = makeOpts({ onLandingTrail: undefined })
+    expect(() => {
+      choreo.run(opts)
+      choreo.notifyLanding({ x: 0, y: 0 }, { x: 100, y: 50 })
+    }).not.toThrow()
+    scope.stop()
+  })
+
   it('watchdog timeout completes orchestrator if notifyAllLanded never fires', async () => {
     const scope = effectScope()
     const choreo = scope.run(() => useFlightChoreography())!
