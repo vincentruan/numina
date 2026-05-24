@@ -14,7 +14,7 @@ from apps.backend.app.models.family import Family
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.auth import UpdateMemberInfoRequest, UserResponse
-from apps.backend.app.schemas.coin import ChildBalanceResponse
+from apps.backend.app.schemas.coin import ChildBalanceResponse, ChildLedgerEntryResponse
 from apps.backend.app.schemas.family import (
     ChildEconomyConfigResponse,
     ChildEconomyConfigUpdate,
@@ -297,6 +297,28 @@ def get_child_balance(
         raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
     balance = coin_service.get_balance(db, child_id)
     return {"balance": balance}
+
+
+@router.get("/children/{child_id}/coins/ledger", response_model=list[ChildLedgerEntryResponse])
+def get_child_ledger(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Parent queries a specific child's coin ledger for trust-contract math
+    (days-estimate delta on cost edits, per R14)."""
+    child = db.query(User).filter(
+        User.id == child_id,
+        User.family_id == user.family_id,
+        User.role == "child",
+    ).first()
+    if not child:
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
+    txs = coin_service.list_transactions(db, child_id, user.family_id)
+    return [
+        ChildLedgerEntryResponse(amount=tx.amount, created_at=tx.created_at)
+        for tx in txs
+    ]
 
 
 @router.get("/children/balances", response_model=dict[str, int])

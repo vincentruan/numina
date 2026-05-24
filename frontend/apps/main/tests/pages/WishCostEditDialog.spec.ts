@@ -57,10 +57,13 @@ const wish: ParentWish = {
   updated_at: '',
 }
 
-function mountDialog(opts: { balance?: number } = {}) {
+function mountDialog(opts: { balance?: number; ledger?: Array<{ amount: number; created_at: string }> } = {}) {
   const visible = ref(true)
   vi.mocked(familyApi.getChildBalance).mockResolvedValue({
     data: { balance: opts.balance ?? 60 },
+  } as never)
+  vi.mocked(familyApi.getChildLedger).mockResolvedValue({
+    data: opts.ledger ?? [],
   } as never)
   const wrapper = mount(WishCostEditDialog, {
     props: {

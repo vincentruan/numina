@@ -58,7 +58,7 @@ import { ref, computed, watch } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { updateChildWishCost, type ParentWish } from '@/api/childWishes'
-import { getChildBalance } from '@/api/family'
+import { getChildBalance, getChildLedger, type ChildLedgerEntry } from '@/api/family'
 import { daysEstimate, reachabilityTint } from '@numina/math'
 
 const props = defineProps<{
@@ -80,6 +80,7 @@ const newCostInput = ref('')
 const submitting = ref(false)
 const submitError = ref('')
 const childBalance = ref<number | null>(null)
+const childLedger = ref<ChildLedgerEntry[]>([])
 
 const childProgress = computed(() => {
   if (childBalance.value === null || !props.wish.star_coin_cost || props.wish.star_coin_cost <= 0) return 0
@@ -119,7 +120,7 @@ const daysBefore = computed<number | null>(() => {
       progress: childProgress.value,
       covered: childBalance.value >= props.wish.star_coin_cost,
     },
-    [],
+    childLedger.value,
   )
 })
 
@@ -135,7 +136,7 @@ const daysAfter = computed<number | null>(() => {
       progress: childBalance.value / newCost.value,
       covered: childBalance.value >= newCost.value,
     },
-    [],
+    childLedger.value,
   )
 })
 
@@ -225,13 +226,19 @@ watch(
   async ([v, childId]) => {
     if (v && childId) {
       try {
-        const res = await getChildBalance(childId)
-        childBalance.value = res.data.balance
+        const [balanceRes, ledgerRes] = await Promise.all([
+          getChildBalance(childId),
+          getChildLedger(childId),
+        ])
+        childBalance.value = balanceRes.data.balance
+        childLedger.value = ledgerRes.data
       } catch {
         childBalance.value = null
+        childLedger.value = []
       }
     } else if (!v) {
       childBalance.value = null
+      childLedger.value = []
     }
   },
   { immediate: true },

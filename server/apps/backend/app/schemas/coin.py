@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
@@ -36,3 +38,8 @@ class GiftResponse(BaseModel):
 
 class ChildBalanceResponse(BaseModel):
     balance: int
+
+
+class ChildLedgerEntryResponse(BaseModel):
+    amount: int
+    created_at: datetime
