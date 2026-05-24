@@ -220,67 +220,17 @@
                   <span class="phase-pulse" aria-hidden="true" />
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
                 </div>
-                <!-- Deep think block with integrated phase indicator and tool timeline -->
-                <div
-                  v-if="msg.role === 'assistant' && (msg.thinkContent || msg.toolTimeline?.length || (msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && deepThink))"
-                  class="think-block"
-                  :class="{
-                    'think-block--open': msg.thinkOpen,
-                    'think-block--done': msg.thinkDone,
-                    'think-block--active': msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error',
-                    'shimmer-active': msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !msg.thinkDone,
-                  }"
-                >
-                  <button class="think-toggle" @click="onThinkToggle(msg)">
-                    <div class="think-icon-wrapper">
-                      <span v-if="msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !msg.thinkDone" class="phase-pulse-small" aria-hidden="true" />
-                      <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
-                        <path d="M9 21h6"/>
-                      </svg>
-                    </div>
-                    <span v-if="msg.thinkDone" class="think-status">{{ t('aiChat.thinkDone') }}</span>
-                    <span v-else class="think-status think-status--active">
-                      <span class="think-text-animated">{{ phaseLabel(msg.phase || 'thinking') }}</span>
-                    </span>
-                    <span v-if="msg.thinkDone" class="think-duration">{{ msg.thinkSeconds }}s</span>
-                    <!-- Tool summary chips shown when collapsed -->
-                    <template v-if="msg.thinkDone && !msg.thinkOpen && msg.toolTimeline?.length">
-                      <span class="think-chip-sep" aria-hidden="true">·</span>
-                      <span v-if="msg.toolTimeline.some(t => t.name === 'search' || t.icon === 'search')" class="think-chip">{{ t('aiChat.thinkSummarySearched') }}</span>
-                      <span v-if="msg.toolTimeline.filter(t => t.name !== 'search' && t.icon !== 'search').length > 0" class="think-chip">{{ t('aiChat.thinkSummaryTools', { n: msg.toolTimeline.filter(t => t.name !== 'search' && t.icon !== 'search').length }) }}</span>
-                    </template>
-                    <svg class="think-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </button>
-                  <!-- Tool timeline inside think block (shown when expanded) -->
-                  <div v-if="msg.thinkOpen && msg.toolTimeline?.length" class="tool-timeline">
-                    <div
-                      v-for="tool in msg.toolTimeline"
-                      :key="tool.id"
-                      class="tool-card"
-                      :class="{ 'tool-card--done': tool.result, 'tool-card--error': tool.result && !tool.result.success, 'shimmer-active': !tool.result }"
-                    >
-                      <div class="tool-card-main">
-                        <span class="tool-card-icon" aria-hidden="true">{{ toolIcon(tool.icon) }}</span>
-                        <div class="tool-card-copy">
-                          <span class="tool-card-title">{{ tool.displayName }}</span>
-                          <span class="tool-card-meta">{{ toolStatus(tool) }}</span>
-                        </div>
-                      </div>
-                      <div v-if="tool.argumentsText" class="tool-card-args">{{ tool.argumentsText }}</div>
-                      <div v-if="tool.result && !tool.result.success" class="tool-result tool-result--failed">
-                        {{ t('aiChat.toolCallFailed') }}
-                      </div>
-                      <div v-else-if="tool.result" class="tool-result">
-                        {{ toolResultText(tool.result) }}
-                      </div>
-                    </div>
-                  </div>
-                  <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
-                  <div v-if="msg.thinkOpen && msg.thinkContent" class="think-content" v-html="msg.thinkContent" />
-                </div>
+                <!-- Process block (replaces inline think-block) -->
+                <AiProcessBlock
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && deepThink"
+                  :status="msg.processStatus || 'running'"
+                  :elapsed-ms="msg.processElapsedMs || 0"
+                  :reasoning-content="msg.thinkContent"
+                  :reasoning-status="msg.phase === 'thinking' ? 'streaming' : 'done'"
+                  :reasoning-elapsed-ms="msg.thinkSeconds ? msg.thinkSeconds * 1000 : undefined"
+                  :tool-steps="msg.processSteps || mapToolTimelineToSteps(msg.toolTimeline)"
+                  :default-expanded="!msg.thinkDone"
+                />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
                   v-if="msg.role === 'assistant' && msg.phase !== 'error'"
@@ -446,6 +396,8 @@ import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } f
 import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
+import AiFinalAnswer from '@/components/ai/AiFinalAnswer.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import type { AgentEvent } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
@@ -482,6 +434,42 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
+function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ToolStep[] {
+  if (!timeline) return []
+  return timeline.map(tool => ({
+    id: tool.id,
+    name: tool.name,
+    displayName: tool.displayName,
+    icon: tool.icon,
+    args: parseToolArgs(tool.argumentsText),
+    status: tool.result ? (tool.result.success ? 'done' : 'error') : 'running',
+    resultSummary: tool.result?.summary,
+    error: tool.result?.error,
+    elapsedMs: tool.result?.execution_time_ms,
+  }))
+}
+
+function parseToolArgs(argsText?: string): Record<string, unknown> {
+  if (!argsText) return {}
+  try {
+    return JSON.parse(argsText)
+  } catch {
+    return { text: argsText }
+  }
+}
+
+interface ToolStep {
+  id: string
+  name: string
+  displayName: string
+  icon: string
+  args: Record<string, unknown>
+  status: 'pending' | 'running' | 'done' | 'error'
+  resultSummary?: string
+  error?: string
+  elapsedMs?: number
+}
+
 interface Message {
   id: string
   role: 'user' | 'assistant'
@@ -499,6 +487,10 @@ interface Message {
   thinkSeconds?: number
   thinkManuallyToggled?: boolean
   toolTimeline?: ToolTimelineItem[]
+  // New fields for AiProcessBlock
+  processStatus?: 'running' | 'done' | 'error'
+  processElapsedMs?: number
+  processSteps?: ToolStep[]
 }
 
 interface ToolTimelineItem {
