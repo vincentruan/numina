@@ -107,9 +107,10 @@ describe('celebrationState', () => {
       markCelebrated(ids)
       const result = getCelebratedIds()
       expect(result.size).toBe(50)
-      // Should keep last 50 (most recent)
-      expect(result.has('id9')).toBe(true) // 10th from end
-      expect(result.has('id0')).toBe(false) // First one pruned
+      // Should keep last 50 (most recent): id10..id59
+      expect(result.has('id10')).toBe(true) // first survivor
+      expect(result.has('id9')).toBe(false) // last pruned
+      expect(result.has('id0')).toBe(false) // first one pruned
     })
 
     it('silently fails on localStorage quota error', () => {
