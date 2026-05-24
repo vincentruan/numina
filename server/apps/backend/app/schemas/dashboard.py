@@ -114,3 +114,127 @@ class NewAssetsResponse(BaseModel):
     count: int
     period: str
     items: list[NewAssetItem]
+
+
+# ═══════════════════════════════════════
+# Insights Schemas (S0-S5 for 洞悉 Tab)
+# ═══════════════════════════════════════
+
+
+class DailyCostStat(BaseModel):
+    """最高/最低日均成本统计"""
+    name: str
+    cost: float
+    icon: str
+
+
+class LongestHeldStat(BaseModel):
+    """持有最久统计"""
+    name: str
+    days: int
+    icon: str
+
+
+class TopCategoryStat(BaseModel):
+    """占比最高分类统计"""
+    name: str
+    percentage: float
+    icon: str
+    color: str
+
+
+class SmartDiscoveryResponse(BaseModel):
+    """S0 智能发现 - 5项统计卡片"""
+    purchase_yoy: float | None = None
+    highest_daily_cost: DailyCostStat | None = None
+    lowest_daily_cost: DailyCostStat | None = None
+    longest_held: LongestHeldStat | None = None
+    top_category: TopCategoryStat | None = None
+
+
+class GoalProgressItem(SnowflakeBase):
+    """S2 目标进度项"""
+    id: int
+    name: str
+    category_color: str
+    status: str  # 'on-track', 'near-end', 'overdue'
+    progress_pct: float
+    days_held: int
+    expected_days: int
+    expected_years: float
+
+
+class GoalProgressSummary(BaseModel):
+    """S2 目标进度汇总"""
+    healthy: int
+    near_end: int
+    overdue: int
+
+
+class GoalProgressResponse(BaseModel):
+    """S2 目标进度总览响应"""
+    summary: GoalProgressSummary
+    items: list[GoalProgressItem]
+
+
+class TypeDistributionItem(SnowflakeBase):
+    """S3 资产类型分布项"""
+    category_id: int
+    name: str
+    color: str
+    percentage: float
+    amount: float
+    count: int
+
+
+class TypeDistributionResponse(BaseModel):
+    """S3 资产类型分布响应"""
+    total_value: float
+    total_count: int
+    categories: list[TypeDistributionItem]
+
+
+class DurationBucket(BaseModel):
+    """S4 持有时长区间"""
+    label_key: str  # i18n key
+    count: int
+    percentage: float
+
+
+class DurationDistributionResponse(BaseModel):
+    """S4 持有时长分布响应"""
+    avg_days: float
+    max_days: int
+    buckets: list[DurationBucket]
+
+
+class RetentionItem(SnowflakeBase):
+    """S5 资产保值率项"""
+    id: int
+    name: str
+    icon: str
+    service_days: int
+    bought_amount: float
+    current_amount: float
+    retention_rate: float
+    profit_loss: float
+    rank: int = 0
+
+
+class RetentionRateResponse(BaseModel):
+    """S5 资产保值率响应"""
+    total_bought: float
+    total_sold: float
+    avg_rate: float
+    total_profit_loss: float
+    top_items: list[RetentionItem]
+
+
+class InsightsResponse(BaseModel):
+    """洞悉 Tab 完整响应"""
+    smart_discovery: SmartDiscoveryResponse
+    daily_cost_ranking: list[DailyCostItem]  # reuse existing schema
+    goal_progress: GoalProgressResponse
+    type_distribution: TypeDistributionResponse
+    duration_distribution: DurationDistributionResponse
+    retention_rate: RetentionRateResponse

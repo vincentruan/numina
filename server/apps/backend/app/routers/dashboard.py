@@ -12,6 +12,7 @@ from apps.backend.app.schemas.dashboard import (
     DailyCostItem,
     ExpiringSoonItem,
     InvestmentReturnItem,
+    InsightsResponse,
     LowUsageItem,
     NewAssetsResponse,
     OverviewResponse,
@@ -41,7 +42,7 @@ def get_allocation(
 
 @router.get("/trend", response_model=TrendResponse)
 def get_trend(
-    period: str = Query("month"),
+    period: Literal["month", "quarter", "year"] = Query("month"),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
@@ -59,10 +60,11 @@ def get_top_assets(
 
 @router.get("/daily-cost-ranking", response_model=list[DailyCostItem])
 def get_daily_cost_ranking(
+    limit: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):
-    return dashboard_service.get_daily_cost_ranking(db, user)
+    return dashboard_service.get_daily_cost_ranking(db, user, limit)
 
 
 @router.get("/low-usage-assets", response_model=list[LowUsageItem])
@@ -110,7 +112,7 @@ def get_home_assets_category_counts(
     if status not in valid_statuses:
         raise AppError(
             ErrorCode.DASHBOARD_INVALID_STATUS,
-            detail=f"Invalid status: {status}. Must be one of {valid_statuses}",
+            details=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
     return dashboard_service.get_home_assets_category_counts(db, user, status)
 
@@ -129,7 +131,7 @@ def get_home_assets_paginated(
     if status not in valid_statuses:
         raise AppError(
             ErrorCode.DASHBOARD_INVALID_STATUS,
-            detail=f"Invalid status: {status}. Must be one of {valid_statuses}",
+            details=f"Invalid status: {status}. Must be one of {valid_statuses}",
         )
     return dashboard_service.get_home_assets_page(db, user, status, page, page_size, category_id)
 
@@ -156,3 +158,15 @@ def get_expiring_soon(
     Financial assets (accounts, subscriptions) - needs attention, show with alert color.
     """
     return dashboard_service.get_expiring_soon_assets(db, user, days_threshold)
+
+
+@router.get("/insights", response_model=InsightsResponse)
+def get_insights(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """
+    Get comprehensive insights data for the Insights tab.
+    Returns S0-S5 all sections in one API call for efficiency.
+    """
+    return dashboard_service.get_insights(db, user)

@@ -1975,6 +1975,77 @@ export default {
     periodYear: '年',
     perDay: '/天',
   },
+  insights: {
+    // S0 智能发现
+    smartDiscovery: {
+      title: '智能发现',
+      purchaseYoY: '购入同比上月',
+      highestDailyCost: '最高日均成本',
+      lowestDailyCost: '最低日均成本',
+      longestHeld: '持有最久',
+      topCategoryByValue: '占比最高分类',
+      vsLastMonth: 'vs 上月',
+      byValue: '按金额占比',
+      daysUnit: '天',
+    },
+    // S1 日均成本排行
+    dailyCostRank: {
+      title: '日均成本排行',
+      highest: '最高',
+      lowest: '最低',
+      serviceDays: '已服役 {days} 天',
+      viewAll: '查看全部',
+    },
+    // S2 目标进度总览
+    goalProgress: {
+      title: '目标进度总览',
+      healthy: '使用健康',
+      nearEnd: '临近寿命',
+      overdue: '已超预期',
+      daysHeld: '已持有 {days} 天',
+      expectedDays: '预期 {days} 天（{years} 年）',
+    },
+    // S3 资产类型分布
+    typeDistribution: {
+      title: '资产类型分布',
+      byValue: '按金额',
+      byCount: '按件数',
+      totalValue: '总价值',
+      totalCount: '总件数',
+      itemsUnit: '{count}件',
+    },
+    // S4 持有时长分布
+    durationDistribution: {
+      title: '持有时长分布',
+      avgHeld: '平均持有',
+      maxHeld: '最长持有',
+      lessThan1Year: '< 1 年',
+      range1to2Years: '1-2 年',
+      range2to4Years: '2-4 年',
+      range4to6Years: '4-6 年',
+      range6to8Years: '6-8 年',
+      moreThan8Years: '> 8 年',
+      itemsUnit: '{count} 件',
+    },
+    // S5 资产保值率
+    retentionRate: {
+      title: '资产保值率',
+      physicalOnly: '仅实物资产',
+      totalBought: '总买入',
+      sold: '卖出',
+      avgRate: '平均保值率',
+      totalProfitLoss: '总盈亏',
+      top3: '保值率 Top 3',
+      serviceDays: '已服役 {days} 天',
+      bought: '买入',
+      current: '当前',
+    },
+    // 通用
+    common: {
+      days: '天',
+      items: '件',
+    },
+  },
   challenge: {
     sectionTitle: '挑战管理',
     create: '创建挑战',

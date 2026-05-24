@@ -30,7 +30,7 @@
               </van-tabs>
             </div>
             <div class="net-worth-value">
-              {{ formatMoney(dashboardStore.overview?.net_worth) }}
+              {{ format(dashboardStore.overview?.net_worth ?? 0) }}
             </div>
             <div
               v-if="monthOverMonthChange !== null"
@@ -105,7 +105,7 @@
                     <div class="new-asset-date">{{ daysAgo(item.created_at) }}</div>
                   </div>
                 </div>
-                <div class="new-asset-value">{{ formatMoney(item.current_value) }}</div>
+                <div class="new-asset-value">{{ format(item.current_value) }}</div>
               </div>
             </template>
             <van-empty
@@ -132,7 +132,7 @@
                   <span class="cost-icon">{{ item.icon || '📦' }}</span>
                   <span class="cost-name">{{ item.name }}</span>
                 </div>
-                <span class="cost-value">{{ formatMoney(item.daily_cost) }}{{ t('analyticsPage.perDay') }}</span>
+                <span class="cost-value">{{ format(item.daily_cost) }}{{ t('analyticsPage.perDay') }}</span>
               </div>
             </template>
             <van-empty v-else :description="t('common.noData')" image-size="60" />
@@ -195,11 +195,7 @@
 
       <!-- ── 洞悉 tab ── -->
       <van-tab :title="t('analyticsPage.tabInsight')" name="insight">
-        <div class="insight-empty">
-          <div class="insight-icon">🔍</div>
-          <div class="insight-title">{{ t('analyticsPage.insightTitle') }}</div>
-          <div class="insight-subtitle">{{ t('analyticsPage.insightPlaceholder') }}</div>
-        </div>
+        <InsightsTab />
       </van-tab>
     </van-tabs>
 
@@ -216,11 +212,13 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import TrendLineChartSimple from '@/components/charts/TrendLineChartSimple.vue'
 import AllocationTreemapChart from '@/components/charts/AllocationTreemapChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
-import { formatCurrency } from '@/utils/format'
+import InsightsTab from '@/components/insights/InsightsTab.vue'
+import { useCurrency } from '@/composables/useCurrency'
 
 const { t } = useI18n()
 const router = useRouter()
 const dashboardStore = useDashboardStore()
+const { format } = useCurrency()
 
 const activeTab = ref<'trend' | 'insight'>('trend')
 const trendPeriod = ref<'month' | 'quarter' | 'year'>('month')
@@ -251,13 +249,6 @@ const changeLabel = computed(() => {
   if (val === null) return ''
   return val >= 0 ? t('analyticsPage.changeUp') : t('analyticsPage.changeDown')
 })
-
-function formatMoney(value: number | string | undefined | null): string {
-  if (value === undefined || value === null) return '¥0'
-  const num = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(num)) return '¥0'
-  return formatCurrency(num)
-}
 
 function daysAgo(isoDate: string): string {
   if (!isoDate) return ''
@@ -611,36 +602,6 @@ const tabActiveColor = computed(() =>
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-}
-
-/* ── 洞悉 empty state ── */
-.insight-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  gap: 16px;
-  padding: 24px;
-  text-align: center;
-}
-
-.insight-icon {
-  font-size: 48px;
-  line-height: 1;
-}
-
-.insight-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.insight-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  max-width: 260px;
-  line-height: 1.6;
 }
 
 /* ── Bottom spacer ── */

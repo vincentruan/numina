@@ -249,3 +249,424 @@ def test_dashboard_new_assets_excludes_old_assets(client, auth_headers):
         "/api/v1/dashboard/new-assets", headers=auth_headers, params={"period": "decade"}
     )
     assert response_invalid.status_code == 422
+
+
+# ═══════════════════════════════════════
+# Insights Tests (S0-S5)
+# ═══════════════════════════════════════
+
+
+def test_dashboard_insights_returns_all_sections(client, auth_headers, setup_test_data):
+    """Insights endpoint returns all 6 sections with expected structure"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # All sections must be present
+    assert "smart_discovery" in data
+    assert "daily_cost_ranking" in data
+    assert "goal_progress" in data
+    assert "type_distribution" in data
+    assert "duration_distribution" in data
+    assert "retention_rate" in data
+
+
+def test_insights_smart_discovery_structure(client, auth_headers, setup_test_data):
+    """S0 智能发现 returns 5 stat card fields"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    smart_discovery = response.json()["data"]["smart_discovery"]
+
+    # All 5 stat card fields present
+    assert "purchase_yoy" in smart_discovery
+    assert "highest_daily_cost" in smart_discovery
+    assert "lowest_daily_cost" in smart_discovery
+    assert "longest_held" in smart_discovery
+    assert "top_category" in smart_discovery
+
+    # highest_daily_cost has expected nested fields (when present)
+    if smart_discovery["highest_daily_cost"]:
+        assert "name" in smart_discovery["highest_daily_cost"]
+        assert "cost" in smart_discovery["highest_daily_cost"]
+        assert "icon" in smart_discovery["highest_daily_cost"]
+
+
+def test_insights_daily_cost_ranking(client, auth_headers, setup_test_data):
+    """S1 日均成本排行 returns top 5 items sorted by daily_cost descending"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    ranking = response.json()["data"]["daily_cost_ranking"]
+
+    # Should have items (we created assets with purchase_date and purchase_price)
+    assert len(ranking) >= 1
+    assert len(ranking) <= 5  # Insights returns top 5
+
+    # Each item has expected fields
+    item = ranking[0]
+    assert "id" in item
+    assert "name" in item
+    assert "daily_cost" in item
+    assert "days_used" in item
+    assert "total_cost" in item
+    assert item["daily_cost"] > 0
+
+    # Sorted descending by daily_cost
+    if len(ranking) > 1:
+        assert ranking[0]["daily_cost"] >= ranking[1]["daily_cost"]
+
+
+def test_insights_goal_progress_structure(client, auth_headers, setup_test_data):
+    """S2 目标进度总览 returns summary and items with progress status"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    goal_progress = response.json()["data"]["goal_progress"]
+
+    # Summary has healthy, near_end, overdue counts
+    assert "summary" in goal_progress
+    summary = goal_progress["summary"]
+    assert "healthy" in summary
+    assert "near_end" in summary
+    assert "overdue" in summary
+    assert isinstance(summary["healthy"], int)
+    assert isinstance(summary["near_end"], int)
+    assert isinstance(summary["overdue"], int)
+
+    # Items list (may be empty if no assets with expected_lifespan_days)
+    assert "items" in goal_progress
+    items = goal_progress["items"]
+    if len(items) > 0:
+        item = items[0]
+        assert "id" in item
+        assert "name" in item
+        assert "status" in item
+        assert item["status"] in ["on-track", "near-end", "overdue"]
+        assert "progress_pct" in item
+        assert "days_held" in item
+        assert "expected_days" in item
+
+
+def test_insights_type_distribution(client, auth_headers, setup_test_data):
+    """S3 资产类型分布 returns total value/count and categories breakdown"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    type_dist = response.json()["data"]["type_distribution"]
+
+    # Total fields
+    assert "total_value" in type_dist
+    assert "total_count" in type_dist
+    assert type_dist["total_count"] == 3  # We created 3 assets
+
+    # Categories list
+    assert "categories" in type_dist
+    categories = type_dist["categories"]
+    assert len(categories) >= 1
+
+    # Each category has expected fields
+    cat = categories[0]
+    assert "category_id" in cat
+    assert "name" in cat
+    assert "color" in cat
+    assert "percentage" in cat
+    assert "amount" in cat
+    assert "count" in cat
+
+    # Percentages sum to 100
+    total_pct = sum(c["percentage"] for c in categories)
+    assert abs(total_pct - 100.0) < 0.1
+
+
+def test_insights_duration_distribution(client, auth_headers, setup_test_data):
+    """S4 持有时长分布 returns avg/max days and bucket breakdown"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    duration = response.json()["data"]["duration_distribution"]
+
+    # Stats
+    assert "avg_days" in duration
+    assert "max_days" in duration
+    assert isinstance(duration["avg_days"], (int, float))
+    assert isinstance(duration["max_days"], int)
+
+    # Buckets
+    assert "buckets" in duration
+    buckets = duration["buckets"]
+    assert len(buckets) == 6  # 6 predefined buckets
+
+    # Each bucket has expected fields
+    bucket = buckets[0]
+    assert "label_key" in bucket
+    assert "count" in bucket
+    assert "percentage" in bucket
+
+    # Bucket percentages sum to 100
+    total_pct = sum(b["percentage"] for b in buckets)
+    assert abs(total_pct - 100.0) < 0.1
+
+
+def test_insights_retention_rate(client, auth_headers, setup_test_data):
+    """S5 资产保值率 returns totals, avg_rate, and top_items for physical assets"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    retention = response.json()["data"]["retention_rate"]
+
+    # Summary fields
+    assert "total_bought" in retention
+    assert "total_sold" in retention
+    assert "avg_rate" in retention
+    assert "total_profit_loss" in retention
+
+    # top_items list (physical assets only)
+    assert "top_items" in retention
+    items = retention["top_items"]
+    if len(items) > 0:
+        item = items[0]
+        assert "id" in item
+        assert "name" in item
+        assert "icon" in item
+        assert "service_days" in item
+        assert "bought_amount" in item
+        assert "current_amount" in item
+        assert "retention_rate" in item
+        assert "profit_loss" in item
+        assert "rank" in item
+        assert item["rank"] == 1  # First item has rank 1
+
+
+def test_insights_empty_data(client, auth_headers):
+    """Insights returns valid structure even with no assets"""
+    response = client.get("/api/v1/dashboard/insights", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # All sections present even with empty data
+    assert "smart_discovery" in data
+    assert "daily_cost_ranking" in data
+    assert "goal_progress" in data
+    assert "type_distribution" in data
+    assert "duration_distribution" in data
+    assert "retention_rate" in data
+
+    # Empty lists/count=0 for sections that depend on assets
+    assert data["daily_cost_ranking"] == []
+    assert data["goal_progress"]["items"] == []
+    assert data["type_distribution"]["total_count"] == 0
+    assert data["duration_distribution"]["avg_days"] == 0
+    assert data["duration_distribution"]["max_days"] == 0
+    assert data["retention_rate"]["top_items"] == []
+
+
+def test_insights_requires_auth(client):
+    """Insights endpoint rejects unauthenticated requests"""
+    response = client.get("/api/v1/dashboard/insights")
+    assert response.status_code == 401
+
+
+# ═══════════════════════════════════════
+# States Summary & Home Assets Tests
+# ═══════════════════════════════════════
+
+
+def test_dashboard_states_summary(client, auth_headers, setup_test_data):
+    """States summary returns count and total_value grouped by status"""
+    response = client.get("/api/v1/dashboard/states-summary", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert "states" in data
+    assert "total_count" in data
+    assert "total_value" in data
+
+    # We created 3 assets, all default to 'in_use' status
+    assert data["total_count"] == 3
+    assert "in_use" in data["states"]
+    assert data["states"]["in_use"]["count"] == 3
+
+
+def test_dashboard_home_assets(client, auth_headers, setup_test_data):
+    """Home assets returns assets grouped by status"""
+    response = client.get("/api/v1/dashboard/home-assets", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # Should have in_use group (our default assets)
+    assert "in_use" in data
+    in_use_items = data["in_use"]
+    assert len(in_use_items) <= 5  # Default limit is 5
+
+    # Each item should have asset fields (full AssetResponse structure)
+    if len(in_use_items) > 0:
+        item = in_use_items[0]
+        assert "id" in item
+        assert "name" in item
+        assert "category" in item  # Nested category object, not flat category_name
+
+
+def test_dashboard_home_assets_limit(client, auth_headers, setup_test_data):
+    """Home assets respects limit parameter"""
+    response = client.get("/api/v1/dashboard/home-assets?limit=2", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # Should limit to 2 items per status
+    if "in_use" in data:
+        assert len(data["in_use"]) <= 2
+
+
+def test_dashboard_home_assets_category_counts(client, auth_headers, setup_test_data):
+    """Home assets category counts returns category breakdown for a status"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use/categories", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # Should return list of categories with counts
+    assert isinstance(data, list)
+    if len(data) > 0:
+        cat = data[0]
+        assert "id" in cat
+        assert "name" in cat
+        assert "icon" in cat
+        assert "color" in cat
+        assert "count" in cat
+
+
+def test_dashboard_home_assets_category_counts_invalid_status(client, auth_headers):
+    """Invalid status returns 400 error for category counts"""
+    response = client.get("/api/v1/dashboard/home-assets/invalid_status/categories", headers=auth_headers)
+    assert response.status_code == 400
+
+
+def test_dashboard_home_assets_paginated(client, auth_headers, setup_test_data):
+    """Home assets paginated returns paginated asset list for a status"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert "items" in data
+    assert "total" in data
+    assert "page" in data
+    assert "page_size" in data
+    assert "total_pages" in data
+    assert "has_next" in data
+    assert "has_prev" in data
+
+    # Default page_size is 20
+    assert data["page_size"] == 20
+    assert data["page"] == 1
+
+
+def test_dashboard_home_assets_paginated_with_pagination(client, auth_headers, setup_test_data):
+    """Home assets paginated respects page and page_size params"""
+    response = client.get("/api/v1/dashboard/home-assets/in_use?page=1&page_size=1", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert len(data["items"]) <= 1
+    assert data["page_size"] == 1
+    # With 3 assets, page_size=1 means total_pages >= 3
+    assert data["total_pages"] >= 3
+
+
+def test_dashboard_home_assets_paginated_invalid_status(client, auth_headers):
+    """Invalid status returns 400 error for paginated endpoint"""
+    response = client.get("/api/v1/dashboard/home-assets/invalid_status", headers=auth_headers)
+    assert response.status_code == 400
+
+
+def test_dashboard_expiring_soon(client, auth_headers, setup_test_data):
+    """Expiring soon returns assets approaching end of lifespan"""
+    response = client.get("/api/v1/dashboard/expiring-soon", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert isinstance(data, list)
+    # 房产 has expected_lifespan_days=25550 (~70 years), purchased 2020-01-01
+    # Should not be expiring soon with default 90 day threshold
+    # But endpoint should still work
+    if len(data) > 0:
+        item = data[0]
+        assert "id" in item
+        assert "name" in item
+        assert "asset_type" in item
+        assert "remaining_days" in item
+        assert "current_value" in item
+
+
+def test_dashboard_expiring_soon_threshold(client, auth_headers):
+    """Expiring soon respects days_threshold parameter"""
+    # Create an asset that will expire soon
+    cat_response = client.get("/api/v1/categories", headers=auth_headers)
+    categories = cat_response.json()["data"]
+    physical_cat = [c for c in categories if c["asset_type"] == "physical"][0]
+
+    # Create asset with 100 day expected lifespan, purchased 80 days ago
+    from datetime import date, timedelta
+    purchase_date = date.today() - timedelta(days=80)
+
+    client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "即将过期设备",
+        "category_id": physical_cat["id"],
+        "asset_type": "physical",
+        "purchase_price": 1000,
+        "current_value": 500,
+        "purchase_date": purchase_date.isoformat(),
+        "expected_lifespan_days": 100,
+    })
+
+    # With threshold=30, this asset (remaining_days=20) should appear
+    response = client.get("/api/v1/dashboard/expiring-soon?days_threshold=30", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    # Should find the expiring asset
+    expiring = [a for a in data if a["name"] == "即将过期设备"]
+    assert len(expiring) == 1
+    assert expiring[0]["remaining_days"] == 20
+
+
+def test_dashboard_expiring_soon_requires_auth(client):
+    """Expiring soon endpoint rejects unauthenticated requests"""
+    response = client.get("/api/v1/dashboard/expiring-soon")
+    assert response.status_code == 401
+
+
+# ═══════════════════════════════════════
+# Edge Cases & Validation Tests
+# ═══════════════════════════════════════
+
+
+def test_dashboard_trend_invalid_period(client, auth_headers, setup_test_data):
+    """Trend endpoint rejects invalid period values (Literal validation)"""
+    client.post("/api/v1/family/snapshots/generate", headers=auth_headers)
+
+    response = client.get("/api/v1/dashboard/trend?period=invalid", headers=auth_headers)
+    assert response.status_code == 422  # FastAPI validation error
+
+
+def test_dashboard_trend_literal_period(client, auth_headers, setup_test_data):
+    """Trend endpoint accepts only month/quarter/year (Literal type)"""
+    client.post("/api/v1/family/snapshots/generate", headers=auth_headers)
+
+    # Valid periods
+    for period in ["month", "quarter", "year"]:
+        response = client.get(f"/api/v1/dashboard/trend?period={period}", headers=auth_headers)
+        assert response.status_code == 200
+
+
+def test_dashboard_daily_cost_ranking_limit(client, auth_headers, setup_test_data):
+    """Daily cost ranking respects limit parameter"""
+    response = client.get("/api/v1/dashboard/daily-cost-ranking?limit=3", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+
+    assert len(data) <= 3
+
+
+def test_dashboard_daily_cost_ranking_limit_bounds(client, auth_headers):
+    """Daily cost ranking limit has bounds (ge=1, le=100)"""
+    # limit=0 should fail
+    response = client.get("/api/v1/dashboard/daily-cost-ranking?limit=0", headers=auth_headers)
+    assert response.status_code == 422
+
+    # limit=101 should fail
+    response = client.get("/api/v1/dashboard/daily-cost-ranking?limit=101", headers=auth_headers)
+    assert response.status_code == 422

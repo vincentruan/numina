@@ -15,6 +15,96 @@ export interface ExpiringSoonItem {
   original_value: number
 }
 
+// ═══════════════════════════════════════
+// Insights Types
+// ═══════════════════════════════════════
+
+export interface SmartDiscoveryResponse {
+  purchase_yoy: number | null
+  highest_daily_cost: { name: string; cost: number; icon: string } | null
+  lowest_daily_cost: { name: string; cost: number; icon: string } | null
+  longest_held: { name: string; days: number; icon: string } | null
+  top_category: { name: string; percentage: number; icon: string; color: string } | null
+}
+
+export interface GoalProgressItem {
+  id: string
+  name: string
+  category_color: string
+  status: 'on-track' | 'near-end' | 'overdue'
+  progress_pct: number
+  days_held: number
+  expected_days: number
+  expected_years: number
+}
+
+export interface GoalProgressSummary {
+  healthy: number
+  near_end: number
+  overdue: number
+}
+
+export interface GoalProgressResponse {
+  summary: GoalProgressSummary
+  items: GoalProgressItem[]
+}
+
+export interface TypeDistributionItem {
+  category_id: string
+  name: string
+  color: string
+  percentage: number
+  amount: number
+  count: number
+}
+
+export interface TypeDistributionResponse {
+  total_value: number
+  total_count: number
+  categories: TypeDistributionItem[]
+}
+
+export interface DurationBucket {
+  label_key: string
+  count: number
+  percentage: number
+}
+
+export interface DurationDistributionResponse {
+  avg_days: number
+  max_days: number
+  buckets: DurationBucket[]
+}
+
+export interface RetentionItem {
+  id: string
+  name: string
+  icon: string
+  service_days: number
+  bought_amount: number
+  current_amount: number
+  retention_rate: number
+  profit_loss: number
+  rank: number
+}
+
+export interface RetentionRateResponse {
+  total_bought: number
+  total_sold: number
+  avg_rate: number
+  total_profit_loss: number
+  top_items: RetentionItem[]
+}
+
+export interface InsightsResponse {
+  smart_discovery: SmartDiscoveryResponse
+  daily_cost_ranking: DailyCostItem[]
+  goal_progress: GoalProgressResponse
+  type_distribution: TypeDistributionResponse
+  duration_distribution: DurationDistributionResponse
+  retention_rate: RetentionRateResponse
+}
+
 export function getOverview() {
   return http.get<DashboardOverview>('/dashboard/overview')
 }
@@ -78,6 +168,10 @@ export function getHomeAssetsPaginated(
 
 export function getNewAssets(period: 'month' | 'quarter' | 'year' = 'month') {
   return http.get<NewAssetsResponse>('/dashboard/new-assets', { params: { period } })
+}
+
+export function getInsights() {
+  return http.get<InsightsResponse>('/dashboard/insights')
 }
 
 export interface ActivityItem {
