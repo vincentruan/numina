@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { nextTick } from 'vue'
 import WishConstellationGrid from './WishConstellationGrid.vue'
 import type { ChildWish, ChildWishStats } from '@/api/childWishes'
 import type { ReachabilityTint } from '@numina/math'
@@ -176,5 +177,55 @@ describe('WishConstellationGrid', () => {
     const labels = wrapper.findAll('.days-added-label')
     expect(labels).toHaveLength(1)
     expect(labels[0].text()).toBe('+3 天')
+  })
+
+  it('AE3: forwards peek-start at 350ms hold and peek-end on release from card', async () => {
+    vi.useFakeTimers()
+    const wishes = [wish('a'), wish('b')]
+    const tintMap = new Map<string, ReachabilityTint>([
+      ['a', 'yellow'],
+      ['b', 'red'],
+    ])
+    const wrapper = mount(WishConstellationGrid, {
+      props: {
+        wishes,
+        stats: baseStats,
+        daysEstimateMap: new Map([['a', 5], ['b', 18]]),
+        tintMap,
+      },
+      global: { plugins: [i18n] },
+    })
+    const cards = wrapper.findAll('.wish-constellation-card')
+    await cards[0].trigger('touchstart')
+    vi.advanceTimersByTime(350)
+    await nextTick()
+    expect(wrapper.emitted('peek-start')).toEqual([['a']])
+    await cards[0].trigger('touchend')
+    expect(wrapper.emitted('peek-end')).toEqual([['a']])
+    vi.useRealTimers()
+  })
+
+  it('AE3: pressed card gets is-peek-affected class on others, confirm-tag on pressed', () => {
+    const wishes = [wish('a'), wish('b')]
+    const tintMap = new Map<string, ReachabilityTint>([
+      ['a', 'green'],
+      ['b', 'yellow'],
+    ])
+    const wrapper = mount(WishConstellationGrid, {
+      props: {
+        wishes,
+        stats: baseStats,
+        daysEstimateMap: new Map([['a', null], ['b', 5]]),
+        tintMap,
+        peekActiveWishId: 'a',
+        peekDeltas: [{ wish_id: 'b', before_progress: 0.5, after_progress: 0.2, days_added: 3 }],
+      },
+      global: { plugins: [i18n] },
+    })
+    const cards = wrapper.findAll('.wish-constellation-card')
+    expect(cards[0].classes()).toContain('is-pressed')
+    expect(cards[1].classes()).toContain('is-peek-affected')
+    expect(cards[0].find('.confirm-tag').exists()).toBe(true)
+    expect(cards[1].find('.confirm-tag').exists()).toBe(false)
   })
 })

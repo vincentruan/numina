@@ -37,7 +37,11 @@
         :stats="stats"
         :days-estimate-map="wishDaysMap"
         :tint-map="wishTintMap"
+        :peek-active-wish-id="peekActiveWishId"
+        :peek-deltas="peekDeltas"
         @tap="goToDetail"
+        @peek-start="onPeekStart"
+        @peek-end="onPeekEnd"
       />
 
       <!-- Active wishes -->
@@ -165,7 +169,7 @@ import {
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { useBalancePolling } from '@/composables/useBalancePolling'
-import { daysEstimate, reachabilityTint, type ReachabilityTint } from '@numina/math'
+import { daysEstimate, reachabilityTint, previewSpend, type ReachabilityTint, type SpendDelta } from '@numina/math'
 import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 
 const { t } = useI18n()
@@ -212,6 +216,38 @@ const wishTintMap = computed(() => {
 
 function goToDetail(wishId: string) {
   router.push({ name: 'ChildWishDetail', params: { id: wishId } })
+}
+
+const PEEK_TIMEOUT_MS = 1500
+
+const peekActiveWishId = ref<string | null>(null)
+const peekDeltas = ref<SpendDelta[]>([])
+let peekTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearPeekTimer() {
+  if (peekTimer) {
+    clearTimeout(peekTimer)
+    peekTimer = null
+  }
+}
+
+function endPeek() {
+  clearPeekTimer()
+  peekActiveWishId.value = null
+  peekDeltas.value = []
+}
+
+function onPeekStart(wishId: string) {
+  if (!stats.value) return
+  clearPeekTimer()
+  const result = previewSpend(wishId, stats.value.balance, stats.value.priority_simulation, ledger.value)
+  peekActiveWishId.value = wishId
+  peekDeltas.value = result.deltas
+  peekTimer = setTimeout(endPeek, PEEK_TIMEOUT_MS)
+}
+
+function onPeekEnd(_wishId: string) {
+  endPeek()
 }
 
 function daysToWish(wishId: string): number | null {
