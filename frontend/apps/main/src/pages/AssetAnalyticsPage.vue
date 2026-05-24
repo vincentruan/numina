@@ -2,119 +2,206 @@
   <div class="analytics-page">
     <PageHeader :title="t('analyticsPage.title')" />
 
-    <!-- Card Container -->
-    <div class="analytics-detail-cards">
-      <!-- Trend Card -->
-      <van-cell-group inset class="analytics-detail-card">
-        <div class="card-header">
-          <span class="card-title">{{ t('analyticsPage.trendCard') }}</span>
-          <van-tabs v-model:active="trendPeriod" type="card" shrink @change="onTrendPeriodChange">
-            <van-tab title="月" name="month" />
-            <van-tab title="季" name="quarter" />
-            <van-tab title="年" name="year" />
-          </van-tabs>
-        </div>
-        <div class="card-content">
-          <TrendLineChartSimple
-            v-if="dashboardStore.trend.length"
-            :data="dashboardStore.trend"
-          />
-          <van-empty v-else :description="t('common.noData')" image-size="60" />
-        </div>
-      </van-cell-group>
+    <van-tabs
+      v-model:active="activeTab"
+      type="line"
+      class="page-tabs"
+      :color="tabActiveColor"
+      title-active-color="var(--text-primary)"
+      title-inactive-color="var(--text-secondary)"
+    >
+      <!-- ── 趋势 tab ── -->
+      <van-tab :title="t('analyticsPage.tabTrend')" name="trend">
+        <div class="tab-content">
 
-      <!-- Treemap Card -->
-      <van-cell-group inset class="analytics-detail-card">
-        <div class="card-header">
-          <span class="card-title">{{ t('analyticsPage.allocationCard') }}</span>
-        </div>
-        <div class="card-content">
-          <AllocationTreemapChart
-            v-if="dashboardStore.allocation.length"
-            :data="dashboardStore.allocation"
-          />
-          <van-empty v-else :description="t('common.noData')" image-size="60" />
-        </div>
-      </van-cell-group>
-
-      <!-- Pie Card -->
-      <van-cell-group inset class="analytics-detail-card">
-        <div class="card-header">
-          <span class="card-title">{{ t('analyticsPage.pieCard') }}</span>
-        </div>
-        <div class="card-content pie-content">
-          <AllocationPieChart
-            v-if="dashboardStore.allocation.length"
-            :data="dashboardStore.allocation"
-            class="pie-chart-embedded"
-          />
-          <van-empty v-else :description="t('common.noData')" image-size="60" />
-        </div>
-      </van-cell-group>
-
-      <!-- Daily Cost Card -->
-      <van-cell-group inset class="analytics-detail-card analytics-detail-card--compact">
-        <div class="card-header">
-          <span class="card-title">{{ t('analyticsPage.dailyCostCard') }}</span>
-        </div>
-        <div class="card-content">
-          <template v-if="dailyCostRanking.length">
-            <van-cell
-              v-for="item in dailyCostRanking.slice(0, 5)"
-              :key="item.id"
-              :title="item.name"
-              :value="formatMoney(item.daily_cost)"
-              :icon="item.icon || 'gold-coin-o'"
-              is-link
-              @click="router.push(`/assets/${item.id}`)"
+          <!-- Section 1: 资产总值 -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.totalAssetsSection') }}</span>
+              <van-tabs
+                v-model:active="trendPeriod"
+                type="card"
+                shrink
+                @change="onPeriodChange"
+              >
+                <van-tab title="月" name="month" />
+                <van-tab title="季" name="quarter" />
+                <van-tab title="年" name="year" />
+              </van-tabs>
+            </div>
+            <div class="net-worth-value">
+              {{ formatMoney(dashboardStore.overview?.net_worth) }}
+            </div>
+            <div
+              v-if="monthOverMonthChange !== null"
+              class="change-badge"
+              :class="changeClass"
             >
-              <template v-if="item.category_name" #label>
-                <span class="item-category">{{ item.category_name }}</span>
-              </template>
-            </van-cell>
-          </template>
-          <van-empty v-else :description="t('common.noData')" image-size="60" />
-        </div>
-      </van-cell-group>
-
-      <!-- Low Usage Card -->
-      <van-cell-group inset class="analytics-detail-card analytics-detail-card--compact">
-        <div class="card-header">
-          <span class="card-title">{{ t('analyticsPage.lowUsageCard') }}</span>
-        </div>
-        <div class="card-content">
-          <template v-if="lowUsageAssets.length">
-            <van-cell
-              v-for="item in lowUsageAssets.slice(0, 5)"
-              :key="item.id"
-              :title="item.name"
-              is-link
-              @click="router.push(`/assets/${item.id}`)"
-            >
-              <template #value>
-                <van-tag type="warning" size="medium">{{ usageLabel(item.usage_frequency) }}</van-tag>
-              </template>
-            </van-cell>
-          </template>
-          <van-empty v-else :description="t('common.noData')" image-size="60" />
-        </div>
-      </van-cell-group>
-
-      <!-- Net Worth Change Card -->
-      <van-cell-group inset class="analytics-detail-card analytics-detail-card--compact">
-        <div class="card-header">
-          <span class="card-title">{{ t('analyticsPage.netWorthChangeCard') }}</span>
-        </div>
-        <div class="card-content net-worth-change">
-          <div v-if="monthOverMonthChange !== null" class="change-indicator" :class="changeClass">
-            <span class="change-arrow">{{ changeArrow }}</span>
-            <span class="change-value">{{ Math.abs(monthOverMonthChange).toFixed(1) }}%</span>
-            <span class="change-label">{{ changeLabel }}</span>
+              {{ changeArrow }} {{ Math.abs(monthOverMonthChange).toFixed(1) }}%
+              {{ changeLabel }}
+            </div>
+            <div class="chart-area">
+              <TrendLineChartSimple
+                v-if="dashboardStore.trend.length"
+                :data="dashboardStore.trend"
+              />
+              <van-empty v-else :description="t('common.noData')" image-size="60" />
+            </div>
           </div>
-          <van-empty v-else :description="t('analyticsPage.noChange')" image-size="60" />
+
+          <!-- Section 2: 资产状态 -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.assetStatusSection') }}</span>
+            </div>
+            <div v-if="dashboardStore.statesSummary" class="status-grid">
+              <div class="status-tile status-tile--in-use">
+                <div class="status-count">
+                  {{ dashboardStore.statesSummary.states['in_use']?.count ?? 0 }}
+                </div>
+                <div class="status-label">{{ t('statusGrid.inUse') }}</div>
+              </div>
+              <div class="status-tile status-tile--idle">
+                <div class="status-count">
+                  {{ dashboardStore.statesSummary.states['idle']?.count ?? 0 }}
+                </div>
+                <div class="status-label">{{ t('statusGrid.idle') }}</div>
+              </div>
+              <div class="status-tile status-tile--sold">
+                <div class="status-count">
+                  {{ dashboardStore.statesSummary.states['sold']?.count ?? 0 }}
+                </div>
+                <div class="status-label">{{ t('statusGrid.sold') }}</div>
+              </div>
+              <div class="status-tile status-tile--retired">
+                <div class="status-count">
+                  {{ dashboardStore.statesSummary.states['retired']?.count ?? 0 }}
+                </div>
+                <div class="status-label">{{ t('statusGrid.retired') }}</div>
+              </div>
+            </div>
+            <van-empty v-else :description="t('common.noData')" image-size="60" />
+          </div>
+
+          <!-- Section 3: 新增资产 -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.newAssetsSection') }}</span>
+            </div>
+            <div class="new-assets-count">
+              <span class="count-number">{{ dashboardStore.newAssets?.count ?? 0 }}</span>
+              <span class="count-unit">{{ t('analyticsPage.newAssetsUnit') }}</span>
+            </div>
+            <template v-if="dashboardStore.newAssets && dashboardStore.newAssets.items.length">
+              <div
+                v-for="item in dashboardStore.newAssets.items.slice(0, 3)"
+                :key="item.id"
+                class="new-asset-row"
+              >
+                <div class="new-asset-left">
+                  <span class="new-asset-icon">{{ item.icon || '📦' }}</span>
+                  <div class="new-asset-info">
+                    <div class="new-asset-name">{{ item.name }}</div>
+                    <div class="new-asset-date">{{ daysAgo(item.created_at) }}</div>
+                  </div>
+                </div>
+                <div class="new-asset-value">{{ formatMoney(item.current_value) }}</div>
+              </div>
+            </template>
+            <van-empty
+              v-else-if="dashboardStore.newAssets?.count === 0"
+              :description="t('common.noData')"
+              image-size="60"
+            />
+          </div>
+
+          <!-- Section 4: 日均成本 -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.dailyCostCard') }}</span>
+            </div>
+            <template v-if="dashboardStore.dailyCostRanking.length">
+              <div
+                v-for="(item, index) in dashboardStore.dailyCostRanking.slice(0, 5)"
+                :key="item.id"
+                class="cost-row"
+                @click="router.push(`/assets/${item.id}`)"
+              >
+                <div class="cost-row-left">
+                  <span class="rank-badge" :class="rankClass(index)">{{ index + 1 }}</span>
+                  <span class="cost-icon">{{ item.icon || '📦' }}</span>
+                  <span class="cost-name">{{ item.name }}</span>
+                </div>
+                <span class="cost-value">{{ formatMoney(item.daily_cost) }}/天</span>
+              </div>
+            </template>
+            <van-empty v-else :description="t('common.noData')" image-size="60" />
+          </div>
+
+          <!-- Section 5: 资产分布 (kept — unique content) -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.allocationCard') }}</span>
+            </div>
+            <div class="card-content">
+              <AllocationTreemapChart
+                v-if="dashboardStore.allocation.length"
+                :data="dashboardStore.allocation"
+              />
+              <van-empty v-else :description="t('common.noData')" image-size="60" />
+            </div>
+          </div>
+
+          <!-- Section 6: 分类占比 (kept — unique content) -->
+          <div class="section-card">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.pieCard') }}</span>
+            </div>
+            <div class="card-content pie-content">
+              <AllocationPieChart
+                v-if="dashboardStore.allocation.length"
+                :data="dashboardStore.allocation"
+                class="pie-chart-embedded"
+              />
+              <van-empty v-else :description="t('common.noData')" image-size="60" />
+            </div>
+          </div>
+
+          <!-- Section 7: 低使用率资产 (kept — unique content) -->
+          <div class="section-card section-card--compact">
+            <div class="card-header">
+              <span class="card-title">{{ t('analyticsPage.lowUsageCard') }}</span>
+            </div>
+            <div class="card-content">
+              <template v-if="lowUsageAssets.length">
+                <van-cell
+                  v-for="item in lowUsageAssets.slice(0, 5)"
+                  :key="item.id"
+                  :title="item.name"
+                  is-link
+                  @click="router.push(`/assets/${item.id}`)"
+                >
+                  <template #value>
+                    <van-tag type="warning" size="medium">{{ usageLabel(item.usage_frequency) }}</van-tag>
+                  </template>
+                </van-cell>
+              </template>
+              <van-empty v-else :description="t('common.noData')" image-size="60" />
+            </div>
+          </div>
+
         </div>
-      </van-cell-group>
-    </div>
+      </van-tab>
+
+      <!-- ── 洞悉 tab ── -->
+      <van-tab :title="t('analyticsPage.tabInsight')" name="insight">
+        <div class="insight-empty">
+          <div class="insight-icon">🔍</div>
+          <div class="insight-title">{{ t('analyticsPage.insightTitle') }}</div>
+          <div class="insight-subtitle">{{ t('analyticsPage.insightPlaceholder') }}</div>
+        </div>
+      </van-tab>
+    </van-tabs>
 
     <div class="bottom-spacer" />
   </div>
@@ -133,27 +220,21 @@ import { formatCurrency } from '@/utils/format'
 
 const { t } = useI18n()
 const router = useRouter()
-
 const dashboardStore = useDashboardStore()
 
+const activeTab = ref<'trend' | 'insight'>('trend')
 const trendPeriod = ref<'month' | 'quarter' | 'year'>('month')
 
-const dailyCostRanking = computed(() => dashboardStore.dailyCostRanking)
-const lowUsageAssets = computed(
-  () => dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle'),
-)
+const tabActiveColor = computed(() => {
+  return document.documentElement.getAttribute('data-theme') === 'dark'
+    ? 'var(--color-lavender)'
+    : 'var(--van-primary-color)'
+})
+
 const monthOverMonthChange = computed(() => dashboardStore.overview?.month_over_month_change ?? null)
-
-function formatMoney(value: number | string | undefined | null): string {
-  if (value === undefined || value === null) return '¥0'
-  const num = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(num)) return '¥0'
-  return formatCurrency(num)
-}
-
-function usageLabel(frequency: string): string {
-  return frequency === 'idle' ? t('statusGrid.idle') : frequency
-}
+const lowUsageAssets = computed(() =>
+  dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle'),
+)
 
 const changeClass = computed(() => {
   const val = monthOverMonthChange.value
@@ -164,7 +245,7 @@ const changeClass = computed(() => {
 const changeArrow = computed(() => {
   const val = monthOverMonthChange.value
   if (val === null) return ''
-  return val >= 0 ? '↑' : '↓'
+  return val >= 0 ? '▲' : '▼'
 })
 
 const changeLabel = computed(() => {
@@ -173,15 +254,40 @@ const changeLabel = computed(() => {
   return val >= 0 ? t('analyticsPage.changeUp') : t('analyticsPage.changeDown')
 })
 
-function onTrendPeriodChange(period: 'month' | 'quarter' | 'year') {
+function formatMoney(value: number | string | undefined | null): string {
+  if (value === undefined || value === null) return '¥0'
+  const num = typeof value === 'string' ? parseFloat(value) : value
+  if (isNaN(num)) return '¥0'
+  return formatCurrency(num)
+}
+
+function daysAgo(isoDate: string): string {
+  const days = Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000)
+  return t('analyticsPage.daysAgo', { n: days })
+}
+
+function usageLabel(frequency: string): string {
+  return frequency === 'idle' ? t('statusGrid.idle') : frequency
+}
+
+function rankClass(index: number): string {
+  if (index === 0) return 'rank-badge--first'
+  if (index === 1) return 'rank-badge--second'
+  if (index === 2) return 'rank-badge--third'
+  return 'rank-badge--rest'
+}
+
+function onPeriodChange(period: 'month' | 'quarter' | 'year') {
   trendPeriod.value = period
   dashboardStore.fetchTrend(period)
+  dashboardStore.fetchNewAssets(period)
 }
 
 onMounted(async () => {
   await dashboardStore.fetchAll()
   dashboardStore.fetchDailyCostRanking()
   dashboardStore.fetchTrend(trendPeriod.value)
+  dashboardStore.fetchNewAssets(trendPeriod.value)
 })
 </script>
 
@@ -189,34 +295,41 @@ onMounted(async () => {
 .analytics-page {
   background: var(--bg-secondary);
   min-height: 100vh;
-  padding-bottom: 20px;
 }
 
-.analytics-detail-cards {
+/* ── Page-level tab bar ── */
+.page-tabs :deep(.van-tabs__wrap) {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--separator);
+}
+
+.page-tabs :deep(.van-tab) {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.page-tabs :deep(.van-tab--active) {
+  font-weight: 600;
+}
+
+/* ── Shared card container ── */
+.tab-content {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 12px;
 }
 
-.analytics-detail-card {
+.section-card {
   background: var(--card-bg);
   border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(1, 1, 32, 0.08);
+  padding: 0 0 12px;
 }
 
-[data-theme='dark'] .analytics-detail-card {
+[data-theme='dark'] .section-card {
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
-}
-
-.analytics-detail-card :deep(.van-cell-group__inset) {
-  margin: 0;
-  border-radius: 16px;
-}
-
-.analytics-detail-card--compact :deep(.van-cell-group__inset) {
-  border-radius: 16px;
 }
 
 .card-header {
@@ -233,10 +346,9 @@ onMounted(async () => {
 }
 
 .card-content {
-  padding: 0 12px 12px;
+  padding: 0 12px;
 }
 
-/* Pie chart embedded: hide built-in title */
 .pie-content .pie-chart-embedded :deep(.chart-title) {
   display: none;
 }
@@ -245,7 +357,7 @@ onMounted(async () => {
   margin: 0;
 }
 
-/* Period tabs inside card header */
+/* Period card-tabs inside card header */
 .card-header :deep(.van-tabs--card) {
   .van-tabs__nav {
     height: 26px;
@@ -274,80 +386,265 @@ onMounted(async () => {
   }
 }
 
-/* Item category label */
-.item-category {
+/* ── Section 1: 资产总值 ── */
+.net-worth-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  padding: 0 16px 4px;
+  letter-spacing: -0.5px;
+}
+
+.change-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
-  color: var(--text-tertiary);
+  padding: 3px 10px;
+  border-radius: 4px;
+  margin: 0 16px 10px;
 }
 
-/* Net worth change indicator */
-.net-worth-change {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px 12px;
-}
-
-.change-indicator {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  border-radius: 12px;
-}
-
-.change-indicator.change-up {
-  background: rgba(5, 150, 105, 0.1);
+.change-badge.change-up {
+  background: rgba(5, 150, 105, 0.08);
   color: #059669;
 }
 
-[data-theme='dark'] .change-indicator.change-up {
-  background: rgba(110, 231, 160, 0.15);
+[data-theme='dark'] .change-badge.change-up {
+  background: rgba(110, 231, 160, 0.12);
   color: #6ee7a0;
 }
 
-.change-indicator.change-down {
-  background: rgba(220, 38, 38, 0.1);
+.change-badge.change-down {
+  background: rgba(220, 38, 38, 0.08);
   color: #dc2626;
 }
 
-[data-theme='dark'] .change-indicator.change-down {
-  background: rgba(252, 165, 165, 0.15);
+[data-theme='dark'] .change-badge.change-down {
+  background: rgba(252, 165, 165, 0.12);
   color: #fca5a5;
 }
 
-.change-arrow {
-  font-size: 24px;
-  font-weight: 600;
+.chart-area {
+  padding: 0 12px;
 }
 
-.change-value {
-  font-size: 18px;
-  font-weight: 600;
+/* ── Section 2: 资产状态 ── */
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 12px;
 }
 
-.change-label {
+.status-tile {
+  border-radius: 8px;
+  padding: 12px;
+  text-align: center;
+}
+
+.status-count {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.status-label {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.status-tile--in-use {
+  background: rgba(5, 150, 105, 0.08);
+}
+.status-tile--in-use .status-count { color: #059669; }
+
+[data-theme='dark'] .status-tile--in-use {
+  background: rgba(110, 231, 160, 0.12);
+}
+[data-theme='dark'] .status-tile--in-use .status-count { color: #6ee7a0; }
+
+.status-tile--idle {
+  background: rgba(250, 140, 22, 0.08);
+}
+.status-tile--idle .status-count { color: #fa8c16; }
+
+[data-theme='dark'] .status-tile--idle {
+  background: rgba(251, 191, 36, 0.12);
+}
+[data-theme='dark'] .status-tile--idle .status-count { color: #fbbf24; }
+
+.status-tile--sold {
+  background: rgba(59, 130, 246, 0.08);
+}
+.status-tile--sold .status-count { color: #3b82f6; }
+
+[data-theme='dark'] .status-tile--sold {
+  background: rgba(147, 197, 253, 0.12);
+}
+[data-theme='dark'] .status-tile--sold .status-count { color: #93c5fd; }
+
+.status-tile--retired {
+  background: var(--bg-secondary);
+}
+.status-tile--retired .status-count { color: var(--text-secondary); }
+
+/* ── Section 3: 新增资产 ── */
+.new-assets-count {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0 16px 10px;
+}
+
+.count-number {
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -1px;
+}
+
+.count-unit {
   font-size: 13px;
+  color: var(--text-secondary);
 }
 
-/* Responsive layout */
-@media (min-width: 768px) {
-  .analytics-detail-cards {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
-  .analytics-detail-card {
-    grid-column: span 2;
-  }
-
-  .analytics-detail-card--compact {
-    grid-column: span 1;
-  }
+.new-asset-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 0 4px 4px;
+  background: var(--bg-secondary);
+  border-radius: 8px;
 }
 
+.new-asset-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.new-asset-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.new-asset-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.new-asset-date {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.new-asset-value {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+/* ── Section 4: 日均成本 ── */
+.cost-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.cost-row:active {
+  background: var(--bg-secondary);
+}
+
+.cost-row-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rank-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.rank-badge--first  { background: #ff4d4f; }
+.rank-badge--second { background: #fa8c16; }
+.rank-badge--third  { background: #fadb14; color: #333; }
+.rank-badge--rest   { background: var(--text-secondary); }
+
+.cost-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.cost-name {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.cost-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* ── 洞悉 empty state ── */
+.insight-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.insight-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.insight-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.insight-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  max-width: 260px;
+  line-height: 1.6;
+}
+
+/* ── Bottom spacer ── */
 .bottom-spacer {
   height: 60px;
+}
+
+/* ── Tablet 2-col layout ── */
+@media (min-width: 768px) {
+  .tab-content {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .section-card:first-child {
+    grid-column: span 2;
+  }
 }
 </style>
