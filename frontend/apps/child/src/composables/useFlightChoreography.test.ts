@@ -100,6 +100,21 @@ describe('useFlightChoreography', () => {
     scope.stop()
   })
 
+  it('watchdog timeout completes orchestrator if notifyAllLanded never fires', async () => {
+    const scope = effectScope()
+    const choreo = scope.run(() => useFlightChoreography())!
+    const opts = makeOpts()
+    choreo.run(opts)
+    expect(opts.onComplete).not.toHaveBeenCalled()
+
+    // Simulate a stuck FlyToTarget: no landings ever, no allLanded ever.
+    await vi.advanceTimersByTimeAsync(10001)
+    expect(opts.onComplete).toHaveBeenCalledTimes(1)
+    expect(opts.onBalanceReactEnd).toHaveBeenCalled()
+    expect(choreo.phase.value).toBe('done')
+    scope.stop()
+  })
+
   it('cancel mid-flight clears timers and triggers onComplete once', () => {
     const scope = effectScope()
     const choreo = scope.run(() => useFlightChoreography())!

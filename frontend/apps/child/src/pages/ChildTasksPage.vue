@@ -235,7 +235,7 @@ const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
 
 // Balance polling via composable
-const { balance, refresh: refreshBalance } = useBalancePolling()
+const { balance, lastChange: balanceLastChange } = useBalancePolling()
 
 // Celebration state via composable (renamed to avoid conflict with milestone celebrationVisible)
 const {
@@ -526,7 +526,19 @@ watch(chores, (next) => {
   checkAndTriggerCelebration(next)
 })
 
-void refreshBalance
+// Non-celebration balance changes (e.g., parent grant while child is on Tasks page):
+// fire a single C1 pulse on the balance card. Skip when a celebration is mid-flight
+// since the celebration owns the reaction.
+watch(balanceLastChange, (change) => {
+  if (!change) return
+  if (taskCelebrationVisible.value) return
+  balanceReactMode.value = 'pop'
+  setTimeout(() => {
+    if (balanceReactMode.value === 'pop') {
+      balanceReactMode.value = null
+    }
+  }, 600)
+})
 
 onUnmounted(() => {
   pollCancelled = true

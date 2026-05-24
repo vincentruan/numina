@@ -100,12 +100,19 @@ export function useFlightChoreography(): FlightChoreography {
     }
 
     phase.value = opts.taskCount > 1 ? 'gathering' : 'flight'
-    // Actual particle motion is handled by <FlyToTarget> in the parent.
-    // We only schedule downstream phases relative to the expected first landing.
-    // First landing fires at MOTION.durations.slow (≈800ms) for single-task,
-    // ≈MOTION.durations.medium*2 for batch (gather 600ms + stream 700ms = ~1300ms).
-    // We rely on notifyLanding/notifyAllLanded callbacks to advance reliably,
-    // so timers below are only safety fallbacks.
+    // Particle motion is owned by <FlyToTarget>; phase advances via notifyLanding
+    // and notifyAllLanded callbacks. The watchdog below ensures the orchestrator
+    // never hangs if those callbacks misfire (DOM detached, particle ref nulls,
+    // resize mid-flight). 10s is generous: longest legitimate path is multi-task
+    // batch ≈1.4s flight + 3s breathing + headroom.
+    pushTimer(() => {
+      if (phase.value !== 'done') {
+        phase.value = 'done'
+        opts.onBalanceReactEnd()
+        opts.onComplete()
+        activeOpts = null
+      }
+    }, 10000)
   }
 
   function notifyLanding(origin: Point, target: Point): void {
