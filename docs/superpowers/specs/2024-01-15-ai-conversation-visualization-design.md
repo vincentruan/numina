@@ -109,6 +109,19 @@ interface Message {
 
 ## 3. 组件清单
 
+### 3.0 用户命名组件映射（6 个必需统一组件）
+
+用户在需求文档中明确点名 6 个统一组件。映射如下，以避免命名层面的覆盖断裂：
+
+| 用户要求组件 | 本设计落地方式 | 说明 |
+|-----|------|------|
+| `AiConversation` | 沿用 `AIChatPage.vue` 现有消息列表 + 滚动逻辑 | 行为契约，不新建文件 |
+| `AiUserBubble` | 沿用 `.bubble.user` 现有 CSS，增加 Markdown 渲染（marked + DOMPurify） | 现有气泡 + 渲染升级 |
+| `AiAssistantTurn` | 行为契约：AIChatPage 消息循环中 `assistant` 分支聚合 AiProcessBlock + AiFinalAnswer + 操作行 | 不新建 Wrapper 文件，但 Phase 3 智能体页应抽出共享 composable `useAIProcessState.ts` |
+| `AiProcessBlock` | **新建** `frontend/apps/main/src/components/ai/AiProcessBlock.vue` | 见 §3.1 |
+| `AiFinalAnswer` | **新建** `frontend/apps/main/src/components/ai/AiFinalAnswer.vue` | 见 §3.1 |
+| `AiRegenerateAction` | 复用现有 `onRegenerate(idx)`；通过 `AiFinalAnswer` 的 `showRegenerate` prop + `@regenerate` emit 暴露 | 不新建独立组件，沿用既有重新生成逻辑 |
+
 ### 3.1 新增组件
 
 | 组件 | 用途 | MVP 必需 |
@@ -150,8 +163,12 @@ interface AiProcessBlockEmits {
 type AiProcessStep =
   | { type: 'reasoning'; id: string; content: string; status: 'streaming' | 'done'; elapsedMs?: number }
   | { type: 'tool_call'; id: string; toolName: string; displayName: string; icon: string; argsSummary: string; status: 'pending' | 'running' | 'done' | 'error'; resultSummary?: string; elapsedMs?: number }
+  | { type: 'subagent'; id: string; title: string; description?: string; status: 'running' | 'done' | 'failed'; result?: string; error?: string }
+  | { type: 'artifact'; id: string; title: string; url?: string; path?: string }
   | { type: 'progress'; id: string; title: string; description?: string; status?: 'running' | 'done' | 'error' }
 ```
+
+> 注：复杂 subagent 详情页与 artifact 侧边栏在 §9.2 暂缓。基本 step 类型与最小渲染（标题/状态/可折叠结果）属 MVP，由 §11 验收标准 A3 要求。
 
 #### AiFinalAnswer
 
@@ -179,11 +196,17 @@ type NormalizedAiEvent =
   | { type: 'reasoning_delta'; messageId: string; content: string }
   | { type: 'tool_call'; messageId: string; toolCallId: string; name: string; args: unknown }
   | { type: 'tool_result'; toolCallId: string; content: unknown }
+  | { type: 'subagent_update'; taskId: string; status: 'running' | 'done' | 'failed'; title?: string; description?: string; result?: string; error?: string }
+  | { type: 'artifact'; id: string; title: string; url?: string; path?: string }
+  | { type: 'state_snapshot'; messages?: unknown[]; artifacts?: unknown[]; title?: string }
   | { type: 'phase_change'; phase: 'connecting' | 'thinking' | 'answering' | 'done' }
+  | { type: 'end'; usage?: unknown }
   | { type: 'error'; error: string }
 
 function normalizeAiStreamEvent(event: AgentEvent): NormalizedAiEvent
 ```
+
+> 注：plan 实现可对 `message_delta` 进行细分（如 `answer_delta`/`reasoning_delta` 已分离），但 spec 此处的 union 是 UI 消费契约，必须包含全部 9 种类型。`state_snapshot` 用于历史回放（§6.3），`subagent_update` / `artifact` / `end` 即使后端暂未发出，adapter 层应预留 case（no-op 或 console.warn）以避免未来事件被静默丢弃。
 
 ### 4.2 工具友好文案映射
 
@@ -381,7 +404,7 @@ FinalAnswer(isReport=true) 突出展示报告
 
 - 用户发送消息后，用户气泡立即出现
 - AI 运行时，过程块展开并持续更新
-- reasoning/tool call 能按事件顺序展示
+- reasoning/tool/subagent/progress 能按事件顺序展示
 - AI 最终答案能流式展示
 - AI 完成后，过程块自动折叠
 - 用户可以展开查看完整过程
