@@ -224,3 +224,9 @@ The constellation grid, what-if peek, and time-denominated price are three lense
 - [Affects R4, R6][Needs research] Does Vant 4's `vTouch`/`v-touch` directive support a clean "release before timeout" hook, or do we need a custom long-press composable? If custom, can we reuse anything from `frontend/apps/child/src/composables/`?
 - [Affects R15][Technical] The existing `useReducedMotion()` composable's hot-reload behavior on iOS Safari with PWA installation has known quirks (per `docs/solutions/`). Planner should verify the static-overlay fallback in F2 actually triggers cleanly when the OS setting flips during a session.
 - [Affects all R][Technical] Performance budget: the constellation grid renders N×wish cards each with their own SVG ring + animation. Low-end Android target: confirm acceptable frame-rate on a 4-wish + 6-wish layout under reduced-motion=off.
+
+---
+
+## Status
+
+- 2026-05-24: Plan landed at `docs/plans/2026-05-24-002-feat-child-cross-wish-bundle-plan.md`. v1 ship cut completed on branch `feat/child-game-opt` across 9 implementation units (U1–U9). All 18 R-IDs and 8 AE-IDs covered.

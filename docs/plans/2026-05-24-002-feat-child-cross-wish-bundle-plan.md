@@ -1,7 +1,7 @@
 ---
 title: "feat: Child cross-wish reachability + opportunity-cost peek bundle"
 date: 2026-05-24
-status: active
+status: completed
 mode: standard
 type: feat
 origin: docs/brainstorms/2026-05-24-child-cross-wish-bundle-requirements.md
