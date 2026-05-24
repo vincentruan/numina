@@ -11,6 +11,9 @@ importers:
       '@numina/auth':
         specifier: workspace:*
         version: link:../../packages/auth
+      '@numina/math':
+        specifier: workspace:*
+        version: link:../../packages/math
       '@vant/touch-emulator':
         specifier: ^1.5.0
         version: 1.5.0

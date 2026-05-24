@@ -155,6 +155,7 @@ import {
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { useBalancePolling } from '@/composables/useBalancePolling'
+import { daysEstimate } from '@numina/math'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -183,35 +184,8 @@ const totalWishes = computed(() =>
 const wishDaysMap = computed(() => {
   const map = new Map<string, number | null>()
   if (!stats.value?.priority_simulation) return map
-
-  const now = Date.now()
-  const cutoff7d = now - 7 * 24 * 60 * 60 * 1000
-
-  const earnEntries = ledger.value.filter(tx => tx.amount > 0 && new Date(tx.created_at).getTime() >= cutoff7d)
-  const earnDays = new Set<string>()
-  let earnSum = 0
-  for (const tx of earnEntries) {
-    earnDays.add(new Date(tx.created_at).toDateString())
-    earnSum += tx.amount
-  }
-
-  const distinctDays = earnDays.size
-  if (distinctDays < 3) return map
-
-  const dailyAvg = earnSum / distinctDays
-  if (dailyAvg <= 0) return map
-
   for (const sim of stats.value.priority_simulation) {
-    if (sim.star_coin_cost == null) {
-      map.set(sim.wish_id, null)
-      continue
-    }
-    const remaining = sim.star_coin_cost - stats.value.balance
-    if (remaining <= 0) {
-      map.set(sim.wish_id, null)
-      continue
-    }
-    map.set(sim.wish_id, Math.ceil(remaining / dailyAvg))
+    map.set(sim.wish_id, daysEstimate(stats.value.balance, sim, ledger.value))
   }
   return map
 })
