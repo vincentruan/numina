@@ -210,7 +210,7 @@ async function saveChannel() {
   editingChannel.value = null
 }
 
-async function removeChannel(id: number) {
+async function removeChannel(id: string) {
   await notificationChannelsApi.remove(id)
   channels.value = channels.value.filter((c) => c.id !== id)
   showToast(t('toast.channelDeleted'))

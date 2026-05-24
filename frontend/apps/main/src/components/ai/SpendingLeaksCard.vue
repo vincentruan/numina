@@ -170,7 +170,7 @@ async function loadLeaks() {
   loading.value = true
   try {
     const res = await getSpendingLeaks()
-    leaks.value = res.data
+    leaks.value = res
   } catch {
     showToast(t('toast.loadFailed'))
   } finally {

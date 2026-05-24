@@ -1,6 +1,13 @@
 import http from './index'
 import type { ChildUser } from '@/types'
 
+export type ChildResponse = ChildUser
+
+export async function listChildren(): Promise<ChildUser[]> {
+  const res = await http.get<ChildResponse[]>('/family/children')
+  return res.data
+}
+
 export interface CreateChildPayload {
   username: string
   display_name: string

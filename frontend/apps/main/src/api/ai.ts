@@ -631,7 +631,7 @@ export const resetSkillPrompt = (capability: string) =>
 // ── Skill Management ──────────────────────────────────────────────────────────
 
 export const getSkillsGrouped = () =>
-  http.get<SkillListResponse>('/ai/skills/grouped')
+  http.get<SkillListResponse>('/ai/skills/grouped').then(res => res.data)
 
 export const createCustomSkill = (payload: CustomSkillCreate) =>
   http.post<SkillDefinition>('/ai/skills/custom', payload)

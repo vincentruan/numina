@@ -37,7 +37,7 @@
         </div>
         <div class="hub-stat-divider" aria-hidden="true"></div>
         <div class="hub-stat-item">
-          <span class="hub-stat-num">{{ currentReport?.data_completeness_score?.toFixed(0) ?? '-' }}%</span>
+          <span class="hub-stat-num">{{ currentReport?.data_completeness_score != null ? currentReport.data_completeness_score.toFixed(0) : '-' }}%</span>
           <span class="hub-stat-label">{{ t('aiHub.dataCompleteness') }}</span>
         </div>
         <div class="hub-stat-divider" aria-hidden="true"></div>
@@ -154,6 +154,7 @@ import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AgentGrid from '@/components/agent/AgentGrid.vue'
 import type { Agent } from '@/types/agent'
+import type { AIReport } from '@/types'
 
 const { t } = useI18n()
 
@@ -164,7 +165,7 @@ const authStore = useAuthStore()
 const ws = useAIReportWS()
 const isOwner = authStore.user?.role === 'owner'
 
-const currentReport = ref<Record<string, unknown> | null>(null)
+const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const chatInput = ref('')
@@ -215,8 +216,8 @@ const alertCount = computed(() => {
   const r = currentReport.value
   if (!r) return 0
   // count sections with score < 60
-  return [r.net_worth_health, r.allocation_analysis, r.liability_pressure, r.asset_efficiency]
-    .filter(s => s && (s.score ?? 100) < 60).length
+  const sections = [r.net_worth_health, r.allocation_analysis, r.liability_pressure, r.asset_efficiency]
+  return sections.filter(s => s && typeof s.score === 'number' && s.score < 60).length
 })
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // 24h
@@ -225,7 +226,7 @@ async function loadReport() {
   try {
     const res = await getAIReport()
     if (res.data.report) {
-      currentReport.value = res.data.report
+      currentReport.value = res.data.report as unknown as AIReport
       reportGeneratedAt.value = res.data.generated_at ?? null
       // Trigger background refresh if cache is stale (>24h)
       if (reportGeneratedAt.value) {
@@ -246,7 +247,7 @@ async function generateReport() {
   try {
     await ws.connect()
     if (ws.report.value) {
-      currentReport.value = ws.report.value
+      currentReport.value = ws.report.value as unknown as AIReport
       reportGeneratedAt.value = ws.generatedAt.value
     }
   } catch {
@@ -264,7 +265,7 @@ async function refreshReport(silent?: boolean) {
   try {
     await ws.connect()
     if (ws.report.value) {
-      currentReport.value = ws.report.value
+      currentReport.value = ws.report.value as unknown as AIReport
       reportGeneratedAt.value = ws.generatedAt.value
     }
   } catch {

@@ -96,7 +96,7 @@
               <span class="category-tag">{{ s.category_name }}</span>
             </div>
             <div class="score-badge" :class="scoreClass(s.inefficiency_score)">
-              {{ s.inefficiency_score }}
+              {{ s.inefficiency_score ?? '-' }}
             </div>
           </div>
 
@@ -111,7 +111,7 @@
 
           <p v-if="s.suggestion" class="suggestion-text">{{ s.suggestion }}</p>
 
-          <div v-if="s.daily_cost" class="daily-cost">
+          <div v-if="s.daily_cost != null" class="daily-cost">
             {{ t('aiDisposal.dailyWaste', { cost: s.daily_cost.toFixed(1) }) }}
           </div>
         </div>
@@ -131,23 +131,15 @@ import { getDisposalSuggestions, dismissDisposalSuggestion } from '@/api/ai'
 import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
-
-interface DisposalSuggestion {
-  id: number
-  asset_name: string
-  score: number
-  reason: string
-  resale_range?: string
-  channels?: string[]
-  [key: string]: unknown
-}
+import type { DisposalSuggestion } from '@/types'
 
 const { t } = useI18n()
 
 const loading = ref(false)
 const suggestions = ref<DisposalSuggestion[]>([])
 
-function scoreClass(score: number) {
+function scoreClass(score: number | null) {
+  if (score == null) return 'score-low'
   if (score >= 70) return 'score-high'
   if (score >= 40) return 'score-medium'
   return 'score-low'
@@ -157,7 +149,7 @@ async function loadSuggestions() {
   loading.value = true
   try {
     const res = await getDisposalSuggestions()
-    suggestions.value = res.data
+    suggestions.value = res.data as DisposalSuggestion[]
   } catch {
     showToast(t('toast.loadFailed'))
   } finally {

@@ -20,7 +20,7 @@
         v-if="reasoningContent"
         type="reasoning"
         :content="reasoningContent"
-        :status="reasoningStatus"
+        :status="reasoningStatus ?? 'done'"
         :elapsed-ms="reasoningElapsedMs"
       />
 

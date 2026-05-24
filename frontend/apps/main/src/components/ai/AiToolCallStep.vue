@@ -7,7 +7,7 @@
       <div class="step-header">
         <div class="step-title-row">
           <span class="tool-icon">{{ displayIcon }}</span>
-          <span class="step-title">{{ displayName }}</span>
+          <span class="step-title">{{ toolDisplayName }}</span>
           <span class="tool-badge">{{ toolName }}</span>
         </div>
         <span v-if="elapsedMs" class="step-time">{{ formatElapsedMs(elapsedMs) }}</span>
@@ -57,7 +57,7 @@ const { t } = useI18n()
 const showFullResult = ref(false)
 
 const displayInfo = getToolDisplayInfo(props.toolName, props.displayName, props.icon)
-const displayName = displayInfo.displayName
+const toolDisplayName = displayInfo.displayName
 const displayIcon = displayInfo.icon
 
 const statusIcon = computed(() => {

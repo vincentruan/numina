@@ -60,6 +60,17 @@ components/ (reusable UI)
 - **No `as any`, `@ts-ignore`, or `@ts-expect-error`** — fix types properly.
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`.
 
+## AI Frontend Interaction Constraints
+
+Frontend AI UI must stay at the **presentation/adaptation layer only**.
+
+| Layer | Frontend CAN | Frontend CANNOT |
+|-------|--------------|-----------------|
+| Runtime | Render events from backend | Implement agent runtime, tool registry, skill loader, memory manager, orchestration/workflow engine, MCP runtime |
+| Process viz | Display `reasoning_content`, `thinking` blocks, `tool_calls`, tool results, task/subtask status, artifacts, progress events, final content | Fabricate hidden reasoning, request model to reveal private chain-of-thought, invent process steps not explicitly returned |
+
+**Rule:** Only display what DeerFlow/backend explicitly returns for UI use. No speculative visualization.
+
 ## Patterns
 
 ### Emoji Convention for User-Facing Messages

@@ -20,7 +20,7 @@
         <van-icon name="description" />
         <span>{{ t('aiProcess.copy') }}</span>
       </button>
-      <button v-if="showRegenerate" class="action-btn" @click="$emit('regenerate')">
+      <button v-if="showRegenerate" class="action-btn" @click="emit('regenerate')">
         <van-icon name="refresh" />
         <span>{{ t('aiProcess.regenerate') }}</span>
       </button>

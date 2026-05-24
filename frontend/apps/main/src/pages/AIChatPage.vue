@@ -397,7 +397,6 @@ import { getSessions, streamSessionEvents, updateSession, deleteSession as delet
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
-import AiFinalAnswer from '@/components/ai/AiFinalAnswer.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import type { AgentEvent } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
@@ -670,7 +669,7 @@ async function onDeleteSession() {
 // Throttled markdown rendering state (scoped to this component instance)
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 let pendingRenderText = ''
-let pendingRenderTarget: { content: string; renderedContent: string } | null = null
+let pendingRenderTarget: { content: string; renderedContent?: string } | null = null
 let scrollRAF: number | null = null
 
 // Follow global theme via data-theme attribute set by App.vue
@@ -737,7 +736,7 @@ function onCancelEditTitle() {
 }
 
 // Throttled markdown render helper (uses state declared above)
-function renderMarkdownThrottled(text: string, target: { content: string; renderedContent: string }) {
+function renderMarkdownThrottled(text: string, target: { content: string; renderedContent?: string }) {
   pendingRenderText = text
   pendingRenderTarget = target
 
@@ -1190,28 +1189,6 @@ function formatToolArguments(args: Record<string, unknown>) {
     .join(' · ')
 }
 
-function toolIcon(icon: string) {
-  const map: Record<string, string> = {
-    search: '⌕',
-    tool: '◇',
-  }
-  return map[icon] ?? '◇'
-}
-
-function toolStatus(tool: ToolTimelineItem) {
-  if (!tool.result) return t('aiChat.toolRunning')
-  if (tool.result.success === false) return t('aiChat.toolFailed')
-  return t('aiChat.toolDone')
-}
-
-function toolResultText(result: NonNullable<ToolTimelineItem['result']>) {
-  if (result.error) return result.error
-  if (result.summary) return result.summary
-  if (typeof result.data === 'string') return result.data
-  if (result.data !== undefined && result.data !== null) return JSON.stringify(result.data)
-  return t('aiChat.toolDone')
-}
-
 function onAbort() {
   abortController?.abort()
   if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
@@ -1221,11 +1198,6 @@ function onAbort() {
   asking.value = false
   connecting.value = false
   abortController = null
-}
-
-function onThinkToggle(msg: Message) {
-  msg.thinkManuallyToggled = true
-  msg.thinkOpen = !msg.thinkOpen
 }
 
 async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {

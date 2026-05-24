@@ -346,43 +346,55 @@ export interface DisposalSuggestion {
   id: string
   asset_id: string
   asset_name: string
-  reason: string
+  category_name: string
   inefficiency_score: number | null
-  estimated_resale_range: string | null
   suggested_channel: string | null
+  estimated_resale_range: string | null
+  suggestion: string | null
+  daily_cost: number | null
   created_at: string
 }
 
 export interface LiabilityStrategy {
-  name: string
-  description: string
-  order: Array<{ id: string; name: string; rate: number }>
-  estimated_interest_saved: number | null
+  strategy: string
+  strategy_name: string
+  priority_debt: string
+  estimated_interest_saved: number
+  order: Array<{ id: string; category: string; rate?: number }>
 }
 
 export interface LiabilityAdviceResponse {
+  has_result: boolean
   has_liabilities: boolean
-  total_remaining: number
-  strategies: LiabilityStrategy[]
+  total_remaining: number | null
+  total_monthly_payment: number | null
+  liability_count: number | null
+  narrative: string | null
   recommended_strategy: string | null
+  strategies: LiabilityStrategy[]
+  generated_at: string
 }
 
 export interface AllocationDriftItem {
   category: string
   target_pct: number
-  actual_pct: number
-  drift_pct: number
+  current_pct: number
+  drift: number
+  exceeds_threshold: boolean
 }
 
 export interface AllocationDriftResponse {
-  has_target: boolean
-  drifted: boolean
-  items: AllocationDriftItem[]
+  has_result: boolean
+  has_significant_drift: boolean
+  narrative: string | null
+  drifts: AllocationDriftItem[] | null
+  generated_at: string
 }
 
 export interface AIReportSection {
   score?: number
   label?: string
+  narrative?: string
   data?: Record<string, unknown>
 }
 

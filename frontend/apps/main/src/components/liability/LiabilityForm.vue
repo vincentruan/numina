@@ -148,7 +148,21 @@ const emit = defineEmits<{
   submit: [data: Partial<Liability>]
 }>()
 
-const form = ref<Record<string, string | number | boolean | null | undefined>>({
+interface FormState {
+  name: string
+  category: 'mortgage' | 'car_loan' | 'credit_card' | 'personal_loan' | 'other'
+  original_amount: string
+  remaining_amount: string
+  currency: string
+  monthly_payment: string
+  interest_rate: string
+  start_date: string
+  end_date: string
+  institution: string
+  notes: string
+}
+
+const form = ref<FormState>({
   name: '',
   category: 'mortgage',
   original_amount: '',
@@ -176,16 +190,17 @@ const currencySymbol = computed(() => CURRENCY_SYMBOLS[form.value.currency] || f
 
 watch(() => props.initialData, (data) => {
   if (data) {
-    const keys: (keyof Liability)[] = [
-      'name', 'category', 'original_amount', 'remaining_amount', 'currency',
-      'monthly_payment', 'interest_rate', 'start_date', 'end_date', 'institution', 'notes'
-    ]
-    for (const key of keys) {
-      const value = getLiabilityField<string | number>(data, key)
-      if (value !== undefined) {
-        form.value[key] = String(value ?? '')
-      }
-    }
+    if (data.name !== undefined) form.value.name = String(data.name ?? '')
+    if (data.category !== undefined) form.value.category = data.category
+    if (data.original_amount !== undefined) form.value.original_amount = String(data.original_amount ?? '')
+    if (data.remaining_amount !== undefined) form.value.remaining_amount = String(data.remaining_amount ?? '')
+    if (data.currency !== undefined) form.value.currency = String(data.currency ?? '')
+    if (data.monthly_payment !== undefined) form.value.monthly_payment = String(data.monthly_payment ?? '')
+    if (data.interest_rate !== undefined) form.value.interest_rate = String(data.interest_rate ?? '')
+    if (data.start_date !== undefined) form.value.start_date = String(data.start_date ?? '')
+    if (data.end_date !== undefined) form.value.end_date = String(data.end_date ?? '')
+    if (data.institution !== undefined) form.value.institution = String(data.institution ?? '')
+    if (data.notes !== undefined) form.value.notes = String(data.notes ?? '')
   }
 }, { immediate: true })
 
@@ -215,7 +230,7 @@ const categoryDisplay = computed(() => {
 })
 
 function selectCategory(value: string) {
-  form.value.category = value
+  form.value.category = value as 'mortgage' | 'car_loan' | 'credit_card' | 'personal_loan' | 'other'
   showCategoryPicker.value = false
 }
 

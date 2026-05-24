@@ -43,7 +43,7 @@ const COLOR_OPTIONS = [
 
 onMounted(async () => {
   const skillData = await getSkillsGrouped()
-  availableSkills.value = [...skillData.builtin.filter(s => s.is_enabled), ...skillData.custom.filter(s => s.is_enabled)]
+  availableSkills.value = [...skillData.builtin.filter((s: SkillDefinition) => s.is_enabled), ...skillData.custom.filter((s: SkillDefinition) => s.is_enabled)]
 
   if (isEdit.value) {
     const agent = await getAgent(agentId.value)

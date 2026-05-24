@@ -144,7 +144,7 @@
           </div>
           <div class="summary-row">
             <span class="label">{{ t('aiLiability.liabilityCountLabel') }}</span>
-            <span class="value">{{ t('aiLiability.liabilityCount', { count: data.liability_count }) }}</span>
+            <span class="value">{{ t('aiLiability.liabilityCount', { count: data.liability_count ?? 0 }) }}</span>
           </div>
         </div>
 
@@ -214,10 +214,12 @@ import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
 
+import type { LiabilityAdviceResponse } from '@/types'
+
 const { t } = useI18n()
 
 const loading = ref(false)
-const data = ref<Record<string, unknown> | null>(null)
+const data = ref<LiabilityAdviceResponse | null>(null)
 const activeTab = ref(0)
 
 const STRATEGY_SHORT: Record<string, string> = {
