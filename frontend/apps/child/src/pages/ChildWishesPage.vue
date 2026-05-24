@@ -39,6 +39,7 @@
         :tint-map="wishTintMap"
         :peek-active-wish-id="peekActiveWishId"
         :peek-deltas="peekDeltas"
+        :reduced-motion="reducedMotion"
         @tap="goToDetail"
         @peek-start="onPeekStart"
         @peek-end="onPeekEnd"
@@ -169,6 +170,7 @@ import {
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { useBalancePolling } from '@/composables/useBalancePolling'
+import { useReducedMotion } from '@/composables/useReducedMotion'
 import { daysEstimate, reachabilityTint, previewSpend, type ReachabilityTint, type SpendDelta } from '@numina/math'
 import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 
@@ -219,7 +221,9 @@ function goToDetail(wishId: string) {
 }
 
 const PEEK_TIMEOUT_MS = 1500
+const PEEK_TIMEOUT_REDUCED_MS = 3000
 
+const reducedMotion = useReducedMotion()
 const peekActiveWishId = ref<string | null>(null)
 const peekDeltas = ref<SpendDelta[]>([])
 let peekTimer: ReturnType<typeof setTimeout> | null = null
@@ -243,7 +247,8 @@ function onPeekStart(wishId: string) {
   const result = previewSpend(wishId, stats.value.balance, stats.value.priority_simulation, ledger.value)
   peekActiveWishId.value = wishId
   peekDeltas.value = result.deltas
-  peekTimer = setTimeout(endPeek, PEEK_TIMEOUT_MS)
+  const timeoutMs = reducedMotion.value ? PEEK_TIMEOUT_REDUCED_MS : PEEK_TIMEOUT_MS
+  peekTimer = setTimeout(endPeek, timeoutMs)
 }
 
 function onPeekEnd(_wishId: string) {

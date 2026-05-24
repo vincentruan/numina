@@ -228,4 +228,48 @@ describe('WishConstellationGrid', () => {
     expect(cards[0].find('.confirm-tag').exists()).toBe(true)
     expect(cards[1].find('.confirm-tag').exists()).toBe(false)
   })
+
+  it('AE7: reducedMotion=true adds is-reduced-motion class to all cards', () => {
+    const wishes = [wish('a'), wish('b')]
+    const tintMap = new Map<string, ReachabilityTint>([
+      ['a', 'green'],
+      ['b', 'yellow'],
+    ])
+    const wrapper = mount(WishConstellationGrid, {
+      props: {
+        wishes,
+        stats: baseStats,
+        daysEstimateMap: new Map([['a', null], ['b', 5]]),
+        tintMap,
+        reducedMotion: true,
+      },
+      global: { plugins: [i18n] },
+    })
+    for (const card of wrapper.findAll('.wish-constellation-card')) {
+      expect(card.classes()).toContain('is-reduced-motion')
+    }
+  })
+
+  it('AE7: ARIA label on peek-affected card includes the +N 天 delta', () => {
+    const wishes = [wish('a'), wish('b', 'Bike')]
+    const tintMap = new Map<string, ReachabilityTint>([
+      ['a', 'green'],
+      ['b', 'yellow'],
+    ])
+    const wrapper = mount(WishConstellationGrid, {
+      props: {
+        wishes,
+        stats: baseStats,
+        daysEstimateMap: new Map([['a', null], ['b', 5]]),
+        tintMap,
+        peekActiveWishId: 'a',
+        peekDeltas: [{ wish_id: 'b', before_progress: 0.5, after_progress: 0.2, days_added: 3 }],
+        reducedMotion: true,
+      },
+      global: { plugins: [i18n] },
+    })
+    const bAria = wrapper.findAll('.wish-constellation-card')[1].attributes('aria-label')
+    expect(bAria).toContain('Bike')
+    expect(bAria).toContain('+3 天')
+  })
 })

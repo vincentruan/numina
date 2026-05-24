@@ -1,7 +1,10 @@
 <template>
   <div
     class="wish-constellation-card"
-    :class="[`tint-${tint}`, { 'is-pressed': isPressed, 'is-peek-affected': peekAfterProgress !== null }]"
+    :class="[
+      `tint-${tint}`,
+      { 'is-pressed': isPressed, 'is-peek-affected': peekAfterProgress !== null, 'is-reduced-motion': reducedMotion },
+    ]"
     role="button"
     tabindex="0"
     :aria-label="ariaLabel"
@@ -59,6 +62,7 @@ const props = defineProps<{
   peekAfterProgress?: number | null
   daysAdded?: number
   isPressed?: boolean
+  reducedMotion?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -82,7 +86,11 @@ const visibleProgress = computed(() => {
 
 const visibleDashOffset = computed(() => ringCircumference * (1 - visibleProgress.value))
 
-const ariaLabel = computed(() => `${t(`wishes.tint.${props.tint}.aria`)}: ${props.wish.name}`)
+const ariaLabel = computed(() => {
+  const base = `${t(`wishes.tint.${props.tint}.aria`)}: ${props.wish.name}`
+  if (daysAdded.value > 0) return `${base} ${t('wishes.peek.daysAdded', { n: daysAdded.value })}`
+  return base
+})
 
 const statusIcon = computed(() => {
   if (props.tint === 'green') return '✅'
@@ -192,6 +200,12 @@ onUnmounted(() => {
 
 .ring-progress {
   transition: stroke-dashoffset 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.is-reduced-motion .ring-progress {
+  transition: none;
+}
+.is-reduced-motion {
+  transition: none;
 }
 
 .tint-green .ring-progress {

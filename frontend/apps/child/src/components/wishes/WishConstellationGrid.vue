@@ -12,6 +12,7 @@
         :peek-after-progress="peekActiveWishId && wish.id !== peekActiveWishId ? (deltaMap.get(wish.id)?.after_progress ?? null) : null"
         :days-added="peekActiveWishId && wish.id !== peekActiveWishId ? (deltaMap.get(wish.id)?.days_added ?? 0) : 0"
         :is-pressed="peekActiveWishId === wish.id"
+        :reduced-motion="reducedMotion"
         @tap="onTap"
         @peek-start="onPeekStart"
         @peek-end="onPeekEnd"
@@ -34,6 +35,7 @@ const props = defineProps<{
   tintMap: Map<string, ReachabilityTint>
   peekActiveWishId?: string | null
   peekDeltas?: SpendDelta[]
+  reducedMotion?: boolean
 }>()
 
 const emit = defineEmits<{
