@@ -165,11 +165,14 @@ onUnmounted(() => {
   cursor: pointer;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.3s ease;
 }
 .wish-constellation-card:active,
 .wish-constellation-card.is-pressed {
   transform: scale(0.97);
+}
+.wish-constellation-card.is-peek-affected:not(.is-pressed) {
+  opacity: 0.55;
 }
 .wish-constellation-card:focus-visible {
   outline: 2px solid var(--color-primary);

@@ -338,15 +338,15 @@ watch(
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: var(--van-primary-color, #1989fa);
-  color: #fff;
+  background: var(--van-primary-color);
+  color: var(--color-on-primary);
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
 }
 
 .btn-confirm {
-  background: #f5a623;
+  background: var(--color-cost);
 }
 
 .btn-next:disabled,
