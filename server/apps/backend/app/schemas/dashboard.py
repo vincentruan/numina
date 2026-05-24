@@ -98,3 +98,19 @@ class ExpiringSoonItem(SnowflakeBase):
     current_value: float
     currency: str = "CNY"
     original_value: float = 0.0
+
+
+class NewAssetItem(SnowflakeBase):
+    id: int
+    name: str
+    icon: str
+    category_name: str
+    current_value: float
+    currency: str
+    created_at: str  # ISO format
+
+
+class NewAssetsResponse(BaseModel):
+    count: int
+    period: str
+    items: list[NewAssetItem]
