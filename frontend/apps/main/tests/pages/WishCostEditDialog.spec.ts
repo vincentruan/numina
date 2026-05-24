@@ -89,12 +89,42 @@ describe('WishCostEditDialog', () => {
   })
 
   it('AE5: warning sheet renders when cost change shifts tint band (progress > 0%)', async () => {
-    const { wrapper } = mountDialog({ balance: 60 })
+    // Stable ledger: 3 distinct earning days, avg 5 ⭐/day.
+    // balance=60, cost=100 → progress=60%, remaining=40 → days_before = ceil(40/5) = 8.
+    // After cost=150 → balance still 60, remaining=90 → days_after = ceil(90/5) = 18.
+    // Delta = 10 days (>=1), tint band yellow → red. Warning must fire AND render days delta.
+    const NOW = Date.now()
+    const daysAgo = (n: number) => new Date(NOW - n * 86400_000).toISOString()
+    const stableLedger = [
+      { amount: 5, created_at: daysAgo(1) },
+      { amount: 5, created_at: daysAgo(2) },
+      { amount: 5, created_at: daysAgo(3) },
+    ]
+    const { wrapper } = mountDialog({ balance: 60, ledger: stableLedger })
     await flushPromises()
     await typeInCost(wrapper, '150')
     await wrapper.find('.btn-next').trigger('click')
     await flushPromises()
     expect(wrapper.find('.dialog-title').text()).toContain('孩子的等待时间会变化')
+    const body = wrapper.find('.dialog-desc').text()
+    expect(body).toContain('≈ 8 天')
+    expect(body).toContain('≈ 18 天')
+  })
+
+  it('AE5 fallback: warning renders progress copy when ledger is too sparse for days math', async () => {
+    // Empty ledger forces daysEstimate → null on both sides. Tint stays gray either way,
+    // so the warning fires only through the 5% cost-ratio proxy. Copy must fall back to
+    // the progress-percent form, not the days form.
+    const { wrapper } = mountDialog({ balance: 60, ledger: [] })
+    await flushPromises()
+    await typeInCost(wrapper, '150')
+    await wrapper.find('.btn-next').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.dialog-title').text()).toContain('孩子的等待时间会变化')
+    const body = wrapper.find('.dialog-desc').text()
+    expect(body).not.toContain('≈')
+    expect(body).toContain('60%')
+    expect(body).toContain('40%')
   })
 
   it('AE6: no warning when delta is tiny (< 5% AND tint unchanged)', async () => {
