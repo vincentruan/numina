@@ -54,10 +54,12 @@ const router = createRouter({
       ],
     },
     // Catch-all redirect — must stay within child app
-    // Redirect to child home, which will trigger auth check if needed
+    // Redirect to child home, which will trigger auth check if needed.
+    // Use router-internal '/' (resolves to URL /child/ via history base);
+    // '/child/' here would be parsed as /child/child/, retriggering this rule infinitely.
     {
       path: '/:pathMatch(.*)*',
-      redirect: '/child/',
+      redirect: '/',
     },
   ],
 })
