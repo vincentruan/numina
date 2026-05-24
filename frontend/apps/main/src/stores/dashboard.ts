@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { showToast } from 'vant'
 import i18n from '@/i18n'
-import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset } from '@/types'
+import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
 import type { ActivityItem, ExpiringSoonItem } from '@/api/dashboard'
 
@@ -26,6 +26,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const investmentReturns = ref<InvestmentReturnItem[]>([])
   const recentActivities = ref<ActivityItem[]>([])
   const statesSummary = ref<StatesSummaryResponse | null>(null)
+  const newAssets = ref<NewAssetsResponse | null>(null)
   const homeAssets = ref<Record<string, Asset[]>>({})
   const loading = ref(false)
 
@@ -109,6 +110,11 @@ export const useDashboardStore = defineStore('dashboard', () => {
   async function fetchStatesSummary() {
     const res = await dashboardApi.getStatesSummary()
     statesSummary.value = res.data
+  }
+
+  async function fetchNewAssets(period: 'month' | 'quarter' | 'year' = 'month') {
+    const res = await dashboardApi.getNewAssets(period)
+    newAssets.value = res.data
   }
 
   async function fetchHomeAssets(limit = 5) {
@@ -310,18 +316,19 @@ export const useDashboardStore = defineStore('dashboard', () => {
     investmentReturns.value = []
     recentActivities.value = []
     statesSummary.value = null
+    newAssets.value = null
     homeAssets.value = {}
     resetAssetPagination()
   }
 
   return {
     overview, allocation, allocationTotal, trend, topAssets, dailyCostRanking,
-    lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, homeAssets, loading,
+    lowUsageAssets, expiringSoonAssets, investmentReturns, recentActivities, statesSummary, newAssets, homeAssets, loading,
     displayedAssets, assetPage, assetPageSize, assetListFinished, assetListLoading,
     assetPagesCache, assetPageInfo, activeAssetStatus, activeAssetCategoryId, categoryCounts,
     fetchOverview, fetchAllocation, fetchTrend, fetchTopAssets,
     fetchDailyCostRanking, fetchLowUsageAssets, fetchExpiringSoonAssets, fetchInvestmentReturns,
-    fetchRecentActivities, fetchStatesSummary, fetchHomeAssets, fetchAll,
+    fetchRecentActivities, fetchStatesSummary, fetchNewAssets, fetchHomeAssets, fetchAll,
     fetchAssetsPage, loadNextAssetsPage, resetAssetPagination, loadMoreAssets,
     fetchCategoryCounts, invalidateDashboard,
   }

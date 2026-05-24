@@ -211,6 +211,22 @@ export interface StatesSummaryResponse {
   total_value: number
 }
 
+export interface NewAssetItem {
+  id: string
+  name: string
+  icon: string
+  category_name: string
+  current_value: number
+  currency: string
+  created_at: string
+}
+
+export interface NewAssetsResponse {
+  count: number
+  period: string
+  items: NewAssetItem[]
+}
+
 export interface LoginRequest {
   username: string
   password: string

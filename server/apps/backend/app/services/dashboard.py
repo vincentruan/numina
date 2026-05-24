@@ -11,16 +11,40 @@ from apps.backend.app.schemas.dashboard import (
     AllocationItem,
     AllocationResponse,
     DailyCostItem,
+    DailyCostStat,
+    DurationBucket,
+    DurationDistributionResponse,
     ExpiringSoonItem,
+    GoalProgressItem,
+    GoalProgressResponse,
+    GoalProgressSummary,
+    InsightsResponse,
     InvestmentReturnItem,
+    LongestHeldStat,
     LowUsageItem,
+    NewAssetItem,
+    NewAssetsResponse,
     OverviewResponse,
+    RetentionItem,
+    RetentionRateResponse,
+    SmartDiscoveryResponse,
     TopAssetItem,
+    TopCategoryStat,
     TrendPoint,
     TrendResponse,
+    TypeDistributionItem,
+    TypeDistributionResponse,
 )
 from apps.backend.app.services.asset import compute_daily_cost, compute_return_rate
 from apps.backend.app.services.exchange_rate import ExchangeRateService
+
+
+def _period_start_date(today: date, period: str) -> date:
+    if period == "year":
+        return today - timedelta(days=365)
+    elif period == "quarter":
+        return today - timedelta(days=90)
+    return today - timedelta(days=30)
 
 
 def get_overview(db: Session, user: User) -> OverviewResponse:
@@ -150,12 +174,7 @@ def get_trend(db: Session, user: User, period: str = "month") -> TrendResponse:
     default_currency = user.default_currency or "CNY"
     today = date.today()
 
-    if period == "year":
-        start_date = today - timedelta(days=365)
-    elif period == "quarter":
-        start_date = today - timedelta(days=90)
-    else:
-        start_date = today - timedelta(days=30)
+    start_date = _period_start_date(today, period)
 
     snapshots = (
         db.query(AssetSnapshot)
@@ -196,6 +215,8 @@ def get_top_assets(db: Session, user: User, limit: int = 10) -> list[TopAssetIte
             Asset.is_archived == False,
             Asset.current_value != None,
         )
+        .order_by(Asset.current_value.desc().nullslast())
+        .limit(limit)
         .all()
     )
 
@@ -215,12 +236,12 @@ def get_top_assets(db: Session, user: User, limit: int = 10) -> list[TopAssetIte
             )
         )
 
-    # Sort by converted value and limit
+    # Re-sort by converted value for multi-currency correctness
     items.sort(key=lambda x: x.current_value, reverse=True)
-    return items[:limit]
+    return items
 
 
-def get_daily_cost_ranking(db: Session, user: User) -> list[DailyCostItem]:
+def get_daily_cost_ranking(db: Session, user: User, limit: int = 10) -> list[DailyCostItem]:
     default_currency = user.default_currency or "CNY"
 
     assets = (
@@ -263,7 +284,7 @@ def get_daily_cost_ranking(db: Session, user: User) -> list[DailyCostItem]:
             )
 
     items.sort(key=lambda x: x.daily_cost, reverse=True)
-    return items
+    return items[:limit]
 
 
 def get_low_usage_assets(db: Session, user: User) -> list[LowUsageItem]:
@@ -586,3 +607,416 @@ def get_recent_alerts(db: Session, user: User, limit: int = 10) -> list[dict]:
         }
         for r in rows
     ]
+
+
+def get_new_assets(db: Session, user: User, period: str = "month") -> NewAssetsResponse:
+    default_currency = user.default_currency or "CNY"
+    today = date.today()
+
+    start_date = _period_start_date(today, period)
+
+    count = (
+        db.query(func.count(Asset.id))
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived == False,
+            Asset.created_at >= start_date,
+        )
+        .scalar()
+    ) or 0
+
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
+        .filter(
+            Asset.family_id == user.family_id,
+            Asset.is_archived == False,
+            Asset.created_at >= start_date,
+        )
+        .order_by(Asset.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    return NewAssetsResponse(
+        count=count,
+        period=period,
+        items=[
+            NewAssetItem(
+                id=a.id,
+                name=a.name,
+                icon=a.category.icon if a.category else "",
+                category_name=a.category.name if a.category else "",
+                current_value=round(
+                    ExchangeRateService.convert(
+                        a.current_value or 0, a.currency or "CNY", default_currency, db
+                    ),
+                    2,
+                ),
+                currency=default_currency,
+                created_at=a.created_at.isoformat() if a.created_at else "",
+            )
+            for a in assets
+        ],
+    )
+
+
+# ═══════════════════════════════════════
+# Insights Service Functions (S0-S5)
+# ═══════════════════════════════════════
+
+
+def get_smart_discovery(db: Session, user: User) -> SmartDiscoveryResponse:
+    """S0 智能发现 - 5项统计卡片"""
+    default_currency = user.default_currency or "CNY"
+    family_id = user.family_id
+    today = date.today()
+
+    # 1. 购入同比上月
+    # Correct formula: go to last day of previous month, then set day=1
+    last_month_start = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+    last_month_end = today.replace(day=1) - timedelta(days=1)
+    prev_month_start = (last_month_start - timedelta(days=1)).replace(day=1)
+
+    assets_this_month = (
+        db.query(Asset)
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.purchase_date >= last_month_start,
+            Asset.purchase_date <= last_month_end,
+        )
+        .all()
+    )
+
+    assets_prev_month = (
+        db.query(Asset)
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.purchase_date >= prev_month_start,
+            Asset.purchase_date < last_month_start,
+        )
+        .all()
+    )
+
+    count_this = len(assets_this_month)
+    count_prev = len(assets_prev_month)
+    purchase_yoy = None
+    if count_prev > 0:
+        purchase_yoy = round((count_this - count_prev) / count_prev * 100, 2)
+
+    # 2. 最高日均成本
+    daily_cost_items = get_daily_cost_ranking(db, user)
+    highest_daily_cost = None
+    if daily_cost_items:
+        top = daily_cost_items[0]
+        highest_daily_cost = DailyCostStat(name=top.name, cost=top.daily_cost, icon=top.icon)
+
+    # 3. 最低日均成本
+    lowest_daily_cost = None
+    if daily_cost_items:
+        bottom = daily_cost_items[-1]
+        lowest_daily_cost = DailyCostStat(name=bottom.name, cost=bottom.daily_cost, icon=bottom.icon)
+
+    # 4. 持有最久
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.purchase_date != None,
+        )
+        .all()
+    )
+
+    longest_held = None
+    if assets:
+        # Sort by days held
+        assets_with_days = [(a, (today - a.purchase_date).days) for a in assets if a.purchase_date]
+        assets_with_days.sort(key=lambda x: x[1], reverse=True)
+        if assets_with_days:
+            longest_asset, days = assets_with_days[0]
+            longest_held = LongestHeldStat(
+                name=longest_asset.name,
+                days=days,
+                icon=longest_asset.category.icon if longest_asset.category else "",
+            )
+
+    # 5. 占比最高分类
+    allocation = get_allocation(db, user)
+    top_category = None
+    if allocation.items:
+        top_cat = allocation.items[0]
+        top_category = TopCategoryStat(
+            name=top_cat.category_name,
+            percentage=top_cat.percentage,
+            icon=top_cat.icon,
+            color=top_cat.color,
+        )
+
+    return SmartDiscoveryResponse(
+        purchase_yoy=purchase_yoy,
+        highest_daily_cost=highest_daily_cost,
+        lowest_daily_cost=lowest_daily_cost,
+        longest_held=longest_held,
+        top_category=top_category,
+    )
+
+
+def get_goal_progress(db: Session, user: User) -> GoalProgressResponse:
+    """S2 目标进度总览"""
+    default_currency = user.default_currency or "CNY"
+    family_id = user.family_id
+    today = date.today()
+
+    # Query assets with expected lifespan
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.status == "in_use",
+            Asset.purchase_date != None,
+            Asset.expected_lifespan_days != None,
+        )
+        .all()
+    )
+
+    items: list[GoalProgressItem] = []
+    healthy = 0
+    near_end = 0
+    overdue = 0
+
+    for a in assets:
+        if not a.purchase_date or not a.expected_lifespan_days:
+            continue
+
+        days_held = (today - a.purchase_date).days
+        expected_days = a.expected_lifespan_days
+        pct = round(days_held / expected_days * 100, 2)
+
+        # Determine status
+        if pct > 100:
+            status = "overdue"
+            overdue += 1
+        elif pct >= 80:
+            status = "near-end"
+            near_end += 1
+        else:
+            status = "on-track"
+            healthy += 1
+
+        items.append(GoalProgressItem(
+            id=a.id,
+            name=a.name,
+            category_color=a.category.color if a.category else "#7B61FF",
+            status=status,
+            progress_pct=min(pct, 110),
+            days_held=days_held,
+            expected_days=expected_days,
+            expected_years=round(expected_days / 365, 1),
+        ))
+
+    # Sort by status priority: overdue > near-end > on-track, then by pct
+    status_order = {"overdue": 0, "near-end": 1, "on-track": 2}
+    items.sort(key=lambda x: (status_order[x.status], -x.progress_pct))
+
+    return GoalProgressResponse(
+        summary=GoalProgressSummary(healthy=healthy, near_end=near_end, overdue=overdue),
+        items=items[:10],  # Return top 10
+    )
+
+
+def get_type_distribution(db: Session, user: User) -> TypeDistributionResponse:
+    """S3 资产类型分布"""
+    default_currency = user.default_currency or "CNY"
+    family_id = user.family_id
+
+    allocation = get_allocation(db, user)
+
+    # Also get count per category
+    count_results = (
+        db.query(
+            Asset.category_id,
+            func.count(Asset.id).label("count"),
+        )
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.category_id != None,
+        )
+        .group_by(Asset.category_id)
+        .all()
+    )
+
+    # Build count map
+    count_map = {r.category_id: r.count for r in count_results}
+
+    categories: list[TypeDistributionItem] = []
+    for item in allocation.items:
+        categories.append(TypeDistributionItem(
+            category_id=item.category_id,
+            name=item.category_name,
+            color=item.color,
+            percentage=item.percentage,
+            amount=item.amount,
+            count=count_map.get(item.category_id, 0),
+        ))
+
+    total_count = sum(c.count for c in categories)
+
+    return TypeDistributionResponse(
+        total_value=allocation.total,
+        total_count=total_count,
+        categories=categories,
+    )
+
+
+def get_duration_distribution(db: Session, user: User) -> DurationDistributionResponse:
+    """S4 持有时长分布"""
+    family_id = user.family_id
+    today = date.today()
+
+    assets = (
+        db.query(Asset)
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.purchase_date != None,
+        )
+        .all()
+    )
+
+    if not assets:
+        return DurationDistributionResponse(
+            avg_days=0,
+            max_days=0,
+            buckets=[],
+        )
+
+    # Calculate days held for each asset
+    days_list = [(today - a.purchase_date).days for a in assets if a.purchase_date]
+
+    avg_days = round(sum(days_list) / len(days_list), 1) if days_list else 0
+    max_days = max(days_list) if days_list else 0
+
+    # Bucket definitions (in days)
+    bucket_defs = [
+        ("less_than_1_year", 0, 365),
+        ("range_1_to_2_years", 365, 730),
+        ("range_2_to_4_years", 730, 1460),
+        ("range_4_to_6_years", 1460, 2190),
+        ("range_6_to_8_years", 2190, 2920),
+        ("more_than_8_years", 2920, None),
+    ]
+
+    total = len(days_list)
+    buckets: list[DurationBucket] = []
+    for label_key, min_days, max_days_bucket in bucket_defs:
+        if max_days_bucket is None:
+            count = sum(1 for d in days_list if d >= min_days)
+        else:
+            count = sum(1 for d in days_list if min_days <= d < max_days_bucket)
+        pct = round(count / total * 100, 1) if total > 0 else 0
+        buckets.append(DurationBucket(
+            label_key=label_key,
+            count=count,
+            percentage=pct,
+        ))
+
+    return DurationDistributionResponse(
+        avg_days=avg_days,
+        max_days=max_days,
+        buckets=buckets,
+    )
+
+
+def get_retention_rate(db: Session, user: User) -> RetentionRateResponse:
+    """S5 资产保值率（仅实物资产）"""
+    default_currency = user.default_currency or "CNY"
+    family_id = user.family_id
+    today = date.today()
+
+    # Query physical assets with purchase price and current value
+    assets = (
+        db.query(Asset)
+        .options(joinedload(Asset.category))
+        .filter(
+            Asset.family_id == family_id,
+            Asset.is_archived == False,
+            Asset.asset_type == "physical",
+            Asset.purchase_price != None,
+            Asset.purchase_date != None,
+        )
+        .all()
+    )
+
+    items: list[RetentionItem] = []
+    total_bought = 0.0
+    total_sold = 0.0  # Sum of sold assets' purchase prices
+
+    for a in assets:
+        if not a.purchase_price or not a.purchase_date:
+            continue
+
+        asset_currency = a.currency or "CNY"
+        bought = ExchangeRateService.convert(a.purchase_price, asset_currency, default_currency, db)
+
+        # Get current value (or 0 if sold/retired)
+        if a.status in ("sold", "retired"):
+            current = 0.0
+            # Add to sold total
+            total_sold += bought
+        else:
+            current = ExchangeRateService.convert(a.current_value or 0, asset_currency, default_currency, db)
+
+        total_bought += bought
+
+        days = (today - a.purchase_date).days
+        rate = round(current / bought * 100, 2) if bought > 0 else 0
+        profit = round(current - bought, 2)
+
+        items.append(RetentionItem(
+            id=a.id,
+            name=a.name,
+            icon=a.category.icon if a.category else "",
+            service_days=days,
+            bought_amount=round(bought, 2),
+            current_amount=round(current, 2),
+            retention_rate=rate,
+            profit_loss=profit,
+        ))
+
+    # Sort by retention rate (highest first)
+    items.sort(key=lambda x: x.retention_rate, reverse=True)
+
+    # Add rank after sorting
+    for i, item in enumerate(items):
+        item.rank = i + 1
+
+    # Calculate totals
+    avg_rate = round(sum(i.retention_rate for i in items) / len(items), 2) if items else 0
+    total_profit_loss = round(sum(i.profit_loss for i in items), 2)
+
+    return RetentionRateResponse(
+        total_bought=round(total_bought, 2),
+        total_sold=round(total_sold, 2),
+        avg_rate=avg_rate,
+        total_profit_loss=total_profit_loss,
+        top_items=items[:5],  # Return top 5
+    )
+
+
+def get_insights(db: Session, user: User) -> InsightsResponse:
+    """获取洞悉 Tab 完整数据"""
+    return InsightsResponse(
+        smart_discovery=get_smart_discovery(db, user),
+        daily_cost_ranking=get_daily_cost_ranking(db, user, limit=5),
+        goal_progress=get_goal_progress(db, user),
+        type_distribution=get_type_distribution(db, user),
+        duration_distribution=get_duration_distribution(db, user),
+        retention_rate=get_retention_rate(db, user),
+    )
