@@ -4,7 +4,7 @@
  * Uses singleton pattern to share polling instance across multiple pages.
  */
 
-import { onMounted, onUnmounted, ref, type Ref } from 'vue'
+import { onMounted, onUnmounted, readonly, ref, type Ref } from 'vue'
 import { getCoinBalance } from '@/api/coins'
 
 interface UseBalancePollingOptions {
@@ -12,10 +12,17 @@ interface UseBalancePollingOptions {
   enabled?: boolean // Default: true
 }
 
+export interface BalanceChange {
+  from: number
+  to: number
+  at: number
+}
+
 interface UseBalancePollingReturn {
   balance: Ref<number>
   isLoading: Ref<boolean>
   error: Ref<string | null>
+  lastChange: Readonly<Ref<BalanceChange | null>>
   start: () => void
   stop: () => void
   refresh: () => Promise<void>
@@ -23,11 +30,22 @@ interface UseBalancePollingReturn {
 
 // Singleton state shared across all consumers
 let _pollingInterval: ReturnType<typeof setInterval> | null = null
-let _balanceRef: Ref<number> = ref(0)
-let _isLoadingRef: Ref<boolean> = ref(false)
-let _errorRef: Ref<string | null> = ref(null)
+const _balanceRef: Ref<number> = ref(0)
+const _isLoadingRef: Ref<boolean> = ref(false)
+const _errorRef: Ref<string | null> = ref(null)
+const _lastChangeRef: Ref<BalanceChange | null> = ref(null)
+let _hasFetchedOnce = false
 let _consumerCount = 0
 let _lastFetchTime = 0
+
+function _applyBalance(next: number): void {
+  const prev = _balanceRef.value
+  _balanceRef.value = next
+  if (_hasFetchedOnce && prev !== next) {
+    _lastChangeRef.value = { from: prev, to: next, at: Date.now() }
+  }
+  _hasFetchedOnce = true
+}
 
 function _startPolling(intervalMs: number) {
   if (_pollingInterval) return // Already running
@@ -40,10 +58,10 @@ function _startPolling(intervalMs: number) {
     _isLoadingRef.value = true
     try {
       const bal = await getCoinBalance()
-      _balanceRef.value = bal
+      _applyBalance(bal)
       _errorRef.value = null
       _lastFetchTime = now
-    } catch (e) {
+    } catch {
       _errorRef.value = 'Failed to fetch balance'
       // Silent retry on next interval
     } finally {
@@ -81,10 +99,10 @@ export function useBalancePolling(options?: UseBalancePollingOptions): UseBalanc
     _isLoadingRef.value = true
     try {
       const bal = await getCoinBalance()
-      _balanceRef.value = bal
+      _applyBalance(bal)
       _errorRef.value = null
       _lastFetchTime = Date.now()
-    } catch (e) {
+    } catch {
       _errorRef.value = 'Failed to fetch balance'
     } finally {
       _isLoadingRef.value = false
@@ -124,8 +142,23 @@ export function useBalancePolling(options?: UseBalancePollingOptions): UseBalanc
     balance: _balanceRef,
     isLoading: _isLoadingRef,
     error: _errorRef,
+    lastChange: readonly(_lastChangeRef),
     start,
     stop,
     refresh,
   }
+}
+
+/**
+ * Test-only helper: reset all singleton state. Used to isolate tests; do not call in production code.
+ */
+export function __resetBalancePollingForTests(): void {
+  _stopPolling()
+  _balanceRef.value = 0
+  _isLoadingRef.value = false
+  _errorRef.value = null
+  _lastChangeRef.value = null
+  _hasFetchedOnce = false
+  _consumerCount = 0
+  _lastFetchTime = 0
 }

@@ -316,5 +316,10 @@ export default {
     singleTask: 'Earned {stars} ⭐!',
     multipleTasks: '{count} tasks approved! Earned {stars} ⭐',
     overlayLabel: 'Task approval celebration',
+    treasureUnlocked: 'Treasure Unlocked!',
+    confirmButton: 'Awesome!',
+    sealTreasureChest: 'Seal the Treasure Chest!',
+    reducedMotionToast: '✨ Task approved! Earned {stars} ⭐',
+    candleAriaLabel: 'Awaiting approval',
   },
 }

@@ -317,5 +317,10 @@ export default {
     singleTask: '获得 {stars} ⭐！',
     multipleTasks: '{count}个任务通过！获得 {stars} ⭐',
     overlayLabel: '任务通过庆祝',
+    treasureUnlocked: '宝藏解锁！',
+    confirmButton: '太棒了！',
+    sealTreasureChest: '锁住宝箱！',
+    reducedMotionToast: '✨ 任务通过！获得 {stars} ⭐',
+    candleAriaLabel: '等待审批中',
   },
 }

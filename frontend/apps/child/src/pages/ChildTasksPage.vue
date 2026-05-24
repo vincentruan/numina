@@ -25,9 +25,13 @@
     </div>
 
     <!-- Balance hero — ochre feature card -->
-    <div class="balance-card">
+    <div
+      ref="balanceCardRef"
+      class="balance-card"
+      :data-reacting="balanceReactMode"
+    >
       <p class="balance-label">{{ t('tasks.myStars') }}</p>
-      <CoinDisplay :amount="balance" :icon-size="28" class="balance-display" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+      <CoinDisplay :amount="balance" :icon-size="28" class="balance-display" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" animate-changes />
     </div>
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
@@ -42,10 +46,18 @@
       <div
         v-for="chore in chores"
         :key="chore.id"
+        :ref="(el) => setChoreCardRef(chore.id, el as HTMLElement | null)"
         class="chore-card"
         :class="chore.status"
       >
         <span class="chore-emoji">{{ chore.chore_emoji || '📋' }}</span>
+        <CandleFlame
+          v-if="chore.status === 'pending_approval' || candleStates[chore.id]"
+          :state="candleStates[chore.id] ?? 'flickering'"
+          :aria-label="t('celebration.candleAriaLabel')"
+          @bloom-end="onCandleAnimationEnd(chore.id)"
+          @gutter-end="onCandleAnimationEnd(chore.id)"
+        />
         <div class="chore-info">
           <p class="chore-name">{{ chore.chore_name }}</p>
           <p class="chore-reward">
@@ -94,8 +106,13 @@
           <p class="abandon-sheet-reward">+{{ completeTarget.coin_reward }} ⭐</p>
         </div>
       </div>
-      <button class="btn-keep-going" @click="doComplete">
-        {{ t('chore.completeConfirm') }}
+      <button
+        class="btn-keep-going seal-btn"
+        :data-spinning="sealSpinning"
+        @click="doComplete"
+      >
+        <span class="seal-icon">🔒</span>
+        {{ t('celebration.sealTreasureChest') }}
       </button>
       <button
         class="btn-abandon-confirm"
@@ -166,13 +183,19 @@
       :visible="taskCelebrationVisible"
       :task-count="celebrationTaskCount"
       :stars-earned="celebrationStarsEarned"
+      :streak-tier="celebrationStreakTier"
+      :task-refs="choreCardRefs"
+      :balance-ref="balanceCardRef"
+      :task-ids="celebrationTaskIds"
       @dismiss="onCelebrationDismiss"
+      @balance-react="onBalanceReact"
+      @balance-react-end="onBalanceReactEnd"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { getUser } from '@numina/auth'
@@ -181,6 +204,7 @@ import { getMyMilestones } from '@/api/milestones'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
 import MilestoneCelebration from '@/components/MilestoneCelebration.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
+import CandleFlame from '@/components/celebration/CandleFlame.vue'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import { childBlindBoxApi } from '@/api/blindBox'
@@ -211,16 +235,50 @@ const autoDraw = ref<BlindBoxDraw | null>(null)
 const showAutoDrawOverlay = ref(false)
 
 // Balance polling via composable
-const { balance, refresh: refreshBalance } = useBalancePolling()
+const { balance, lastChange: balanceLastChange } = useBalancePolling()
 
 // Celebration state via composable (renamed to avoid conflict with milestone celebrationVisible)
 const {
   celebrationVisible: taskCelebrationVisible,
   celebrationTaskCount,
   celebrationStarsEarned,
-  onCelebrationDismiss,
+  celebrationTaskIds,
+  celebrationStreakTier,
+  onCelebrationDismiss: dismissTaskCelebration,
   checkAndTriggerCelebration,
 } = useCelebration()
+
+// Position-resolution refs for star flight
+const choreCardRefs = ref<Map<string, HTMLElement>>(new Map())
+const balanceCardRef = ref<HTMLElement | null>(null)
+function setChoreCardRef(id: string, el: HTMLElement | null): void {
+  if (el) {
+    choreCardRefs.value.set(id, el)
+  } else {
+    choreCardRefs.value.delete(id)
+  }
+}
+
+// Pending-approval candle states
+const candleStates = ref<Record<string, 'flickering' | 'bloom' | 'gutter'>>({})
+function onCandleAnimationEnd(id: string): void {
+  delete candleStates.value[id]
+}
+
+// Lock-spin on confirm button + balance reaction
+const sealSpinning = ref(false)
+const balanceReactMode = ref<'pop' | 'invert' | null>(null)
+function onBalanceReact(mode: 'pop' | 'invert'): void {
+  balanceReactMode.value = mode
+}
+function onBalanceReactEnd(): void {
+  balanceReactMode.value = null
+}
+
+function onCelebrationDismiss(): void {
+  dismissTaskCelebration()
+  balanceReactMode.value = null
+}
 
 let pollCancelled = false
 
@@ -363,6 +421,10 @@ function showCompleteConfirm(chore: ChoreInstance) {
 async function doComplete() {
   if (!completeTarget.value) return
   const instanceId = completeTarget.value.id
+  sealSpinning.value = true
+  setTimeout(() => {
+    sealSpinning.value = false
+  }, 350)
   completeSheetVisible.value = false
   completeTarget.value = null
   await complete(instanceId)
@@ -441,11 +503,55 @@ onMounted(async () => {
   checkAndTriggerCelebration(chores.value)
 })
 
+// Drive candle state transitions when chore status changes after polling.
+watch(
+  chores,
+  (next, prev) => {
+    if (!prev) return
+    const prevById = new Map(prev.map(c => [c.id, c.status]))
+    for (const c of next) {
+      const oldStatus = prevById.get(c.id)
+      if (oldStatus === 'pending_approval' && c.status === 'approved') {
+        candleStates.value[c.id] = 'bloom'
+      } else if (oldStatus === 'pending_approval' && c.status === 'rejected') {
+        candleStates.value[c.id] = 'gutter'
+      }
+    }
+  },
+  { deep: true },
+)
+
+// When the page sees newly-approved chores via polling, surface the celebration.
+watch(chores, (next) => {
+  checkAndTriggerCelebration(next)
+})
+
+// Non-celebration balance changes (e.g., parent grant while child is on Tasks page):
+// fire a single C1 pulse on the balance card. Skip when a celebration is mid-flight
+// since the celebration owns the reaction.
+let popResetTimer: ReturnType<typeof setTimeout> | null = null
+watch(balanceLastChange, (change) => {
+  if (!change) return
+  if (taskCelebrationVisible.value) return
+  balanceReactMode.value = 'pop'
+  if (popResetTimer) clearTimeout(popResetTimer)
+  popResetTimer = setTimeout(() => {
+    if (balanceReactMode.value === 'pop') {
+      balanceReactMode.value = null
+    }
+    popResetTimer = null
+  }, 600)
+})
+
 onUnmounted(() => {
   pollCancelled = true
   if (dismissTimer) {
     clearTimeout(dismissTimer)
     dismissTimer = null
+  }
+  if (popResetTimer) {
+    clearTimeout(popResetTimer)
+    popResetTimer = null
   }
 })
 </script>
@@ -473,6 +579,7 @@ onUnmounted(() => {
 
 /* ── Balance hero — ochre feature card ── */
 .balance-card {
+  position: relative;
   background: linear-gradient(135deg, var(--color-brand-ochre), var(--color-brand-peach));
   border-radius: var(--radius-lg);
   padding: 16px 20px;
@@ -480,6 +587,36 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition: box-shadow 300ms ease-out;
+}
+
+.balance-card[data-reacting='pop'] {
+  animation: balance-pop 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275),
+             balance-glow 1500ms ease-out;
+  box-shadow: 0 0 40px rgba(232, 185, 74, 0.6);
+}
+
+.balance-card[data-reacting='invert'] {
+  animation: balance-color-invert 400ms ease-out;
+}
+
+@keyframes balance-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+@keyframes balance-glow {
+  0%   { box-shadow: 0 0 0 rgba(232, 185, 74, 0); }
+  20%  { box-shadow: 0 0 48px rgba(232, 185, 74, 0.75); }
+  60%  { box-shadow: 0 0 32px rgba(232, 185, 74, 0.55); }
+  100% { box-shadow: 0 0 0 rgba(232, 185, 74, 0); }
+}
+
+@keyframes balance-color-invert {
+  0% { filter: hue-rotate(0); }
+  50% { filter: hue-rotate(60deg) brightness(1.1); }
+  100% { filter: hue-rotate(0); }
 }
 
 .balance-label {
@@ -551,6 +688,7 @@ onUnmounted(() => {
 .chore-list { display: flex; flex-direction: column; gap: 12px; }
 
 .chore-card {
+  position: relative;
   display: flex;
   align-items: center;
   background: var(--color-surface-soft);
@@ -743,6 +881,39 @@ onUnmounted(() => {
   transition: transform 0.1s;
 }
 .btn-keep-going:active { transform: scale(0.96); }
+
+/* ── Seal button (lock-spin on tap) ── */
+.seal-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.seal-btn .seal-icon {
+  display: inline-block;
+  font-size: 18px;
+  line-height: 1;
+  transform-origin: center;
+  transition: transform 100ms ease-out;
+}
+.seal-btn[data-spinning='true'] {
+  animation: seal-press 250ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.seal-btn[data-spinning='true'] .seal-icon {
+  animation: seal-spin 300ms ease-out;
+}
+
+@keyframes seal-spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes seal-press {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.95); }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
 
 .btn-abandon-confirm {
   width: 100%;
