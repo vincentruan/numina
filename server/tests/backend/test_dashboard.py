@@ -171,7 +171,7 @@ def test_dashboard_new_assets_default_period(client, auth_headers, setup_test_da
     assert data["period"] == "month"
     # setup_test_data creates 3 assets — all created just now, so all in last 30 days
     assert data["count"] == 3
-    assert len(data["items"]) <= 5
+    assert len(data["items"]) == 3
     item = data["items"][0]
     assert "id" in item
     assert "name" in item
