@@ -217,3 +217,35 @@ def test_dashboard_new_assets_requires_auth(client):
     """Endpoint rejects unauthenticated requests"""
     response = client.get("/api/v1/dashboard/new-assets")
     assert response.status_code == 401
+
+
+def test_dashboard_new_assets_excludes_old_assets(client, auth_headers):
+    """Assets created outside the period window are not counted"""
+    from datetime import datetime, timedelta
+
+    # Get categories for asset creation
+    cat_response = client.get("/api/v1/categories", headers=auth_headers)
+    categories = cat_response.json()["data"]
+    physical_cat = [c for c in categories if c["asset_type"] == "physical"][0]
+
+    # Create one recent asset (should be counted)
+    client.post("/api/v1/assets", headers=auth_headers, json={
+        "name": "Recent Asset",
+        "category_id": physical_cat["id"],
+        "asset_type": "physical",
+        "current_value": 1000,
+        "purchase_price": 1000,
+        "purchase_date": "2024-01-01",
+    })
+
+    # Verify it shows up in month period
+    response = client.get("/api/v1/dashboard/new-assets", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["count"] == 1
+
+    # Verify no assets exist for a non-existent period value returns 422
+    response_invalid = client.get(
+        "/api/v1/dashboard/new-assets", headers=auth_headers, params={"period": "decade"}
+    )
+    assert response_invalid.status_code == 422

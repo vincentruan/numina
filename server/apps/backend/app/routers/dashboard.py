@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -134,7 +136,7 @@ def get_home_assets_paginated(
 
 @router.get("/new-assets", response_model=NewAssetsResponse)
 def get_new_assets(
-    period: str = Query("month"),
+    period: Literal["month", "quarter", "year"] = Query("month"),
     db: Session = Depends(get_db),
     user: User = Depends(require_adult),
 ):

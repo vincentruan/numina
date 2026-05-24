@@ -260,6 +260,7 @@ function formatMoney(value: number | string | undefined | null): string {
 }
 
 function daysAgo(isoDate: string): string {
+  if (!isoDate) return ''
   const days = Math.floor((Date.now() - new Date(isoDate).getTime()) / 86400000)
   return t('analyticsPage.daysAgo', { n: days })
 }
@@ -289,7 +290,6 @@ onMounted(async () => {
 
   await dashboardStore.fetchAll()
   dashboardStore.fetchDailyCostRanking()
-  dashboardStore.fetchTrend(trendPeriod.value)
   dashboardStore.fetchNewAssets(trendPeriod.value)
 })
 
