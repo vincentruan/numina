@@ -1,5 +1,5 @@
 import http from './index'
-import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse } from '@/types'
+import type { DashboardOverview, AllocationResponse, TrendResponse, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, HomeAssetsPageResponse, NewAssetsResponse } from '@/types'
 
 export interface ExpiringSoonItem {
   id: string
@@ -74,6 +74,10 @@ export function getHomeAssetsPaginated(
   return http.get<HomeAssetsPageResponse>(`/dashboard/home-assets/${status}`, {
     params: { page, page_size: pageSize, ...(categoryId ? { category_id: categoryId } : {}) }
   })
+}
+
+export function getNewAssets(period: 'month' | 'quarter' | 'year' = 'month') {
+  return http.get<NewAssetsResponse>('/dashboard/new-assets', { params: { period } })
 }
 
 export interface ActivityItem {
