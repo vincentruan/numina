@@ -54,6 +54,15 @@ export function getChildBalance(childId: string) {
   return http.get<{ balance: number }>(`/family/children/${childId}/balance`)
 }
 
+export interface ChildLedgerEntry {
+  amount: number
+  created_at: string
+}
+
+export function getChildLedger(childId: string) {
+  return http.get<ChildLedgerEntry[]>(`/family/children/${childId}/coins/ledger`)
+}
+
 /** Batch fetch all child balances in one request. Returns {child_user_id: balance}. */
 export function getAllChildBalances() {
   return http.get<Record<string, number>>('/family/children/balances')

@@ -20,6 +20,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@numina/math': fileURLToPath(new URL('../../packages/math/src/index.ts', import.meta.url)),
     },
   },
 })

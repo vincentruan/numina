@@ -30,6 +30,21 @@
 
       <div v-if="error && !loading" class="error-msg">{{ error }}</div>
 
+      <!-- Constellation grid (active wishes only) -->
+      <WishConstellationGrid
+        v-if="!loading && activeWishes.length > 0"
+        :wishes="activeWishes"
+        :stats="stats"
+        :days-estimate-map="wishDaysMap"
+        :tint-map="wishTintMap"
+        :peek-active-wish-id="peekActiveWishId"
+        :peek-deltas="peekDeltas"
+        :reduced-motion="reducedMotion"
+        @tap="goToDetail"
+        @peek-start="onPeekStart"
+        @peek-end="onPeekEnd"
+      />
+
       <!-- Active wishes -->
       <div v-if="!loading && activeWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionActive') }}</p>
@@ -145,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -155,6 +170,9 @@ import {
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { useBalancePolling } from '@/composables/useBalancePolling'
+import { useReducedMotion } from '@/composables/useReducedMotion'
+import { daysEstimate, reachabilityTint, previewSpend, type ReachabilityTint, type SpendDelta } from '@numina/math'
+import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -183,38 +201,61 @@ const totalWishes = computed(() =>
 const wishDaysMap = computed(() => {
   const map = new Map<string, number | null>()
   if (!stats.value?.priority_simulation) return map
-
-  const now = Date.now()
-  const cutoff7d = now - 7 * 24 * 60 * 60 * 1000
-
-  const earnEntries = ledger.value.filter(tx => tx.amount > 0 && new Date(tx.created_at).getTime() >= cutoff7d)
-  const earnDays = new Set<string>()
-  let earnSum = 0
-  for (const tx of earnEntries) {
-    earnDays.add(new Date(tx.created_at).toDateString())
-    earnSum += tx.amount
-  }
-
-  const distinctDays = earnDays.size
-  if (distinctDays < 3) return map
-
-  const dailyAvg = earnSum / distinctDays
-  if (dailyAvg <= 0) return map
-
   for (const sim of stats.value.priority_simulation) {
-    if (sim.star_coin_cost == null) {
-      map.set(sim.wish_id, null)
-      continue
-    }
-    const remaining = sim.star_coin_cost - stats.value.balance
-    if (remaining <= 0) {
-      map.set(sim.wish_id, null)
-      continue
-    }
-    map.set(sim.wish_id, Math.ceil(remaining / dailyAvg))
+    map.set(sim.wish_id, daysEstimate(stats.value.balance, sim, ledger.value))
   }
   return map
 })
+
+const wishTintMap = computed(() => {
+  const map = new Map<string, ReachabilityTint>()
+  if (!stats.value?.priority_simulation) return map
+  for (const sim of stats.value.priority_simulation) {
+    map.set(sim.wish_id, reachabilityTint(sim, wishDaysMap.value.get(sim.wish_id) ?? null))
+  }
+  return map
+})
+
+function goToDetail(wishId: string) {
+  router.push({ name: 'ChildWishDetail', params: { id: wishId } })
+}
+
+const PEEK_TIMEOUT_MS = 1500
+const PEEK_TIMEOUT_REDUCED_MS = 3000
+
+const reducedMotion = useReducedMotion()
+const peekActiveWishId = ref<string | null>(null)
+const peekDeltas = ref<SpendDelta[]>([])
+let peekTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearPeekTimer() {
+  if (peekTimer) {
+    clearTimeout(peekTimer)
+    peekTimer = null
+  }
+}
+
+function endPeek() {
+  clearPeekTimer()
+  peekActiveWishId.value = null
+  peekDeltas.value = []
+}
+
+function onPeekStart(wishId: string) {
+  if (!stats.value) return
+  clearPeekTimer()
+  const result = previewSpend(wishId, stats.value.balance, stats.value.priority_simulation, ledger.value)
+  peekActiveWishId.value = wishId
+  peekDeltas.value = result.deltas
+  const timeoutMs = reducedMotion.value ? PEEK_TIMEOUT_REDUCED_MS : PEEK_TIMEOUT_MS
+  peekTimer = setTimeout(endPeek, timeoutMs)
+}
+
+function onPeekEnd(_wishId: string) {
+  endPeek()
+}
+
+onBeforeUnmount(clearPeekTimer)
 
 function daysToWish(wishId: string): number | null {
   return wishDaysMap.value.get(wishId) ?? null

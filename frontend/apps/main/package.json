@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@numina/auth": "workspace:*",
+    "@numina/math": "workspace:*",
     "@vant/touch-emulator": "^1.5.0",
     "axios": "^1.13.6",
     "dompurify": "^3.4.1",

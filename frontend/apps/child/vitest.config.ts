@@ -8,6 +8,7 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, 'src'),
       '@numina/auth': path.resolve(__dirname, '../../packages/auth/src/index.ts'),
+      '@numina/math': path.resolve(__dirname, '../../packages/math/src/index.ts'),
     },
     dedupe: ['vue', 'pinia'],
   },

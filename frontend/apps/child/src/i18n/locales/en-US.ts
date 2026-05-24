@@ -202,6 +202,24 @@ export default {
     continueCreate: 'Make Another',
     backToList: 'Back to Wishes',
     emojiPickerTitle: 'Pick an Emoji',
+    tint: {
+      green: { aria: 'Ready to claim' },
+      yellow: { aria: 'Almost ready' },
+      red: { aria: 'Still saving' },
+      gray: { aria: 'Keep saving — estimate stabilizes after a few days' },
+    },
+    constellation: {
+      headline: 'You can get {k} of {n} wishes today',
+      headlineZero: 'Keep going — closest wish is {d} days away',
+      headlineZeroNoEstimate: 'Keep doing chores to grow your stars',
+      detailUnknown: 'This wish was not found',
+    },
+    timeUnitDays: '≈ {days} days',
+    timeUnitPlaceholder: 'Keep going — estimate stabilizes',
+    peek: {
+      confirmTag: 'You can have this one ✨',
+      daysAdded: '+{n} days',
+    },
   },
   treasures: {
     title: '🏆 My Treasures',

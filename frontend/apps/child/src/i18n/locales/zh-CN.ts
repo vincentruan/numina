@@ -203,6 +203,24 @@ export default {
     continueCreate: '继续许愿',
     backToList: '返回心愿列表',
     emojiPickerTitle: '选择表情',
+    tint: {
+      green: { aria: '可以兑换啦' },
+      yellow: { aria: '快可以兑换了' },
+      red: { aria: '还要再等一阵子' },
+      gray: { aria: '继续做家务，几天后能更准估计' },
+    },
+    constellation: {
+      headline: '你今天可以拿到 {k} 个 / 共 {n} 个 心愿',
+      headlineZero: '继续加油，离最近的心愿还差 {d} 天',
+      headlineZeroNoEstimate: '继续做家务，慢慢攒星星',
+      detailUnknown: '没找到这个心愿',
+    },
+    timeUnitDays: '≈ {days} 天',
+    timeUnitPlaceholder: '继续做家务，几天后能更准估计',
+    peek: {
+      confirmTag: '这个就能拿到啦 ✨',
+      daysAdded: '+{n} 天',
+    },
   },
   treasures: {
     title: '🏆 我的宝贝',

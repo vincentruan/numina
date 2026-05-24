@@ -1496,6 +1496,7 @@ export default {
     section: {
       redemptionRequested: 'Redemption Requested 🎁',
       pendingReview: 'Pending Review ⏳',
+      active: 'Active ✨',
     },
     dialog: {
       approveTitle: 'Approve Wish',
@@ -1526,6 +1527,25 @@ export default {
     error: {
       operationFailed: 'Operation failed, please retry',
       insufficientCoins: 'Insufficient coins or operation failed',
+    },
+  },
+  wishCostEdit: {
+    entryBtn: 'Adjust Stars',
+    title: 'Adjust Wish Stars',
+    currentLabel: 'Current Stars',
+    placeholder: 'Enter new star amount (≥1)',
+    next: 'Next',
+    cancel: 'Cancel',
+    warningTitle: "Your child's wait time will change",
+    warningBodyDays: 'Estimated wait will shift from ≈ {before} days to ≈ {after} days. Confirm?',
+    warningBodyProgress: 'Wish stars will shift from {beforeCost} ⭐ to {afterCost} ⭐, and progress will shift from {beforePct}% to {afterPct}%. Confirm?',
+    reconsider: 'Reconsider',
+    confirm: 'Confirm',
+    success: '✅ Updated',
+    error: '❌ Update failed, please try again',
+    errors: {
+      invalid: '⚠️ Enter a positive integer',
+      unchanged: '⚠️ No change to stars',
     },
   },
   choreTemplate: {
