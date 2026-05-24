@@ -158,3 +158,62 @@ def test_dashboard_investment_returns(client, auth_headers, setup_test_data):
     # return_rate = (225000 - 200000) / 200000 * 100 = 12.5
     assert abs(data[0]["return_rate"] - 12.5) < 0.1
     assert data[0]["profit"] == 25000
+
+
+def test_dashboard_new_assets_default_period(client, auth_headers, setup_test_data):
+    """新增资产 returns count and items for default month period"""
+    response = client.get("/api/v1/dashboard/new-assets", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert "count" in data
+    assert "period" in data
+    assert "items" in data
+    assert data["period"] == "month"
+    # setup_test_data creates 3 assets — all created just now, so all in last 30 days
+    assert data["count"] == 3
+    assert len(data["items"]) <= 5
+    item = data["items"][0]
+    assert "id" in item
+    assert "name" in item
+    assert "icon" in item
+    assert "category_name" in item
+    assert "current_value" in item
+    assert "currency" in item
+    assert "created_at" in item
+
+
+def test_dashboard_new_assets_quarter_period(client, auth_headers, setup_test_data):
+    """period=quarter is accepted and returns same assets (all recent)"""
+    response = client.get(
+        "/api/v1/dashboard/new-assets", headers=auth_headers, params={"period": "quarter"}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["period"] == "quarter"
+    assert data["count"] == 3
+
+
+def test_dashboard_new_assets_year_period(client, auth_headers, setup_test_data):
+    """period=year is accepted and returns same assets (all recent)"""
+    response = client.get(
+        "/api/v1/dashboard/new-assets", headers=auth_headers, params={"period": "year"}
+    )
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["period"] == "year"
+    assert data["count"] == 3
+
+
+def test_dashboard_new_assets_empty(client, auth_headers):
+    """Returns count=0 and empty items when no assets exist"""
+    response = client.get("/api/v1/dashboard/new-assets", headers=auth_headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["count"] == 0
+    assert data["items"] == []
+
+
+def test_dashboard_new_assets_requires_auth(client):
+    """Endpoint rejects unauthenticated requests"""
+    response = client.get("/api/v1/dashboard/new-assets")
+    assert response.status_code == 401
