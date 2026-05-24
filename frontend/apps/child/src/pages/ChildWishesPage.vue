@@ -30,6 +30,16 @@
 
       <div v-if="error && !loading" class="error-msg">{{ error }}</div>
 
+      <!-- Constellation grid (active wishes only) -->
+      <WishConstellationGrid
+        v-if="!loading && activeWishes.length > 0"
+        :wishes="activeWishes"
+        :stats="stats"
+        :days-estimate-map="wishDaysMap"
+        :tint-map="wishTintMap"
+        @tap="goToDetail"
+      />
+
       <!-- Active wishes -->
       <div v-if="!loading && activeWishes.length > 0" class="section">
         <p class="section-title">{{ t('wishes.sectionActive') }}</p>
@@ -155,7 +165,8 @@ import {
 } from '@/api/childWishes'
 import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { useBalancePolling } from '@/composables/useBalancePolling'
-import { daysEstimate } from '@numina/math'
+import { daysEstimate, reachabilityTint, type ReachabilityTint } from '@numina/math'
+import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -189,6 +200,19 @@ const wishDaysMap = computed(() => {
   }
   return map
 })
+
+const wishTintMap = computed(() => {
+  const map = new Map<string, ReachabilityTint>()
+  if (!stats.value?.priority_simulation) return map
+  for (const sim of stats.value.priority_simulation) {
+    map.set(sim.wish_id, reachabilityTint(sim, wishDaysMap.value.get(sim.wish_id) ?? null))
+  }
+  return map
+})
+
+function goToDetail(wishId: string) {
+  router.push({ name: 'ChildWishDetail', params: { id: wishId } })
+}
 
 function daysToWish(wishId: string): number | null {
   return wishDaysMap.value.get(wishId) ?? null
