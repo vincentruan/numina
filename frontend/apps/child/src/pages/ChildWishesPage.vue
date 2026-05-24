@@ -160,7 +160,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -254,6 +254,8 @@ function onPeekStart(wishId: string) {
 function onPeekEnd(_wishId: string) {
   endPeek()
 }
+
+onBeforeUnmount(clearPeekTimer)
 
 function daysToWish(wishId: string): number | null {
   return wishDaysMap.value.get(wishId) ?? null

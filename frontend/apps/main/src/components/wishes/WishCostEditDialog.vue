@@ -9,14 +9,13 @@
           <span class="cost-label">{{ t('wishCostEdit.currentLabel') }}</span>
           <span class="cost-value">{{ wish.star_coin_cost ?? '-' }} ⭐</span>
         </div>
-        <input
+        <van-field
           class="cost-input"
           type="number"
-          inputmode="numeric"
-          min="1"
-          :value="newCostInput"
+          input-align="left"
+          :model-value="newCostInput"
           :placeholder="t('wishCostEdit.placeholder')"
-          @input="onCostInput(($event.target as HTMLInputElement).value)"
+          @update:model-value="onCostInput"
         />
         <div v-if="inputError" class="error-msg">{{ inputError }}</div>
         <div class="dialog-actions">

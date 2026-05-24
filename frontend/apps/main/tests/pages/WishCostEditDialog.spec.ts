@@ -71,7 +71,17 @@ function mountDialog(opts: { balance?: number; ledger?: Array<{ amount: number; 
       wish,
       'onUpdate:visible': (v: boolean) => (visible.value = v),
     },
-    global: { plugins: [i18n] },
+    global: {
+      plugins: [i18n],
+      stubs: {
+        VanField: {
+          name: 'VanField',
+          props: ['modelValue', 'placeholder', 'type'],
+          emits: ['update:modelValue'],
+          template: '<input class="cost-input" :value="modelValue" :placeholder="placeholder" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+        },
+      },
+    },
     attachTo: document.body,
   })
   return { wrapper, visible }
