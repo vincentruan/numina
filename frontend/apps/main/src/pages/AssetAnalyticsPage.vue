@@ -24,9 +24,9 @@
                 shrink
                 @change="onPeriodChange"
               >
-                <van-tab title="月" name="month" />
-                <van-tab title="季" name="quarter" />
-                <van-tab title="年" name="year" />
+                <van-tab :title="t('analyticsPage.periodMonth')" name="month" />
+                <van-tab :title="t('analyticsPage.periodQuarter')" name="quarter" />
+                <van-tab :title="t('analyticsPage.periodYear')" name="year" />
               </van-tabs>
             </div>
             <div class="net-worth-value">
@@ -132,7 +132,7 @@
                   <span class="cost-icon">{{ item.icon || '📦' }}</span>
                   <span class="cost-name">{{ item.name }}</span>
                 </div>
-                <span class="cost-value">{{ formatMoney(item.daily_cost) }}/天</span>
+                <span class="cost-value">{{ formatMoney(item.daily_cost) }}{{ t('analyticsPage.perDay') }}</span>
               </div>
             </template>
             <van-empty v-else :description="t('common.noData')" image-size="60" />
@@ -208,7 +208,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -225,11 +225,9 @@ const dashboardStore = useDashboardStore()
 const activeTab = ref<'trend' | 'insight'>('trend')
 const trendPeriod = ref<'month' | 'quarter' | 'year'>('month')
 
-const tabActiveColor = computed(() => {
-  return document.documentElement.getAttribute('data-theme') === 'dark'
-    ? 'var(--color-lavender)'
-    : 'var(--van-primary-color)'
-})
+const isDarkMode = ref(document.documentElement.getAttribute('data-theme') === 'dark')
+
+let _themeObserver: MutationObserver | null = null
 
 const monthOverMonthChange = computed(() => dashboardStore.overview?.month_over_month_change ?? null)
 const lowUsageAssets = computed(() =>
@@ -284,11 +282,24 @@ function onPeriodChange(period: 'month' | 'quarter' | 'year') {
 }
 
 onMounted(async () => {
+  _themeObserver = new MutationObserver(() => {
+    isDarkMode.value = document.documentElement.getAttribute('data-theme') === 'dark'
+  })
+  _themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+
   await dashboardStore.fetchAll()
   dashboardStore.fetchDailyCostRanking()
   dashboardStore.fetchTrend(trendPeriod.value)
   dashboardStore.fetchNewAssets(trendPeriod.value)
 })
+
+onUnmounted(() => {
+  _themeObserver?.disconnect()
+})
+
+const tabActiveColor = computed(() =>
+  isDarkMode.value ? 'var(--color-lavender)' : 'var(--van-primary-color)'
+)
 </script>
 
 <style scoped>

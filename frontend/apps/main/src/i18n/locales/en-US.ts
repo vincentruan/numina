@@ -1577,6 +1577,10 @@ export default {
     daysAgo: '{n}d ago',
     insightTitle: 'Smart Insights',
     insightPlaceholder: 'Coming soon: AI-powered analysis and suggestions based on your assets',
+    periodMonth: 'Month',
+    periodQuarter: 'Quarter',
+    periodYear: 'Year',
+    perDay: '/day',
   },
   statusGrid: {
     all: 'All',

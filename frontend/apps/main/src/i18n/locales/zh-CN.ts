@@ -1970,6 +1970,10 @@ export default {
     daysAgo: '{n}天前',
     insightTitle: '智能洞悉',
     insightPlaceholder: '即将推出：基于你的资产数据，提供智能分析和建议',
+    periodMonth: '月',
+    periodQuarter: '季',
+    periodYear: '年',
+    perDay: '/天',
   },
   challenge: {
     sectionTitle: '挑战管理',
