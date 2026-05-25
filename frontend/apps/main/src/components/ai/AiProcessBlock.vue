@@ -35,6 +35,41 @@
           :error="step.error"
           :elapsed-ms="step.elapsedMs"
         />
+        <div
+          v-else-if="step.type === 'subagent'"
+          class="step-subagent"
+          :class="`step-subagent--${step.status}`"
+        >
+          <span class="step-subagent-icon" aria-hidden="true">{{ subagentIcon(step.status) }}</span>
+          <div class="step-subagent-body">
+            <div class="step-subagent-title">{{ step.title || step.taskId }}</div>
+            <div v-if="step.description" class="step-subagent-desc">{{ step.description }}</div>
+            <div v-if="step.result" class="step-subagent-result">{{ step.result }}</div>
+            <div v-if="step.error" class="step-subagent-error">{{ step.error }}</div>
+          </div>
+        </div>
+        <a
+          v-else-if="step.type === 'artifact'"
+          class="step-artifact"
+          :href="step.url || '#'"
+          :target="step.url ? '_blank' : undefined"
+          :rel="step.url ? 'noopener noreferrer' : undefined"
+        >
+          <span class="step-artifact-icon" aria-hidden="true">📎</span>
+          <span class="step-artifact-title">{{ step.title }}</span>
+          <span v-if="step.path" class="step-artifact-path">{{ step.path }}</span>
+        </a>
+        <div
+          v-else-if="step.type === 'progress'"
+          class="step-progress"
+          :class="`step-progress--${step.status}`"
+        >
+          <span class="step-progress-icon" aria-hidden="true">{{ progressIcon(step.status) }}</span>
+          <div class="step-progress-body">
+            <div class="step-progress-title">{{ step.title }}</div>
+            <div v-if="step.description" class="step-progress-desc">{{ step.description }}</div>
+          </div>
+        </div>
       </template>
 
       <!-- Empty running state -->
@@ -183,6 +218,22 @@ const formattedElapsed = computed(() => {
   if (s < 60) return `${s}s`
   return `${Math.floor(s / 60)}m${s % 60}s`
 })
+
+function subagentIcon(status: 'running' | 'done' | 'failed'): string {
+  switch (status) {
+    case 'running': return '⏳'
+    case 'done': return '✓'
+    case 'failed': return '✕'
+  }
+}
+
+function progressIcon(status: 'running' | 'done' | 'error'): string {
+  switch (status) {
+    case 'running': return '⏳'
+    case 'done': return '✓'
+    case 'error': return '✕'
+  }
+}
 </script>
 
 <style scoped>
@@ -315,6 +366,83 @@ const formattedElapsed = computed(() => {
 
 .process-retry-btn:hover {
   background: rgba(var(--color-error-rgb), 0.08);
+}
+
+.step-subagent,
+.step-progress {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--color-card-border);
+  font-size: 12px;
+}
+
+.step-subagent--running .step-subagent-icon,
+.step-progress--running .step-progress-icon {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.step-subagent--failed,
+.step-progress--error {
+  border-color: var(--color-error);
+  background: rgba(var(--color-error-rgb), 0.08);
+}
+
+.step-subagent-body,
+.step-progress-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-subagent-title,
+.step-progress-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.step-subagent-desc,
+.step-progress-desc {
+  margin-top: 2px;
+  color: var(--text-secondary);
+}
+
+.step-subagent-result {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.step-subagent-error {
+  margin-top: 4px;
+  color: var(--color-error);
+  word-break: break-word;
+}
+
+.step-artifact {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--color-card-border);
+  font-size: 12px;
+  color: var(--color-action-blue);
+  text-decoration: none;
+}
+
+.step-artifact:hover {
+  background: rgba(var(--color-action-blue-rgb), 0.08);
+}
+
+.step-artifact-path {
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 /* Mobile responsive (spec §8 mobile risk mitigation) */

@@ -154,6 +154,24 @@ export function normalizeAgentEvent(
         // Merge so partial updates (e.g. status-only) keep prior title/description
         const merged = { ...(prev ?? {}), ...event.subagent }
         state.subagents.set(event.subagent.taskId, merged)
+        const stepIdx = state.steps.findIndex(
+          (s) => s.type === 'subagent' && s.taskId === merged.taskId,
+        )
+        const subagentStep: Extract<ProcessStep, { type: 'subagent' }> = {
+          type: 'subagent',
+          id: `subagent-${merged.taskId}`,
+          taskId: merged.taskId,
+          title: merged.title,
+          description: merged.description,
+          status: merged.status,
+          result: merged.result,
+          error: merged.error,
+        }
+        if (stepIdx >= 0) {
+          state.steps[stepIdx] = subagentStep
+        } else {
+          state.steps.push(subagentStep)
+        }
         events.push({
           type: 'subagent_update',
           taskId: merged.taskId,
@@ -174,6 +192,21 @@ export function normalizeAgentEvent(
           state.artifacts[existing] = event.artifact
         } else {
           state.artifacts.push(event.artifact)
+        }
+        const stepIdx = state.steps.findIndex(
+          (s) => s.type === 'artifact' && s.id === event.artifact!.id,
+        )
+        const artifactStep: Extract<ProcessStep, { type: 'artifact' }> = {
+          type: 'artifact',
+          id: event.artifact.id,
+          title: event.artifact.title,
+          url: event.artifact.url,
+          path: event.artifact.path,
+        }
+        if (stepIdx >= 0) {
+          state.steps[stepIdx] = artifactStep
+        } else {
+          state.steps.push(artifactStep)
         }
         events.push({
           type: 'artifact',

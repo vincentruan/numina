@@ -318,6 +318,59 @@ describe('normalizeAgentEvent — subagent.update', () => {
     ])
   })
 
+  it('appends a subagent step in arrival order with reasoning/tool_call', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    normalizeAgentEvent({ type: 'token.stream', token: 'r1', is_thinking: true }, state)
+    normalizeAgentEvent(
+      {
+        type: 'tool.call',
+        tool: { id: 't1', name: 'x', display_name: 'x', icon: '⚙', arguments: {} },
+      },
+      state,
+    )
+    normalizeAgentEvent(
+      {
+        type: 'subagent.update',
+        subagent: { taskId: 'sa1', status: 'running', title: 'Sub' },
+      },
+      state,
+    )
+    expect(state.steps.map((s) => s.type)).toEqual(['reasoning', 'tool_call', 'subagent'])
+    const sub = state.steps[2]
+    if (sub.type === 'subagent') {
+      expect(sub.taskId).toBe('sa1')
+      expect(sub.title).toBe('Sub')
+      expect(sub.status).toBe('running')
+    }
+  })
+
+  it('partial subagent update merges in place in steps[] (status-only update keeps title)', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent(
+      {
+        type: 'subagent.update',
+        subagent: { taskId: 'sa1', status: 'running', title: '原始', description: '描述' },
+      },
+      state,
+    )
+    normalizeAgentEvent(
+      { type: 'subagent.update', subagent: { taskId: 'sa1', status: 'done', result: '完成' } },
+      state,
+    )
+    expect(state.steps).toHaveLength(1)
+    const step = state.steps[0]
+    if (step.type === 'subagent') {
+      expect(step).toMatchObject({
+        taskId: 'sa1',
+        title: '原始',
+        description: '描述',
+        status: 'done',
+        result: '完成',
+      })
+    }
+  })
+
   it('merges partial updates into existing subagent state', () => {
     const state = createNormalizationState()
     normalizeAgentEvent(
@@ -381,6 +434,45 @@ describe('normalizeAgentEvent — artifact.created', () => {
         path: undefined,
       },
     ])
+  })
+
+  it('appends an artifact step in steps[] in arrival order', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent(
+      {
+        type: 'tool.call',
+        tool: { id: 't1', name: 'x', display_name: 'x', icon: '⚙', arguments: {} },
+      },
+      state,
+    )
+    normalizeAgentEvent(
+      { type: 'artifact.created', artifact: { id: 'a1', title: '报告', url: 'https://x' } },
+      state,
+    )
+    expect(state.steps.map((s) => s.type)).toEqual(['tool_call', 'artifact'])
+    const art = state.steps[1]
+    if (art.type === 'artifact') {
+      expect(art.id).toBe('a1')
+      expect(art.title).toBe('报告')
+      expect(art.url).toBe('https://x')
+    }
+  })
+
+  it('artifact re-emit replaces in place in steps[]', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent(
+      { type: 'artifact.created', artifact: { id: 'a1', title: '初始' } },
+      state,
+    )
+    normalizeAgentEvent(
+      { type: 'artifact.created', artifact: { id: 'a1', title: '更新', url: 'https://x' } },
+      state,
+    )
+    expect(state.steps).toHaveLength(1)
+    const step = state.steps[0]
+    if (step.type === 'artifact') {
+      expect(step).toMatchObject({ id: 'a1', title: '更新', url: 'https://x' })
+    }
   })
 
   it('dedupes artifact by id (re-emit replaces in place)', () => {
