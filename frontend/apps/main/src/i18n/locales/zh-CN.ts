@@ -199,6 +199,10 @@ export default {
     answeringTitle: '正在生成回答...',
     errorTitle: '执行出错',
     elapsedSeconds: '已思考 {seconds} 秒',
+    artifactsTitle: '关联资源',
+    openArtifact: '打开',
+    copyPath: '复制路径',
+    pathCopied: '✅ 已复制路径',
   },
   asset: {
     title: '资产',

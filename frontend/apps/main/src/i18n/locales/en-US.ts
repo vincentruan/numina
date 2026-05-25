@@ -154,6 +154,10 @@ export default {
     answeringTitle: 'Generating answer...',
     errorTitle: 'Execution failed',
     elapsedSeconds: 'Thought for {seconds}s',
+    artifactsTitle: 'Related artifacts',
+    openArtifact: 'Open',
+    copyPath: 'Copy path',
+    pathCopied: '✅ Path copied',
   },
   asset: {
     title: 'Assets',
