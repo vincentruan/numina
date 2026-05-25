@@ -31,6 +31,8 @@
 
 ### Task 1: Restore the Artifact / Subagent / State-Snapshot Contract on `NormalizedAiEvent`
 
+> **Status: COMPLETED in commit `c4a5b3e`.** Verified live: `src/types/agent-stream.ts` and `src/utils/aiEventNormalizer.ts` now expose all 14 spec-declared event variants and the new `Artifact`/`Subagent` interfaces; 10 normalizer unit tests pass at `tests/unit/utils/aiEventNormalizer.test.ts`. Skip Tasks 1 and 2 — proceed directly to Task 3.
+
 **Files:**
 - Modify: `frontend/apps/main/src/types/agent-stream.ts:50-91`
 
@@ -118,6 +120,8 @@ The type and state initializer must move together to keep the repo compilable. H
 ---
 
 ### Task 2: Update `aiEventNormalizer.ts` to Initialize and Propagate Artifact / Subagent State
+
+> **Status: COMPLETED in commit `c4a5b3e`** (chained with Task 1). The live normalizer initializes `artifacts: []` and `subagents: new Map()` in `createNormalizationState`, handles `subagent.update` with partial-merge semantics, handles `artifact.created` with id-based dedup, and handles `state.snapshot` for history rehydration. Skip — proceed to Task 3.
 
 **Files:**
 - Modify: `frontend/apps/main/src/utils/aiEventNormalizer.ts`
