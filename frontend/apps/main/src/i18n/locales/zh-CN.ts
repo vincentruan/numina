@@ -192,6 +192,8 @@ export default {
     copySuccess: '✅ 已复制',
     copyFailed: '❌ 复制失败',
     regenerate: '重新生成',
+    errorMessage: '❌ AI 执行出错，请重试',
+    retry: '重试',
   },
   asset: {
     title: '资产',

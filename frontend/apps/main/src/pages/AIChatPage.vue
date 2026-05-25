@@ -221,12 +221,15 @@
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
                 </div>
                 <!-- Process block (replaces inline think-block) — unified steps[] preserves event order (spec §3.3) -->
+                <!-- Includes phase=error so error message + retry button render inside the block (spec §5.4) -->
                 <AiProcessBlock
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && deepThink"
-                  :status="msg.processStatus || 'running'"
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && deepThink"
+                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : 'running')"
                   :elapsed-ms="msg.processElapsedMs || 0"
                   :steps="msg.processSteps || buildLegacySteps(msg)"
-                  :default-expanded="!msg.thinkDone"
+                  :default-expanded="!msg.thinkDone || msg.phase === 'error'"
+                  :error-message="msg.phase === 'error' ? t('aiChat.errorRetry') : undefined"
+                  @retry="onRetryError(idx)"
                 />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
@@ -235,8 +238,8 @@
                   :class="{ 'bubble-text--appearing': msg.content && msg.phase === 'answering' && !msg.renderedContent }"
                   v-html="msg.renderedContent ?? ''"
                 />
-                <!-- Error state with retry button -->
-                <div v-if="msg.role === 'assistant' && msg.phase === 'error'" class="error-state">
+                <!-- Inline error state — fallback when deepThink is off (AiProcessBlock not rendered) -->
+                <div v-if="msg.role === 'assistant' && msg.phase === 'error' && !deepThink" class="error-state">
                   <p class="error-msg">{{ t('aiChat.errorRetry') }}</p>
                   <button class="error-retry-btn" :disabled="asking" @click="onRetryError(idx)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

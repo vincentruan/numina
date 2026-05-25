@@ -147,6 +147,8 @@ export default {
     copySuccess: '✅ Copied',
     copyFailed: '❌ Copy failed',
     regenerate: 'Regenerate',
+    errorMessage: '❌ AI execution failed, please retry',
+    retry: 'Retry',
   },
   asset: {
     title: 'Assets',

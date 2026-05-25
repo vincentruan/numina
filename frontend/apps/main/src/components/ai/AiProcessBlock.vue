@@ -42,6 +42,15 @@
         <van-loading size="14" type="spinner" />
         <span>{{ t('aiProcess.connecting') }}</span>
       </div>
+
+      <!-- Error state (spec §5.4): error message + retry button -->
+      <div v-if="status === 'error'" class="process-error">
+        <p class="process-error-msg">{{ errorMessage || t('aiProcess.errorMessage') }}</p>
+        <button class="process-retry-btn" @click="onRetry">
+          <van-icon name="replay" />
+          <span>{{ t('aiProcess.retry') }}</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -58,10 +67,12 @@ const props = defineProps<{
   elapsedMs: number
   steps: ProcessStep[]
   defaultExpanded?: boolean
+  errorMessage?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'toggle-expand', expanded: boolean): void
+  (e: 'retry'): void
 }>()
 
 const { t } = useI18n()
@@ -72,7 +83,11 @@ function toggleExpand() {
   emit('toggle-expand', isExpanded.value)
 }
 
-// Auto-collapse when status changes to done
+function onRetry() {
+  emit('retry')
+}
+
+// Auto-collapse when status changes to done; keep expanded on error so user sees the retry button
 watch(
   () => props.status,
   (val, prev) => {
@@ -80,6 +95,9 @@ watch(
       isExpanded.value = false
     }
     if (val === 'running' && prev !== 'running') {
+      isExpanded.value = true
+    }
+    if (val === 'error') {
       isExpanded.value = true
     }
   },
@@ -236,5 +254,41 @@ const formattedElapsed = computed(() => {
   gap: 8px;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.process-error {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+}
+
+.process-error-msg {
+  margin: 0;
+  font-size: 13px;
+  color: #b91c1c;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.process-retry-btn {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #dc2626;
+  background: white;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.process-retry-btn:hover {
+  background: #fee2e2;
 }
 </style>
