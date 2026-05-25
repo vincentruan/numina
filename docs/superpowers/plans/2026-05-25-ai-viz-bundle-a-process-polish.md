@@ -22,7 +22,7 @@
 | `frontend/apps/main/src/pages/AIChatPage.vue` | Pass `phase` prop to `<AiProcessBlock>` so it can derive title | Modify |
 | `frontend/apps/main/src/i18n/locales/zh-CN.ts` | Add `aiProcess.thinkingTitle / answeringTitle / errorTitle / elapsedSeconds` | Modify |
 | `frontend/apps/main/src/i18n/locales/en-US.ts` | English translations for the above | Modify |
-| `frontend/apps/main/src/components/ai/AiLogo.test.ts` | Unit test for state class switching | Create |
+| `frontend/apps/main/tests/unit/components/ai/AiLogo.test.ts` | Unit test for state class switching (lives under `tests/` per project vitest config; the include glob is `tests/**`) | Create |
 
 ---
 
@@ -638,17 +638,19 @@ the elapsed-seconds subtitle has a stable origin."
 ### Task 6: Unit Test for `AiLogo` State Switching
 
 **Files:**
-- Create: `frontend/apps/main/src/components/ai/AiLogo.test.ts`
+- Create: `frontend/apps/main/tests/unit/components/ai/AiLogo.test.ts`
+
+> **Project test convention:** Tests live under `tests/`, not co-located with `src/`. `vitest.config.ts` has `include: ['tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}']`. Use the `@/` alias (e.g. `from '@/components/ai/AiLogo.vue'`) — relative imports from `tests/` won't resolve.
 
 - [ ] **Step 1: Write the test**
 
-Create `frontend/apps/main/src/components/ai/AiLogo.test.ts`:
+Create `frontend/apps/main/tests/unit/components/ai/AiLogo.test.ts`:
 
 ```typescript
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import AiLogo from './AiLogo.vue'
+import AiLogo from '@/components/ai/AiLogo.vue'
 
 const i18n = createI18n({
   legacy: false,
@@ -716,7 +718,7 @@ Expected: 6 tests PASS
 - [ ] **Step 3: Commit**
 
 ```bash
-git add frontend/apps/main/src/components/ai/AiLogo.test.ts
+git add frontend/apps/main/tests/unit/components/ai/AiLogo.test.ts
 git commit -m "test(ai): cover AiLogo state class switching and a11y attributes
 
 Phase 3 Bundle A — verifies each of the 4 states applies the correct
