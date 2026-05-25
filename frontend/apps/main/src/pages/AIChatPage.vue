@@ -221,10 +221,10 @@
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
                 </div>
                 <!-- Process block (replaces inline think-block) — unified steps[] preserves event order (spec §3.3) -->
-                <!-- Includes phase=error so error message + retry button render inside the block (spec §5.4) -->
+                <!-- Renders whenever the assistant has process steps OR is in error (so retry button is visible) -->
                 <AiProcessBlock
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && deepThink"
-                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : 'running')"
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg)"
+                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
                   :elapsed-ms="msg.processElapsedMs || 0"
                   :steps="msg.processSteps || buildLegacySteps(msg)"
                   :default-expanded="!msg.thinkDone || msg.phase === 'error'"
@@ -400,6 +400,7 @@ import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
+import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNormalizer'
 import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
@@ -468,6 +469,17 @@ function buildLegacySteps(msg: Message): ProcessStep[] {
   }
   steps.push(...mapToolTimelineToSteps(msg.toolTimeline))
   return steps
+}
+
+// Decide whether AiProcessBlock should render for an assistant message.
+// Show whenever there is process content (live steps, legacy think/tool data) or
+// when the message is in error so the inline retry button is visible.
+function shouldShowProcessBlock(msg: Message): boolean {
+  if (msg.phase === 'error') return true
+  if (msg.processSteps && msg.processSteps.length > 0) return true
+  if (msg.thinkContent) return true
+  if (msg.toolTimeline && msg.toolTimeline.length > 0) return true
+  return false
 }
 
 function parseToolArgs(argsText?: string): Record<string, unknown> {
@@ -1005,6 +1017,8 @@ async function onSend() {
     thinkDone: deepThink.value ? false : undefined,
     thinkSeconds: deepThink.value ? 0 : undefined,
     toolTimeline: [],
+    processSteps: [],
+    processStatus: 'running',
   }
   messages.value.push(assistantMsg)
   const msgIdx = messages.value.length - 1
@@ -1020,9 +1034,9 @@ async function onSend() {
   }
 
   const decoder = new TextDecoder()
-  let thinkRaw = ''
   let textRaw = ''
   let thinkingDone = false
+  const normState = createNormalizationState()
 
   try {
     const reader = await sendChatEventStream(q, deepThink.value, webSearch.value, abortController.signal, currentSessionId.value ?? undefined)
@@ -1051,6 +1065,14 @@ async function onSend() {
     }
     armWatchdog()
 
+    function syncStepsToMessage() {
+      // Live render reads processSteps; assign a fresh array reference so Vue
+      // reactivity picks up step-array mutations made by the normalizer.
+      messages.value[msgIdx].processSteps = [...normState.steps]
+      messages.value[msgIdx].processStatus =
+        normState.phase === 'done' ? 'done' : 'running'
+    }
+
     function handleEvent(event: AgentEvent) {
       // Reset stream watchdog: any received event keeps the stream alive (spec §8).
       armWatchdog()
@@ -1059,6 +1081,12 @@ async function onSend() {
         if (event.session_id) currentSessionId.value = event.session_id
         return
       }
+
+      // Route every event through the normalizer so state.steps[] is the
+      // single source of truth for AiProcessBlock (spec §3.3 unified order).
+      normalizeAgentEvent(event, normState)
+      syncStepsToMessage()
+
       if (event.type === 'phase.connecting') {
         messages.value[msgIdx].phase = 'connecting'
         return
@@ -1079,8 +1107,7 @@ async function onSend() {
         return
       }
       if (event.type === 'token.stream' && event.is_thinking) {
-        thinkRaw += event.token ?? ''
-        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+        // Reasoning content is captured inside normState.steps; nothing else to do.
         return
       }
       if (event.type === 'token.stream') {
@@ -1093,53 +1120,12 @@ async function onSend() {
           if (!messages.value[msgIdx].thinkManuallyToggled) {
             messages.value[msgIdx].thinkOpen = false
           }
-          // Final render for think content
-          if (thinkRaw) {
-            messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-          }
         }
         textRaw += event.token ?? ''
         messages.value[msgIdx].content = textRaw
         // Use throttled rendering for smoother streaming
         renderMarkdownThrottled(textRaw, messages.value[msgIdx])
         scrollToBottom()
-        return
-      }
-      if (event.type === 'tool.call' && event.tool) {
-        messages.value[msgIdx].toolTimeline ??= []
-        messages.value[msgIdx].toolTimeline.push({
-          id: event.tool.id,
-          name: event.tool.name,
-          displayName: event.tool.display_name,
-          icon: event.tool.icon,
-          argumentsText: formatToolArguments(event.tool.arguments),
-        })
-        return
-      }
-      if (event.type === 'tool.result' && event.tool_id) {
-        messages.value[msgIdx].toolTimeline ??= []
-        const tool = messages.value[msgIdx].toolTimeline.find((item) => item.id === event.tool_id)
-        const result = event.result
-          ? {
-              success: event.result.success,
-              summary: event.result.summary,
-              data: event.result.data,
-              error: event.result.error,
-              execution_time_ms: event.result.execution_time_ms,
-            }
-          : undefined
-        if (tool) {
-          tool.result = result
-        } else {
-          messages.value[msgIdx].toolTimeline.push({
-            id: event.tool_id,
-            name: event.tool_id,
-            displayName: event.tool_id,
-            icon: 'tool',
-            argumentsText: '',
-            result,
-          })
-        }
         return
       }
       if (event.type === 'capability.error') {
@@ -1174,13 +1160,10 @@ async function onSend() {
         messages.value[msgIdx].thinkOpen = false
       }
       messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-      // Final render for think content
-      if (thinkRaw) {
-        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-      }
     }
 
     messages.value[msgIdx].phase = textRaw ? 'done' : 'error'
+    messages.value[msgIdx].processStatus = textRaw ? 'done' : 'error'
     asking.value = false
     connecting.value = false
     isUserScrolledUp.value = false
@@ -1232,12 +1215,6 @@ async function onSend() {
     abortController = null
     await scrollToBottom()
   }
-}
-
-function formatToolArguments(args: Record<string, unknown>) {
-  return Object.entries(args)
-    .map(([key, value]) => `${key}: ${String(value)}`)
-    .join(' · ')
 }
 
 function onAbort() {
