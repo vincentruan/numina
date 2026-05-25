@@ -337,7 +337,7 @@
     <!-- Scroll-to-bottom floating button: shown when user scrolled up during streaming -->
     <transition name="scroll-btn">
       <button
-        v-if="isUserScrolledUp && asking"
+        v-if="isUserScrolledUp"
         class="scroll-to-bottom-btn"
         :aria-label="t('aiChat.scrollToBottom')"
         @click="onScrollToBottom"
@@ -801,16 +801,13 @@ function onChatScroll() {
   const el = scrollRef.value
   if (!el) return
   const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  // Mark as scrolled up when more than 100px from bottom (only during streaming)
-  if (asking.value) {
-    isUserScrolledUp.value = distFromBottom > 100
-  }
+  isUserScrolledUp.value = distFromBottom > 100
 }
 
 function onScrollToBottom() {
   isUserScrolledUp.value = false
   if (scrollRef.value) {
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    scrollRef.value.scrollTo({ top: scrollRef.value.scrollHeight, behavior: 'smooth' })
   }
 }
 
