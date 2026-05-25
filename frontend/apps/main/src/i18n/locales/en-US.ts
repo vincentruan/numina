@@ -77,6 +77,7 @@ export default {
     retry: 'Retry',
     retrying: 'Regenerating',
     errorRetry: 'Request failed, please retry',
+    errorTimeout: '⏱️ Response timed out, please retry',
     historyTitle: 'Chat History',
     loadingHistory: 'Loading history…',
     noHistory: 'No chat history',

@@ -122,6 +122,7 @@ export default {
     retry: '重试',
     retrying: '重新生成中',
     errorRetry: '请求失败，请重试',
+    errorTimeout: '⏱️ 响应超时，请重试',
     historyTitle: '会话历史',
     loadingHistory: '加载历史中…',
     noHistory: '暂无历史会话',

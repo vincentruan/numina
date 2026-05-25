@@ -228,7 +228,7 @@
                   :elapsed-ms="msg.processElapsedMs || 0"
                   :steps="msg.processSteps || buildLegacySteps(msg)"
                   :default-expanded="!msg.thinkDone || msg.phase === 'error'"
-                  :error-message="msg.phase === 'error' ? t('aiChat.errorRetry') : undefined"
+                  :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
                   @retry="onRetryError(idx)"
                 />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
@@ -687,6 +687,9 @@ let themeObserver: MutationObserver | null = null
 
 let abortController: AbortController | null = null
 let connectTimer: ReturnType<typeof setInterval> | null = null
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null
+let watchdogTimedOut = false
+const STREAM_TIMEOUT_MS = 30_000
 
 
 const sessionTitle = computed(() => {
@@ -1025,7 +1028,29 @@ async function onSend() {
     }
     await scrollToBottom()
 
+    // Stream timeout watchdog (spec §8 risk): if no event arrives within
+    // STREAM_TIMEOUT_MS, abort the stream and mark the message as errored.
+    // Reset on every received event so an active stream never times out.
+    watchdogTimedOut = false
+    function clearWatchdog() {
+      if (watchdogTimer) {
+        clearTimeout(watchdogTimer)
+        watchdogTimer = null
+      }
+    }
+    function armWatchdog() {
+      clearWatchdog()
+      watchdogTimer = setTimeout(() => {
+        watchdogTimedOut = true
+        abortController?.abort()
+      }, STREAM_TIMEOUT_MS)
+    }
+    armWatchdog()
+
     function handleEvent(event: AgentEvent) {
+      // Reset stream watchdog: any received event keeps the stream alive (spec §8).
+      armWatchdog()
+
       if (event.type === 'session.start') {
         if (event.session_id) currentSessionId.value = event.session_id
         return
@@ -1123,6 +1148,7 @@ async function onSend() {
       parser.push(decoder.decode(value, { stream: true }))
     }
     parser.flush()
+    clearWatchdog()
 
     // Flush pending markdown render
     if (renderTimer) {
@@ -1156,13 +1182,23 @@ async function onSend() {
   } catch (err: unknown) {
     if (thinkTimer) clearInterval(thinkTimer)
     if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
+    if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null }
     if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
+      // Distinguish watchdog timeout from user-initiated cancel (spec §8)
+      const isTimeout = watchdogTimedOut
+      watchdogTimedOut = false
       // Finalize the assistant message so it doesn't stay in connecting/thinking/answering phase
       if (messages.value[msgIdx]) {
-        messages.value[msgIdx].phase = textRaw ? 'interrupted' : 'error'
-        if (!textRaw) {
-          messages.value[msgIdx].content = t('toast.aiChatError')
-          messages.value[msgIdx].renderedContent = `<p>${t('toast.aiChatError')}</p>`
+        if (isTimeout) {
+          messages.value[msgIdx].phase = 'error'
+          messages.value[msgIdx].content = t('aiChat.errorTimeout')
+          messages.value[msgIdx].renderedContent = `<p>${t('aiChat.errorTimeout')}</p>`
+        } else {
+          messages.value[msgIdx].phase = textRaw ? 'interrupted' : 'error'
+          if (!textRaw) {
+            messages.value[msgIdx].content = t('toast.aiChatError')
+            messages.value[msgIdx].renderedContent = `<p>${t('toast.aiChatError')}</p>`
+          }
         }
       }
       asking.value = false
@@ -1200,6 +1236,8 @@ function formatToolArguments(args: Record<string, unknown>) {
 function onAbort() {
   abortController?.abort()
   if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
+  if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null }
+  watchdogTimedOut = false
   // Mark the last in-progress assistant message as interrupted
   const lastAssistant = [...messages.value].reverse().find((m) => m.role === 'assistant' && m.phase === 'answering')
   if (lastAssistant) lastAssistant.phase = 'interrupted'
