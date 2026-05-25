@@ -17,6 +17,7 @@ export interface Artifact {
   title: string
   url?: string
   path?: string
+  kind?: 'report' | 'file' | 'image' | 'link' | 'other'
 }
 
 export interface Subagent {
