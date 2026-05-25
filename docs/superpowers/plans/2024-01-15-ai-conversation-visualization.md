@@ -1741,7 +1741,6 @@ The plan was reviewed against `docs/superpowers/specs/2024-01-15-ai-conversation
 - **`AiProcessBlock` props split vs unified.** Spec §3.3 uses single `steps: AiProcessStep[]` array (preserves event ordering between reasoning and tool calls). Plan splits into `reasoningContent` + `toolSteps` — reasoning always renders before all tool steps regardless of event order. If interleaved ordering matters, switch to spec's unified array.
 - **`AiProcessStep` missing `id` prop.** Spec union has `id: string` on all variants; plan component lacks it. Add for v-for keying and step-targeted updates.
 - **Hardcoded hex colors / wrong border-radius.** All component `<style scoped>` blocks use `#8b5cf6`, `#22c55e`, gradients, and `border-radius: 10px/12px`. Project DESIGN.md mandates CSS variables (`--card-bg`, `--bg-secondary`) and 4px/8px radii — required for dark-mode support. Replace before final integration.
-- **Toggle arrow direction wrong.** Spec §2.2: `(◀/▼)`. Plan uses `arrow-up/arrow-down`. Change collapsed → `arrow-left`, expanded → `arrow-down`.
 - **`formatContentSize()` is dead code.** Spec §4.3 only defines `truncateContent` and `truncateJson`. Plan adds a third unused function. Remove until a consumer exists.
 - **`AiFinalAnswer` report-mode props are dead code while Phase 3 is deferred.** `isReport`/`reportTitle`/`reportMeta` have no consumer in the chat-only MVP. Either restore Phase 3 or strip these props.
 - **Verification Checklist missing agent-acceptance items.** Spec §11 lists 4 agent-side criteria absent from the plan's checklist. Add when Phase 3 is restored.
@@ -1784,7 +1783,6 @@ This round reviewed both spec and plan against the user's original requirements 
 - **AiFinalAnswer streaming skeleton** — spec §6.1 wants 报告骨架屏; current implementation is empty markdown div + cursor.
 - **Hardcoded hex colors / 10–12 px border-radius** — violate frontend `DESIGN.md` (CSS variables required, 4px/8px radii). Will break dark mode. Must replace with CSS variables before integration.
 - **AiProcessBlock split props vs unified `steps[]` array** — spec §3.3 specifies a single ordered array; plan splits into `reasoningContent` + `toolSteps`. Breaks A3 ordering when reasoning interleaves with tool calls. Restoring spec contract requires Task 4 + Task 1 normalizer changes (reasoning emits as a step, not a separate prop).
-- **Toggle arrow direction** — spec §2.2 requires ◀/▼; plan uses `arrow-up/arrow-down`. Cosmetic but explicit spec mismatch.
 - **AI logo asset** — spec §2.2 references "左侧 AI logo 动图"; plan uses text glyph `✦`.
 - **Reasoning shimmer animation** — spec §2.2 wants shimmer on streaming reasoning text body; plan only animates marker.
 - **AiFinalAnswer report-mode props** (`isReport`/`reportTitle`/`reportMeta`) — currently dead code while Phase 3 deferred. Either restore Task 10 or strip until needed.
