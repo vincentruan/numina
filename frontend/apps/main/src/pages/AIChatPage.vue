@@ -814,7 +814,6 @@ function onScrollToBottom() {
 
 function onChipClick(text: string) {
   inputText.value = text
-  onSend()
 }
 
 function phaseLabel(phase: NonNullable<Message['phase']>) {
