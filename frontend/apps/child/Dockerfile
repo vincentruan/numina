@@ -1,13 +1,19 @@
 FROM node:20-alpine AS build
 WORKDIR /app
-# Install packages/auth devDependencies so vue-tsc can type-check it
+# Copy shared packages first
 COPY frontend/packages/auth ./frontend/packages/auth
+COPY frontend/packages/math ./frontend/packages/math
+# Install packages devDependencies so vue-tpc can type-check them
 WORKDIR /app/frontend/packages/auth
+RUN npm install
+WORKDIR /app/frontend/packages/math
 RUN npm install
 # Copy and install frontend-child app
 COPY frontend/apps/child/package*.json /app/frontend/apps/child/
 WORKDIR /app/frontend/apps/child
-RUN sed -i 's|"workspace:\*"|"file:../../packages/auth"|g' package.json && npm install
+RUN sed -i 's|"@numina/math": "workspace:\*"|"@numina/math": "file:../../packages/math"|g' package.json && \
+    sed -i 's|"@numina/auth": "workspace:\*"|"@numina/auth": "file:../../packages/auth"|g' package.json && \
+    npm install
 COPY frontend/apps/child/ .
 ARG VITE_MAIN_APP_URL=""
 ENV VITE_MAIN_APP_URL=$VITE_MAIN_APP_URL
