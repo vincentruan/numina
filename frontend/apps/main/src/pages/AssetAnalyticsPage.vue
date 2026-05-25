@@ -99,7 +99,7 @@
                 class="new-asset-row"
               >
                 <div class="new-asset-left">
-                  <span class="new-asset-icon">{{ item.icon || '📦' }}</span>
+                  <span class="new-asset-icon">{{ item.icon?.trim() || '📦' }}</span>
                   <div class="new-asset-info">
                     <div class="new-asset-name">{{ item.name }}</div>
                     <div class="new-asset-date">{{ daysAgo(item.created_at) }}</div>
@@ -129,7 +129,7 @@
               >
                 <div class="cost-row-left">
                   <span class="rank-badge" :class="rankClass(index)">{{ index + 1 }}</span>
-                  <span class="cost-icon">{{ item.icon || '📦' }}</span>
+                  <span class="cost-icon">{{ item.icon?.trim() || '📦' }}</span>
                   <span class="cost-name">{{ item.name }}</span>
                 </div>
                 <span class="cost-value">{{ format(item.daily_cost) }}{{ t('analyticsPage.perDay') }}</span>
@@ -138,21 +138,7 @@
             <van-empty v-else :description="t('common.noData')" image-size="60" />
           </div>
 
-          <!-- Section 5: 资产分布 (kept — unique content) -->
-          <div class="section-card">
-            <div class="card-header">
-              <span class="card-title">{{ t('analyticsPage.allocationCard') }}</span>
-            </div>
-            <div class="card-content">
-              <AllocationTreemapChart
-                v-if="dashboardStore.allocation.length"
-                :data="dashboardStore.allocation"
-              />
-              <van-empty v-else :description="t('common.noData')" image-size="60" />
-            </div>
-          </div>
-
-          <!-- Section 6: 分类占比 (kept — unique content) -->
+          <!-- Section 5: 分类占比 -->
           <div class="section-card">
             <div class="card-header">
               <span class="card-title">{{ t('analyticsPage.pieCard') }}</span>
@@ -210,7 +196,6 @@ import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
 import PageHeader from '@/components/common/PageHeader.vue'
 import TrendLineChartSimple from '@/components/charts/TrendLineChartSimple.vue'
-import AllocationTreemapChart from '@/components/charts/AllocationTreemapChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import InsightsTab from '@/components/insights/InsightsTab.vue'
 import { useCurrency } from '@/composables/useCurrency'
@@ -381,6 +366,9 @@ const tabActiveColor = computed(() =>
 [data-theme='dark'] .card-header :deep(.van-tabs--card) {
   .van-tabs__nav {
     background: rgba(255, 255, 255, 0.08);
+  }
+  .van-tab {
+    color: rgba(255, 255, 255, 0.7);
   }
   .van-tab--active {
     background: var(--color-lavender);

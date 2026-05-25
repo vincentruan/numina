@@ -260,7 +260,7 @@
       <div class="top3-row" v-if="top3Items.length >= 3">
         <!-- 2nd -->
         <div class="podium-item rank2">
-          <div class="podium-thumb">{{ top3Items[1]?.icon }}</div>
+          <div class="podium-thumb">{{ top3Items[1]?.icon || '📦' }}</div>
           <div class="podium-name">{{ top3Items[1]?.name }}</div>
           <div class="podium-service">{{ t('insights.retentionRate.serviceDays', { days: top3Items[1]?.service_days }) }}</div>
           <div class="podium-rate" :class="top3Items[1]?.retention_rate >= 80 ? 'green' : 'red'">{{ top3Items[1]?.retention_rate.toFixed(1) }}%</div>
@@ -270,7 +270,7 @@
         </div>
         <!-- 1st -->
         <div class="podium-item rank1">
-          <div class="podium-thumb">{{ top3Items[0]?.icon }}</div>
+          <div class="podium-thumb">{{ top3Items[0]?.icon || '📦' }}</div>
           <div class="podium-name">{{ top3Items[0]?.name }}</div>
           <div class="podium-service">{{ t('insights.retentionRate.serviceDays', { days: top3Items[0]?.service_days }) }}</div>
           <div class="podium-rate" :class="top3Items[0]?.retention_rate >= 80 ? 'green' : 'red'">{{ top3Items[0]?.retention_rate.toFixed(1) }}%</div>
@@ -280,7 +280,7 @@
         </div>
         <!-- 3rd -->
         <div class="podium-item rank3">
-          <div class="podium-thumb">{{ top3Items[2]?.icon }}</div>
+          <div class="podium-thumb">{{ top3Items[2]?.icon || '📦' }}</div>
           <div class="podium-name">{{ top3Items[2]?.name }}</div>
           <div class="podium-service">{{ t('insights.retentionRate.serviceDays', { days: top3Items[2]?.service_days }) }}</div>
           <div class="podium-rate" :class="top3Items[2]?.retention_rate >= 80 ? 'green' : 'red'">{{ top3Items[2]?.retention_rate.toFixed(1) }}%</div>
@@ -410,23 +410,28 @@ const retentionRate = computed(() => insightsData.value?.retention_rate)
 
 const retentionItems = computed(() => {
   if (!insightsData.value?.retention_rate?.top_items) return []
-  return insightsData.value.retention_rate.top_items.filter((item: RetentionItem) => item.rank > 3).map((item: RetentionItem) => ({
-    rank: item.rank,
-    icon: item.icon,
-    name: item.name,
-    days: item.service_days,
-    bought: item.bought_amount,
-    current: item.current_amount,
-    rate: item.retention_rate,
-    rateClass: item.retention_rate >= 80 ? 'green' : 'red',
-    profit: item.profit_loss,
-    profitClass: item.profit_loss >= 0 ? 'green' : 'red',
-  }))
+  return insightsData.value.retention_rate.top_items
+    .filter((item: RetentionItem) => item.rank > 3)
+    .sort((a: RetentionItem, b: RetentionItem) => a.rank - b.rank)
+    .map((item: RetentionItem) => ({
+      rank: item.rank,
+      icon: item.icon || '📦',
+      name: item.name,
+      days: item.service_days,
+      bought: item.bought_amount,
+      current: item.current_amount,
+      rate: item.retention_rate,
+      rateClass: item.retention_rate >= 80 ? 'green' : 'red',
+      profit: item.profit_loss,
+      profitClass: item.profit_loss >= 0 ? 'green' : 'red',
+    }))
 })
 
 const top3Items = computed(() => {
   if (!insightsData.value?.retention_rate?.top_items) return []
-  return insightsData.value.retention_rate.top_items.filter((item: RetentionItem) => item.rank <= 3)
+  return insightsData.value.retention_rate.top_items
+    .filter((item: RetentionItem) => item.rank <= 3)
+    .sort((a: RetentionItem, b: RetentionItem) => a.rank - b.rank)
 })
 
 // Fetch data on mount
@@ -628,6 +633,55 @@ onMounted(async () => {
   font-size: 40px;
   opacity: 0.07;
 }
+
+[data-theme='dark'] .isc-bg-icon { opacity: 0.12; }
+
+/* Dark mode overrides for insight-stat-card gradients */
+[data-theme='dark'] .insight-stat-card:nth-child(1) {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.12), rgba(147, 197, 253, 0.08));
+}
+[data-theme='dark'] .insight-stat-card:nth-child(2) {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.06));
+}
+[data-theme='dark'] .insight-stat-card:nth-child(3) {
+  background: linear-gradient(135deg, rgba(110, 231, 160, 0.12), rgba(110, 231, 160, 0.06));
+}
+[data-theme='dark'] .insight-stat-card:nth-child(4) {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.15), rgba(167, 139, 255, 0.08));
+}
+[data-theme='dark'] .insight-stat-card:nth-child(5) {
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.12), rgba(255, 107, 157, 0.06));
+}
+
+/* Dark mode for isc-icon backgrounds */
+[data-theme='dark'] .insight-stat-card:nth-child(1) .isc-icon { background: rgba(189, 187, 255, 0.2); }
+[data-theme='dark'] .insight-stat-card:nth-child(2) .isc-icon { background: rgba(251, 191, 36, 0.2); }
+[data-theme='dark'] .insight-stat-card:nth-child(3) .isc-icon { background: rgba(110, 231, 160, 0.2); }
+[data-theme='dark'] .insight-stat-card:nth-child(4) .isc-icon { background: rgba(189, 187, 255, 0.25); }
+[data-theme='dark'] .insight-stat-card:nth-child(5) .isc-icon { background: rgba(255, 107, 157, 0.2); }
+
+/* Dark mode for gradient title */
+[data-theme='dark'] .gradient-title .gradient-icon {
+  background: linear-gradient(135deg, #bdbbff, #ff6b9d, #fbbf24);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-theme='dark'] .gradient-title .gradient-text {
+  background: linear-gradient(135deg, #bdbbff 0%, #ff6b9d 60%, #fbbf24 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Dark mode for isc-category-pct */
+[data-theme='dark'] .isc-category-pct { color: #ff6b9d; }
+
+/* Dark mode for isc-sub separator text */
+[data-theme='dark'] .isc-sub span[style*="color: #ccc"] { color: rgba(255, 255, 255, 0.4) !important; }
+
+/* Dark mode for isc-cost-unit and isc-days-unit */
+[data-theme='dark'] .isc-cost-unit { color: rgba(255, 255, 255, 0.4); }
+[data-theme='dark'] .isc-days-unit { color: rgba(255, 255, 255, 0.4); }
 
 .isc-category-row {
   display: flex;
