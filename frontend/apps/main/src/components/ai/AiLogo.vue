@@ -59,7 +59,7 @@ const ariaLabel = computed(() => {
       return t('aiProcess.statusDone')
     case 'error':
       return t('aiProcess.statusError')
-    default:
+    case 'idle':
       return t('aiProcess.title')
   }
 })
@@ -78,7 +78,6 @@ const ariaLabel = computed(() => {
 .ai-logo-svg {
   width: 70%;
   height: 70%;
-  transition: opacity 200ms ease-in-out;
 }
 
 .logo-sparkle,
@@ -123,7 +122,6 @@ const ariaLabel = computed(() => {
     animation: none;
   }
 
-  .ai-logo-svg,
   .logo-sparkle,
   .logo-check,
   .logo-cross {
