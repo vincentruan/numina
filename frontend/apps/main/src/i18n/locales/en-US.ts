@@ -150,6 +150,10 @@ export default {
     regenerate: 'Regenerate',
     errorMessage: '❌ AI execution failed, please retry',
     retry: 'Retry',
+    thinkingTitle: 'Thinking...',
+    answeringTitle: 'Generating answer...',
+    errorTitle: 'Execution failed',
+    elapsedSeconds: 'Thought for {seconds}s',
   },
   asset: {
     title: 'Assets',

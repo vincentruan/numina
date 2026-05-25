@@ -195,6 +195,10 @@ export default {
     regenerate: '重新生成',
     errorMessage: '❌ AI 执行出错，请重试',
     retry: '重试',
+    thinkingTitle: '正在思考...',
+    answeringTitle: '正在生成回答...',
+    errorTitle: '执行出错',
+    elapsedSeconds: '已思考 {seconds} 秒',
   },
   asset: {
     title: '资产',
