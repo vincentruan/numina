@@ -99,7 +99,12 @@
                 class="new-asset-row"
               >
                 <div class="new-asset-left">
-                  <span class="new-asset-icon">{{ item.icon?.trim() || '📦' }}</span>
+                  <span class="new-asset-icon">
+                    <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+                      <use :href="`#${getIconId(item.icon)}`" />
+                    </svg>
+                    <span v-else>{{ item.icon?.trim() || '📦' }}</span>
+                  </span>
                   <div class="new-asset-info">
                     <div class="new-asset-name">{{ item.name }}</div>
                     <div class="new-asset-date">{{ daysAgo(item.created_at) }}</div>
@@ -129,7 +134,12 @@
               >
                 <div class="cost-row-left">
                   <span class="rank-badge" :class="rankClass(index)">{{ index + 1 }}</span>
-                  <span class="cost-icon">{{ item.icon?.trim() || '📦' }}</span>
+                  <span class="cost-icon">
+                    <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+                      <use :href="`#${getIconId(item.icon)}`" />
+                    </svg>
+                    <span v-else>{{ item.icon?.trim() || '📦' }}</span>
+                  </span>
                   <span class="cost-name">{{ item.name }}</span>
                 </div>
                 <span class="cost-value">{{ format(item.daily_cost) }}{{ t('analyticsPage.perDay') }}</span>
@@ -199,6 +209,7 @@ import TrendLineChartSimple from '@/components/charts/TrendLineChartSimple.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import InsightsTab from '@/components/insights/InsightsTab.vue'
 import { useCurrency } from '@/composables/useCurrency'
+import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -579,6 +590,23 @@ const tabActiveColor = computed(() =>
 .cost-icon {
   font-size: 18px;
   line-height: 1;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cost-icon .icon-svg,
+.new-asset-icon .icon-svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-primary);
+}
+
+[data-theme='dark'] .cost-icon .icon-svg,
+[data-theme='dark'] .new-asset-icon .icon-svg {
+  color: var(--text-primary);
 }
 
 .cost-name {
