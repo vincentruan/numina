@@ -1,11 +1,9 @@
 <template>
-  <div class="ai-final-answer" :class="{ 'is-report': isReport, 'is-streaming': streaming }">
-    <!-- Report header (optional) -->
-    <div v-if="isReport && reportTitle" class="answer-report-header">
-      <span class="report-icon">📊</span>
-      <span class="report-title">{{ reportTitle }}</span>
-      <span v-if="reportMeta" class="report-meta">{{ reportMeta.generatedAt }}</span>
-    </div>
+  <div class="ai-final-answer" :class="{ 'is-streaming': streaming }">
+    <!-- TODO(phase-3): restore report header when agent feature pages are integrated.
+         Spec §6.2 / §6.3 use isReport + reportTitle + reportMeta to surface a
+         report-styled header above the markdown body on AIReportPage et al.
+         Stripped for the chat-only MVP because no caller currently passes them. -->
 
     <!-- Answer content -->
     <div ref="contentRef" class="answer-content">
@@ -35,12 +33,12 @@ import { showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
+// TODO(phase-3): add isReport / reportTitle / reportMeta props back here when
+// agent feature pages (AIReportPage etc.) integrate AiFinalAnswer. See
+// spec §6.2 / §6.3 for the report-mode contract.
 const props = defineProps<{
   content: string
   streaming?: boolean
-  isReport?: boolean
-  reportTitle?: string
-  reportMeta?: { generatedAt: string; itemCount?: number }
   showActions?: boolean
   showRegenerate?: boolean
 }>()
@@ -94,43 +92,10 @@ async function copyContent() {
   box-shadow: var(--shadow-elevated);
 }
 
-.is-report {
-  padding: 16px;
-  box-shadow: var(--shadow-elevated);
-}
-
-.answer-report-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--separator);
-  margin-bottom: 12px;
-}
-
-.report-icon {
-  font-size: 20px;
-  background: var(--color-success);
-  color: #ffffff;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.report-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.report-meta {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
+/* TODO(phase-3): restore .is-report, .answer-report-header, .report-icon,
+   .report-title, .report-meta styles when AiFinalAnswer is used in agent
+   feature pages (spec §6.2 / §6.3). Stripped because the report-mode
+   template was stripped from AiFinalAnswer for the chat-only MVP. */
 
 .answer-content {
   font-size: 14px;
@@ -188,34 +153,6 @@ async function copyContent() {
 @media (max-width: 768px) {
   .ai-final-answer {
     padding: 10px 12px;
-  }
-
-  .is-report {
-    padding: 12px;
-  }
-
-  .answer-report-header {
-    gap: 8px;
-    padding-bottom: 10px;
-    margin-bottom: 10px;
-  }
-
-  .report-icon {
-    font-size: 16px;
-    width: 28px;
-    height: 28px;
-  }
-
-  .report-title {
-    font-size: 14px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-
-  .report-meta {
-    font-size: 11px;
   }
 
   .answer-content {

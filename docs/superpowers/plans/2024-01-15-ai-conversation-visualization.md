@@ -1777,18 +1777,31 @@ This round reviewed both spec and plan against the user's original requirements 
 
 - **MVP boundary** — Spec §9.1 includes 智能体页复用 + 历史回放; plan Task 10 still defers all 5 agent pages. Decision needed: restore Task 10 to active or amend spec §9.1.
 - **History replay (spec §6.3)** — no task implements loading completed records into AiProcessBlock + AiFinalAnswer. Now that NormalizedAiEvent has `state_snapshot`, the adapter has the receive path; integration into AIReportPage et al. is pending Phase 3.
-- **Error state retry button** — spec §5.4 requires error message + retry button in AiProcessBlock; only red status icon implemented.
-- **Streaming timeout watchdog** — spec §8 risk; not yet implemented in normalizer or AIChatPage SSE handler.
-- **Mobile responsive** — no `@media` rules in any new component; spec §8 mobile risk unaddressed.
-- **AiFinalAnswer streaming skeleton** — spec §6.1 wants 报告骨架屏; current implementation is empty markdown div + cursor.
-- **Hardcoded hex colors / 10–12 px border-radius** — violate frontend `DESIGN.md` (CSS variables required, 4px/8px radii). Will break dark mode. Must replace with CSS variables before integration.
-- **AiProcessBlock split props vs unified `steps[]` array** — spec §3.3 specifies a single ordered array; plan splits into `reasoningContent` + `toolSteps`. Breaks A3 ordering when reasoning interleaves with tool calls. Restoring spec contract requires Task 4 + Task 1 normalizer changes (reasoning emits as a step, not a separate prop).
-- **AI logo asset** — spec §2.2 references "左侧 AI logo 动图"; plan uses text glyph `✦`.
-- **Reasoning shimmer animation** — spec §2.2 wants shimmer on streaming reasoning text body; plan only animates marker.
-- **AiFinalAnswer report-mode props** (`isReport`/`reportTitle`/`reportMeta`) — currently dead code while Phase 3 deferred. Either restore Task 10 or strip until needed.
-- **Token-stream non-thinking tokens during thinking phase silently dropped** (product-lens P-4) — `is_thinking=false` tokens during `phase==='thinking'` fall into neither branch. Add fallback: append to `answerContent` and emit `answer_delta`, OR add dev-build `console.warn` for visibility.
-- **Process block title not time-aware** — spec §2.2 implies "正在思考..." / "已思考 X 秒" titles; plan uses static `t('aiProcess.title')` plus secondary statusLabel.
-- **「回到底部」button** — spec §2.1 requires; AIChatPage has scroll logic but the button affordance for scroll-up-during-stream is not in plan. Confirm existing AIChatPage already has it.
-- **AiUserBubble Markdown rendering** — spec §3.0 mapping commits to "marked + DOMPurify on user bubble"; no Task implements it. Add a Task 8 sub-step or new task.
-- **Empty state for AiConversation** — spec §2.1 requires; plan does not specify. Audit existing AIChatPage empty state and document.
-- **Artifact/report links beside final answer** — spec §3.0 implied via AiFinalAnswer; no `artifacts` prop on AiFinalAnswer yet. Now that NormalizedAiEvent has `artifact`, the data path exists; UI integration is pending.
+
+### From 2026-05-25 review (round 3 — P0/P1/P2 fixes + Phase 3 deferrals)
+
+After round 2, the user picked individual P0/P1/P2 items to fix in code; remaining P2/P3 items have been re-classified as deliberate Phase 3 deferrals (spec amendments document MVP-vs-Phase-3 boundary).
+
+**Code fixes applied this round (with commit hashes):**
+
+- `7f25fef` — Token-stream non-thinking-during-thinking fallback + dev-warn (product-lens P-4)
+- `7f25fef` — `NormalizationState` unified `steps[]` array; AiProcessBlock takes `steps: ProcessStep[]` prop dispatching by `type` (spec §3.3)
+- `aa31f85` — Error retry button inside AiProcessBlock with `errorMessage` prop and `@retry` emit (spec §5.4)
+- `ad5044a` — All hardcoded hex colors replaced with CSS variables; border-radius normalized to 4px/8px per `DESIGN.md`; dark mode now adapts via `[data-theme='dark']` token overrides
+- `0386b49` — `@media (max-width: 768px)` responsive overrides on all 4 components (spec §8 mobile risk)
+- `2e72de7` — 30s SSE inactivity watchdog with timeout-specific error message (spec §8 stream-interrupt risk); `aiChat.errorTimeout` i18n key
+- `a93f6d4` — Spec arrow direction aligned with implementation (`arrow-up`/`arrow-down`, not `◀/▼`)
+- *(this commit)* — AiFinalAnswer `isReport`/`reportTitle`/`reportMeta` props + report-header template + related CSS stripped; TODO(phase-3) markers placed; spec §2.2 amended to document MVP-vs-Phase-3 boundary for AI logo / shimmer / dynamic title.
+
+**Deferred to Phase 3 (documented in spec §2.2 / §6.1; no code change in MVP):**
+
+- **AiFinalAnswer streaming skeleton (spec §6.1)** — Phase 3. Reason: skeleton is meaningful only on agent feature pages where the answer takes seconds to begin; on `/ai/chat` the cursor + immediate streaming is acceptable. When AIReportPage et al. integrate AiFinalAnswer (Phase 3), add `<van-skeleton>` block when `streaming && !content`.
+- **AiFinalAnswer report-mode header / `isReport` props (spec §6.2 §6.3)** — Phase 3. Reason: only consumer is agent feature pages, which are deferred to Phase 3. Stripped this round; restore alongside agent-page integration. TODO markers in `AiFinalAnswer.vue`.
+- **AI logo 动图 (spec §2.2)** — Phase 3. Reason: no asset exists; MVP uses text glyph `✦`/`✓`/`✗` placeholders. Phase 3 designs and ships SVG/Lottie. Spec amended to make this MVP-vs-Phase-3 boundary explicit.
+- **Reasoning body shimmer animation (spec §2.2)** — Phase 3. Reason: tool args already have shimmer; reasoning marker has pulse. Adding text-body shimmer requires shared CSS extraction and doesn't change information conveyed in MVP. Spec amended to clarify MVP scope.
+- **Time-aware process block title (spec §2.2 amendment)** — Phase 3. Reason: dynamic "正在思考... / 已思考 X 秒" titles need additional i18n keys + reasoning timer wiring. MVP keeps static `t('aiProcess.title')` + secondary `statusLabel`. Spec amended to document this.
+- **「回到底部」button (spec §2.1)** — Phase 3 verification. Reason: `AIChatPage.vue` already has scroll-to-bottom logic at `scrollToBottom()` and a `.scroll-to-bottom-btn` class; the gap is unverified rather than implemented. Phase 3: confirm during integration testing whether the existing button covers spec §2.1 fully.
+- **AiUserBubble Markdown rendering (spec §3.0)** — Phase 3. Reason: existing user bubbles render plain text; adding `marked` + `DOMPurify` introduces user-content sanitization risk (XSS) and trailing-newline edge cases. Defer until a deliberate user-input rendering pass is scoped (with input-source security review).
+- **AiConversation empty state (spec §2.1)** — Phase 3 verification. Reason: AIChatPage likely has an existing empty state; not audited this round. Phase 3: audit and either confirm sufficient or design replacement (e.g. example question chips).
+- **Artifact link area beside final answer (spec §3.0)** — Phase 3. Reason: data path exists (NormalizedAiEvent has `artifact` after round 2), but no backend currently emits artifact events on `/ai/chat`. UI integration would be dead code until backend support lands. Tracked alongside Phase 3 agent-page integration.
+- **AiFinalAnswer auto-scroll `scrollIntoView`** — Phase 3 cleanup. Reason: still present in `AiFinalAnswer.vue` despite a prior plan-doc claim of removal. Competes with `AIChatPage.scrollToBottom()`. Low-priority because AIChatPage's container scroll dominates; remove during Phase 3 integration cleanup.

@@ -98,10 +98,11 @@ interface Message {
 
 ### 2.2 视觉设计要点
 
-- **过程块样式**：渐变背景 + 圆角卡片，左侧 AI logo 动图
+- **过程块样式**：圆角卡片 + DESIGN.md 设计系统的 token 色，左侧状态图标。MVP 阶段使用文字 glyph `✦`（运行中）/ `✓`（完成）/ `✗`（错误）作为占位；Phase 3 替换为 AI logo 动图（SVG/Lottie，待资产）。
 - **展开/收起指示**：右上角 Vant 箭头图标，折叠时显示 `arrow-up`、展开时显示 `arrow-down`（符合"点击向下展开、向上收起"的直觉），无文字提示
 - **状态图标**：完成 ✓ (绿色)、运行中 pulse 动画 (蓝紫)、失败 ✗ (红色)
-- **光影效果**：思考/调用中的文字 shimmer 动画
+- **光影效果**：MVP 阶段仅在运行中 step 的 marker 圆点上加 `pulse` 动画；spec 期望的"思考/调用中的文字 body shimmer 动画"延后到 Phase 3（tool args 已有 shimmer，reasoning body 缺）。
+- **过程块标题**：MVP 阶段使用静态 i18n key `t('aiProcess.title')`（"执行过程"），副标题用 `statusRunning/statusDone/statusError` 表达状态；Phase 3 升级为时间感知标题（如"正在思考..." / "已思考 X 秒"），需要新增 i18n key 与 reasoning 计时联动。
 - **工具友好文案**：`web_search` → "搜索文档"，`read_file` → "读取文件"
 - **长内容截断**：默认截断，可点击展开
 
