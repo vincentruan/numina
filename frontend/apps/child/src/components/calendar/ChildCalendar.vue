@@ -203,23 +203,9 @@ onMounted(loadMonth)
 
 <style scoped>
 .child-calendar {
-  /* Heat color tokens — light mode: warm amber tones */
-  --heat-1: #fff3e0;
-  --heat-2: #ffe0b2;
-  --heat-3: #ffb74d;
-  --heat-4: #f5a623;
-
   background: var(--color-surface-card);
   border-radius: 12px;
   padding: 12px;
-}
-
-/* Dark mode heat colors: teal-green tones with enough contrast against #152828 */
-:global([data-theme="dark"]) .child-calendar {
-  --heat-1: rgba(34, 197, 94, 0.12);
-  --heat-2: rgba(34, 197, 94, 0.25);
-  --heat-3: rgba(34, 197, 94, 0.45);
-  --heat-4: rgba(34, 197, 94, 0.70);
 }
 
 /* Header */
