@@ -252,7 +252,7 @@
                   </button>
                 </div>
                 <!-- eslint-enable vue/no-v-html -->
-                <div v-if="msg.role === 'user'" class="bubble-text">{{ msg.content }}</div>
+                <AiUserBubble v-if="msg.role === 'user'" class="bubble-text" :content="msg.content" />
                 <span class="msg-time">{{ msg.displayTime }}</span>
                 <!-- User message send status indicator -->
                 <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
@@ -399,6 +399,7 @@ import { getSessions, streamSessionEvents, updateSession, deleteSession as delet
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
+import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNormalizer'
 import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
