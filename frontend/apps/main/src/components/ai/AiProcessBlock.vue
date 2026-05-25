@@ -90,6 +90,7 @@ function onRetry() {
   emit('retry')
 }
 
+// Auto-collapse when status changes to done; keep expanded on error so user sees the retry button
 watch(
   () => props.status,
   (val, prev) => {
@@ -163,7 +164,7 @@ const titleLabel = computed(() => {
 })
 
 const subtitleLabel = computed(() => {
-  if (props.phase === 'thinking' && props.reasoningStartTime) {
+  if (props.phase === 'thinking' && props.reasoningStartTime != null) {
     const seconds = Math.max(0, Math.floor((nowMs.value - props.reasoningStartTime) / 1000))
     return t('aiProcess.elapsedSeconds', { seconds })
   }
