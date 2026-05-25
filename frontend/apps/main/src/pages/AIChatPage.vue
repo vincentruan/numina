@@ -694,6 +694,13 @@ let watchdogTimer: ReturnType<typeof setTimeout> | null = null
 let watchdogTimedOut = false
 const STREAM_TIMEOUT_MS = 30_000
 
+function clearStreamWatchdog() {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer)
+    watchdogTimer = null
+  }
+}
+
 
 const sessionTitle = computed(() => {
   const firstUser = messages.value.find((m) => m.role === 'user')
@@ -1035,14 +1042,8 @@ async function onSend() {
     // STREAM_TIMEOUT_MS, abort the stream and mark the message as errored.
     // Reset on every received event so an active stream never times out.
     watchdogTimedOut = false
-    function clearWatchdog() {
-      if (watchdogTimer) {
-        clearTimeout(watchdogTimer)
-        watchdogTimer = null
-      }
-    }
     function armWatchdog() {
-      clearWatchdog()
+      clearStreamWatchdog()
       watchdogTimer = setTimeout(() => {
         watchdogTimedOut = true
         abortController?.abort()
@@ -1154,7 +1155,7 @@ async function onSend() {
       parser.push(decoder.decode(value, { stream: true }))
     }
     parser.flush()
-    clearWatchdog()
+    clearStreamWatchdog()
 
     // Flush pending markdown render
     if (renderTimer) {
@@ -1188,7 +1189,7 @@ async function onSend() {
   } catch (err: unknown) {
     if (thinkTimer) clearInterval(thinkTimer)
     if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
-    if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null }
+    clearStreamWatchdog()
     if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
       // Distinguish watchdog timeout from user-initiated cancel (spec §8)
       const isTimeout = watchdogTimedOut
@@ -1242,7 +1243,7 @@ function formatToolArguments(args: Record<string, unknown>) {
 function onAbort() {
   abortController?.abort()
   if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
-  if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null }
+  clearStreamWatchdog()
   watchdogTimedOut = false
   // Mark the last in-progress assistant message as interrupted
   const lastAssistant = [...messages.value].reverse().find((m) => m.role === 'assistant' && m.phase === 'answering')
