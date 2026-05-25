@@ -6,15 +6,289 @@ import {
 import type { AgentEvent } from '@/types/agent-stream'
 
 describe('createNormalizationState', () => {
+  it('initializes phase to connecting', () => {
+    expect(createNormalizationState().phase).toBe('connecting')
+  })
+
+  it('initializes empty steps array', () => {
+    expect(createNormalizationState().steps).toEqual([])
+  })
+
+  it('initializes empty answerContent string', () => {
+    expect(createNormalizationState().answerContent).toBe('')
+  })
+
+  it('initializes null reasoningStartTime', () => {
+    expect(createNormalizationState().reasoningStartTime).toBeNull()
+  })
+
   it('initializes artifacts as empty array', () => {
-    const s = createNormalizationState()
-    expect(s.artifacts).toEqual([])
+    expect(createNormalizationState().artifacts).toEqual([])
   })
 
   it('initializes subagents as empty Map', () => {
     const s = createNormalizationState()
     expect(s.subagents).toBeInstanceOf(Map)
     expect(s.subagents.size).toBe(0)
+  })
+})
+
+describe('normalizeAgentEvent — phase transitions', () => {
+  it('phase.connecting sets phase and emits phase_change', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent({ type: 'phase.connecting' }, state)
+    expect(state.phase).toBe('connecting')
+    expect(out).toEqual([{ type: 'phase_change', phase: 'connecting' }])
+  })
+
+  it('phase.thinking sets reasoningStartTime on first event', () => {
+    const state = createNormalizationState()
+    const before = Date.now()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    const after = Date.now()
+    expect(state.phase).toBe('thinking')
+    expect(state.reasoningStartTime).not.toBeNull()
+    expect(state.reasoningStartTime!).toBeGreaterThanOrEqual(before)
+    expect(state.reasoningStartTime!).toBeLessThanOrEqual(after)
+  })
+
+  it('phase.thinking is idempotent — second event does not reset reasoningStartTime', async () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    const first = state.reasoningStartTime
+    await new Promise((r) => setTimeout(r, 5))
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    expect(state.reasoningStartTime).toBe(first)
+  })
+
+  it('phase.answering marks tail reasoning step done with elapsedMs', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    normalizeAgentEvent(
+      { type: 'token.stream', token: 'reasoning content', is_thinking: true },
+      state,
+    )
+    const out = normalizeAgentEvent({ type: 'phase.answering' }, state)
+    const tail = state.steps[state.steps.length - 1]
+    expect(tail.type).toBe('reasoning')
+    if (tail.type === 'reasoning') {
+      expect(tail.status).toBe('done')
+      expect(tail.elapsedMs).toBeGreaterThanOrEqual(0)
+    }
+    expect(out.some((e) => e.type === 'reasoning_done')).toBe(true)
+    expect(out.some((e) => e.type === 'phase_change' && e.phase === 'answering')).toBe(true)
+  })
+})
+
+describe('normalizeAgentEvent — token.stream routing', () => {
+  it('thinking token appends to a reasoning step', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    normalizeAgentEvent(
+      { type: 'token.stream', token: 'hello', is_thinking: true },
+      state,
+    )
+    expect(state.steps).toHaveLength(1)
+    const step = state.steps[0]
+    expect(step.type).toBe('reasoning')
+    if (step.type === 'reasoning') {
+      expect(step.content).toBe('hello')
+      expect(step.status).toBe('streaming')
+    }
+  })
+
+  it('multiple thinking tokens concatenate onto the same reasoning step', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    normalizeAgentEvent({ type: 'token.stream', token: 'a', is_thinking: true }, state)
+    normalizeAgentEvent({ type: 'token.stream', token: 'b', is_thinking: true }, state)
+    normalizeAgentEvent({ type: 'token.stream', token: 'c', is_thinking: true }, state)
+    expect(state.steps).toHaveLength(1)
+    const step = state.steps[0]
+    if (step.type === 'reasoning') expect(step.content).toBe('abc')
+  })
+
+  it('non-thinking token in answering phase appends to answerContent', () => {
+    const state = createNormalizationState()
+    state.phase = 'answering'
+    const out = normalizeAgentEvent({ type: 'token.stream', token: 'final' }, state)
+    expect(state.answerContent).toBe('final')
+    expect(out).toContainEqual({ type: 'answer_delta', content: 'final' })
+  })
+
+  it('non-thinking token in thinking phase still routes to answer_delta (fallback)', () => {
+    const state = createNormalizationState()
+    state.phase = 'thinking'
+    const out = normalizeAgentEvent({ type: 'token.stream', token: 'oops' }, state)
+    expect(state.answerContent).toBe('oops')
+    expect(out).toContainEqual({ type: 'answer_delta', content: 'oops' })
+  })
+
+  it('empty token is dropped', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent(
+      { type: 'token.stream', token: '', is_thinking: true },
+      state,
+    )
+    expect(state.steps).toHaveLength(0)
+    expect(out).toEqual([])
+  })
+
+  it('reasoning followed by tool_call followed by reasoning creates 3 steps in order', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent({ type: 'phase.thinking' }, state)
+    normalizeAgentEvent({ type: 'token.stream', token: 'r1', is_thinking: true }, state)
+    normalizeAgentEvent(
+      {
+        type: 'tool.call',
+        tool: { id: 't1', name: 'tool', display_name: 'tool', icon: '⚙', arguments: {} },
+      },
+      state,
+    )
+    normalizeAgentEvent({ type: 'token.stream', token: 'r2', is_thinking: true }, state)
+    expect(state.steps).toHaveLength(3)
+    expect(state.steps[0].type).toBe('reasoning')
+    expect(state.steps[1].type).toBe('tool_call')
+    expect(state.steps[2].type).toBe('reasoning')
+  })
+})
+
+describe('normalizeAgentEvent — tool.call / tool.result', () => {
+  it('tool.call appends a tool_call step with status=running', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent(
+      {
+        type: 'tool.call',
+        tool: {
+          id: 't1',
+          name: 'web_search',
+          display_name: '搜索文档',
+          icon: '🔍',
+          arguments: { query: 'foo' },
+        },
+      },
+      state,
+    )
+    expect(state.steps).toHaveLength(1)
+    const s = state.steps[0]
+    expect(s.type).toBe('tool_call')
+    if (s.type === 'tool_call') {
+      expect(s.status).toBe('running')
+      expect(s.args).toEqual({ query: 'foo' })
+    }
+    expect(out.some((e) => e.type === 'tool_call')).toBe(true)
+    expect(out.some((e) => e.type === 'tool_running')).toBe(true)
+  })
+
+  it('tool.result updates the matching tool_call to done', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent(
+      {
+        type: 'tool.call',
+        tool: { id: 't1', name: 'x', display_name: 'x', icon: '⚙', arguments: {} },
+      },
+      state,
+    )
+    normalizeAgentEvent(
+      {
+        type: 'tool.result',
+        tool_id: 't1',
+        result: { success: true, summary: '完成', execution_time_ms: 120 },
+      },
+      state,
+    )
+    const s = state.steps[0]
+    if (s.type === 'tool_call') {
+      expect(s.status).toBe('done')
+      expect(s.resultSummary).toBe('完成')
+      expect(s.elapsedMs).toBe(120)
+    }
+  })
+
+  it('tool.result with success=false marks the step as error', () => {
+    const state = createNormalizationState()
+    normalizeAgentEvent(
+      {
+        type: 'tool.call',
+        tool: { id: 't1', name: 'x', display_name: 'x', icon: '⚙', arguments: {} },
+      },
+      state,
+    )
+    normalizeAgentEvent(
+      {
+        type: 'tool.result',
+        tool_id: 't1',
+        result: { success: false, error: '执行失败' },
+      },
+      state,
+    )
+    const s = state.steps[0]
+    if (s.type === 'tool_call') {
+      expect(s.status).toBe('error')
+      expect(s.error).toBe('执行失败')
+    }
+  })
+
+  it('tool.result for an unknown tool_id is silently dropped', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent(
+      { type: 'tool.result', tool_id: 'unknown', result: { success: true } },
+      state,
+    )
+    expect(state.steps).toHaveLength(0)
+    expect(out).toEqual([])
+  })
+
+  it('tool.call with no tool payload is dropped', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent({ type: 'tool.call' }, state)
+    expect(state.steps).toHaveLength(0)
+    expect(out).toEqual([])
+  })
+})
+
+describe('normalizeAgentEvent — capability.end / capability.error', () => {
+  it('capability.end during answering emits answer_done then phase_change(done) + session_end', () => {
+    const state = createNormalizationState()
+    state.phase = 'answering'
+    const out = normalizeAgentEvent({ type: 'capability.end' }, state)
+    expect(state.phase).toBe('done')
+    const types = out.map((e) => e.type)
+    expect(types).toEqual(['answer_done', 'phase_change', 'session_end'])
+  })
+
+  it('capability.end outside answering skips answer_done', () => {
+    const state = createNormalizationState()
+    state.phase = 'thinking'
+    const out = normalizeAgentEvent({ type: 'capability.end' }, state)
+    expect(state.phase).toBe('done')
+    expect(out.some((e) => e.type === 'answer_done')).toBe(false)
+    expect(out.some((e) => e.type === 'phase_change' && e.phase === 'done')).toBe(true)
+    expect(out.some((e) => e.type === 'session_end')).toBe(true)
+  })
+
+  it('capability.error with nested error object emits error event with message + code', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent(
+      { type: 'capability.error', error: { message: 'boom', code: 'E_FOO' } },
+      state,
+    )
+    expect(out).toEqual([{ type: 'error', message: 'boom', code: 'E_FOO' }])
+  })
+
+  it('capability.error with flat shape (message+code on root) is supported', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent(
+      { type: 'capability.error', message: 'flat error', code: 'E_BAR' },
+      state,
+    )
+    expect(out).toEqual([{ type: 'error', message: 'flat error', code: 'E_BAR' }])
+  })
+
+  it('capability.error with no message falls back to "Unknown error"', () => {
+    const state = createNormalizationState()
+    const out = normalizeAgentEvent({ type: 'capability.error' }, state)
+    expect(out[0]).toMatchObject({ type: 'error', message: 'Unknown error' })
   })
 })
 
@@ -170,7 +444,6 @@ describe('normalizeAgentEvent — state.snapshot', () => {
       { type: 'state.snapshot', messages: [{ role: 'user' }], title: 't' },
       state,
     )
-    // No artifacts in snapshot → preserve existing
     expect(state.artifacts).toEqual([{ id: 'kept', title: 'preserved' }])
     expect(out[0]).toMatchObject({ type: 'state_snapshot', title: 't' })
   })

@@ -17,7 +17,15 @@
       <div class="step-args" :class="{ 'args-running': status === 'running' }">
         <span class="args-label">{{ t('aiProcess.argsLabel') }}</span>
         <span class="args-value">{{ argsSummary }}</span>
+        <button
+          v-if="argsIsLong"
+          class="expand-btn"
+          @click="showFullArgs = !showFullArgs"
+        >
+          {{ showFullArgs ? t('aiProcess.collapse') : t('aiProcess.expand') }}
+        </button>
       </div>
+      <pre v-if="showFullArgs" class="args-raw">{{ argsFullJson }}</pre>
 
       <!-- Result summary -->
       <div v-if="status === 'done' || status === 'error'" class="step-result" :class="resultClass">
@@ -49,16 +57,18 @@ const props = defineProps<{
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'done' | 'error'
   resultSummary?: string
+  rawResult?: unknown
   error?: string
   elapsedMs?: number
 }>()
 
 const { t } = useI18n()
 const showFullResult = ref(false)
+const showFullArgs = ref(false)
 
-const displayInfo = getToolDisplayInfo(props.toolName, props.displayName, props.icon)
-const toolDisplayName = displayInfo.displayName
-const displayIcon = displayInfo.icon
+const displayInfo = computed(() => getToolDisplayInfo(props.toolName, props.displayName, props.icon))
+const toolDisplayName = computed(() => displayInfo.value.displayName)
+const displayIcon = computed(() => displayInfo.value.icon)
 
 const statusIcon = computed(() => {
   switch (props.status) {
@@ -80,7 +90,12 @@ const markerClass = computed(() => {
   }
 })
 
-const argsSummary = formatArgsSummary(props.args, displayInfo.argsTemplate)
+const argsSummary = computed(() => formatArgsSummary(props.args, displayInfo.value.argsTemplate))
+const argsFullJson = computed(() => truncateJson(props.args, 10_000).fullContent)
+const argsIsLong = computed(() => {
+  const json = JSON.stringify(props.args)
+  return json.length > 80
+})
 
 const resultStatusIcon = computed(() => props.status === 'done' ? '✓' : '✗')
 
@@ -88,11 +103,15 @@ const resultClass = computed(() => props.status === 'done' ? 'result-success' : 
 
 const resultText = computed(() => {
   if (props.error) return props.error
-  if (showFullResult.value) return truncateJson(props.resultSummary).fullContent
-  return formatResultSummary(undefined, displayInfo.resultTemplate, props.resultSummary, props.status === 'done')
+  if (showFullResult.value) {
+    if (props.rawResult !== undefined) return truncateJson(props.rawResult, 10_000).fullContent
+    if (props.resultSummary) return props.resultSummary
+  }
+  return formatResultSummary(undefined, displayInfo.value.resultTemplate, props.resultSummary, props.status === 'done')
 })
 
 const showExpandBtn = computed(() => {
+  if (props.rawResult !== undefined) return true
   if (!props.resultSummary) return false
   return typeof props.resultSummary === 'string' && props.resultSummary.length > 80
 })
@@ -166,7 +185,7 @@ function formatElapsedMs(ms: number): string {
 .tool-badge {
   font-size: 11px;
   color: var(--color-action-blue);
-  background: rgba(24, 99, 220, 0.08);
+  background: rgba(var(--color-action-blue-rgb), 0.08);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -190,7 +209,7 @@ function formatElapsedMs(ms: number): string {
   background: linear-gradient(
     90deg,
     var(--bg-secondary) 25%,
-    rgba(24, 99, 220, 0.08) 50%,
+    rgba(var(--color-action-blue-rgb), 0.08) 50%,
     var(--bg-secondary) 75%
   );
   background-size: 200%;
@@ -242,7 +261,7 @@ function formatElapsedMs(ms: number): string {
 
 .result-error {
   border-color: var(--color-error);
-  background: rgba(179, 0, 0, 0.06);
+  background: rgba(var(--color-error-rgb), 0.06);
 }
 
 .result-icon {

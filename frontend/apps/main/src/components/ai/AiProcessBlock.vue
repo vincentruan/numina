@@ -246,7 +246,7 @@ const formattedElapsed = computed(() => {
   gap: 8px;
   padding: 10px 12px;
   border-radius: 4px;
-  background: rgba(179, 0, 0, 0.08);
+  background: rgba(var(--color-error-rgb), 0.08);
   border: 1px solid var(--color-error);
 }
 
@@ -273,7 +273,7 @@ const formattedElapsed = computed(() => {
 }
 
 .process-retry-btn:hover {
-  background: rgba(179, 0, 0, 0.08);
+  background: rgba(var(--color-error-rgb), 0.08);
 }
 
 /* Mobile responsive (spec §8 mobile risk mitigation) */
