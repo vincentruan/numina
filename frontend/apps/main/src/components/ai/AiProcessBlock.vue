@@ -275,4 +275,56 @@ const formattedElapsed = computed(() => {
 .process-retry-btn:hover {
   background: rgba(179, 0, 0, 0.08);
 }
+
+/* Mobile responsive (spec §8 mobile risk mitigation) */
+@media (max-width: 768px) {
+  .ai-process-block {
+    margin: 8px 0;
+  }
+
+  .process-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .process-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .icon-symbol {
+    font-size: 12px;
+  }
+
+  .process-info {
+    min-width: 0;
+  }
+
+  .process-title {
+    font-size: 12px;
+  }
+
+  .process-status,
+  .process-elapsed {
+    font-size: 11px;
+  }
+
+  .process-body {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+
+  .process-error {
+    padding: 8px 10px;
+  }
+
+  .process-error-msg {
+    font-size: 12px;
+  }
+
+  .process-retry-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}
 </style>

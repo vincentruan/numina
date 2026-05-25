@@ -272,4 +272,82 @@ function formatElapsedMs(ms: number): string {
 .expand-btn:hover {
   text-decoration: underline;
 }
+
+/* Mobile responsive (spec §8 mobile risk mitigation) */
+@media (max-width: 768px) {
+  .ai-tool-call-step {
+    gap: 10px;
+  }
+
+  .step-marker {
+    width: 18px;
+    height: 18px;
+  }
+
+  .marker-icon {
+    font-size: 9px;
+  }
+
+  .step-content {
+    min-width: 0;
+  }
+
+  .step-header {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .step-title-row {
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .step-title {
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tool-badge {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+
+  .step-time {
+    font-size: 10px;
+  }
+
+  .step-args {
+    padding: 6px 8px;
+    font-size: 11px;
+    overflow: hidden;
+  }
+
+  .args-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
+    vertical-align: bottom;
+  }
+
+  .args-raw {
+    max-height: 160px;
+    font-size: 10px;
+    padding: 6px 8px;
+  }
+
+  .step-result {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .expand-btn {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+}
 </style>

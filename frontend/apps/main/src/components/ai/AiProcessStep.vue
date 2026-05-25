@@ -155,4 +155,43 @@ function formatElapsedMs(ms: number): string {
 .expand-btn:hover {
   text-decoration: underline;
 }
+
+/* Mobile responsive (spec §8 mobile risk mitigation) */
+@media (max-width: 768px) {
+  .ai-process-step {
+    gap: 10px;
+  }
+
+  .step-marker {
+    width: 18px;
+    height: 18px;
+  }
+
+  .marker-icon {
+    font-size: 10px;
+  }
+
+  .step-content {
+    min-width: 0;
+  }
+
+  .step-title {
+    font-size: 12px;
+  }
+
+  .step-time {
+    font-size: 10px;
+  }
+
+  .step-body {
+    padding: 6px 8px;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .expand-btn {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+}
 </style>

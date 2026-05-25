@@ -183,4 +183,66 @@ async function copyContent() {
 .action-btn:hover {
   background: var(--bg-tertiary);
 }
+
+/* Mobile responsive (spec §8 mobile risk mitigation) */
+@media (max-width: 768px) {
+  .ai-final-answer {
+    padding: 10px 12px;
+  }
+
+  .is-report {
+    padding: 12px;
+  }
+
+  .answer-report-header {
+    gap: 8px;
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+  }
+
+  .report-icon {
+    font-size: 16px;
+    width: 28px;
+    height: 28px;
+  }
+
+  .report-title {
+    font-size: 14px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .report-meta {
+    font-size: 11px;
+  }
+
+  .answer-content {
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  .answer-markdown :deep(pre) {
+    padding: 8px;
+    font-size: 11px;
+  }
+
+  .answer-markdown :deep(code) {
+    font-size: 11px;
+  }
+
+  .answer-actions {
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  .action-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+}
 </style>
