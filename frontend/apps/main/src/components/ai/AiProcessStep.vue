@@ -8,7 +8,7 @@
         <span class="step-title">{{ t('aiProcess.stepReasoning') }}</span>
         <span v-if="elapsedMs" class="step-time">{{ formatElapsedMs(elapsedMs) }}</span>
       </div>
-      <div class="step-body">
+      <div class="step-body" :class="{ 'body-streaming': status === 'streaming' }">
         <div v-if="showFullContent" class="reasoning-full">{{ content }}</div>
         <div v-else class="reasoning-truncated">{{ truncatedContent }}</div>
         <button
@@ -132,6 +132,33 @@ function formatElapsedMs(ms: number): string {
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.body-streaming {
+  background: linear-gradient(
+    90deg,
+    var(--card-bg) 25%,
+    var(--bg-secondary) 50%,
+    var(--card-bg) 75%
+  );
+  background-size: 200%;
+  animation: body-shimmer 1.5s linear infinite;
+}
+
+@keyframes body-shimmer {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .body-streaming {
+    animation: none;
+    background: var(--card-bg);
+  }
 }
 
 .reasoning-truncated {
