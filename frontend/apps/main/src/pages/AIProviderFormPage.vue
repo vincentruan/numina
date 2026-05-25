@@ -96,9 +96,31 @@
                 <span
                   v-for="cap in formModels[slot - 1].capabilities"
                   :key="cap"
-                  class="cap-preview__badge"
-                  :class="`cap-preview__badge--${cap}`"
-                >{{ capLabel(cap) }}</span>
+                  class="cap-preview__chip"
+                  :class="`cap-preview__chip--${cap}`"
+                  :title="capLabel(cap)"
+                >
+                  <!-- text_generation -->
+                  <svg v-if="cap === 'text_generation'" width="12" height="12" viewBox="0 0 28 28" fill="none">
+                    <rect x="4" y="6" width="20" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="4" y="12" width="16" height="3" rx="1.5" fill="currentColor" opacity="0.7" />
+                    <rect x="4" y="18" width="12" height="3" rx="1.5" fill="currentColor" opacity="0.4" />
+                  </svg>
+                  <!-- deep_thinking -->
+                  <svg v-else-if="cap === 'deep_thinking'" width="12" height="12" viewBox="0 0 28 28" fill="none">
+                    <circle cx="14" cy="12" r="7" stroke="currentColor" stroke-width="2" />
+                    <path d="M10.5 12C10.5 10.067 12.067 8.5 14 8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    <circle cx="14" cy="12" r="2" fill="currentColor" />
+                    <rect x="11" y="20" width="6" height="2" rx="1" fill="currentColor" />
+                    <rect x="12.5" y="22" width="3" height="2" rx="1" fill="currentColor" />
+                  </svg>
+                  <!-- vision_understanding -->
+                  <svg v-else width="12" height="12" viewBox="0 0 28 28" fill="none">
+                    <path d="M4 14C4 14 7.5 7 14 7C20.5 7 24 14 24 14C24 14 20.5 21 14 21C7.5 21 4 14 4 14Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round" />
+                    <circle cx="14" cy="14" r="3.5" stroke="currentColor" stroke-width="2" />
+                    <circle cx="14" cy="14" r="1.5" fill="currentColor" />
+                  </svg>
+                </span>
               </template>
             </div>
           </template>
@@ -369,26 +391,28 @@ onMounted(async () => {
   color: var(--text-secondary);
 }
 
-.cap-preview__badge {
-  font-size: 11px;
-  font-weight: 500;
-  padding: 2px 7px;
-  border-radius: 4px;
-  letter-spacing: 0.1px;
+.cap-preview__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 
-.cap-preview__badge--text_generation {
-  background: color-mix(in srgb, #4f8ef7 15%, transparent);
+.cap-preview__chip--text_generation {
+  background: color-mix(in srgb, #4f8ef7 12%, transparent);
   color: #4f8ef7;
 }
 
-.cap-preview__badge--deep_thinking {
-  background: color-mix(in srgb, #9b59f7 15%, transparent);
+.cap-preview__chip--deep_thinking {
+  background: color-mix(in srgb, #9b59f7 12%, transparent);
   color: #9b59f7;
 }
 
-.cap-preview__badge--vision_understanding {
-  background: color-mix(in srgb, #2ec4b6 15%, transparent);
+.cap-preview__chip--vision_understanding {
+  background: color-mix(in srgb, #2ec4b6 12%, transparent);
   color: #2ec4b6;
 }
 

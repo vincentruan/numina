@@ -26,7 +26,10 @@
             <div class="drag-handle" :title="t('aiConfig.dragToReorder')">
               <span class="drag-icon">⠿</span>
             </div>
-            <div class="card-logo" :class="`logo--${cfg.provider}`">
+            <div
+              class="card-logo"
+              :class="[`logo--${cfg.provider}`, { 'card-logo--spinning': testingKey?.startsWith(`${cfg.id}-`) }]"
+            >
               <!-- anthropic -->
               <svg v-if="cfg.provider === 'anthropic'" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M13.827 3.52h3.603L24 20h-3.603l-6.57-16.48zm-3.654 0H6.57L0 20h3.603l1.378-3.504h6.875L13.234 20h3.603l-6.664-16.48zm-1.32 9.99 2.244-5.716 2.244 5.717H8.853z" fill="currentColor" />
@@ -439,6 +442,9 @@ onMounted(async () => {
 [data-theme='dark'] .logo--openai_compatible {
   background: rgba(16, 163, 127, 0.15);
   color: #34d399;
+}
+.card-logo--spinning svg {
+  animation: spin 1s linear infinite;
 }
 
 .card-header-info {
