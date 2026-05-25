@@ -7,13 +7,13 @@
       <TaskConsole
         v-model="isConsoleOpen"
         :status="taskStatus"
-        :chunks="taskChunks"
+        :think-content="taskChunks"
         :elapsed-seconds="taskElapsed"
       />
     </div>
 
     <!-- No report yet -->
-    <div v-if="!currentReport && taskStatus === 'idle'" class="empty-state">
+    <div v-if="!currentReport" class="empty-state">
       <van-empty image="search" :description="t('aiReport.noReport')" />
       <div class="empty-actions">
         <van-button type="primary" block :loading="taskStatus === 'running'" @click="onGenerate">
@@ -66,15 +66,15 @@
           :score="currentReport.net_worth_health?.score ?? 0"
           :narrative="currentReport.net_worth_health?.narrative ?? ''"
         >
-          <div v-if="currentReport.net_worth_health?.data" class="card-data">
+          <div v-if="currentReport.net_worth_health?.data?.net_worth != null" class="card-data">
             <div class="data-row">
               <span>{{ t('aiReport.netWorthLabel') }}</span>
               <span>{{ formatMoney(currentReport.net_worth_health.data.net_worth) }}</span>
             </div>
-            <div class="data-row">
+            <div v-if="currentReport.net_worth_health.data.mom_change_pct != null" class="data-row">
               <span>{{ t('aiReport.momChange') }}</span>
               <span :class="currentReport.net_worth_health.data.mom_change_pct >= 0 ? 'positive' : 'negative'">
-                {{ currentReport.net_worth_health.data.mom_change_pct >= 0 ? '+' : '' }}{{ currentReport.net_worth_health.data.mom_change_pct?.toFixed(1) }}%
+                {{ currentReport.net_worth_health.data.mom_change_pct >= 0 ? '+' : '' }}{{ currentReport.net_worth_health.data.mom_change_pct.toFixed(1) }}%
               </span>
             </div>
           </div>
@@ -89,14 +89,14 @@
           <div v-if="currentReport.allocation_analysis?.data?.items?.length" class="alloc-bars">
             <div
               v-for="item in currentReport.allocation_analysis.data.items"
-              :key="item.category_name || item.name"
+              :key="item.category_id"
               class="alloc-bar-row"
             >
-              <span class="alloc-name">{{ item.category_name || item.name }}</span>
+              <span class="alloc-name">{{ item.category_name }}</span>
               <div class="alloc-bar-bg">
                 <div class="alloc-bar-fill" :style="{ width: `${item.percentage}%` }" />
               </div>
-              <span class="alloc-pct">{{ item.percentage?.toFixed(1) }}%</span>
+              <span class="alloc-pct">{{ item.percentage.toFixed(1) }}%</span>
             </div>
           </div>
         </ReportCard>
@@ -162,7 +162,7 @@ const aiStore = useAIStore()
 
 const {
   status: taskStatus,
-  chunks: taskChunks,
+  thinkContent: taskChunks,
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   startStream,

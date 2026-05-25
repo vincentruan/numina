@@ -1,10 +1,11 @@
 """Internal MCP SSE endpoint — agent → backend tool calls for family data."""
 import logging
 
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, Request
 from starlette.responses import Response
 
 from apps.backend.app.config import settings
+from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.services.mcp_session import MCPSession
 
 router = APIRouter(prefix="/internal/mcp", tags=["internal-mcp"])
@@ -28,9 +29,9 @@ def _get_transport():
 
 def _verify_agent_token(token: str | None) -> None:
     if not settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(status_code=503, detail="agent token not configured")
+        raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "agent token not configured")
     if not token or token != settings.AGENT_INTERNAL_TOKEN:
-        raise HTTPException(status_code=401, detail="invalid agent token")
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid agent token")
 
 
 class MCPSSEResponse(Response):
@@ -68,7 +69,7 @@ async def mcp_sse(
     """SSE endpoint that speaks MCP protocol for the given family_id."""
     _verify_agent_token(x_agent_token)
     if x_family_id and x_family_id != family_id:
-        raise HTTPException(status_code=403, detail="family_id mismatch")
+        raise AppError(ErrorCode.FORBIDDEN, "family_id mismatch")
     session = MCPSession(family_id=family_id)
     return MCPSSEResponse(session=session, family_id=family_id)
 

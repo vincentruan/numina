@@ -26,9 +26,11 @@
   --color-coral: #ff7759;
   --color-coral-soft: #ffad9b;
   --color-action-blue: #1863dc;
+  --color-action-blue-rgb: 24, 99, 220;
   --color-focus-blue: #4c6ee6;
   --color-form-focus: #9b60aa;
   --color-error: #b30000;
+  --color-error-rgb: 179, 0, 0;
   --color-success: #1a7a4a;
 
   /* Surface & Background */

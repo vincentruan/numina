@@ -75,7 +75,7 @@
     </div>
 
     <!-- Results -->
-    <template v-if="driftResult">
+    <template v-if="driftResult && driftResult.has_result">
       <div v-if="!driftResult.has_significant_drift" class="no-drift">
         <van-empty :description="t('aiAllocation.noDrift')">
           <template #image>
@@ -126,12 +126,13 @@ import { getAllocationTarget, setAllocationTarget, checkAllocationDrift } from '
 import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
+import type { AllocationDriftResponse, AllocationDriftItem } from '@/types'
 
 const { t } = useI18n()
 
 const hasTarget = ref(false)
 const editingTarget = ref(false)
-const driftResult = ref<Record<string, unknown> | null>(null)
+const driftResult = ref<AllocationDriftResponse | null>(null)
 
 const editTargets = reactive<Record<string, number>>({})
 

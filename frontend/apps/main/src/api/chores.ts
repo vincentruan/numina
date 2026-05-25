@@ -65,7 +65,7 @@ export interface ChoreInstance {
   streak_count: number
   streak_bonus: number
   milestone_triggered: string | null
-  child_user_id?: string
+  child_user_id: string | null
   is_pool_unclaimed: boolean
   assigned_by_user_id: string | null
   claimed_at: string | null
@@ -73,7 +73,6 @@ export interface ChoreInstance {
 
 /** Extends ChoreInstance with child identity fields present on pending-approval responses. */
 export interface PendingApprovalInstance extends ChoreInstance {
-  child_user_id: string | null
   child_display_name: string | null
   child_avatar_color: string | null
 }

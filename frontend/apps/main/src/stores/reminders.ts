@@ -27,7 +27,7 @@ export const useRemindersStore = defineStore('reminders', () => {
     }
   }
 
-  async function dismiss(id: number) {
+  async function dismiss(id: string) {
     await remindersApi.dismiss(id)
     reminders.value = reminders.value.filter((r) => r.id !== id)
     await fetchSummary()

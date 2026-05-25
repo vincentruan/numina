@@ -136,7 +136,7 @@ const showChildPicker = ref(false)
 const showTypePicker = ref(false)
 const showDeadlinePicker = ref(false)
 const showTemplatePicker = ref(false)
-const deadlineDate = ref(new Date())
+const deadlineDate = ref<string[]>([])
 
 const minDeadline = computed(() => {
   const d = new Date()

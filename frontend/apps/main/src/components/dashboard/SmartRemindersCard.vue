@@ -150,7 +150,7 @@ async function onToggle(names: string[]) {
   }
 }
 
-async function onDismiss(id: number) {
+async function onDismiss(id: string) {
   await store.dismiss(id)
 }
 

@@ -225,12 +225,12 @@ async function loadSkills() {
   loading.value = true
   try {
     const res = await getSkillsGrouped()
-    groupedSkills.value = res.data
+    groupedSkills.value = res
     // For builtin toggle display, we need all builtin skills including disabled
     // The API returns only enabled ones, so we construct the full list
     const builtinSkillIds = builtinIds.filter(id => id !== 'chat' && id !== 'time_machine')
     allBuiltinSkills.value = builtinSkillIds.map(id => {
-      const found = res.data.builtin.find(s => s.id === id)
+      const found = res.builtin?.find((s: { id: string }) => s.id === id)
       return found || { id, skill_type: 'builtin' as const, is_enabled: false, display_order: 100, can_edit: false, can_delete: false }
     })
   } catch {

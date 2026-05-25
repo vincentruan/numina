@@ -35,7 +35,7 @@ vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal()
   return {
     ...actual,
-    useI18n: () => ({ t: (key: string) => key }),
+    useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh-CN' } }),
   }
 })
 
@@ -100,9 +100,10 @@ describe('AIChatPage tool events', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
-    const toggle = wrapper.find('.think-toggle')
-    if (toggle.exists()) {
-      await toggle.trigger('click')
+    // AiProcessBlock auto-collapses on done; expand it to see tool details
+    const header = wrapper.find('.process-header')
+    if (header.exists()) {
+      await header.trigger('click')
     }
 
     expect(wrapper.text()).toContain('资产查询')
@@ -150,8 +151,8 @@ describe('AIChatPage tool events', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(wrapper.find('.phase-strip').exists()).toBe(false)
-    expect(wrapper.find('.think-block--done').exists()).toBe(true)
-    expect(wrapper.text()).toContain('aiChat.thinkDone')
+    // AiProcessBlock auto-collapses when reasoning finishes (status=done → is-collapsed class)
+    expect(wrapper.find('.ai-process-block.is-collapsed').exists()).toBe(true)
     expect(wrapper.text()).toContain('最终答案')
   })
 })

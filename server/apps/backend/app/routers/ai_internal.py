@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -420,9 +420,9 @@ def internal_half_open_result(
     # so the caller can distinguish "recorded" from "ignored" rather than
     # treating an ignored result as success.
     if cfg.circuit_state != "half_open":
-        raise HTTPException(
-            status_code=409,
-            detail=f"Provider not in half_open state (current: {cfg.circuit_state})",
+        raise AppError(
+            ErrorCode.AI_TASK_IN_PROGRESS,
+            f"Provider not in half_open state (current: {cfg.circuit_state})",
         )
 
     if body.success:
@@ -504,7 +504,7 @@ def get_skill_registry(
 ) -> list[dict]:
     """Internal endpoint for agent to fetch family skill registry."""
     if x_internal_token != settings.INTERNAL_TOKEN:
-        raise HTTPException(status_code=401, detail="invalid token")
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid token")
 
     records = (
         db.query(SkillRegistry)
@@ -705,7 +705,7 @@ def internal_get_chat_prompt(
 ):
     """Return family's custom chat system prompt (or null if not set)."""
     if family_id_path != str(family_id):
-        raise HTTPException(status_code=403, detail="family_id mismatch")
+        raise AppError(ErrorCode.FORBIDDEN, "family_id mismatch")
     from apps.backend.app.services import workspace
     content = workspace.get_chat_prompt(family_id)
     return {"content": content}

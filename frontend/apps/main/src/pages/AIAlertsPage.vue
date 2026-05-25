@@ -121,18 +121,12 @@ import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
 
-interface Alert {
-  id: number
-  alert_type: string
-  asset_name: string
-  message: string
-  [key: string]: unknown
-}
+import type { AssetAlert } from '@/types'
 
 const { t } = useI18n()
 
 const loading = ref(false)
-const alerts = ref<Alert[]>([])
+const alerts = ref<AssetAlert[]>([])
 
 const ALERT_TYPE_LABELS: Record<string, string> = {
   aging: t('aiAlerts.agingType'),

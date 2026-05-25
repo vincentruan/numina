@@ -220,67 +220,19 @@
                   <span class="phase-pulse" aria-hidden="true" />
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
                 </div>
-                <!-- Deep think block with integrated phase indicator and tool timeline -->
-                <div
-                  v-if="msg.role === 'assistant' && (msg.thinkContent || msg.toolTimeline?.length || (msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && deepThink))"
-                  class="think-block"
-                  :class="{
-                    'think-block--open': msg.thinkOpen,
-                    'think-block--done': msg.thinkDone,
-                    'think-block--active': msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error',
-                    'shimmer-active': msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !msg.thinkDone,
-                  }"
-                >
-                  <button class="think-toggle" @click="onThinkToggle(msg)">
-                    <div class="think-icon-wrapper">
-                      <span v-if="msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !msg.thinkDone" class="phase-pulse-small" aria-hidden="true" />
-                      <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
-                        <path d="M9 21h6"/>
-                      </svg>
-                    </div>
-                    <span v-if="msg.thinkDone" class="think-status">{{ t('aiChat.thinkDone') }}</span>
-                    <span v-else class="think-status think-status--active">
-                      <span class="think-text-animated">{{ phaseLabel(msg.phase || 'thinking') }}</span>
-                    </span>
-                    <span v-if="msg.thinkDone" class="think-duration">{{ msg.thinkSeconds }}s</span>
-                    <!-- Tool summary chips shown when collapsed -->
-                    <template v-if="msg.thinkDone && !msg.thinkOpen && msg.toolTimeline?.length">
-                      <span class="think-chip-sep" aria-hidden="true">·</span>
-                      <span v-if="msg.toolTimeline.some(t => t.name === 'search' || t.icon === 'search')" class="think-chip">{{ t('aiChat.thinkSummarySearched') }}</span>
-                      <span v-if="msg.toolTimeline.filter(t => t.name !== 'search' && t.icon !== 'search').length > 0" class="think-chip">{{ t('aiChat.thinkSummaryTools', { n: msg.toolTimeline.filter(t => t.name !== 'search' && t.icon !== 'search').length }) }}</span>
-                    </template>
-                    <svg class="think-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </button>
-                  <!-- Tool timeline inside think block (shown when expanded) -->
-                  <div v-if="msg.thinkOpen && msg.toolTimeline?.length" class="tool-timeline">
-                    <div
-                      v-for="tool in msg.toolTimeline"
-                      :key="tool.id"
-                      class="tool-card"
-                      :class="{ 'tool-card--done': tool.result, 'tool-card--error': tool.result && !tool.result.success, 'shimmer-active': !tool.result }"
-                    >
-                      <div class="tool-card-main">
-                        <span class="tool-card-icon" aria-hidden="true">{{ toolIcon(tool.icon) }}</span>
-                        <div class="tool-card-copy">
-                          <span class="tool-card-title">{{ tool.displayName }}</span>
-                          <span class="tool-card-meta">{{ toolStatus(tool) }}</span>
-                        </div>
-                      </div>
-                      <div v-if="tool.argumentsText" class="tool-card-args">{{ tool.argumentsText }}</div>
-                      <div v-if="tool.result && !tool.result.success" class="tool-result tool-result--failed">
-                        {{ t('aiChat.toolCallFailed') }}
-                      </div>
-                      <div v-else-if="tool.result" class="tool-result">
-                        {{ toolResultText(tool.result) }}
-                      </div>
-                    </div>
-                  </div>
-                  <!-- eslint-disable-next-line vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
-                  <div v-if="msg.thinkOpen && msg.thinkContent" class="think-content" v-html="msg.thinkContent" />
-                </div>
+                <!-- Process block (replaces inline think-block) — unified steps[] preserves event order (spec §3.3) -->
+                <!-- Renders whenever the assistant has process steps OR is in error (so retry button is visible) -->
+                <AiProcessBlock
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg)"
+                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
+                  :elapsed-ms="msg.processElapsedMs || 0"
+                  :steps="msg.processSteps || buildLegacySteps(msg)"
+                  :default-expanded="!msg.thinkDone || msg.phase === 'error'"
+                  :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
+                  :phase="msg.phase === 'interrupted' ? undefined : msg.phase"
+                  :reasoning-start-time="msg.reasoningStartTime ?? null"
+                  @retry="onRetryError(idx)"
+                />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
                 <div
                   v-if="msg.role === 'assistant' && msg.phase !== 'error'"
@@ -288,8 +240,8 @@
                   :class="{ 'bubble-text--appearing': msg.content && msg.phase === 'answering' && !msg.renderedContent }"
                   v-html="msg.renderedContent ?? ''"
                 />
-                <!-- Error state with retry button -->
-                <div v-if="msg.role === 'assistant' && msg.phase === 'error'" class="error-state">
+                <!-- Inline error state — fallback when deepThink is off (AiProcessBlock not rendered) -->
+                <div v-if="msg.role === 'assistant' && msg.phase === 'error' && !deepThink" class="error-state">
                   <p class="error-msg">{{ t('aiChat.errorRetry') }}</p>
                   <button class="error-retry-btn" :disabled="asking" @click="onRetryError(idx)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -300,7 +252,7 @@
                   </button>
                 </div>
                 <!-- eslint-enable vue/no-v-html -->
-                <div v-if="msg.role === 'user'" class="bubble-text">{{ msg.content }}</div>
+                <AiUserBubble v-if="msg.role === 'user'" class="bubble-text" :content="msg.content" />
                 <span class="msg-time">{{ msg.displayTime }}</span>
                 <!-- User message send status indicator -->
                 <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
@@ -385,7 +337,7 @@
     <!-- Scroll-to-bottom floating button: shown when user scrolled up during streaming -->
     <transition name="scroll-btn">
       <button
-        v-if="isUserScrolledUp && asking"
+        v-if="isUserScrolledUp"
         class="scroll-to-bottom-btn"
         :aria-label="t('aiChat.scrollToBottom')"
         @click="onScrollToBottom"
@@ -446,8 +398,11 @@ import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } f
 import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
+import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
-import type { AgentEvent } from '@/types/agent-stream'
+import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNormalizer'
+import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
 // Configure marked
@@ -479,7 +434,62 @@ const suggestions = computed(() => [
 ])
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
+}
+
+function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ProcessStep[] {
+  if (!timeline) return []
+  return timeline.map<ProcessStep>(tool => ({
+    type: 'tool_call',
+    id: tool.id,
+    name: tool.name,
+    displayName: tool.displayName,
+    icon: tool.icon,
+    args: parseToolArgs(tool.argumentsText),
+    status: tool.result ? (tool.result.success ? 'done' : 'error') : 'running',
+    resultSummary: tool.result?.summary,
+    error: tool.result?.error,
+    elapsedMs: tool.result?.execution_time_ms,
+  }))
+}
+
+// Synthesize a unified ProcessStep[] from legacy Message fields (thinkContent + toolTimeline).
+// Used as a fallback when the message did not flow through aiEventNormalizer (e.g. older history
+// records or messages saved before the steps[] refactor). Reasoning is emitted as the leading
+// step; tool calls follow in timeline order.
+function buildLegacySteps(msg: Message): ProcessStep[] {
+  const steps: ProcessStep[] = []
+  if (msg.thinkContent) {
+    steps.push({
+      type: 'reasoning',
+      id: `legacy-reasoning-${msg.id}`,
+      content: msg.thinkContent,
+      status: msg.thinkDone ? 'done' : 'streaming',
+      elapsedMs: msg.thinkSeconds ? msg.thinkSeconds * 1000 : undefined,
+    })
+  }
+  steps.push(...mapToolTimelineToSteps(msg.toolTimeline))
+  return steps
+}
+
+// Decide whether AiProcessBlock should render for an assistant message.
+// Show whenever there is process content (live steps, legacy think/tool data) or
+// when the message is in error so the inline retry button is visible.
+function shouldShowProcessBlock(msg: Message): boolean {
+  if (msg.phase === 'error') return true
+  if (msg.processSteps && msg.processSteps.length > 0) return true
+  if (msg.thinkContent) return true
+  if (msg.toolTimeline && msg.toolTimeline.length > 0) return true
+  return false
+}
+
+function parseToolArgs(argsText?: string): Record<string, unknown> {
+  if (!argsText) return {}
+  try {
+    return JSON.parse(argsText)
+  } catch {
+    return { text: argsText }
+  }
 }
 
 interface Message {
@@ -497,8 +507,13 @@ interface Message {
   thinkOpen?: boolean
   thinkDone?: boolean
   thinkSeconds?: number
+  reasoningStartTime?: number | null
   thinkManuallyToggled?: boolean
   toolTimeline?: ToolTimelineItem[]
+  // New fields for AiProcessBlock — unified steps[] preserves event order (spec §3.3)
+  processStatus?: 'running' | 'done' | 'error'
+  processElapsedMs?: number
+  processSteps?: ProcessStep[]
 }
 
 interface ToolTimelineItem {
@@ -516,7 +531,7 @@ interface ToolTimelineItem {
   }
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const aiStore = useAIStore()
@@ -529,6 +544,7 @@ const deepThink = ref(false)
 const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
+let programmaticScroll = false
 const showHistory = ref(false)
 const sessions = ref<SessionSummary[]>([])
 const sessionsLoading = ref(false)
@@ -678,7 +694,7 @@ async function onDeleteSession() {
 // Throttled markdown rendering state (scoped to this component instance)
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 let pendingRenderText = ''
-let pendingRenderTarget: { content: string; renderedContent: string } | null = null
+let pendingRenderTarget: { content: string; renderedContent?: string } | null = null
 let scrollRAF: number | null = null
 
 // Follow global theme via data-theme attribute set by App.vue
@@ -688,6 +704,16 @@ let themeObserver: MutationObserver | null = null
 
 let abortController: AbortController | null = null
 let connectTimer: ReturnType<typeof setInterval> | null = null
+let watchdogTimer: ReturnType<typeof setTimeout> | null = null
+let watchdogTimedOut = false
+const STREAM_TIMEOUT_MS = 30_000
+
+function clearStreamWatchdog() {
+  if (watchdogTimer) {
+    clearTimeout(watchdogTimer)
+    watchdogTimer = null
+  }
+}
 
 
 const sessionTitle = computed(() => {
@@ -745,7 +771,7 @@ function onCancelEditTitle() {
 }
 
 // Throttled markdown render helper (uses state declared above)
-function renderMarkdownThrottled(text: string, target: { content: string; renderedContent: string }) {
+function renderMarkdownThrottled(text: string, target: { content: string; renderedContent?: string }) {
   pendingRenderText = text
   pendingRenderTarget = target
 
@@ -763,7 +789,14 @@ async function scrollToBottom(force = false) {
   await nextTick()
   if (scrollRef.value) {
     if (!force && isUserScrolledUp.value) return // Don't auto-scroll when user has scrolled up
+    if (force && scrollRAF) {
+      // Cancel any pending throttled scroll — the final force=true call needs
+      // to win, otherwise the in-flight rAF executes against a stale scrollHeight.
+      cancelAnimationFrame(scrollRAF)
+      scrollRAF = null
+    }
     if (scrollRAF) return // Already pending
+    programmaticScroll = true
     scrollRAF = requestAnimationFrame(() => {
       scrollRAF = null
       if (scrollRef.value) {
@@ -774,25 +807,34 @@ async function scrollToBottom(force = false) {
 }
 
 function onChatScroll() {
+  // Ignore scroll events triggered by our own scrollToBottom / onScrollToBottom
+  // calls — the programmaticScroll flag is set just before the scroll mutation
+  // and cleared on the next event. Without this gate, the moment we
+  // scrollTop = scrollHeight, the resulting scroll event re-evaluates
+  // distFromBottom and can briefly toggle isUserScrolledUp during smooth scroll.
+  if (programmaticScroll) {
+    programmaticScroll = false
+    return
+  }
   const el = scrollRef.value
   if (!el) return
   const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-  // Mark as scrolled up when more than 100px from bottom (only during streaming)
-  if (asking.value) {
-    isUserScrolledUp.value = distFromBottom > 100
-  }
+  // Visibility gate is independent of streaming state (spec §B1):
+  // the scroll-to-bottom button must appear whenever the user is scrolled up,
+  // not only while asking — otherwise the button hides while reading history.
+  isUserScrolledUp.value = distFromBottom > 100
 }
 
 function onScrollToBottom() {
   isUserScrolledUp.value = false
   if (scrollRef.value) {
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    programmaticScroll = true
+    scrollRef.value.scrollTo({ top: scrollRef.value.scrollHeight, behavior: 'smooth' })
   }
 }
 
 function onChipClick(text: string) {
   inputText.value = text
-  onSend()
 }
 
 function phaseLabel(phase: NonNullable<Message['phase']>) {
@@ -805,16 +847,16 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
 // Load session list when history panel opens (lazy, once per mount)
 const selectedCapability = ref<string>('chat')  // Default to 'chat' filter
 
-// Capability metadata from skills/*.md - icons, colors, display names, and AI flag
-const capabilityMeta: Record<string, { icon: string; color: string; name: string; isAI: boolean }> = {
-  chat: { icon: '💬', color: '#06b6d4', name: '智能问答', isAI: true },
-  alerts: { icon: '🔔', color: '#f59e0b', name: '资产老化预警', isAI: true },
-  disposal: { icon: '🗑️', color: '#ef4444', name: '闲置资产处置', isAI: true },
-  report: { icon: '📋', color: '#6366f1', name: '家庭资产体检', isAI: true },
-  allocation: { icon: '📊', color: '#8b5cf6', name: '资产配置分析', isAI: true },
-  liability: { icon: '💳', color: '#f97316', name: '负债健康分析', isAI: true },
-  spending_leak: { icon: '💧', color: '#10b981', name: '消费漏洞扫描', isAI: true },
-  time_machine: { icon: '⏰', color: '#a855f7', name: '财务时光机', isAI: false },  // simulation, not AI chat
+// Capability metadata from skills/*.md - icons, colors, display name keys, and AI flag
+const capabilityMeta: Record<string, { icon: string; color: string; nameKey: string; isAI: boolean }> = {
+  chat: { icon: '💬', color: '#06b6d4', nameKey: 'aiChat.filterChat', isAI: true },
+  alerts: { icon: '🔔', color: '#f59e0b', nameKey: 'aiChat.filterAlerts', isAI: true },
+  disposal: { icon: '🗑️', color: '#ef4444', nameKey: 'aiChat.filterDisposal', isAI: true },
+  report: { icon: '📋', color: '#6366f1', nameKey: 'aiChat.filterReport', isAI: true },
+  allocation: { icon: '📊', color: '#8b5cf6', nameKey: 'aiChat.filterAllocation', isAI: true },
+  liability: { icon: '💳', color: '#f97316', nameKey: 'aiChat.filterLiability', isAI: true },
+  spending_leak: { icon: '💧', color: '#10b981', nameKey: 'aiChat.filterSpendingLeak', isAI: true },
+  time_machine: { icon: '⏰', color: '#a855f7', nameKey: 'aiChat.filterTimeMachine', isAI: false },  // simulation, not AI chat
 }
 
 const capabilityFilters = computed(() => [
@@ -823,7 +865,7 @@ const capabilityFilters = computed(() => [
   ...Object.entries(capabilityMeta)
     .filter(([_, meta]) => meta.isAI)
     .map(([key, meta]) => ({
-      label: `${meta.icon} ${meta.name}`,
+      label: `${meta.icon} ${t(meta.nameKey)}`,
       value: key,
     })),
 ])
@@ -960,6 +1002,12 @@ async function onSend() {
   const q = inputText.value.trim()
   if (!q || asking.value) return
 
+  // Reset scroll state at the start of a new turn (spec §B1): a fresh question
+  // means the user is committing to the new exchange, so subsequent
+  // scrollToBottom calls during streaming must not be suppressed by a stale
+  // isUserScrolledUp from earlier in the conversation.
+  isUserScrolledUp.value = false
+
   const userMsgId = Date.now().toString()
   messages.value.push({
     id: userMsgId,
@@ -993,6 +1041,8 @@ async function onSend() {
     thinkDone: deepThink.value ? false : undefined,
     thinkSeconds: deepThink.value ? 0 : undefined,
     toolTimeline: [],
+    processSteps: [],
+    processStatus: 'running',
   }
   messages.value.push(assistantMsg)
   const msgIdx = messages.value.length - 1
@@ -1008,9 +1058,9 @@ async function onSend() {
   }
 
   const decoder = new TextDecoder()
-  let thinkRaw = ''
   let textRaw = ''
   let thinkingDone = false
+  const normState = createNormalizationState()
 
   try {
     const reader = await sendChatEventStream(q, deepThink.value, webSearch.value, abortController.signal, currentSessionId.value ?? undefined)
@@ -1026,17 +1076,50 @@ async function onSend() {
     }
     await scrollToBottom()
 
+    // Stream timeout watchdog (spec §8 risk): if no event arrives within
+    // STREAM_TIMEOUT_MS, abort the stream and mark the message as errored.
+    // Reset on every received event so an active stream never times out.
+    watchdogTimedOut = false
+    function armWatchdog() {
+      clearStreamWatchdog()
+      watchdogTimer = setTimeout(() => {
+        watchdogTimedOut = true
+        abortController?.abort()
+      }, STREAM_TIMEOUT_MS)
+    }
+    armWatchdog()
+
+    function syncStepsToMessage() {
+      // Live render reads processSteps; assign a fresh array reference so Vue
+      // reactivity picks up step-array mutations made by the normalizer.
+      messages.value[msgIdx].processSteps = [...normState.steps]
+      messages.value[msgIdx].processStatus =
+        normState.phase === 'done' ? 'done' : 'running'
+    }
+
     function handleEvent(event: AgentEvent) {
+      // Reset stream watchdog: any received event keeps the stream alive (spec §8).
+      armWatchdog()
+
       if (event.type === 'session.start') {
         if (event.session_id) currentSessionId.value = event.session_id
         return
       }
+
+      // Route every event through the normalizer so state.steps[] is the
+      // single source of truth for AiProcessBlock (spec §3.3 unified order).
+      normalizeAgentEvent(event, normState)
+      syncStepsToMessage()
+
       if (event.type === 'phase.connecting') {
         messages.value[msgIdx].phase = 'connecting'
         return
       }
       if (event.type === 'phase.thinking') {
         messages.value[msgIdx].phase = 'thinking'
+        if (messages.value[msgIdx].reasoningStartTime == null) {
+          messages.value[msgIdx].reasoningStartTime = Date.now()
+        }
         return
       }
       if (event.type === 'phase.answering') {
@@ -1048,8 +1131,7 @@ async function onSend() {
         return
       }
       if (event.type === 'token.stream' && event.is_thinking) {
-        thinkRaw += event.token ?? ''
-        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
+        // Reasoning content is captured inside normState.steps; nothing else to do.
         return
       }
       if (event.type === 'token.stream') {
@@ -1062,53 +1144,12 @@ async function onSend() {
           if (!messages.value[msgIdx].thinkManuallyToggled) {
             messages.value[msgIdx].thinkOpen = false
           }
-          // Final render for think content
-          if (thinkRaw) {
-            messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-          }
         }
         textRaw += event.token ?? ''
         messages.value[msgIdx].content = textRaw
         // Use throttled rendering for smoother streaming
         renderMarkdownThrottled(textRaw, messages.value[msgIdx])
         scrollToBottom()
-        return
-      }
-      if (event.type === 'tool.call' && event.tool) {
-        messages.value[msgIdx].toolTimeline ??= []
-        messages.value[msgIdx].toolTimeline.push({
-          id: event.tool.id,
-          name: event.tool.name,
-          displayName: event.tool.display_name,
-          icon: event.tool.icon,
-          argumentsText: formatToolArguments(event.tool.arguments),
-        })
-        return
-      }
-      if (event.type === 'tool.result' && event.tool_id) {
-        messages.value[msgIdx].toolTimeline ??= []
-        const tool = messages.value[msgIdx].toolTimeline.find((item) => item.id === event.tool_id)
-        const result = event.result
-          ? {
-              success: event.result.success,
-              summary: event.result.summary,
-              data: event.result.data,
-              error: event.result.error,
-              execution_time_ms: event.result.execution_time_ms,
-            }
-          : undefined
-        if (tool) {
-          tool.result = result
-        } else {
-          messages.value[msgIdx].toolTimeline.push({
-            id: event.tool_id,
-            name: event.tool_id,
-            displayName: event.tool_id,
-            icon: 'tool',
-            argumentsText: '',
-            result,
-          })
-        }
         return
       }
       if (event.type === 'capability.error') {
@@ -1124,6 +1165,7 @@ async function onSend() {
       parser.push(decoder.decode(value, { stream: true }))
     }
     parser.flush()
+    clearStreamWatchdog()
 
     // Flush pending markdown render
     if (renderTimer) {
@@ -1142,13 +1184,10 @@ async function onSend() {
         messages.value[msgIdx].thinkOpen = false
       }
       messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-      // Final render for think content
-      if (thinkRaw) {
-        messages.value[msgIdx].thinkContent = renderMarkdown(thinkRaw)
-      }
     }
 
     messages.value[msgIdx].phase = textRaw ? 'done' : 'error'
+    messages.value[msgIdx].processStatus = textRaw ? 'done' : 'error'
     asking.value = false
     connecting.value = false
     isUserScrolledUp.value = false
@@ -1157,13 +1196,23 @@ async function onSend() {
   } catch (err: unknown) {
     if (thinkTimer) clearInterval(thinkTimer)
     if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
+    clearStreamWatchdog()
     if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
+      // Distinguish watchdog timeout from user-initiated cancel (spec §8)
+      const isTimeout = watchdogTimedOut
+      watchdogTimedOut = false
       // Finalize the assistant message so it doesn't stay in connecting/thinking/answering phase
       if (messages.value[msgIdx]) {
-        messages.value[msgIdx].phase = textRaw ? 'interrupted' : 'error'
-        if (!textRaw) {
-          messages.value[msgIdx].content = t('toast.aiChatError')
-          messages.value[msgIdx].renderedContent = `<p>${t('toast.aiChatError')}</p>`
+        if (isTimeout) {
+          messages.value[msgIdx].phase = 'error'
+          messages.value[msgIdx].content = t('aiChat.errorTimeout')
+          messages.value[msgIdx].renderedContent = `<p>${t('aiChat.errorTimeout')}</p>`
+        } else {
+          messages.value[msgIdx].phase = textRaw ? 'interrupted' : 'error'
+          if (!textRaw) {
+            messages.value[msgIdx].content = t('toast.aiChatError')
+            messages.value[msgIdx].renderedContent = `<p>${t('toast.aiChatError')}</p>`
+          }
         }
       }
       asking.value = false
@@ -1192,48 +1241,17 @@ async function onSend() {
   }
 }
 
-function formatToolArguments(args: Record<string, unknown>) {
-  return Object.entries(args)
-    .map(([key, value]) => `${key}: ${String(value)}`)
-    .join(' · ')
-}
-
-function toolIcon(icon: string) {
-  const map: Record<string, string> = {
-    search: '⌕',
-    tool: '◇',
-  }
-  return map[icon] ?? '◇'
-}
-
-function toolStatus(tool: ToolTimelineItem) {
-  if (!tool.result) return t('aiChat.toolRunning')
-  if (tool.result.success === false) return t('aiChat.toolFailed')
-  return t('aiChat.toolDone')
-}
-
-function toolResultText(result: NonNullable<ToolTimelineItem['result']>) {
-  if (result.error) return result.error
-  if (result.summary) return result.summary
-  if (typeof result.data === 'string') return result.data
-  if (result.data !== undefined && result.data !== null) return JSON.stringify(result.data)
-  return t('aiChat.toolDone')
-}
-
 function onAbort() {
   abortController?.abort()
   if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
+  clearStreamWatchdog()
+  watchdogTimedOut = false
   // Mark the last in-progress assistant message as interrupted
   const lastAssistant = [...messages.value].reverse().find((m) => m.role === 'assistant' && m.phase === 'answering')
   if (lastAssistant) lastAssistant.phase = 'interrupted'
   asking.value = false
   connecting.value = false
   abortController = null
-}
-
-function onThinkToggle(msg: Message) {
-  msg.thinkManuallyToggled = true
-  msg.thinkOpen = !msg.thinkOpen
 }
 
 async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {

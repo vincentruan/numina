@@ -7,7 +7,7 @@
         v-model="fileList"
         :max-count="1"
         :max-size="5 * 1024 * 1024"
-        :after-read="afterRead"
+        :after-read="afterRead as UploaderAfterRead"
         @delete="onDelete"
       >
         <template #default>
@@ -252,6 +252,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import type { UploaderAfterRead } from 'vant'
 import type { Asset, Category, Tag } from '@/types'
 import { getAssetField } from '@/types'
 import { uploadImage } from '@/api/upload'
@@ -283,7 +284,28 @@ const emit = defineEmits<{
   submit: [data: Partial<Asset>]
 }>()
 
-const form = ref<Record<string, string | number | boolean | null | undefined>>({
+interface FormState {
+  name: string
+  asset_type: 'physical' | 'financial'
+  category_id: string
+  purchase_price: string
+  current_value: string
+  currency: string
+  purchase_date: string
+  status: 'in_use' | 'idle' | 'sold' | 'retired'
+  location: string
+  institution: string
+  interest_rate: string
+  maturity_date: string
+  warranty_expiry_date: string
+  annual_maintenance_cost: string
+  usage_frequency: 'daily' | 'weekly' | 'monthly' | 'rarely' | 'idle' | ''
+  notes: string
+  image_url: string
+  expected_lifespan_days: number | null
+}
+
+const form = ref<FormState>({
   name: '',
   asset_type: 'physical',
   category_id: '',
@@ -300,7 +322,8 @@ const form = ref<Record<string, string | number | boolean | null | undefined>>({
   annual_maintenance_cost: '',
   usage_frequency: 'daily',
   notes: '',
-  image_url: ''
+  image_url: '',
+  expected_lifespan_days: null
 })
 
 // P0: Lifespan in years (display) — submitted as days
@@ -385,7 +408,7 @@ const aiFilledFields = ref<Set<string>>(new Set())
 
 async function onNameBlur() {
   if (props.isEdit) return
-  const name = form.value.name?.trim()
+  const name = form.value.name.trim()
   if (!name || name.length < 2) return
   if (!aiStore.aiEnabled) return
 
@@ -407,7 +430,7 @@ async function onNameBlur() {
         filled.add('expected_lifespan_years')
       }
       if (s.usage_frequency && form.value.usage_frequency === 'daily') {
-        form.value.usage_frequency = s.usage_frequency
+        form.value.usage_frequency = s.usage_frequency as 'daily' | 'weekly' | 'monthly' | 'rarely' | 'idle' | ''
         filled.add('usage_frequency')
       }
     }
@@ -437,42 +460,40 @@ async function onNameBlur() {
 watch(() => props.initialData, (data) => {
   if (data) {
     // Copy common fields
-    const commonKeys: (keyof Asset)[] = [
-      'name', 'asset_type', 'category_id', 'purchase_price', 'current_value',
-      'currency', 'purchase_date', 'status', 'notes', 'image_url'
-    ]
-    for (const key of commonKeys) {
-      const value = getAssetField<string | number>(data, key)
-      if (value !== undefined) {
-        form.value[key] = String(value ?? '')
-      }
-    }
+    if (data.name !== undefined) form.value.name = String(data.name ?? '')
+    if (data.asset_type !== undefined) form.value.asset_type = data.asset_type
+    if (data.category_id !== undefined) form.value.category_id = String(data.category_id ?? '')
+    if (data.purchase_price !== undefined) form.value.purchase_price = String(data.purchase_price ?? '')
+    if (data.current_value !== undefined) form.value.current_value = String(data.current_value ?? '')
+    if (data.currency !== undefined) form.value.currency = String(data.currency ?? '')
+    if (data.purchase_date !== undefined) form.value.purchase_date = String(data.purchase_date ?? '')
+    if (data.status !== undefined) form.value.status = data.status
+    if (data.notes !== undefined) form.value.notes = String(data.notes ?? '')
+    if (data.image_url !== undefined) form.value.image_url = String(data.image_url ?? '')
+
     // Copy physical fields
-    const physicalKeys: (keyof Asset)[] = ['location', 'annual_maintenance_cost', 'usage_frequency', 'warranty_expiry_date']
-    for (const key of physicalKeys) {
-      const value = getAssetField<string | number>(data, key)
-      if (value !== undefined) {
-        form.value[key] = String(value ?? '')
-      }
-    }
+    if (data.location !== undefined) form.value.location = String(data.location ?? '')
+    if (data.annual_maintenance_cost !== undefined) form.value.annual_maintenance_cost = String(data.annual_maintenance_cost ?? '')
+    if (data.usage_frequency !== undefined) form.value.usage_frequency = data.usage_frequency ?? ''
+    if (data.warranty_expiry_date !== undefined) form.value.warranty_expiry_date = String(data.warranty_expiry_date ?? '')
+
     // Copy financial fields
-    const financialKeys: (keyof Asset)[] = ['institution', 'interest_rate', 'maturity_date']
-    for (const key of financialKeys) {
-      const value = getAssetField<string | number>(data, key)
-      if (value !== undefined) {
-        form.value[key] = String(value ?? '')
-      }
-    }
+    if (data.institution !== undefined) form.value.institution = String(data.institution ?? '')
+    if (data.interest_rate !== undefined) form.value.interest_rate = String(data.interest_rate ?? '')
+    if (data.maturity_date !== undefined) form.value.maturity_date = String(data.maturity_date ?? '')
+
     // P0: reverse-convert lifespan days → years
-    const lifespanDays = getAssetField<number>(data, 'expected_lifespan_days')
+    const lifespanDays = data.expected_lifespan_days
     expectedLifeYears.value = lifespanDays
       ? String(Math.round(lifespanDays / 365))
       : ''
+
     // Tags
-    const tags = getAssetField<Tag[]>(data, 'tags')
+    const tags = data.tags
     selectedTagIds.value = tags?.map((t: Tag) => t.id) ?? []
+
     // Image preview
-    const imageUrl = getAssetField<string>(data, 'image_url')
+    const imageUrl = data.image_url
     if (imageUrl) {
       const fullUrl = imageUrl.startsWith('/api/v1') ? imageUrl : `/api/v1${imageUrl}`
       fileList.value = [{ url: fullUrl, content: fullUrl, status: 'done' }]
@@ -525,12 +546,12 @@ function onWarrantyConfirm({ selectedValues }: { selectedValues: string[] }) {
 }
 
 function onStatusConfirm({ selectedOptions }: { selectedOptions: { value: string }[] }) {
-  form.value.status = selectedOptions[0].value
+  form.value.status = selectedOptions[0].value as 'in_use' | 'idle' | 'sold' | 'retired'
   showStatusPicker.value = false
 }
 
 // Image upload handlers
-async function afterRead(file: { file: File; url?: string; content?: string; status: string; message?: string }) {
+async function afterRead(file: { file: File; url?: string; content?: string; status?: string; message?: string }) {
   file.status = 'uploading'
   try {
     const res = await uploadImage(file.file)

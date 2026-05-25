@@ -85,7 +85,7 @@ const form = reactive({
 onMounted(async () => {
   if (isEdit.value) {
     await store.fetchGifts()
-    const gift = gifts.value.find((g) => g.id === Number(route.params.id))
+    const gift = gifts.value.find((g) => g.id === route.params.id)
     if (gift) {
       form.name = gift.name
       form.emoji = gift.emoji ?? ''
@@ -99,7 +99,7 @@ async function onSubmit() {
   loading.value = true
   try {
     if (isEdit.value) {
-      await store.updateGift(Number(route.params.id), {
+      await store.updateGift(route.params.id as string, {
         name: form.name,
         emoji: form.emoji || null,
         description: form.description || null,

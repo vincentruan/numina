@@ -1,6 +1,8 @@
 import http from './index'
 import type { ChallengeGrant, ChallengeCreateRequest } from '@/types/challengeGrant'
 
+export { type ChallengeGrant, type ChallengeCreateRequest }
+
 export async function listFamilyChallenges(): Promise<ChallengeGrant[]> {
   const res = await http.get('/challenges')
   return res.data.items
