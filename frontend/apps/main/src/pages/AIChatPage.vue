@@ -229,6 +229,8 @@
                   :steps="msg.processSteps || buildLegacySteps(msg)"
                   :default-expanded="!msg.thinkDone || msg.phase === 'error'"
                   :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
+                  :phase="msg.phase === 'interrupted' ? undefined : msg.phase"
+                  :reasoning-start-time="msg.reasoningStartTime ?? null"
                   @retry="onRetryError(idx)"
                 />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
@@ -492,6 +494,7 @@ interface Message {
   thinkOpen?: boolean
   thinkDone?: boolean
   thinkSeconds?: number
+  reasoningStartTime?: number | null
   thinkManuallyToggled?: boolean
   toolTimeline?: ToolTimelineItem[]
   // New fields for AiProcessBlock — unified steps[] preserves event order (spec §3.3)
@@ -1061,6 +1064,9 @@ async function onSend() {
       }
       if (event.type === 'phase.thinking') {
         messages.value[msgIdx].phase = 'thinking'
+        if (messages.value[msgIdx].reasoningStartTime == null) {
+          messages.value[msgIdx].reasoningStartTime = Date.now()
+        }
         return
       }
       if (event.type === 'phase.answering') {
