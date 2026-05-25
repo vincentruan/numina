@@ -120,10 +120,10 @@ function formatElapsedMs(ms: number): string {
   flex-shrink: 0;
 }
 
-.marker-pending { background: #94a3b8; }
-.marker-running { background: #3b82f6; animation: pulse 1s infinite; }
-.marker-done { background: #22c55e; }
-.marker-error { background: #dc2626; }
+.marker-pending { background: var(--color-muted); }
+.marker-running { background: var(--color-action-blue); animation: pulse 1s infinite; }
+.marker-done { background: var(--color-success); }
+.marker-error { background: var(--color-error); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -132,7 +132,7 @@ function formatElapsedMs(ms: number): string {
 
 .marker-icon {
   font-size: 10px;
-  color: white;
+  color: #ffffff;
 }
 
 .step-content {
@@ -160,34 +160,39 @@ function formatElapsedMs(ms: number): string {
 .step-title {
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .tool-badge {
   font-size: 11px;
-  color: #1d4ed8;
-  background: #dbeafe;
+  color: var(--color-action-blue);
+  background: rgba(24, 99, 220, 0.08);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 .step-time {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .step-args {
   padding: 8px 10px;
-  background: #eff6ff;
-  border-radius: 6px;
-  border: 1px solid #bfdbfe;
+  background: var(--bg-secondary);
+  border-radius: 4px;
+  border: 1px solid var(--color-card-border);
   margin-bottom: 6px;
   font-size: 12px;
 }
 
 .args-running {
   animation: shimmer 1.5s infinite;
-  background: linear-gradient(90deg, #eff6ff 25%, #dbeafe 50%, #eff6ff 75%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-secondary) 25%,
+    rgba(24, 99, 220, 0.08) 50%,
+    var(--bg-secondary) 75%
+  );
   background-size: 200%;
 }
 
@@ -197,19 +202,34 @@ function formatElapsedMs(ms: number): string {
 }
 
 .args-label {
-  color: #1e40af;
+  color: var(--text-secondary);
   margin-right: 4px;
 }
 
 .args-value {
-  color: #3b82f6;
+  color: var(--text-primary);
+}
+
+.args-raw {
+  margin: 4px 0 6px;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--color-card-border);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 
 .step-result {
   padding: 8px 10px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  background: var(--card-bg);
+  border-radius: 4px;
+  border: 1px solid var(--color-card-border);
   display: flex;
   align-items: flex-start;
   gap: 6px;
@@ -217,24 +237,24 @@ function formatElapsedMs(ms: number): string {
 }
 
 .result-success {
-  border-color: #86efac;
+  border-color: var(--color-success);
 }
 
 .result-error {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: var(--color-error);
+  background: rgba(179, 0, 0, 0.06);
 }
 
 .result-icon {
   flex-shrink: 0;
 }
 
-.result-success .result-icon { color: #22c55e; }
-.result-error .result-icon { color: #dc2626; }
+.result-success .result-icon { color: var(--color-success); }
+.result-error .result-icon { color: var(--color-error); }
 
 .result-text {
   flex: 1;
-  color: #374151;
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -243,7 +263,7 @@ function formatElapsedMs(ms: number): string {
   flex-shrink: 0;
   padding: 4px 8px;
   font-size: 11px;
-  color: #60a5fa;
+  color: var(--color-action-blue);
   background: none;
   border: none;
   cursor: pointer;

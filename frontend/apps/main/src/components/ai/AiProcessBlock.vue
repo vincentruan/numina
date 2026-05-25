@@ -142,15 +142,15 @@ const formattedElapsed = computed(() => {
 <style scoped>
 .ai-process-block {
   margin: 12px 0;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%);
-  border: 1px solid #c4b5fd;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 1px solid var(--color-card-border);
   overflow: hidden;
 }
 
 .is-collapsed {
-  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
-  border-color: #86efac;
+  background: var(--bg-secondary);
+  border-color: var(--color-card-border);
 }
 
 .process-header {
@@ -165,7 +165,7 @@ const formattedElapsed = computed(() => {
 .process-icon {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -173,21 +173,21 @@ const formattedElapsed = computed(() => {
 }
 
 .status-running {
-  background: linear-gradient(135deg, #8b5cf6, #a78bfa);
+  background: var(--color-action-blue);
   animation: pulse 1.5s ease-in-out infinite;
 }
 
 .status-done {
-  background: linear-gradient(135deg, #22c55e, #16a34a);
+  background: var(--color-success);
 }
 
 .status-error {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  background: var(--color-error);
 }
 
 .icon-symbol {
   font-size: 14px;
-  color: white;
+  color: #ffffff;
 }
 
 @keyframes pulse {
@@ -205,47 +205,31 @@ const formattedElapsed = computed(() => {
 .process-title {
   font-size: 13px;
   font-weight: 500;
-  color: #4f46e5;
-}
-
-.is-collapsed .process-title {
-  color: #166534;
+  color: var(--text-primary);
 }
 
 .process-status {
   font-size: 12px;
-  color: #a5b4fc;
-}
-
-.is-collapsed .process-status {
-  color: #22c55e;
+  color: var(--text-secondary);
 }
 
 .process-elapsed {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
 .process-toggle {
-  color: #8b5cf6;
+  color: var(--text-secondary);
   font-size: 16px;
-}
-
-.is-collapsed .process-toggle {
-  color: #22c55e;
 }
 
 .process-body {
   padding: 10px 14px;
-  border-top: 1px solid #ddd6fe;
+  border-top: 1px solid var(--separator);
   display: flex;
   flex-direction: column;
   gap: 10px;
-}
-
-.is-collapsed .process-body {
-  border-top-color: #86efac;
 }
 
 .process-empty {
@@ -261,15 +245,15 @@ const formattedElapsed = computed(() => {
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px;
-  border-radius: 6px;
-  background: #fef2f2;
-  border: 1px solid #fca5a5;
+  border-radius: 4px;
+  background: rgba(179, 0, 0, 0.08);
+  border: 1px solid var(--color-error);
 }
 
 .process-error-msg {
   margin: 0;
   font-size: 13px;
-  color: #b91c1c;
+  color: var(--color-error);
   line-height: 1.5;
   word-break: break-word;
 }
@@ -281,14 +265,14 @@ const formattedElapsed = computed(() => {
   gap: 6px;
   padding: 6px 12px;
   font-size: 13px;
-  color: #dc2626;
-  background: white;
-  border: 1px solid #fca5a5;
-  border-radius: 6px;
+  color: var(--color-error);
+  background: var(--card-bg);
+  border: 1px solid var(--color-error);
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .process-retry-btn:hover {
-  background: #fee2e2;
+  background: rgba(179, 0, 0, 0.08);
 }
 </style>

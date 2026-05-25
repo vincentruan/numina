@@ -88,15 +88,15 @@ async function copyContent() {
 
 <style scoped>
 .ai-final-answer {
-  background: white;
-  border-radius: 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
   padding: 14px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-elevated);
 }
 
 .is-report {
   padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-elevated);
 }
 
 .answer-report-header {
@@ -104,14 +104,14 @@ async function copyContent() {
   align-items: center;
   gap: 10px;
   padding-bottom: 12px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--separator);
   margin-bottom: 12px;
 }
 
 .report-icon {
   font-size: 20px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
+  background: var(--color-success);
+  color: #ffffff;
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -123,13 +123,13 @@ async function copyContent() {
 .report-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
 }
 
 .report-meta {
   margin-left: auto;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .answer-content {
@@ -143,8 +143,8 @@ async function copyContent() {
 .answer-markdown :deep(ul), .answer-markdown :deep(ol) { padding-left: 18px; margin: 4px 0 8px; }
 .answer-markdown :deep(li) { margin-bottom: 4px; }
 .answer-markdown :deep(strong) { color: var(--text-primary); }
-.answer-markdown :deep(code) { background: var(--bg-secondary); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
-.answer-markdown :deep(pre) { background: var(--bg-secondary); padding: 10px; border-radius: 6px; overflow-x: auto; }
+.answer-markdown :deep(code) { background: var(--bg-secondary); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+.answer-markdown :deep(pre) { background: var(--bg-secondary); padding: 10px; border-radius: 4px; overflow-x: auto; }
 .answer-markdown :deep(pre code) { background: none; padding: 0; }
 
 .answer-cursor {
@@ -164,7 +164,7 @@ async function copyContent() {
   gap: 8px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f1f5f9;
+  border-top: 1px solid var(--separator);
 }
 
 .action-btn {
@@ -173,14 +173,14 @@ async function copyContent() {
   gap: 6px;
   padding: 8px 12px;
   font-size: 13px;
-  color: #64748b;
-  background: #f1f5f9;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .action-btn:hover {
-  background: #e2e8f0;
+  background: var(--bg-tertiary);
 }
 </style>

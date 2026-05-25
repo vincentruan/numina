@@ -81,12 +81,12 @@ function formatElapsedMs(ms: number): string {
 }
 
 .marker-streaming {
-  background: #fbbf24;
+  background: var(--color-cost, #ffc04d);
   animation: pulse 1s infinite;
 }
 
 .marker-done {
-  background: #22c55e;
+  background: var(--color-success);
 }
 
 @keyframes pulse {
@@ -96,7 +96,7 @@ function formatElapsedMs(ms: number): string {
 
 .marker-icon {
   font-size: 11px;
-  color: white;
+  color: #ffffff;
 }
 
 .step-content {
@@ -114,39 +114,39 @@ function formatElapsedMs(ms: number): string {
 .step-title {
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .step-time {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--text-tertiary);
 }
 
 .step-body {
   padding: 8px 10px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
+  background: var(--card-bg);
+  border-radius: 4px;
+  border: 1px solid var(--color-card-border);
   font-size: 12px;
-  color: #6b7280;
+  color: var(--text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .reasoning-truncated {
-  color: #6b7280;
+  color: var(--text-secondary);
 }
 
 .reasoning-full {
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .expand-btn {
   margin-top: 6px;
   padding: 4px 8px;
   font-size: 11px;
-  color: #60a5fa;
+  color: var(--color-action-blue);
   background: none;
   border: none;
   cursor: pointer;
