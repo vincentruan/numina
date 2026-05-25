@@ -60,6 +60,7 @@ const ariaLabel = computed(() => {
     case 'error':
       return t('aiProcess.statusError')
     case 'idle':
+    default:
       return t('aiProcess.title')
   }
 })
