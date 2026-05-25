@@ -55,6 +55,17 @@ import DOMPurify from 'dompurify'
 import AiArtifactLink from './AiArtifactLink.vue'
 import type { Artifact } from '@/types/agent-stream'
 
+// The repo has three distinct marked + DOMPurify pipelines, each with its own
+// trust model. Do not collapse them without re-evaluating each call site:
+//   1. userMarkdownSanitizer (user-typed input) — tight allowlist, no block
+//      elements, scoped DOMPurify instance with link-policy hook.
+//   2. AiFinalAnswer (this file, assistant output) — default DOMPurify profile
+//      (full GFM: tables, code, lists, headings), shared singleton.
+//   3. AIChatPage renderMarkdown (legacy assistant render in bubbles) — same
+//      shape as #2 but inline, used during streaming throttle.
+// User input needs stricter rules than assistant output, and the streaming
+// path needs a render that doesn't allocate a new DOMPurify instance per token.
+
 const props = defineProps<{
   content: string
   streaming?: boolean
@@ -74,17 +85,40 @@ const { t } = useI18n()
 const contentRef = ref<HTMLElement | null>(null)
 let scrollRAF: number | null = null
 
+// Assistant Markdown is rendered with DOMPurify's default profile — the model
+// output stream can include arbitrary GFM (tables, code, lists, links). The
+// stricter user-bubble allowlist (see userMarkdownSanitizer.ts) would strip
+// most of that. Default profile already blocks scripts/embeds/style/iframes,
+// which is the threat surface that matters for tool-emitted content.
+const ASSISTANT_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
+
 const renderedContent = computed(() => {
   if (!props.content) return ''
   try {
     const html = marked.parse(props.content, { async: false }) as string
-    return DOMPurify.sanitize(html)
+    return DOMPurify.sanitize(html, ASSISTANT_PURIFY_CONFIG)
   } catch {
-    return DOMPurify.sanitize(props.content)
+    return DOMPurify.sanitize(props.content, ASSISTANT_PURIFY_CONFIG)
   }
 })
 
-// Auto-scroll during streaming
+// Strip NUL and Unicode bidi-override / isolate chars before clipboard write
+// so poisoned answer content can't inject visually-disguised payloads when
+// pasted into a terminal. Newlines are preserved because Markdown content
+// genuinely needs them (paragraph breaks, code blocks).
+// ‪-‮: LRE/RLE/PDF/LRO/RLO bidi-override
+// ⁦-⁩: LRI/RLI/FSI/PDI bidi-isolates
+function scrubForClipboard(value: string): string {
+  return value.replace(/[\0‪-‮⁦-⁩]/g, '')
+}
+
+// Auto-scroll during streaming. `flush: 'post'` defers the watcher until after
+// the DOM patch, so contentRef has already grown to include the new tokens
+// when scrollIntoView fires — otherwise the smooth-scroll target is the
+// previous frame's height and the last line trails behind.
 watch(
   () => props.content,
   () => {
@@ -95,11 +129,12 @@ watch(
       contentRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     })
   },
+  { flush: 'post' },
 )
 
 async function copyContent() {
   try {
-    await navigator.clipboard.writeText(props.content)
+    await navigator.clipboard.writeText(scrubForClipboard(props.content))
     showToast(t('aiProcess.copySuccess'))
   } catch {
     showToast(t('aiProcess.copyFailed'))
@@ -132,7 +167,7 @@ async function copyContent() {
 .report-icon {
   font-size: 18px;
   background: var(--color-success);
-  color: #ffffff;
+  color: var(--color-canvas);
   width: 32px;
   height: 32px;
   border-radius: 8px;

@@ -85,7 +85,7 @@ export type NormalizedAiEvent =
   | { type: 'answer_delta'; content: string }
   | { type: 'answer_done' }
   | { type: 'subagent_update'; taskId: string; status: 'running' | 'done' | 'failed'; title?: string; description?: string; result?: string; error?: string }
-  | { type: 'artifact'; id: string; title: string; url?: string; path?: string }
+  | { type: 'artifact'; id: string; title: string; url?: string; path?: string; kind?: 'report' | 'file' | 'image' | 'link' | 'other' }
   | { type: 'state_snapshot'; messages?: unknown[]; artifacts?: Artifact[]; title?: string }
   | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }
@@ -130,6 +130,7 @@ export type ProcessStep =
       title: string
       url?: string
       path?: string
+      kind?: 'report' | 'file' | 'image' | 'link' | 'other'
     }
   | {
       type: 'progress'

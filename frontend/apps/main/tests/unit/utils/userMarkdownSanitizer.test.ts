@@ -97,3 +97,34 @@ describe('sanitizeUserMarkdown — XSS allowlist enforcement', () => {
     expect(hrOut).not.toContain('<hr')
   })
 })
+
+describe('sanitizeUserMarkdown — edge cases', () => {
+  it('strips uppercase/mixed-case <SCRIPT> tags', () => {
+    const out = sanitizeUserMarkdown('<SCRIPT>alert(1)</SCRIPT>')
+    expect(out.toLowerCase()).not.toContain('<script')
+    expect(out).not.toContain('alert(1)')
+  })
+
+  it('strips <script> with attribute payload', () => {
+    const out = sanitizeUserMarkdown('<script src="//evil.example/x.js"></script>')
+    expect(out).not.toContain('<script')
+    expect(out).not.toContain('evil.example')
+  })
+
+  it('strips javascript: with whitespace and case variation in href', () => {
+    const out = sanitizeUserMarkdown('<a href="  JaVaScRiPt:alert(1)">x</a>')
+    expect(out.toLowerCase()).not.toContain('javascript:')
+  })
+
+  it('keeps inline strong nested in code-text without leaking HTML', () => {
+    const out = sanitizeUserMarkdown('`<b>not bold</b>` and **bold**')
+    expect(out).toContain('&lt;b&gt;not bold&lt;/b&gt;')
+    expect(out).toContain('<strong>bold</strong>')
+  })
+
+  it('does not double-escape ampersands in plain text', () => {
+    const out = sanitizeUserMarkdown('Tom & Jerry')
+    expect(out).toContain('Tom &amp; Jerry')
+    expect(out).not.toContain('&amp;amp;')
+  })
+})

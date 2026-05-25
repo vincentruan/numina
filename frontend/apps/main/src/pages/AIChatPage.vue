@@ -434,7 +434,7 @@ const suggestions = computed(() => [
 ])
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
 }
 
 function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ProcessStep[] {
@@ -531,7 +531,7 @@ interface ToolTimelineItem {
   }
 }
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const aiStore = useAIStore()
@@ -544,6 +544,7 @@ const deepThink = ref(false)
 const webSearch = ref(false)
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
+let programmaticScroll = false
 const showHistory = ref(false)
 const sessions = ref<SessionSummary[]>([])
 const sessionsLoading = ref(false)
@@ -788,7 +789,14 @@ async function scrollToBottom(force = false) {
   await nextTick()
   if (scrollRef.value) {
     if (!force && isUserScrolledUp.value) return // Don't auto-scroll when user has scrolled up
+    if (force && scrollRAF) {
+      // Cancel any pending throttled scroll — the final force=true call needs
+      // to win, otherwise the in-flight rAF executes against a stale scrollHeight.
+      cancelAnimationFrame(scrollRAF)
+      scrollRAF = null
+    }
     if (scrollRAF) return // Already pending
+    programmaticScroll = true
     scrollRAF = requestAnimationFrame(() => {
       scrollRAF = null
       if (scrollRef.value) {
@@ -799,15 +807,28 @@ async function scrollToBottom(force = false) {
 }
 
 function onChatScroll() {
+  // Ignore scroll events triggered by our own scrollToBottom / onScrollToBottom
+  // calls — the programmaticScroll flag is set just before the scroll mutation
+  // and cleared on the next event. Without this gate, the moment we
+  // scrollTop = scrollHeight, the resulting scroll event re-evaluates
+  // distFromBottom and can briefly toggle isUserScrolledUp during smooth scroll.
+  if (programmaticScroll) {
+    programmaticScroll = false
+    return
+  }
   const el = scrollRef.value
   if (!el) return
   const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  // Visibility gate is independent of streaming state (spec §B1):
+  // the scroll-to-bottom button must appear whenever the user is scrolled up,
+  // not only while asking — otherwise the button hides while reading history.
   isUserScrolledUp.value = distFromBottom > 100
 }
 
 function onScrollToBottom() {
   isUserScrolledUp.value = false
   if (scrollRef.value) {
+    programmaticScroll = true
     scrollRef.value.scrollTo({ top: scrollRef.value.scrollHeight, behavior: 'smooth' })
   }
 }
@@ -980,6 +1001,12 @@ async function onNewChat() {
 async function onSend() {
   const q = inputText.value.trim()
   if (!q || asking.value) return
+
+  // Reset scroll state at the start of a new turn (spec §B1): a fresh question
+  // means the user is committing to the new exchange, so subsequent
+  // scrollToBottom calls during streaming must not be suppressed by a stale
+  // isUserScrolledUp from earlier in the conversation.
+  isUserScrolledUp.value = false
 
   const userMsgId = Date.now().toString()
   messages.value.push({

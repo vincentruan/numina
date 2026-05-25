@@ -3,9 +3,9 @@
     <span class="artifact-icon" aria-hidden="true">{{ kindIcon }}</span>
     <span class="artifact-title">{{ artifact.title }}</span>
     <a
-      v-if="artifact.url"
+      v-if="safeUrl"
       class="artifact-action"
-      :href="artifact.url"
+      :href="safeUrl"
       target="_blank"
       rel="noopener noreferrer"
     >{{ t('aiProcess.openArtifact') }}</a>
@@ -13,13 +13,14 @@
       v-else-if="artifact.path"
       class="artifact-action"
       type="button"
+      :disabled="copying"
       @click="copyPath"
     >{{ t('aiProcess.copyPath') }}</button>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import type { Artifact } from '@/types/agent-stream'
@@ -29,6 +30,7 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const copying = ref(false)
 
 const kindIcon = computed(() => {
   switch (props.artifact.kind) {
@@ -45,13 +47,52 @@ const kindIcon = computed(() => {
   }
 })
 
+// Reject javascript:/data:/vbscript: hrefs and any non-http(s)/mailto scheme
+// before binding to :href. artifact.url is LLM/tool-emitted and reaches the
+// DOM without the userMarkdownSanitizer pipeline, so we have to filter here.
+const safeUrl = computed(() => {
+  const raw = props.artifact.url
+  if (!raw) return null
+  const trimmed = raw.trim()
+  const lower = trimmed.toLowerCase()
+  if (
+    lower.startsWith('javascript:') ||
+    lower.startsWith('data:') ||
+    lower.startsWith('vbscript:')
+  ) {
+    return null
+  }
+  if (
+    lower.startsWith('http://') ||
+    lower.startsWith('https://') ||
+    lower.startsWith('mailto:') ||
+    lower.startsWith('/') ||
+    !/^[a-z][a-z0-9+.-]*:/.test(lower)
+  ) {
+    return trimmed
+  }
+  return null
+})
+
+// Strip newlines, NUL, and Unicode bidi-override / isolate chars before
+// clipboard write so a poisoned artifact.path can't inject "\n; rm -rf /"
+// or visually-disguised payloads when pasted into a terminal.
+// ‪-‮: LRE/RLE/PDF/LRO/RLO bidi-override
+// ⁦-⁩: LRI/RLI/FSI/PDI bidi-isolates
+function scrubForClipboard(value: string): string {
+  return value.replace(/[\r\n\0‪-‮⁦-⁩]/g, '')
+}
+
 async function copyPath() {
-  if (!props.artifact.path) return
+  if (!props.artifact.path || copying.value) return
+  copying.value = true
   try {
-    await navigator.clipboard.writeText(props.artifact.path)
+    await navigator.clipboard.writeText(scrubForClipboard(props.artifact.path))
     showToast(t('aiProcess.pathCopied'))
   } catch {
     showToast(t('aiProcess.copyFailed'))
+  } finally {
+    copying.value = false
   }
 }
 </script>
@@ -97,6 +138,11 @@ async function copyPath() {
   opacity: 0.85;
 }
 
+.artifact-action:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .ai-artifact-link {
     padding: 6px 8px;
@@ -104,8 +150,13 @@ async function copyPath() {
   }
 
   .artifact-action {
-    padding: 4px 8px;
+    padding: 8px 12px;
     font-size: 11px;
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 </style>
