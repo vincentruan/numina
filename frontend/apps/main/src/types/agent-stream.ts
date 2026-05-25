@@ -8,6 +8,25 @@ export type AgentEventType =
   | 'token.stream'
   | 'capability.end'
   | 'capability.error'
+  | 'subagent.update'
+  | 'artifact.created'
+  | 'state.snapshot'
+
+export interface Artifact {
+  id: string
+  title: string
+  url?: string
+  path?: string
+}
+
+export interface Subagent {
+  taskId: string
+  status: 'running' | 'done' | 'failed'
+  title?: string
+  description?: string
+  result?: string
+  error?: string
+}
 
 export interface AgentEvent {
   id?: string
@@ -44,9 +63,17 @@ export interface AgentEvent {
   // capability.error may also be sent as a flat object: { type, code, message }
   code?: string
   message?: string
+  // subagent.update payload (spec §4.1)
+  subagent?: Subagent
+  // artifact.created payload (spec §4.1)
+  artifact?: Artifact
+  // state.snapshot payload (spec §4.1) — replays full state on history load
+  messages?: unknown[]
+  artifacts?: Artifact[]
+  title?: string
 }
 
-// Normalized event types for UI consumption
+// Normalized event types for UI consumption (spec §4.1)
 export type NormalizedAiEvent =
   | { type: 'phase_change'; phase: 'connecting' | 'thinking' | 'answering' | 'done' }
   | { type: 'reasoning_delta'; content: string }
@@ -56,6 +83,9 @@ export type NormalizedAiEvent =
   | { type: 'tool_result'; toolCallId: string; success: boolean; summary?: string; error?: string; elapsedMs?: number }
   | { type: 'answer_delta'; content: string }
   | { type: 'answer_done' }
+  | { type: 'subagent_update'; taskId: string; status: 'running' | 'done' | 'failed'; title?: string; description?: string; result?: string; error?: string }
+  | { type: 'artifact'; id: string; title: string; url?: string; path?: string }
+  | { type: 'state_snapshot'; messages?: unknown[]; artifacts?: Artifact[]; title?: string }
   | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }
 
@@ -88,4 +118,6 @@ export interface NormalizationState {
   reasoningStartTime: number | null
   answerContent: string
   steps: ProcessStep[]
+  artifacts: Artifact[]
+  subagents: Map<string, Subagent>
 }

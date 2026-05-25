@@ -6,6 +6,8 @@ export function createNormalizationState(): NormalizationState {
     reasoningStartTime: null,
     answerContent: '',
     steps: [],
+    artifacts: [],
+    subagents: new Map(),
   }
 }
 
@@ -143,6 +145,55 @@ export function normalizeAgentEvent(
         type: 'error',
         message: event.error?.message || event.message || 'Unknown error',
         code: event.error?.code || event.code,
+      })
+      break
+
+    case 'subagent.update':
+      if (event.subagent?.taskId) {
+        const prev = state.subagents.get(event.subagent.taskId)
+        // Merge so partial updates (e.g. status-only) keep prior title/description
+        const merged = { ...(prev ?? {}), ...event.subagent }
+        state.subagents.set(event.subagent.taskId, merged)
+        events.push({
+          type: 'subagent_update',
+          taskId: merged.taskId,
+          status: merged.status,
+          title: merged.title,
+          description: merged.description,
+          result: merged.result,
+          error: merged.error,
+        })
+      }
+      break
+
+    case 'artifact.created':
+      if (event.artifact?.id) {
+        // Dedupe by id — re-emission of an artifact should update in place
+        const existing = state.artifacts.findIndex((a) => a.id === event.artifact!.id)
+        if (existing >= 0) {
+          state.artifacts[existing] = event.artifact
+        } else {
+          state.artifacts.push(event.artifact)
+        }
+        events.push({
+          type: 'artifact',
+          id: event.artifact.id,
+          title: event.artifact.title,
+          url: event.artifact.url,
+          path: event.artifact.path,
+        })
+      }
+      break
+
+    case 'state.snapshot':
+      if (event.artifacts) {
+        state.artifacts = [...event.artifacts]
+      }
+      events.push({
+        type: 'state_snapshot',
+        messages: event.messages,
+        artifacts: event.artifacts,
+        title: event.title,
       })
       break
   }
