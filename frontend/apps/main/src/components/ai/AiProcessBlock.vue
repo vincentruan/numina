@@ -3,11 +3,11 @@
     <!-- Header -->
     <div class="process-header" @click="toggleExpand">
       <div class="process-icon" :class="statusClass">
-        <span class="icon-symbol">{{ statusIcon }}</span>
+        <AiLogo :state="logoState" />
       </div>
       <div class="process-info">
-        <span class="process-title">{{ t('aiProcess.title') }}</span>
-        <span class="process-status">{{ statusLabel }}</span>
+        <span class="process-title">{{ titleLabel }}</span>
+        <span class="process-status">{{ subtitleLabel }}</span>
       </div>
       <span class="process-elapsed">{{ formattedElapsed }}</span>
       <van-icon :name="isExpanded ? 'arrow-down' : 'arrow-up'" class="process-toggle" />
@@ -56,10 +56,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AiProcessStep from './AiProcessStep.vue'
 import AiToolCallStep from './AiToolCallStep.vue'
+import AiLogo from './AiLogo.vue'
 import type { ProcessStep } from '@/types/agent-stream'
 
 const props = defineProps<{
@@ -68,6 +69,8 @@ const props = defineProps<{
   steps: ProcessStep[]
   defaultExpanded?: boolean
   errorMessage?: string
+  phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error'
+  reasoningStartTime?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -87,7 +90,6 @@ function onRetry() {
   emit('retry')
 }
 
-// Auto-collapse when status changes to done; keep expanded on error so user sees the retry button
 watch(
   () => props.status,
   (val, prev) => {
@@ -103,13 +105,45 @@ watch(
   },
 )
 
-const statusIcon = computed(() => {
-  switch (props.status) {
-    case 'running': return '✦'
-    case 'done': return '✓'
-    case 'error': return '✗'
-    default: return '✦'
+// Tick once per second while phase is thinking, so the elapsed-seconds
+// subtitle updates without per-token re-renders.
+const nowMs = ref(Date.now())
+let tickInterval: ReturnType<typeof setInterval> | null = null
+
+function startTick() {
+  if (tickInterval) return
+  tickInterval = setInterval(() => {
+    nowMs.value = Date.now()
+  }, 1000)
+}
+
+function stopTick() {
+  if (tickInterval) {
+    clearInterval(tickInterval)
+    tickInterval = null
   }
+}
+
+watch(
+  () => props.phase,
+  (val) => {
+    if (val === 'thinking') {
+      nowMs.value = Date.now()
+      startTick()
+    } else {
+      stopTick()
+    }
+  },
+  { immediate: true },
+)
+
+onUnmounted(stopTick)
+
+const logoState = computed<'idle' | 'thinking' | 'done' | 'error'>(() => {
+  if (props.status === 'error') return 'error'
+  if (props.status === 'done') return 'done'
+  if (props.phase === 'thinking' || props.phase === 'connecting') return 'thinking'
+  return 'idle'
 })
 
 const statusClass = computed(() => {
@@ -121,7 +155,18 @@ const statusClass = computed(() => {
   }
 })
 
-const statusLabel = computed(() => {
+const titleLabel = computed(() => {
+  if (props.status === 'error') return t('aiProcess.errorTitle')
+  if (props.phase === 'thinking' || props.phase === 'connecting') return t('aiProcess.thinkingTitle')
+  if (props.phase === 'answering') return t('aiProcess.answeringTitle')
+  return t('aiProcess.title')
+})
+
+const subtitleLabel = computed(() => {
+  if (props.phase === 'thinking' && props.reasoningStartTime) {
+    const seconds = Math.max(0, Math.floor((nowMs.value - props.reasoningStartTime) / 1000))
+    return t('aiProcess.elapsedSeconds', { seconds })
+  }
   switch (props.status) {
     case 'running': return t('aiProcess.statusRunning')
     case 'done': return t('aiProcess.statusDone')
@@ -183,11 +228,6 @@ const formattedElapsed = computed(() => {
 
 .status-error {
   background: var(--color-error);
-}
-
-.icon-symbol {
-  font-size: 14px;
-  color: #ffffff;
 }
 
 @keyframes pulse {
@@ -290,10 +330,6 @@ const formattedElapsed = computed(() => {
   .process-icon {
     width: 24px;
     height: 24px;
-  }
-
-  .icon-symbol {
-    font-size: 12px;
   }
 
   .process-info {
