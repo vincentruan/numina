@@ -1,15 +1,35 @@
 <template>
-  <div class="ai-final-answer" :class="{ 'is-streaming': streaming }">
-    <!-- TODO(phase-3): restore report header when agent feature pages are integrated.
-         Spec §6.2 / §6.3 use isReport + reportTitle + reportMeta to surface a
-         report-styled header above the markdown body on AIReportPage et al.
-         Stripped for the chat-only MVP because no caller currently passes them. -->
+  <div class="ai-final-answer" :class="{ 'is-streaming': streaming, 'is-report': isReport }">
+    <!-- Report header (spec §6.2) — only when isReport -->
+    <div v-if="isReport && reportTitle" class="answer-report-header">
+      <span class="report-icon" aria-hidden="true">📊</span>
+      <span class="report-title">{{ reportTitle }}</span>
+      <span v-if="reportMeta?.generatedAt" class="report-meta">{{ reportMeta.generatedAt }}</span>
+    </div>
+
+    <!-- Streaming skeleton (spec §6.1): rendered when streaming and no content yet -->
+    <div v-if="streaming && !content" class="answer-skeleton" aria-hidden="true">
+      <van-skeleton :row="3" row-width="100%" animate />
+      <van-skeleton :row="1" row-width="60%" animate />
+    </div>
 
     <!-- Answer content -->
-    <div ref="contentRef" class="answer-content">
+    <div v-else ref="contentRef" class="answer-content">
       <!-- eslint-disable-next-line vue/no-v-html -- sanitized via DOMPurify -->
       <div class="answer-markdown" v-html="renderedContent" />
       <span v-if="streaming" class="answer-cursor" aria-hidden="true">▋</span>
+    </div>
+
+    <!-- Artifact row (spec §3.0 / Bundle C C2) — only when artifacts exist -->
+    <div v-if="!streaming && artifacts && artifacts.length > 0" class="answer-artifacts">
+      <p class="artifacts-title">{{ t('aiProcess.artifactsTitle') }}</p>
+      <div class="artifacts-list">
+        <AiArtifactLink
+          v-for="artifact in artifacts"
+          :key="artifact.id"
+          :artifact="artifact"
+        />
+      </div>
     </div>
 
     <!-- Actions -->
@@ -32,15 +52,18 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import AiArtifactLink from './AiArtifactLink.vue'
+import type { Artifact } from '@/types/agent-stream'
 
-// TODO(phase-3): add isReport / reportTitle / reportMeta props back here when
-// agent feature pages (AIReportPage etc.) integrate AiFinalAnswer. See
-// spec §6.2 / §6.3 for the report-mode contract.
 const props = defineProps<{
   content: string
   streaming?: boolean
   showActions?: boolean
   showRegenerate?: boolean
+  isReport?: boolean
+  reportTitle?: string
+  reportMeta?: { generatedAt?: string; itemCount?: number }
+  artifacts?: Artifact[]
 }>()
 
 const emit = defineEmits<{
@@ -92,10 +115,73 @@ async function copyContent() {
   box-shadow: var(--shadow-elevated);
 }
 
-/* TODO(phase-3): restore .is-report, .answer-report-header, .report-icon,
-   .report-title, .report-meta styles when AiFinalAnswer is used in agent
-   feature pages (spec §6.2 / §6.3). Stripped because the report-mode
-   template was stripped from AiFinalAnswer for the chat-only MVP. */
+.is-report {
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(1, 1, 32, 0.1);
+}
+
+.answer-report-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--separator);
+  margin-bottom: 12px;
+}
+
+.report-icon {
+  font-size: 18px;
+  background: var(--color-success);
+  color: #ffffff;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.report-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-meta {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.answer-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.answer-artifacts {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
+}
+
+.artifacts-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.artifacts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
 
 .answer-content {
   font-size: 14px;
@@ -153,6 +239,25 @@ async function copyContent() {
 @media (max-width: 768px) {
   .ai-final-answer {
     padding: 10px 12px;
+  }
+
+  .is-report {
+    padding: 12px;
+  }
+
+  .report-title {
+    font-size: 14px;
+  }
+
+  .report-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
+  }
+
+  .answer-artifacts {
+    margin-top: 10px;
+    padding-top: 10px;
   }
 
   .answer-content {
