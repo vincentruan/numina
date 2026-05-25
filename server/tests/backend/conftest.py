@@ -1,19 +1,20 @@
 import os
 import tempfile
 
-# Pin DATABASE_URL to a writable temp file BEFORE any app modules import settings.
+# Force DATABASE_URL to a writable temp file BEFORE any app modules import settings.
 # The lifespan handler in app.main runs schema migration against the production
 # `engine`, which reads settings.DATABASE_URL at import time. On CI the default
-# (~/.numina/data/db/numina.db) parent dir doesn't exist, causing
-# `sqlite3.OperationalError: unable to open database file`.
+# (~/.numina/data/db/numina.db) or Docker path from root .env (/app/.numina/data/db)
+# parent dir doesn't exist or is read-only, causing OSError.
 #
 # A file-based temp SQLite (not :memory:) is required because the migration
 # lock table must persist across the multiple connections opened by
 # `run_schema_migration`. Per-test logic still uses a separate in-memory
 # StaticPool DB below; the prod engine here only keeps lifespan startup happy.
-if "DATABASE_URL" not in os.environ:
-    _TEST_LIFESPAN_DIR = tempfile.mkdtemp(prefix="numina-tests-")
-    os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_LIFESPAN_DIR}/lifespan.db"
+# Note: We FORCE override even if root .env already sets DATABASE_URL.
+import tempfile
+_TEST_LIFESPAN_DIR = tempfile.mkdtemp(prefix="numina-tests-")
+os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_LIFESPAN_DIR}/lifespan.db"
 
 import pytest
 from fastapi.testclient import TestClient
