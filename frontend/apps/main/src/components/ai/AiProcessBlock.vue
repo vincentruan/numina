@@ -13,34 +13,32 @@
       <van-icon :name="isExpanded ? 'arrow-down' : 'arrow-up'" class="process-toggle" />
     </div>
 
-    <!-- Body (collapsible) -->
+    <!-- Body (collapsible) — unified steps rendering preserves arrival order between reasoning and tool calls (spec §3.3) -->
     <div v-show="isExpanded" class="process-body">
-      <!-- Reasoning step -->
-      <AiProcessStep
-        v-if="reasoningContent"
-        type="reasoning"
-        :content="reasoningContent"
-        :status="reasoningStatus ?? 'done'"
-        :elapsed-ms="reasoningElapsedMs"
-      />
-
-      <!-- Tool call steps -->
-      <AiToolCallStep
-        v-for="step in toolSteps"
-        :key="step.id"
-        :tool-call-id="step.id"
-        :tool-name="step.name"
-        :display-name="step.displayName"
-        :icon="step.icon"
-        :args="step.args"
-        :status="step.status"
-        :result-summary="step.resultSummary"
-        :error="step.error"
-        :elapsed-ms="step.elapsedMs"
-      />
+      <template v-for="step in steps" :key="step.id">
+        <AiProcessStep
+          v-if="step.type === 'reasoning'"
+          type="reasoning"
+          :content="step.content"
+          :status="step.status"
+          :elapsed-ms="step.elapsedMs"
+        />
+        <AiToolCallStep
+          v-else-if="step.type === 'tool_call'"
+          :tool-call-id="step.id"
+          :tool-name="step.name"
+          :display-name="step.displayName"
+          :icon="step.icon"
+          :args="step.args"
+          :status="step.status"
+          :result-summary="step.resultSummary"
+          :error="step.error"
+          :elapsed-ms="step.elapsedMs"
+        />
+      </template>
 
       <!-- Empty running state -->
-      <div v-if="status === 'running' && !reasoningContent && toolSteps.length === 0" class="process-empty">
+      <div v-if="status === 'running' && steps.length === 0" class="process-empty">
         <van-loading size="14" type="spinner" />
         <span>{{ t('aiProcess.connecting') }}</span>
       </div>
@@ -53,26 +51,12 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AiProcessStep from './AiProcessStep.vue'
 import AiToolCallStep from './AiToolCallStep.vue'
-
-interface ToolStep {
-  id: string
-  name: string
-  displayName: string
-  icon: string
-  args: Record<string, unknown>
-  status: 'pending' | 'running' | 'done' | 'error'
-  resultSummary?: string
-  error?: string
-  elapsedMs?: number
-}
+import type { ProcessStep } from '@/types/agent-stream'
 
 const props = defineProps<{
   status: 'running' | 'done' | 'error'
   elapsedMs: number
-  reasoningContent?: string
-  reasoningStatus?: 'streaming' | 'done'
-  reasoningElapsedMs?: number
-  toolSteps: ToolStep[]
+  steps: ProcessStep[]
   defaultExpanded?: boolean
 }>()
 

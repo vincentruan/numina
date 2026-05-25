@@ -59,10 +59,33 @@ export type NormalizedAiEvent =
   | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }
 
+// Unified process step union — preserves event arrival order between reasoning and tool calls.
+// Spec §3.3 requires a single steps[] array (not split props) so interleaved reasoning/tool
+// sequences render in the order they arrived. AiProcessBlock dispatches by `type`.
+export type ProcessStep =
+  | {
+      type: 'reasoning'
+      id: string
+      content: string
+      status: 'streaming' | 'done'
+      elapsedMs?: number
+    }
+  | {
+      type: 'tool_call'
+      id: string
+      name: string
+      displayName: string
+      icon: string
+      args: Record<string, unknown>
+      status: 'pending' | 'running' | 'done' | 'error'
+      resultSummary?: string
+      error?: string
+      elapsedMs?: number
+    }
+
 export interface NormalizationState {
   phase: 'connecting' | 'thinking' | 'answering' | 'done'
-  reasoningContent: string
   reasoningStartTime: number | null
   answerContent: string
-  toolCalls: Map<string, { name: string; displayName: string; icon: string; args: Record<string, unknown>; status: 'pending' | 'running' | 'done' | 'error'; resultSummary?: string; error?: string; elapsedMs?: number }>
+  steps: ProcessStep[]
 }

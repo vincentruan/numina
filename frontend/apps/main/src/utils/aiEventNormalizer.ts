@@ -1,13 +1,26 @@
-import type { AgentEvent, NormalizedAiEvent, NormalizationState } from '@/types/agent-stream'
+import type { AgentEvent, NormalizedAiEvent, NormalizationState, ProcessStep } from '@/types/agent-stream'
 
 export function createNormalizationState(): NormalizationState {
   return {
     phase: 'connecting',
-    reasoningContent: '',
     reasoningStartTime: null,
     answerContent: '',
-    toolCalls: new Map(),
+    steps: [],
   }
+}
+
+// Returns the last reasoning step if it is the most recent step in the array,
+// otherwise null. New reasoning content after a tool call starts a fresh
+// reasoning step so interleaved sequences render in arrival order.
+function tailReasoningStep(steps: ProcessStep[]): Extract<ProcessStep, { type: 'reasoning' }> | null {
+  const last = steps[steps.length - 1]
+  return last && last.type === 'reasoning' ? last : null
+}
+
+let reasoningIdSeq = 0
+function nextReasoningId(): string {
+  reasoningIdSeq += 1
+  return `reasoning-${Date.now()}-${reasoningIdSeq}`
 }
 
 export function normalizeAgentEvent(
@@ -28,20 +41,42 @@ export function normalizeAgentEvent(
       events.push({ type: 'phase_change', phase: 'thinking' })
       break
 
-    case 'phase.answering':
+    case 'phase.answering': {
       state.phase = 'answering'
-      if (state.reasoningStartTime && state.reasoningContent) {
-        const elapsedMs = Date.now() - state.reasoningStartTime
-        events.push({ type: 'reasoning_done', elapsedMs })
+      const tail = tailReasoningStep(state.steps)
+      if (tail) {
+        tail.status = 'done'
+        if (state.reasoningStartTime) {
+          const elapsedMs = Date.now() - state.reasoningStartTime
+          tail.elapsedMs = elapsedMs
+          events.push({ type: 'reasoning_done', elapsedMs })
+        }
       }
       events.push({ type: 'phase_change', phase: 'answering' })
       break
+    }
 
     case 'token.stream':
       if (event.is_thinking && event.token) {
-        state.reasoningContent += event.token
+        let tail = tailReasoningStep(state.steps)
+        if (!tail) {
+          tail = {
+            type: 'reasoning',
+            id: nextReasoningId(),
+            content: '',
+            status: 'streaming',
+          }
+          state.steps.push(tail)
+        }
+        tail.content += event.token
         events.push({ type: 'reasoning_delta', content: event.token })
-      } else if (state.phase === 'answering' && event.token) {
+      } else if (event.token) {
+        if (state.phase === 'thinking' && import.meta.env.DEV) {
+          console.warn(
+            '[aiEventNormalizer] non-thinking token received during phase=thinking; routing to answer_delta',
+            { token: event.token },
+          )
+        }
         state.answerContent += event.token
         events.push({ type: 'answer_delta', content: event.token })
       }
@@ -49,13 +84,16 @@ export function normalizeAgentEvent(
 
     case 'tool.call':
       if (event.tool) {
-        state.toolCalls.set(event.tool.id, {
+        const toolStep: ProcessStep = {
+          type: 'tool_call',
+          id: event.tool.id,
           name: event.tool.name,
           displayName: event.tool.display_name || event.tool.name,
           icon: event.tool.icon || '⚙️',
           args: event.tool.arguments || {},
           status: 'running',
-        })
+        }
+        state.steps.push(toolStep)
         events.push({
           type: 'tool_call',
           toolCallId: event.tool.id,
@@ -69,20 +107,25 @@ export function normalizeAgentEvent(
       break
 
     case 'tool.result':
-      if (event.tool_id && state.toolCalls.has(event.tool_id)) {
-        const tool = state.toolCalls.get(event.tool_id)!
-        tool.status = event.result?.success ? 'done' : 'error'
-        tool.resultSummary = event.result?.summary
-        tool.error = event.result?.error
-        tool.elapsedMs = event.result?.execution_time_ms
-        events.push({
-          type: 'tool_result',
-          toolCallId: event.tool_id,
-          success: event.result?.success ?? false,
-          summary: event.result?.summary,
-          error: event.result?.error,
-          elapsedMs: event.result?.execution_time_ms,
-        })
+      if (event.tool_id) {
+        const target = state.steps.find(
+          (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>
+            s.type === 'tool_call' && s.id === event.tool_id,
+        )
+        if (target) {
+          target.status = event.result?.success ? 'done' : 'error'
+          target.resultSummary = event.result?.summary
+          target.error = event.result?.error
+          target.elapsedMs = event.result?.execution_time_ms
+          events.push({
+            type: 'tool_result',
+            toolCallId: event.tool_id,
+            success: event.result?.success ?? false,
+            summary: event.result?.summary,
+            error: event.result?.error,
+            elapsedMs: event.result?.execution_time_ms,
+          })
+        }
       }
       break
 

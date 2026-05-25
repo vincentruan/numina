@@ -220,15 +220,12 @@
                   <span class="phase-pulse" aria-hidden="true" />
                   <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
                 </div>
-                <!-- Process block (replaces inline think-block) -->
+                <!-- Process block (replaces inline think-block) — unified steps[] preserves event order (spec §3.3) -->
                 <AiProcessBlock
                   v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && deepThink"
                   :status="msg.processStatus || 'running'"
                   :elapsed-ms="msg.processElapsedMs || 0"
-                  :reasoning-content="msg.thinkContent"
-                  :reasoning-status="msg.phase === 'thinking' ? 'streaming' : 'done'"
-                  :reasoning-elapsed-ms="msg.thinkSeconds ? msg.thinkSeconds * 1000 : undefined"
-                  :tool-steps="msg.processSteps || mapToolTimelineToSteps(msg.toolTimeline)"
+                  :steps="msg.processSteps || buildLegacySteps(msg)"
                   :default-expanded="!msg.thinkDone"
                 />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
@@ -398,7 +395,7 @@ import { useAIStore } from '@/stores/ai'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
-import type { AgentEvent } from '@/types/agent-stream'
+import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
 // Configure marked
@@ -433,9 +430,10 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 }
 
-function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ToolStep[] {
+function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ProcessStep[] {
   if (!timeline) return []
-  return timeline.map(tool => ({
+  return timeline.map<ProcessStep>(tool => ({
+    type: 'tool_call',
     id: tool.id,
     name: tool.name,
     displayName: tool.displayName,
@@ -448,6 +446,25 @@ function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ToolStep[] {
   }))
 }
 
+// Synthesize a unified ProcessStep[] from legacy Message fields (thinkContent + toolTimeline).
+// Used as a fallback when the message did not flow through aiEventNormalizer (e.g. older history
+// records or messages saved before the steps[] refactor). Reasoning is emitted as the leading
+// step; tool calls follow in timeline order.
+function buildLegacySteps(msg: Message): ProcessStep[] {
+  const steps: ProcessStep[] = []
+  if (msg.thinkContent) {
+    steps.push({
+      type: 'reasoning',
+      id: `legacy-reasoning-${msg.id}`,
+      content: msg.thinkContent,
+      status: msg.thinkDone ? 'done' : 'streaming',
+      elapsedMs: msg.thinkSeconds ? msg.thinkSeconds * 1000 : undefined,
+    })
+  }
+  steps.push(...mapToolTimelineToSteps(msg.toolTimeline))
+  return steps
+}
+
 function parseToolArgs(argsText?: string): Record<string, unknown> {
   if (!argsText) return {}
   try {
@@ -455,18 +472,6 @@ function parseToolArgs(argsText?: string): Record<string, unknown> {
   } catch {
     return { text: argsText }
   }
-}
-
-interface ToolStep {
-  id: string
-  name: string
-  displayName: string
-  icon: string
-  args: Record<string, unknown>
-  status: 'pending' | 'running' | 'done' | 'error'
-  resultSummary?: string
-  error?: string
-  elapsedMs?: number
 }
 
 interface Message {
@@ -486,10 +491,10 @@ interface Message {
   thinkSeconds?: number
   thinkManuallyToggled?: boolean
   toolTimeline?: ToolTimelineItem[]
-  // New fields for AiProcessBlock
+  // New fields for AiProcessBlock — unified steps[] preserves event order (spec §3.3)
   processStatus?: 'running' | 'done' | 'error'
   processElapsedMs?: number
-  processSteps?: ToolStep[]
+  processSteps?: ProcessStep[]
 }
 
 interface ToolTimelineItem {
