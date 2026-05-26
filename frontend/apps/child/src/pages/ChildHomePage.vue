@@ -391,8 +391,16 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-ink);
   margin-bottom: var(--space-lg);
+  --coin-text-gold:   var(--color-ink);
+  --coin-text-silver: var(--color-ink);
+  --coin-text-copper: var(--color-ink);
 }
-[data-theme="dark"] .hero-card { color: var(--color-on-feature-ochre); }
+[data-theme="dark"] .hero-card {
+  color: var(--color-on-feature-ochre);
+  --coin-text-gold:   var(--color-on-feature-ochre);
+  --coin-text-silver: var(--color-on-feature-ochre);
+  --coin-text-copper: var(--color-on-feature-ochre);
+}
 .hero-label {
   font-family: Inter, sans-serif;
   font-size: 13px;

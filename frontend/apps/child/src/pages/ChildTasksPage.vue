@@ -641,6 +641,15 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   transition: box-shadow 300ms ease-out;
+  --coin-text-gold:   var(--color-ink);
+  --coin-text-silver: var(--color-ink);
+  --coin-text-copper: var(--color-ink);
+}
+
+[data-theme="dark"] .balance-card {
+  --coin-text-gold:   var(--color-on-feature-ochre);
+  --coin-text-silver: var(--color-on-feature-ochre);
+  --coin-text-copper: var(--color-on-feature-ochre);
 }
 
 .balance-card[data-reacting='pop'] {
