@@ -36,6 +36,7 @@ def _make_adapter(events) -> DeerFlowAdapter:
     adapter._family_id = "fam_test"
     adapter._ai_config = {}
     adapter._is_family_mode = True
+    adapter._config_path = None  # Required attribute for _produce method
     client = MagicMock()
     client.stream.return_value = iter(events)
     adapter._client = client
@@ -106,6 +107,7 @@ async def test_error_in_produce_raises_deerflow_error():
     adapter._family_id = "fam_test"
     adapter._ai_config = {}
     adapter._is_family_mode = True
+    adapter._config_path = None  # Required attribute
     client = MagicMock()
     client.stream.side_effect = RuntimeError("upstream failure")
     adapter._client = client

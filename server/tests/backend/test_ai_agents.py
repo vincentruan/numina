@@ -11,13 +11,13 @@ def seed_builtin_agents(db):
         id=100000000000001, family_id=0, agent_name="asset-health-advisor",
         display_name="资产健康顾问", description="test builtin",
         icon="🏥", color="#10B981", soul_md="你是资产健康顾问。" * 2,
-        skills=["report", "alerts"], is_builtin=True, display_order=100,
+        skills=["report", "alerts"], agent_type="builtin", display_order=100,
     ))
     db.add(AIAgent(
         id=100000000000002, family_id=0, agent_name="finance-optimizer",
         display_name="财务优化师", description="test builtin",
         icon="💰", color="#F59E0B", soul_md="你是财务优化师。" * 2,
-        skills=["liability", "spending_leak"], is_builtin=True, display_order=200,
+        skills=["liability", "spending_leak"], agent_type="builtin", display_order=200,
     ))
     db.commit()
 

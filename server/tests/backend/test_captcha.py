@@ -1,6 +1,7 @@
 """Tests for ALTCHA captcha enhancements."""
 
 import hashlib
+import time
 
 from apps.backend.app.services.cache import get_captcha_payload_cache, reset_captcha_payload_cache
 
@@ -86,8 +87,7 @@ class TestPayloadRegistry:
         # Should exist immediately
         assert cache.get(test_key) == "1"
 
-        # Wait for expiry
-        import time
+        # Wait for expiry (short sleep is acceptable for TTL tests)
         time.sleep(2)
 
         # Should be expired now

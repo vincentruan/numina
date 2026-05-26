@@ -1,6 +1,9 @@
-"""Unit tests for Unit 4: DeerFlow harness import and config structure."""
+"""Unit tests for Unit 4: DeerFlow harness import and config structure.
 
-import json
+Note: DeerFlow is installed via git dependency (see pyproject.toml [tool.uv.sources]),
+not vendored locally. Vendor manifest tests are skipped.
+"""
+
 import os
 import sys
 
@@ -9,13 +12,13 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 class TestDeerFlowImport:
     def test_deerflow_client_importable(self):
-        """DeerFlow harness must be importable after vendor install."""
+        """DeerFlow harness must be importable via git dependency."""
         try:
             from deerflow.client import DeerFlowClient  # noqa: F401
             assert True
         except ImportError as e:
             raise AssertionError(
-                f"deerflow.client not importable — run scripts/vendor-deerflow.sh then uv add --editable ./vendor/deerflow-harness\n{e}"
+                f"deerflow.client not importable — check uv.lock for git dependency\n{e}"
             ) from e
 
     def test_deerflow_agents_importable(self):
@@ -26,26 +29,8 @@ class TestDeerFlowImport:
             raise AssertionError(f"deerflow.agents not importable: {e}") from e
 
 
-class TestVendorManifest:
-    def test_vendor_manifest_exists(self):
-        manifest_path = os.path.join(
-            os.path.dirname(__file__), "../../../apps/agent/vendor/deerflow-harness/.vendor-manifest.json"
-        )
-        assert os.path.exists(manifest_path), (
-            "vendor/deerflow-harness/.vendor-manifest.json not found — "
-            "run scripts/vendor-deerflow.sh first"
-        )
-
-    def test_vendor_manifest_has_commit(self):
-        manifest_path = os.path.join(
-            os.path.dirname(__file__), "../../../apps/agent/vendor/deerflow-harness/.vendor-manifest.json"
-        )
-        if not os.path.exists(manifest_path):
-            return  # covered by test above
-        with open(manifest_path) as f:
-            manifest = json.load(f)
-        assert "commit" in manifest
-        assert len(manifest["commit"]) == 40  # full SHA
+# TestVendorManifest tests removed — DeerFlow installed via git, not vendor
+# See pyproject.toml [tool.uv.sources] for git dependency config
 
 
 class TestDeerFlowConfigFiles:
