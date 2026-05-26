@@ -90,6 +90,15 @@ export default {
       assetList: '资产列表 ({count})',
     },
   },
+  ai: {
+    systemAgents: '系统智能体',
+    builtinAgents: '内置智能体',
+    customAgents: '自定义智能体',
+    systemAgentHint: '不可删除，仅可启用/禁用',
+    builtinAgentHint: '可调整外观和调用能力',
+    customAgentHint: '完全可编辑，可删除',
+    createAgent: '创建新智能体',
+  },
   aiChat: {
     connecting: '正在连接模型',
     thinking: '思考中',
