@@ -4,6 +4,11 @@
 .hermes/
 
 # ===========================
+# Reference designs (local only)
+# ===========================
+.ref_designs/
+
+# ===========================
 # CodeGraph (code intelligence index)
 # ===========================
 .codegraph/
