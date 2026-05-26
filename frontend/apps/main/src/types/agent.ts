@@ -11,7 +11,7 @@ export interface Agent {
   model: string | null
   subagent_enabled: boolean
   tool_groups: string[] | null
-  is_builtin: boolean
+  agent_type: 'system' | 'builtin' | 'custom'
   is_enabled: boolean
   display_order: number
   created_by: string | null
@@ -24,6 +24,13 @@ export interface Agent {
 export interface AgentListResponse {
   builtin: Agent[]
   custom: Agent[]
+}
+
+export interface AgentListGroupedResponse {
+  system: Agent[]
+  builtin: Agent[]
+  custom: Agent[]
+  total: number
 }
 
 export interface AgentCreatePayload {
