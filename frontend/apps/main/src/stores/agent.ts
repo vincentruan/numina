@@ -4,17 +4,19 @@ import { getAgents, createAgent, updateAgent, deleteAgent, toggleAgent } from '@
 import type { Agent, AgentCreatePayload, AgentUpdatePayload } from '@/types/agent'
 
 export const useAgentStore = defineStore('agent', () => {
+  const systemAgents = ref<Agent[]>([])
   const builtinAgents = ref<Agent[]>([])
   const customAgents = ref<Agent[]>([])
   const loading = ref(false)
 
-  const allAgents = computed(() => [...builtinAgents.value, ...customAgents.value])
+  const allAgents = computed(() => [...systemAgents.value, ...builtinAgents.value, ...customAgents.value])
   const enabledAgents = computed(() => allAgents.value.filter(a => a.is_enabled))
 
   async function loadAgents() {
     loading.value = true
     try {
       const data = await getAgents()
+      systemAgents.value = data.system
       builtinAgents.value = data.builtin
       customAgents.value = data.custom
     } finally {
@@ -30,10 +32,14 @@ export const useAgentStore = defineStore('agent', () => {
 
   async function editAgent(id: string, payload: AgentUpdatePayload): Promise<Agent> {
     const agent = await updateAgent(id, payload)
-    const idx = customAgents.value.findIndex(a => a.id === id)
-    if (idx >= 0) customAgents.value[idx] = agent
-    const bIdx = builtinAgents.value.findIndex(a => a.id === id)
-    if (bIdx >= 0) builtinAgents.value[bIdx] = agent
+    const collections = [systemAgents.value, builtinAgents.value, customAgents.value]
+    for (const collection of collections) {
+      const idx = collection.findIndex(a => a.id === id)
+      if (idx >= 0) {
+        collection[idx] = agent
+        break
+      }
+    }
     return agent
   }
 
@@ -44,13 +50,18 @@ export const useAgentStore = defineStore('agent', () => {
 
   async function toggleAgentEnabled(id: string, enabled: boolean): Promise<void> {
     const agent = await toggleAgent(id, enabled)
-    const idx = customAgents.value.findIndex(a => a.id === id)
-    if (idx >= 0) customAgents.value[idx] = agent
-    const bIdx = builtinAgents.value.findIndex(a => a.id === id)
-    if (bIdx >= 0) builtinAgents.value[bIdx] = agent
+    const collections = [systemAgents.value, builtinAgents.value, customAgents.value]
+    for (const collection of collections) {
+      const idx = collection.findIndex(a => a.id === id)
+      if (idx >= 0) {
+        collection[idx] = agent
+        break
+      }
+    }
   }
 
   return {
+    systemAgents,
     builtinAgents,
     customAgents,
     allAgents,

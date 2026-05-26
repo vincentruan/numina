@@ -10,6 +10,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 
 from apps.backend.app.database import Base
@@ -47,7 +48,7 @@ class AIAgent(Base):
     subagent_enabled = Column(Boolean, nullable=False, default=False)
     tool_groups = Column(JSON, nullable=True)
 
-    is_builtin = Column(Boolean, nullable=False, default=False)
+    agent_type = Column(String(20), nullable=False, server_default=text("'builtin'"))  # system | builtin | custom
     is_enabled = Column(Boolean, nullable=False, default=True)
     display_order = Column(Integer, nullable=False, default=0)
     created_by = Column(BigInteger, nullable=True)

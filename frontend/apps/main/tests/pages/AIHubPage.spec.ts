@@ -5,32 +5,33 @@ import { nextTick } from 'vue'
 
 import AIHubPage from '../../src/pages/AIHubPage.vue'
 import { useAIStore } from '../../src/stores/ai'
+import { useAgentStore } from '../../src/stores/agent'
 
-const push = vi.fn()
-const { getAICapabilities } = vi.hoisted(() => ({
-  getAICapabilities: vi.fn(() =>
-    Promise.resolve({
-      data: [
-        {
-          id: 'chat',
-          name: 'AI 问答',
-          description: '自由对话助手',
-          ui: { route: '/ai/chat' },
-        },
-        {
-          id: 'report',
-          name: '资产体检',
-          description: '综合健康评分',
-          ui: { route: '/ai/report' },
-        },
-      ],
-    }),
-  ),
+const { push, loadAgents } = vi.hoisted(() => ({
+  push: vi.fn(),
+  loadAgents: vi.fn(() => Promise.resolve()),
 }))
 
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push }),
-}))
+vi.mock('vue-router', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useRouter: () => ({ push }),
+    createRouter: vi.fn(() => ({
+      push,
+      beforeEach: vi.fn(),
+      afterEach: vi.fn(),
+    })),
+  }
+})
+
+vi.mock('vue-i18n', async (importOriginal) => {
+  const actual = await importOriginal()
+  return {
+    ...actual,
+    useI18n: () => ({ t: (key: string) => key }),
+  }
+})
 
 vi.mock('../../src/utils/storage', () => ({
   getUser: () => ({ display_name: 'Demo User' }),
@@ -40,7 +41,6 @@ vi.mock('../../src/api/ai', () => ({
   getAIConfig: vi.fn(() => Promise.resolve({ data: { ai_enabled: true } })),
   getAIReport: vi.fn(() => Promise.resolve({ data: { report: null } })),
   getAITask: vi.fn(() => Promise.resolve({ status: 'idle' })),
-  getAICapabilities,
 }))
 
 vi.mock('../../src/composables/useAIReportWS', () => ({
@@ -54,8 +54,22 @@ vi.mock('../../src/composables/useAIReportWS', () => ({
   }),
 }))
 
-vi.mock('vue-i18n', () => ({
-  useI18n: () => ({ t: (key: string) => key }),
+vi.mock('../../src/stores/auth', () => ({
+  useAuthStore: vi.fn(() => ({
+    user: { role: 'owner', display_name: 'Demo User' },
+  })),
+}))
+
+vi.mock('../../src/stores/agent', () => ({
+  useAgentStore: vi.fn(() => ({
+    tasks: [],
+    builtinAgents: [
+      { id: 'chat', name: 'AI 问答', description: '自由对话助手', is_enabled: true },
+      { id: 'report', name: '资产体检', description: '综合健康评分', is_enabled: true },
+    ],
+    customAgents: [],
+    loadAgents,
+  })),
 }))
 
 vi.mock('vant', () => ({
@@ -66,7 +80,7 @@ describe('AIHubPage chat entry', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     push.mockClear()
-    getAICapabilities.mockClear()
+    loadAgents.mockClear()
   })
 
   it('passes draft text and input mode selections to AI chat page', async () => {
@@ -80,6 +94,7 @@ describe('AIHubPage chat entry', () => {
             template: '<button class="chat-input" @click="$emit(\'submit\', modelValue)">send</button>',
           },
           VanLoading: true,
+          AgentGrid: true,
         },
       },
     })
@@ -105,12 +120,13 @@ describe('AIHubPage chat entry', () => {
     })
   })
 
-  it('renders capability cards from the registry and navigates by route', async () => {
+  it('calls loadAgents on mount and renders AgentGrid', async () => {
     const wrapper = shallowMount(AIHubPage, {
       global: {
         stubs: {
           AIChatInput: true,
           VanLoading: true,
+          AgentGrid: true,
         },
       },
     })
@@ -118,12 +134,7 @@ describe('AIHubPage chat entry', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await nextTick()
 
-    expect(getAICapabilities).toHaveBeenCalled()
-    expect(wrapper.text()).toContain('AI 问答')
-    expect(wrapper.text()).toContain('资产体检')
-
-    await wrapper.find('[data-testid="capability-chat"]').trigger('click')
-
-    expect(push).toHaveBeenCalledWith('/ai/chat')
+    expect(loadAgents).toHaveBeenCalled()
+    expect(wrapper.findComponent({ name: 'AgentGrid' }).exists()).toBe(true)
   })
 })

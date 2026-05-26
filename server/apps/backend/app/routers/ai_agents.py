@@ -9,7 +9,7 @@ from apps.backend.app.models.ai_agent import AIAgent
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_agent import (
     AgentCreateRequest,
-    AgentListResponse,
+    AgentListGroupedResponse,
     AgentResponse,
     AgentUpdateRequest,
 )
@@ -23,16 +23,24 @@ def _to_response(agent: AIAgent, user: User) -> AgentResponse:
         col.name: getattr(agent, col.name)
         for col in agent.__table__.columns
     }
-    data["can_edit"] = is_owner if agent.is_builtin else (is_owner and agent.family_id == user.family_id)
-    data["can_delete"] = False if agent.is_builtin else (is_owner and agent.family_id == user.family_id)
+    # Calculate permissions based on agent_type
+    if agent.agent_type == "system":
+        data["can_edit"] = False
+        data["can_delete"] = False
+    elif agent.agent_type == "builtin":
+        data["can_edit"] = is_owner
+        data["can_delete"] = False
+    else:  # custom
+        data["can_edit"] = is_owner
+        data["can_delete"] = is_owner and agent.family_id == user.family_id
     return AgentResponse.model_validate(data)
 
 
-@router.get("", response_model=AgentListResponse)
+@router.get("", response_model=AgentListGroupedResponse)
 def list_agents(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
-) -> AgentListResponse:
+) -> AgentListGroupedResponse:
     agents = (
         db.query(AIAgent)
         .filter(
@@ -44,9 +52,15 @@ def list_agents(
         .order_by(AIAgent.display_order, AIAgent.created_at)
         .all()
     )
-    builtin = [_to_response(a, current_user) for a in agents if a.is_builtin]
-    custom = [_to_response(a, current_user) for a in agents if not a.is_builtin]
-    return AgentListResponse(builtin=builtin, custom=custom)
+    system = [_to_response(a, current_user) for a in agents if a.agent_type == "system"]
+    builtin = [_to_response(a, current_user) for a in agents if a.agent_type == "builtin"]
+    custom = [_to_response(a, current_user) for a in agents if a.agent_type == "custom"]
+    return AgentListGroupedResponse(
+        system=system,
+        builtin=builtin,
+        custom=custom,
+        total=len(system) + len(builtin) + len(custom),
+    )
 
 
 @router.get("/{agent_id}", response_model=AgentResponse)
@@ -91,6 +105,7 @@ def create_agent(
     agent = AIAgent(
         family_id=current_user.family_id,
         created_by=current_user.id,
+        agent_type="custom",
         **payload.model_dump(),
     )
     db.add(agent)
@@ -114,11 +129,14 @@ def update_agent(
 
     updates = payload.model_dump(exclude_unset=True)
 
-    if agent.is_builtin:
-        allowed = {"icon", "color", "display_order"}
+    if agent.agent_type == "system":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体不可修改")
+
+    if agent.agent_type == "builtin":
+        allowed = {"icon", "color", "skills", "display_order"}
         disallowed = set(updates.keys()) - allowed
         if disallowed:
-            raise AppError(ErrorCode.VALIDATION_ERROR, f"内置智能体只允许修改: {', '.join(allowed)}")
+            raise AppError(ErrorCode.VALIDATION_ERROR, "内置智能体仅可修改外观和调用能力")
 
     for key, value in updates.items():
         setattr(agent, key, value)
@@ -137,8 +155,8 @@ def delete_agent(
     agent = db.query(AIAgent).filter(AIAgent.id == agent_id).first()
     if not agent:
         raise AppError(ErrorCode.NOT_FOUND)
-    if agent.is_builtin:
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN, "内置智能体不可删除")
+    if agent.agent_type in ("system", "builtin"):
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体和内置智能体不可删除")
     if agent.family_id != current_user.family_id:
         raise AppError(ErrorCode.NOT_FOUND)
     db.delete(agent)

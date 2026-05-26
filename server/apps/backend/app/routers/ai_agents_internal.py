@@ -31,6 +31,6 @@ def get_agent_config(
         "model": agent.model,
         "subagent_enabled": agent.subagent_enabled,
         "tool_groups": agent.tool_groups,
-        "is_builtin": agent.is_builtin,
+        "agent_type": agent.agent_type,
         "is_enabled": agent.is_enabled,
     }

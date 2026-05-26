@@ -4,6 +4,11 @@
 .hermes/
 
 # ===========================
+# CodeGraph (code intelligence index)
+# ===========================
+.codegraph/
+
+# ===========================
 # OS Generated Files
 # ===========================
 .DS_Store

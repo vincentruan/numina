@@ -1,7 +1,7 @@
 import api from '@/api'
-import type { Agent, AgentCreatePayload, AgentListResponse, AgentUpdatePayload } from '@/types/agent'
+import type { Agent, AgentCreatePayload, AgentListGroupedResponse, AgentUpdatePayload } from '@/types/agent'
 
-export function getAgents(): Promise<AgentListResponse> {
+export function getAgents(): Promise<AgentListGroupedResponse> {
   return api.get('/ai/agents').then(r => r.data)
 }
 

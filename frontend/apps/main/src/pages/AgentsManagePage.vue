@@ -35,9 +35,13 @@ async function handleDelete(agent: Agent) {
   <div class="page">
     <van-nav-bar :title="t('agents.title')" left-arrow @click-left="router.back()" />
 
-    <van-cell-group inset :title="t('agents.builtinAgents')">
+    <!-- System Agents -->
+    <van-cell-group inset :title="t('ai.systemAgents')">
+      <template #title-extra>
+        <span class="hint-text">{{ t('ai.systemAgentHint') }}</span>
+      </template>
       <van-cell
-        v-for="agent in agentStore.builtinAgents"
+        v-for="agent in agentStore.systemAgents"
         :key="agent.id"
         :title="agent.display_name"
         :label="agent.description || ''"
@@ -56,7 +60,40 @@ async function handleDelete(agent: Agent) {
       </van-cell>
     </van-cell-group>
 
-    <van-cell-group inset :title="t('agents.customAgents')">
+    <!-- Builtin Agents -->
+    <van-cell-group inset :title="t('ai.builtinAgents')">
+      <template #title-extra>
+        <span class="hint-text">{{ t('ai.builtinAgentHint') }}</span>
+      </template>
+      <van-cell
+        v-for="agent in agentStore.builtinAgents"
+        :key="agent.id"
+        :title="agent.display_name"
+        :label="agent.description || ''"
+        is-link
+        @click="router.push({ name: 'AgentEdit', params: { id: agent.id } })"
+      >
+        <template #icon>
+          <span style="margin-right: 8px; font-size: 20px;">{{ agent.icon || '🤖' }}</span>
+        </template>
+        <template #value>
+          <div class="cell-actions" @click.stop>
+            <van-switch
+              :model-value="agent.is_enabled"
+              size="20"
+              :disabled="!isOwner"
+              @update:model-value="(v: boolean) => handleToggle(agent, v)"
+            />
+          </div>
+        </template>
+      </van-cell>
+    </van-cell-group>
+
+    <!-- Custom Agents -->
+    <van-cell-group inset :title="t('ai.customAgents')">
+      <template #title-extra>
+        <span class="hint-text">{{ t('ai.customAgentHint') }}</span>
+      </template>
       <van-cell
         v-for="agent in agentStore.customAgents"
         :key="agent.id"
@@ -96,7 +133,7 @@ async function handleDelete(agent: Agent) {
           size="small"
           @click="router.push({ name: 'AgentCreate' })"
         >
-          {{ t('agents.createAgent') }}
+          {{ t('ai.createAgent') }}
         </van-button>
       </van-empty>
     </van-cell-group>
@@ -108,7 +145,7 @@ async function handleDelete(agent: Agent) {
         round
         @click="router.push({ name: 'AgentCreate' })"
       >
-        {{ t('agents.createAgent') }}
+        {{ t('ai.createAgent') }}
       </van-button>
     </div>
   </div>
@@ -117,6 +154,12 @@ async function handleDelete(agent: Agent) {
 <style scoped>
 .page {
   padding-bottom: 80px;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: var(--van-text-color-3);
+  margin-left: 8px;
 }
 
 .cell-actions {

@@ -41,7 +41,12 @@
           <div class="isc-sub" v-if="smartDiscovery.highest_daily_cost">
             <span class="isc-cost-val">{{ format(smartDiscovery.highest_daily_cost.cost) }} <span class="isc-cost-unit">/ {{ t('analyticsPage.perDay').replace('/', '') }}</span></span>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.highest_daily_cost">{{ smartDiscovery.highest_daily_cost.icon }}</div>
+          <div class="isc-bg-icon" v-if="smartDiscovery.highest_daily_cost">
+            <svg v-if="smartDiscovery.highest_daily_cost.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
+              <use :href="`#${getIconId(smartDiscovery.highest_daily_cost.icon)}`" />
+            </svg>
+            <span v-else>{{ smartDiscovery.highest_daily_cost.icon }}</span>
+          </div>
         </div>
 
         <!-- 最低日均成本 -->
@@ -54,7 +59,12 @@
           <div class="isc-sub" v-if="smartDiscovery.lowest_daily_cost">
             <span class="isc-cost-val green">{{ format(smartDiscovery.lowest_daily_cost.cost) }} <span class="isc-cost-unit">/ {{ t('analyticsPage.perDay').replace('/', '') }}</span></span>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.lowest_daily_cost">{{ smartDiscovery.lowest_daily_cost.icon }}</div>
+          <div class="isc-bg-icon" v-if="smartDiscovery.lowest_daily_cost">
+            <svg v-if="smartDiscovery.lowest_daily_cost.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
+              <use :href="`#${getIconId(smartDiscovery.lowest_daily_cost.icon)}`" />
+            </svg>
+            <span v-else>{{ smartDiscovery.lowest_daily_cost.icon }}</span>
+          </div>
         </div>
 
         <!-- 持有最久 -->
@@ -67,7 +77,12 @@
           <div class="isc-sub" v-if="smartDiscovery.longest_held">
             <span class="isc-days-val">{{ smartDiscovery.longest_held.days }} <span class="isc-days-unit">{{ t('insights.smartDiscovery.daysUnit') }}</span></span>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.longest_held">{{ smartDiscovery.longest_held.icon }}</div>
+          <div class="isc-bg-icon" v-if="smartDiscovery.longest_held">
+            <svg v-if="smartDiscovery.longest_held.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
+              <use :href="`#${getIconId(smartDiscovery.longest_held.icon)}`" />
+            </svg>
+            <span v-else>{{ smartDiscovery.longest_held.icon }}</span>
+          </div>
         </div>
 
         <!-- 占比最高分类 -->
@@ -83,7 +98,12 @@
             </div>
             <div class="isc-category-pct">{{ smartDiscovery.top_category.percentage }}%</div>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.top_category">{{ smartDiscovery.top_category.icon }}</div>
+          <div class="isc-bg-icon" v-if="smartDiscovery.top_category">
+            <svg v-if="smartDiscovery.top_category.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
+              <use :href="`#${getIconId(smartDiscovery.top_category.icon)}`" />
+            </svg>
+            <span v-else>{{ smartDiscovery.top_category.icon }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -97,7 +117,12 @@
       </div>
       <div class="rank-list">
         <div class="rank-item" v-for="(item, idx) in dailyCostItems" :key="idx">
-          <div class="rank-img">{{ item.icon }}</div>
+          <div class="rank-img">
+            <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(item.icon)}`" />
+            </svg>
+            <span v-else>{{ item.icon || '📦' }}</span>
+          </div>
           <div class="rank-info">
             <div class="rank-name">{{ item.name }}</div>
             <div class="rank-service-row">
@@ -260,7 +285,12 @@
       <div class="top3-row" v-if="top3Items.length >= 3">
         <!-- 2nd -->
         <div class="podium-item rank2">
-          <div class="podium-thumb">{{ top3Items[1]?.icon || '📦' }}</div>
+          <div class="podium-thumb">
+            <svg v-if="top3Items[1]?.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(top3Items[1]?.icon)}`" />
+            </svg>
+            <span v-else>{{ top3Items[1]?.icon || '📦' }}</span>
+          </div>
           <div class="podium-name">{{ top3Items[1]?.name }}</div>
           <div class="podium-service">{{ t('insights.retentionRate.serviceDays', { days: top3Items[1]?.service_days }) }}</div>
           <div class="podium-rate" :class="top3Items[1]?.retention_rate >= 80 ? 'green' : 'red'">{{ top3Items[1]?.retention_rate.toFixed(1) }}%</div>
@@ -270,7 +300,12 @@
         </div>
         <!-- 1st -->
         <div class="podium-item rank1">
-          <div class="podium-thumb">{{ top3Items[0]?.icon || '📦' }}</div>
+          <div class="podium-thumb">
+            <svg v-if="top3Items[0]?.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(top3Items[0]?.icon)}`" />
+            </svg>
+            <span v-else>{{ top3Items[0]?.icon || '📦' }}</span>
+          </div>
           <div class="podium-name">{{ top3Items[0]?.name }}</div>
           <div class="podium-service">{{ t('insights.retentionRate.serviceDays', { days: top3Items[0]?.service_days }) }}</div>
           <div class="podium-rate" :class="top3Items[0]?.retention_rate >= 80 ? 'green' : 'red'">{{ top3Items[0]?.retention_rate.toFixed(1) }}%</div>
@@ -280,7 +315,12 @@
         </div>
         <!-- 3rd -->
         <div class="podium-item rank3">
-          <div class="podium-thumb">{{ top3Items[2]?.icon || '📦' }}</div>
+          <div class="podium-thumb">
+            <svg v-if="top3Items[2]?.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(top3Items[2]?.icon)}`" />
+            </svg>
+            <span v-else>{{ top3Items[2]?.icon || '📦' }}</span>
+          </div>
           <div class="podium-name">{{ top3Items[2]?.name }}</div>
           <div class="podium-service">{{ t('insights.retentionRate.serviceDays', { days: top3Items[2]?.service_days }) }}</div>
           <div class="podium-rate" :class="top3Items[2]?.retention_rate >= 80 ? 'green' : 'red'">{{ top3Items[2]?.retention_rate.toFixed(1) }}%</div>
@@ -292,7 +332,12 @@
       <div class="pres-list">
         <div class="pres-list-item" v-for="(item, idx) in retentionItems" :key="idx">
           <div class="pres-rank">{{ item.rank }}</div>
-          <div class="pres-thumb">{{ item.icon }}</div>
+          <div class="pres-thumb">
+            <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(item.icon)}`" />
+            </svg>
+            <span v-else>{{ item.icon }}</span>
+          </div>
           <div class="pres-info">
             <div class="pres-name">{{ item.name }}</div>
             <div class="pres-service">{{ t('insights.retentionRate.serviceDays', { days: item.days }) }}</div>
@@ -318,6 +363,7 @@ import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { formatCurrency, CURRENCY_SYMBOLS } from '@/utils/format'
 import { getInsights, type InsightsResponse, type DailyCostItem, type GoalProgressItem, type TypeDistributionItem, type DurationBucket, type RetentionItem } from '@/api/dashboard'
+import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 const { format, currency } = useCurrency()
@@ -632,6 +678,15 @@ onMounted(async () => {
   bottom: -4px;
   font-size: 40px;
   opacity: 0.07;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.isc-bg-icon .icon-svg-bg {
+  width: 40px;
+  height: 40px;
+  color: var(--text-primary);
 }
 
 [data-theme='dark'] .isc-bg-icon { opacity: 0.12; }
@@ -735,6 +790,12 @@ onMounted(async () => {
   font-size: 20px;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+.rank-img .icon-svg {
+  width: 24px;
+  height: 24px;
+  color: var(--text-primary);
 }
 
 .rank-info { flex: 1; min-width: 0; }
@@ -1316,6 +1377,12 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.podium-thumb .icon-svg {
+  width: 28px;
+  height: 28px;
+  color: var(--text-primary);
+}
+
 [data-theme='dark'] .podium-thumb { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 
 .podium-item.rank1 .podium-thumb {
@@ -1323,6 +1390,11 @@ onMounted(async () => {
   height: 56px;
   border-radius: 14px;
   font-size: 28px;
+}
+
+.podium-item.rank1 .podium-thumb .icon-svg {
+  width: 32px;
+  height: 32px;
 }
 
 .podium-name {
@@ -1413,6 +1485,12 @@ onMounted(async () => {
   font-size: 22px;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+.pres-thumb .icon-svg {
+  width: 26px;
+  height: 26px;
+  color: var(--text-primary);
 }
 
 .pres-info { flex: 1; min-width: 0; }

@@ -90,6 +90,12 @@
   --van-toast-text-color: #ffffff;
   --van-toast-border-radius: 12px;
   --van-toast-font-size: 14px;
+
+  /* ── Calendar heat colors (light mode — warm amber tones) ── */
+  --heat-1: #fff3e0;
+  --heat-2: #ffe0b2;
+  --heat-3: #ffb74d;
+  --heat-4: #f5a623;
 }
 
 /* ── Dark mode overrides ── */
@@ -151,6 +157,12 @@
   --color-on-feature-lavender:#f0ecff;
   --color-on-feature-pink:    #ffffff;
   --color-on-feature-teal:    #f0ece0;
+
+  /* ── Calendar heat colors (dark mode — teal-green tones for contrast) ── */
+  --heat-1: rgba(34, 197, 94, 0.12);
+  --heat-2: rgba(34, 197, 94, 0.25);
+  --heat-3: rgba(34, 197, 94, 0.45);
+  --heat-4: rgba(34, 197, 94, 0.70);
 }
 
 /* ── Vant dark mode overrides ── */
