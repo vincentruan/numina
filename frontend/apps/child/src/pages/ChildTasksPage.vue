@@ -76,7 +76,7 @@
           <button
             v-if="chore.is_pool_unclaimed"
             class="btn-complete"
-            :disabled="claimingId === chore.id || submittingId === chore.id"
+            :disabled="!isClaimable(chore) || claimingId === chore.id || submittingId === chore.id"
             @click.stop="claim(chore.id)"
           >{{ claimingId === chore.id ? t('chore.claiming') : t('chore.claim') }}</button>
           <template v-else-if="chore.status === 'available'">
@@ -95,6 +95,10 @@
           <span v-else-if="chore.status === 'approved'" class="status-badge approved">{{ t('chore.approved') }}</span>
           <span v-else-if="chore.status === 'rejected'" class="status-badge rejected">{{ t('chore.rejected') }}</span>
         </div>
+        <p
+          v-if="chore.is_pool_unclaimed && claimDisabledReason(chore)"
+          class="claim-disabled-hint"
+        >{{ claimDisabledReason(chore) }}</p>
       </div>
     </div>
 
@@ -263,6 +267,17 @@ function daysToNextBonus(streakCount: number): number | null {
   const thresholds = [7, 14, 30]
   const nextThreshold = thresholds.find(t => streakCount < t)
   return nextThreshold ? nextThreshold - streakCount : null
+}
+
+function isClaimable(c: ChoreInstance): boolean {
+  return c.is_pool_unclaimed && c.status === 'available' && isToday.value
+}
+
+function claimDisabledReason(c: ChoreInstance): string {
+  if (!c.is_pool_unclaimed) return ''
+  if (!isToday.value) return t('chore.claimDisabledHistorical')
+  if (c.status !== 'available') return t('chore.claimDisabledUnavailable')
+  return ''
 }
 
 // Celebration state via composable (renamed to avoid conflict with milestone celebrationVisible)
@@ -486,6 +501,8 @@ async function complete(instanceId: string) {
 }
 
 async function claim(instanceId: string) {
+  const target = chores.value.find(c => c.id === instanceId)
+  if (!target || !isClaimable(target)) return
   claimingId.value = instanceId
   // Optimistic update
   const idx = chores.value.findIndex(c => c.id === instanceId)
@@ -726,6 +743,7 @@ onUnmounted(() => {
 .chore-card {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   background: var(--color-surface-soft);
   border-radius: var(--radius-lg);
@@ -783,6 +801,15 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--color-muted-soft);
   margin: 2px 0 0;
+}
+
+.claim-disabled-hint {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  color: var(--color-muted-soft);
+  margin: 8px 0 0;
+  padding-left: 40px;
+  flex-basis: 100%;
 }
 
 /* ── Complete button — pink brand CTA ── */

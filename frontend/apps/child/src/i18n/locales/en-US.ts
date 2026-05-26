@@ -104,6 +104,8 @@ export default {
     abandonConfirm: 'Give Up Task',
     abandonWishHint: '{remaining} ⭐ away from 「{wishName}」 — finishing this gets you closer 🌟',
     claimFailed: '❌ Claim failed, task may already be taken',
+    claimDisabledHistorical: '⏳ Past tasks cannot be claimed',
+    claimDisabledUnavailable: '🔒 Cannot claim in current state',
     abandonFailed: '❌ Failed to give up, please try again',
     wishProgressBump: '✨ +{stars} ⭐ closer to {wishName}!',
     daysToBonus: '🔥 {days} more days to streak bonus!',

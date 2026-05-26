@@ -105,6 +105,8 @@ export default {
     abandonConfirm: '放弃任务',
     abandonWishHint: '距离「{wishName}」还差 {remaining} ⭐，完成这个任务又近一步了 🌟',
     claimFailed: '❌ 认领失败，任务可能已被认领',
+    claimDisabledHistorical: '⏳ 历史任务无法认领',
+    claimDisabledUnavailable: '🔒 当前状态无法认领',
     abandonFailed: '❌ 放弃失败，请重试',
     wishProgressBump: '✨ +{stars} ⭐ 离「{wishName}」又近一步!',
     daysToBonus: '🔥 还差 {days} 天获得连击奖励!',
