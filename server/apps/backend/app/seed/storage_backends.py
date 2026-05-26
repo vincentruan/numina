@@ -1,93 +1,97 @@
-"""Seed storage backends from YAML config file."""
-from pathlib import Path
-
-import yaml
+"""Seed storage backends from environment variables."""
 from sqlalchemy.orm import Session
 
 from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.models.storage_backend import StorageBackend
 from apps.backend.app.services.storage.config_crypto import encrypt_config
+from packages.core.settings import settings
 
 logger = get_logger(__name__)
 
-CONFIG_FILE = Path(__file__).parent.parent / "config" / "storage_backends.yaml"
-
 
 def seed_storage_backends(db: Session) -> None:
-    """Load storage backends from YAML config and sync to database.
+    """Load storage backend from environment variables and sync to database.
 
-    - Creates new backends that don't exist (by display_name)
-    - Updates existing backends' config if changed
-    - Preserves backends that exist in DB but not in config
+    - Creates new backend if STORAGE_BACKEND_TYPE is set and backend doesn't exist
+    - Updates existing backend's config if changed
+    - Preserves backends that exist in DB but not configured via env vars
     - Encrypts credentials before storing
     """
-    if not CONFIG_FILE.exists():
-        logger.info(f"存储后端配置文件不存在: {CONFIG_FILE}，跳过加载")
+    backend_type = settings.STORAGE_BACKEND_TYPE
+    if not backend_type:
+        logger.info("STORAGE_BACKEND_TYPE 未设置，跳过远程存储后端加载")
         return
 
-    try:
-        with open(CONFIG_FILE, encoding="utf-8") as f:
-            data = yaml.safe_load(f)
-    except Exception as e:
-        logger.warning(f"存储后端配置文件解析失败: {e}")
+    if backend_type not in ("github", "webdav"):
+        logger.warning(f"不支持的存储后端类型: {backend_type}，跳过")
         return
 
-    if not data or "backends" not in data:
-        logger.info("存储后端配置文件无 backends 条目，跳过加载")
-        return
+    # Build config dict based on backend type
+    config_dict: dict[str, str] = {}
+    if backend_type == "github":
+        if not all([
+            settings.STORAGE_GITHUB_REPO_OWNER,
+            settings.STORAGE_GITHUB_REPO_NAME,
+            settings.STORAGE_GITHUB_TOKEN,
+        ]):
+            logger.warning("GitHub 存储后端缺少必要配置（REPO_OWNER/REPO_NAME/TOKEN），跳过")
+            return
+        config_dict = {
+            "repo_owner": settings.STORAGE_GITHUB_REPO_OWNER,
+            "repo_name": settings.STORAGE_GITHUB_REPO_NAME,
+            "branch": settings.STORAGE_GITHUB_BRANCH,
+            "token": settings.STORAGE_GITHUB_TOKEN,
+        }
+    elif backend_type == "webdav":
+        if not all([
+            settings.STORAGE_WEBDAV_BASE_URL,
+            settings.STORAGE_WEBDAV_USERNAME,
+            settings.STORAGE_WEBDAV_PASSWORD,
+        ]):
+            logger.warning("WebDAV 存储后端缺少必要配置（BASE_URL/USERNAME/PASSWORD），跳过")
+            return
+        config_dict = {
+            "base_url": settings.STORAGE_WEBDAV_BASE_URL,
+            "username": settings.STORAGE_WEBDAV_USERNAME,
+            "password": settings.STORAGE_WEBDAV_PASSWORD,
+        }
 
-    backends_config = data.get("backends", [])
-    if not backends_config:
-        logger.info("存储后端配置为空列表，跳过加载")
-        return
+    name = settings.STORAGE_BACKEND_NAME or backend_type.upper()
+    is_default = settings.STORAGE_BACKEND_IS_DEFAULT
+    is_active = settings.STORAGE_BACKEND_IS_ACTIVE
 
-    for backend_cfg in backends_config:
-        name = backend_cfg.get("name")
-        backend_type = backend_cfg.get("type")
-        is_default = backend_cfg.get("is_default", False)
-        is_active = backend_cfg.get("is_active", True)
-        config_dict = backend_cfg.get("config", {})
+    # Check if backend already exists by display_name
+    existing = db.query(StorageBackend).filter_by(display_name=name).first()
 
-        if not name or not backend_type:
-            logger.warning(f"存储后端配置缺少 name 或 type，跳过: {backend_cfg}")
-            continue
+    config_encrypted = encrypt_config(config_dict)
 
-        if backend_type not in ("github", "webdav"):
-            logger.warning(f"不支持的存储后端类型: {backend_type}，跳过")
-            continue
-
-        # Check if backend already exists by display_name
-        existing = db.query(StorageBackend).filter_by(display_name=name).first()
-
-        if existing:
-            # Update existing backend if config changed
-            new_config_encrypted = encrypt_config(config_dict)
-            if existing.config != new_config_encrypted:
-                existing.config = new_config_encrypted
-                existing.backend_type = backend_type
-                existing.is_default = is_default
-                existing.is_active = is_active
-                logger.info(f"更新存储后端配置: {name}")
-            # Update flags even if config unchanged
-            if existing.is_default != is_default or existing.is_active != is_active:
-                existing.is_default = is_default
-                existing.is_active = is_active
-                db.commit()
-        else:
-            # Create new backend
-            config_encrypted = encrypt_config(config_dict)
-            new_backend = StorageBackend(
-                backend_type=backend_type,
-                display_name=name,
-                config=config_encrypted,
-                is_default=is_default,
-                is_active=is_active,
-            )
-            db.add(new_backend)
-            logger.info(f"创建存储后端: {name} (类型: {backend_type})")
-
-    db.commit()
-    logger.info(f"存储后端配置已同步，共处理 {len(backends_config)} 条")
+    if existing:
+        needs_update = False
+        # Update existing backend if config changed
+        if existing.config != config_encrypted:
+            existing.config = config_encrypted
+            existing.backend_type = backend_type
+            needs_update = True
+            logger.info(f"更新存储后端配置: {name}")
+        # Update flags if changed
+        if existing.is_default != is_default or existing.is_active != is_active:
+            existing.is_default = is_default
+            existing.is_active = is_active
+            needs_update = True
+        if needs_update:
+            db.commit()
+    else:
+        # Create new backend
+        new_backend = StorageBackend(
+            backend_type=backend_type,
+            display_name=name,
+            config=config_encrypted,
+            is_default=is_default,
+            is_active=is_active,
+        )
+        db.add(new_backend)
+        db.commit()
+        logger.info(f"创建存储后端: {name} (类型: {backend_type})")
 
     # Validate: only one default backend
     defaults = db.query(StorageBackend).filter_by(is_default=True, is_active=True).all()

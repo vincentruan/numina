@@ -67,6 +67,24 @@ class Settings(BaseSettings):
     FILE_SYNC_INTERVAL_MINUTES: int = 15
     STORAGE_ENCRYPTION_KEY: str = ""
 
+    # Remote storage backend configuration (seeded on startup)
+    # Supports one remote backend: "github" or "webdav"
+    STORAGE_BACKEND_TYPE: str = ""  # "github", "webdav", or empty (no remote backend)
+    STORAGE_BACKEND_NAME: str = ""  # Display name for the backend
+    STORAGE_BACKEND_IS_DEFAULT: bool = False
+    STORAGE_BACKEND_IS_ACTIVE: bool = True
+
+    # GitHub storage backend credentials
+    STORAGE_GITHUB_REPO_OWNER: str = ""
+    STORAGE_GITHUB_REPO_NAME: str = ""
+    STORAGE_GITHUB_BRANCH: str = "main"
+    STORAGE_GITHUB_TOKEN: str = ""  # Personal access token with repo scope
+
+    # WebDAV storage backend credentials
+    STORAGE_WEBDAV_BASE_URL: str = ""
+    STORAGE_WEBDAV_USERNAME: str = ""
+    STORAGE_WEBDAV_PASSWORD: str = ""
+
     # Chat session storage configuration
     CHAT_DIR: str = "./data/chat"
     CHAT_ENABLE_REMOTE_SYNC: bool = False
@@ -152,6 +170,29 @@ if settings.ENVIRONMENT == "production" and not settings.STORAGE_ENCRYPTION_KEY:
         "STORAGE_ENCRYPTION_KEY 未配置！生产环境必须设置独立的存储加密密钥，"
         "避免与 SECRET_KEY 共用导致密钥轮换风险。"
     )
+
+# Storage backend credentials validation for production
+if settings.ENVIRONMENT == "production" and settings.STORAGE_BACKEND_TYPE:
+    if settings.STORAGE_BACKEND_TYPE == "github":
+        if not all([
+            settings.STORAGE_GITHUB_REPO_OWNER,
+            settings.STORAGE_GITHUB_REPO_NAME,
+            settings.STORAGE_GITHUB_TOKEN,
+        ]):
+            raise RuntimeError(
+                "GitHub 存储后端缺少必要配置！生产环境必须设置 "
+                "STORAGE_GITHUB_REPO_OWNER、STORAGE_GITHUB_REPO_NAME 和 STORAGE_GITHUB_TOKEN。"
+            )
+    elif settings.STORAGE_BACKEND_TYPE == "webdav":
+        if not all([
+            settings.STORAGE_WEBDAV_BASE_URL,
+            settings.STORAGE_WEBDAV_USERNAME,
+            settings.STORAGE_WEBDAV_PASSWORD,
+        ]):
+            raise RuntimeError(
+                "WebDAV 存储后端缺少必要配置！生产环境必须设置 "
+                "STORAGE_WEBDAV_BASE_URL、STORAGE_WEBDAV_USERNAME 和 STORAGE_WEBDAV_PASSWORD。"
+            )
 
 # CHAT_DIR validation - must not be a strict subdirectory of UPLOAD_DIR
 # (UPLOAD_DIR subtree is served as static files; equality is OK because

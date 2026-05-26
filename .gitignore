@@ -145,9 +145,6 @@ data/*.json
 !data/.gitkeep
 server/data/
 
-# Storage backend config (contains credentials)
-server/apps/backend/config/storage_backends.yaml
-
 # ===========================
 # Environment & Secrets
 # ===========================
@@ -188,7 +185,6 @@ tests/screenshot/screenshots/*-after-*.png
 .claude/worktrees/
 .gstack/
 .worktrees/
-.worktrees
 
 # Runtime chat data (user-generated, not source code)
 data/chat/
@@ -196,4 +192,4 @@ data/sessions/
 server/apps/agent/data/sessions
 
 # Runtime data directory (SQLite DBs, DeerFlow checkpoints, WAL files)
-data/
+.numina_data/
