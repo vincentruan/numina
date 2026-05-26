@@ -1,11 +1,13 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./server
+      dockerfile: apps/backend/Dockerfile
     container_name: numina-backend
     restart: unless-stopped
     volumes:
       - ./data:/app/data
-      - ./backend:/app  # hot-reload source mount
+      - ./server:/app  # hot-reload source mount
     env_file:
       - .env
     environment:
@@ -19,7 +21,7 @@ services:
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
       - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
-    command: uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir app
+    command: uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 10s
@@ -28,12 +30,14 @@ services:
       start_period: 30s
 
   agent:
-    build: ./agent
+    build:
+      context: ./server
+      dockerfile: apps/agent/Dockerfile
     container_name: numina-agent
     restart: unless-stopped
     volumes:
       - ./data:/app/data
-      - ./agent:/app  # hot-reload source mount (excludes vendor via .dockerignore)
+      - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
       - agent_logs:/app/logs
     environment:
       - TZ=Asia/Shanghai
@@ -42,7 +46,7 @@ services:
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
+    command: uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --port 8001 --reload --reload-dir apps/agent
     depends_on:
       backend:
         condition: service_healthy
