@@ -114,6 +114,10 @@
         <div class="section-title">
           <span class="title-icon">📉</span>{{ t('insights.dailyCostRank.title') }}
         </div>
+        <div class="rank-sort-group">
+          <div :class="['rank-sort-btn', { active: costRankOrder === 'highest' }]" @click="costRankOrder = 'highest'">{{ t('insights.dailyCostRank.highest') }}</div>
+          <div :class="['rank-sort-btn', { active: costRankOrder === 'lowest' }]" @click="costRankOrder = 'lowest'">{{ t('insights.dailyCostRank.lowest') }}</div>
+        </div>
       </div>
       <div class="rank-list">
         <div class="rank-item" v-for="(item, idx) in dailyCostItems" :key="idx">
@@ -138,8 +142,39 @@
           </div>
         </div>
       </div>
-      <div class="view-all-row">{{ t('insights.dailyCostRank.viewAll') }} <span class="view-all-arrow">›</span></div>
+      <div class="view-all-row" @click="showAllCostRank = true">{{ t('insights.dailyCostRank.viewAll') }} <span class="view-all-arrow">›</span></div>
     </div>
+
+    <!-- S1 查看全部弹出层 -->
+    <van-popup v-model:show="showAllCostRank" position="bottom" round safe-area-inset-bottom>
+      <div class="popup-header">
+        <span class="popup-title">{{ t('insights.dailyCostRank.title') }}</span>
+        <div class="popup-close" @click="showAllCostRank = false">✕</div>
+      </div>
+      <div class="popup-rank-list">
+        <div class="rank-item" v-for="(item, idx) in allCostRankItems" :key="idx">
+          <div class="rank-img">
+            <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
+              <use :href="`#${getIconId(item.icon)}`" />
+            </svg>
+            <span v-else>{{ item.icon || '📦' }}</span>
+          </div>
+          <div class="rank-info">
+            <div class="rank-name">{{ item.name }}</div>
+            <div class="rank-service-row">
+              <span class="rank-service-text">{{ t('insights.dailyCostRank.serviceDays', { days: item.days }) }}</span>
+              <div class="rank-bar-track">
+                <div class="rank-bar-fill" :style="{ width: item.pct + '%' }"></div>
+              </div>
+            </div>
+          </div>
+          <div class="rank-cost">
+            <span class="rank-cost-val">{{ format(item.cost) }}</span>
+            <span class="rank-cost-unit">{{ t('analyticsPage.perDay') }}</span>
+          </div>
+        </div>
+      </div>
+    </van-popup>
 
     <!-- S2 目标进度总览 -->
     <div class="section-card" v-if="goalProgress">
@@ -191,8 +226,8 @@
           <span class="title-icon">📊</span>{{ t('insights.typeDistribution.title') }}
         </div>
         <div class="toggle-group">
-          <div class="toggle-btn active" @click="distMode = 'value'">{{ t('insights.typeDistribution.byValue') }}</div>
-          <div class="toggle-btn" @click="distMode = 'count'">{{ t('insights.typeDistribution.byCount') }}</div>
+          <div :class="['toggle-btn', { active: distMode === 'value' }]" @click="distMode = 'value'">{{ t('insights.typeDistribution.byValue') }}</div>
+          <div :class="['toggle-btn', { active: distMode === 'count' }]" @click="distMode = 'count'">{{ t('insights.typeDistribution.byCount') }}</div>
         </div>
       </div>
       <div class="dist-summary">
@@ -371,6 +406,8 @@ const { format, currency } = useCurrency()
 const loading = ref(true)
 const insightsData = ref<InsightsResponse | null>(null)
 const distMode = ref<'value' | 'count'>('value')
+const costRankOrder = ref<'highest' | 'lowest'>('highest')
+const showAllCostRank = ref(false)
 
 // Compact formatter for large numbers (K format)
 function formatCompact(amount: number): string {
@@ -387,14 +424,20 @@ function formatCompact(amount: number): string {
 const smartDiscovery = computed(() => insightsData.value?.smart_discovery)
 const dailyCostItems = computed(() => {
   if (!insightsData.value?.daily_cost_ranking) return []
-  return insightsData.value.daily_cost_ranking.map((item: DailyCostItem, idx: number) => ({
+  const sorted = costRankOrder.value === 'lowest'
+    ? [...insightsData.value.daily_cost_ranking].reverse()
+    : insightsData.value.daily_cost_ranking
+  const maxCost = sorted[0]?.daily_cost || 1
+  return sorted.map((item: DailyCostItem) => ({
     icon: item.icon,
     name: item.name,
     days: item.days_used,
     cost: item.daily_cost,
-    pct: idx === 0 ? 100 : Math.round((item.daily_cost / (insightsData.value?.daily_cost_ranking[0]?.daily_cost || 1)) * 100)
+    pct: Math.round((item.daily_cost / maxCost) * 100)
   }))
 })
+
+const allCostRankItems = computed(() => dailyCostItems.value)
 
 const goalProgress = computed(() => insightsData.value?.goal_progress)
 
@@ -866,6 +909,65 @@ onMounted(async () => {
 .rank-cost-unit {
   font-size: 11px;
   color: #bbb;
+}
+
+.rank-sort-group {
+  display: flex;
+  gap: 6px;
+}
+
+.rank-sort-btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.rank-sort-btn.active {
+  background: var(--van-primary-color);
+  color: #fff;
+  font-weight: 600;
+}
+
+[data-theme='dark'] .rank-sort-btn.active {
+  background: var(--color-lavender);
+  color: #010120;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 12px;
+  border-bottom: 0.5px solid var(--separator);
+}
+
+.popup-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.popup-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.popup-rank-list {
+  padding: 12px 16px 24px;
+  max-height: 65vh;
+  overflow-y: auto;
 }
 
 .view-all-row {
