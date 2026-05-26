@@ -106,6 +106,8 @@ export default {
     abandonWishHint: '距离「{wishName}」还差 {remaining} ⭐，完成这个任务又近一步了 🌟',
     claimFailed: '❌ 认领失败，任务可能已被认领',
     abandonFailed: '❌ 放弃失败，请重试',
+    wishProgressBump: '✨ +{stars} ⭐ 离「{wishName}」又近一步!',
+    daysToBonus: '🔥 还差 {days} 天获得连击奖励!',
   },
   tasks: {
     myStars: '我的星星币 ⭐',

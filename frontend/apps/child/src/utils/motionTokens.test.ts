@@ -24,4 +24,8 @@ describe('MOTION tokens', () => {
   it('scales.pop === 1.15', () => {
     expect(MOTION.scales.pop).toBe(1.15)
   })
+
+  it('haptic.rewardPulse is the 3-element double-pulse pattern', () => {
+    expect(MOTION.haptic.rewardPulse).toEqual([50, 30, 50])
+  })
 })

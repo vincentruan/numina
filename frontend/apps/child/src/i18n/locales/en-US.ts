@@ -105,6 +105,8 @@ export default {
     abandonWishHint: '{remaining} ⭐ away from 「{wishName}」 — finishing this gets you closer 🌟',
     claimFailed: '❌ Claim failed, task may already be taken',
     abandonFailed: '❌ Failed to give up, please try again',
+    wishProgressBump: '✨ +{stars} ⭐ closer to {wishName}!',
+    daysToBonus: '🔥 {days} more days to streak bonus!',
   },
   tasks: {
     myStars: 'My Star Coins ⭐',

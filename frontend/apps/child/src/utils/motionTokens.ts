@@ -23,5 +23,6 @@ export const MOTION = {
     confirm: [50],
     arrival: [400],
     final: [150],
+    rewardPulse: [50, 30, 50],
   },
 } as const
