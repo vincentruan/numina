@@ -151,7 +151,7 @@ def seed_demo_scenario(db: Session, verbose: bool = False) -> None:
     )
     child2, _ = UserFactory.get_or_create_child(
         db, display_name="大宝", family_id=fam.id, avatar_color="#4ADE80",
-        username="dabao", pin="🦊🐼🦁🐯",
+        username="dabao", pin="🐱🐶🌟🌈",
     )
 
     # 任务模板
