@@ -22,6 +22,7 @@ export interface Agent {
 }
 
 export interface AgentListResponse {
+  system: Agent[]
   builtin: Agent[]
   custom: Agent[]
 }
