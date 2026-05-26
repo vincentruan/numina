@@ -1,5 +1,5 @@
 ---
-status: active
+status: completed
 type: feat
 origin: ~/.gstack/projects/vincentruan-numina/ceo-plans/2026-05-25-child-chore-gamification.md
 created: 2026-05-25
