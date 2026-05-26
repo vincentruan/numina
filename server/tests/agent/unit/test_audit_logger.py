@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
-from apps.agent.services.audit_logger import AuditEntry, AuditLogger
+from apps.agent.services.audit_logger import AuditEntry, AuditLogger, setup_audit_logger
 
 
 class TestAuditEntry:
@@ -66,6 +66,9 @@ class TestAuditLogger:
             def handle(self, record): messages.append(record.getMessage())
             def emit(self, record): messages.append(record.getMessage())
 
+        # Initialize audit logger first (required before accessing handlers)
+        setup_audit_logger()
+
         # Clear existing handlers and add test handler
         for h in al._audit_logger.handlers[:]:
             al._audit_logger.removeHandler(h)
@@ -79,6 +82,9 @@ class TestAuditLogger:
     def test_log_call_does_not_raise_on_failure(self):
         """Audit failure must never propagate."""
         import apps.agent.services.audit_logger as al
+
+        # Initialize audit logger first
+        setup_audit_logger()
 
         # Clear existing handlers
         for h in al._audit_logger.handlers[:]:
@@ -105,6 +111,9 @@ class TestAuditLogger:
             def handle(self, record): messages.append(record.getMessage())
             def emit(self, record): messages.append(record.getMessage())
 
+        # Initialize audit logger first
+        setup_audit_logger()
+
         for h in al._audit_logger.handlers[:]:
             al._audit_logger.removeHandler(h)
         al._audit_logger.addHandler(CapturingHandler())
@@ -121,6 +130,9 @@ class TestAuditLogger:
             level = 0
             def handle(self, record): messages.append(record.getMessage())
             def emit(self, record): messages.append(record.getMessage())
+
+        # Initialize audit logger first
+        setup_audit_logger()
 
         for h in al._audit_logger.handlers[:]:
             al._audit_logger.removeHandler(h)

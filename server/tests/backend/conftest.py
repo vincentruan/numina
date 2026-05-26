@@ -18,8 +18,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_LIFESPAN_DIR}/lifespan.db"
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, event
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
 from apps.backend.app.database import Base, get_db
@@ -48,17 +48,88 @@ from apps.backend.app.models.user import User  # noqa: F401
 from apps.backend.app.seed.categories import seed_categories
 from apps.backend.app.services.cache import reset_captcha_payload_cache, reset_rate_limit_cache
 
-# Use in-memory SQLite for tests
+# ─────────────────────────────────────────────────────────────────────────────
+# Session-scoped engine + table creation (create once, reuse across all tests)
+# ─────────────────────────────────────────────────────────────────────────────
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
-# Create engine and session factory for tests
+# Create session-scoped engine with StaticPool for in-memory SQLite
 # StaticPool ensures all connections share the same in-memory database
-engine = create_engine(
+_engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
     poolclass=StaticPool,
 )
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Session-scoped sessionmaker for creating connections
+_SessionFactory = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+
+
+@pytest.fixture(scope="session")
+def _session_engine():
+    """Session-scoped engine — tables created once and reused."""
+    # Create all tables once at session start
+    Base.metadata.create_all(bind=_engine)
+    yield _engine
+    # Drop all tables at session end (cleanup)
+    Base.metadata.drop_all(bind=_engine)
+
+
+@pytest.fixture(scope="function")
+def db(_session_engine):
+    """Function-scoped session with nested transaction (SAVEPOINT) isolation.
+
+    Pattern: Session-level tables + Function-level nested transaction.
+    - Tables created once per session (fast)
+    - Each test gets a SAVEPOINT via begin_nested()
+    - Business code db.commit() is caught in SAVEPOINT
+    - Rollback at test end restores clean state
+
+    This is 10-100x faster than create_all/drop_all per test.
+    """
+    # Reset rate limit store before each test
+    if hasattr(RateLimitMiddleware, "_rate_store"):
+        RateLimitMiddleware._rate_store.clear()
+
+    # Reset cache (including registration rate limits)
+    reset_rate_limit_cache()
+
+    # Create a CONNECTION (not just session) for nested transaction support
+    connection = _session_engine.connect()
+    transaction = connection.begin()  # Outer transaction
+
+    # Create session bound to this connection
+    session = Session(bind=connection)
+
+    # Begin a SAVEPOINT (nested transaction)
+    nested = connection.begin_nested()
+
+    # If the session commits, it's caught in the SAVEPOINT (not the outer tx)
+    @event.listens_for(session, "after_transaction_end")
+    def restart_savepoint(session, transaction):
+        if transaction.nested and not transaction._parent.nested:
+            # Ensure that state is expired the way session.commit() at normal
+            # operation expires state (e.g. session.refresh() behavior)
+            session.expire_all()
+            session.begin_nested()
+
+    # Seed categories and invitation codes inside the SAVEPOINT
+    seed_categories(session)
+    _seed_test_invitation_codes(session)
+
+    yield session
+
+    # Rollback to SAVEPOINT, discarding all changes from the test
+    session.close()
+    transaction.rollback()
+    connection.close()
+
+    # Reset rate limit store after each test
+    if hasattr(RateLimitMiddleware, "_rate_store"):
+        RateLimitMiddleware._rate_store.clear()
+    # Reset captcha payload cache and rate limit cache
+    reset_captcha_payload_cache()
+    reset_rate_limit_cache()
 
 
 def _seed_test_invitation_codes(session):
@@ -82,40 +153,13 @@ def _seed_test_invitation_codes(session):
     ]
     for code in codes:
         session.add(code)
-    session.commit()
-
-
-@pytest.fixture(scope="function")
-def db():
-    """Create a fresh database for each test"""
-    # Reset rate limit store before each test
-    if hasattr(RateLimitMiddleware, "_rate_store"):
-        RateLimitMiddleware._rate_store.clear()
-
-    # Reset cache (including registration rate limits)
-    reset_rate_limit_cache()
-
-    Base.metadata.create_all(bind=engine)
-    session = TestingSessionLocal()
-    seed_categories(session)
-    # Seed test invitation codes for fixtures
-    _seed_test_invitation_codes(session)
-    try:
-        yield session
-    finally:
-        session.close()
-        Base.metadata.drop_all(bind=engine)
-        # Reset rate limit store after each test
-        if hasattr(RateLimitMiddleware, "_rate_store"):
-            RateLimitMiddleware._rate_store.clear()
-        # Reset captcha payload cache and rate limit cache
-        reset_captcha_payload_cache()
-        reset_rate_limit_cache()
+    # DO NOT commit here — nested transaction (SAVEPOINT) handles isolation
+    # session.commit() inside SAVEPOINT is caught and rolled back at test end
 
 
 @pytest.fixture(scope="function")
 def client(db):
-    """Create a test client with database override"""
+    """Create a test client with database override."""
     def override_get_db():
         try:
             yield db
@@ -128,8 +172,16 @@ def client(db):
     # Override SessionLocal for all new sessions (including generators)
     # This ensures components that create their own SessionLocal() use the test database
     from apps.backend.app import database as app_database_module
+    # Create a sessionmaker that yields our nested-transaction session
+    # Note: We can't replace SessionLocal directly since it's a sessionmaker,
+    # but the dependency override handles most cases
     original_session_local = app_database_module.SessionLocal
-    app_database_module.SessionLocal = TestingSessionLocal
+
+    # For tests, create a factory that returns the same nested session
+    def _test_session_factory():
+        return db
+
+    app_database_module.SessionLocal = _test_session_factory
 
     with TestClient(app) as test_client:
         yield test_client

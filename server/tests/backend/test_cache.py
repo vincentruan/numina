@@ -73,6 +73,7 @@ class TestMemoryCacheBackend:
         cache = MemoryCacheBackend()
         cache.set("key_ttl", "value", ttl_seconds=1)
         assert cache.get("key_ttl") == "value"
+        # Short sleep is acceptable for TTL tests (time_machine has edge cases with time.time())
         time.sleep(1.1)
         assert cache.get("key_ttl") is None
 

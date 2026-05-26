@@ -23,6 +23,8 @@ def _to_response(agent: AIAgent, user: User) -> AgentResponse:
         col.name: getattr(agent, col.name)
         for col in agent.__table__.columns
     }
+    # Add computed fields
+    data["is_builtin"] = agent.is_builtin
     # Calculate permissions based on agent_type
     if agent.agent_type == "system":
         data["can_edit"] = False

@@ -7,6 +7,12 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     setupFiles: ['tests/setup.ts'],
+    // Parallel execution for speed (Vitest 4 uses pool directly)
+    pool: 'threads',
+    minWorkers: 1,
+    maxWorkers: 4,
+    // Silent console in tests for machine-friendly output
+    silent: true,
     deps: {
       inline: [/packages\/auth/],
     },
