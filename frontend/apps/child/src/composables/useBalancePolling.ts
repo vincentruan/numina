@@ -37,6 +37,7 @@ const _lastChangeRef: Ref<BalanceChange | null> = ref(null)
 let _hasFetchedOnce = false
 let _consumerCount = 0
 let _lastFetchTime = 0
+let _visibilityHandler: (() => void) | null = null
 
 function _applyBalance(next: number): void {
   const prev = _balanceRef.value
@@ -114,7 +115,8 @@ export function useBalancePolling(options?: UseBalancePollingOptions): UseBalanc
     if (_consumerCount === 1) {
       // First consumer: start polling and add visibility listener
       _startPolling(intervalMs)
-      document.addEventListener('visibilitychange', () => _handleVisibilityChange(intervalMs))
+      _visibilityHandler = () => _handleVisibilityChange(intervalMs)
+      document.addEventListener('visibilitychange', _visibilityHandler)
     }
   }
 
@@ -124,7 +126,10 @@ export function useBalancePolling(options?: UseBalancePollingOptions): UseBalanc
       _consumerCount = 0
       // Last consumer: stop polling and remove visibility listener
       _stopPolling()
-      document.removeEventListener('visibilitychange', () => _handleVisibilityChange(intervalMs))
+      if (_visibilityHandler) {
+        document.removeEventListener('visibilitychange', _visibilityHandler)
+        _visibilityHandler = null
+      }
     }
   }
 
@@ -154,6 +159,10 @@ export function useBalancePolling(options?: UseBalancePollingOptions): UseBalanc
  */
 export function __resetBalancePollingForTests(): void {
   _stopPolling()
+  if (_visibilityHandler) {
+    document.removeEventListener('visibilitychange', _visibilityHandler)
+    _visibilityHandler = null
+  }
   _balanceRef.value = 0
   _isLoadingRef.value = false
   _errorRef.value = null

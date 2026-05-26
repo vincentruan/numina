@@ -63,3 +63,32 @@ describe('useBalancePolling lastChange', () => {
     scope.stop()
   })
 })
+
+describe('useBalancePolling visibility listener cleanup', () => {
+  beforeEach(() => {
+    __resetBalancePollingForTests()
+    vi.clearAllMocks()
+  })
+
+  it('removes visibilitychange listener when last consumer stops', async () => {
+    vi.mocked(getCoinBalance).mockResolvedValue(100)
+
+    const addSpy = vi.spyOn(document, 'addEventListener')
+    const removeSpy = vi.spyOn(document, 'removeEventListener')
+
+    const scope = effectScope()
+    const handle = scope.run(() => useBalancePolling({ enabled: false }))!
+    handle.start()
+    handle.stop()
+
+    const addedHandler = addSpy.mock.calls.find((c) => c[0] === 'visibilitychange')?.[1]
+    const removedHandler = removeSpy.mock.calls.find((c) => c[0] === 'visibilitychange')?.[1]
+
+    expect(addedHandler).toBeDefined()
+    expect(removedHandler).toBe(addedHandler)
+
+    scope.stop()
+    addSpy.mockRestore()
+    removeSpy.mockRestore()
+  })
+})
