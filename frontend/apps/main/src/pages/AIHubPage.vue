@@ -292,6 +292,23 @@ function startChat(q: string) {
 }
 
 function handleAgentConsult(agent: Agent) {
+  // Route based on agent_name
+  if (agent.agent_name === 'ai-assistant') {
+    router.push({ name: 'AIChat' })
+    return
+  }
+  if (agent.agent_name === 'time-machine') {
+    router.push({ name: 'TimeMachine' })
+    return
+  }
+
+  // Route based on skills
+  if (agent.skills?.includes('report')) {
+    router.push('/ai/report')
+    return
+  }
+
+  // Default: route to chat with agentId
   router.push({ name: 'AIChat', query: { agentId: agent.id } })
 }
 
