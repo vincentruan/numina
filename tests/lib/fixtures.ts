@@ -48,7 +48,7 @@ export async function singleAsset(page: Page): Promise<Credentials> {
 
 /**
  * Child family fixture — logs in as test_child (a child user in test_rich's family).
- * PIN: 🐱🐶🐸🦊
+ * PIN: 🐱🐶🌟🌈
  *
  * Returns { childId, parentToken } for specs that need both child and parent contexts.
  * The page is left in child session state (localStorage has numina_user with role: 'child').
@@ -56,5 +56,5 @@ export async function singleAsset(page: Page): Promise<Credentials> {
  * NOTE: test_child is seeded by seed-accounts.sh. Requires the seed script to have run.
  */
 export async function childFamily(page: Page): Promise<ChildSession> {
-  return loginAsChild(page, 'test_rich', 'TestRich123!', 'test_child', ['🐱', '🐶', '🐸', '🦊'])
+  return loginAsChild(page, 'test_rich', 'TestRich123!', 'test_child', ['🐱', '🐶', '🌟', '🌈'])
 }

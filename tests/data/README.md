@@ -41,9 +41,9 @@ TEST_DATABASE_URL=sqlite:///test.db python seed_data.py
 
 | 显示名 | 用户名 | PIN | 星星币余额 | 说明 |
 |--------|--------|-----|-----------|------|
-| 小宝 | `xiaobao` | `🐰🥕🌈⭐` | 200 + 任务奖励 | 有已完成任务实例（最近3天） |
-| 大宝 | `dabao` | `🐰🥕🌈⭐` | 150 | 有待审核心愿 |
-| 小明 | `xiaoming` | `🐰🥕🌈⭐` | 50 | test_rich 家庭，有1条已完成任务 |
+| 小宝 | `xiaobao` | `🐱🐶🌟🌈` | 200 + 任务奖励 | 有已完成任务实例（最近3天） |
+| 大宝 | `dabao` | `🐱🐶🌟🌈` | 150 | 有待审核心愿 |
+| 小明 | `xiaoming` | `🐱🐶🌟🌈` | 50 | test_rich 家庭，有1条已完成任务 |
 
 ## 数据场景详情
 
@@ -202,7 +202,7 @@ curl -s -X POST http://localhost:8080/api/v1/auth/child/login \
   -H "Content-Type: application/json" \
   -d '{
     "username": "xiaobao",
-    "pin_sequence": ["🐰", "🥕", "🌈", "⭐"]
+    "pin_sequence": ["🐱", "🐶", "🌟", "🌈"]
   }' | jq .
 ```
 
@@ -296,7 +296,7 @@ curl -s "$BASE/wishes" -H "Authorization: Bearer $TOKEN" | \
 # 儿童直接登录，无需家长 token
 CHILD_TOKEN=$(curl -s -X POST $BASE/auth/child/login \
   -H "Content-Type: application/json" \
-  -d '{"username": "xiaobao", "pin_sequence": ["🐰","🥕","🌈","⭐"]}' | \
+  -d '{"username": "xiaobao", "pin_sequence": ["🐱","🐶","🌟","🌈"]}' | \
   jq -r .access_token)
 
 # 查看星星币余额
