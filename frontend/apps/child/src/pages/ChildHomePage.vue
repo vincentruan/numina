@@ -21,7 +21,17 @@
           <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
           <div class="chore-info">
             <p class="chore-name">{{ c.chore_name }}</p>
-            <p class="chore-reward">+{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐</p>
+            <p class="chore-reward">
+              +{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐
+              <span
+                v-if="c.streak_count > 1"
+                class="streak-badge"
+                :class="['flame-tier-' + streakTier(c.streak_count), { 'reduced-motion': reducedMotion }]"
+              >🔥{{ c.streak_count }}</span>
+            </p>
+            <p v-if="daysToNextBonus(c.streak_count) !== null" class="days-to-bonus">
+              {{ t('chore.daysToBonus', { days: daysToNextBonus(c.streak_count) }) }}
+            </p>
           </div>
           <button
             v-if="c.is_pool_unclaimed"
@@ -170,6 +180,9 @@ import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
+import { useReducedMotion } from '@/composables/useReducedMotion'
+import { tryVibrate } from '@/composables/useHaptic'
+import { MOTION } from '@/utils/motionTokens'
 import { useChildAuthStore } from '@numina/auth'
 
 const { t } = useI18n()
@@ -181,6 +194,7 @@ const childAuthStore = useChildAuthStore()
 
 // Balance polling via composable
 const { balance, refresh: refreshBalance } = useBalancePolling()
+const reducedMotion = useReducedMotion()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
 const submittingId = ref<string | null>(null)
@@ -211,6 +225,23 @@ const languageOptions = computed(() => [
   { value: 'en-US' as const, label: t('home.langEnUS') },
 ])
 
+// Streak tier helper: returns threshold value (7, 14, 30) or '0' for below 7
+function streakTier(count: number): string {
+  if (count >= 30) return '30'
+  if (count >= 14) return '14'
+  if (count >= 7) return '7'
+  return '0'
+}
+
+// Days to next streak bonus tier
+function daysToNextBonus(streakCount: number): number | null {
+  if (streakCount <= 1) return null // No streak yet
+  if (streakCount >= 30) return null // Already at max tier
+  const thresholds = [7, 14, 30]
+  const nextThreshold = thresholds.find(t => streakCount < t)
+  return nextThreshold ? nextThreshold - streakCount : null
+}
+
 function statusLabel(status: ChoreInstance['status']): string {
   switch (status) {
     case 'available': return t('chore.complete')
@@ -227,6 +258,14 @@ async function complete(instanceId: string) {
     const updated = await markChoreComplete(instanceId)
     const idx = todayChores.value.findIndex(c => c.id === instanceId)
     if (idx !== -1) todayChores.value[idx] = updated
+    // Haptic feedback after successful completion
+    tryVibrate(MOTION.haptic.rewardPulse)
+    // Wish progress bump toast if active wish exists
+    if (topWish.value) {
+      const chore = todayChores.value.find(c => c.id === instanceId)
+      const stars = chore?.coin_reward ?? 0
+      showToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
+    }
     // Refresh balance after completing a chore
     await refreshBalance()
   } catch {
@@ -392,6 +431,35 @@ onMounted(async () => {
   color: var(--color-brand-ochre);
   margin: 2px 0 0;
   font-weight: 500;
+}
+
+/* Streak badge */
+.streak-badge {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 12px;
+  background: var(--color-brand-peach);
+  color: var(--color-ink);
+  border-radius: var(--radius-pill);
+  padding: 1px 6px;
+  font-weight: 600;
+}
+.streak-badge.flame-tier-7 { font-size: 13px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
+.streak-badge.flame-tier-14 { font-size: 14px; animation: flame-pulse 500ms ease-in-out infinite; }
+.streak-badge.flame-tier-30 { font-size: 15px; animation: flame-pulse 600ms ease-in-out infinite; }
+.streak-badge.reduced-motion { animation: none; }
+
+@keyframes flame-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); /* scales.pulse */ }
+}
+
+/* Days to bonus hint */
+.days-to-bonus {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  color: var(--color-muted-soft);
+  margin: 2px 0 0;
 }
 
 /* Complete button */

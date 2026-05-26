@@ -62,7 +62,14 @@
           <p class="chore-name">{{ chore.chore_name }}</p>
           <p class="chore-reward">
             +{{ chore.coin_reward }} ⭐
-            <span v-if="chore.streak_count > 1" class="streak-badge">🔥{{ chore.streak_count }}</span>
+            <span
+              v-if="chore.streak_count > 1"
+              class="streak-badge"
+              :class="['flame-tier-' + streakTier(chore.streak_count), { 'reduced-motion': reducedMotion }]"
+            >🔥{{ chore.streak_count }}</span>
+          </p>
+          <p v-if="daysToNextBonus(chore.streak_count) !== null" class="days-to-bonus">
+            {{ t('chore.daysToBonus', { days: daysToNextBonus(chore.streak_count) }) }}
           </p>
         </div>
         <div class="chore-action">
@@ -212,6 +219,9 @@ import type { BlindBoxDraw } from '@/types/blindBox'
 import http from '@/api/index'
 import { useCelebration } from '@/composables/useCelebration'
 import { useBalancePolling } from '@/composables/useBalancePolling'
+import { useReducedMotion } from '@/composables/useReducedMotion'
+import { tryVibrate } from '@/composables/useHaptic'
+import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
 
 const { t, locale } = useI18n()
@@ -236,6 +246,24 @@ const showAutoDrawOverlay = ref(false)
 
 // Balance polling via composable
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
+const reducedMotion = useReducedMotion()
+
+// Streak tier helper: returns threshold value (7, 14, 30) or '0' for below 7
+function streakTier(count: number): string {
+  if (count >= 30) return '30'
+  if (count >= 14) return '14'
+  if (count >= 7) return '7'
+  return '0'
+}
+
+// Days to next streak bonus tier
+function daysToNextBonus(streakCount: number): number | null {
+  if (streakCount <= 1) return null // No streak yet
+  if (streakCount >= 30) return null // Already at max tier
+  const thresholds = [7, 14, 30]
+  const nextThreshold = thresholds.find(t => streakCount < t)
+  return nextThreshold ? nextThreshold - streakCount : null
+}
 
 // Celebration state via composable (renamed to avoid conflict with milestone celebrationVisible)
 const {
@@ -436,6 +464,14 @@ async function complete(instanceId: string) {
     const updated = await markChoreComplete(instanceId)
     const idx = chores.value.findIndex(c => c.id === instanceId)
     if (idx !== -1) chores.value[idx] = updated
+    // Haptic feedback after successful completion
+    tryVibrate(MOTION.haptic.rewardPulse)
+    // Wish progress bump toast if active wish exists
+    if (topWish.value) {
+      const chore = chores.value.find(c => c.id === instanceId)
+      const stars = chore?.coin_reward ?? 0
+      showToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
+    }
     // Check for auto-triggered blind box
     if (updated.status === 'approved') {
       await checkAutoDraw()
@@ -731,6 +767,22 @@ onUnmounted(() => {
   border-radius: var(--radius-pill);
   padding: 1px 8px;
   font-weight: 600;
+}
+.streak-badge.flame-tier-7 { font-size: 13px; animation: flame-pulse 400ms /* durations.medium */ ease-in-out infinite; }
+.streak-badge.flame-tier-14 { font-size: 14px; animation: flame-pulse 500ms ease-in-out infinite; }
+.streak-badge.flame-tier-30 { font-size: 15px; animation: flame-pulse 600ms ease-in-out infinite; }
+.streak-badge.reduced-motion { animation: none; }
+
+@keyframes flame-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); /* scales.pulse */ }
+}
+
+.days-to-bonus {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  color: var(--color-muted-soft);
+  margin: 2px 0 0;
 }
 
 /* ── Complete button — pink brand CTA ── */
