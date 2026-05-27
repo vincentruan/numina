@@ -19,17 +19,17 @@ router = APIRouter(prefix="/ai/agents", tags=["ai-agents"])
 
 def _to_response(agent: AIAgent, user: User) -> AgentResponse:
     is_owner = user.role == "owner"
-    data = {
-        col.name: getattr(agent, col.name)
-        for col in agent.__table__.columns
-    }
+    data = {col.name: getattr(agent, col.name) for col in agent.__table__.columns}
     # Add computed fields
     data["is_builtin"] = agent.is_builtin
-    # Calculate permissions based on agent_type
-    if agent.agent_type == "system":
-        data["can_edit"] = False
-        data["can_delete"] = False
-    elif agent.agent_type == "builtin":
+    # Calculate permissions based on agent_type.
+    #
+    # system agents (ai-assistant, numina): owners can navigate to a read-only
+    # AgentFormPage view (see U13 in the plan). The PUT /ai/agents/{id} guard
+    # below still rejects mutations on system agents (403); can_edit=True here
+    # only controls the frontend's display of the edit affordance, not
+    # mutation authority.
+    if agent.agent_type == "system" or agent.agent_type == "builtin":
         data["can_edit"] = is_owner
         data["can_delete"] = False
     else:  # custom
@@ -55,7 +55,9 @@ def list_agents(
         .all()
     )
     system = [_to_response(a, current_user) for a in agents if a.agent_type == "system"]
-    builtin = [_to_response(a, current_user) for a in agents if a.agent_type == "builtin"]
+    builtin = [
+        _to_response(a, current_user) for a in agents if a.agent_type == "builtin"
+    ]
     custom = [_to_response(a, current_user) for a in agents if a.agent_type == "custom"]
     return AgentListGroupedResponse(
         system=system,
@@ -138,7 +140,9 @@ def update_agent(
         allowed = {"icon", "color", "skills", "display_order"}
         disallowed = set(updates.keys()) - allowed
         if disallowed:
-            raise AppError(ErrorCode.VALIDATION_ERROR, "内置智能体仅可修改外观和调用能力")
+            raise AppError(
+                ErrorCode.VALIDATION_ERROR, "内置智能体仅可修改外观和调用能力"
+            )
 
     for key, value in updates.items():
         setattr(agent, key, value)
