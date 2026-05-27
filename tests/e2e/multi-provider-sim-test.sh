@@ -281,7 +281,7 @@ if [ "$SECOND_FACTOR_REQUIRED" = "true" ]; then
     TEMP_TOKEN=$(json_value "$STEP1_RESP" '.data.temp_token')
     STEP2_RESP=$(curl -sL -X POST "$BASE_URL/auth/login/step2" \
         -H "Content-Type: application/json" \
-        -d "{\"temp_token\":\"$TEMP_TOKEN\",\"factor_type\":\"emoji_pin\",\"payload\":{\"pin_sequence\":[\"🐰\",\"🥕\",\"🌈\",\"⭐\"]}}")
+        -d "{\"temp_token\":\"$TEMP_TOKEN\",\"factor_type\":\"emoji_pin\",\"payload\":{\"pin_sequence\":[\"🐱\",\"🐶\",\"🌟\",\"🌈\"]}}")
     CHILD_TOKEN=$(json_value "$STEP2_RESP" '.data.access_token')
 else
     # No second factor — step1 returned token directly

@@ -106,7 +106,7 @@ test.describe('login flow — production', () => {
 
     // Child emoji PIN login
     const childLoginResp = await page.request.post(`${PROD}/api/v1/auth/child/login`, {
-      data: { child_id: child!.id, pin_sequence: ['🐱', '🐶', '🐸', '🦊'] },
+      data: { child_id: child!.id, pin_sequence: ['🐱', '🐶', '🌟', '🌈'] },
     })
     expect(childLoginResp.ok(), `child login failed: ${await childLoginResp.text()}`).toBeTruthy()
     const childData = await childLoginResp.json()

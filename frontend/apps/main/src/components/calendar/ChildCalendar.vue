@@ -217,6 +217,16 @@ onMounted(loadMonth)
   --cal-heat-3: #ffb74d;
   --cal-heat-4: #f5a623;
   --cal-dot-dark-shadow: #fff;
+  --cal-today-bg: #f5a623;
+  --cal-today-color: #fff;
+  --cal-dot-chore: #4caf50;
+  --cal-dot-wish: #f5a623;
+  --cal-dot-milestone: #9c27b0;
+  --cal-dot-count-chore: #2e7d32;
+  --cal-dot-count-wish: #e65100;
+  --cal-dot-count-milestone: #6a1b9a;
+  --cal-dot-count-on-dark: #fff;
+  --cal-accent: #f5a623;
 }
 
 /* ── Dark mode overrides ── */
@@ -238,6 +248,16 @@ onMounted(loadMonth)
   --cal-heat-3: rgba(245, 166, 35, 0.5);
   --cal-heat-4: rgba(245, 166, 35, 0.75);
   --cal-dot-dark-shadow: rgba(26, 26, 46, 0.8);
+  --cal-today-bg: #f5a623;
+  --cal-today-color: #1a1a2e;
+  --cal-dot-chore: #6fcf73;
+  --cal-dot-wish: #ffb74d;
+  --cal-dot-milestone: #ce93d8;
+  --cal-dot-count-chore: #a5d6a7;
+  --cal-dot-count-wish: #ffcc80;
+  --cal-dot-count-milestone: #e1bee7;
+  --cal-dot-count-on-dark: #1a1a2e;
+  --cal-accent: #ffb74d;
 }
 
 .child-calendar {
@@ -324,8 +344,8 @@ onMounted(loadMonth)
   transform: scale(0.92);
 }
 .cal-cell.today .day-num {
-  background: #f5a623;
-  color: #fff;
+  background: var(--cal-today-bg);
+  color: var(--cal-today-color);
   border-radius: 50%;
   width: 26px;
   height: 26px;
@@ -363,9 +383,9 @@ onMounted(loadMonth)
   display: inline-block;
   flex-shrink: 0;
 }
-.dot-chore { background: #4caf50; }
-.dot-wish  { background: #f5a623; }
-.dot-milestone { background: #9c27b0; }
+.dot-chore { background: var(--cal-dot-chore); }
+.dot-wish  { background: var(--cal-dot-wish); }
+.dot-milestone { background: var(--cal-dot-milestone); }
 
 /* 深色背景时圆点加描边 */
 .dot-dark .dot {
@@ -390,12 +410,12 @@ onMounted(loadMonth)
   padding: 0 1px;
 }
 
-.dot-count-chore    { color: #2e7d32; }
-.dot-count-wish     { color: #e65100; }
-.dot-count-milestone { color: #6a1b9a; }
+.dot-count-chore    { color: var(--cal-dot-count-chore); }
+.dot-count-wish     { color: var(--cal-dot-count-wish); }
+.dot-count-milestone { color: var(--cal-dot-count-milestone); }
 
 .dot-dark .dot-count {
-  color: #fff;
+  color: var(--cal-dot-count-on-dark);
 }
 
 /* 父母视角圆角 */
@@ -432,7 +452,7 @@ onMounted(loadMonth)
   color: var(--cal-stats-color);
 }
 .stats-sep { color: var(--cal-stats-sep); }
-.stats-rate { color: #f5a623; font-weight: 600; }
+.stats-rate { color: var(--cal-accent); font-weight: 600; }
 
 /* Streak connector */
 .cal-cell.streak::before {
@@ -442,7 +462,7 @@ onMounted(loadMonth)
   top: 50%;
   width: 50%;
   height: 2px;
-  background: #f5a623;
+  background: var(--cal-accent);
   opacity: 0.5;
   transform: translateY(-50%);
   pointer-events: none;
