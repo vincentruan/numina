@@ -8,6 +8,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 
+from apps.backend.app.config import settings
 from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
 
 
@@ -48,27 +49,28 @@ class TestGlobalRateLimit:
     def test_health_endpoint_not_rate_limited(self):
         """Test that health endpoint is not rate limited."""
         from apps.backend.app.main import app
+        limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         # Don't raise exceptions for 429 responses
         client = TestClient(app, raise_server_exceptions=False)
 
         # Make many requests to health endpoint - should all succeed
-        for _ in range(150):
+        for _ in range(limit + 50):
             response = client.get("/api/health")
             assert response.status_code == 200
 
     def test_rate_limit_enforcement(self):
         """Test that rate limiting is enforced by the middleware."""
         # Test the middleware logic directly rather than through HTTP
+        limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         middleware = RateLimitMiddleware(None)
 
-        # Should allow first 100 requests
-        for i in range(100):
-            result = middleware._check_rate_limit(f"test_client_{i % 3}")  # 3 different clients
+        # Should allow first 'limit' requests spread across 3 clients
+        for i in range(limit):
+            result = middleware._check_rate_limit(f"test_client_{i % 3}")
             assert result is True, f"Request {i} should have passed"
 
-        # After 100 requests per client, should be rate limited
-        # Client 0, 1, 2 each made ~33-34 requests, so make more to hit limit
-        for _ in range(100):
+        # Exhaust the limit for one client
+        for _ in range(limit):
             middleware._check_rate_limit("heavy_user")
 
         # Now should be rate limited
@@ -77,10 +79,11 @@ class TestGlobalRateLimit:
 
     def test_different_clients_have_separate_limits(self):
         """Test that different clients have separate rate limits."""
+        limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         middleware = RateLimitMiddleware(None)
 
-        # Client A makes 150 requests (should be limited)
-        for _ in range(150):
+        # Client A exhausts its limit
+        for _ in range(limit + 50):
             middleware._check_rate_limit("client_a")
 
         # Client A should be limited
@@ -199,13 +202,14 @@ class TestRateLimitSkipPaths:
 
     def test_rate_limit_check_logic(self):
         """Test the rate limit check logic directly."""
+        limit = settings.GLOBAL_RATE_LIMIT_PER_MINUTE
         middleware = RateLimitMiddleware(None)
 
         # First check should pass
         assert middleware._check_rate_limit("test_client_1") is True
 
         # Exhaust the limit
-        for _ in range(150):
+        for _ in range(limit + 50):
             middleware._check_rate_limit("test_client_2")
 
         # Should now be rate limited
