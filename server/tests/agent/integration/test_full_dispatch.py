@@ -204,6 +204,7 @@ class TestChatEndpoint:
             thread_id=None,
             free_text=None,
             enable_thinking_override=None,
+            web_search=False,
         ):
             captured["capability"] = capability
             captured["family_id"] = family_id
