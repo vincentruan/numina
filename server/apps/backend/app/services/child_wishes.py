@@ -73,6 +73,7 @@ def _to_parent_response(wish: ChildWish, child_display_name: str, db: Session | 
         star_coin_cost=wish.star_coin_cost,
         rejection_reason=wish.rejection_reason,
         realized_asset_id=wish.realized_asset_id,
+        fulfilled_at=wish.fulfilled_at,
         created_at=wish.created_at,
         updated_at=wish.updated_at,
         cost_history=cost_history,
