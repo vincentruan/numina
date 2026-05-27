@@ -198,3 +198,5 @@ server/apps/agent/data/sessions
 
 # Runtime data directory (SQLite DBs, DeerFlow checkpoints, WAL files)
 .numina_data/
+# Test results (root level)
+test-results/
