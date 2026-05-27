@@ -280,7 +280,7 @@ def _make_numina_agent():
     )
 
 
-def test_non_owner_sees_can_edit_false_for_system_agents(db):
+def test_non_owner_sees_can_edit_false_for_system_agents():
     """Non-owner (adult) role gets can_edit=False on system agents — they cannot navigate to the edit view.
 
     Tested at the _to_response unit level: JWT embeds role at issue time, so
@@ -305,7 +305,7 @@ def test_non_owner_sees_can_edit_false_for_system_agents(db):
     assert response.can_delete is False
 
 
-def test_owner_to_response_for_system_agent_yields_can_edit_true(db):
+def test_owner_to_response_for_system_agent_yields_can_edit_true():
     """Direct unit test confirming owner role → can_edit=True for system agents."""
     from apps.backend.app.models.user import User
     from apps.backend.app.routers.ai_agents import _to_response

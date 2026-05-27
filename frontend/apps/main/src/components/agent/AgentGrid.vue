@@ -34,6 +34,9 @@ const emit = defineEmits<{
     </div>
   </div>
 
+  <!-- Slot for content between system and custom zones (e.g. apps section) -->
+  <slot name="between" />
+
   <!-- Custom agents zone — title renders unconditionally so the empty-state
        hint is visible even when no custom agents exist (per R1 + AE11). -->
   <div class="agent-section">

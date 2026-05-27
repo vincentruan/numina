@@ -20,7 +20,7 @@
           <van-skeleton v-if="activeAgentLoading && !activeAgent" :row="1" row-width="80px" />
           <template v-else-if="activeAgent">
             <span class="header-agent__icon" aria-hidden="true">
-              <NuminaLogo v-if="activeAgent.agent_name === 'numina'" :width="48" />
+              <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="48" />
               <span v-else>{{ activeAgent.icon || '🤖' }}</span>
             </span>
             <span class="header-agent__name">{{ activeAgent.display_name }}</span>
@@ -427,6 +427,8 @@ import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNo
 import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
+const NUMINA_AGENT_NAME = 'numina'
+
 // Configure marked
 marked.use({ breaks: true })
 
@@ -573,7 +575,7 @@ async function loadActiveAgent() {
   if (!agentId) {
     // No agentId in URL — fall back to numina from the store.
     const fallback =
-      agentStore.systemAgents.find((a) => a.agent_name === 'numina') ||
+      agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) ||
       agentStore.systemAgents[0] ||
       null
     activeAgent.value = fallback
@@ -585,7 +587,7 @@ async function loadActiveAgent() {
   } catch {
     // Fetch failed — fall back to store-resolved numina.
     activeAgent.value =
-      agentStore.systemAgents.find((a) => a.agent_name === 'numina') ||
+      agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) ||
       agentStore.systemAgents[0] ||
       null
   } finally {
@@ -1457,12 +1459,12 @@ onMounted(async () => {
   if (!aiStore.config) await aiStore.fetchConfig()
 
   // Resolve which agent this chat session is for (R4: every chat is bound
-  // to an agent via the route's agentId query param). Loading agentStore is
-  // a no-op if it's already populated. Both calls run in parallel.
-  await Promise.all([
-    agentStore.systemAgents.length === 0 ? agentStore.loadAgents() : Promise.resolve(),
-    loadActiveAgent(),
-  ])
+  // to an agent via the route's agentId query param). Sequential to ensure
+  // the store is populated before loadActiveAgent's fallback path reads it.
+  if (agentStore.systemAgents.length === 0) {
+    await agentStore.loadAgents()
+  }
+  await loadActiveAgent()
 
   const routeDeepThink = route.query.deepThink === '1'
   const routeWebSearch = route.query.webSearch === '1'

@@ -124,30 +124,32 @@
         @consult="handleAgentConsult"
         @edit="handleAgentEdit"
         @create="router.push({ name: 'AgentCreate' })"
-      />
-
-      <!-- 应用区 (Apps): fixed-rule applications, not chat agents.
-           Rendered between system and custom zones per R1 + R13.
-           Hardcoded constant — not sourced from ai_agents table. -->
-      <div class="agent-section">
-        <div class="agent-section__title">{{ t('agents.apps') }}</div>
-        <div class="agent-grid">
-          <div
-            class="agent-card app-card"
-            role="button"
-            tabindex="0"
-            @click="router.push('/ai/time-machine')"
-            @keydown.enter="router.push('/ai/time-machine')"
-            @keydown.space.prevent="router.push('/ai/time-machine')"
-          >
-            <div class="agent-card__icon">⏰</div>
-            <div class="agent-card__body">
-              <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
-              <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+      >
+        <template #between>
+          <!-- 应用区 (Apps): fixed-rule applications, not chat agents.
+               Rendered between system and custom zones per R1 + R13.
+               Hardcoded constant — not sourced from ai_agents table. -->
+          <div class="agent-section">
+            <div class="agent-section__title">{{ t('agents.apps') }}</div>
+            <div class="agent-grid">
+              <div
+                class="agent-card app-card"
+                role="button"
+                tabindex="0"
+                @click="router.push('/ai/time-machine')"
+                @keydown.enter="router.push('/ai/time-machine')"
+                @keydown.space.prevent="router.push('/ai/time-machine')"
+              >
+                <div class="agent-card__icon">⏰</div>
+                <div class="agent-card__body">
+                  <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
+                  <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </AgentGrid>
     </div>
 
     <!-- Chat input -->
@@ -168,7 +170,7 @@
             <span class="recipient-chip__label">{{ t('aiHub.sendTo') }}</span>
             <span class="recipient-chip__icon" aria-hidden="true">
               <NuminaLogo
-                v-if="selectedRecipient?.agent_name === 'numina'"
+                v-if="selectedRecipient?.agent_name === NUMINA_AGENT_NAME"
                 :width="32"
               />
               <span v-else>{{ selectedRecipient?.icon || '🤖' }}</span>
@@ -228,7 +230,7 @@
         >
           <template #icon>
             <span class="recipient-row__icon" aria-hidden="true">
-              <NuminaLogo v-if="agent.agent_name === 'numina'" :width="24" />
+              <NuminaLogo v-if="agent.agent_name === NUMINA_AGENT_NAME" :width="24" />
               <span v-else>{{ agent.icon || '🤖' }}</span>
             </span>
           </template>
@@ -255,6 +257,8 @@ import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 
+const NUMINA_AGENT_NAME = 'numina'
+
 const { t } = useI18n()
 
 const router = useRouter()
@@ -277,7 +281,7 @@ const selectedRecipient = ref<Agent | null>(null)
 const showRecipientPicker = ref(false)
 
 const numinaAgent = computed(() =>
-  agentStore.systemAgents.find((a) => a.agent_name === 'numina') || null,
+  agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) || null,
 )
 
 // All agents the chip's action sheet can switch to: enabled system + custom.
@@ -1030,7 +1034,7 @@ onMounted(async () => {
   gap: 6px;
   padding: 4px 10px;
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 999px;
+  border-radius: 4px;
   background: rgba(0, 0, 0, 0.03);
   font-size: 12px;
   font-weight: 500;

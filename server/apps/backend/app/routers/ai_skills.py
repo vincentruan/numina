@@ -455,6 +455,9 @@ def toggle_skill_endpoint(
     db: Session = Depends(get_db),
 ) -> SkillDefinitionResponse:
     """启用/禁用技能。"""
+    if skill_id in RESERVED_NAMES:
+        raise AppError(ErrorCode.NOT_FOUND, f"技能 '{skill_id}' 不存在")
+
     family_id = current_user.family_id
 
     record = (

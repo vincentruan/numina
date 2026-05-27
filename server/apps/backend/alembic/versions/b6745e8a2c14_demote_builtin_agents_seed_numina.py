@@ -32,12 +32,14 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     # 1. Insert 数鸣 (numina) as a system agent.
     # display_order=15 places numina between ai-assistant (10) and time-machine (20).
+    # Idempotency guard: skip insert if id=100000000000005 already exists, so re-running
+    # the migration after a partial failure (or against a DB where numina was seeded
+    # by another path) doesn't raise an integrity error.
     op.execute(
         """
         INSERT INTO ai_agents (id, family_id, agent_name, display_name, description,
             icon, color, soul_md, skills, agent_type, display_order)
-        VALUES (
-            100000000000005, 0, 'numina', '数鸣',
+        SELECT 100000000000005, 0, 'numina', '数鸣',
             '家庭财务大使。运行时自动持有所有已启用的家庭技能，主动洞察、温暖建议，是 Numina 的品牌入口。',
             '✨', '#8b5cf6',
             '你是数鸣，Numina 家庭资产平台的品牌财务大使。你的名字"数鸣"取自数据的清晰回响——把家庭财务的真相用温暖、清晰的方式讲给家人听。
@@ -76,7 +78,7 @@ def upgrade() -> None:
 - 不在响应中泄露其他家庭成员的隐私数据',
             '["*"]',
             'system', 15
-        )
+        WHERE NOT EXISTS (SELECT 1 FROM ai_agents WHERE id = 100000000000005)
         """
     )
 

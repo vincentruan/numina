@@ -87,6 +87,9 @@ def create_agent(
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> AgentResponse:
+    if payload.skills and "*" in payload.skills:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "通配符 * 仅限系统智能体使用")
+
     existing = (
         db.query(AIAgent)
         .filter(
@@ -136,6 +139,9 @@ def update_agent(
     if agent.agent_type == "system":
         raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体不可修改")
 
+    if "skills" in updates and updates["skills"] and "*" in updates["skills"]:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "通配符 * 仅限系统智能体使用")
+
     if agent.agent_type == "builtin":
         allowed = {"icon", "color", "skills", "display_order"}
         disallowed = set(updates.keys()) - allowed
@@ -179,6 +185,8 @@ def toggle_agent(
     agent = db.query(AIAgent).filter(AIAgent.id == agent_id).first()
     if not agent:
         raise AppError(ErrorCode.NOT_FOUND)
+    if agent.agent_type == "system":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体不可禁用")
     if agent.family_id != 0 and agent.family_id != current_user.family_id:
         raise AppError(ErrorCode.NOT_FOUND)
     agent.is_enabled = enabled

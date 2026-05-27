@@ -104,7 +104,8 @@ async def stream_agent_dispatch(
 
     try:
         enabled_skills = await client.get_enabled_skills()
-    except Exception:
+    except Exception as e:
+        logger.warning("get_enabled_skills failed for family %s: %s", family_id, type(e).__name__)
         enabled_skills = []
 
     # Apply per-agent skill scope: AI问答 (chat-only) → no business skills;
@@ -123,6 +124,11 @@ async def stream_agent_dispatch(
         return
 
     task_type = "thinking" if enable_thinking else "text"
+    if _select_model is None:
+        yield builder_events.error(
+            "Agent 运行环境未就绪", code="RUNTIME_ERROR"
+        ).to_ndjson()
+        return
     selected_provider, model_id, caps = _select_model(providers, task_type)
 
     # 4. Build effective config

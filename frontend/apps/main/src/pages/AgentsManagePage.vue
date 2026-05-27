@@ -5,7 +5,10 @@ import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
+import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import type { Agent } from '@/types/agent'
+
+const NUMINA_AGENT_NAME = 'numina'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -51,7 +54,13 @@ async function handleDelete(agent: Agent) {
         "
       >
         <template #icon>
-          <span style="margin-right: 8px; font-size: 20px;">{{ agent.icon || '🤖' }}</span>
+          <span style="margin-right: 8px; font-size: 20px;">
+            <NuminaLogo
+              v-if="agent.agent_name === NUMINA_AGENT_NAME"
+              class="numina-logo-small"
+            />
+            <span v-else>{{ agent.icon || '🤖' }}</span>
+          </span>
         </template>
         <template #value>
           <van-switch

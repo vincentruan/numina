@@ -3,6 +3,8 @@ import type { Agent } from '@/types/agent'
 import { useI18n } from 'vue-i18n'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
+const NUMINA_AGENT_NAME = 'numina'
+
 const { t } = useI18n()
 
 defineProps<{
@@ -24,7 +26,7 @@ const emit = defineEmits<{
   >
     <div class="agent-card__icon">
       <!-- Numina brand agent (数鸣) renders the cursive wordmark instead of emoji. -->
-      <NuminaLogo v-if="agent.agent_name === 'numina'" :width="80" />
+      <NuminaLogo v-if="agent.agent_name === NUMINA_AGENT_NAME" :width="80" />
       <span v-else>{{ agent.icon || '🤖' }}</span>
     </div>
     <div class="agent-card__body">

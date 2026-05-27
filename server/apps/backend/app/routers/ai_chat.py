@@ -67,6 +67,13 @@ class ChatStreamRequest(BaseModel):
             raise ValueError("问题不能超过500字")
         return v
 
+    @field_validator("agent_id")
+    @classmethod
+    def validate_agent_id(cls, v: str | None) -> str | None:
+        if v is not None and not re.fullmatch(r"\d{15,20}", v):
+            raise ValueError("agent_id 格式无效")
+        return v
+
 
 def _get_session_for_family(
     session_id: int | str | None,
@@ -225,6 +232,7 @@ async def chat_stream(
                 "message": body.question,
                 "thread_id": str(session_id),
                 "enable_thinking": body.deep_think,
+                "web_search": body.web_search,
             }
         else:
             agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
