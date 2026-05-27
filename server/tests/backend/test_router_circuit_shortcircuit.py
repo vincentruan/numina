@@ -102,6 +102,7 @@ class TestAlertsCircuitShortCircuit:
         )
         db.add(circuit)
         db.commit()
+        circuit_id = circuit.id
 
         # Stub the agent stream so we don't need a real backend
         class NoopStream:
@@ -135,7 +136,8 @@ class TestAlertsCircuitShortCircuit:
         # No "circuit_blocked" header — was allowed through
         assert "circuit_blocked" not in body
         # Circuit was auto-recovered to ok
-        db.refresh(circuit)
+        circuit = db.query(AIExtractionCircuit).filter_by(id=circuit_id).first()
+        assert circuit is not None
         assert circuit.state == "ok"
 
 

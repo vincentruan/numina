@@ -112,7 +112,8 @@ class TestAlertsE2EHappyPath:
         from apps.backend.app.routers import _ai_events_helper
 
         user = db.query(User).filter_by(username="testuser").first()
-        _enable_ai(db, user.family_id)
+        family_id = user.family_id
+        _enable_ai(db, family_id)
 
         lines = _make_ndjson_with_structured_data("alerts")
         monkeypatch.setattr(
@@ -130,14 +131,14 @@ class TestAlertsE2EHappyPath:
         assert "phase.answering" in body
 
         # Verify structured data was written
-        alerts = db.query(AIAssetAlert).filter_by(family_id=user.family_id).all()
+        alerts = db.query(AIAssetAlert).filter_by(family_id=family_id).all()
         assert len(alerts) >= 1
         assert alerts[0].asset_name == "MacBook Pro"
         assert alerts[0].alert_type == "aging"
 
         # Verify audit record
         audit = db.query(AIExtractionAudit).filter_by(
-            family_id=user.family_id, capability="alerts"
+            family_id=family_id, capability="alerts"
         ).first()
         assert audit is not None
         assert audit.method == "regex_html"
@@ -149,7 +150,8 @@ class TestDisposalE2EHappyPath:
         from apps.backend.app.routers import _ai_events_helper
 
         user = db.query(User).filter_by(username="testuser").first()
-        _enable_ai(db, user.family_id)
+        family_id = user.family_id
+        _enable_ai(db, family_id)
 
         lines = _make_ndjson_with_structured_data("disposal")
         monkeypatch.setattr(
@@ -164,12 +166,12 @@ class TestDisposalE2EHappyPath:
         assert resp.status_code == 200
         assert "capability.error" not in resp.text
 
-        suggestions = db.query(AIDisposalSuggestion).filter_by(family_id=user.family_id).all()
+        suggestions = db.query(AIDisposalSuggestion).filter_by(family_id=family_id).all()
         assert len(suggestions) >= 1
         assert suggestions[0].asset_name == "Old Printer"
 
         audit = db.query(AIExtractionAudit).filter_by(
-            family_id=user.family_id, capability="disposal"
+            family_id=family_id, capability="disposal"
         ).first()
         assert audit is not None
         assert audit.method == "regex_html"
@@ -180,7 +182,8 @@ class TestSpendingLeakE2EHappyPath:
         from apps.backend.app.routers import _ai_events_helper
 
         user = db.query(User).filter_by(username="testuser").first()
-        _enable_ai(db, user.family_id)
+        family_id = user.family_id
+        _enable_ai(db, family_id)
 
         lines = _make_ndjson_with_structured_data("spending_leak")
         monkeypatch.setattr(
@@ -195,12 +198,12 @@ class TestSpendingLeakE2EHappyPath:
         assert resp.status_code == 200
         assert "capability.error" not in resp.text
 
-        leaks = db.query(AISpendingLeak).filter_by(family_id=user.family_id).all()
+        leaks = db.query(AISpendingLeak).filter_by(family_id=family_id).all()
         assert len(leaks) >= 1
         assert leaks[0].asset_name == "Gym Membership"
 
         audit = db.query(AIExtractionAudit).filter_by(
-            family_id=user.family_id, capability="spending_leak"
+            family_id=family_id, capability="spending_leak"
         ).first()
         assert audit is not None
         assert audit.method == "regex_html"
@@ -212,7 +215,8 @@ class TestFallbackAndFailure:
         from apps.backend.app.routers import _ai_events_helper
 
         user = db.query(User).filter_by(username="testuser").first()
-        _enable_ai(db, user.family_id)
+        family_id = user.family_id
+        _enable_ai(db, family_id)
 
         lines = _make_ndjson_no_structured_data()
         monkeypatch.setattr(
@@ -230,12 +234,12 @@ class TestFallbackAndFailure:
         assert "extraction_failed" in body
 
         # GET alerts should be empty (no data written)
-        alerts = db.query(AIAssetAlert).filter_by(family_id=user.family_id).all()
+        alerts = db.query(AIAssetAlert).filter_by(family_id=family_id).all()
         assert len(alerts) == 0
 
         # Audit shows method=failed
         audit = db.query(AIExtractionAudit).filter_by(
-            family_id=user.family_id, capability="alerts"
+            family_id=family_id, capability="alerts"
         ).first()
         assert audit is not None
         assert audit.method == "failed"
@@ -247,7 +251,8 @@ class TestFallbackAndFailure:
         from apps.backend.app.services import ai_result_parser
 
         user = db.query(User).filter_by(username="testuser").first()
-        _enable_ai(db, user.family_id)
+        family_id = user.family_id
+        _enable_ai(db, family_id)
 
         lines = _make_ndjson_no_structured_data()
         monkeypatch.setattr(
@@ -273,12 +278,12 @@ class TestFallbackAndFailure:
         assert resp.status_code == 200
         assert "capability.error" not in resp.text
 
-        alerts = db.query(AIAssetAlert).filter_by(family_id=user.family_id).all()
+        alerts = db.query(AIAssetAlert).filter_by(family_id=family_id).all()
         assert len(alerts) >= 1
         assert alerts[0].asset_name == "FromLLM"
 
         audit = db.query(AIExtractionAudit).filter_by(
-            family_id=user.family_id, capability="alerts"
+            family_id=family_id, capability="alerts"
         ).first()
         assert audit is not None
         assert audit.method == "llm_fallback_hit"
