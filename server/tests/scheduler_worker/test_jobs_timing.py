@@ -12,7 +12,7 @@ def mock_session_local():
     mock_session = MagicMock()
     mock_session.close = MagicMock()
 
-    with patch("packages.db.session.SessionLocal", return_value=mock_session):
+    with patch("apps.scheduler_worker.jobs.SessionLocal", return_value=mock_session):
         yield mock_session
 
 
