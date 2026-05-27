@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from sqlalchemy.orm import Session, joinedload
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -101,6 +103,8 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
         # Update wish
         wish.status = "realized"
         wish.realized_asset_id = asset.id
+        wish.fulfilled_at = datetime.now(timezone.utc)
+        asset.from_wish_id = wish.id
 
         db.commit()
         db.refresh(asset)

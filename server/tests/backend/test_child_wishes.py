@@ -346,3 +346,39 @@ def test_stats_with_active_wishes(client, auth_headers, child_user):
     sim = data["priority_simulation"]
     assert sim[0]["priority"] == "high"
     assert sim[1]["priority"] == "medium"
+
+
+# ---------------------------------------------------------------------------
+# Unit 6: Child asset detail endpoint
+# ---------------------------------------------------------------------------
+
+def test_child_asset_get_own(client, auth_headers, child_user, sample_wish, category_id):
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    realize_resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    asset_id = _data(realize_resp)["realized_asset_id"]
+    resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=child_user["headers"])
+    assert resp.status_code == 200
+    data = _data(resp)
+    assert data["id"] == asset_id
+    assert isinstance(data["id"], str)  # SnowflakeBase → string
+
+
+def test_child_asset_not_found(client, child_user):
+    resp = client.get("/api/v1/child/assets/99999999999999999", headers=child_user["headers"])
+    assert resp.status_code == 404
+
+
+def test_child_asset_adult_auth_rejected(client, auth_headers, child_user, sample_wish, category_id):
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    realize_resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    asset_id = _data(realize_resp)["realized_asset_id"]
+    resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=auth_headers)
+    assert resp.status_code in (401, 403)

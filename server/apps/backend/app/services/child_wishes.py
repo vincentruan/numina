@@ -1,4 +1,4 @@
-from datetime import UTC, date
+from datetime import UTC, date, datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -44,6 +44,7 @@ def _to_child_response(wish: ChildWish, balance: int = 0) -> ChildWishResponse:
         progress=progress,
         rejection_reason=wish.rejection_reason,
         realized_asset_id=wish.realized_asset_id,
+        fulfilled_at=wish.fulfilled_at,
         created_at=wish.created_at,
         updated_at=wish.updated_at,
     )
@@ -381,13 +382,13 @@ def realize_child_wish(
 
         wish.status = "realized"
         wish.realized_asset_id = asset.id
+        wish.fulfilled_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(wish)
 
         # Trigger bonus draw opportunity on wish realization (probabilistic)
         try:
             import random
-            from datetime import datetime, timedelta
 
             from apps.backend.app.models.blind_box_config import BlindBoxConfig
             from apps.backend.app.models.bonus_draw import BonusDraw

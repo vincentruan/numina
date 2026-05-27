@@ -64,6 +64,7 @@ class ChildWishResponse(SnowflakeBase):
     progress: float | None  # balance / star_coin_cost, computed by backend
     rejection_reason: str | None
     realized_asset_id: int | None
+    fulfilled_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -129,6 +130,7 @@ class ParentWishResponse(SnowflakeBase):
     star_coin_cost: int | None
     rejection_reason: str | None
     realized_asset_id: int | None
+    fulfilled_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
     milestone_triggered: str | None = None

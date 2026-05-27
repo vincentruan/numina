@@ -53,5 +53,6 @@ class WishResponse(SnowflakeBase):
     currency: str = "CNY"
     converts_to_asset: bool
     realized_asset_id: int | None
+    fulfilled_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
