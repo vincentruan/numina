@@ -45,6 +45,10 @@ async function handleDelete(agent: Agent) {
         :key="agent.id"
         :title="agent.display_name"
         :label="agent.description || ''"
+        :is-link="agent.can_edit"
+        @click="
+          agent.can_edit && router.push({ name: 'AgentEdit', params: { id: agent.id } })
+        "
       >
         <template #icon>
           <span style="margin-right: 8px; font-size: 20px;">{{ agent.icon || '🤖' }}</span>
@@ -60,34 +64,11 @@ async function handleDelete(agent: Agent) {
       </van-cell>
     </van-cell-group>
 
-    <!-- Builtin Agents -->
-    <van-cell-group inset :title="t('ai.builtinAgents')">
-      <template #title-extra>
-        <span class="hint-text">{{ t('ai.builtinAgentHint') }}</span>
-      </template>
-      <van-cell
-        v-for="agent in agentStore.builtinAgents"
-        :key="agent.id"
-        :title="agent.display_name"
-        :label="agent.description || ''"
-        is-link
-        @click="router.push({ name: 'AgentEdit', params: { id: agent.id } })"
-      >
-        <template #icon>
-          <span style="margin-right: 8px; font-size: 20px;">{{ agent.icon || '🤖' }}</span>
-        </template>
-        <template #value>
-          <div class="cell-actions" @click.stop>
-            <van-switch
-              :model-value="agent.is_enabled"
-              size="20"
-              :disabled="!isOwner"
-              @update:model-value="(v: boolean) => handleToggle(agent, v)"
-            />
-          </div>
-        </template>
-      </van-cell>
-    </van-cell-group>
+    <!-- U15 (R12): Builtin Agents section removed.
+         After migration b6745e8a2c14 there are no builtin agents in
+         production — the six business agents (asset-health-advisor,
+         finance-optimizer, etc.) were demoted to skills. The cell-group
+         would otherwise render as an empty section with a header. -->
 
     <!-- Custom Agents -->
     <van-cell-group inset :title="t('ai.customAgents')">
