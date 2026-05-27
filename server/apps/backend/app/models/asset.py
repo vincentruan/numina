@@ -62,3 +62,4 @@ class Asset(Base):
     category = relationship("Category", back_populates="assets")
     tags = relationship("Tag", secondary=asset_tags, back_populates="assets")
     linked_liabilities = relationship("Liability", back_populates="linked_asset")
+    from_wish = relationship("Wish", foreign_keys=[from_wish_id])

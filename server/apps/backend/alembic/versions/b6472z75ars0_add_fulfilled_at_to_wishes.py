@@ -20,6 +20,8 @@ def upgrade() -> None:
     op.add_column("wishes", sa.Column("fulfilled_at", sa.TIMESTAMP(timezone=True), nullable=True))
     op.add_column("child_wishes", sa.Column("fulfilled_at", sa.TIMESTAMP(timezone=True), nullable=True))
     # Backfill existing realized records using updated_at as a proxy for fulfillment time
+    # Approximation: fulfilled_at was not tracked before, so updated_at (which reflects the last transaction
+    # that changed status to 'realized') serves as the closest timestamp available for historical data.
     op.execute(
         "UPDATE wishes SET fulfilled_at = updated_at WHERE status = 'realized' AND fulfilled_at IS NULL"
     )

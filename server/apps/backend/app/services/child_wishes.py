@@ -428,6 +428,19 @@ def realize_child_wish(
 
 
 def get_child_asset(db: Session, user: User, asset_id: int):
+    """Fetch a child's own asset by ID, filtering out archived assets.
+
+    Args:
+        db: SQLAlchemy session
+        user: Current child user (must own the asset)
+        asset_id: Asset ID to fetch
+
+    Returns:
+        ChildAssetResponse with asset details
+
+    Raises:
+        HTTPException 404: Asset not found, not owned by user, or archived
+    """
     from apps.backend.app.models.asset import Asset
     from apps.backend.app.schemas.asset import ChildAssetResponse
     asset = db.query(Asset).filter(

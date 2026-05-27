@@ -32,6 +32,7 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 - **Always run `alembic upgrade head` before starting the app on an existing database.** `Base.metadata.create_all()` only creates tables for fresh installs — it does not apply migrations. Skipping causes `OperationalError: no such column` on endpoints that read newly added columns.
 - **Pydantic v2 only** — see root [CLAUDE.md](../../../CLAUDE.md) §Key Invariants for rule; see §Patterns below for examples.
 - **Import direction** — apps never import sibling apps. Use `packages/` for shared logic. Never `from apps.agent import ...` or `from apps.scheduler_worker import ...` inside backend code.
+- **Error detail convention** — backend raises `HTTPException(status_code=..., detail={"code": "ENGLISH_CODE", "message": "中文消息"})`. Frontend catches via axios interceptor and maps `code` to i18n key `t('errors.ENGLISH_CODE')`. Chinese message is fallback if frontend lacks i18n mapping.
 
 ## Snowflake ID Serialization
 

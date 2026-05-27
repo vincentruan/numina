@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -64,7 +64,7 @@ class ChildWishResponse(SnowflakeBase):
     progress: float | None  # balance / star_coin_cost, computed by backend
     rejection_reason: str | None
     realized_asset_id: int | None
-    fulfilled_at: datetime | None = None
+    fulfilled_at: datetime | None = Field(default=None, description="Timestamp when wish was realized/fulfilled (status became 'realized')")
     created_at: datetime
     updated_at: datetime
 
@@ -130,7 +130,7 @@ class ParentWishResponse(SnowflakeBase):
     star_coin_cost: int | None
     rejection_reason: str | None
     realized_asset_id: int | None
-    fulfilled_at: datetime | None = None
+    fulfilled_at: datetime | None = Field(default=None, description="Timestamp when wish was realized/fulfilled (status became 'realized')")
     created_at: datetime
     updated_at: datetime
     milestone_triggered: str | None = None

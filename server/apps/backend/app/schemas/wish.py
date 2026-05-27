@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -53,6 +53,6 @@ class WishResponse(SnowflakeBase):
     currency: str = "CNY"
     converts_to_asset: bool
     realized_asset_id: int | None
-    fulfilled_at: datetime | None = None
+    fulfilled_at: datetime | None = Field(default=None, description="Timestamp when wish was realized/fulfilled (status became 'realized')")
     created_at: datetime
     updated_at: datetime

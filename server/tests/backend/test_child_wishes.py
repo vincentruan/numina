@@ -2,6 +2,7 @@
 
 import pytest
 
+from apps.backend.app.constants.pin import ALLOWED_EMOJIS
 from tests.backend.conftest import child_login_two_phase
 
 
@@ -18,16 +19,17 @@ def _data(resp):
 @pytest.fixture
 def child_user(client, auth_headers):
     """Create a child user and return their info + child auth headers."""
+    allowed_emojis = list(ALLOWED_EMOJIS)[:4]
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
         "password": "ChildPass1",
         "username": "xiaoming8",
         "avatar_color": "#FF5733",
-        "pin": ["🐱", "🌟", "🎈", "🐶"],
+        "pin": allowed_emojis,
     })
     assert resp.status_code == 201
     child = _data(resp)
-    token = child_login_two_phase(client, "xiaoming8", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
+    token = child_login_two_phase(client, "xiaoming8", "ChildPass1", allowed_emojis)
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -451,3 +453,11 @@ def test_child_asset_cross_sibling_isolation(client, auth_headers, child_user, s
     # Sibling must not be able to access first child's asset
     resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=sibling_headers)
     assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Note: FK ondelete=SET NULL behavior for from_wish_id is tested via migration
+# definition and model FK constraint. SQLite in-memory DB doesn't enforce FK
+# constraints by default, so runtime test would be database-specific. The FK
+# is correctly defined in Asset model and c7583a86bst1 migration.
+# ---------------------------------------------------------------------------

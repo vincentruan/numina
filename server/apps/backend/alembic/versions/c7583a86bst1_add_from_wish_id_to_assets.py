@@ -28,6 +28,8 @@ def upgrade() -> None:
     )
     op.create_index("ix_assets_family_from_wish", "assets", ["family_id", "from_wish_id"])
     # Backfill existing assets that were created from a wish realization
+    # Relies on child_wishes.realized_asset_id FK integrity — existing realized wishes must have valid asset references.
+    # The UPDATE via JOIN matches each asset to its originating wish via the reverse FK link.
     op.execute(
         """
         UPDATE assets

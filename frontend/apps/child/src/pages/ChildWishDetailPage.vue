@@ -65,7 +65,7 @@
         <p v-if="wish.fulfilled_at" class="fulfilled-date">
           {{ t('wishes.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
         </p>
-        <router-link v-if="wish.realized_asset_id" :to="`/assets/${wish.realized_asset_id}`" class="link-asset">
+        <router-link v-if="wish.realized_asset_id" :to="{ name: 'ChildAssetDetail', params: { id: wish.realized_asset_id } }" class="link-asset">
           {{ t('wishes.viewAsset') }}
         </router-link>
         <span v-else class="status-line">{{ t('wishes.realized') }}</span>
