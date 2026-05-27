@@ -425,10 +425,21 @@ export async function sendChatMessageStream(
   webSearch: boolean,
   signal?: AbortSignal,
   sessionId?: string,
+  agentId?: string,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
-  const body = JSON.stringify({ question, deep_think: deepThink, web_search: webSearch })
+  // R4/R5: agent_id is the routing key that activates per-agent skill scoping
+  // (_resolve_skills in agent_dispatch.py). When omitted, the backend falls
+  // back to the legacy chat_adapter path with no skill resolution — present
+  // for backward compatibility with any caller that hasn't migrated yet.
+  const payload: Record<string, unknown> = {
+    question,
+    deep_think: deepThink,
+    web_search: webSearch,
+  }
+  if (agentId) payload.agent_id = agentId
+  const body = JSON.stringify(payload)
 
   let res = await fetch('/api/v1/ai/chat/stream', {
     method: 'POST',

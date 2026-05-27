@@ -63,10 +63,26 @@ vi.mock('../../src/stores/auth', () => ({
 vi.mock('../../src/stores/agent', () => ({
   useAgentStore: vi.fn(() => ({
     tasks: [],
-    builtinAgents: [
-      { id: 'chat', name: 'AI 问答', description: '自由对话助手', is_enabled: true },
-      { id: 'report', name: '资产体检', description: '综合健康评分', is_enabled: true },
+    // U8/U9: AgentGrid prop renamed; AIHubPage now reads systemAgents +
+    // customAgents. The recipient chip (U11) defaults to numina, so the
+    // mock must include an enabled numina row for startChat to fire.
+    systemAgents: [
+      {
+        id: 'numina-id',
+        agent_name: 'numina',
+        display_name: '数鸣',
+        description: '家庭财务大使',
+        is_enabled: true,
+      },
+      {
+        id: 'ai-assistant-id',
+        agent_name: 'ai-assistant',
+        display_name: 'AI 问答',
+        description: '通用对话助手',
+        is_enabled: true,
+      },
     ],
+    builtinAgents: [],
     customAgents: [],
     loadAgents,
   })),
@@ -113,6 +129,7 @@ describe('AIHubPage chat entry', () => {
       path: '/ai/chat',
       query: {
         q: '我们家净资产是多少？',
+        agentId: 'numina-id', // R4: every entry routes by agentId; default = numina
         newSession: '1',
         deepThink: '1',
         webSearch: '1',

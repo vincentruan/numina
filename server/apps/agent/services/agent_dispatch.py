@@ -6,6 +6,7 @@ Replaces the old DeerFlowAdapter path with:
 
 No global singleton mutation. No ContextVar. No reload_app_config().
 """
+
 import time
 import uuid
 from collections.abc import AsyncGenerator
@@ -31,6 +32,36 @@ except ImportError:
     _select_model = None
 
 
+def _resolve_skills(
+    agent_skills: list[str] | None,
+    family_enabled_skills: list[dict],
+) -> list[dict]:
+    """Resolve which skills an agent dispatches with, enforcing R5/R6/R15.
+
+    Branches:
+    - ``agent_skills == ["chat"]`` → ``[]`` (R5: AI问答 reserved chat capability,
+      pure LLM mode, no business skill catalog injection).
+    - ``"*" in agent_skills`` → all of ``family_enabled_skills`` (R6: 数鸣 sentinel).
+    - non-empty specific list → intersection with ``family_enabled_skills`` by
+      ``skill_id`` (R15: custom agents).
+    - ``None`` / ``[]`` → ``[]`` (defensive default).
+
+    The resolved list preserves the original dict shape from BackendClient
+    (``{"skill_id": ..., "skill_type": ..., ...}``) so downstream consumers
+    (EffectiveConfigBuilder) see the same fields they would without resolution.
+    """
+    if not agent_skills:
+        return []
+    # Chat-reserved capability handling must come before the sentinel branch
+    # so an agent with skills=["chat"] never accidentally inherits family skills.
+    if agent_skills == ["chat"]:
+        return []
+    if "*" in agent_skills:
+        return list(family_enabled_skills)
+    allowed = set(agent_skills)
+    return [s for s in family_enabled_skills if s.get("skill_id") in allowed]
+
+
 async def stream_agent_dispatch(
     agent_id: int,
     family_id: str,
@@ -42,14 +73,18 @@ async def stream_agent_dispatch(
     """Agent-first execution entry point. Streams NDJSON events."""
     t_start = time.monotonic()
     task_id = str(uuid.uuid4())
-    builder_events = EventStreamBuilder(capability_id=f"agent-{agent_id}", task_id=task_id)
+    builder_events = EventStreamBuilder(
+        capability_id=f"agent-{agent_id}", task_id=task_id
+    )
 
     # 1. Fetch agent config
     client = BackendClient(family_id)
     try:
         agent_config = await client.get_agent_config(agent_id)
     except Exception as e:
-        yield builder_events.error(f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR").to_ndjson()
+        yield builder_events.error(
+            f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR"
+        ).to_ndjson()
         return
 
     if not agent_config.get("is_enabled", True):
@@ -62,13 +97,20 @@ async def stream_agent_dispatch(
     try:
         ai_config = await client.get_family_ai_config()
     except Exception as e:
-        yield builder_events.error(f"获取 AI 配置失败: {e}", code="AI_CONFIG_ERROR").to_ndjson()
+        yield builder_events.error(
+            f"获取 AI 配置失败: {e}", code="AI_CONFIG_ERROR"
+        ).to_ndjson()
         return
 
     try:
         enabled_skills = await client.get_enabled_skills()
-    except Exception:
+    except Exception as e:
+        logger.warning("get_enabled_skills failed for family %s: %s", family_id, type(e).__name__)
         enabled_skills = []
+
+    # Apply per-agent skill scope: AI问答 (chat-only) → no business skills;
+    # 数鸣 (sentinel "*") → all family-enabled; custom → intersect declared with family.
+    resolved_skills = _resolve_skills(agent_config.get("skills"), enabled_skills)
 
     try:
         mcp_servers = await client.get_enabled_mcp_servers()
@@ -82,6 +124,11 @@ async def stream_agent_dispatch(
         return
 
     task_type = "thinking" if enable_thinking else "text"
+    if _select_model is None:
+        yield builder_events.error(
+            "Agent 运行环境未就绪", code="RUNTIME_ERROR"
+        ).to_ndjson()
+        return
     selected_provider, model_id, caps = _select_model(providers, task_type)
 
     # 4. Build effective config
@@ -90,7 +137,7 @@ async def stream_agent_dispatch(
 
     skill_entries = [
         {"skill_name": s["skill_id"], "is_builtin": s.get("skill_type") == "builtin"}
-        for s in enabled_skills
+        for s in resolved_skills
     ]
 
     try:
@@ -103,7 +150,9 @@ async def stream_agent_dispatch(
             mcp_servers=mcp_servers,
         )
     except Exception as e:
-        yield builder_events.error(f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR").to_ndjson()
+        yield builder_events.error(
+            f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR"
+        ).to_ndjson()
         return
 
     # 5. Determine thread_id
@@ -124,13 +173,17 @@ async def stream_agent_dispatch(
 
     # 8. Create agent graph and stream
     if make_lead_agent is None:
-        yield builder_events.error("Agent 运行环境未就绪", code="RUNTIME_ERROR").to_ndjson()
+        yield builder_events.error(
+            "Agent 运行环境未就绪", code="RUNTIME_ERROR"
+        ).to_ndjson()
         return
 
     try:
         agent_graph = make_lead_agent(runnable_config)
     except Exception as e:
-        yield builder_events.error(f"创建智能体失败: {e}", code="AGENT_CREATE_ERROR").to_ndjson()
+        yield builder_events.error(
+            f"创建智能体失败: {e}", code="AGENT_CREATE_ERROR"
+        ).to_ndjson()
         return
 
     # 9. Stream events
@@ -151,7 +204,9 @@ async def stream_agent_dispatch(
                                     yield builder_events.phase("answering").to_ndjson()
                                     answering_started = True
                                 answer_parts.append(content)
-                                yield builder_events.token(content, is_thinking=False).to_ndjson()
+                                yield builder_events.token(
+                                    content, is_thinking=False
+                                ).to_ndjson()
     except Exception as e:
         yield builder_events.error(str(e), code="STREAM_ERROR").to_ndjson()
         return

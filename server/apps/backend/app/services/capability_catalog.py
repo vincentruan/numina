@@ -1,4 +1,27 @@
-"""Static UI metadata for built-in AI capabilities."""
+"""Static UI metadata overrides for AI capabilities surfaced by ``/ai/capabilities``.
+
+Each key is a capability id; values are display overrides applied on top of the
+agent's CapabilityDefinition (or on top of the fallback dict when the agent is
+unreachable). The backend has the final say on user-facing display names, so
+the agent's ``FIXED_CAPABILITY_DEFS`` and skill frontmatter are starting points,
+not authoritative for the UI.
+
+The set of keys here is broader than ``BUILTIN_CAPABILITIES`` from ``ai_skills``:
+
+- ``chat`` and ``time_machine`` are routing capabilities (not skills — they don't
+  appear in skill management). They are exposed by ``/ai/capabilities`` and listed
+  in ``_ROUTING_CAPABILITIES`` (see ``ai_capabilities``). Their entries here carry
+  the canonical display name the frontend renders for the chat input chip and
+  the resolveable ``/ai/chat`` and ``/ai/time-machine`` routes.
+- The remaining six entries (``report``, ``alerts``, ``allocation``, ``disposal``,
+  ``liability``, ``spending_leak``) are the business skills from
+  ``BUILTIN_CAPABILITIES``. They double as capabilities (routable detail pages)
+  and skills (toggleable in skill management).
+
+This dict has no agent-association fields. The brainstorm/plan reference to
+"capability_catalog agent associations" found no such fields to remove (per
+feasibility review of the plan); see plan U3 deviation note.
+"""
 
 from __future__ import annotations
 
@@ -46,13 +69,21 @@ _CAPABILITY_OVERRIDES: dict[str, dict[str, Any]] = {
         "name": "负债优化",
         "description": "还款策略建议",
         "category": "liability",
-        "ui": {"icon": "badge-dollar-sign", "route": "/ai/liability", "color": "#be123c"},
+        "ui": {
+            "icon": "badge-dollar-sign",
+            "route": "/ai/liability",
+            "color": "#be123c",
+        },
     },
     "spending_leak": {
         "name": "资金泄漏",
         "description": "检测资金泄漏",
         "category": "asset_efficiency",
-        "ui": {"icon": "shield-check", "route": "/ai/spending-leaks", "color": "#15803d"},
+        "ui": {
+            "icon": "shield-check",
+            "route": "/ai/spending-leaks",
+            "color": "#15803d",
+        },
     },
     "time_machine": {
         "name": "资产时光机",

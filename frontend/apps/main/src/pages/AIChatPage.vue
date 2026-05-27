@@ -13,7 +13,25 @@
         </svg>
       </button>
       <div class="header-title-wrap">
-        <h1 class="header-title">{{ displayedTitle }}</h1>
+        <!-- U12 (R4): agent identity badge — replaces what used to be just
+             the session title. Numina renders the cursive wordmark; other
+             agents fall back to their emoji + display_name. -->
+        <div v-if="activeAgent || activeAgentLoading" class="header-agent">
+          <van-skeleton v-if="activeAgentLoading && !activeAgent" :row="1" row-width="80px" />
+          <template v-else-if="activeAgent">
+            <span class="header-agent__icon" aria-hidden="true">
+              <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="48" />
+              <span v-else>{{ activeAgent.icon || '🤖' }}</span>
+            </span>
+            <span class="header-agent__name">{{ activeAgent.display_name }}</span>
+          </template>
+        </div>
+        <h1
+          class="header-title"
+          :class="{ 'header-title--subtitle': !!activeAgent }"
+        >
+          {{ displayedTitle }}
+        </h1>
         <button
           v-if="sessionTitle && sessionTitle !== t('aiChat.newChat')"
           class="header-edit-btn"
@@ -397,13 +415,19 @@ import DOMPurify from 'dompurify'
 import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
+import { useAgentStore } from '@/stores/agent'
+import { getAgent } from '@/api/agent'
+import type { Agent } from '@/types/agent'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
 import AiUserBubble from '@/components/ai/AiUserBubble.vue'
+import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNormalizer'
 import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
+
+const NUMINA_AGENT_NAME = 'numina'
 
 // Configure marked
 marked.use({ breaks: true })
@@ -535,6 +559,41 @@ const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const aiStore = useAIStore()
+const agentStore = useAgentStore()
+
+// U12: active agent for this chat session, resolved from route.query.agentId.
+// Drives header agent identity (display_name + icon, NuminaLogo for numina)
+// and is the future hook point for skill-scoped dispatch metadata. Loading
+// is best-effort: failures fall back to numina from the store, then to a
+// neutral placeholder. We don't block message sending on agent fetch since
+// the backend dispatch route also accepts agentId from the route param.
+const activeAgent = ref<Agent | null>(null)
+const activeAgentLoading = ref(false)
+
+async function loadActiveAgent() {
+  const agentId = typeof route.query.agentId === 'string' ? route.query.agentId : null
+  if (!agentId) {
+    // No agentId in URL — fall back to numina from the store.
+    const fallback =
+      agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) ||
+      agentStore.systemAgents[0] ||
+      null
+    activeAgent.value = fallback
+    return
+  }
+  activeAgentLoading.value = true
+  try {
+    activeAgent.value = await getAgent(agentId)
+  } catch {
+    // Fetch failed — fall back to store-resolved numina.
+    activeAgent.value =
+      agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) ||
+      agentStore.systemAgents[0] ||
+      null
+  } finally {
+    activeAgentLoading.value = false
+  }
+}
 const messages = ref<Message[]>([])
 const inputText = ref('')
 const asking = ref(false)
@@ -845,7 +904,11 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
 }
 
 // Load session list when history panel opens (lazy, once per mount)
-const selectedCapability = ref<string>('chat')  // Default to 'chat' filter
+// U12 (R10): default capability filter is 'all' so historical sessions
+// from any skill surface remain visible. The 'chat' key in capabilityMeta
+// stays for backward compatibility with pre-restructure sessions tagged
+// capability='chat'.
+const selectedCapability = ref<string>('all')
 
 // Capability metadata from skills/*.md - icons, colors, display name keys, and AI flag
 const capabilityMeta: Record<string, { icon: string; color: string; nameKey: string; isAI: boolean }> = {
@@ -1063,7 +1126,18 @@ async function onSend() {
   const normState = createNormalizationState()
 
   try {
-    const reader = await sendChatEventStream(q, deepThink.value, webSearch.value, abortController.signal, currentSessionId.value ?? undefined)
+    // ADV-001 fix: pass agentId so the backend routes through the
+    // agent-dispatch path (which runs _resolve_skills). Without this, R5
+    // (AI问答 chat-only) is not enforced at runtime — every chat would
+    // go through the legacy chat_adapter regardless of the selected agent.
+    const reader = await sendChatEventStream(
+      q,
+      deepThink.value,
+      webSearch.value,
+      abortController.signal,
+      currentSessionId.value ?? undefined,
+      activeAgent.value?.id,
+    )
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation
@@ -1383,6 +1457,15 @@ onMounted(async () => {
   // Default deep think on if the primary model has passed the thinking capability test
   // or if it was enabled from AIHubPage
   if (!aiStore.config) await aiStore.fetchConfig()
+
+  // Resolve which agent this chat session is for (R4: every chat is bound
+  // to an agent via the route's agentId query param). Sequential to ensure
+  // the store is populated before loadActiveAgent's fallback path reads it.
+  if (agentStore.systemAgents.length === 0) {
+    await agentStore.loadAgents()
+  }
+  await loadActiveAgent()
+
   const routeDeepThink = route.query.deepThink === '1'
   const routeWebSearch = route.query.webSearch === '1'
   const isNewSession = route.query.newSession === '1'
@@ -1528,11 +1611,44 @@ onUnmounted(() => {
 .header-title-wrap {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 0;
   min-width: 0;
   padding: 0 4px;
+}
+
+/* U12: agent identity badge — shown above the session title in chat header.
+   Numina renders the cursive wordmark; other agents use emoji + name. */
+.header-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  line-height: 1;
+}
+
+.header-agent__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  height: 16px;
+}
+
+.header-agent__icon :deep(.numina-logo) {
+  height: 16px;
+}
+
+.header-agent__name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-title {
@@ -1543,6 +1659,15 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* When agent identity is shown above, the session title shrinks to a
+   secondary subtitle so both fit in the fixed-height header bar. */
+.header-title--subtitle {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0;
 }
 
 .header-edit-btn {

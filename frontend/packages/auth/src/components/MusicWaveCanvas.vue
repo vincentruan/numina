@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const props = defineProps<{ dismissing: boolean }>()
 
@@ -23,6 +23,36 @@ const DPR = Math.min(window.devicePixelRatio || 1, 2)
 const TARGET_FPS = LOW_END ? 30 : 60
 const FRAME_INTERVAL = 1000 / TARGET_FPS
 
+// ── Theme detection ─────────────────────────────────────────────────────────────
+
+const isDark = ref(document.documentElement.dataset.theme === 'dark')
+const themeObserver = new MutationObserver(() => {
+  isDark.value = document.documentElement.dataset.theme === 'dark'
+})
+
+// ── Reduced-motion detection ───────────────────────────────────────────────────
+
+const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+const prefersReduced = ref(reduceQuery.matches)
+const onMotionChange = (e: MediaQueryListEvent) => { prefersReduced.value = e.matches }
+
+// ── TikTok 2-color palette ────────────────────────────────────────────────────
+
+const PALETTE = {
+  dark: {
+    cyan: '#00f2fe', cyanGlow: 'rgba(0,242,254,0.55)',
+    red:  '#fe0979', redGlow:  'rgba(254,9,121,0.55)',
+    blend: 'screen' as GlobalCompositeOperation,
+  },
+  light: {
+    cyan: '#00b8c8', cyanGlow: 'rgba(0,184,200,0.30)',
+    red:  '#d61b6e', redGlow:  'rgba(214,27,110,0.30)',
+    blend: 'multiply' as GlobalCompositeOperation,
+  },
+} as const
+
+const p = computed(() => isDark.value ? PALETTE.dark : PALETTE.light)
+
 // ── Ripple wave definition ────────────────────────────────────────────────────
 
 interface Ripple {
@@ -34,33 +64,28 @@ interface Ripple {
   speed: number        // expansion speed (px per second)
   color: string        // neon stroke color
   glowColor: string    // neon glow/shadow color
+  glowStop: string     // precomputed transparent stop for gradient
   lineWidth: number
   noiseSeed: number    // unique seed for irregularity
 }
 
-// Configuration
-const MAX_RIPPLES = LOW_END ? 5 : 8
-const WAVE_LIFETIME = 3200  // ms for a wave to fully expand and fade
+// ── Configuration ──────────────────────────────────────────────────────────────
 
-// Neon cyberpunk palette: [strokeColor, glowColor]
-const NEON_COLORS: Array<[string, string]> = [
-  ['#00d4ff', 'rgba(0,212,255,0.6)'],    // cyan
-  ['#b967ff', 'rgba(185,103,255,0.6)'],  // violet
-  ['#ff2a6d', 'rgba(255,42,109,0.6)'],   // hot pink
-  ['#05ffa1', 'rgba(5,255,161,0.6)'],    // mint green
-]
+const MAX_RIPPLES = LOW_END ? 4 : 6
+const WAVE_LIFETIME = 2800  // ms for a wave to fully expand and fade
+const DISMISS_DURATION = 300  // ms for the choreographed exit
 
 const LAYER_CONFIGS = [
-  { amplitude: 14, frequency: 6,  speed: 38,  lineWidth: 2.5 },
-  { amplitude: 11, frequency: 8,  speed: 50,  lineWidth: 2.0 },
-  { amplitude: 8,  frequency: 10, speed: 62,  lineWidth: 1.4 },
-  { amplitude: 6,  frequency: 13, speed: 76,  lineWidth: 0.9 },
+  { amplitude: 5, frequency: 6,  speed: 14, lineWidth: 0.8 },
+  { amplitude: 4, frequency: 8,  speed: 18, lineWidth: 0.6 },
+  { amplitude: 3, frequency: 10, speed: 22, lineWidth: 0.45 },
+  { amplitude: 2, frequency: 13, speed: 28, lineWidth: 0.3 },
 ]
 
 // Breathing rhythm: spawn interval pulses between fast and slow
 function spawnInterval(globalTime: number): number {
-  const base = LOW_END ? 550 : 360
-  const pulse = Math.sin(globalTime * 0.8) * (LOW_END ? 80 : 120)
+  const base = LOW_END ? 420 : 320
+  const pulse = Math.sin(globalTime * 0.8) * (LOW_END ? 60 : 100)
   return base + pulse
 }
 
@@ -91,6 +116,52 @@ function fractalNoise(t: number, octaves: number = 3): number {
   return val / (2 - Math.pow(0.5, octaves)) // normalize to ~[0,1]
 }
 
+// ── Core animation ─────────────────────────────────────────────────────────────
+
+function drawCore(
+  ctx: CanvasRenderingContext2D,
+  cx: number, cy: number,
+  unit: number,
+  globalTime: number,
+  pulseFreq: number,
+  pulseAmp: number,
+  dismissScale: number,
+  dismissAlpha: number,
+) {
+  const pulse = Math.sin(globalTime * pulseFreq) * pulseAmp
+  const scale = (1 + pulse) * dismissScale
+  const alpha = (0.85 + Math.sin(globalTime * pulseFreq) * 0.15) * dismissAlpha
+
+  const outerR = 6 * unit * scale
+  const innerR = 1.5 * unit * scale
+  const ringR = 4 * unit * scale
+
+  ctx.save()
+  ctx.globalAlpha = alpha
+  ctx.globalCompositeOperation = 'source-over'
+
+  // Halo gradient disc
+  const palette = p.value
+  const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
+  grad.addColorStop(0, palette.cyan)
+  grad.addColorStop(0.4, palette.red)
+  grad.addColorStop(1, 'transparent')
+  ctx.fillStyle = grad
+  ctx.beginPath()
+  ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
+  ctx.fill()
+
+  // Inner ring
+  ctx.globalAlpha = alpha * 0.6
+  ctx.strokeStyle = palette.cyan
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
+  ctx.stroke()
+
+  ctx.restore()
+}
+
 // ── Animation state ───────────────────────────────────────────────────────────
 // All state is declared inside setup() (see below) so each component instance
 // owns isolated state. Module-scope state caused multiple RAF loops to share
@@ -115,35 +186,72 @@ function makeDrawFrame(
     const cx = W / 2
     const cy = H / 2
 
+    // vmin-derived unit — W/H are already physical pixels
+    const unit = Math.min(W, H) / 100
+
+    // Effective FPS for reduced-motion
+    const effectiveInterval = prefersReduced.value ? 100 : FRAME_INTERVAL
+    if (now - state.lastFrameTime < effectiveInterval) return
+
     ctx.clearRect(0, 0, W, H)
 
-    // Update dismiss progress
+    // Update dismiss progress (300ms)
     if (props.dismissing) {
       if (state.dismissStart === null) state.dismissStart = now
-      state.dismissProgress = Math.min(1, (now - state.dismissStart) / 400)
+      state.dismissProgress = Math.min(1, (now - state.dismissStart) / DISMISS_DURATION)
     } else {
       state.dismissStart = null
       state.dismissProgress = 0
     }
 
-    const deltaTime = (now - state.lastFrameTime) / 1000 // seconds
+    const deltaTime = state.lastFrameTime === 0 ? 0 : (now - state.lastFrameTime) / 1000
     state.globalTime += deltaTime
+    state.lastFrameTime = now
 
-    // Spawn new ripples
+    // Dismiss animation values
+    const dismissScale = props.dismissing
+      ? 1 - state.dismissProgress * 0.6 * (prefersReduced.value ? 0 : 1)
+      : 1
+    const dismissAlpha = props.dismissing
+      ? Math.max(0, 1 - state.dismissProgress * (prefersReduced.value ? 1 : 1.2))
+      : 1
+
+    // ── Draw core ─────────────────────────────────────────────────────────────
+    if (prefersReduced.value) {
+      drawCore(ctx, cx, cy, unit, state.globalTime, 6.28, 0.03, dismissScale, dismissAlpha)
+    } else {
+      drawCore(ctx, cx, cy, unit, state.globalTime, 10, 0.04, dismissScale, dismissAlpha)
+    }
+
+    // ── Reduced-motion: skip ripples ──────────────────────────────────────────
+    if (prefersReduced.value) {
+      // Clean up expired ripples (from before motion pref changed)
+      state.ripples = state.ripples.filter(r => {
+        const lifeProgress = (now - r.birth) / 1000 / (WAVE_LIFETIME / 1000)
+        return lifeProgress < 1 && !(props.dismissing && state.dismissProgress > 0.8)
+      })
+      return
+    }
+
+    // ── Spawn new ripples ─────────────────────────────────────────────────────
     if (!props.dismissing && now - state.lastSpawn > spawnInterval(state.globalTime)) {
       const configIdx = state.nextRippleId % LAYER_CONFIGS.length
       const config = LAYER_CONFIGS[configIdx]
-      const [color, glowColor] = NEON_COLORS[state.nextRippleId % NEON_COLORS.length]
+      const isCyan = state.nextRippleId % 2 === 0
+      const palette = p.value
+      const color = isCyan ? palette.cyan : palette.red
+      const glowColor = isCyan ? palette.cyanGlow : palette.redGlow
       state.ripples.push({
         id: state.nextRippleId++,
         birth: now,
-        baseRadius: 20 * DPR,
-        amplitude: config.amplitude * DPR,
+        baseRadius: 8 * unit,
+        amplitude: config.amplitude * unit,
         frequency: config.frequency,
-        speed: config.speed * DPR,
+        speed: config.speed * unit,
         color,
         glowColor,
-        lineWidth: config.lineWidth * DPR,
+        glowStop: glowColor.replace(/[\d.]+\)$/, '0.0)'),
+        lineWidth: config.lineWidth * unit,
         noiseSeed: Math.random() * 1000,
       })
       state.lastSpawn = now
@@ -153,11 +261,12 @@ function makeDrawFrame(
       }
     }
 
-    // Update and draw each ripple
+    // ── Draw each ripple ──────────────────────────────────────────────────────
     const POINTS = LOW_END ? 60 : 90
+    const blendMode = p.value.blend
 
     state.ripples.forEach((ripple) => {
-      const age = (now - ripple.birth) / 1000 // seconds
+      const age = (now - ripple.birth) / 1000
       const lifeProgress = age / (WAVE_LIFETIME / 1000)
 
       if (lifeProgress >= 1 || (props.dismissing && state.dismissProgress > 0.8)) {
@@ -182,7 +291,7 @@ function makeDrawFrame(
       const currentAmp = ripple.amplitude * expansionDecay * (props.dismissing ? (1 - state.dismissProgress) : 1)
 
       const noiseTime = state.globalTime * 1.5 + ripple.noiseSeed
-      const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * DPR * (1 - lifeProgress * 0.5)
+      const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * unit * (1 - lifeProgress * 0.5)
       const angleNoise = fractalNoise(noiseTime * 0.5 + 100, 3) * 0.3
 
       const currentLineWidth = ripple.lineWidth * Math.max(0.3, 1 - lifeProgress * 0.65)
@@ -207,10 +316,12 @@ function makeDrawFrame(
       const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.5)
       grad.addColorStop(0, ripple.color)
       grad.addColorStop(0.65, ripple.color)
-      grad.addColorStop(1, ripple.glowColor.replace('0.6)', '0.0)'))
+      grad.addColorStop(1, ripple.glowStop)
 
+      // Outer glow pass (high-end only)
       if (!LOW_END) {
         ctx.save()
+        ctx.globalCompositeOperation = blendMode
         ctx.globalAlpha = alpha * 0.45
         ctx.shadowBlur = 18 * DPR
         ctx.shadowColor = ripple.glowColor
@@ -221,7 +332,9 @@ function makeDrawFrame(
         ctx.restore()
       }
 
+      // Main stroke
       ctx.save()
+      ctx.globalCompositeOperation = blendMode
       ctx.globalAlpha = alpha
       ctx.shadowBlur = LOW_END ? 0 : 8 * DPR
       ctx.shadowColor = ripple.glowColor
@@ -273,13 +386,11 @@ const drawFrame = makeDrawFrame(state)
 
 function loop(now: number) {
   rafBox.id = requestAnimationFrame(loop)
-  if (now - state.lastFrameTime < FRAME_INTERVAL) return
   const canvas = canvasEl.value
   if (!canvas) return
   const ctx = canvas.getContext('2d')
   if (!ctx) return
   drawFrame(canvas, ctx, now)
-  state.lastFrameTime = now
 }
 
 onMounted(() => {
@@ -299,12 +410,19 @@ onMounted(() => {
   ro = new ResizeObserver(() => resize(canvas))
   ro.observe(canvas.parentElement ?? canvas)
   rafBox.id = requestAnimationFrame(loop)
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+  reduceQuery.addEventListener('change', onMotionChange)
 })
 
 onUnmounted(() => {
   cancelAnimationFrame(rafBox.id)
   ro?.disconnect()
   ro = null
+  themeObserver.disconnect()
+  reduceQuery.removeEventListener('change', onMotionChange)
 })
 
 watch(() => props.dismissing, (val) => {

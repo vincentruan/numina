@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import type { Agent } from '@/types/agent'
 import { useI18n } from 'vue-i18n'
+import NuminaLogo from '@/components/common/NuminaLogo.vue'
+
+const NUMINA_AGENT_NAME = 'numina'
 
 const { t } = useI18n()
 
@@ -21,26 +24,20 @@ const emit = defineEmits<{
     :style="{ '--agent-color': agent.color || '#6366F1' }"
     @click="emit('consult', agent)"
   >
-    <div class="agent-card__icon">{{ agent.icon || '🤖' }}</div>
+    <div class="agent-card__icon">
+      <!-- Numina brand agent (数鸣) renders the cursive wordmark instead of emoji. -->
+      <NuminaLogo v-if="agent.agent_name === NUMINA_AGENT_NAME" :width="80" />
+      <span v-else>{{ agent.icon || '🤖' }}</span>
+    </div>
     <div class="agent-card__body">
       <div class="agent-card__name">{{ agent.display_name }}</div>
       <div class="agent-card__desc">{{ agent.description || '' }}</div>
     </div>
     <div v-if="showActions" class="agent-card__actions" @click.stop>
-      <van-button
-        size="small"
-        type="primary"
-        plain
-        @click="emit('consult', agent)"
-      >
+      <van-button size="small" type="primary" plain @click="emit('consult', agent)">
         {{ agent.is_builtin ? t('agents.consult') : t('agents.chat') }}
       </van-button>
-      <van-button
-        v-if="agent.can_edit"
-        size="small"
-        plain
-        @click="emit('edit', agent)"
-      >
+      <van-button v-if="agent.can_edit" size="small" plain @click="emit('edit', agent)">
         {{ t('agents.edit') }}
       </van-button>
     </div>
@@ -57,14 +54,23 @@ const emit = defineEmits<{
   background: var(--van-background-2);
   border: 1px solid var(--van-border-color);
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 
 .agent-card:active {
   transform: scale(0.97);
 }
 
+/* Fixed icon slot height accommodates both the 32px emoji and the 80px
+   NuminaLogo SVG (rendered with its native aspect ratio) without changing
+   card height. Center contents so emoji and SVG both look balanced. */
 .agent-card__icon {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 32px;
   line-height: 1;
 }

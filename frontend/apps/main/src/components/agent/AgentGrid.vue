@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
 defineProps<{
-  builtinAgents: Agent[]
+  systemAgents: Agent[]
   customAgents: Agent[]
   showCreate?: boolean
 }>()
@@ -19,11 +19,12 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <div v-if="builtinAgents.length" class="agent-section">
-    <div class="agent-section__title">{{ t('agents.builtinAgents') }}</div>
+  <!-- System agents zone: AI问答, 数鸣 (always present when at least one is enabled). -->
+  <div v-if="systemAgents.length" class="agent-section">
+    <div class="agent-section__title">{{ t('agents.systemAgents') }}</div>
     <div class="agent-grid">
       <AgentCard
-        v-for="agent in builtinAgents"
+        v-for="agent in systemAgents"
         :key="agent.id"
         :agent="agent"
         :show-actions="true"
@@ -33,6 +34,11 @@ const emit = defineEmits<{
     </div>
   </div>
 
+  <!-- Slot for content between system and custom zones (e.g. apps section) -->
+  <slot name="between" />
+
+  <!-- Custom agents zone — title renders unconditionally so the empty-state
+       hint is visible even when no custom agents exist (per R1 + AE11). -->
   <div class="agent-section">
     <div class="agent-section__title">{{ t('agents.customAgents') }}</div>
     <div class="agent-grid">
@@ -44,11 +50,7 @@ const emit = defineEmits<{
         @consult="emit('consult', $event)"
         @edit="emit('edit', $event)"
       />
-      <div
-        v-if="showCreate"
-        class="agent-card agent-card--create"
-        @click="emit('create')"
-      >
+      <div v-if="showCreate" class="agent-card agent-card--create" @click="emit('create')">
         <div class="agent-card__icon">＋</div>
         <div class="agent-card__body">
           <div class="agent-card__name">{{ t('agents.createAgent') }}</div>

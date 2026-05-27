@@ -2,16 +2,11 @@
   <div class="skills-manage-page">
     <PageHeader :title="t('skills.title')" />
 
-    <!-- Fixed capabilities (read-only) -->
-    <van-cell-group inset :title="t('skills.fixedSkills')" class="section">
-      <van-cell
-        v-for="skill in groupedSkills?.fixed ?? []"
-        :key="skill.id"
-        :title="t(`skills.capability.${skill.id}.name`)"
-        :label="t(`skills.capability.${skill.id}.description`)"
-        center
-      />
-    </van-cell-group>
+    <!-- U14 (R9): the "固定技能" section is removed entirely. The chat and
+         time_machine entries are no longer skills — they're routing
+         capabilities (see _ROUTING_CAPABILITIES in ai_capabilities.py) and
+         shouldn't appear in skill management. The api response's `fixed`
+         array is also empty after the U1 backend change. -->
 
     <!-- Builtin skills (toggle) -->
     <van-cell-group inset :title="t('skills.builtinSkills')" class="section">
@@ -208,8 +203,14 @@ const formDraft = ref({
 const emojiOptions = ['✨', '📊', '🔔', '💡', '🎯', '📈', '🔍', '💰', '🏠', '📋', '⚡', '🛡️', '🎨', '📦', '🔧', '💳', '📱', '🌐', '🤖', '📝']
 const colorOptions = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316', '#a855f7']
 
-// Builtin IDs for validation
-const builtinIds = ['alerts', 'allocation', 'chat', 'disposal', 'liability', 'report', 'spending_leak', 'time_machine']
+// Builtin skill IDs — must mirror the backend's BUILTIN_CAPABILITIES list.
+// chat and time_machine are NOT in this list; they're routing-only
+// capabilities, blocked from custom skill IDs via RESERVED_NAMES below.
+const builtinIds = ['alerts', 'allocation', 'disposal', 'liability', 'report', 'spending_leak']
+
+// Names reserved for system internal use; cannot be reused as custom skill IDs.
+// Mirrors the backend's RESERVED_NAMES constant in ai_skills.py.
+const RESERVED_NAMES = ['chat', 'time_machine']
 
 // Computed
 const formValid = computed(() => {
@@ -228,8 +229,7 @@ async function loadSkills() {
     groupedSkills.value = res
     // For builtin toggle display, we need all builtin skills including disabled
     // The API returns only enabled ones, so we construct the full list
-    const builtinSkillIds = builtinIds.filter(id => id !== 'chat' && id !== 'time_machine')
-    allBuiltinSkills.value = builtinSkillIds.map(id => {
+    allBuiltinSkills.value = builtinIds.map(id => {
       const found = res.builtin?.find((s: { id: string }) => s.id === id)
       return found || { id, skill_type: 'builtin' as const, is_enabled: false, display_order: 100, can_edit: false, can_delete: false }
     })
@@ -254,6 +254,12 @@ function validateSkillId(value: string) {
   }
   if (builtinIds.includes(value)) {
     skillIdError.value = t('skills.form.skillIdConflict')
+    return
+  }
+  if (RESERVED_NAMES.includes(value)) {
+    // U14: chat and time_machine are reserved for system internal use.
+    // Mirror the backend's RESERVED_NAMES check (per U1 RESERVED_NAMES).
+    skillIdError.value = t('skills.form.skillIdReserved')
     return
   }
   if (groupedSkills.value?.custom.some(s => s.id === value)) {
