@@ -17,14 +17,22 @@ onMounted(() => {
 .glass-mask {
   position: absolute;
   inset: 0;
-  /* Glassmorphism: dark-tinted blur */
+  background: rgba(255, 255, 255, 0.90);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+}
+
+.glass-mask.no-backdrop {
+  background: rgba(245, 245, 255, 0.88);
+}
+
+[data-theme='dark'] .glass-mask {
   background: rgba(1, 1, 32, 0.52);
   backdrop-filter: blur(12px) saturate(1.4);
   -webkit-backdrop-filter: blur(12px) saturate(1.4);
 }
 
-/* Fallback for browsers without backdrop-filter */
-.glass-mask.no-backdrop {
+[data-theme='dark'] .glass-mask.no-backdrop {
   background: rgba(1, 1, 32, 0.82);
 }
 </style>
