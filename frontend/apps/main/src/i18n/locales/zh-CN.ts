@@ -1640,6 +1640,8 @@ export default {
       createSuccess: '🎉 智能体创建成功',
       updateSuccess: '✅ 智能体更新成功',
       deleteSuccess: '🗑️ 智能体已删除',
+      systemAgentBanner: '🔒 这是系统智能体，配置由产品维护，仅可查看。如需调整能力，请前往「设置 → AI → 技能管理」开启或关闭技能。',
+      noEnabledSkills: '尚未启用任何技能，可前往「技能管理」开启',
     },
     templateFinanceAdvisor: '财务顾问模板',
     templateBudgetTracker: '预算追踪模板',

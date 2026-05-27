@@ -29,8 +29,16 @@ const form = ref<AgentCreatePayload>({
   subagent_enabled: false,
 })
 
+// U13: agent_type drives the read-only mode for system agents (numina,
+// ai-assistant). isBuiltin remains for the legacy 6-builtin code path —
+// after migration b6745e8a2c14 there are no builtin agents in production
+// but the branch is preserved against down() rollback scenarios.
+const agentType = ref<'system' | 'builtin' | 'custom' | null>(null)
 const isBuiltin = ref(false)
+const isSystemAgent = computed(() => agentType.value === 'system')
+
 const availableSkills = ref<SkillDefinition[]>([])
+const skillsLoading = ref(true)
 const submitting = ref(false)
 
 const ICON_OPTIONS = ['🤖', '🏥', '💰', '🎯', '📊', '🔍', '💡', '🛡️', '📈', '🧮',
@@ -42,12 +50,21 @@ const COLOR_OPTIONS = [
 ]
 
 onMounted(async () => {
-  const skillData = await getSkillsGrouped()
-  availableSkills.value = [...skillData.builtin.filter((s: SkillDefinition) => s.is_enabled), ...skillData.custom.filter((s: SkillDefinition) => s.is_enabled)]
+  skillsLoading.value = true
+  try {
+    const skillData = await getSkillsGrouped()
+    availableSkills.value = [
+      ...skillData.builtin.filter((s: SkillDefinition) => s.is_enabled),
+      ...skillData.custom.filter((s: SkillDefinition) => s.is_enabled),
+    ]
+  } finally {
+    skillsLoading.value = false
+  }
 
   if (isEdit.value) {
     const agent = await getAgent(agentId.value)
     isBuiltin.value = agent.is_builtin
+    agentType.value = agent.agent_type
     form.value = {
       agent_name: agent.agent_name,
       display_name: agent.display_name,
@@ -63,6 +80,10 @@ onMounted(async () => {
 })
 
 async function handleSubmit() {
+  // U13 defensive guard — system agents are not mutable; the save button is
+  // also removed from the DOM via v-if so this path is unreachable from
+  // the UI, but keep the guard against programmatic invocation.
+  if (isSystemAgent.value) return
   submitting.value = true
   try {
     if (isEdit.value) {
@@ -112,17 +133,28 @@ function toggleSkill(skillId: string) {
       @click-left="router.back()"
     />
 
+    <!-- U13: read-only banner — system agents (数鸣, AI问答) cannot be edited.
+         Owners can still navigate here to inspect the agent's configuration. -->
+    <van-notice-bar
+      v-if="isSystemAgent"
+      :scrollable="false"
+      :left-icon="'lock'"
+      :text="t('agents.form.systemAgentBanner')"
+    />
+
     <van-cell-group inset>
       <van-field
         v-if="!isEdit"
         v-model="form.agent_name"
         :label="t('agents.form.agentName')"
         :placeholder="t('agents.form.agentNameHint')"
+        :disabled="isSystemAgent"
       />
       <van-field
         v-model="form.display_name"
         :label="t('agents.form.displayName')"
         required
+        :disabled="isSystemAgent"
       />
       <van-field
         v-model="form.description"
@@ -130,17 +162,18 @@ function toggleSkill(skillId: string) {
         type="textarea"
         rows="2"
         autosize
+        :disabled="isSystemAgent"
       />
     </van-cell-group>
 
     <van-cell-group inset :title="t('agents.form.icon')">
-      <div class="icon-grid">
+      <div class="icon-grid" :class="{ 'icon-grid--readonly': isSystemAgent }">
         <div
           v-for="icon in ICON_OPTIONS"
           :key="icon"
           class="icon-option"
           :class="{ 'icon-option--active': form.icon === icon }"
-          @click="form.icon = icon"
+          @click="!isSystemAgent && (form.icon = icon)"
         >
           {{ icon }}
         </div>
@@ -148,19 +181,19 @@ function toggleSkill(skillId: string) {
     </van-cell-group>
 
     <van-cell-group inset :title="t('agents.form.color')">
-      <div class="color-grid">
+      <div class="color-grid" :class="{ 'color-grid--readonly': isSystemAgent }">
         <div
           v-for="color in COLOR_OPTIONS"
           :key="color"
           class="color-option"
           :class="{ 'color-option--active': form.color === color }"
           :style="{ background: color }"
-          @click="form.color = color"
+          @click="!isSystemAgent && (form.color = color)"
         />
       </div>
     </van-cell-group>
 
-    <van-cell-group v-if="!isBuiltin" inset :title="t('agents.form.soulMd')">
+    <van-cell-group v-if="!isBuiltin && !isSystemAgent" inset :title="t('agents.form.soulMd')">
       <van-field
         v-model="form.soul_md"
         type="textarea"
@@ -170,23 +203,36 @@ function toggleSkill(skillId: string) {
       />
     </van-cell-group>
 
-    <van-cell-group v-if="!isBuiltin" inset :title="t('agents.form.skills')">
-      <van-cell
-        v-for="skill in availableSkills"
-        :key="skill.id"
-        :title="skill.name || skill.id"
-        :label="skill.description || ''"
-      >
-        <template #right-icon>
-          <van-checkbox
-            :model-value="(form.skills || []).includes(skill.id)"
-            @update:model-value="toggleSkill(skill.id)"
-          />
-        </template>
-      </van-cell>
+    <!-- Skills section: for system agents (numina with sentinel ['*']),
+         render the family's currently-enabled skills as locked rows so the
+         owner sees what numina actually has access to. For builtin/custom
+         agents, render normal toggleable rows. -->
+    <van-cell-group v-if="!isBuiltin || isSystemAgent" inset :title="t('agents.form.skills')">
+      <van-skeleton v-if="skillsLoading" :row="3" />
+      <van-empty
+        v-else-if="!availableSkills.length"
+        :description="t('agents.form.noEnabledSkills')"
+      />
+      <template v-else>
+        <van-cell
+          v-for="skill in availableSkills"
+          :key="skill.id"
+          :title="skill.name || skill.id"
+          :label="skill.description || ''"
+        >
+          <template #right-icon>
+            <van-icon v-if="isSystemAgent" name="lock" />
+            <van-checkbox
+              v-else
+              :model-value="(form.skills || []).includes(skill.id)"
+              @update:model-value="toggleSkill(skill.id)"
+            />
+          </template>
+        </van-cell>
+      </template>
     </van-cell-group>
 
-    <van-cell-group v-if="!isBuiltin" inset>
+    <van-cell-group v-if="!isBuiltin && !isSystemAgent" inset>
       <van-field
         v-model="form.model"
         :label="t('agents.form.model')"
@@ -199,7 +245,8 @@ function toggleSkill(skillId: string) {
       </van-cell>
     </van-cell-group>
 
-    <div class="bottom-bar">
+    <!-- Save button: removed from DOM (not just disabled) for system agents. -->
+    <div v-if="!isSystemAgent" class="bottom-bar">
       <van-button
         type="primary"
         block
@@ -223,6 +270,12 @@ function toggleSkill(skillId: string) {
   grid-template-columns: repeat(10, 1fr);
   gap: 4px;
   padding: 12px 16px;
+}
+
+.icon-grid--readonly,
+.color-grid--readonly {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .icon-option {
