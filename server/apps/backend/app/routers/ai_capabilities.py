@@ -19,6 +19,14 @@ from apps.backend.app.services.capability_catalog import apply_capability_overri
 router = APIRouter(prefix="/ai/capabilities", tags=["ai-capabilities"])
 logger = logging.getLogger(__name__)
 
+# Routing-only capabilities exposed by /ai/capabilities for frontend discovery.
+# These are not skills (not toggleable in skill management) — they map to fixed
+# routes (`/ai/chat`, `/ai/time-machine`) that always exist when AI is enabled.
+# The agent's `services.capability_registry.FIXED_CAPABILITY_DEFS` is the source
+# of truth for their full UI metadata; this list mirrors their IDs locally for
+# the enabled-set check and the fallback when the agent is unreachable.
+_ROUTING_CAPABILITIES: tuple[str, ...] = ("chat", "time_machine")
+
 
 def _fallback_capability(capability_id: str) -> dict:
     return {
@@ -58,6 +66,9 @@ def _enabled_capability_ids(family_id: str, db: Session) -> set[str]:
         row = rows.get(capability)
         if row is None or row.is_enabled:
             enabled.add(capability)
+    # Routing capabilities (chat, time_machine) are always enabled — they are
+    # fixed destinations, not skills. They do not appear in FamilySkillConfig.
+    enabled.update(_ROUTING_CAPABILITIES)
     return enabled
 
 
@@ -71,8 +82,11 @@ async def _load_agent_capabilities() -> list[dict]:
             resp.raise_for_status()
             return list(resp.json())
     except Exception as exc:
-        logger.warning("capability discovery fell back to built-ins: %s", type(exc).__name__)
-        return [_fallback_capability(capability) for capability in BUILTIN_CAPABILITIES]
+        logger.warning(
+            "capability discovery fell back to built-ins: %s", type(exc).__name__
+        )
+        ids = list(BUILTIN_CAPABILITIES) + list(_ROUTING_CAPABILITIES)
+        return [_fallback_capability(capability) for capability in ids]
 
 
 @router.get("", response_model=list[AICapabilitySchema])

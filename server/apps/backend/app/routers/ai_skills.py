@@ -1,4 +1,13 @@
-"""技能配置管理路由（per-family）。"""
+"""技能配置管理路由（per-family）。
+
+Skill catalog 命名空间约定：
+- ``BUILTIN_CAPABILITIES`` 列出可启用/禁用的业务能力 skill（对应 ``agent/skills/*.md`` 文件）。
+- ``RESERVED_NAMES`` 保留给系统内部能力，禁止 owner 创建同名 custom skill：
+  - ``chat`` 是 AI 问答智能体的纯 LLM 对话内部能力（``agent.skills=["chat"]`` 由 dispatch 层
+    识别为"无业务 skill"模式，不进入 catalog 查找）。
+- ``time_machine`` 是固定规则计算应用，作为独立 ``/ai/time-machine`` 页面入口暴露，不作为可调度 skill。
+
+"""
 
 import logging
 import os
@@ -21,19 +30,19 @@ from apps.backend.app.services import workspace
 router = APIRouter(prefix="/ai/skills", tags=["ai-skills"])
 logger = logging.getLogger(__name__)
 
-# Canonical list of built-in capabilities (matches agent/skills/*.md)
+# Business capabilities exposed to skill management (matches agent/skills/*.md).
+# 注意：`chat` 与 `time_machine` 不在此列 — 见 RESERVED_NAMES。
 BUILTIN_CAPABILITIES = [
     "report",
-    "chat",
     "alerts",
     "allocation",
     "disposal",
     "liability",
     "spending_leak",
-    "time_machine",
 ]
 
-FIXED_CAPABILITIES = ["chat", "time_machine"]
+# Reserved namespace — not skills, but blocked from custom skill_id collisions.
+RESERVED_NAMES = ["chat", "time_machine"]
 
 BUILTIN_DEFAULT_ORDER = {
     "report": 100,
@@ -69,11 +78,12 @@ def _read_default_prompt(capability: str, family_id: str | None = None) -> str |
     if content.startswith("---"):
         end = content.find("---", 3)
         if end != -1:
-            return content[end + 3:].strip()
+            return content[end + 3 :].strip()
     return content.strip()
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
+
 
 class SkillConfigResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -81,7 +91,9 @@ class SkillConfigResponse(BaseModel):
     capability: str
     is_enabled: bool
     custom_prompt: str | None
-    default_prompt: str | None  # always populated from workspace override or skills/*.md
+    default_prompt: (
+        str | None
+    )  # always populated from workspace override or skills/*.md
 
 
 class SkillConfigUpdate(BaseModel):
@@ -126,11 +138,15 @@ class CustomSkillCreate(BaseModel):
     @classmethod
     def validate_skill_id(cls, v: str) -> str:
         if not SKILL_ID_PATTERN.match(v):
-            raise ValueError("skill_id 只能包含小写字母、数字、下划线、连字符，且不能数字开头")
+            raise ValueError(
+                "skill_id 只能包含小写字母、数字、下划线、连字符，且不能数字开头"
+            )
         if len(v) > 64:
             raise ValueError("skill_id 长度不能超过 64 字符")
         if v in BUILTIN_CAPABILITIES:
             raise ValueError("skill_id 不能与内置技能冲突")
+        if v in RESERVED_NAMES:
+            raise ValueError("skill_id 与保留命名冲突")
         return v
 
 
@@ -153,6 +169,7 @@ class ReorderRequest(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
 
 @router.get("", response_model=list[SkillConfigResponse])
 def list_skills(
@@ -192,10 +209,14 @@ def update_skill(
     if capability not in BUILTIN_CAPABILITIES:
         raise AppError(ErrorCode.NOT_FOUND, f"未知技能: {capability}")
 
-    row = db.query(FamilySkillConfig).filter(
-        FamilySkillConfig.family_id == current_user.family_id,
-        FamilySkillConfig.capability == capability,
-    ).first()
+    row = (
+        db.query(FamilySkillConfig)
+        .filter(
+            FamilySkillConfig.family_id == current_user.family_id,
+            FamilySkillConfig.capability == capability,
+        )
+        .first()
+    )
 
     if row is None:
         row = FamilySkillConfig(
@@ -234,10 +255,14 @@ def reset_skill_prompt(
     if capability not in BUILTIN_CAPABILITIES:
         raise AppError(ErrorCode.NOT_FOUND, f"未知技能: {capability}")
 
-    row = db.query(FamilySkillConfig).filter(
-        FamilySkillConfig.family_id == current_user.family_id,
-        FamilySkillConfig.capability == capability,
-    ).first()
+    row = (
+        db.query(FamilySkillConfig)
+        .filter(
+            FamilySkillConfig.family_id == current_user.family_id,
+            FamilySkillConfig.capability == capability,
+        )
+        .first()
+    )
 
     if row:
         row.custom_prompt = None
@@ -270,38 +295,52 @@ def list_skills_grouped(
         .all()
     }
 
-    fixed = [
-        SkillDefinitionResponse(id="chat", skill_type="fixed", display_order=0, is_enabled=True),
-        SkillDefinitionResponse(id="time_machine", skill_type="fixed", display_order=1, is_enabled=True),
-    ]
+    fixed: list[SkillDefinitionResponse] = []
 
     builtin = []
     for skill_id in BUILTIN_CAPABILITIES:
-        if skill_id in FIXED_CAPABILITIES:
-            continue
         record = db_records.get(skill_id)
         is_enabled = record.is_enabled if record else True
-        display_order = record.display_order if record else BUILTIN_DEFAULT_ORDER.get(skill_id, 100)
-        builtin.append(SkillDefinitionResponse(
-            id=skill_id, skill_type="builtin",
-            display_order=display_order, is_enabled=is_enabled,
-        ))
+        display_order = (
+            record.display_order if record else BUILTIN_DEFAULT_ORDER.get(skill_id, 100)
+        )
+        builtin.append(
+            SkillDefinitionResponse(
+                id=skill_id,
+                skill_type="builtin",
+                display_order=display_order,
+                is_enabled=is_enabled,
+            )
+        )
     builtin.sort(key=lambda s: s.display_order)
 
     custom = []
-    for record in db.query(SkillRegistry).filter(
-        SkillRegistry.family_id == family_id,
-        SkillRegistry.skill_type == "custom",
-    ).order_by(SkillRegistry.display_order).all():
-        custom.append(SkillDefinitionResponse(
-            id=record.skill_id, skill_type="custom",
-            name=record.name, description=record.description,
-            icon=record.icon, color=record.color,
-            route=record.route, input_mode=record.input_mode,
-            examples=record.examples,
-            display_order=record.display_order, is_enabled=record.is_enabled,
-            can_edit=True, can_delete=True,
-        ))
+    for record in (
+        db.query(SkillRegistry)
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_type == "custom",
+        )
+        .order_by(SkillRegistry.display_order)
+        .all()
+    ):
+        custom.append(
+            SkillDefinitionResponse(
+                id=record.skill_id,
+                skill_type="custom",
+                name=record.name,
+                description=record.description,
+                icon=record.icon,
+                color=record.color,
+                route=record.route,
+                input_mode=record.input_mode,
+                examples=record.examples,
+                display_order=record.display_order,
+                is_enabled=record.is_enabled,
+                can_edit=True,
+                can_delete=True,
+            )
+        )
 
     return SkillListGroupedResponse(fixed=fixed, builtin=builtin, custom=custom)
 
@@ -314,28 +353,45 @@ def create_custom_skill_endpoint(
 ) -> SkillDefinitionResponse:
     """创建自定义技能。"""
     family_id = current_user.family_id
-    existing = db.query(SkillRegistry).filter(
-        SkillRegistry.family_id == family_id,
-        SkillRegistry.skill_id == payload.skill_id,
-    ).first()
+    existing = (
+        db.query(SkillRegistry)
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_id == payload.skill_id,
+        )
+        .first()
+    )
     if existing:
-        raise AppError(ErrorCode.VALIDATION_ERROR, f"技能 ID '{payload.skill_id}' 已存在")
+        raise AppError(
+            ErrorCode.VALIDATION_ERROR, f"技能 ID '{payload.skill_id}' 已存在"
+        )
 
-    max_order = db.query(func.max(SkillRegistry.display_order)).filter(
-        SkillRegistry.family_id == family_id,
-        SkillRegistry.skill_type == "custom",
-    ).scalar() or 199
+    max_order = (
+        db.query(func.max(SkillRegistry.display_order))
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_type == "custom",
+        )
+        .scalar()
+        or 199
+    )
     display_order = max_order + 1
 
     skill_md_content = f"---\nname: {payload.name}\ndescription: {payload.description or ''}\ntrigger_phrases:\n  - {payload.name}\nallowed-tools: []\nthinking: false\n---\n\n{payload.prompt_content}\n"
     workspace.create_custom_skill(str(family_id), payload.skill_id, skill_md_content)
 
     record = SkillRegistry(
-        family_id=family_id, skill_id=payload.skill_id, skill_type="custom",
-        name=payload.name, description=payload.description,
-        icon=payload.icon, color=payload.color,
-        input_mode=payload.input_mode, examples=payload.examples,
-        is_enabled=True, display_order=display_order,
+        family_id=family_id,
+        skill_id=payload.skill_id,
+        skill_type="custom",
+        name=payload.name,
+        description=payload.description,
+        icon=payload.icon,
+        color=payload.color,
+        input_mode=payload.input_mode,
+        examples=payload.examples,
+        is_enabled=True,
+        display_order=display_order,
         created_by=current_user.id,
     )
     db.add(record)
@@ -343,12 +399,18 @@ def create_custom_skill_endpoint(
     db.refresh(record)
 
     return SkillDefinitionResponse(
-        id=record.skill_id, skill_type="custom",
-        name=record.name, description=record.description,
-        icon=record.icon, color=record.color,
-        input_mode=record.input_mode, examples=record.examples,
-        display_order=record.display_order, is_enabled=record.is_enabled,
-        can_edit=True, can_delete=True,
+        id=record.skill_id,
+        skill_type="custom",
+        name=record.name,
+        description=record.description,
+        icon=record.icon,
+        color=record.color,
+        input_mode=record.input_mode,
+        examples=record.examples,
+        display_order=record.display_order,
+        is_enabled=record.is_enabled,
+        can_edit=True,
+        can_delete=True,
     )
 
 
@@ -361,15 +423,22 @@ def reorder_skills_endpoint(
     """批量调整排序。"""
     family_id = current_user.family_id
     for idx, skill_id in enumerate(payload.skill_ids):
-        record = db.query(SkillRegistry).filter(
-            SkillRegistry.family_id == family_id,
-            SkillRegistry.skill_id == skill_id,
-        ).first()
+        record = (
+            db.query(SkillRegistry)
+            .filter(
+                SkillRegistry.family_id == family_id,
+                SkillRegistry.skill_id == skill_id,
+            )
+            .first()
+        )
         if not record:
-            if skill_id in BUILTIN_CAPABILITIES and skill_id not in FIXED_CAPABILITIES:
+            if skill_id in BUILTIN_CAPABILITIES:
                 record = SkillRegistry(
-                    family_id=family_id, skill_id=skill_id, skill_type="builtin",
-                    display_order=idx, is_enabled=True,
+                    family_id=family_id,
+                    skill_id=skill_id,
+                    skill_type="builtin",
+                    display_order=idx,
+                    is_enabled=True,
                 )
                 db.add(record)
         else:
@@ -387,18 +456,22 @@ def toggle_skill_endpoint(
 ) -> SkillDefinitionResponse:
     """启用/禁用技能。"""
     family_id = current_user.family_id
-    if skill_id in FIXED_CAPABILITIES:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "固定能力不可禁用")
 
-    record = db.query(SkillRegistry).filter(
-        SkillRegistry.family_id == family_id,
-        SkillRegistry.skill_id == skill_id,
-    ).first()
+    record = (
+        db.query(SkillRegistry)
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_id == skill_id,
+        )
+        .first()
+    )
 
     if not record:
         if skill_id in BUILTIN_CAPABILITIES:
             record = SkillRegistry(
-                family_id=family_id, skill_id=skill_id, skill_type="builtin",
+                family_id=family_id,
+                skill_id=skill_id,
+                skill_type="builtin",
                 is_enabled=payload.is_enabled,
                 display_order=BUILTIN_DEFAULT_ORDER.get(skill_id, 100),
             )
@@ -412,11 +485,16 @@ def toggle_skill_endpoint(
     db.refresh(record)
 
     return SkillDefinitionResponse(
-        id=skill_id, skill_type=record.skill_type,
-        display_order=record.display_order, is_enabled=record.is_enabled,
-        name=record.name, description=record.description,
-        icon=record.icon, color=record.color,
-        input_mode=record.input_mode, examples=record.examples,
+        id=skill_id,
+        skill_type=record.skill_type,
+        display_order=record.display_order,
+        is_enabled=record.is_enabled,
+        name=record.name,
+        description=record.description,
+        icon=record.icon,
+        color=record.color,
+        input_mode=record.input_mode,
+        examples=record.examples,
         can_edit=record.skill_type == "custom",
         can_delete=record.skill_type == "custom",
     )
@@ -431,11 +509,15 @@ def update_custom_skill_endpoint(
 ) -> SkillDefinitionResponse:
     """更新自定义技能。"""
     family_id = current_user.family_id
-    record = db.query(SkillRegistry).filter(
-        SkillRegistry.family_id == family_id,
-        SkillRegistry.skill_id == skill_id,
-        SkillRegistry.skill_type == "custom",
-    ).first()
+    record = (
+        db.query(SkillRegistry)
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_id == skill_id,
+            SkillRegistry.skill_type == "custom",
+        )
+        .first()
+    )
     if not record:
         raise AppError(ErrorCode.NOT_FOUND, f"自定义技能 '{skill_id}' 不存在")
 
@@ -460,12 +542,18 @@ def update_custom_skill_endpoint(
     db.refresh(record)
 
     return SkillDefinitionResponse(
-        id=record.skill_id, skill_type="custom",
-        name=record.name, description=record.description,
-        icon=record.icon, color=record.color,
-        input_mode=record.input_mode, examples=record.examples,
-        display_order=record.display_order, is_enabled=record.is_enabled,
-        can_edit=True, can_delete=True,
+        id=record.skill_id,
+        skill_type="custom",
+        name=record.name,
+        description=record.description,
+        icon=record.icon,
+        color=record.color,
+        input_mode=record.input_mode,
+        examples=record.examples,
+        display_order=record.display_order,
+        is_enabled=record.is_enabled,
+        can_edit=True,
+        can_delete=True,
     )
 
 
@@ -477,11 +565,15 @@ def delete_custom_skill_endpoint(
 ) -> dict:
     """删除自定义技能。"""
     family_id = current_user.family_id
-    record = db.query(SkillRegistry).filter(
-        SkillRegistry.family_id == family_id,
-        SkillRegistry.skill_id == skill_id,
-        SkillRegistry.skill_type == "custom",
-    ).first()
+    record = (
+        db.query(SkillRegistry)
+        .filter(
+            SkillRegistry.family_id == family_id,
+            SkillRegistry.skill_id == skill_id,
+            SkillRegistry.skill_type == "custom",
+        )
+        .first()
+    )
     if not record:
         raise AppError(ErrorCode.NOT_FOUND, f"自定义技能 '{skill_id}' 不存在")
 
