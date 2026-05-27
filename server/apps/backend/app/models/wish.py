@@ -7,6 +7,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     String,
+    TIMESTAMP,
     Text,
     func,
 )
@@ -31,9 +32,10 @@ class Wish(Base):
     currency: Mapped[str] = mapped_column(String(10), default="CNY")
     converts_to_asset: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
+    fulfilled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="wishes")
     category = relationship("Category")
-    realized_asset = relationship("Asset")
+    realized_asset = relationship("Asset", foreign_keys=[realized_asset_id])
