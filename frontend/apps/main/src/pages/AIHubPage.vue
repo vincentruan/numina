@@ -115,33 +115,131 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent grid -->
+    <!-- Agent grid: system agents → time-machine app card → custom agents -->
     <div class="feature-section">
       <AgentGrid
-        :builtin-agents="agentStore.builtinAgents.filter(a => a.is_enabled)"
+        :system-agents="agentStore.systemAgents.filter(a => a.is_enabled)"
         :custom-agents="agentStore.customAgents.filter(a => a.is_enabled)"
         :show-create="isOwner"
         @consult="handleAgentConsult"
         @edit="handleAgentEdit"
         @create="router.push({ name: 'AgentCreate' })"
       />
+
+      <!-- 应用区 (Apps): fixed-rule applications, not chat agents.
+           Rendered between system and custom zones per R1 + R13.
+           Hardcoded constant — not sourced from ai_agents table. -->
+      <div class="agent-section">
+        <div class="agent-section__title">{{ t('agents.apps') }}</div>
+        <div class="agent-grid">
+          <div
+            class="agent-card app-card"
+            role="button"
+            tabindex="0"
+            @click="router.push('/ai/time-machine')"
+            @keydown.enter="router.push('/ai/time-machine')"
+            @keydown.space.prevent="router.push('/ai/time-machine')"
+          >
+            <div class="agent-card__icon">⏰</div>
+            <div class="agent-card__body">
+              <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
+              <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Chat input -->
     <div class="chat-entry">
+      <!-- Recipient chip (U11): which agent the bottom input sends to.
+           Default is 数鸣; tap to pick a different system or custom agent. -->
+      <div class="recipient-chip-row">
+        <button
+          class="recipient-chip"
+          :disabled="!selectedRecipient"
+          :aria-label="t('aiHub.changeRecipient')"
+          @click="showRecipientPicker = true"
+        >
+          <template v-if="!agentStore.systemAgents.length && !agentStore.customAgents.length">
+            <van-skeleton :row="1" row-width="80px" />
+          </template>
+          <template v-else>
+            <span class="recipient-chip__label">{{ t('aiHub.sendTo') }}</span>
+            <span class="recipient-chip__icon" aria-hidden="true">
+              <NuminaLogo
+                v-if="selectedRecipient?.agent_name === 'numina'"
+                :width="32"
+              />
+              <span v-else>{{ selectedRecipient?.icon || '🤖' }}</span>
+            </span>
+            <span class="recipient-chip__name">
+              {{ selectedRecipient?.display_name || t('aiHub.recipientFallback') }}
+            </span>
+            <svg
+              class="recipient-chip__chevron"
+              width="12"
+              height="12"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </template>
+        </button>
+      </div>
+
       <AIChatInput
         v-model="chatInput"
         v-model:deep-think="deepThink"
         v-model:web-search="webSearch"
         :placeholder="t('aiHub.chatPlaceholder')"
+        :disabled="!selectedRecipient"
         @submit="startChat"
       />
     </div>
+
+    <!-- Recipient picker action sheet -->
+    <van-action-sheet
+      v-model:show="showRecipientPicker"
+      :title="t('aiHub.changeRecipient')"
+      :description="recipientPickerHint"
+    >
+      <div v-if="!recipientChoices.length" class="recipient-empty">
+        <p class="recipient-empty__text">{{ t('aiHub.noEnabledAgents') }}</p>
+        <van-button size="small" plain @click="onManageAgentsClicked">
+          {{ t('aiHub.manageAgents') }}
+        </van-button>
+      </div>
+      <van-cell-group v-else inset>
+        <van-cell
+          v-for="agent in recipientChoices"
+          :key="agent.id"
+          :title="agent.display_name"
+          :label="agent.description || ''"
+          clickable
+          :class="{ 'recipient-row--active': agent.id === selectedRecipient?.id }"
+          @click="onSelectRecipient(agent)"
+        >
+          <template #icon>
+            <span class="recipient-row__icon" aria-hidden="true">
+              <NuminaLogo v-if="agent.agent_name === 'numina'" :width="24" />
+              <span v-else>{{ agent.icon || '🤖' }}</span>
+            </span>
+          </template>
+        </van-cell>
+      </van-cell-group>
+    </van-action-sheet>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
@@ -153,6 +251,7 @@ import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AgentGrid from '@/components/agent/AgentGrid.vue'
+import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 
@@ -171,6 +270,55 @@ const reportLoading = ref(false)
 const chatInput = ref('')
 const deepThink = ref(false)
 const webSearch = ref(false)
+
+// Recipient chip state (U11): which agent the bottom chat input talks to.
+// Defaults to 数鸣 once agents load; user can switch via action sheet.
+const selectedRecipient = ref<Agent | null>(null)
+const showRecipientPicker = ref(false)
+
+const numinaAgent = computed(() =>
+  agentStore.systemAgents.find((a) => a.agent_name === 'numina') || null,
+)
+
+// All agents the chip's action sheet can switch to: enabled system + custom.
+const recipientChoices = computed<Agent[]>(() => [
+  ...agentStore.systemAgents.filter((a) => a.is_enabled),
+  ...agentStore.customAgents.filter((a) => a.is_enabled),
+])
+
+const recipientPickerHint = computed(() =>
+  recipientChoices.value.length ? t('aiHub.changeRecipientHint') : '',
+)
+
+// Default the recipient to 数鸣 once the agent store finishes loading.
+// Fall back to ai-assistant, then any other system agent if 数鸣 isn't seeded
+// (defensive — 数鸣 should always exist after migration b6745e8a2c14).
+watch(
+  () => [agentStore.systemAgents, agentStore.customAgents] as const,
+  () => {
+    if (selectedRecipient.value) return // user already picked something
+    if (numinaAgent.value && numinaAgent.value.is_enabled) {
+      selectedRecipient.value = numinaAgent.value
+      return
+    }
+    const fallback =
+      agentStore.systemAgents.find((a) => a.is_enabled) ||
+      agentStore.customAgents.find((a) => a.is_enabled) ||
+      null
+    selectedRecipient.value = fallback
+  },
+  { deep: true, immediate: true },
+)
+
+function onSelectRecipient(agent: Agent) {
+  selectedRecipient.value = agent
+  showRecipientPicker.value = false
+}
+
+function onManageAgentsClicked() {
+  showRecipientPicker.value = false
+  router.push({ name: 'AgentsManage' })
+}
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
@@ -277,6 +425,11 @@ async function refreshReport(silent?: boolean) {
 
 function startChat(q: string) {
   if (!q) return
+  if (!selectedRecipient.value) {
+    // Defensive — the chat input is disabled when no recipient is set.
+    showToast(t('aiHub.noEnabledAgents'))
+    return
+  }
   aiStore.draftQuery = q
   aiStore.deepThinkEnabled = deepThink.value
   aiStore.webSearchEnabled = webSearch.value
@@ -284,6 +437,7 @@ function startChat(q: string) {
     path: '/ai/chat',
     query: {
       q,
+      agentId: selectedRecipient.value.id, // R4: every entry routes by agentId
       newSession: '1', // Signal fresh session from hub
       deepThink: deepThink.value ? '1' : undefined,
       webSearch: webSearch.value ? '1' : undefined,
@@ -292,23 +446,13 @@ function startChat(q: string) {
 }
 
 function handleAgentConsult(agent: Agent) {
-  // Route based on agent_name
-  if (agent.agent_name === 'ai-assistant') {
-    router.push({ name: 'AIChat' })
-    return
-  }
-  if (agent.agent_name === 'time-machine') {
-    router.push({ name: 'TimeMachine' })
-    return
-  }
-
-  // Route based on skills
-  if (agent.skills?.includes('report')) {
-    router.push('/ai/report')
-    return
-  }
-
-  // Default: route to chat with agentId
+  // R4: unified agentId routing — every agent card lands in AIChatPage with
+  // the agent's id in the query string. AIChatPage loads the matching
+  // agent's soul/skills based on agentId. No more agent_name special cases
+  // (the old ai-assistant / time-machine branches were architectural
+  // accidents from before agentId routing existed) and no more skills-based
+  // dead routing (the builtin agents that those branches targeted were
+  // deleted by migration b6745e8a2c14).
   router.push({ name: 'AIChat', query: { agentId: agent.id } })
 }
 
@@ -871,5 +1015,110 @@ onMounted(async () => {
 [data-theme='dark'] .report-summary-card:focus-visible,
 [data-theme='dark'] .report-empty-card:focus-visible {
   outline-color: rgba(255, 255, 255, 0.5);
+}
+
+/* ── Recipient chip (U11) ── */
+.recipient-chip-row {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 6px;
+}
+
+.recipient-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  min-height: 28px;
+}
+
+.recipient-chip:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.recipient-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+[data-theme='dark'] .recipient-chip {
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme='dark'] .recipient-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.recipient-chip__label {
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+}
+
+.recipient-chip__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.recipient-chip__icon :deep(.numina-logo) {
+  height: 14px;
+}
+
+.recipient-chip__name {
+  font-weight: 600;
+}
+
+.recipient-chip__chevron {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.recipient-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 24px;
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.recipient-row--active {
+  background-color: rgba(var(--theme-primary-rgb, 0, 122, 255), 0.06);
+}
+
+.recipient-empty {
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.recipient-empty__text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 0;
+}
+
+/* ── App card (U9 — time-machine) ── */
+.app-card {
+  /* Inherits .agent-card base styling; left-border accent distinguishes it
+     from chat agents — apps are fixed-rule, not conversational. */
+  border-left: 3px solid var(--theme-primary, #007aff);
 }
 </style>
