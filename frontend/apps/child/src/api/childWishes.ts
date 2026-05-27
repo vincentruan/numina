@@ -17,6 +17,7 @@ export interface ChildWish {
   progress: number | null
   rejection_reason: string | null
   realized_asset_id: string | null
+  fulfilled_at: string | null
   created_at: string
   updated_at: string
 }

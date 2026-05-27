@@ -94,6 +94,11 @@
         </van-cell>
       </van-cell-group>
 
+      <!-- Wish Origin -->
+      <van-cell-group v-if="asset.from_wish_id" inset :title="t('assetDetail.sectionWishOrigin')">
+        <van-cell :title="t('assetDetail.fromWish')" is-link :to="`/wishes/${asset.from_wish_id}`" />
+      </van-cell-group>
+
       <!-- Physical Info -->
       <van-cell-group v-if="asset.asset_type === 'physical'" inset :title="t('assetDetail.sectionPhysicalInfo')">
         <van-cell v-if="asset.location" :title="t('assetDetail.fieldLocation')" :value="asset.location" />

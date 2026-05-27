@@ -224,6 +224,8 @@ export default {
       confirmTag: 'You can have this one ✨',
       daysAdded: '+{n} days',
     },
+    fulfilledAt: 'Fulfilled on {date}',
+    viewAsset: 'View Treasure →',
   },
   treasures: {
     title: '🏆 My Treasures',
@@ -343,5 +345,10 @@ export default {
     sealTreasureChest: 'Seal the Treasure Chest!',
     reducedMotionToast: '✨ Task approved! Earned {stars} ⭐',
     candleAriaLabel: 'Awaiting approval',
+  },
+  assetDetail: {
+    purchaseDate: 'Purchase Date',
+    purchasePrice: 'Purchase Price',
+    currentValue: 'Current Value',
   },
 }

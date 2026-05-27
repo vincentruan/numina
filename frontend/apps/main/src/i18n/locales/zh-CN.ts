@@ -375,6 +375,8 @@ export default {
     btnDelete: '删除',
     lifespanDays: '{days} 天',
     perDay: '/天',
+    sectionWishOrigin: '来源心愿',
+    fromWish: '查看原始心愿',
   },
   liability: {
     title: '负债',
@@ -478,6 +480,7 @@ export default {
     priority: '优先级',
     status: '状态',
     realizedAsset: '已转化为资产',
+    fulfilledAt: '兑现于 {date}',
     detailInfo: '详细信息',
     notes: '备注',
     createdAt: '创建时间',

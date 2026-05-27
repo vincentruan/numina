@@ -225,6 +225,8 @@ export default {
       confirmTag: '这个就能拿到啦 ✨',
       daysAdded: '+{n} 天',
     },
+    fulfilledAt: '兑现于 {date}',
+    viewAsset: '查看宝贝 →',
   },
   treasures: {
     title: '🏆 我的宝贝',
@@ -344,5 +346,10 @@ export default {
     sealTreasureChest: '锁住宝箱！',
     reducedMotionToast: '✨ 任务通过！获得 {stars} ⭐',
     candleAriaLabel: '等待审批中',
+  },
+  assetDetail: {
+    purchaseDate: '购入日期',
+    purchasePrice: '购入价格',
+    currentValue: '当前价值',
   },
 }

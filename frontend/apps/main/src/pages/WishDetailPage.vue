@@ -52,7 +52,14 @@
           </div>
         </div>
 
-        <div v-if="wish.realized_asset_id" class="hero-realized-info">{{ t('wish.realizedAsset') }}</div>
+        <div v-if="wish.realized_asset_id" class="hero-realized-info">
+          <p v-if="wish.fulfilled_at" class="fulfilled-date">
+            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+          </p>
+          <router-link :to="`/assets/${wish.realized_asset_id}`">
+            {{ t('wish.realizedAsset') }} →
+          </router-link>
+        </div>
 
         <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
@@ -206,7 +213,7 @@ import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getIconId } from '@/utils/icon'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const route = useRoute()
 const router = useRouter()

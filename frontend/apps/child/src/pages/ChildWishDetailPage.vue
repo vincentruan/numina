@@ -61,7 +61,15 @@
       </button>
       <span v-else-if="wish.status === 'redemption_requested'" class="status-line">{{ t('wishes.waitingRedemption') }}</span>
       <span v-else-if="wish.status === 'pending_review'" class="status-line">{{ t('wishes.waitingReview') }}</span>
-      <span v-else-if="wish.status === 'realized'" class="status-line">{{ t('wishes.realized') }}</span>
+      <div v-else-if="wish.status === 'realized'" class="realized-section">
+        <p v-if="wish.fulfilled_at" class="fulfilled-date">
+          {{ t('wishes.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+        </p>
+        <router-link v-if="wish.realized_asset_id" :to="`/assets/${wish.realized_asset_id}`" class="link-asset">
+          {{ t('wishes.viewAsset') }}
+        </router-link>
+        <span v-else class="status-line">{{ t('wishes.realized') }}</span>
+      </div>
       <span v-else-if="wish.status === 'rejected'" class="status-line">{{ t('wishes.rejected') }}</span>
     </div>
   </div>
@@ -80,7 +88,7 @@ import { getCoinLedger, type CoinTransaction } from '@/api/coins'
 import { daysEstimate } from '@numina/math'
 import PageHeader from '@/components/common/PageHeader.vue'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -304,6 +312,30 @@ onMounted(load)
   height: 52px;
 }
 .btn-redeem:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.realized-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.fulfilled-date {
+  font-family: Inter, sans-serif;
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 0;
+}
+
+.link-asset {
+  font-family: Inter, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-brand-ochre);
+  text-decoration: none;
+}
+.link-asset:active { opacity: 0.7; }
 
 .status-line {
   display: block;

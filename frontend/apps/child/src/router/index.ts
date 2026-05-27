@@ -43,6 +43,11 @@ const router = createRouter({
           component: () => import('@/pages/ChildWishDetailPage.vue'),
         },
         {
+          path: 'assets/:id',
+          name: 'ChildAssetDetail',
+          component: () => import('@/pages/ChildAssetDetailPage.vue'),
+        },
+        {
           path: 'treasures',
           name: 'ChildTreasures',
           component: () => import('@/pages/ChildTreasuresPage.vue'),

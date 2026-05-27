@@ -70,6 +70,7 @@ export interface Asset {
   tags?: Tag[]
   daily_cost?: number
   return_rate?: number
+  from_wish_id?: string
   created_at: string
   updated_at: string
 }
@@ -300,6 +301,7 @@ export interface Wish {
   category?: CategoryInfo
   converts_to_asset: boolean
   realized_asset_id?: string
+  fulfilled_at?: string
   created_at: string
   updated_at: string
 }
