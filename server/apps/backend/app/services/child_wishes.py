@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -377,13 +377,14 @@ def realize_child_wish(
             current_value=0,
             purchase_date=date.today(),
             status="in_use",
+            from_wish_id=wish.id,
         )
         db.add(asset)
         db.flush()
 
         wish.status = "realized"
         wish.realized_asset_id = asset.id
-        wish.fulfilled_at = datetime.now(timezone.utc)
+        wish.fulfilled_at = datetime.now(UTC)
         db.commit()
         db.refresh(wish)
 
@@ -424,6 +425,23 @@ def realize_child_wish(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={"code": "WISH_REALIZE_FAILED", "message": f"兑现失败: {str(e)}"},
         ) from e
+
+
+def get_child_asset(db: Session, user: User, asset_id: int):
+    from apps.backend.app.models.asset import Asset
+    from apps.backend.app.schemas.asset import ChildAssetResponse
+    asset = db.query(Asset).filter(
+        Asset.id == asset_id,
+        Asset.user_id == user.id,
+        Asset.family_id == user.family_id,
+        Asset.is_archived.is_(False),
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "ASSET_NOT_FOUND", "message": "资产不存在"},
+        )
+    return ChildAssetResponse.model_validate(asset)
 
 
 def defer_redemption(db: Session, user: User, wish_id: str) -> ParentWishResponse:

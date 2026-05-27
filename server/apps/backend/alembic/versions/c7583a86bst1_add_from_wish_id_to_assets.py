@@ -5,16 +5,15 @@ Revises: b6472z75ars0
 Create Date: 2026-05-27
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
-
 revision: str = "c7583a86bst1"
-down_revision: Union[str, None] = "b6472z75ars0"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "b6472z75ars0"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -28,6 +27,16 @@ def upgrade() -> None:
         ondelete="SET NULL",
     )
     op.create_index("ix_assets_family_from_wish", "assets", ["family_id", "from_wish_id"])
+    # Backfill existing assets that were created from a wish realization
+    op.execute(
+        """
+        UPDATE assets
+        SET from_wish_id = child_wishes.id
+        FROM child_wishes
+        WHERE child_wishes.realized_asset_id = assets.id
+          AND assets.from_wish_id IS NULL
+        """
+    )
 
 
 def downgrade() -> None:

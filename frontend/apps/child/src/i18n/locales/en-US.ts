@@ -347,6 +347,7 @@ export default {
     candleAriaLabel: 'Awaiting approval',
   },
   assetDetail: {
+    title: 'Asset Details',
     purchaseDate: 'Purchase Date',
     purchasePrice: 'Purchase Price',
     currentValue: 'Current Value',

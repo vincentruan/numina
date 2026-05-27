@@ -348,6 +348,7 @@ export default {
     candleAriaLabel: '等待审批中',
   },
   assetDetail: {
+    title: '资产详情',
     purchaseDate: '购入日期',
     purchasePrice: '购入价格',
     currentValue: '当前价值',

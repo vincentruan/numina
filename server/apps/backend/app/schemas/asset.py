@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -206,4 +206,5 @@ class ChildAssetResponse(SnowflakeBase):
     purchase_price: float | None = None
     current_value: float | None = None
     status: str
+    from_wish_id: int | None = None
     created_at: datetime

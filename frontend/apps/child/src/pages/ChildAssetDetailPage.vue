@@ -1,6 +1,6 @@
 <template>
   <div class="asset-detail-page">
-    <PageHeader :title="t('wishes.viewAsset')" />
+    <PageHeader :title="t('assetDetail.title')" />
 
     <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
 
@@ -9,7 +9,7 @@
     <div v-else-if="!asset" class="empty-state">
       <p class="empty-icon">🎁</p>
       <p class="empty-text">{{ t('errors.LOAD_FAILED') }}</p>
-      <button class="btn-back" @click="router.back()">{{ t('common.back') }}</button>
+      <button class="btn-back" @click="router.replace('/wishes')">{{ t('common.back') }}</button>
     </div>
 
     <div v-else class="asset-card">

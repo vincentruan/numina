@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import get_current_child_user, require_adult
 from apps.backend.app.database import get_db
-from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.asset import ChildAssetResponse
 from apps.backend.app.schemas.child_wish import (
@@ -75,14 +74,7 @@ def get_child_asset(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_child_user),
 ):
-    asset = db.query(Asset).filter(
-        Asset.id == asset_id,
-        Asset.user_id == user.id,
-        Asset.family_id == user.family_id,
-    ).first()
-    if not asset:
-        raise HTTPException(status_code=404, detail="资产不存在")
-    return ChildAssetResponse.model_validate(asset)
+    return svc.get_child_asset(db, user, asset_id)
 
 
 # ---------------------------------------------------------------------------
