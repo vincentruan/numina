@@ -14,7 +14,7 @@ from apps.backend.app.services.storage.local import LocalStorageBackend
 
 def run(coro):
     """Run a coroutine synchronously in tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 @pytest.fixture

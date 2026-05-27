@@ -15,7 +15,7 @@ from apps.backend.app.services.storage.github import GitHubStorageBackend
 
 def run(coro):
     """Run a coroutine synchronously in tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def make_response(status_code: int, json_data: dict | None = None, headers: dict | None = None) -> MagicMock:

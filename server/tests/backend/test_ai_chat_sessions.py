@@ -260,12 +260,8 @@ def test_get_sessions_returns_list(client, auth_headers, db, tmp_path):
 
     with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
         # Create two sessions directly via service
-        asyncio.get_event_loop().run_until_complete(
-            ChatSessionService.create_session(family_id, user_id, db)
-        )
-        asyncio.get_event_loop().run_until_complete(
-            ChatSessionService.create_session(family_id, user_id, db)
-        )
+        asyncio.run(ChatSessionService.create_session(family_id, user_id, db))
+        asyncio.run(ChatSessionService.create_session(family_id, user_id, db))
 
     resp = client.get("/api/v1/ai/chat/sessions", headers=auth_headers)
     assert resp.status_code == 200
@@ -336,10 +332,10 @@ def test_delete_specific_session(client, auth_headers, db, tmp_path):
     user_id = me["data"]["id"]
 
     with patch("apps.backend.app.config.settings.CHAT_DIR", str(tmp_path)):
-        session1 = asyncio.get_event_loop().run_until_complete(
+        session1 = asyncio.run(
             ChatSessionService.create_session(family_id, user_id, db)
         )
-        session2 = asyncio.get_event_loop().run_until_complete(
+        session2 = asyncio.run(
             ChatSessionService.create_session(family_id, user_id, db)
         )
 

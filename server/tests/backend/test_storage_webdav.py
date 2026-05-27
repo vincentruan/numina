@@ -11,7 +11,7 @@ from apps.backend.app.services.storage.webdav import WebDAVStorageBackend
 
 def run(coro):
     """Run a coroutine synchronously in tests."""
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def make_response(status_code: int) -> MagicMock:

@@ -9,7 +9,7 @@ from apps.backend.app.services.storage.base import StorageConnectionError
 
 
 def run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 def _register_and_get_ids(client):
