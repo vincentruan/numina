@@ -52,7 +52,14 @@
           </div>
         </div>
 
-        <div v-if="wish.realized_asset_id" class="hero-realized-info">{{ t('wish.realizedAsset') }}</div>
+        <div v-if="wish.realized_asset_id" class="hero-realized-info">
+          <p v-if="wish.fulfilled_at" class="fulfilled-date">
+            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+          </p>
+          <router-link :to="`/assets/${wish.realized_asset_id}`">
+            {{ t('wish.realizedAsset') }} →
+          </router-link>
+        </div>
 
         <div v-if="wish.description" class="hero-description">{{ wish.description }}</div>
       </div>
@@ -206,13 +213,13 @@ import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getIconId } from '@/utils/icon'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const route = useRoute()
 const router = useRouter()
 const wishStore = useWishStore()
 const deleting = ref(false)
-const acting = ref(false)
+const loading = ref(true)
 
 // Realize dialog
 const showRealizeDialog = ref(false)
@@ -257,7 +264,7 @@ const selectedCategoryName = computed(() => {
 })
 
 function formatDate(dateStr: string) {
-  return dateStr.slice(0, 10)
+  return new Date(dateStr).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
 function onDateConfirm(date: Date) {
@@ -328,25 +335,30 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  const id = route.params.id as string
-  await wishStore.fetchWish(id)
+  loading.value = true
+  try {
+    const id = route.params.id as string
+    await wishStore.fetchWish(id)
 
-  // Pre-fill form
-  if (wish.value?.expected_price) {
-    realizeForm.value.purchase_price = String(wish.value.expected_price)
-  }
-  if (wish.value?.category_id) {
-    realizeForm.value.category_id = wish.value.category_id
-  }
+    // Pre-fill form
+    if (wish.value?.expected_price) {
+      realizeForm.value.purchase_price = String(wish.value.expected_price)
+    }
+    if (wish.value?.category_id) {
+      realizeForm.value.category_id = wish.value.category_id
+    }
 
-  // Load categories for picker
-  const catRes = await getCategories()
-  categories.value = catRes.data
+    // Load categories for picker
+    const catRes = await getCategories()
+    categories.value = catRes.data
 
-  // Pre-set asset type tab based on wish's existing category
-  if (wish.value?.category_id) {
-    const cat = categories.value.find(c => c.id === wish.value!.category_id)
-    if (cat) selectedAssetType.value = cat.asset_type as 'physical' | 'financial'
+    // Pre-set asset type tab based on wish's existing category
+    if (wish.value?.category_id) {
+      const cat = categories.value.find(c => c.id === wish.value!.category_id)
+      if (cat) selectedAssetType.value = cat.asset_type as 'physical' | 'financial'
+    }
+  } finally {
+    loading.value = false
   }
 })
 </script>

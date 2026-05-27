@@ -14,7 +14,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 const MAX_TRAILS = 50
-const TRAIL_LIFETIME_MS = 60_000
+const TRAIL_LIFETIME_MS = 1500
 const REMOVAL_BUFFER_MS = 100
 
 const svgRef = ref<SVGSVGElement | null>(null)
@@ -105,7 +105,7 @@ defineExpose({ addPath, clearAll })
   stroke-dasharray: 4 4;
   stroke-linecap: round;
   opacity: 0.4;
-  animation: trail-fade 60s linear forwards;
+  animation: trail-fade 1.5s linear forwards;
 }
 
 @keyframes trail-fade {

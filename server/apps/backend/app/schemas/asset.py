@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
 from apps.backend.app.schemas.base import SnowflakeBase
 
@@ -139,6 +139,7 @@ class AssetResponse(SnowflakeBase):
     retire_date: date | None = None
     target_daily_cost: float | None = None
     image_url: str | None = None
+    from_wish_id: int | None = None
     tags: list[TagBrief] = []
     daily_cost: float | None = None
     return_rate: float | None = None
@@ -195,3 +196,15 @@ class PaginatedAssetResponse(BaseModel):
     total_pages: int
     has_next: bool
     has_prev: bool
+
+
+class ChildAssetResponse(SnowflakeBase):
+    id: int
+    name: str
+    image_url: str | None = None
+    purchase_date: date | None = None
+    purchase_price: float | None = None
+    current_value: float | None = None
+    status: str
+    from_wish_id: int | None = None
+    created_at: datetime

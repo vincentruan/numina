@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy.orm import Session, joinedload
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -82,6 +84,12 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
     if not category_id:
         raise AppError(ErrorCode.VALIDATION_ERROR)
 
+    # Validate category is physical type (wishes only create physical assets)
+    from apps.backend.app.models.category import Category
+    category = db.query(Category).filter(Category.id == category_id).first()
+    if category and category.asset_type != "physical":
+        raise AppError(ErrorCode.VALIDATION_ERROR, detail="Category must be physical type for wish realization")
+
     try:
         # Create asset
         asset = Asset(
@@ -89,7 +97,7 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
             user_id=user.id,
             category_id=category_id,
             name=wish.name,
-            asset_type="physical",  # Default to physical, can be overridden by category
+            asset_type="physical",  # All realized wishes create physical assets
             purchase_price=req.purchase_price,
             current_value=req.purchase_price,
             purchase_date=req.purchase_date,
@@ -100,7 +108,9 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
 
         # Update wish
         wish.status = "realized"
-        wish.realized_asset_id = asset.id
+        wish.realized_asset_id = asset.id  # FK to assets.id
+        wish.fulfilled_at = datetime.now(UTC)
+        asset.from_wish_id = wish.id  # wish.id is int, FK to wishes.id
 
         db.commit()
         db.refresh(asset)
@@ -108,6 +118,6 @@ def realize_wish(db: Session, user: User, wish_id: str, req: WishRealizeRequest)
     except AppError:
         db.rollback()
         raise
-    except Exception:
+    except Exception as e:
         db.rollback()
-        raise AppError(ErrorCode.INTERNAL_ERROR)
+        raise AppError(ErrorCode.INTERNAL_ERROR) from e

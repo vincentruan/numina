@@ -54,6 +54,7 @@ class Asset(Base):
     target_daily_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
     is_archived: Mapped[bool] = mapped_column(Boolean, default=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    from_wish_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("wishes.id", ondelete="SET NULL", use_alter=True, name="fk_assets_from_wish_id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 
@@ -61,3 +62,4 @@ class Asset(Base):
     category = relationship("Category", back_populates="assets")
     tags = relationship("Tag", secondary=asset_tags, back_populates="assets")
     linked_liabilities = relationship("Liability", back_populates="linked_asset")
+    from_wish = relationship("Wish", foreign_keys=[from_wish_id])

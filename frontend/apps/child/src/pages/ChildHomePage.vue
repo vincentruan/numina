@@ -18,40 +18,46 @@
           class="chore-card"
           :class="c.status"
         >
-          <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
-          <div class="chore-info">
-            <p class="chore-name">{{ c.chore_name }}</p>
-            <p class="chore-reward">
-              +{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐
-              <span
-                v-if="c.streak_count > 1"
-                class="streak-badge"
-                :class="['flame-tier-' + streakTier(c.streak_count), { 'reduced-motion': reducedMotion }]"
-              >🔥{{ c.streak_count }}</span>
-            </p>
-            <p v-if="daysToNextBonus(c.streak_count) !== null" class="days-to-bonus">
-              {{ t('chore.daysToBonus', { days: daysToNextBonus(c.streak_count) }) }}
-            </p>
-          </div>
-          <button
-            v-if="c.is_pool_unclaimed"
-            class="btn-complete"
-            :disabled="claimingId === c.id || submittingId === c.id"
-            @click="claim(c.id)"
-          >{{ claimingId === c.id ? t('chore.claiming') : t('chore.claim') }}</button>
-          <template v-else-if="c.status === 'available'">
+          <div class="chore-card-row">
+            <span class="chore-emoji">{{ c.chore_emoji || '✅' }}</span>
+            <div class="chore-info">
+              <p class="chore-name">{{ c.chore_name }}</p>
+              <p class="chore-reward">
+                +{{ (c.coin_reward ?? 0) + (c.streak_bonus ?? 0) }} ⭐
+                <span
+                  v-if="c.streak_count > 1"
+                  class="streak-badge"
+                  :class="['flame-tier-' + streakTier(c.streak_count), { 'reduced-motion': reducedMotion }]"
+                >🔥{{ c.streak_count }}</span>
+              </p>
+              <p v-if="daysToNextBonus(c.streak_count) !== null" class="days-to-bonus">
+                {{ t('chore.daysToBonus', { days: daysToNextBonus(c.streak_count) }) }}
+              </p>
+            </div>
             <button
+              v-if="c.is_pool_unclaimed"
               class="btn-complete"
-              :disabled="submittingId === c.id"
-              @click="complete(c.id)"
-            >{{ t('chore.complete') }}</button>
-            <button
-              class="btn-abandon"
-              :disabled="submittingId === c.id || claimingId === c.id || abandoningId === c.id"
-              @click="abandon(c)"
-            >{{ t('chore.abandon') }}</button>
-          </template>
-          <span v-else class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
+              :disabled="!isClaimable(c) || claimingId === c.id || submittingId === c.id"
+              @click="claim(c.id)"
+            >{{ claimingId === c.id ? t('chore.claiming') : t('chore.claim') }}</button>
+            <template v-else-if="c.status === 'available'">
+              <button
+                class="btn-complete"
+                :disabled="submittingId === c.id"
+                @click="complete(c.id)"
+              >{{ t('chore.complete') }}</button>
+              <button
+                class="btn-abandon"
+                :disabled="submittingId === c.id || claimingId === c.id || abandoningId === c.id"
+                @click="abandon(c)"
+              >{{ t('chore.abandon') }}</button>
+            </template>
+            <span v-else class="chore-status-badge" :class="c.status">{{ statusLabel(c.status) }}</span>
+          </div>
+          <p
+            v-if="c.is_pool_unclaimed && claimDisabledReason(c)"
+            class="claim-disabled-hint"
+          >{{ claimDisabledReason(c) }}</p>
         </div>
       </div>
     </div>
@@ -252,6 +258,16 @@ function statusLabel(status: ChoreInstance['status']): string {
   }
 }
 
+function isClaimable(c: ChoreInstance): boolean {
+  return c.is_pool_unclaimed && c.status === 'available'
+}
+
+function claimDisabledReason(c: ChoreInstance): string {
+  if (!c.is_pool_unclaimed) return ''
+  if (c.status !== 'available') return t('chore.claimDisabledUnavailable')
+  return ''
+}
+
 async function complete(instanceId: string) {
   submittingId.value = instanceId
   try {
@@ -276,6 +292,8 @@ async function complete(instanceId: string) {
 }
 
 async function claim(instanceId: string) {
+  const target = todayChores.value.find(c => c.id === instanceId)
+  if (!target || !isClaimable(target)) return
   claimingId.value = instanceId
   // Optimistic update
   const idx = todayChores.value.findIndex(c => c.id === instanceId)
@@ -373,8 +391,16 @@ onMounted(async () => {
   text-align: center;
   color: var(--color-ink);
   margin-bottom: var(--space-lg);
+  --coin-text-gold:   var(--color-ink);
+  --coin-text-silver: var(--color-ink);
+  --coin-text-copper: var(--color-ink);
 }
-[data-theme="dark"] .hero-card { color: var(--color-on-feature-ochre); }
+[data-theme="dark"] .hero-card {
+  color: var(--color-on-feature-ochre);
+  --coin-text-gold:   var(--color-on-feature-ochre);
+  --coin-text-silver: var(--color-on-feature-ochre);
+  --coin-text-copper: var(--color-on-feature-ochre);
+}
 .hero-label {
   font-family: Inter, sans-serif;
   font-size: 13px;
@@ -407,17 +433,28 @@ onMounted(async () => {
 .chore-list { display: flex; flex-direction: column; gap: 8px; }
 .chore-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   background: var(--color-surface-soft);
   border-radius: var(--radius-md);
   padding: 12px 14px;
-  gap: 12px;
   border: 1px solid var(--color-hairline);
   min-height: 56px;
+}
+.chore-card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 .chore-card.approved { opacity: 0.55; }
 .chore-emoji { font-size: 24px; }
 .chore-info { flex: 1; }
+.claim-disabled-hint {
+  font-family: Inter, sans-serif;
+  font-size: 11px;
+  color: var(--color-muted-soft);
+  margin: 6px 0 0;
+  padding-left: 36px;
+}
 .chore-name {
   font-family: Inter, sans-serif;
   font-size: 14px;

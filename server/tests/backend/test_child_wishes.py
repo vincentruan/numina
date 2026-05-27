@@ -2,6 +2,7 @@
 
 import pytest
 
+from apps.backend.app.constants.pin import ALLOWED_EMOJIS
 from tests.backend.conftest import child_login_two_phase
 
 
@@ -18,16 +19,17 @@ def _data(resp):
 @pytest.fixture
 def child_user(client, auth_headers):
     """Create a child user and return their info + child auth headers."""
+    allowed_emojis = list(ALLOWED_EMOJIS)[:4]
     resp = client.post("/api/v1/family/children", headers=auth_headers, json={
         "display_name": "小明",
         "password": "ChildPass1",
         "username": "xiaoming8",
         "avatar_color": "#FF5733",
-        "pin": ["🐱", "🌟", "🎈", "🐶"],
+        "pin": allowed_emojis,
     })
     assert resp.status_code == 201
     child = _data(resp)
-    token = child_login_two_phase(client, "xiaoming8", "ChildPass1", ["🐱", "🌟", "🎈", "🐶"])
+    token = child_login_two_phase(client, "xiaoming8", "ChildPass1", allowed_emojis)
     client.cookies.delete("access_token")
     return {"id": child["id"], "headers": {"Authorization": f"Bearer {token}"}}
 
@@ -281,6 +283,27 @@ def test_realize_wish_creates_asset(client, auth_headers, child_user, sample_wis
     data = _data(resp)
     assert data["status"] == "realized"
     assert data["realized_asset_id"] is not None
+    assert data["fulfilled_at"] is not None
+
+
+def test_realize_wish_sets_from_wish_id(client, auth_headers, child_user, sample_wish, category_id):
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    assert resp.status_code == 200
+    data = _data(resp)
+    asset_id = data["realized_asset_id"]
+    assert asset_id is not None
+    assert isinstance(asset_id, str)  # SnowflakeBase → string serialization
+    # Fetch the asset and verify from_wish_id is set and serialized as string
+    asset_resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=child_user["headers"])
+    assert asset_resp.status_code == 200
+    asset_data = _data(asset_resp)
+    assert asset_data.get("from_wish_id") == sample_wish["id"]
+    assert isinstance(asset_data["from_wish_id"], str)
 
 
 def test_realize_wish_without_category_uses_default(client, auth_headers, child_user, sample_wish):
@@ -346,3 +369,95 @@ def test_stats_with_active_wishes(client, auth_headers, child_user):
     sim = data["priority_simulation"]
     assert sim[0]["priority"] == "high"
     assert sim[1]["priority"] == "medium"
+
+
+# ---------------------------------------------------------------------------
+# Unit 6: Child asset detail endpoint
+# ---------------------------------------------------------------------------
+
+def test_child_asset_get_own(client, auth_headers, child_user, sample_wish, category_id):
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    realize_resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    asset_id = _data(realize_resp)["realized_asset_id"]
+    resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=child_user["headers"])
+    assert resp.status_code == 200
+    data = _data(resp)
+    assert data["id"] == asset_id
+    assert isinstance(data["id"], str)  # SnowflakeBase → string
+
+
+def test_child_asset_not_found(client, child_user):
+    resp = client.get("/api/v1/child/assets/99999999999999999", headers=child_user["headers"])
+    assert resp.status_code == 404
+
+
+def test_child_asset_adult_auth_rejected(client, auth_headers, child_user, sample_wish, category_id):
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    realize_resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    assert realize_resp.status_code == 200
+    asset_id = _data(realize_resp)["realized_asset_id"]
+    resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=auth_headers)
+    assert resp.status_code in (401, 403)
+
+
+def test_child_asset_archived_returns_404(client, auth_headers, child_user, sample_wish, category_id):
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    realize_resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    assert realize_resp.status_code == 200
+    asset_id = _data(realize_resp)["realized_asset_id"]
+    # Archive the asset via parent endpoint
+    del_resp = client.delete(f"/api/v1/assets/{asset_id}", headers=auth_headers)
+    assert del_resp.status_code == 200
+    # Archived asset must return 404 for child
+    resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=child_user["headers"])
+    assert resp.status_code == 404
+
+
+def test_child_asset_cross_sibling_isolation(client, auth_headers, child_user, sample_wish, category_id):
+    """Child cannot access an asset belonging to a sibling."""
+    # Create a second child in the same family
+    resp2 = client.post("/api/v1/family/children", headers=auth_headers, json={
+        "display_name": "小红",
+        "password": "ChildPass2",
+        "username": "xiaohong9",
+        "avatar_color": "#33AAFF",
+        "pin": ["🌈", "🍎", "🎈", "🌟"],
+    })
+    assert resp2.status_code == 201
+    sibling_token = child_login_two_phase(client, "xiaohong9", "ChildPass2", ["🌈", "🍎", "🎈", "🌟"])
+    client.cookies.delete("access_token")
+    sibling_headers = {"Authorization": f"Bearer {sibling_token}"}
+
+    # Realize a wish for the first child to get an asset
+    _approve_grant_request(client, auth_headers, child_user, sample_wish["id"])
+    realize_resp = client.post(
+        f"/api/v1/family/child-wishes/{sample_wish['id']}/realize",
+        headers=auth_headers,
+        json={"category_id": category_id},
+    )
+    assert realize_resp.status_code == 200
+    asset_id = _data(realize_resp)["realized_asset_id"]
+
+    # Sibling must not be able to access first child's asset
+    resp = client.get(f"/api/v1/child/assets/{asset_id}", headers=sibling_headers)
+    assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Note: FK ondelete=SET NULL behavior for from_wish_id is tested via migration
+# definition and model FK constraint. SQLite in-memory DB doesn't enforce FK
+# constraints by default, so runtime test would be database-specific. The FK
+# is correctly defined in Asset model and c7583a86bst1 migration.
+# ---------------------------------------------------------------------------

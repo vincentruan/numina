@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from apps.backend.app.auth.deps import get_current_child_user, require_adult
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
+from apps.backend.app.schemas.asset import ChildAssetResponse
 from apps.backend.app.schemas.child_wish import (
     ApproveChildWishRequest,
     ChildWishCreate,
@@ -65,6 +66,15 @@ def request_redemption(
     user: User = Depends(get_current_child_user),
 ):
     return svc.request_redemption(db, user, wish_id)
+
+
+@router.get("/child/assets/{asset_id}", response_model=ChildAssetResponse)
+def get_child_asset(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_child_user),
+):
+    return svc.get_child_asset(db, user, asset_id)
 
 
 # ---------------------------------------------------------------------------

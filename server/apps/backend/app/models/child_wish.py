@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    TIMESTAMP,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -40,6 +41,7 @@ class ChildWish(Base):
     star_coin_cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(200), nullable=True)
     realized_asset_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("assets.id"), nullable=True)
+    fulfilled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())
 

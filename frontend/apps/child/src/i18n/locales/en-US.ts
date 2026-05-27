@@ -104,6 +104,8 @@ export default {
     abandonConfirm: 'Give Up Task',
     abandonWishHint: '{remaining} ⭐ away from 「{wishName}」 — finishing this gets you closer 🌟',
     claimFailed: '❌ Claim failed, task may already be taken',
+    claimDisabledHistorical: '⏳ Past tasks cannot be claimed',
+    claimDisabledUnavailable: '🔒 Cannot claim in current state',
     abandonFailed: '❌ Failed to give up, please try again',
     wishProgressBump: '✨ +{stars} ⭐ closer to {wishName}!',
     daysToBonus: '🔥 {days} more days to streak bonus!',
@@ -222,6 +224,8 @@ export default {
       confirmTag: 'You can have this one ✨',
       daysAdded: '+{n} days',
     },
+    fulfilledAt: 'Fulfilled on {date}',
+    viewAsset: 'View Treasure →',
   },
   treasures: {
     title: '🏆 My Treasures',
@@ -341,5 +345,11 @@ export default {
     sealTreasureChest: 'Seal the Treasure Chest!',
     reducedMotionToast: '✨ Task approved! Earned {stars} ⭐',
     candleAriaLabel: 'Awaiting approval',
+  },
+  assetDetail: {
+    title: 'Asset Details',
+    purchaseDate: 'Purchase Date',
+    purchasePrice: 'Purchase Price',
+    currentValue: 'Current Value',
   },
 }

@@ -142,9 +142,9 @@ onUnmounted(clearAnimations)
   color: var(--color-brand-ochre);
   text-shadow: 0 0 8px rgba(232, 185, 74, 0.55);
 }
-.coin-count.gold   { color: var(--color-coin-gold-text); }
-.coin-count.silver { color: var(--color-coin-silver-text); }
-.coin-count.copper { color: var(--color-coin-copper-text); }
+.coin-count.gold   { color: var(--coin-text-gold,   var(--color-coin-gold-text)); }
+.coin-count.silver { color: var(--coin-text-silver, var(--color-coin-silver-text)); }
+.coin-count.copper { color: var(--coin-text-copper, var(--color-coin-copper-text)); }
 .coin-count.is-counting.gold,
 .coin-count.is-counting.silver,
 .coin-count.is-counting.copper {
