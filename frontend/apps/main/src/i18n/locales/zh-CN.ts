@@ -1577,6 +1577,7 @@ export default {
       skillIdPlaceholder: '小写字母、数字、下划线、连字符',
       skillIdInvalid: 'ID 只能包含小写字母、数字、下划线、连字符，且不能数字开头',
       skillIdConflict: '该 ID 与内置技能冲突',
+      skillIdReserved: '该 ID 是系统保留命名，不可使用',
       skillIdExists: '该 ID 已存在',
       skillName: '技能名称',
       skillNamePlaceholder: '请输入技能名称',
