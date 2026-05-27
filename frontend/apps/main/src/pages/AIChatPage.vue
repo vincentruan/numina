@@ -1124,7 +1124,18 @@ async function onSend() {
   const normState = createNormalizationState()
 
   try {
-    const reader = await sendChatEventStream(q, deepThink.value, webSearch.value, abortController.signal, currentSessionId.value ?? undefined)
+    // ADV-001 fix: pass agentId so the backend routes through the
+    // agent-dispatch path (which runs _resolve_skills). Without this, R5
+    // (AI问答 chat-only) is not enforced at runtime — every chat would
+    // go through the legacy chat_adapter regardless of the selected agent.
+    const reader = await sendChatEventStream(
+      q,
+      deepThink.value,
+      webSearch.value,
+      abortController.signal,
+      currentSessionId.value ?? undefined,
+      activeAgent.value?.id,
+    )
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation

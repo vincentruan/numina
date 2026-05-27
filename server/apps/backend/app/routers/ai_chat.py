@@ -51,6 +51,11 @@ class ChatStreamRequest(BaseModel):
     deep_think: bool = False
     web_search: bool = False
     session_id: str | None = None
+    # R4/R5: when present, /chat/stream proxies to /agent/{agent_id}/stream so
+    # the request runs through agent_dispatch._resolve_skills (per-agent skill
+    # scoping). Omitted requests fall back to the legacy /chat/ask/stream
+    # adapter for backward compatibility.
+    agent_id: str | None = None
 
     @field_validator("question")
     @classmethod
@@ -211,6 +216,24 @@ async def chat_stream(
             separators=(",", ":"),
         ).encode() + b"\n"
 
+        # R4: when agent_id is present, route to the agent-dispatch endpoint so
+        # the request runs through _resolve_skills (per-agent skill scoping).
+        # Otherwise use the legacy chat_adapter path.
+        if body.agent_id:
+            agent_url = f"{settings.AGENT_BASE_URL}/agent/{body.agent_id}/stream"
+            agent_body = {
+                "message": body.question,
+                "thread_id": str(session_id),
+                "enable_thinking": body.deep_think,
+            }
+        else:
+            agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
+            agent_body = {
+                "question": body.question,
+                "deep_think": body.deep_think,
+                "web_search": body.web_search,
+            }
+
         answer_chunks: list[str] = []
         buffer = ""
         try:
@@ -218,8 +241,8 @@ async def chat_stream(
                 httpx.AsyncClient(timeout=None) as client,
                 client.stream(
                     "POST",
-                    f"{settings.AGENT_BASE_URL}/chat/ask/stream",
-                    json={"question": body.question, "deep_think": body.deep_think, "web_search": body.web_search},
+                    agent_url,
+                    json=agent_body,
                     headers={
                         "X-Family-Id": str(current_user.family_id),
                         "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
