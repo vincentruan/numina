@@ -20,7 +20,7 @@ def test_load_report_skill():
 def test_load_alerts_skill():
     loader = SkillLoader()
     config = loader.load("alerts")
-    assert config.thinking is False
+    assert config.thinking is True  # defaults to True when not specified in frontmatter
 
 
 def test_load_missing_skill_returns_minimal():
