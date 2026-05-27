@@ -133,7 +133,7 @@ may return `InMemorySaver` (lost on restart) or a stale singleton after
 family_adapter_cache.get_family_adapter(family_id, ai_config)
     ↓
 _get_shared_checkpointer()          ← created once, shared by all families
-    ↓ SqliteSaver(/app/data/deerflow-checkpoints.db)
+    ↓ SqliteSaver(/app/.numina/data/deerflow-checkpoints.db)
 DeerFlowClient(config_path=..., checkpointer=shared_checkpointer)
     ↓
 client.stream(message, thread_id=thread_id)
@@ -155,7 +155,7 @@ client.stream(message, thread_id=thread_id)
 ### Checkpointer DB path
 
 Read from `deerflow_config/base/config.yaml` → `checkpointer.path`.
-Default: `/app/data/deerflow-checkpoints.db`.
+Default: `/app/.numina/data/deerflow-checkpoints.db`.
 
 ### Fallback behaviour
 

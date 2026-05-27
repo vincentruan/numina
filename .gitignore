@@ -145,9 +145,6 @@ docker-compose.override.yml
 # ===========================
 *.sqlite3
 *.db
-data/*.csv
-data/*.json
-!data/.gitkeep
 server/data/
 
 # ===========================
@@ -191,12 +188,7 @@ tests/screenshot/screenshots/*-after-*.png
 .gstack/
 .worktrees/
 
-# Runtime chat data (user-generated, not source code)
-data/chat/
-data/sessions/
-server/apps/agent/data/sessions
-
 # Runtime data directory (SQLite DBs, DeerFlow checkpoints, WAL files)
-.numina_data/
+.numina/data/
 # Test results (root level)
 test-results/

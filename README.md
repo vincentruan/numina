@@ -69,7 +69,7 @@ docker-compose up -d
 ```env
 PORT=8080                                    # Nginx 端口
 SECRET_KEY=your-secret-key-here              # JWT 签名密钥（生产环境必须设置）
-DATABASE_URL=sqlite:////app/data/numina.db   # 数据库路径
+DATABASE_URL=sqlite:////app/.numina/data/numina.db   # 数据库路径
 SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-1023，多实例部署时设置）
 ```
 
@@ -234,14 +234,14 @@ docker-compose up -d
 
 ### 数据备份
 
-SQLite 数据库文件位于 `./data/numina.db`，定期备份此文件即可。
+SQLite 数据库文件位于 `./.numina/data/db/numina.db`，定期备份此文件即可。
 
 ```bash
 # 备份数据库
-cp ./data/numina.db ./backups/numina-$(date +%Y%m%d).db
+cp ./.numina/data/db/numina.db ./backups/numina-$(date +%Y%m%d).db
 
 # 恢复数据库
-cp ./backups/numina-20260314.db ./data/numina.db
+cp ./backups/numina-20260314.db ./.numina/data/db/numina.db
 docker-compose restart backend
 ```
 

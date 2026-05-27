@@ -6,13 +6,14 @@ services:
     container_name: numina-backend
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - DATA_ROOT=/app/.numina/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -20,7 +21,7 @@ services:
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
-      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
+      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/.numina/data/workspace}
     command: uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --port 8000 --reload --reload-dir apps/backend
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
@@ -36,11 +37,11 @@ services:
     container_name: numina-agent
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount (excludes vendor via .dockerignore)
-      - agent_logs:/app/logs
     environment:
       - TZ=Asia/Shanghai
+      - DATA_ROOT=/app/.numina/data
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
@@ -64,13 +65,14 @@ services:
     container_name: numina-scheduler-worker
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
       - ./server:/app  # hot-reload source mount
     env_file:
       - .env
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - DATA_ROOT=/app/.numina/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -157,7 +159,6 @@ services:
       - frontend-child
 
 volumes:
-  agent_logs:
   frontend_root_node_modules:
   frontend_main_node_modules:
   frontend_child_node_modules:

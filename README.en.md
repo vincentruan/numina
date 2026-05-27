@@ -67,7 +67,7 @@ Create a `.env` file:
 ```env
 PORT=8080                                    # Nginx port
 SECRET_KEY=your-secret-key-here              # JWT signing key (must set in production)
-DATABASE_URL=sqlite:////app/data/numina.db   # Database path
+DATABASE_URL=sqlite:////app/.numina/data/numina.db   # Database path
 ```
 
 ### Local Development
@@ -214,10 +214,10 @@ docker-compose up -d
 
 ### Data Backup
 
-The SQLite database is stored at `./data/numina.db`. Simply back up this file regularly.
+The SQLite database is stored at `./.numina/data/db/numina.db`. Simply back up this file regularly.
 
 ```bash
-cp ./data/numina.db ./backups/numina-$(date +%Y%m%d).db
+cp ./.numina/data/db/numina.db ./backups/numina-$(date +%Y%m%d).db
 ```
 
 ## Roadmap

@@ -7,11 +7,11 @@
 # 检查点（对话状态持久化）
 checkpointer:
   type: sqlite
-  path: /app/data/deerflow-checkpoints.db
+  path: /app/.numina/data/deerflow-checkpoints.db
 
 # 记忆（低敏长期记忆）
 memory:
-  path: /app/data/deerflow-memory.json
+  path: /app/.numina/data/deerflow-memory.json
   max_facts: 50
   fact_confidence_threshold: 0.8
 

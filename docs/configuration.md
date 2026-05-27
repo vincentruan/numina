@@ -104,7 +104,7 @@ ALTCHA_HMAC_KEY=<openssl rand -base64 32>
 AI_ENCRYPTION_KEY=<Fernet.generate_key()>
 STORAGE_ENCRYPTION_KEY=<Fernet.generate_key()>
 AGENT_INTERNAL_TOKEN=<openssl rand -base64 32>
-DATABASE_URL=sqlite:////app/data/numina.db
-WORKSPACE_ROOT=/app/data/workspace
+DATABASE_URL=sqlite:////app/.numina/data/numina.db
+WORKSPACE_ROOT=/app/.numina/data/workspace
 CORS_ORIGINS=["https://numina.yourdomain.com"]
 ```

@@ -14,15 +14,13 @@ services:
     container_name: numina-backend
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
     env_file:
       - .env.production
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
-      - UPLOAD_DIR=/app/data/uploads
-      - AGENT_BASE_URL=http://numina-agent:8001
-      - WORKSPACE_ROOT=${WORKSPACE_ROOT:-/app/data/workspace}
+      - DATA_ROOT=/app/.numina/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
@@ -39,12 +37,12 @@ services:
     container_name: numina-agent
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
-      - agent_logs:/app/logs
+      - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
     env_file:
       - .env.production
     environment:
       - TZ=Asia/Shanghai
+      - DATA_ROOT=/app/.numina/data
       - ENVIRONMENT=production
       - BACKEND_BASE_URL=http://numina-backend:8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
@@ -67,12 +65,13 @@ services:
     container_name: numina-scheduler-worker
     restart: unless-stopped
     volumes:
-      - ./data:/app/data
+      - ${NUMINA_DATA_DIR:-./.numina/data}:/app/.numina/data
     env_file:
       - .env.production
     environment:
       - TZ=Asia/Shanghai
-      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/numina.db}
+      - DATA_ROOT=/app/.numina/data
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
       - ENVIRONMENT=production
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
     depends_on:
@@ -111,7 +110,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx.production.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./data/uploads:/app/data/uploads:ro
+      - ${NUMINA_DATA_DIR:-./.numina/data}/uploads:/app/.numina/data/uploads:ro
       - ./site:/usr/share/nginx/site:ro
     depends_on:
       backend:
@@ -122,4 +121,4 @@ services:
         condition: service_started
 
 volumes:
-  agent_logs:
+  # (no named volumes — all data lives under .numina/data/)

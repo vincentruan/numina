@@ -144,7 +144,7 @@ Run `ls tests/test_*.py | sort` to see all test files.
 ```
 # SQLite (default)
 sqlite:///./data/numina.db            # local dev
-sqlite:////app/data/numina.db         # Docker
+sqlite:////app/.numina/data/numina.db         # Docker
 
 # PostgreSQL
 postgresql+psycopg2://user:password@host:5432/database

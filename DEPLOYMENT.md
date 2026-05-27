@@ -185,7 +185,7 @@ ENVIRONMENT=production
 CORS_ORIGINS=["https://numina.example.com"]
 
 # Database
-DATABASE_URL=sqlite:////app/data/numina.db
+DATABASE_URL=sqlite:////app/.numina/data/numina.db
 
 # Token expiration
 ACCESS_TOKEN_EXPIRE_MINUTES=15
@@ -204,7 +204,7 @@ EOF
 ### 2. 创建数据目录
 
 ```bash
-mkdir -p data/uploads
+mkdir -p .numina/data/uploads
 ```
 
 ### 3. 启动服务
@@ -338,9 +338,9 @@ docker compose -f docker-compose.production.yml up -d --build
 │   │   └── child/           # 儿童端 SPA（原 frontend-child/）
 │   └── packages/
 │       └── auth/            # 共享认证包
-├── data/                    # 数据目录（持久化）
-│   ├── numina.db           # SQLite 数据库
-│   └── uploads/            # 上传文件
+├── .numina/data/              # 数据目录（持久化）
+│   ├── db/numina.db           # SQLite 数据库
+│   └── uploads/               # 上传文件
 ├── nginx.production.conf    # Nginx 配置
 ├── docker-compose.production.yml
 └── .env.production          # 环境变量（不提交到 git）
@@ -382,7 +382,7 @@ docker compose -f docker-compose.production.yml up -d --build
 **原因**: Docker 卷未正确挂载
 
 **解决**:
-1. 确认 `./data` 目录存在
+1. 确认 `./.numina/data` 目录存在
 2. 检查 docker-compose.production.yml 中的 volumes 配置
 3. 定期备份数据目录
 
@@ -418,7 +418,7 @@ docker compose -f docker-compose.production.yml up -d backend
 ```bash
 # 方案一：删除旧数据库，重新创建（仅适用于测试环境）
 docker compose -f docker-compose.production.yml stop backend
-rm -f data/numina.db
+rm -f .numina/data/db/numina.db
 docker compose -f docker-compose.production.yml up -d backend
 
 # 方案二：运行 Alembic 迁移（生产环境推荐）
@@ -445,7 +445,7 @@ docker exec numina-backend uv run --no-dev python scripts/family_invitation_code
 
 **解决**:
 ```bash
-chmod -R 755 ~/data/numina/data/uploads
+chmod -R 755 ~/data/numina/.numina/data/uploads
 docker restart numina-backend numina-nginx
 ```
 
@@ -455,7 +455,7 @@ docker restart numina-backend numina-nginx
 
 ```bash
 # 备份数据目录
-tar -czvf numina-backup-$(date +%Y%m%d).tar.gz ~/data/numina/data/
+tar -czvf numina-backup-$(date +%Y%m%d).tar.gz ~/data/numina/.numina/data/
 
 # 备份配置文件
 tar -czvf numina-config-$(date +%Y%m%d).tar.gz \
