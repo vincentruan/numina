@@ -3,7 +3,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 
 const props = defineProps<{ dismissing: boolean }>()
 
@@ -22,6 +22,36 @@ const LOW_END = isLowEnd()
 const DPR = Math.min(window.devicePixelRatio || 1, 2)
 const TARGET_FPS = LOW_END ? 30 : 60
 const FRAME_INTERVAL = 1000 / TARGET_FPS
+
+// ── Theme detection ─────────────────────────────────────────────────────────────
+
+const isDark = ref(document.documentElement.dataset.theme === 'dark')
+const themeObserver = new MutationObserver(() => {
+  isDark.value = document.documentElement.dataset.theme === 'dark'
+})
+
+// ── Reduced-motion detection ───────────────────────────────────────────────────
+
+const reduceQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+const prefersReduced = ref(reduceQuery.matches)
+const onMotionChange = (e: MediaQueryListEvent) => { prefersReduced.value = e.matches }
+
+// ── TikTok 2-color palette ────────────────────────────────────────────────────
+
+const PALETTE = {
+  dark: {
+    cyan: '#00f2fe', cyanGlow: 'rgba(0,242,254,0.55)',
+    red:  '#fe0979', redGlow:  'rgba(254,9,121,0.55)',
+    blend: 'screen' as GlobalCompositeOperation,
+  },
+  light: {
+    cyan: '#00b8c8', cyanGlow: 'rgba(0,184,200,0.30)',
+    red:  '#d61b6e', redGlow:  'rgba(214,27,110,0.30)',
+    blend: 'multiply' as GlobalCompositeOperation,
+  },
+} as const
+
+const p = computed(() => isDark.value ? PALETTE.dark : PALETTE.light)
 
 // ── Ripple wave definition ────────────────────────────────────────────────────
 
@@ -299,12 +329,19 @@ onMounted(() => {
   ro = new ResizeObserver(() => resize(canvas))
   ro.observe(canvas.parentElement ?? canvas)
   rafBox.id = requestAnimationFrame(loop)
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  })
+  reduceQuery.addEventListener('change', onMotionChange)
 })
 
 onUnmounted(() => {
   cancelAnimationFrame(rafBox.id)
   ro?.disconnect()
   ro = null
+  themeObserver.disconnect()
+  reduceQuery.removeEventListener('change', onMotionChange)
 })
 
 watch(() => props.dismissing, (val) => {
