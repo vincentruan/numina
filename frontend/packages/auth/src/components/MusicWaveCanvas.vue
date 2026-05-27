@@ -127,6 +127,7 @@ function drawCore(
   pulseAmp: number,
   dismissScale: number,
   dismissAlpha: number,
+  palette: typeof PALETTE.dark,
 ) {
   const pulse = Math.sin(globalTime * pulseFreq) * pulseAmp
   const scale = (1 + pulse) * dismissScale
@@ -141,7 +142,6 @@ function drawCore(
   ctx.globalCompositeOperation = 'source-over'
 
   // Halo gradient disc
-  const palette = p.value
   const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
   grad.addColorStop(0, palette.cyan)
   grad.addColorStop(0.4, palette.red)
@@ -189,6 +189,9 @@ function makeDrawFrame(
     // vmin-derived unit — W/H are already physical pixels
     const unit = Math.min(W, H) / 100
 
+    // Snapshot palette at frame start to avoid mid-frame theme race
+    const framePalette = p.value
+
     // Effective FPS for reduced-motion
     const effectiveInterval = prefersReduced.value ? 100 : FRAME_INTERVAL
     if (now - state.lastFrameTime < effectiveInterval) return
@@ -218,9 +221,9 @@ function makeDrawFrame(
 
     // ── Draw core ─────────────────────────────────────────────────────────────
     if (prefersReduced.value) {
-      drawCore(ctx, cx, cy, unit, state.globalTime, 6.28, 0.03, dismissScale, dismissAlpha)
+      drawCore(ctx, cx, cy, unit, state.globalTime, 6.28, 0.03, dismissScale, dismissAlpha, framePalette)
     } else {
-      drawCore(ctx, cx, cy, unit, state.globalTime, 10, 0.04, dismissScale, dismissAlpha)
+      drawCore(ctx, cx, cy, unit, state.globalTime, 10, 0.04, dismissScale, dismissAlpha, framePalette)
     }
 
     // ── Reduced-motion: skip ripples ──────────────────────────────────────────
@@ -238,9 +241,8 @@ function makeDrawFrame(
       const configIdx = state.nextRippleId % LAYER_CONFIGS.length
       const config = LAYER_CONFIGS[configIdx]
       const isCyan = state.nextRippleId % 2 === 0
-      const palette = p.value
-      const color = isCyan ? palette.cyan : palette.red
-      const glowColor = isCyan ? palette.cyanGlow : palette.redGlow
+      const color = isCyan ? framePalette.cyan : framePalette.red
+      const glowColor = isCyan ? framePalette.cyanGlow : framePalette.redGlow
       state.ripples.push({
         id: state.nextRippleId++,
         birth: now,
@@ -263,7 +265,7 @@ function makeDrawFrame(
 
     // ── Draw each ripple ──────────────────────────────────────────────────────
     const POINTS = LOW_END ? 60 : 90
-    const blendMode = p.value.blend
+    const blendMode = framePalette.blend
 
     state.ripples.forEach((ripple) => {
       const age = (now - ripple.birth) / 1000
@@ -308,7 +310,8 @@ function makeDrawFrame(
 
       function tracePath() {
         ctx.beginPath()
-        ctx.moveTo(pts[0][0], pts[0][1])
+        const firstPt = pts[0]!
+        ctx.moveTo(firstPt[0], firstPt[1])
         for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
         ctx.closePath()
       }
@@ -358,8 +361,12 @@ function makeDrawFrame(
 function resize(canvas: HTMLCanvasElement) {
   const parent = canvas.parentElement
   if (!parent) return
-  canvas.width = parent.clientWidth * DPR
-  canvas.height = parent.clientHeight * DPR
+  const w = parent.clientWidth * DPR
+  const h = parent.clientHeight * DPR
+  // Skip if parent not yet laid out — ResizeObserver will fire when dimensions available
+  if (w === 0 || h === 0) return
+  canvas.width = w
+  canvas.height = h
 }
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────

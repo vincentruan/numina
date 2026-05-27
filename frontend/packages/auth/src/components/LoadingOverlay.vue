@@ -27,6 +27,7 @@ const exitMessage = ref('')
 let srTimer: ReturnType<typeof setTimeout> | null = null
 
 function onAfterLeave() {
+  // TODO(i18n): Extract '加载完成' to i18n locales, matching existing '加载中' pattern
   exitMessage.value = '加载完成'
   if (srTimer !== null) clearTimeout(srTimer)
   srTimer = setTimeout(() => { exitMessage.value = '' }, 1000)
