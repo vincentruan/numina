@@ -16,6 +16,9 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
+    "@bytemd/plugin-gfm": "^1.22.0",
+    "@bytemd/plugin-highlight": "^1.22.0",
+    "@bytemd/vue-next": "^1.22.0",
     "@numina/auth": "file:../../packages/auth",
     "@numina/math": "file:../../packages/math",
     "@vant/touch-emulator": "^1.5.0",

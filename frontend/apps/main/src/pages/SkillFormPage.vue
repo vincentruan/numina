@@ -10,6 +10,7 @@ import {
   type SkillDefinition,
 } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -212,13 +213,9 @@ onMounted(async () => {
       </van-cell-group>
 
       <van-cell-group inset :title="t('skills.form.skillPrompt')" class="section">
-        <van-field
+        <MarkdownEditor
           v-model="form.prompt_content"
-          type="textarea"
-          rows="8"
           :placeholder="isEdit ? t('skills.form.skillPromptPlaceholderEdit') : t('skills.form.skillPromptPlaceholder')"
-          :autosize="{ minHeight: 150 }"
-          :required="!isEdit"
         />
       </van-cell-group>
 
