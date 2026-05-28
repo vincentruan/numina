@@ -82,7 +82,6 @@ vi.mock('../../src/stores/agent', () => ({
         is_enabled: true,
       },
     ],
-    builtinAgents: [],
     customAgents: [],
     loadAgents,
   })),
