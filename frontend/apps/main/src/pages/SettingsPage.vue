@@ -69,6 +69,7 @@
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.enableAI')"
         :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
+        icon="flash-o"
       >
         <template #value>
           <van-switch
@@ -84,6 +85,7 @@
       <van-cell :title="t('settings.skillsManage')" icon="star-o" is-link to="/settings/ai/skills" />
       <van-cell
         :title="t('settings.agentsManage')"
+        icon="service-o"
         is-link
         to="/settings/ai/agents"
       />

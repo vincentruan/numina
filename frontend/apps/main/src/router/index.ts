@@ -196,9 +196,29 @@ const router = createRouter({
           component: () => import('@/pages/MCPManagePage.vue')
         },
         {
+          path: 'settings/ai/mcp/new',
+          name: 'MCPCreate',
+          component: () => import('@/pages/MCPFormPage.vue')
+        },
+        {
+          path: 'settings/ai/mcp/:id/edit',
+          name: 'MCPEdit',
+          component: () => import('@/pages/MCPFormPage.vue')
+        },
+        {
           path: 'settings/ai/skills',
           name: 'SkillsManage',
           component: () => import('@/pages/SkillsManagePage.vue')
+        },
+        {
+          path: 'settings/ai/skills/new',
+          name: 'SkillCreate',
+          component: () => import('@/pages/SkillFormPage.vue')
+        },
+        {
+          path: 'settings/ai/skills/:id/edit',
+          name: 'SkillEdit',
+          component: () => import('@/pages/SkillFormPage.vue')
         },
         {
           path: 'settings/ai/agents',
