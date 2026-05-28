@@ -207,6 +207,9 @@ export default {
     purchaseDate: 'Purchase Date',
     status: 'Status',
     inUse: 'In Use',
+    toggleViewMode: 'Toggle view mode',
+    viewModeCard: 'Card view',
+    viewModeList: 'List view',
     idle: 'Idle',
     sold: 'Sold',
     retired: 'Retired',
@@ -670,9 +673,6 @@ export default {
     languageZhCN: '简体中文',
     languageEnUS: 'English',
     defaultCurrency: 'Default Currency',
-    defaultView: 'Default View',
-    viewCard: 'Overview Card View',
-    viewList: 'List View',
     accountInfo: 'Account Info',
     currentUser: 'Current User',
     username: 'Username',
@@ -1003,6 +1003,8 @@ export default {
     coinRateInvalid: '⚠️ Please enter an integer between 1 and 10',
     // Settings
     themeChanged: '🎨 Theme color updated',
+    viewSwitchedToCard: '✅ Switched to card view',
+    viewSwitchedToList: '✅ Switched to list view',
     // Dynamic messages
     newInviteCode: '🔑 New invite code: {code}',
     assetDeletedCount: '🗑️ Deleted {count} assets',

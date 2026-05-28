@@ -249,6 +249,9 @@ export default {
     purchaseDate: '购入日期',
     status: '状态',
     inUse: '服役中',
+    toggleViewMode: '切换视图模式',
+    viewModeCard: '卡片视图',
+    viewModeList: '列表视图',
     idle: '闲置',
     sold: '已出售',
     retired: '已退役',
@@ -858,9 +861,6 @@ export default {
     languageZhCN: '简体中文',
     languageEnUS: 'English',
     defaultCurrency: '默认币种',
-    defaultView: '默认视图',
-    viewCard: '总览卡片视图',
-    viewList: '列表视图',
     accountInfo: '账户信息',
     currentUser: '当前用户',
     username: '用户名',
@@ -1216,6 +1216,8 @@ export default {
     confirmForceLogout: '⚠️ 确定要强制退出 {name} 的所有设备吗？',
     // Settings
     themeChanged: '🎨 主题色已更改',
+    viewSwitchedToCard: '✅ 已切换到卡片视图',
+    viewSwitchedToList: '✅ 已切换到列表视图',
     // Dynamic messages
     newInviteCode: '🔑 新邀请码: {code}',
     assetDeletedCount: '🗑️ 已删除 {count} 项资产',

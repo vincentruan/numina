@@ -1,6 +1,16 @@
 <template>
   <div class="asset-list-page" role="main" aria-label="资产列表">
-    <PageHeader :title="t('asset.title')" :show-back="false" />
+    <PageHeader :title="t('asset.title')" :show-back="false">
+      <template #right>
+        <button
+          class="view-toggle-btn"
+          :aria-label="t('asset.toggleViewMode')"
+          @click="onToggleViewMode"
+        >
+          <van-icon :name="viewMode === 'card' ? 'bars' : 'apps-o'" size="18" />
+        </button>
+      </template>
+    </PageHeader>
 
     <!-- Filter Tabs -->
     <van-tabs v-model:active="activeTab" sticky aria-label="资产类型筛选" @change="onTabChange">
@@ -165,6 +175,7 @@ import { showToast } from 'vant'
 import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/category'
+import { updateSettings } from '@/api/auth'
 import { getIconId } from '@/utils/icon'
 import { RecycleScroller } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
@@ -207,6 +218,17 @@ const selectedAssets = ref<string[]>([])
 const showDeleteDialog = ref(false)
 
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
+
+async function onToggleViewMode() {
+  const next = viewMode.value === 'card' ? 'list' : 'card'
+  try {
+    await updateSettings({ view_mode: next })
+    await authStore.fetchMe()
+    showToast(next === 'list' ? t('toast.viewSwitchedToList') : t('toast.viewSwitchedToCard'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
 
 const sortOptions = computed(() => [
   { text: t('asset.sortByValue'), value: 'current_value' },
@@ -327,6 +349,25 @@ onUnmounted(() => {
 .asset-list-page {
   background: var(--bg-secondary);
   min-height: 100vh;
+}
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.view-toggle-btn:active {
+  background: rgba(0, 0, 0, 0.06);
+}
+[data-theme='dark'] .view-toggle-btn:active {
+  background: rgba(255, 255, 255, 0.08);
 }
 /* Category Filter Chips */
 .category-chips {
