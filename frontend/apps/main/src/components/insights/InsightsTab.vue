@@ -114,9 +114,9 @@
         <div class="section-title">
           <span class="title-icon">📉</span>{{ t('insights.dailyCostRank.title') }}
         </div>
-        <div class="rank-sort-group">
-          <div :class="['rank-sort-btn', { active: costRankOrder === 'highest' }]" @click="costRankOrder = 'highest'">{{ t('insights.dailyCostRank.highest') }}</div>
-          <div :class="['rank-sort-btn', { active: costRankOrder === 'lowest' }]" @click="costRankOrder = 'lowest'">{{ t('insights.dailyCostRank.lowest') }}</div>
+        <div class="toggle-group">
+          <div :class="['toggle-btn', { active: costRankOrder === 'highest' }]" @click="costRankOrder = 'highest'">{{ t('insights.dailyCostRank.highest') }}</div>
+          <div :class="['toggle-btn', { active: costRankOrder === 'lowest' }]" @click="costRankOrder = 'lowest'">{{ t('insights.dailyCostRank.lowest') }}</div>
         </div>
       </div>
       <div class="rank-list">
