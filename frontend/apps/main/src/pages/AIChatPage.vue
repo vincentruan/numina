@@ -230,7 +230,7 @@
                 </div>
                 <!-- Unified phase indicator: shown during thinking/answering when NOT deep think mode -->
                 <div
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink && msg.content"
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !isSmartMode && msg.content"
                   class="phase-strip standalone"
                   :class="`phase-strip--${msg.phase}`"
                   aria-live="polite"
@@ -258,8 +258,8 @@
                   :class="{ 'bubble-text--appearing': msg.content && msg.phase === 'answering' && !msg.renderedContent }"
                   v-html="msg.renderedContent ?? ''"
                 />
-                <!-- Inline error state — fallback when deepThink is off (AiProcessBlock not rendered) -->
-                <div v-if="msg.role === 'assistant' && msg.phase === 'error' && !deepThink" class="error-state">
+                <!-- Inline error state — fallback when smart mode is off (AiProcessBlock not rendered) -->
+                <div v-if="msg.role === 'assistant' && msg.phase === 'error' && !isSmartMode" class="error-state">
                   <p class="error-msg">{{ t('aiChat.errorRetry') }}</p>
                   <button class="error-retry-btn" :disabled="asking" @click="onRetryError(idx)">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -299,12 +299,18 @@
                     </svg>
                   </button>
                 </div>
-                <!-- Streaming cursor: visible while answering -->
-                <span v-if="msg.role === 'assistant' && msg.phase === 'answering'" class="stream-cursor" aria-hidden="true">▌</span>
+                <!-- Streaming indicator: visible while answering -->
+                <StreamingDots v-if="msg.role === 'assistant' && msg.phase === 'answering'" />
                 <!-- Interrupted hint -->
                 <div v-if="msg.role === 'assistant' && msg.phase === 'interrupted'" class="interrupted-hint" aria-live="polite">
                   {{ t('aiChat.generationStopped') }}
                 </div>
+                <!-- Follow-up suggestions after AI response completes -->
+                <SuggestionChips
+                  v-if="msg.role === 'assistant' && msg.phase === 'done' && idx === messages.length - 1"
+                  :suggestions="followUpSuggestions"
+                  @select="onSuggestionSelect"
+                />
                 <!-- Assistant message actions: only shown after generation completes/stops/fails -->
                 <div v-if="msg.role === 'assistant' && (msg.phase === 'done' || msg.phase === 'interrupted' || msg.phase === 'error')" class="msg-actions">
                   <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
@@ -371,8 +377,7 @@
     <div class="input-bar">
       <AIChatInput
         v-model="inputText"
-        v-model:deep-think="deepThink"
-        v-model:web-search="webSearch"
+        v-model:mode="chatMode"
         :disabled="asking"
         :loading="asking || connecting"
         :show-clear="messages.length > 0"
@@ -419,6 +424,10 @@ import { useAgentStore } from '@/stores/agent'
 import { getAgent } from '@/api/agent'
 import type { Agent } from '@/types/agent'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import StreamingDots from '@/components/ai/StreamingDots.vue'
+import SuggestionChips from '@/components/ai/SuggestionChips.vue'
+import { generateSuggestions, extractCategoriesFromMessages } from '@/utils/suggestionTemplates'
+import type { ChatMode } from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
 import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
@@ -456,6 +465,19 @@ const suggestions = computed(() => [
     icon: { viewBox: '0 0 24 24', paths: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'] },
   },
 ])
+
+// U6 (R8): Follow-up suggestions generated after AI response completes
+const followUpSuggestions = computed(() => {
+  const lastAssistant = [...messages.value].reverse().find(m => m.role === 'assistant' && m.phase === 'done')
+  if (!lastAssistant) return []
+  const categories = extractCategoriesFromMessages([lastAssistant.content])
+  return generateSuggestions({ categories })
+})
+
+function onSuggestionSelect(text: string) {
+  inputText.value = text
+  nextTick(() => onSend())
+}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
@@ -599,8 +621,8 @@ const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
 const connectingSeconds = ref(0)
-const deepThink = ref(false)
-const webSearch = ref(false)
+const chatMode = ref<ChatMode>('normal')
+const isSmartMode = computed(() => chatMode.value === 'smart_light' || chatMode.value === 'smart_full')
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
 let programmaticScroll = false
@@ -1089,8 +1111,8 @@ async function onSend() {
   await scrollToBottom()
   const userMsgIdx = messages.value.findIndex((m) => m.id === userMsgId)
 
-  // Add assistant message placeholder (with think block if deep_think)
-  const thinkStart = deepThink.value ? Date.now() : 0
+  // Add assistant message placeholder (with think block if smart mode)
+  const thinkStart = isSmartMode.value ? Date.now() : 0
   const assistantMsg: Message = {
     id: `pending-${Date.now()}`,
     role: 'assistant',
@@ -1099,10 +1121,10 @@ async function onSend() {
     renderedContent: '',
     created_at: new Date().toISOString(),
     displayTime: formatTime(new Date().toISOString()),
-    thinkContent: deepThink.value ? '' : undefined,
-    thinkOpen: deepThink.value ? true : undefined,
-    thinkDone: deepThink.value ? false : undefined,
-    thinkSeconds: deepThink.value ? 0 : undefined,
+    thinkContent: isSmartMode.value ? '' : undefined,
+    thinkOpen: isSmartMode.value ? true : undefined,
+    thinkDone: isSmartMode.value ? false : undefined,
+    thinkSeconds: isSmartMode.value ? 0 : undefined,
     toolTimeline: [],
     processSteps: [],
     processStatus: 'running',
@@ -1112,7 +1134,7 @@ async function onSend() {
   await scrollToBottom()
 
   let thinkTimer: ReturnType<typeof setInterval> | null = null
-  if (deepThink.value) {
+  if (isSmartMode.value) {
     thinkTimer = setInterval(() => {
       if (!messages.value[msgIdx].thinkDone) {
         messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
@@ -1132,18 +1154,19 @@ async function onSend() {
     // go through the legacy chat_adapter regardless of the selected agent.
     const reader = await sendChatEventStream(
       q,
-      deepThink.value,
-      webSearch.value,
+      isSmartMode.value,
+      false,
       abortController.signal,
       currentSessionId.value ?? undefined,
       activeAgent.value?.id,
+      chatMode.value === 'smart_light' ? 'low' : chatMode.value === 'smart_full' ? 'high' : undefined,
     )
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation
     if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
     connecting.value = false
-    messages.value[msgIdx].phase = deepThink.value ? 'thinking' : 'answering'
+    messages.value[msgIdx].phase = isSmartMode.value ? 'thinking' : 'answering'
     // Mark user message as sent
     if (userMsgIdx >= 0) {
       messages.value[userMsgIdx].sendStatus = 'sent'
@@ -1209,7 +1232,7 @@ async function onSend() {
         return
       }
       if (event.type === 'token.stream') {
-        if (!thinkingDone && deepThink.value) {
+        if (!thinkingDone && isSmartMode.value) {
           thinkingDone = true
           if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
           messages.value[msgIdx].thinkDone = true
@@ -1251,7 +1274,7 @@ async function onSend() {
     }
 
     // Finalize think block if no text came (e.g. error from agent)
-    if (deepThink.value && !thinkingDone) {
+    if (isSmartMode.value && !thinkingDone) {
       if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
       messages.value[msgIdx].thinkDone = true
       if (!messages.value[msgIdx].thinkManuallyToggled) {
@@ -1434,6 +1457,34 @@ watch(paginationSentinelRef, (el) => {
   if (el) paginationObserver?.observe(el)
 })
 
+// U5: Mode category switch (normal ↔ smart) triggers confirmation dialog if
+// conversation has messages. Sub-option switch (light ↔ full) is instant.
+let prevWasSmart: boolean | null = null
+watch(chatMode, async (newMode, oldMode) => {
+  const newIsSmart = newMode === 'smart_light' || newMode === 'smart_full'
+  const oldIsSmart = oldMode === 'smart_light' || oldMode === 'smart_full'
+  // Only care about category changes (normal ↔ smart), not sub-option changes
+  if (newIsSmart === oldIsSmart) return
+  // Skip initial setup
+  if (prevWasSmart === null) { prevWasSmart = newIsSmart; return }
+  prevWasSmart = newIsSmart
+  // No confirmation needed if no messages yet
+  if (messages.value.length === 0) return
+  try {
+    await showConfirmDialog({
+      title: t('common.confirm'),
+      message: t('aiChat.modeSwitchConfirm'),
+    })
+  } catch {
+    // Cancelled — revert to previous mode
+    chatMode.value = oldMode
+    return
+  }
+  // Confirmed — start new session
+  messages.value = []
+  currentSessionId.value = null
+})
+
 onMounted(async () => {
   // Observe data-theme attribute changes on <html> to stay in sync with global theme
   themeObserver = new MutationObserver(() => {
@@ -1471,11 +1522,10 @@ onMounted(async () => {
   const isNewSession = route.query.newSession === '1'
 
   if (routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true) {
-    deepThink.value = true
+    chatMode.value = 'smart_full'
     aiStore.deepThinkEnabled = false // Reset after using
   }
   if (routeWebSearch || aiStore.webSearchEnabled) {
-    webSearch.value = true
     aiStore.webSearchEnabled = false
   }
 
@@ -2378,23 +2428,6 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .bubble.assistant .bubble-text :deep(img) { max-width: 100%; height: auto; }
-
-/* ── Streaming cursor ── */
-.stream-cursor {
-  display: inline-block;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1;
-  margin-left: 1px;
-  animation: cursor-blink 0.8s step-end infinite;
-}
-@keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .stream-cursor { animation: none; }
-}
 
 /* ── Interrupted hint ── */
 .interrupted-hint {

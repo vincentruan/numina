@@ -86,12 +86,14 @@ export function normalizeAgentEvent(
 
     case 'tool.call':
       if (event.tool) {
+        // U1/U4: Backend is source of truth for tool_type/display_name/icon
         const toolStep: ProcessStep = {
           type: 'tool_call',
           id: event.tool.id,
           name: event.tool.name,
+          toolType: event.tool.tool_type || 'unknown',
           displayName: event.tool.display_name || event.tool.name,
-          icon: event.tool.icon || '⚙️',
+          icon: event.tool.icon || 'tool',
           args: event.tool.arguments || {},
           status: 'running',
         }
@@ -100,8 +102,9 @@ export function normalizeAgentEvent(
           type: 'tool_call',
           toolCallId: event.tool.id,
           name: event.tool.name,
+          toolType: event.tool.tool_type || 'unknown',
           displayName: event.tool.display_name || event.tool.name,
-          icon: event.tool.icon || '⚙️',
+          icon: event.tool.icon || 'tool',
           args: event.tool.arguments || {},
         })
         events.push({ type: 'tool_running', toolCallId: event.tool.id })

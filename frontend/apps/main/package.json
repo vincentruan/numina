@@ -16,8 +16,8 @@
     "typecheck": "vue-tsc --noEmit"
   },
   "dependencies": {
-    "@numina/auth": "workspace:*",
-    "@numina/math": "workspace:*",
+    "@numina/auth": "file:../../packages/auth",
+    "@numina/math": "file:../../packages/math",
     "@vant/touch-emulator": "^1.5.0",
     "axios": "^1.13.6",
     "dompurify": "^3.4.1",

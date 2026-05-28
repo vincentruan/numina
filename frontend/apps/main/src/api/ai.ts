@@ -426,6 +426,8 @@ export async function sendChatMessageStream(
   signal?: AbortSignal,
   sessionId?: string,
   agentId?: string,
+  // U2: reasoning_effort controls thinking depth when deepThink=true
+  reasoningEffort?: 'low' | 'medium' | 'high',
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
@@ -436,9 +438,11 @@ export async function sendChatMessageStream(
   const payload: Record<string, unknown> = {
     question,
     deep_think: deepThink,
-    web_search: webSearch,
+    // U2: reasoning_effort only passed when deepThink=true
+    reasoning_effort: deepThink ? (reasoningEffort || 'medium') : undefined,
   }
   if (agentId) payload.agent_id = agentId
+  // U2: web_search removed as independent toggle (smart mode agents decide)
   const body = JSON.stringify(payload)
 
   let res = await fetch('/api/v1/ai/chat/stream', {

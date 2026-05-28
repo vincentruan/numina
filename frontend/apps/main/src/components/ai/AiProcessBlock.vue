@@ -14,60 +14,77 @@
     </div>
 
     <!-- Body (collapsible) — unified steps rendering preserves arrival order between reasoning and tool calls (spec §3.3) -->
-    <div v-show="isExpanded" class="process-body">
-      <template v-for="step in steps" :key="step.id">
-        <AiProcessStep
-          v-if="step.type === 'reasoning'"
-          type="reasoning"
-          :content="step.content"
-          :status="step.status"
-          :elapsed-ms="step.elapsedMs"
-        />
-        <AiToolCallStep
-          v-else-if="step.type === 'tool_call'"
-          :tool-call-id="step.id"
-          :tool-name="step.name"
-          :display-name="step.displayName"
-          :icon="step.icon"
-          :args="step.args"
-          :status="step.status"
-          :result-summary="step.resultSummary"
-          :error="step.error"
-          :elapsed-ms="step.elapsedMs"
-        />
+    <!-- U4: ChainOfThought with vertical line connectors and role="list" -->
+    <div v-show="isExpanded" class="process-body" role="list">
+      <template v-for="(step, idx) in steps" :key="step.id">
+        <!-- Vertical connector line (between steps) -->
         <div
-          v-else-if="step.type === 'subagent'"
-          class="step-subagent"
-          :class="`step-subagent--${step.status}`"
+          v-if="idx > 0"
+          class="chain-connector"
+          :class="chainConnectorClass(step)"
+          aria-hidden="true"
+        />
+        <!-- Step item with status-aware styling -->
+        <div
+          class="chain-step"
+          :class="chainStepClass(step, idx)"
+          role="listitem"
+          :aria-label="stepAriaLabel(step)"
         >
-          <span class="step-subagent-icon" aria-hidden="true">{{ subagentIcon(step.status) }}</span>
-          <div class="step-subagent-body">
-            <div class="step-subagent-title">{{ step.title || step.taskId }}</div>
-            <div v-if="step.description" class="step-subagent-desc">{{ step.description }}</div>
-            <div v-if="step.result" class="step-subagent-result">{{ step.result }}</div>
-            <div v-if="step.error" class="step-subagent-error">{{ step.error }}</div>
+          <AiProcessStep
+            v-if="step.type === 'reasoning'"
+            type="reasoning"
+            :content="step.content"
+            :status="step.status"
+            :elapsed-ms="step.elapsedMs"
+          />
+          <AiToolCallStep
+            v-else-if="step.type === 'tool_call'"
+            :tool-call-id="step.id"
+            :tool-name="step.name"
+            :tool-type="step.toolType"
+            :display-name="step.displayName"
+            :icon="step.icon"
+            :args="step.args"
+            :status="step.status"
+            :result-summary="step.resultSummary"
+            :error="step.error"
+            :elapsed-ms="step.elapsedMs"
+          />
+          <div
+            v-else-if="step.type === 'subagent'"
+            class="step-subagent"
+            :class="`step-subagent--${step.status}`"
+          >
+            <span class="step-subagent-icon" aria-hidden="true">{{ subagentIcon(step.status) }}</span>
+            <div class="step-subagent-body">
+              <div class="step-subagent-title">{{ step.title || step.taskId }}</div>
+              <div v-if="step.description" class="step-subagent-desc">{{ step.description }}</div>
+              <div v-if="step.result" class="step-subagent-result">{{ step.result }}</div>
+              <div v-if="step.error" class="step-subagent-error">{{ step.error }}</div>
+            </div>
           </div>
-        </div>
-        <a
-          v-else-if="step.type === 'artifact'"
-          class="step-artifact"
-          :href="step.url || '#'"
-          :target="step.url ? '_blank' : undefined"
-          :rel="step.url ? 'noopener noreferrer' : undefined"
-        >
-          <span class="step-artifact-icon" aria-hidden="true">📎</span>
-          <span class="step-artifact-title">{{ step.title }}</span>
-          <span v-if="step.path" class="step-artifact-path">{{ step.path }}</span>
-        </a>
-        <div
-          v-else-if="step.type === 'progress'"
-          class="step-progress"
-          :class="`step-progress--${step.status}`"
-        >
-          <span class="step-progress-icon" aria-hidden="true">{{ progressIcon(step.status) }}</span>
-          <div class="step-progress-body">
-            <div class="step-progress-title">{{ step.title }}</div>
-            <div v-if="step.description" class="step-progress-desc">{{ step.description }}</div>
+          <a
+            v-else-if="step.type === 'artifact'"
+            class="step-artifact"
+            :href="step.url || '#'"
+            :target="step.url ? '_blank' : undefined"
+            :rel="step.url ? 'noopener noreferrer' : undefined"
+          >
+            <span class="step-artifact-icon" aria-hidden="true">📎</span>
+            <span class="step-artifact-title">{{ step.title }}</span>
+            <span v-if="step.path" class="step-artifact-path">{{ step.path }}</span>
+          </a>
+          <div
+            v-else-if="step.type === 'progress'"
+            class="step-progress"
+            :class="`step-progress--${step.status}`"
+          >
+            <span class="step-progress-icon" aria-hidden="true">{{ progressIcon(step.status) }}</span>
+            <div class="step-progress-body">
+              <div class="step-progress-title">{{ step.title }}</div>
+              <div v-if="step.description" class="step-progress-desc">{{ step.description }}</div>
+            </div>
           </div>
         </div>
       </template>
@@ -96,6 +113,7 @@ import { useI18n } from 'vue-i18n'
 import AiProcessStep from './AiProcessStep.vue'
 import AiToolCallStep from './AiToolCallStep.vue'
 import AiLogo from './AiLogo.vue'
+import AiThinkingLabel from './AiThinkingLabel.vue'
 import type { ProcessStep } from '@/types/agent-stream'
 
 const props = defineProps<{
@@ -234,6 +252,51 @@ function progressIcon(status: 'running' | 'done' | 'error'): string {
     case 'error': return '✕'
   }
 }
+
+// U4: ChainOfThought status styling helpers
+
+/** Get connector line style based on current step status */
+function chainConnectorClass(step: ProcessStep): string {
+  if (step.status === 'error') return 'chain-connector--error'
+  if (step.status === 'running') return 'chain-connector--active'
+  if (step.status === 'pending') return 'chain-connector--pending'
+  return 'chain-connector--complete'
+}
+
+/** Get step container style based on status and position */
+function chainStepClass(step: ProcessStep, idx: number): string {
+  const classes: string[] = []
+  if (step.status === 'error') classes.push('chain-step--error')
+  if (step.status === 'running') classes.push('chain-step--active')
+  if (step.status === 'pending') classes.push('chain-step--pending')
+  if (idx === 0) classes.push('chain-step--first')
+  if (idx === props.steps.length - 1) classes.push('chain-step--last')
+  return classes.join(' ')
+}
+
+/** Get aria-label for step based on type and status */
+function stepAriaLabel(step: ProcessStep): string {
+  if (step.type === 'reasoning') {
+    return `${t('aiProcess.stepReasoning')}: ${step.status}`
+  }
+  if (step.type === 'tool_call') {
+    const name = step.displayName || step.name
+    const statusText = step.status === 'running' ? t('aiChat.toolRunning') :
+                       step.status === 'done' ? t('aiChat.toolDone') :
+                       step.status === 'error' ? t('aiChat.toolFailed') : ''
+    return `${name}: ${statusText}`
+  }
+  if (step.type === 'subagent') {
+    return `${step.title || step.taskId}: ${step.status}`
+  }
+  if (step.type === 'artifact') {
+    return `${t('aiProcess.artifactsTitle')}: ${step.title}`
+  }
+  if (step.type === 'progress') {
+    return `${step.title}: ${step.status}`
+  }
+  return ''
+}
 </script>
 
 <style scoped>
@@ -321,7 +384,66 @@ function progressIcon(status: 'running' | 'done' | 'error'): string {
   border-top: 1px solid var(--separator);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0; /* ChainOfThought uses connectors instead of gap */
+}
+
+/* U4: ChainOfThought vertical line connectors */
+
+.chain-connector {
+  height: 12px;
+  margin-left: 10px; /* Align with step marker */
+  border-left: 1px solid var(--separator);
+}
+
+.chain-connector--complete {
+  border-color: var(--color-muted);
+  opacity: 0.4;
+}
+
+.chain-connector--active {
+  border-color: var(--color-action-blue);
+  opacity: 0.7;
+}
+
+.chain-connector--pending {
+  border-color: var(--separator);
+  opacity: 0.3;
+}
+
+.chain-connector--error {
+  border-left-style: dashed;
+  border-color: var(--color-error);
+  opacity: 0.6;
+}
+
+/* U4: ChainOfThought step status styles */
+
+.chain-step {
+  position: relative;
+}
+
+.chain-step--complete {
+  opacity: 0.6;
+}
+
+.chain-step--active {
+  /* Active step is highlighted */
+}
+
+.chain-step--pending {
+  opacity: 0.4;
+}
+
+.chain-step--error {
+  /* Error styling handled by child components */
+}
+
+.chain-step--first {
+  /* First step has no connector above */
+}
+
+.chain-step--last {
+  /* Last step styling if needed */
 }
 
 .process-empty {

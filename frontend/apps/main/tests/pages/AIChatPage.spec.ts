@@ -135,10 +135,10 @@ describe('AIChatPage tool events', () => {
         stubs: {
           AIChatInput: {
             name: 'AIChatInput',
-            props: ['modelValue', 'deepThink'],
-            emits: ['update:modelValue', 'submit', 'update:deepThink'],
+            props: ['modelValue', 'mode'],
+            emits: ['update:modelValue', 'submit', 'update:mode'],
             template:
-              '<button class="chat-input" @click="$emit(\'update:deepThink\', true); $emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
+              '<button class="chat-input" @click="$emit(\'update:mode\', \'smart_full\'); $emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },

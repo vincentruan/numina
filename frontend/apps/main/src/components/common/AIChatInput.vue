@@ -48,40 +48,45 @@
       </div>
     </transition>
 
-    <!-- Bottom toolbar: toggles left, plus right -->
+    <!-- Bottom toolbar: mode selector left, plus right -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <!-- Deep think toggle -->
+        <!-- Mode toggle: normal ↔ smart -->
         <button
           class="toggle-btn"
-          :class="{ 'toggle-btn--active': deepThinkInternal }"
-          :aria-pressed="deepThinkInternal"
-          :aria-label="t('aiChat.deepThink')"
-          :title="t('aiChat.deepThink')"
-          @click="deepThinkInternal = !deepThinkInternal"
+          :class="{ 'toggle-btn--active': isSmartMode }"
+          :aria-pressed="isSmartMode"
+          :aria-label="modeLabel"
+          :title="modeLabel"
+          @click="toggleMainMode"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
             <path d="M9 21h6"/>
           </svg>
-          <span>{{ t('aiChat.deepThink') }}</span>
+          <span>{{ modeLabel }}</span>
         </button>
-        <!-- Web search toggle -->
-        <button
-          class="toggle-btn"
-          :class="{ 'toggle-btn--active': webSearch }"
-          :aria-pressed="webSearch"
-          :aria-label="t('aiChat.webSearch')"
-          :title="t('aiChat.webSearch')"
-          @click="webSearch = !webSearch"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <line x1="2" y1="12" x2="22" y2="12"/>
-            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-          <span>{{ t('aiChat.webSearch') }}</span>
-        </button>
+        <!-- Sub-options: shown when smart mode is active -->
+        <template v-if="isSmartMode">
+          <button
+            class="sub-option-btn"
+            :class="{ 'sub-option-btn--active': modeInternal === 'smart_light' }"
+            :aria-pressed="modeInternal === 'smart_light'"
+            :aria-label="t('aiChat.modeSmartLight')"
+            @click="modeInternal = 'smart_light'"
+          >
+            {{ t('aiChat.modeSmartLight') }}
+          </button>
+          <button
+            class="sub-option-btn"
+            :class="{ 'sub-option-btn--active': modeInternal === 'smart_full' }"
+            :aria-pressed="modeInternal === 'smart_full'"
+            :aria-label="t('aiChat.modeSmartFull')"
+            @click="modeInternal = 'smart_full'"
+          >
+            {{ t('aiChat.modeSmartFull') }}
+          </button>
+        </template>
       </div>
       <div class="toolbar-right">
         <!-- Plus button -->
@@ -176,14 +181,15 @@ import { useI18n } from 'vue-i18n'
 import { useCapabilityStore } from '@/stores/capability'
 import type { AICapability } from '@/api/ai'
 
+export type ChatMode = 'normal' | 'smart_light' | 'smart_full'
+
 const props = defineProps<{
   modelValue: string
   placeholder?: string
   disabled?: boolean
   loading?: boolean
   showClear?: boolean
-  deepThink?: boolean
-  webSearch?: boolean
+  mode?: ChatMode
 }>()
 
 const emit = defineEmits<{
@@ -191,16 +197,14 @@ const emit = defineEmits<{
   (e: 'submit', value: string): void
   (e: 'abort'): void
   (e: 'action', type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history'): void
-  (e: 'update:deepThink', value: boolean): void
-  (e: 'update:webSearch', value: boolean): void
+  (e: 'update:mode', value: ChatMode): void
 }>()
 
 const internalValue = ref(props.modelValue)
 const expanded = ref(false)
 const focused = ref(false)
 const panelOpen = ref(false)
-const deepThinkInternal = ref(props.deepThink ?? false)
-const webSearch = ref(props.webSearch ?? false)
+const modeInternal = ref<ChatMode>(props.mode ?? 'normal')
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 
 const router = useRouter()
@@ -238,11 +242,24 @@ watch(
 )
 
 watch(internalValue, (val) => emit('update:modelValue', val))
-watch(deepThinkInternal, (val) => emit('update:deepThink', val))
-watch(webSearch, (val) => emit('update:webSearch', val))
-// Sync parent-pushed values (e.g. auto-enable after async config fetch)
-watch(() => props.deepThink, (val) => { if (val !== undefined) deepThinkInternal.value = val })
-watch(() => props.webSearch, (val) => { if (val !== undefined) webSearch.value = val })
+watch(modeInternal, (val) => emit('update:mode', val))
+// Sync parent-pushed values
+watch(() => props.mode, (val) => { if (val !== undefined) modeInternal.value = val })
+
+const isSmartMode = computed(() => modeInternal.value === 'smart_light' || modeInternal.value === 'smart_full')
+
+const modeLabel = computed(() => {
+  if (isSmartMode.value) return t('aiChat.modeSmart')
+  return t('aiChat.modeNormal')
+})
+
+function toggleMainMode() {
+  if (isSmartMode.value) {
+    modeInternal.value = 'normal'
+  } else {
+    modeInternal.value = 'smart_light'
+  }
+}
 
 function onInput() {
   adjustHeight()
@@ -467,6 +484,35 @@ onBeforeUnmount(() => {
 
 .toggle-btn--active:hover {
   background: rgba(99, 102, 241, 0.22);
+}
+
+/* ── Sub-option buttons (smart mode light/full) ── */
+.sub-option-btn {
+  padding: 5px 8px;
+  border: 1px solid var(--ai-btn-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ai-btn-color);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+  min-height: 30px;
+  white-space: nowrap;
+}
+
+.sub-option-btn:hover {
+  background: var(--ai-btn-hover-bg);
+  color: var(--ai-btn-hover-color);
+}
+
+.sub-option-btn--active {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: #818cf8;
+}
+
+.sub-option-btn--active:hover {
+  background: rgba(99, 102, 241, 0.18);
 }
 
 /* ── Plus button ── */
@@ -758,6 +804,7 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .send-btn,
   .toggle-btn,
+  .sub-option-btn,
   .plus-btn,
   .input-row,
   .panel-enter-active,

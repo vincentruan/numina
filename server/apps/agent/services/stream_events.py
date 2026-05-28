@@ -66,15 +66,29 @@ class EventStreamBuilder:
         self,
         tool_name: str,
         arguments: dict[str, Any],
+        tool_type: str | None = None,
         display_name: str | None = None,
         icon: str | None = None,
     ) -> StreamEvent:
+        """Emit a tool.call event.
+
+        Args:
+            tool_name: The actual tool name from LangChain tool_calls (e.g., "query_assets")
+            arguments: Tool invocation arguments
+            tool_type: Business-level categorization (e.g., "asset_query", "report_gen")
+            display_name: User-friendly display name (e.g., "资产查询")
+            icon: Icon identifier (e.g., "asset", "report")
+
+        Backend is the source of truth for tool_type/display_name/icon.
+        Frontend toolTypeRegistry only maps tool_type → summaryTemplate.
+        """
         return self._event(
             "tool.call",
             {
                 "tool": {
                     "id": self._next_tool_id(),
                     "name": tool_name,
+                    "tool_type": tool_type or "unknown",
                     "display_name": display_name or tool_name,
                     "icon": icon or "tool",
                     "arguments": arguments,
