@@ -68,6 +68,7 @@ class EventStreamBuilder:
         arguments: dict[str, Any],
         display_name: str | None = None,
         icon: str | None = None,
+        tool_type: str | None = None,
     ) -> StreamEvent:
         return self._event(
             "tool.call",
@@ -75,6 +76,7 @@ class EventStreamBuilder:
                 "tool": {
                     "id": self._next_tool_id(),
                     "name": tool_name,
+                    "tool_type": tool_type or "unknown",
                     "display_name": display_name or tool_name,
                     "icon": icon or "tool",
                     "arguments": arguments,

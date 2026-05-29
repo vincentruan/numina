@@ -92,6 +92,7 @@ export function normalizeAgentEvent(
           name: event.tool.name,
           displayName: event.tool.display_name || event.tool.name,
           icon: event.tool.icon || '⚙️',
+          toolType: event.tool.tool_type,
           args: event.tool.arguments || {},
           status: 'running',
         }
@@ -102,6 +103,7 @@ export function normalizeAgentEvent(
           name: event.tool.name,
           displayName: event.tool.display_name || event.tool.name,
           icon: event.tool.icon || '⚙️',
+          toolType: event.tool.tool_type,
           args: event.tool.arguments || {},
         })
         events.push({ type: 'tool_running', toolCallId: event.tool.id })

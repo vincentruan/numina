@@ -1,5 +1,7 @@
 """Agent-first stream router."""
 
+from typing import Literal
+
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -14,6 +16,7 @@ class AgentStreamRequest(BaseModel):
     message: str
     thread_id: str | None = None
     enable_thinking: bool = False
+    reasoning_effort: Literal["low", "medium", "high"] = "medium"
 
 
 @router.post("/{agent_id}/stream")
@@ -38,6 +41,7 @@ async def stream_agent(
             thread_id=thread_id,
             message=body.message,
             enable_thinking=body.enable_thinking,
+            reasoning_effort=body.reasoning_effort,
         ),
         media_type="application/x-ndjson",
     )

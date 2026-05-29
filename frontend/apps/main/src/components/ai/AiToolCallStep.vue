@@ -1,5 +1,5 @@
 <template>
-  <div class="ai-tool-call-step">
+  <div class="ai-tool-call-step" :class="`ai-tool-call-step--${status}`">
     <div class="step-marker" :class="markerClass">
       <span class="marker-icon">{{ statusIcon }}</span>
     </div>
@@ -54,6 +54,7 @@ const props = defineProps<{
   toolName: string
   displayName?: string
   icon?: string
+  toolType?: string
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'done' | 'error'
   resultSummary?: string
@@ -66,7 +67,9 @@ const { t } = useI18n()
 const showFullResult = ref(false)
 const showFullArgs = ref(false)
 
-const displayInfo = computed(() => getToolDisplayInfo(props.toolName, props.displayName, props.icon))
+const displayInfo = computed(() =>
+  getToolDisplayInfo(props.toolName, props.displayName, props.icon, props.toolType),
+)
 const toolDisplayName = computed(() => displayInfo.value.displayName)
 const displayIcon = computed(() => displayInfo.value.icon)
 
@@ -127,6 +130,28 @@ function formatElapsedMs(ms: number): string {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  /* U4: chain-of-thought state styling — base, override per status below */
+  transition: opacity 0.2s ease;
+}
+
+/* U4 state: pending — not yet started, semi-transparent */
+.ai-tool-call-step--pending {
+  opacity: 0.55;
+}
+
+/* U4 state: running — active step, fully opaque */
+.ai-tool-call-step--running {
+  opacity: 1;
+}
+
+/* U4 state: done — completed, slightly dimmed so the eye lands on the active step */
+.ai-tool-call-step--done {
+  opacity: 0.75;
+}
+
+/* U4 state: error — full opacity to demand attention */
+.ai-tool-call-step--error {
+  opacity: 1;
 }
 
 .step-marker {

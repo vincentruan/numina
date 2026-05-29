@@ -426,6 +426,7 @@ export async function sendChatMessageStream(
   signal?: AbortSignal,
   sessionId?: string,
   agentId?: string,
+  reasoningEffort: 'low' | 'medium' | 'high' = 'medium',
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
@@ -437,6 +438,7 @@ export async function sendChatMessageStream(
     question,
     deep_think: deepThink,
     web_search: webSearch,
+    reasoning_effort: reasoningEffort,
   }
   if (agentId) payload.agent_id = agentId
   const body = JSON.stringify(payload)

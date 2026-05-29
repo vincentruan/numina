@@ -43,6 +43,7 @@ export interface AgentEvent {
   tool?: {
     id: string
     name: string
+    tool_type?: string
     display_name: string
     icon: string
     arguments: Record<string, unknown>
@@ -79,7 +80,7 @@ export type NormalizedAiEvent =
   | { type: 'phase_change'; phase: 'connecting' | 'thinking' | 'answering' | 'done' }
   | { type: 'reasoning_delta'; content: string }
   | { type: 'reasoning_done'; elapsedMs: number }
-  | { type: 'tool_call'; toolCallId: string; name: string; displayName: string; icon: string; args: Record<string, unknown> }
+  | { type: 'tool_call'; toolCallId: string; name: string; displayName: string; icon: string; toolType?: string; args: Record<string, unknown> }
   | { type: 'tool_running'; toolCallId: string }
   | { type: 'tool_result'; toolCallId: string; success: boolean; summary?: string; error?: string; elapsedMs?: number }
   | { type: 'answer_delta'; content: string }
@@ -108,6 +109,7 @@ export type ProcessStep =
       name: string
       displayName: string
       icon: string
+      toolType?: string
       args: Record<string, unknown>
       status: 'pending' | 'running' | 'done' | 'error'
       resultSummary?: string

@@ -6,15 +6,16 @@
         <AiLogo :state="logoState" />
       </div>
       <div class="process-info">
-        <span class="process-title">{{ titleLabel }}</span>
+        <span class="process-title" :class="{ 'is-thinking': isShimmerActive }">{{ titleLabel }}</span>
         <span class="process-status">{{ subtitleLabel }}</span>
       </div>
       <span class="process-elapsed">{{ formattedElapsed }}</span>
       <van-icon :name="isExpanded ? 'arrow-down' : 'arrow-up'" class="process-toggle" />
     </div>
 
-    <!-- Body (collapsible) — unified steps rendering preserves arrival order between reasoning and tool calls (spec §3.3) -->
-    <div v-show="isExpanded" class="process-body">
+    <!-- Body (collapsible) — unified steps rendering preserves arrival order between reasoning and tool calls (spec §3.3). U3: fade+slide collapse transition. -->
+    <Transition name="process-body">
+      <div v-show="isExpanded" class="process-body">
       <template v-for="step in steps" :key="step.id">
         <AiProcessStep
           v-if="step.type === 'reasoning'"
@@ -29,6 +30,7 @@
           :tool-name="step.name"
           :display-name="step.displayName"
           :icon="step.icon"
+          :tool-type="step.toolType"
           :args="step.args"
           :status="step.status"
           :result-summary="step.resultSummary"
@@ -87,6 +89,7 @@
         </button>
       </div>
     </div>
+    </Transition>
   </div>
 </template>
 
@@ -116,8 +119,24 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const isExpanded = ref(props.defaultExpanded ?? props.status === 'running')
 
+// U3: thinking-phase auto-collapse runs exactly once after thinking ends.
+// Subsequent toggles by the user are not re-collapsed automatically.
+const hasAutoCollapsed = ref(false)
+let autoCollapseTimer: ReturnType<typeof setTimeout> | null = null
+
+function clearAutoCollapseTimer() {
+  if (autoCollapseTimer) {
+    clearTimeout(autoCollapseTimer)
+    autoCollapseTimer = null
+  }
+}
+
 function toggleExpand() {
   isExpanded.value = !isExpanded.value
+  // User interaction cancels any pending auto-collapse and disables future ones,
+  // so we never undo an explicit user action.
+  clearAutoCollapseTimer()
+  hasAutoCollapsed.value = true
   emit('toggle-expand', isExpanded.value)
 }
 
@@ -125,17 +144,35 @@ function onRetry() {
   emit('retry')
 }
 
-// Auto-collapse when status changes to done; keep expanded on error so user sees the retry button
+// Auto-collapse rules (U3 spec):
+// - Status running → done while phase was thinking: collapse after 1s, once.
+// - Status running → done from non-thinking path: collapse immediately.
+// - Status → error: keep expanded so the retry button stays visible.
 watch(
   () => props.status,
   (val, prev) => {
-    if (val === 'done' && prev === 'running') {
-      isExpanded.value = false
-    }
     if (val === 'running' && prev !== 'running') {
       isExpanded.value = true
+      hasAutoCollapsed.value = false
+      clearAutoCollapseTimer()
+      return
+    }
+    if (val === 'done' && prev === 'running') {
+      const fromThinking = props.phase === 'thinking' || props.reasoningStartTime != null
+      if (fromThinking && !hasAutoCollapsed.value) {
+        clearAutoCollapseTimer()
+        autoCollapseTimer = setTimeout(() => {
+          isExpanded.value = false
+          hasAutoCollapsed.value = true
+          autoCollapseTimer = null
+        }, 1000)
+      } else {
+        isExpanded.value = false
+      }
+      return
     }
     if (val === 'error') {
+      clearAutoCollapseTimer()
       isExpanded.value = true
     }
   },
@@ -173,7 +210,10 @@ watch(
   { immediate: true },
 )
 
-onUnmounted(stopTick)
+onUnmounted(() => {
+  stopTick()
+  clearAutoCollapseTimer()
+})
 
 const logoState = computed<'idle' | 'thinking' | 'done' | 'error'>(() => {
   if (props.status === 'error') return 'error'
@@ -181,6 +221,13 @@ const logoState = computed<'idle' | 'thinking' | 'done' | 'error'>(() => {
   if (props.phase === 'thinking' || props.phase === 'connecting') return 'thinking'
   return 'idle'
 })
+
+// U3: Shimmer animation runs only while the agent is actively thinking.
+// Status transitions away from running stop the shimmer immediately so the
+// settled "done"/"error" state reads as static.
+const isShimmerActive = computed(
+  () => props.status === 'running' && (props.phase === 'thinking' || props.phase === 'connecting'),
+)
 
 const statusClass = computed(() => {
   switch (props.status) {
@@ -443,6 +490,91 @@ function progressIcon(status: 'running' | 'done' | 'error'): string {
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: 11px;
+}
+
+/* U3: Shimmer animation on thinking title — CSS gradient sweep, 2s loop */
+.process-title.is-thinking {
+  background-image: linear-gradient(
+    90deg,
+    var(--text-primary) 0%,
+    var(--text-primary) 40%,
+    var(--color-action-blue) 50%,
+    var(--text-primary) 60%,
+    var(--text-primary) 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: shimmer-sweep 2s ease-in-out infinite;
+}
+
+@keyframes shimmer-sweep {
+  from { background-position: 100% center; }
+  to { background-position: 0% center; }
+}
+
+/* Reduced-motion: show static text, no animation */
+@media (prefers-reduced-motion: reduce) {
+  .process-title.is-thinking {
+    background-image: none;
+    background-clip: unset;
+    -webkit-background-clip: unset;
+    color: var(--text-primary);
+    animation: none;
+  }
+}
+
+/* U3: fade+slide transition for process-body collapse */
+.process-body-enter-active,
+.process-body-leave-active {
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.process-body-enter-from,
+.process-body-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.process-body-enter-to,
+.process-body-leave-from {
+  max-height: 800px;
+  opacity: 1;
+}
+
+/* U4: vertical line connector between steps */
+.process-body > :deep(.ai-tool-call-step),
+.process-body > :deep(.ai-process-step),
+.process-body > :deep(.step-subagent),
+.process-body > :deep(.step-progress) {
+  position: relative;
+  padding-left: 14px;
+}
+
+.process-body > :deep(.ai-tool-call-step)::before,
+.process-body > :deep(.ai-process-step)::before,
+.process-body > :deep(.step-subagent)::before,
+.process-body > :deep(.step-progress)::before {
+  content: '';
+  position: absolute;
+  left: 9px;
+  top: -5px;
+  bottom: -5px;
+  width: 1px;
+  background: var(--separator);
+}
+
+/* Error steps get a dashed red connector segment */
+.process-body > :deep(.ai-tool-call-step.marker-error-connector)::before {
+  background: none;
+  border-left: 1px dashed var(--color-error);
+}
+
+/* Remove connector line from the first step */
+.process-body > :deep(:first-child)::before {
+  display: none;
 }
 
 /* Mobile responsive (spec §8 mobile risk mitigation) */

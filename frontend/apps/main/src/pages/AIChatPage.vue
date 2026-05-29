@@ -299,8 +299,16 @@
                     </svg>
                   </button>
                 </div>
-                <!-- Streaming cursor: visible while answering -->
-                <span v-if="msg.role === 'assistant' && msg.phase === 'answering'" class="stream-cursor" aria-hidden="true">▌</span>
+                <!-- U7: bouncing 3-dot streaming indicator (replaces blinking block cursor) -->
+                <span
+                  v-if="msg.role === 'assistant' && msg.phase === 'answering'"
+                  class="stream-dots"
+                  :aria-label="t('aiChat.streaming')"
+                >
+                  <span class="stream-dot"></span>
+                  <span class="stream-dot"></span>
+                  <span class="stream-dot"></span>
+                </span>
                 <!-- Interrupted hint -->
                 <div v-if="msg.role === 'assistant' && msg.phase === 'interrupted'" class="interrupted-hint" aria-live="polite">
                   {{ t('aiChat.generationStopped') }}
@@ -344,6 +352,22 @@
                     </svg>
                   </button>
                 </div>
+                <!-- U8: templated suggestion chips — shown after answer completes (≥30 chars) -->
+                <div
+                  v-if="msg.role === 'assistant' && msg.phase === 'done' && msg.content && msg.content.length >= 30"
+                  class="suggestion-chips"
+                  :aria-label="t('aiChat.suggestionsAria')"
+                >
+                  <button
+                    v-for="chip in suggestionChipsFor(msg)"
+                    :key="chip"
+                    class="suggestion-chip"
+                    type="button"
+                    @click="onSuggestionChipClick(chip)"
+                  >
+                    {{ chip }}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -371,8 +395,7 @@
     <div class="input-bar">
       <AIChatInput
         v-model="inputText"
-        v-model:deep-think="deepThink"
-        v-model:web-search="webSearch"
+        v-model:mode="chatMode"
         :disabled="asking"
         :loading="asking || connecting"
         :show-clear="messages.length > 0"
@@ -599,8 +622,19 @@ const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
 const connectingSeconds = ref(0)
-const deepThink = ref(false)
-const webSearch = ref(false)
+// U5: 2-tier mode replaces deepThink/webSearch dual booleans.
+// "normal" → no extended thinking, no web search.
+// "smart_light" → deep_think=true, web_search omitted (agent decides), reasoning_effort=low.
+// "smart_full"  → deep_think=true, web_search=true, reasoning_effort=high.
+type ChatMode = 'normal' | 'smart_light' | 'smart_full'
+const chatMode = ref<ChatMode>('normal')
+const deepThink = computed(() => chatMode.value !== 'normal')
+const webSearch = computed(() => chatMode.value === 'smart_full')
+const reasoningEffort = computed<'low' | 'medium' | 'high'>(() => {
+  if (chatMode.value === 'smart_light') return 'low'
+  if (chatMode.value === 'smart_full') return 'high'
+  return 'medium'
+})
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
 let programmaticScroll = false
@@ -1137,6 +1171,7 @@ async function onSend() {
       abortController.signal,
       currentSessionId.value ?? undefined,
       activeAgent.value?.id,
+      reasoningEffort.value,
     )
     const parser = createAgentEventParser(handleEvent)
 
@@ -1342,6 +1377,35 @@ async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | '
   showToast(t('toast.featureComingSoon'))
 }
 
+// U8: templated suggestion chips. Generated deterministically from message
+// content so the same message always renders the same chips on re-render
+// (no flicker). Pool is i18n-driven; v1 = static template per plan §"Deferred
+// to Follow-Up Work" (LLM-generated chips deferred to v2).
+function suggestionChipsFor(msg: Message): string[] {
+  const pool = [
+    t('aiChat.chipFollowupReason'),
+    t('aiChat.chipFollowupAction'),
+    t('aiChat.chipFollowupExample'),
+    t('aiChat.chipFollowupCompare'),
+    t('aiChat.chipFollowupTrend'),
+  ]
+  // Hash content into a stable rotation so different messages get different
+  // starting chips but the same message stays consistent.
+  const seed = (msg.content || '').length % pool.length
+  const count = msg.content && msg.content.length > 200 ? 5 : 3
+  const out: string[] = []
+  for (let i = 0; i < count; i++) {
+    out.push(pool[(seed + i) % pool.length])
+  }
+  return out
+}
+
+function onSuggestionChipClick(chip: string) {
+  inputText.value = chip
+  // Submit immediately so the chip behaves like a one-tap follow-up.
+  void onSend()
+}
+
 async function onCopy(content: string) {
   // Try modern Clipboard API first
   if (navigator.clipboard && window.isSecureContext) {
@@ -1470,14 +1534,17 @@ onMounted(async () => {
   const routeWebSearch = route.query.webSearch === '1'
   const isNewSession = route.query.newSession === '1'
 
-  if (routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true) {
-    deepThink.value = true
-    aiStore.deepThinkEnabled = false // Reset after using
+  // U5: legacy deepThink/webSearch query params + aiStore flags map to chatMode.
+  // deepThink only → smart_light; deepThink + webSearch (or webSearch alone) → smart_full.
+  const wantDeep = routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true
+  const wantSearch = routeWebSearch || aiStore.webSearchEnabled
+  if (wantSearch) {
+    chatMode.value = 'smart_full'
+  } else if (wantDeep) {
+    chatMode.value = 'smart_light'
   }
-  if (routeWebSearch || aiStore.webSearchEnabled) {
-    webSearch.value = true
-    aiStore.webSearchEnabled = false
-  }
+  if (wantDeep) aiStore.deepThinkEnabled = false
+  if (wantSearch) aiStore.webSearchEnabled = false
 
   // Start fresh session when navigating from hub with newSession flag
   if (isNewSession) {
@@ -2379,21 +2446,63 @@ onUnmounted(() => {
 }
 .bubble.assistant .bubble-text :deep(img) { max-width: 100%; height: auto; }
 
-/* ── Streaming cursor ── */
-.stream-cursor {
-  display: inline-block;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1;
-  margin-left: 1px;
-  animation: cursor-blink 0.8s step-end infinite;
+/* ── U7: Bouncing 3-dot streaming indicator (replaces blinking block cursor) ── */
+.stream-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  vertical-align: middle;
 }
-@keyframes cursor-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+.stream-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-secondary);
+  animation: stream-bounce 1.2s ease-in-out infinite;
+}
+.stream-dot:nth-child(2) { animation-delay: 0.15s; }
+.stream-dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes stream-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+  30% { transform: translateY(-3px); opacity: 1; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .stream-cursor { animation: none; }
+  .stream-dot { animation: none; opacity: 0.7; }
+}
+
+/* ── U8: templated suggestion chips after assistant answer completes ── */
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 6px;
+}
+.suggestion-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-primary);
+  background: var(--card-bg);
+  border: 1px solid var(--separator);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.suggestion-chip:hover {
+  background: var(--bg-secondary);
+  border-color: var(--van-primary-color);
+  color: var(--van-primary-color);
+}
+.suggestion-chip:active {
+  transform: scale(0.97);
+}
+@media (prefers-reduced-motion: reduce) {
+  .suggestion-chip { transition: none; }
+  .suggestion-chip:active { transform: none; }
 }
 
 /* ── Interrupted hint ── */

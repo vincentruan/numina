@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException
 from fastapi.responses import StreamingResponse
@@ -23,6 +24,10 @@ class ChatStreamRequest(BaseModel):
     question: str
     deep_think: bool = False
     web_search: bool = False
+    # Accepted on the legacy path for forward compatibility with the agent-first
+    # router. The orchestrator path does not currently honor reasoning_effort —
+    # see plan 2026-05-27-003 §"Deferred to Follow-Up Work".
+    reasoning_effort: Literal["low", "medium", "high"] = "medium"
 
 
 @router.post("/ask")

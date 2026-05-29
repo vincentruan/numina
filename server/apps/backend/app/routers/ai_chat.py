@@ -7,6 +7,7 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
@@ -50,6 +51,10 @@ class ChatStreamRequest(BaseModel):
     question: str
     deep_think: bool = False
     web_search: bool = False
+    # When deep_think=true, controls the agent's reasoning depth/tool budget.
+    # Maps to OpenAI o-series reasoning_effort + DeerFlow planning toggles.
+    # Ignored when deep_think=false.
+    reasoning_effort: Literal["low", "medium", "high"] = "medium"
     session_id: str | None = None
     # R4/R5: when present, /chat/stream proxies to /agent/{agent_id}/stream so
     # the request runs through agent_dispatch._resolve_skills (per-agent skill
@@ -233,6 +238,7 @@ async def chat_stream(
                 "thread_id": str(session_id),
                 "enable_thinking": body.deep_think,
                 "web_search": body.web_search,
+                "reasoning_effort": body.reasoning_effort,
             }
         else:
             agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
@@ -240,6 +246,7 @@ async def chat_stream(
                 "question": body.question,
                 "deep_think": body.deep_think,
                 "web_search": body.web_search,
+                "reasoning_effort": body.reasoning_effort,
             }
 
         answer_chunks: list[str] = []
