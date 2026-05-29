@@ -19,6 +19,7 @@ from apps.backend.app.auth.revoke_jti import revoke_jti
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
+from apps.backend.app.middleware.rate_limit import _get_real_client_ip
 from apps.backend.app.schemas.device import (
     DeviceCheckRequest,
     DeviceCheckResponse,
@@ -250,12 +251,43 @@ def revoke_all_devices(
     return None
 
 
+_DEVICE_CHECK_RATE_LIMIT_PER_MINUTE = 20
+
+
+def _check_device_check_rate_limit(ip: str) -> None:
+    """Limit /device/check to 20 requests per minute per IP."""
+    try:
+        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+
+        cache = get_rate_limit_cache()
+        key = f"device_check:{ip}"
+        count = cache.get(key)
+        if count is not None and int(count) >= _DEVICE_CHECK_RATE_LIMIT_PER_MINUTE:
+            raise AppError(ErrorCode.RATE_LIMITED)
+        new_count = cache.increment(key)
+        if new_count == 1:
+            cache.set(key, 1, ttl_seconds=60)
+    except AppError:
+        raise
+    except Exception:
+        pass
+
+
 @router.post("/device/check", response_model=DeviceCheckResponse)
 def check_device(
     req: DeviceCheckRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
-    """Check if a device_id is trusted. No auth required — used before login."""
+    """Check if a device_id is trusted. No auth required — used before login.
+
+    Rate-limited by IP (20/min) because the endpoint is unauthenticated and
+    returns a temp_token on success. The token alone cannot complete login
+    (still requires PIN/password), but rate-limiting prevents bulk probing.
+    """
+    client_ip = _get_real_client_ip(request)
+    _check_device_check_rate_limit(client_ip)
+
     from datetime import datetime
 
     from apps.backend.app.auth.deps import create_temp_token

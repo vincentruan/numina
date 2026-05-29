@@ -142,3 +142,62 @@ def test_trust_or_reuse_creates_new_when_expired(db):
     assert is_new is True
     assert session2.id != session1.id
     assert session2.device_id == device_id
+
+
+def test_trust_or_reuse_partial_unique_constraint(db):
+    """Partial unique index prevents duplicate active sessions for same user+device_id."""
+    family = _make_family(db)
+    user = _make_user(db, family.id)
+    session1, _ = device_service.trust_or_reuse_device(
+        db,
+        user_id=user.id,
+        family_id=family.id,
+        refresh_jti="jti-first",
+        device_name="Mac · Chrome",
+        device_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    )
+    assert session1.device_id == "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+    # Attempting to insert a second active row with same user_id + device_id
+    # should raise IntegrityError (caught by trust_or_reuse_device).
+    session2, is_new = device_service.trust_or_reuse_device(
+        db,
+        user_id=user.id,
+        family_id=family.id,
+        refresh_jti="jti-duplicate",
+        device_name="Mac · Chrome",
+        device_id="aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    )
+    # Should reuse the existing session (IntegrityError caught → fallback)
+    assert is_new is False
+    assert session2.id == session1.id
+
+
+def test_trust_or_reuse_allows_revoked_and_active(db):
+    """A revoked session + a new active one with same device_id should coexist."""
+    family = _make_family(db)
+    user = _make_user(db, family.id)
+    session1, _ = device_service.trust_or_reuse_device(
+        db,
+        user_id=user.id,
+        family_id=family.id,
+        refresh_jti="jti-first",
+        device_name="Mac · Chrome",
+        device_id="11111111-2222-3333-4444-555555555555",
+    )
+    # Revoke it
+    session1.is_revoked = True
+    db.commit()
+
+    # Now trust again with same device_id — should create new active session
+    session2, is_new = device_service.trust_or_reuse_device(
+        db,
+        user_id=user.id,
+        family_id=family.id,
+        refresh_jti="jti-second",
+        device_name="Mac · Chrome",
+        device_id="11111111-2222-3333-4444-555555555555",
+    )
+    assert is_new is True
+    assert session2.id != session1.id
+    assert session2.device_id == "11111111-2222-3333-4444-555555555555"

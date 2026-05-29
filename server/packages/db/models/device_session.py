@@ -31,5 +31,13 @@ class DeviceSession(Base):
     __table_args__ = (
         Index("ix_device_sessions_user_active", "user_id", "is_revoked", "expires_at"),
         Index("ix_device_sessions_family", "family_id"),
-        Index("ix_device_sessions_user_device", "user_id", "device_id"),
+        # Partial unique index: one active session per (user_id, device_id).
+        # Prevents duplicate active sessions from concurrent trust requests.
+        Index(
+            "uq_device_sessions_user_device_active",
+            "user_id", "device_id",
+            unique=True,
+            postgresql_where=(is_revoked == False),  # noqa: E712
+            sqlite_where=(is_revoked == False),  # noqa: E712
+        ),
     )
