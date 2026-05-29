@@ -17,7 +17,7 @@ import type { User, LoginRequest, RegisterRequest, JoinFamilyRequest, LoginStep1
 import type { StoredUser } from '../utils/storage'
 import { getUser, setUser, clearAuth } from '../utils/storage'
 import { configureAuthHttp, getHttp } from './http'
-import { getDeviceFingerprint } from '../utils/fingerprint'
+import { readDeviceId, writeDeviceId } from '../utils/deviceIdentity'
 
 export { configureAuthHttp }
 
@@ -75,8 +75,9 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function trustDevice(options?: { onSuccess?: () => void; onError?: () => void }) {
     try {
-      const fingerprint = await getDeviceFingerprint()
-      await getHttp().post('/auth/device/trust', { fingerprint })
+      const deviceId = readDeviceId()
+      const { data } = await getHttp().post<{ device_id: string }>('/auth/device/trust', { device_id: deviceId })
+      writeDeviceId(data.device_id)
       options?.onSuccess?.()
     } catch {
       options?.onError?.()
