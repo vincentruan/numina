@@ -249,8 +249,6 @@ def test_check_device_not_trusted(client):
 
 def test_trust_device_reuses_session(client, auth_headers, db):
     """Trust with same device_id reuses existing session (no new row)."""
-    from apps.backend.app.models.device_session import DeviceSession
-
     trust_resp1 = client.post(
         "/api/v1/auth/device/trust",
         headers={"Authorization": auth_headers["Authorization"]},
