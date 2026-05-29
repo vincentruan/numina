@@ -67,10 +67,17 @@ def seed_test_users(db):
     ]
 
     for user_data in users_data:
-        # Check if user exists
+        # Check if user exists. Per c34d3e40, bind-mounted SQLite survives
+        # `docker compose down -v`, so stale password hashes from earlier seed
+        # runs leak into the next session. Refresh the hash on every seed run
+        # so callers passing the canonical password always get an aligned row.
         existing_user = db.query(User).filter_by(username=user_data["username"]).first()
         if existing_user:
-            print(f"User {user_data['username']} already exists (family_id={existing_user.family_id})")
+            existing_user.password_hash = hash_password(user_data["password"])
+            print(
+                f"User {user_data['username']} already exists "
+                f"(family_id={existing_user.family_id}); password resynced"
+            )
             continue
 
         # Create family

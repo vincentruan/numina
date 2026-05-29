@@ -9,11 +9,12 @@ from apps.agent.routers.agent_stream import AgentStreamRequest
 
 
 def test_agent_stream_request_defaults():
-    """Default values for AgentStreamRequest."""
+    """Default values for AgentStreamRequest. reasoning_effort defaults to 'medium'
+    per plan U2 (non-nullable Literal['low','medium','high'])."""
     req = AgentStreamRequest(message="hello")
     assert req.enable_thinking == False
     assert req.thread_id is None
-    assert req.reasoning_effort is None
+    assert req.reasoning_effort == "medium"
 
 
 def test_agent_stream_request_with_reasoning_effort_low():
@@ -46,7 +47,12 @@ def test_agent_stream_request_invalid_reasoning_effort():
         assert errors[0]["loc"][0] == "reasoning_effort"
 
 
-def test_agent_stream_request_reasoning_effort_can_be_none():
-    """reasoning_effort=None is valid (uses default 'medium')."""
-    req = AgentStreamRequest(message="test", enable_thinking=True, reasoning_effort=None)
-    assert req.reasoning_effort is None
+def test_agent_stream_request_reasoning_effort_rejects_none():
+    """reasoning_effort=None is rejected — Literal['low','medium','high'] is non-nullable.
+    Callers wanting the default should omit the field entirely."""
+    try:
+        AgentStreamRequest(message="test", enable_thinking=True, reasoning_effort=None)
+        assert False, "Should have raised ValidationError"
+    except ValidationError as e:
+        errors = e.errors()
+        assert any(err["loc"][0] == "reasoning_effort" for err in errors)
