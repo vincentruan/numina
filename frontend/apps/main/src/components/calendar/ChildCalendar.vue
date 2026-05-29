@@ -229,11 +229,11 @@ onMounted(loadMonth)
   --cal-accent: #f5a623;
 }
 
-/* ── Dark mode overrides ── */
+/* ── Dark mode overrides — aligned with global midnight-blue palette ── */
 :global([data-theme='dark']) .child-calendar,
 :global(.dark) .child-calendar {
-  --cal-bg: #1a1a2e;
-  --cal-title-color: #f0f0f0;
+  --cal-bg: #12122a;
+  --cal-title-color: #f5f5f5;
   --cal-nav-bg: rgba(255, 255, 255, 0.08);
   --cal-nav-bg-active: rgba(255, 255, 255, 0.14);
   --cal-nav-color: #c8c8d0;
@@ -243,20 +243,20 @@ onMounted(loadMonth)
   --cal-legend-color: rgba(255, 255, 255, 0.5);
   --cal-stats-color: rgba(255, 255, 255, 0.45);
   --cal-stats-sep: rgba(255, 255, 255, 0.2);
-  --cal-heat-1: rgba(245, 166, 35, 0.15);
-  --cal-heat-2: rgba(245, 166, 35, 0.28);
-  --cal-heat-3: rgba(245, 166, 35, 0.5);
-  --cal-heat-4: rgba(245, 166, 35, 0.75);
-  --cal-dot-dark-shadow: rgba(26, 26, 46, 0.8);
+  --cal-heat-1: rgba(245, 166, 35, 0.12);
+  --cal-heat-2: rgba(245, 166, 35, 0.24);
+  --cal-heat-3: rgba(245, 166, 35, 0.42);
+  --cal-heat-4: rgba(245, 166, 35, 0.65);
+  --cal-dot-dark-shadow: rgba(1, 1, 32, 0.8);
   --cal-today-bg: #f5a623;
-  --cal-today-color: #1a1a2e;
+  --cal-today-color: #010120;
   --cal-dot-chore: #6fcf73;
   --cal-dot-wish: #ffb74d;
   --cal-dot-milestone: #ce93d8;
   --cal-dot-count-chore: #a5d6a7;
   --cal-dot-count-wish: #ffcc80;
   --cal-dot-count-milestone: #e1bee7;
-  --cal-dot-count-on-dark: #1a1a2e;
+  --cal-dot-count-on-dark: #010120;
   --cal-accent: #ffb74d;
 }
 
