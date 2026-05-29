@@ -247,6 +247,28 @@ def test_check_device_not_trusted(client):
     assert data["trusted"] is False
 
 
+def test_check_device_inactive_user(client, auth_headers, db):
+    """POST /auth/device/check returns trusted=false when the owner is deactivated."""
+    trust_resp = client.post(
+        "/api/v1/auth/device/trust",
+        headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": auth_headers["_refresh_token"]},
+    )
+    device_id = trust_resp.json()["data"]["device_id"]
+
+    user = db.query(User).filter(User.username == "testuser").first()
+    user.is_active = False
+    db.commit()
+
+    check_resp = client.post(
+        "/api/v1/auth/device/check",
+        json={"device_id": device_id},
+    )
+    assert check_resp.status_code == 200
+    data = check_resp.json()["data"]
+    assert data["trusted"] is False
+
+
 def test_trust_device_reuses_session(client, auth_headers, db):
     """Trust with same device_id reuses existing session (no new row)."""
     trust_resp1 = client.post(
