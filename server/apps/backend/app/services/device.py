@@ -211,7 +211,8 @@ def list_family_device_sessions(
     for session, user in rows:
         result.append(
             {
-                "id": session.id,
+                "session_id": session.id,
+                "device_id": session.device_id,
                 "user_id": session.user_id,
                 "display_name": user.display_name,
                 "avatar_color": user.avatar_color,
