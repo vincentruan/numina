@@ -82,6 +82,7 @@ vi.mock('../../src/stores/agent', () => ({
         is_enabled: true,
       },
     ],
+    builtinAgents: [],
     customAgents: [],
     loadAgents,
   })),
@@ -116,12 +117,14 @@ describe('AIHubPage chat entry', () => {
 
     const input = wrapper.findComponent({ name: 'AIChatInput' })
     await input.vm.$emit('update:modelValue', '我们家净资产是多少？')
-    await input.vm.$emit('update:mode', 'smart_full')
+    await input.vm.$emit('update:deepThink', true)
+    await input.vm.$emit('update:webSearch', true)
     await input.vm.$emit('submit', '我们家净资产是多少？')
 
     const aiStore = useAIStore()
     expect(aiStore.draftQuery).toBe('我们家净资产是多少？')
     expect(aiStore.deepThinkEnabled).toBe(true)
+    expect(aiStore.webSearchEnabled).toBe(true)
     expect(push).toHaveBeenCalledWith({
       path: '/ai/chat',
       query: {
@@ -129,6 +132,7 @@ describe('AIHubPage chat entry', () => {
         agentId: 'numina-id', // R4: every entry routes by agentId; default = numina
         newSession: '1',
         deepThink: '1',
+        webSearch: '1',
       },
     })
   })

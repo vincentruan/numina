@@ -40,11 +40,9 @@ export interface AgentEvent {
   metadata?: Record<string, unknown>
   token?: string
   is_thinking?: boolean
-  // U1/U4: tool_type added for differentiated display
   tool?: {
     id: string
     name: string
-    tool_type?: string // Business-level categorization (asset_query, report_gen, etc.)
     display_name: string
     icon: string
     arguments: Record<string, unknown>
@@ -81,7 +79,7 @@ export type NormalizedAiEvent =
   | { type: 'phase_change'; phase: 'connecting' | 'thinking' | 'answering' | 'done' }
   | { type: 'reasoning_delta'; content: string }
   | { type: 'reasoning_done'; elapsedMs: number }
-  | { type: 'tool_call'; toolCallId: string; name: string; toolType: string; displayName: string; icon: string; args: Record<string, unknown> }
+  | { type: 'tool_call'; toolCallId: string; name: string; displayName: string; icon: string; args: Record<string, unknown> }
   | { type: 'tool_running'; toolCallId: string }
   | { type: 'tool_result'; toolCallId: string; success: boolean; summary?: string; error?: string; elapsedMs?: number }
   | { type: 'answer_delta'; content: string }
@@ -108,8 +106,6 @@ export type ProcessStep =
       type: 'tool_call'
       id: string
       name: string
-      // U1/U4: tool_type for differentiated display
-      toolType: string // Business-level categorization from backend
       displayName: string
       icon: string
       args: Record<string, unknown>
