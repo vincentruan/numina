@@ -52,6 +52,13 @@ async def aiter(items):
         yield item
 
 
+def _mock_app_config():
+    """Mock AppConfig.model_validate to return its input dict (deerflow not installed in test env)."""
+    cls = MagicMock()
+    cls.model_validate = MagicMock(side_effect=lambda d: d)
+    return cls
+
+
 def _mock_client_instance(sample_agent_config, sample_ai_config):
     """Create a mock BackendClient instance with all required async methods."""
     instance = MagicMock()
@@ -69,6 +76,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
@@ -131,6 +139,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
@@ -167,6 +176,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
@@ -199,6 +209,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
@@ -232,6 +243,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
             patch("apps.agent.services.agent_dispatch.make_lead_agent", side_effect=capture_make_lead_agent),
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
@@ -255,6 +267,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             MockClient.return_value = _mock_client_instance(sample_agent_config, sample_ai_config)
             mock_select.return_value = (
@@ -285,6 +298,7 @@ class TestStreamAgentDispatchGateway:
             patch("apps.agent.services.agent_dispatch.BackendClient") as MockClient,
             patch("apps.agent.services.agent_dispatch.get_path_manager", return_value=pm),
             patch("apps.agent.services.agent_dispatch._select_model") as mock_select,
+            patch("apps.agent.services.agent_dispatch.AppConfig", _mock_app_config()),
         ):
             instance = _mock_client_instance(sample_agent_config, sample_ai_config)
             MockClient.return_value = instance

@@ -28,6 +28,11 @@ except ImportError:
     make_lead_agent = None
 
 try:
+    from deerflow.config.app_config import AppConfig
+except ImportError:
+    AppConfig = None
+
+try:
     from apps.agent.services.orchestrator import _select_model
 except ImportError:
     _select_model = None
@@ -222,10 +227,30 @@ async def stream_agent_dispatch(
     # Only meaningful when enable_thinking=True; default "medium" if omitted.
     # Passed via configurable so DeerFlow agent can access it.
     effective_reasoning_effort = (reasoning_effort or "medium") if enable_thinking else None
+
+    # DeerFlow expects an AppConfig pydantic instance, not a dict.
+    # SandboxConfig.use is required (no default), so seed it before validation.
+    if AppConfig is None:
+        yield builder_events.error(
+            "Agent 运行环境未就绪", code="RUNTIME_ERROR"
+        ).to_ndjson()
+        return
+    app_config_dict = dict(effective.config_dict)
+    app_config_dict.setdefault(
+        "sandbox", {"use": "deerflow.sandbox.local:LocalSandboxProvider"}
+    )
+    try:
+        app_config_obj = AppConfig.model_validate(app_config_dict)
+    except Exception as e:
+        yield builder_events.error(
+            f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR"
+        ).to_ndjson()
+        return
+
     runnable_config = {
         "configurable": {
             "thread_id": thread_id,
-            "app_config": effective.config_dict,
+            "app_config": app_config_obj,
             "user_id": user_id,
             "reasoning_effort": effective_reasoning_effort,
         }
