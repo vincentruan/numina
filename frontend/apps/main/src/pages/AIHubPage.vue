@@ -115,7 +115,7 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent grid: system agents → custom agents, then app zone below -->
+    <!-- Agent grid: system agents → time-machine app card → custom agents -->
     <div class="feature-section">
       <AgentGrid
         :system-agents="agentStore.systemAgents.filter(a => a.is_enabled)"
@@ -124,46 +124,32 @@
         @consult="handleAgentConsult"
         @edit="handleAgentEdit"
         @create="router.push({ name: 'AgentCreate' })"
-      />
-
-      <!-- 应用区 (Apps): fixed-rule applications, not chat agents.
-           Rendered after agent zones. Hardcoded constant — not sourced
-           from ai_agents table. -->
-      <div class="app-section">
-        <div class="app-section__title">{{ t('agents.apps') }}</div>
-        <div class="app-grid">
-          <div
-            class="app-card"
-            role="button"
-            tabindex="0"
-            @click="router.push('/ai/time-machine')"
-            @keydown.enter="router.push('/ai/time-machine')"
-            @keydown.space.prevent="router.push('/ai/time-machine')"
-          >
-            <div class="app-card__icon">
-              <svg
-                width="32"
-                height="32"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.6"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true"
+      >
+        <template #between>
+          <!-- 应用区 (Apps): fixed-rule applications, not chat agents.
+               Rendered between system and custom zones per R1 + R13.
+               Hardcoded constant — not sourced from ai_agents table. -->
+          <div class="agent-section">
+            <div class="agent-section__title">{{ t('agents.apps') }}</div>
+            <div class="agent-grid">
+              <div
+                class="agent-card app-card"
+                role="button"
+                tabindex="0"
+                @click="router.push('/ai/time-machine')"
+                @keydown.enter="router.push('/ai/time-machine')"
+                @keydown.space.prevent="router.push('/ai/time-machine')"
               >
-                <path d="M3 12a9 9 0 1 0 3-6.36" />
-                <polyline points="3 4.5 3 9 7.5 9" />
-                <polyline points="12 7.5 12 12 15.2 13.6" />
-              </svg>
-            </div>
-            <div class="app-card__body">
-              <div class="app-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
-              <div class="app-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+                <div class="agent-card__icon">⏰</div>
+                <div class="agent-card__body">
+                  <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
+                  <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </AgentGrid>
     </div>
 
     <!-- Chat input -->
@@ -212,7 +198,8 @@
 
       <AIChatInput
         v-model="chatInput"
-        v-model:mode="chatMode"
+        v-model:deep-think="deepThink"
+        v-model:web-search="webSearch"
         :placeholder="t('aiHub.chatPlaceholder')"
         :disabled="!selectedRecipient"
         @submit="startChat"
@@ -285,7 +272,8 @@ const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const chatInput = ref('')
-const chatMode = ref<'normal' | 'smart_light' | 'smart_full'>('smart_full')
+const deepThink = ref(false)
+const webSearch = ref(false)
 
 // Recipient chip state (U11): which agent the bottom chat input talks to.
 // Defaults to 数鸣 once agents load; user can switch via action sheet.
@@ -447,14 +435,16 @@ function startChat(q: string) {
     return
   }
   aiStore.draftQuery = q
-  aiStore.deepThinkEnabled = chatMode.value !== 'normal'
+  aiStore.deepThinkEnabled = deepThink.value
+  aiStore.webSearchEnabled = webSearch.value
   router.push({
     path: '/ai/chat',
     query: {
       q,
       agentId: selectedRecipient.value.id, // R4: every entry routes by agentId
       newSession: '1', // Signal fresh session from hub
-      deepThink: chatMode.value !== 'normal' ? '1' : undefined,
+      deepThink: deepThink.value ? '1' : undefined,
+      webSearch: webSearch.value ? '1' : undefined,
     },
   })
 }
@@ -476,9 +466,9 @@ function handleAgentEdit(agent: Agent) {
 
 onMounted(async () => {
   await aiStore.fetchConfig()
-  // Enable smart mode by default if model supports thinking capability
+  // Enable deep-think by default if model supports thinking capability
   if (aiStore.config?.ai_test_thinking_success === true) {
-    chatMode.value = 'smart_full'
+    deepThink.value = true
   }
   await agentStore.loadAgents()
   await loadReport()
@@ -1129,79 +1119,10 @@ onMounted(async () => {
   margin: 0;
 }
 
-/* ── App section (U9 — time-machine, rule-based apps rendered after the
-   custom agent zone). Mirrors AgentGrid/AgentCard visual language but the
-   classes live here because Vue scoped styles don't penetrate the slot
-   boundary — slot content carries the parent's data attribute, not the
-   child component's. */
-.app-section {
-  margin-bottom: 16px;
-}
-
-.app-section__title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--van-text-color-2);
-  padding: 0 4px 8px;
-}
-
-.app-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-
+/* ── App card (U9 — time-machine) ── */
 .app-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  border-radius: 12px;
-  background: var(--van-background-2);
-  border: 1px solid var(--van-border-color);
+  /* Inherits .agent-card base styling; left-border accent distinguishes it
+     from chat agents — apps are fixed-rule, not conversational. */
   border-left: 3px solid var(--theme-primary, #007aff);
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
 }
-
-.app-card:active {
-  transform: scale(0.97);
-}
-
-.app-card:focus-visible {
-  outline: 2px solid var(--theme-primary, #007aff);
-  outline-offset: 2px;
-}
-
-.app-card__icon {
-  height: 56px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  line-height: 1;
-  color: var(--theme-primary, #007aff);
-}
-
-.app-card__body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.app-card__name {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--van-text-color);
-}
-
-.app-card__desc {
-  font-size: 12px;
-  color: var(--van-text-color-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
 </style>

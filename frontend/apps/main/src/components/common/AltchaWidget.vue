@@ -1,11 +1,10 @@
 <template>
   <div class="altcha-container">
-    <!-- Captcha disabled (per server config): dev-mode indicator -->
+    <!-- Captcha disabled (per server config): silent pass-through -->
     <div v-if="!captchaEnabled" class="altcha-dev-notice">
-      <div class="dev-notice-bar">
-        <span class="dev-notice-icon">🛡️</span>
-        <span class="dev-notice-text">{{ t('captcha.devDisabled') }}</span>
-      </div>
+      <van-notice-bar color="var(--color-primary)" background="var(--color-soft-stone)">
+        验证码已禁用
+      </van-notice-bar>
     </div>
 
     <!-- Captcha enabled: custom unified UI -->
@@ -228,32 +227,6 @@ defineExpose({
 
 .altcha-dev-notice {
   margin: 16px 0;
-}
-
-.dev-notice-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 52px;
-  padding: 0 16px;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 2px dashed rgba(189, 187, 255, 0.35);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(1, 1, 32, 0.3);
-}
-
-.dev-notice-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.dev-notice-text {
-  font-size: 14px;
-  color: rgba(189, 187, 255, 0.85);
-  letter-spacing: 0.02em;
 }
 
 /* ── Hidden altcha widget ── */

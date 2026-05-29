@@ -51,9 +51,6 @@ class ChatStreamRequest(BaseModel):
     deep_think: bool = False
     web_search: bool = False
     session_id: str | None = None
-    # U2: reasoning_effort controls thinking depth when deep_think=True.
-    # Values: "low" (single-step tool calls), "medium" (default), "high" (multi-step).
-    reasoning_effort: str | None = None  # "low" | "medium" | "high"
     # R4/R5: when present, /chat/stream proxies to /agent/{agent_id}/stream so
     # the request runs through agent_dispatch._resolve_skills (per-agent skill
     # scoping). Omitted requests fall back to the legacy /chat/ask/stream
@@ -75,13 +72,6 @@ class ChatStreamRequest(BaseModel):
     def validate_agent_id(cls, v: str | None) -> str | None:
         if v is not None and not re.fullmatch(r"\d{15,20}", v):
             raise ValueError("agent_id 格式无效")
-        return v
-
-    @field_validator("reasoning_effort")
-    @classmethod
-    def validate_reasoning_effort(cls, v: str | None) -> str | None:
-        if v is not None and v not in ("low", "medium", "high"):
-            raise ValueError("reasoning_effort 必须为 low、medium 或 high")
         return v
 
 
@@ -242,16 +232,14 @@ async def chat_stream(
                 "message": body.question,
                 "thread_id": str(session_id),
                 "enable_thinking": body.deep_think,
-                # U2: reasoning_effort controls thinking depth.
-                # Only passed when deep_think=True; default "medium" if omitted.
-                "reasoning_effort": body.reasoning_effort if body.deep_think else None,
+                "web_search": body.web_search,
             }
         else:
             agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
             agent_body = {
                 "question": body.question,
                 "deep_think": body.deep_think,
-                # Legacy path does not support reasoning_effort; omitted.
+                "web_search": body.web_search,
             }
 
         answer_chunks: list[str] = []

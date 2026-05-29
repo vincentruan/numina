@@ -53,202 +53,307 @@ const PALETTE = {
 
 const p = computed(() => isDark.value ? PALETTE.dark : PALETTE.light)
 
-// ── Polar curve parameters ────────────────────────────────────────────────────
+// ── Ripple wave definition ────────────────────────────────────────────────────
 
-interface LineParams {
-  basePhase: number
-  rotSpeed: number   // rad/s, negative = counter-clockwise
-  n1: number         // primary radial harmonic count
-  n2: number         // secondary radial harmonic count
-  n3: number         // slow wobble harmonic count
-  amp1: number       // primary amplitude (relative to R)
-  amp2: number       // secondary amplitude
-  amp3: number       // wobble amplitude
-  drift1: number     // phase drift speed for harmonic 1
-  drift2: number     // phase drift speed for harmonic 2
-  drift3: number     // phase drift speed for harmonic 3
-  baseR: number      // base radius scale (relative to R)
+interface Ripple {
+  id: number
+  birth: number        // creation time (ms)
+  baseRadius: number   // initial radius
+  amplitude: number    // initial wave amplitude
+  frequency: number    // angular frequency (waves around circle)
+  speed: number        // expansion speed (px per second)
+  color: string        // neon stroke color
+  glowColor: string    // neon glow/shadow color
+  glowStop: string     // precomputed transparent stop for gradient
+  lineWidth: number
+  noiseSeed: number    // unique seed for irregularity
 }
 
-const LINE_COUNT_HIGH = 9
-const LINE_COUNT_LOW  = 5
-const STEPS_HIGH = 200
-const STEPS_LOW  = 120
-const DISMISS_DURATION = 300
+// ── Configuration ──────────────────────────────────────────────────────────────
 
-function makeLineParams(index: number, total: number): LineParams {
-  const basePhase = (index / total) * Math.PI * 2
-  const rotDir = (index % 2 === 0) ? 1 : -1
-  const rotSpeed = (0.18 + index * 0.04) * rotDir
+const MAX_RIPPLES = LOW_END ? 4 : 6
+const WAVE_LIFETIME = 2800  // ms for a wave to fully expand and fade
+const DISMISS_DURATION = 300  // ms for the choreographed exit
 
-  return {
-    basePhase,
-    rotSpeed,
-    n1: 2 + (index % 4),
-    n2: 3 + (index % 3),
-    n3: 1,
-    amp1: 0.22 + (index % 3) * 0.07,
-    amp2: 0.12 + (index % 2) * 0.06,
-    amp3: 0.08,
-    drift1: 0.29 + index * 0.05,
-    drift2: 0.17 + index * 0.08,
-    drift3: 0.11 + index * 0.03,
-    baseR:  0.55 + (index % 5) * 0.06,
+const LAYER_CONFIGS = [
+  { amplitude: 5, frequency: 6,  speed: 14, lineWidth: 0.8 },
+  { amplitude: 4, frequency: 8,  speed: 18, lineWidth: 0.6 },
+  { amplitude: 3, frequency: 10, speed: 22, lineWidth: 0.45 },
+  { amplitude: 2, frequency: 13, speed: 28, lineWidth: 0.3 },
+]
+
+// Breathing rhythm: spawn interval pulses between fast and slow
+function spawnInterval(globalTime: number): number {
+  const base = LOW_END ? 420 : 320
+  const pulse = Math.sin(globalTime * 0.8) * (LOW_END ? 60 : 100)
+  return base + pulse
+}
+
+// ── Lightweight pseudo-noise ─────────────────────────────────────────────────
+
+function hash(n: number): number {
+  const x = Math.sin(n * 12.9898) * 43758.5453
+  return x - Math.floor(x)
+}
+
+function smoothNoise(t: number): number {
+  const i = Math.floor(t)
+  const f = t - i
+  const u = f * f * (3 - 2 * f)
+  return hash(i) * (1 - u) + hash(i + 1) * u
+}
+
+// Multi-octave noise for more organic irregularity
+function fractalNoise(t: number, octaves: number = 3): number {
+  let val = 0
+  let amp = 1
+  let freq = 1
+  for (let o = 0; o < octaves; o++) {
+    val += smoothNoise(t * freq) * amp
+    amp *= 0.5
+    freq *= 2
   }
+  return val / (2 - Math.pow(0.5, octaves)) // normalize to ~[0,1]
 }
 
-// ── Draw a single polar rotating curve ───────────────────────────────────────
+// ── Core animation ─────────────────────────────────────────────────────────────
 
-function drawPolarCurve(
+function drawCore(
   ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  R: number,
-  params: LineParams,
-  t: number,
-  alpha: number,
-  lineWidth: number,
-  palette: { color: string; glowColor: string; blend: GlobalCompositeOperation },
-  skipGlow: boolean,
-): void {
-  const { rotSpeed, basePhase, n1, n2, n3, amp1, amp2, amp3, drift1, drift2, drift3, baseR } = params
-  const rotation = t * rotSpeed + basePhase
-  const STEPS = LOW_END ? STEPS_LOW : STEPS_HIGH
+  cx: number, cy: number,
+  unit: number,
+  globalTime: number,
+  pulseFreq: number,
+  pulseAmp: number,
+  dismissScale: number,
+  dismissAlpha: number,
+  palette: typeof PALETTE.dark,
+) {
+  const pulse = Math.sin(globalTime * pulseFreq) * pulseAmp
+  const scale = (1 + pulse) * dismissScale
+  const alpha = (0.85 + Math.sin(globalTime * pulseFreq) * 0.15) * dismissAlpha
 
-  const pts: Array<[number, number]> = []
-  for (let i = 0; i <= STEPS; i++) {
-    const theta = (i / STEPS) * Math.PI * 2
-    const r = R * (
-      baseR
-      + amp1 * Math.sin(n1 * theta + t * drift1)
-      + amp2 * Math.sin(n2 * theta - t * drift2 + 1.3)
-      + amp3 * Math.cos(n3 * theta + t * drift3)
-    )
-    const angle = theta + rotation
-    pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)])
-  }
+  const outerR = 6 * unit * scale
+  const innerR = 1.5 * unit * scale
+  const ringR = 4 * unit * scale
 
   ctx.save()
-  ctx.globalCompositeOperation = palette.blend
   ctx.globalAlpha = alpha
+  ctx.globalCompositeOperation = 'source-over'
 
+  // Halo gradient disc
+  const grad = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR)
+  grad.addColorStop(0, palette.cyan)
+  grad.addColorStop(0.4, palette.red)
+  grad.addColorStop(1, 'transparent')
+  ctx.fillStyle = grad
   ctx.beginPath()
-  const first = pts[0]!
-  ctx.moveTo(first[0], first[1])
-  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i]![0], pts[i]![1])
-  ctx.closePath()
+  ctx.arc(cx, cy, outerR, 0, Math.PI * 2)
+  ctx.fill()
 
-  if (!skipGlow) {
-    ctx.shadowBlur = lineWidth * 10
-    ctx.shadowColor = palette.glowColor
-    ctx.strokeStyle = palette.color
-    ctx.lineWidth = lineWidth * 2.0
-    ctx.stroke()
-  }
-
-  ctx.shadowBlur = 0
-  ctx.strokeStyle = palette.color
-  ctx.lineWidth = lineWidth * 0.8
+  // Inner ring
+  ctx.globalAlpha = alpha * 0.6
+  ctx.strokeStyle = palette.cyan
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(cx, cy, ringR, 0, Math.PI * 2)
   ctx.stroke()
 
   ctx.restore()
 }
 
 // ── Animation state ───────────────────────────────────────────────────────────
+// All state is declared inside setup() (see below) so each component instance
+// owns isolated state. Module-scope state caused multiple RAF loops to share
+// the same rafId, making cancelAnimationFrame cancel the wrong loop on unmount.
 
-const lineCount = LOW_END ? LINE_COUNT_LOW : LINE_COUNT_HIGH
+// ── Draw ──────────────────────────────────────────────────────────────────────
 
-const state = {
-  lines: [] as LineParams[],
-  globalTime: 0,
-  lastFrameTime: 0,
-  dismissProgress: 0,
-  dismissStart: null as number | null,
-}
-
-// ── Draw frame ────────────────────────────────────────────────────────────────
-
-function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now: number): void {
-  const W = canvas.width
-  const H = canvas.height
-  const cx = W / 2
-  const cy = H / 2
-  const unit = Math.min(W, H)
-  const framePalette = p.value
-
-  const effectiveInterval = prefersReduced.value ? 100 : FRAME_INTERVAL
-  if (now - state.lastFrameTime < effectiveInterval) return
-
-  ctx.clearRect(0, 0, W, H)
-
-  if (props.dismissing) {
-    if (state.dismissStart === null) state.dismissStart = now
-    state.dismissProgress = Math.min(1, (now - state.dismissStart) / DISMISS_DURATION)
-  } else {
-    state.dismissStart = null
-    state.dismissProgress = 0
+function makeDrawFrame(
+  state: {
+    ripples: Ripple[]
+    nextRippleId: number
+    lastSpawn: number
+    globalTime: number
+    lastFrameTime: number
+    dismissProgress: number
+    dismissStart: number | null
   }
+) {
+  return function drawFrame(canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D, now: number) {
+    const W = canvas.width
+    const H = canvas.height
+    const cx = W / 2
+    const cy = H / 2
 
-  const deltaTime = state.lastFrameTime === 0 ? 0 : (now - state.lastFrameTime) / 1000
-  state.globalTime += deltaTime
-  state.lastFrameTime = now
+    // vmin-derived unit — W/H are already physical pixels
+    const unit = Math.min(W, H) / 100
 
-  const t = state.globalTime
+    // Snapshot palette at frame start to avoid mid-frame theme race
+    const framePalette = p.value
 
-  const dismissScale = props.dismissing
-    ? 1 - state.dismissProgress * 0.5 * (prefersReduced.value ? 0 : 1)
-    : 1
-  const dismissAlpha = props.dismissing
-    ? Math.max(0, 1 - state.dismissProgress * 1.3)
-    : 1
+    // Effective FPS for reduced-motion
+    const effectiveInterval = prefersReduced.value ? 100 : FRAME_INTERVAL
+    if (now - state.lastFrameTime < effectiveInterval) return
 
-  const R = unit * 0.44
-  const clipR = unit * 0.46
-  const lineWidth = unit * 0.007
+    ctx.clearRect(0, 0, W, H)
 
-  ctx.save()
-  ctx.beginPath()
-  ctx.arc(cx, cy, clipR, 0, Math.PI * 2)
-  ctx.clip()
-
-  ctx.save()
-  ctx.translate(cx, cy)
-  ctx.scale(dismissScale, dismissScale)
-  ctx.translate(-cx, -cy)
-
-  const skipGlow = LOW_END
-
-  for (let i = 0; i < state.lines.length; i++) {
-    const params = state.lines[i]!
-    const isCyan = i % 2 === 0
-    const palette = {
-      color:     isCyan ? framePalette.cyan     : framePalette.red,
-      glowColor: isCyan ? framePalette.cyanGlow : framePalette.redGlow,
-      blend:     framePalette.blend,
+    // Update dismiss progress (300ms)
+    if (props.dismissing) {
+      if (state.dismissStart === null) state.dismissStart = now
+      state.dismissProgress = Math.min(1, (now - state.dismissStart) / DISMISS_DURATION)
+    } else {
+      state.dismissStart = null
+      state.dismissProgress = 0
     }
 
-    const breathPhase = prefersReduced.value
-      ? 0
-      : t * 0.8 + (i / state.lines.length) * Math.PI * 2
-    const breathAlpha = prefersReduced.value
-      ? 0.6
-      : 0.55 + Math.sin(breathPhase) * 0.2
+    const deltaTime = state.lastFrameTime === 0 ? 0 : (now - state.lastFrameTime) / 1000
+    state.globalTime += deltaTime
+    state.lastFrameTime = now
 
-    const rotSpeedFactor = prefersReduced.value ? 0.15 : 1
+    // Dismiss animation values
+    const dismissScale = props.dismissing
+      ? 1 - state.dismissProgress * 0.6 * (prefersReduced.value ? 0 : 1)
+      : 1
+    const dismissAlpha = props.dismissing
+      ? Math.max(0, 1 - state.dismissProgress * (prefersReduced.value ? 1 : 1.2))
+      : 1
 
-    drawPolarCurve(
-      ctx, cx, cy, R,
-      { ...params, rotSpeed: params.rotSpeed * rotSpeedFactor },
-      t,
-      breathAlpha * dismissAlpha,
-      lineWidth,
-      palette,
-      skipGlow,
-    )
+    // ── Draw core ─────────────────────────────────────────────────────────────
+    if (prefersReduced.value) {
+      drawCore(ctx, cx, cy, unit, state.globalTime, 6.28, 0.03, dismissScale, dismissAlpha, framePalette)
+    } else {
+      drawCore(ctx, cx, cy, unit, state.globalTime, 10, 0.04, dismissScale, dismissAlpha, framePalette)
+    }
+
+    // ── Reduced-motion: skip ripples ──────────────────────────────────────────
+    if (prefersReduced.value) {
+      // Clean up expired ripples (from before motion pref changed)
+      state.ripples = state.ripples.filter(r => {
+        const lifeProgress = (now - r.birth) / 1000 / (WAVE_LIFETIME / 1000)
+        return lifeProgress < 1 && !(props.dismissing && state.dismissProgress > 0.8)
+      })
+      return
+    }
+
+    // ── Spawn new ripples ─────────────────────────────────────────────────────
+    if (!props.dismissing && now - state.lastSpawn > spawnInterval(state.globalTime)) {
+      const configIdx = state.nextRippleId % LAYER_CONFIGS.length
+      const config = LAYER_CONFIGS[configIdx]
+      const isCyan = state.nextRippleId % 2 === 0
+      const color = isCyan ? framePalette.cyan : framePalette.red
+      const glowColor = isCyan ? framePalette.cyanGlow : framePalette.redGlow
+      state.ripples.push({
+        id: state.nextRippleId++,
+        birth: now,
+        baseRadius: 8 * unit,
+        amplitude: config.amplitude * unit,
+        frequency: config.frequency,
+        speed: config.speed * unit,
+        color,
+        glowColor,
+        glowStop: glowColor.replace(/[\d.]+\)$/, '0.0)'),
+        lineWidth: config.lineWidth * unit,
+        noiseSeed: Math.random() * 1000,
+      })
+      state.lastSpawn = now
+
+      if (state.ripples.length > MAX_RIPPLES) {
+        state.ripples.shift()
+      }
+    }
+
+    // ── Draw each ripple ──────────────────────────────────────────────────────
+    const POINTS = LOW_END ? 60 : 90
+    const blendMode = framePalette.blend
+
+    state.ripples.forEach((ripple) => {
+      const age = (now - ripple.birth) / 1000
+      const lifeProgress = age / (WAVE_LIFETIME / 1000)
+
+      if (lifeProgress >= 1 || (props.dismissing && state.dismissProgress > 0.8)) {
+        return
+      }
+
+      const currentRadius = ripple.baseRadius + ripple.speed * age
+
+      let lifeAlpha: number
+      if (lifeProgress < 0.15) {
+        lifeAlpha = lifeProgress / 0.15
+      } else if (lifeProgress > 0.6) {
+        lifeAlpha = 1 - (lifeProgress - 0.6) / 0.4
+      } else {
+        lifeAlpha = 1
+      }
+
+      const dismissAlpha = props.dismissing ? Math.max(0, 1 - state.dismissProgress * 1.5) : 1
+      const alpha = lifeAlpha * dismissAlpha * 0.9
+
+      const expansionDecay = Math.max(0.3, 1 - lifeProgress * 0.7)
+      const currentAmp = ripple.amplitude * expansionDecay * (props.dismissing ? (1 - state.dismissProgress) : 1)
+
+      const noiseTime = state.globalTime * 1.5 + ripple.noiseSeed
+      const radiusNoise = fractalNoise(noiseTime * 0.7, 3) * 8 * unit * (1 - lifeProgress * 0.5)
+      const angleNoise = fractalNoise(noiseTime * 0.5 + 100, 3) * 0.3
+
+      const currentLineWidth = ripple.lineWidth * Math.max(0.3, 1 - lifeProgress * 0.65)
+
+      const pts: Array<[number, number]> = []
+      for (let i = 0; i <= POINTS; i++) {
+        const angle = (i / POINTS) * Math.PI * 2 + angleNoise
+        const wavePhase = age * 3 + ripple.noiseSeed * 0.1
+        const waveNoise = fractalNoise(angle * ripple.frequency / (2 * Math.PI) + wavePhase, 2)
+        const waveOffset = currentAmp * Math.sin(angle * ripple.frequency + wavePhase) * (0.5 + waveNoise * 0.5)
+        const r = currentRadius + radiusNoise + waveOffset
+        pts.push([cx + r * Math.cos(angle), cy + r * Math.sin(angle)])
+      }
+
+      function tracePath() {
+        ctx.beginPath()
+        const firstPt = pts[0]!
+        ctx.moveTo(firstPt[0], firstPt[1])
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1])
+        ctx.closePath()
+      }
+
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.5)
+      grad.addColorStop(0, ripple.color)
+      grad.addColorStop(0.65, ripple.color)
+      grad.addColorStop(1, ripple.glowStop)
+
+      // Outer glow pass (high-end only)
+      if (!LOW_END) {
+        ctx.save()
+        ctx.globalCompositeOperation = blendMode
+        ctx.globalAlpha = alpha * 0.45
+        ctx.shadowBlur = 18 * DPR
+        ctx.shadowColor = ripple.glowColor
+        ctx.strokeStyle = grad
+        ctx.lineWidth = currentLineWidth * 2.5
+        tracePath()
+        ctx.stroke()
+        ctx.restore()
+      }
+
+      // Main stroke
+      ctx.save()
+      ctx.globalCompositeOperation = blendMode
+      ctx.globalAlpha = alpha
+      ctx.shadowBlur = LOW_END ? 0 : 8 * DPR
+      ctx.shadowColor = ripple.glowColor
+      ctx.strokeStyle = grad
+      ctx.lineWidth = currentLineWidth
+      tracePath()
+      ctx.stroke()
+      ctx.restore()
+    })
+
+    // Clean up expired ripples
+    state.ripples = state.ripples.filter(r => {
+      const lifeProgress = (now - r.birth) / 1000 / (WAVE_LIFETIME / 1000)
+      return lifeProgress < 1 && !(props.dismissing && state.dismissProgress > 0.8)
+    })
   }
-
-  ctx.restore()
-  ctx.restore()
 }
 
 // ── Resize ────────────────────────────────────────────────────────────────────
@@ -258,6 +363,7 @@ function resize(canvas: HTMLCanvasElement) {
   if (!parent) return
   const w = parent.clientWidth * DPR
   const h = parent.clientHeight * DPR
+  // Skip if parent not yet laid out — ResizeObserver will fire when dimensions available
   if (w === 0 || h === 0) return
   canvas.width = w
   canvas.height = h
@@ -266,7 +372,24 @@ function resize(canvas: HTMLCanvasElement) {
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 let ro: ResizeObserver | null = null
+
+// Use a box so onUnmounted can cancel the correct RAF id even though
+// the id is assigned inside onMounted's closure.
 const rafBox = { id: 0 }
+
+// Instance-local animation state — created once at module eval time but
+// reset on every mount, so remounts always start clean.
+const state = {
+  ripples: [] as Ripple[],
+  nextRippleId: 0,
+  lastSpawn: 0,
+  globalTime: 0,
+  lastFrameTime: 0,
+  dismissProgress: 0,
+  dismissStart: null as number | null,
+}
+
+const drawFrame = makeDrawFrame(state)
 
 function loop(now: number) {
   rafBox.id = requestAnimationFrame(loop)
@@ -281,7 +404,10 @@ onMounted(() => {
   const canvas = canvasEl.value
   if (!canvas) return
 
-  state.lines = Array.from({ length: lineCount }, (_, i) => makeLineParams(i, lineCount))
+  // Reset state so every mount starts clean (handles remounts)
+  state.ripples = []
+  state.nextRippleId = 0
+  state.lastSpawn = 0
   state.globalTime = 0
   state.lastFrameTime = 0
   state.dismissProgress = 0
@@ -310,6 +436,8 @@ watch(() => props.dismissing, (val) => {
   if (!val) {
     state.dismissProgress = 0
     state.dismissStart = null
+    state.ripples = []
+    state.lastSpawn = 0
   }
 })
 </script>

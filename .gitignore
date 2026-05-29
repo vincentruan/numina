@@ -192,6 +192,3 @@ tests/screenshot/screenshots/*-after-*.png
 .numina/data/
 # Test results (root level)
 test-results/
-
-# Webwright tool output (local artifacts)
-webwright_output/
