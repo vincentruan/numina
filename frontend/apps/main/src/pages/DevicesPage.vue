@@ -42,7 +42,7 @@ async function handleRevoke(device: DeviceSession) {
   } catch {
     return
   }
-  await revokeDevice(device.id)
+  await revokeDevice(device.session_id)
   showToast(t('toast.deviceRevokeSuccess'))
   if (device.is_current) {
     authStore.logout({ onLogout: () => router.push('/login') })
@@ -99,7 +99,7 @@ async function handleRevokeFamily(device: FamilyDevice) {
   } catch {
     return
   }
-  await revokeDevice(String(device.id))
+  await revokeDevice(String(device.session_id))
   showToast(t('toast.deviceRevokeSuccess'))
   familyLoaded.value = false
   await loadFamily()
@@ -158,7 +158,7 @@ onMounted(load)
       <van-list>
         <van-cell
           v-for="device in devices"
-          :key="device.id"
+          :key="device.session_id"
           :title="device.device_name"
           :label="`${t('device.lastSeen')}: ${formatRelativeTime(device.last_seen_at)}`"
         >
@@ -215,7 +215,7 @@ onMounted(load)
 
         <van-cell
           v-for="device in group.devices"
-          :key="device.id"
+          :key="device.session_id"
           :title="device.device_name"
           :label="`${t('device.lastSeen')}: ${formatRelativeTime(device.last_seen_at)}`"
         >
