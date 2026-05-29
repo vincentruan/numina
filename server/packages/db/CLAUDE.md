@@ -37,6 +37,16 @@ uv run pytest packages/db/ -v         # run tests
 - **Don't leave sessions open** — always close in a `finally` block or use a context manager.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/db/`.
 
+## Modules
+
+| Module | Exports | Purpose |
+|--------|---------|---------|
+| `session.py` | `Base`, `SessionLocal`, `get_db()` | The single ORM `DeclarativeBase` and session factory |
+| `engine.py` | `_DatabaseBackend`, `_SQLiteBackend`, `_PostgresBackend` | SQLAlchemy engine factory; chooses pool config and `connect_args` per dialect |
+| `models/` | `User`, `Family`, `Asset`, `Liability`, `Currency`, `ExchangeRate`, `DeviceSession`, `RevokedToken`, `Reminder`, `ReminderNotification`, `NotificationChannel`, `NotificationConfig`, `NotificationSubscription`, `AssetSnapshot`, `CachedFile`, `FileRemoteLocation`, `StorageBackend`, `SecurityAuditLog`, `AiTask` | Cross-app ORM entities. App-specific models live in their own apps |
+
+Alembic migrations (under `apps/backend/alembic/`) reference `Base.metadata` from this package — adding a model here makes it visible to `--autogenerate`.
+
 ## Patterns
 
 ### Session lifecycle

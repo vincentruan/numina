@@ -36,13 +36,15 @@ uv run pytest packages/domain/ -v         # run tests
 
 ## Subpackages
 
-| Subpackage | Purpose |
-|------------|---------|
-| `audit` | Audit log write/purge |
-| `device` | Device registration and management |
-| `exchange_rate` | Currency exchange rate fetching and caching |
-| `notification` | Push notification dispatch |
-| `snapshot` | Daily family net-worth snapshots |
+| Subpackage | Key exports | Purpose |
+|------------|-------------|---------|
+| `audit` | `write_audit_log`, `purge_old_audit_logs` | Security/audit log write + retention purge |
+| `device` | `cleanup_expired_device_sessions`, `cleanup_expired_revoked_tokens` | Device session lifecycle, JWT revocation cleanup |
+| `exchange_rate` | `ExchangeRateService` | Fetch + cache foreign-exchange rates |
+| `notification` | `run_scheduled_checks` and channel/reminder dispatch | Reminder evaluation + notification channel dispatch (`reminder_job` calls this) |
+| `snapshot` | `auto_generate_daily_snapshots` | Per-family net-worth snapshot generation |
+
+Reminders are owned by the `notification` subpackage (not a separate `reminder/` subpackage). The `reminder` routers in `apps/backend` and the `reminder_daily` scheduler job both dispatch into `notification.service.run_scheduled_checks`.
 
 ## Patterns
 

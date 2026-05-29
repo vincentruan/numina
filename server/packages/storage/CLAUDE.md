@@ -34,6 +34,19 @@ uv run pytest packages/storage/ -v         # run tests
 - **Don't let `StorageError` propagate to API responses** — catch at the app boundary and handle explicitly.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/storage/`.
 
+## Modules
+
+| File | Purpose |
+|------|---------|
+| `base.py` | Abstract `StorageBackend` ABC + the `StorageError` exception hierarchy (`StorageRateLimitError`, `StorageConflictError`, `StorageConnectionError`, `StorageAuthError`) |
+| `factory.py` | `get_backend_for_type(type_str)` and `get_local_backend()` — singleton lookup. Always use these |
+| `local.py` | `LocalStorageBackend` — files on local disk |
+| `github.py` | `GitHubStorageBackend` — files as GitHub repo contents |
+| `webdav.py` | `WebDAVStorageBackend` — files on a WebDAV server |
+| `config_crypto.py` | `decrypt_config(text)` / `encrypt_config(dict)` — Fernet encryption for per-family backend config (key from `STORAGE_ENCRYPTION_KEY`, falls back to `SECRET_KEY` derivation with a warning) |
+
+Backend configuration is stored encrypted in the database (model: `packages/db/models/storage_backend.py`). The factory decrypts via `config_crypto.decrypt_config` before instantiating a backend.
+
 ## Backends
 
 | Backend | Type string | Use case |

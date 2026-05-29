@@ -97,7 +97,8 @@ agent/
 │   ├── desensitize.py         # Structural PII stripping (assets/liabilities/members)
 │   ├── llm.py                 # LLMClient (Anthropic + OpenAI), ThinkingTagParser
 │   └── logging.py             # setup_logging()
-├── routers/                   # Top-level router registrations (14 routers)
+├── routers/                   # Top-level router registrations (16 routers)
+│   ├── agent_stream.py        # Generic agent NDJSON streaming endpoint
 │   ├── alerts.py              # POST /alerts/aging, /alerts/stream
 │   ├── allocation.py          # POST /allocation/drift, /allocation/stream
 │   ├── capabilities.py        # GET /capabilities
@@ -105,6 +106,7 @@ agent/
 │   ├── disposal.py            # POST /disposal/scan, /disposal/stream
 │   ├── import_parse.py        # POST /import/parse
 │   ├── liability.py           # POST /liability/analyze, /liability/stream
+│   ├── model_test.py          # POST /model-test — validate per-family LLM config (token, model, ping)
 │   ├── report.py              # POST /report/generate, /report/generate/stream
 │   ├── sessions.py            # GET /sessions, GET /sessions/{id}/events (NDJSON)
 │   ├── spending_leak.py       # POST /spending-leak, /spending-leak/stream

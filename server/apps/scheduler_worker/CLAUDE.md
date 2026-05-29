@@ -8,7 +8,7 @@ See root [`CLAUDE.md`](../../../CLAUDE.md) for behavioral guidelines and cross-c
 Run all commands from `server/`:
 
 ```bash
-uv run uvicorn apps.scheduler_worker.app.main:app --reload --port 8002  # Dev worker
+uv run uvicorn apps.scheduler_worker.main:app --reload --port 8002  # Dev worker
 uv run ruff check apps/scheduler_worker/        # lint
 uv run ruff check apps/scheduler_worker/ --fix  # lint + auto-fix
 uv run ruff format apps/scheduler_worker/       # format (only files you touch)
@@ -27,13 +27,29 @@ uv run pytest apps/scheduler_worker/ -v         # run tests
 
 ```
 scheduler_worker/
-├── app/
-│   ├── config.py          # Settings (pydantic-settings)
-│   └── main.py            # FastAPI app entry point + lifespan
+├── main.py            # FastAPI app entry point + lifespan (top-level, not under app/)
+├── scheduler.py       # AsyncIOScheduler + setup_all_jobs() — register new jobs here
 ├── jobs/
-│   └── __init__.py        # All job function definitions (add new jobs here)
-└── scheduler.py           # setup_all_jobs() — job registration (register new jobs here)
+│   └── __init__.py    # All job function definitions (add new jobs here)
+└── app/
+    └── config.py      # Settings (pydantic-settings)
 ```
+
+The worker has no `routers/` — it exposes only liveness/readiness probes from `main.py`.
+
+## Job Inventory
+
+7 jobs are registered in `scheduler.py:setup_all_jobs()`:
+
+| Job ID | Function | Trigger | Purpose |
+|--------|----------|---------|---------|
+| `exchange_rate` | `fetch_rates_job` | Cron `hour=8,10,12,14,16,18,20,22` (15-min jitter) | Refresh currency rates during waking hours |
+| `file_sync` | `file_sync_job` (async) | Interval `FILE_SYNC_INTERVAL_MINUTES` env | Sync local files to remote storage backend |
+| `audit_log_purge` | `audit_log_purge_job` | Cron daily 03:00 | Drop audit log rows past retention window |
+| `revoked_token_cleanup` | `revoked_token_cleanup_job` | Cron hourly :30 | Remove expired entries from `revoked_token` table |
+| `device_session_cleanup` | `device_session_cleanup_job` | Cron hourly :15 | Remove expired device sessions |
+| `reminder_daily` | `reminder_job` | Cron daily 09:20 | Compute due reminders + dispatch via notification channels |
+| `snapshot_daily` | `snapshot_job` | Cron daily 00:05 | Take per-family net-worth snapshot |
 
 ## Key Invariants
 
@@ -56,6 +72,8 @@ scheduler_worker/
 - **Exchange rate job cron window** — only runs between 08:00 and 22:00 (`hour="8,10,12,14,16,18,20,22"`) with a 15-minute jitter. Does not run overnight — intentional.
 - **`audit_log_purge_job` has no `SessionLocal()`** — it delegates session management to `purge_old_audit_logs()` in `packages.domain.audit.service`. This is the only job that does not manage its own session directly. Do not "fix" it by adding one.
 - **`file_sync_job` is async** — the only async job. APScheduler handles it natively. Do not wrap it in `asyncio.run()`.
+- **`reminder_job` runs once daily at 09:20** — if you need quicker reminder dispatch (e.g. minute-of-day scheduling), do not lower the cron interval; instead, queue dispatch from the backend's request path.
+- **`device_session_cleanup_job` and `revoked_token_cleanup_job`** — both are hourly housekeeping jobs that delete expired rows. They do not flag stale-but-active sessions; that is the security middleware's job.
 
 ## Patterns
 

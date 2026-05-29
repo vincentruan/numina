@@ -8,20 +8,20 @@ See root [`CLAUDE.md`](../CLAUDE.md) for behavioral guidelines and cross-cutting
 Run all commands from `frontend/apps/main/`:
 
 ```bash
-npm run dev          # Vite dev server — http://localhost:5173, hot reload
-npm run lint          # ESLint — check for errors and warnings
-npm run lint:fix      # ESLint — auto-fix where possible
-npm run format        # Prettier — format all files in src/
-npm run typecheck     # vue-tsc --noEmit — type check without building
-npm run build         # vue-tsc -b && vite build — full production build
-npm run test:run      # vitest run — run tests once (no watch)
+pnpm dev          # Vite dev server — http://localhost:5173, hot reload
+pnpm lint          # ESLint — check for errors and warnings
+pnpm lint:fix      # ESLint — auto-fix where possible
+pnpm format        # Prettier — format all files in src/
+pnpm typecheck     # vue-tsc --noEmit — type check without building
+pnpm build         # vue-tsc -b && vite build — full production build
+pnpm test:run      # vitest run — run tests once (no watch)
 ```
 
 ## Tooling
 
 - **ESLint:** flat config at `eslint.config.js`. Vue 3 + typescript-eslint + prettier compat.
 - **Prettier:** config at `.prettierrc`. Single quotes, no semicolons, trailing commas, 100-char width.
-- **vue-tsc:** canonical type gate. Run `npm run typecheck` before pushing. Strict mode is on (`tsconfig.app.json`).
+- **vue-tsc:** canonical type gate. Run `pnpm typecheck` before pushing. Strict mode is on (`tsconfig.app.json`).
 - **vitest:** test runner. Tests live in `src/**/*.test.ts` or `src/**/*.spec.ts`.
 
 ## Directory Structure
@@ -29,17 +29,30 @@ npm run test:run      # vitest run — run tests once (no watch)
 ```
 src/
 ├── api/           # HTTP request modules
+├── assets/        # Static assets bundled by Vite
 ├── components/    # Reusable Vue components (ai/, asset/, charts/, common/, etc.)
 ├── composables/   # Vue composition functions
 ├── constants/     # Static constants
 ├── i18n/          # Localization (zh-CN.ts, en-US.ts)
 ├── layouts/       # Layout wrappers
 ├── pages/         # Route-level views (DashboardPage, AssetListPage, etc.)
+├── plugins/       # Vite/Vue plugin wiring (loading, etc.)
 ├── router/        # Vue Router config
 ├── stores/        # Pinia state stores
 ├── types/         # TypeScript type definitions
 └── utils/         # Helper functions
 ```
+
+## Workspace Dependencies
+
+Imports come from two shared packages under `frontend/packages/`:
+
+| Package | Purpose |
+|---------|---------|
+| `@numina/auth` | Auth store (`useAuthStore`), trusted-device card, login form, axios wiring (`configureAuthHttp`), loading overlay |
+| `@numina/math` | Pure cross-wish reachability + opportunity-cost math. Same exports the child app uses — both apps must produce identical results |
+
+Always import from the package root (`import { useAuthStore } from '@numina/auth'`). Do not reach into `@numina/auth/src/...`.
 
 ## Architecture Flow
 
@@ -100,7 +113,7 @@ showToast('添加成功')
 
 ### Adding New Messages
 
-Add emoji-prefixed string to `src/i18n/locales/zh-CN.ts` + `en-US.ts`, use `t('key')` in Vue file, run `npm run typecheck`.
+Add emoji-prefixed string to `src/i18n/locales/zh-CN.ts` + `en-US.ts`, use `t('key')` in Vue file, run `pnpm typecheck`.
 
 ### Path Alias
 
@@ -138,47 +151,33 @@ This app is **mobile-first**. All design decisions must prioritize the phone vie
 - Spacing scale from `DESIGN.md` applies; prefer `8px`/`12px`/`16px` gutters on mobile over `24px`+
 - Test every component at 375px width before considering it done
 
-## Display Configuration Requirements
+## Display Configuration
 
-Three user-configurable display preferences, all persisted server-side on `User` model and applied via `App.vue` watchers.
+Three user preferences. Language and theme mode are persisted server-side on `User` and applied via `App.vue` watchers; theme color is persisted in `localStorage`. Source UI: `SettingsPage.vue`. Read via `authStore.user` (language/theme) or `localStorage` (theme color) — never call the API directly.
 
-### i18n (Language Switching)
+### i18n (`App.vue` watches `authStore.user?.language`)
 
-**Source:** `App.vue` (watches `authStore.user?.language` → sets `locale.value`), `src/i18n/locales/zh-CN.ts` + `en-US.ts`
+- Every string goes through `t('key')` — including template ternaries and `toLocaleDateString()` calls.
+- Arrays of `t()` labels must be `computed()`; otherwise labels freeze at setup time.
+- Date formatting uses `locale.value` from `useI18n()`, never literal `'zh-CN'`.
+- Language option labels use self-identifying names identical in both locale files (`'🇨🇳 中文'`, `'🇺🇸 English'`).
+- `zh-CN.ts` and `en-US.ts` must stay in lockstep.
 
-**Rules:**
-1. All strings via `t('key')` — no hardcoded text, including template ternaries and `toLocaleDateString()` calls
-2. `zh-CN.ts` and `en-US.ts` must stay in sync
-3. Arrays with `t()` labels must be `computed()` — otherwise labels freeze at setup time
-4. Date formatting must use `locale.value` from `useI18n()`, never hardcode `'zh-CN'`
-5. Language option labels use self-identifying names identical in both locale files (e.g., `'🇨🇳 中文'`, `'🇺🇸 English'`)
+### Dark/Light mode (`App.vue` resolves `User.theme` → `data-theme` attribute)
 
-### Dark/Light Mode (Theme Mode Switching)
+- Use CSS variables from `src/style.css`. Key tokens: `--bg-primary`, `--bg-secondary`, `--card-bg`, `--text-primary`, `--text-secondary`, `--separator`, `--color-canvas`.
+- Dark mode overrides live in `style.css`'s `[data-theme='dark']` block — never `@media (prefers-color-scheme: dark)` in components.
+- Vant adapts automatically via `<van-config-provider>` — do not override Vant colors manually.
+- Test both modes before reporting done.
 
-**Source:** `App.vue` (resolves `User.theme` → sets `data-theme` attribute), `src/style.css` (`:root` + `[data-theme='dark']` tokens)
+### Theme color (`localStorage('theme-primary')` → `--van-primary-color` + `--theme-primary`)
 
-**Rules:**
-1. Use CSS variables from `style.css`, never hardcode colors
-2. Key tokens: `--bg-primary`, `--bg-secondary`, `--card-bg`, `--text-primary`, `--text-secondary`, `--separator`, `--color-canvas`
-3. Dark mode overrides live in `style.css` — no `@media (prefers-color-scheme: dark)` in components
-4. Vant theming is automatic via `<van-config-provider>` — don't manually override Vant colors
-5. Test both modes before reporting done
+- Interactive elements use `var(--van-primary-color)` — never hardcode primary colors.
+- Tinted backgrounds: `rgba(var(--theme-primary-rgb), 0.06)` or `var(--color-soft-stone)`.
+- Dark mode overrides `--van-primary-color` to `#bdbbff` (lavender). Respect this — interactive elements adapt automatically.
+- Predefined colors (any new addition needs WCAG AA contrast): Blue `#007aff`, Purple `#5856d6`, Indigo `#3634a3`, Orange `#ff9500`, Red `#ff3b30`, Pink `#ff2d55`, Green `#248a3d`, Teal `#0071a4`.
 
-### Theme Color (Custom Primary Color)
-
-**Source:** `localStorage('theme-primary')` → sets `--van-primary-color` + `--theme-primary` on `documentElement`
-
-**Rules:**
-1. Interactive elements must use `var(--van-primary-color)` — never hardcode primary colors
-2. Themed backgrounds use light tint: `rgba(var(--theme-primary-rgb), 0.06)` or `var(--color-soft-stone)`
-3. In dark mode, `--van-primary-color` is overridden to `#bdbbff` (lavender) — respect this
-4. Predefined colors: Blue `#007aff`, Purple `#5856d6`, Indigo `#3634a3`, Orange `#ff9500`, Red `#ff3b30`, Pink `#ff2d55`, Green `#248a3d`, Teal `#0071a4` — new colors need WCAG AA contrast
-
-### Cross-Cutting Display Rules
-
-- `SettingsPage.vue` is the single UI for all display preferences
-- Read preferences via `authStore.user` (language/theme) or `localStorage` (theme color) — never from API directly
-- New visual components must use semantic CSS variables; add missing tokens to `style.css` in both `:root` and `[data-theme='dark']`
+When you need a token that doesn't exist yet, add it to `style.css` in both `:root` and `[data-theme='dark']`.
 
 ## Documented Solutions
 

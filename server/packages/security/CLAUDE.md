@@ -35,6 +35,18 @@ uv run pytest packages/security/ -v         # run tests
 - **Don't mix `frontend_auth` and `service_auth`** — they serve different callers with different token formats and trust models.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/security/`.
 
+## Modules
+
+```
+security/
+├── frontend_auth/        # JWT-based auth for browser clients (login, refresh, /me)
+├── service_auth/
+│   └── agent_jwt.py      # Service-to-service token issuance for backend ↔ agent
+└── revoke_jti.py         # Public JTI revocation API (revoke_jti, revoke_all_user_tokens, cleanup_expired_revoked_tokens)
+```
+
+The `RevokedToken` SQLAlchemy model lives under `packages/db/models/revoked_token.py`. Always go through this package's public functions to mutate it.
+
 ## Auth Contexts
 
 | Context | Caller | Token format |

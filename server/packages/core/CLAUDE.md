@@ -35,6 +35,17 @@ uv run pytest packages/core/ -v         # run tests
 - **Don't call `logging.getLogger()`** — use `get_logger(__name__)` instead.
 - **Don't run commands from the package directory** — quality commands must be invoked from `server/`, not from `packages/core/`.
 
+## Modules
+
+| Module | Exports | Purpose |
+|--------|---------|---------|
+| `settings.py` | `settings` (singleton), `Settings` (class) | Loads env vars via pydantic-settings |
+| `logging.py` | `get_logger(__name__)`, `setup_logging()` | Project-wide logger factory + format/rotation |
+| `snowflake.py` | `generate_id()` | Snowflake ID generator (used for primary keys) |
+| `path_manager.py` | `PathManager` | Resolves paths for data/, logs/, config/ across containers |
+| `model_entry.py` | `ModelEntry`, `MODEL_REGISTRY` | LLM model catalogue (provider × model_id × pricing) |
+| `effective_config.py` | helpers | Merge layered config (defaults + env + per-family overrides) |
+
 ## Patterns
 
 ### Settings singleton import

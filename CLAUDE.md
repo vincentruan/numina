@@ -4,46 +4,13 @@ This file provides guidance to AI coding assistants when working with code in th
 
 ## Behavioral Guidelines
 
-### 1. Think Before Coding
+These supersede general defaults in this repo:
 
-Before implementing, state assumptions explicitly. If multiple interpretations exist, present them — don't pick silently. If a simpler approach exists, say so. If something is unclear, stop and ask.
-
-### 2. Simplicity First
-
-Minimum code that solves the problem. Nothing speculative.
-
-- No features beyond what was asked.
-- No abstractions for single-use code.
-- No "flexibility" or "configurability" that wasn't requested.
-- No error handling for impossible scenarios.
-
-Ask: "Would a senior engineer say this is overcomplicated?" If yes, simplify.
-
-### 3. Surgical Changes
-
-Touch only what you must. When editing existing code:
-
-- Don't "improve" adjacent code, comments, or formatting.
-- Don't refactor things that aren't broken.
-- Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it — don't delete it.
-- Remove imports/variables/functions that **your** changes made unused, but leave pre-existing dead code alone.
-
-Every changed line should trace directly to the user's request.
-
-### 4. Goal-Driven Execution
-
-Transform tasks into verifiable goals before starting:
-
-- "Fix the bug" → write a test that reproduces it, then make it pass.
-- "Add validation" → write tests for invalid inputs, then make them pass.
-- "Refactor X" → ensure tests pass before and after.
-
-For multi-step tasks, state a brief plan with explicit verify steps **before coding**.
-
-### 5. Verify Before Claiming Done
-
-Run the module's quality commands and confirm they pass. Do not report a task complete without evidence. "Looks right" is not verification.
+- **State assumptions before coding.** If multiple interpretations of a request exist, present them — don't pick silently.
+- **Surgical changes.** Touch only what the request requires. Don't refactor adjacent code, "improve" formatting, or delete pre-existing dead code. Do remove imports/variables that *your* changes left unused.
+- **Goal-driven verification.** "Fix bug" → reproduce with a failing test, then make it pass. "Refactor X" → tests pass before and after. "Add validation" → invalid-input test first.
+- **No work claimed done without evidence.** Run the module's quality commands (`pytest`, `typecheck`, `ruff check`) and confirm they pass. "Looks right" is not verification.
+- **Never run dev servers from automated agents.** `uvicorn` and `pnpm dev` block indefinitely. Use `pytest` and `typecheck` for verification.
 
 ## Project Overview
 
@@ -58,10 +25,6 @@ Numina (家庭资产可视化) is a privacy-first, self-hosted family asset visu
 | Infrastructure | Docker Compose + Nginx |
 
 ## Known Pitfalls
-
-### Never Run Dev Servers from Automated Agents
-
-Do NOT run `uvicorn`, `npm run dev`, or any long-running process from an agent. These block indefinitely. Use `pytest` and `typecheck` for verification instead.
 
 ### URL Style — No Trailing Slash, No Redirects
 
@@ -124,31 +87,62 @@ For module-specific dev commands, conventions, and patterns:
 
 ## Development Commands
 
-### Frontend (Main App)
+This is a `pnpm` workspace (`pnpm-workspace.yaml`) for the frontend, and a `uv` workspace (single `pyproject.toml` at `server/`) for all Python apps. Use those tools — never `npm install` or `pip install` directly.
+
+### Frontend
 
 ```bash
+# Main app (adult-facing) — http://localhost:5173
 cd frontend/apps/main
-npm run dev          # Dev server — http://localhost:5173 (hot reload)
-npm run test:run     # Run tests once
-npm run typecheck    # Type check before push
+pnpm dev          # Vite dev server, hot reload
+pnpm typecheck    # vue-tsc --noEmit
+pnpm test:run     # vitest run (no watch)
+pnpm lint         # ESLint
+pnpm build        # Production build
+
+# Child app — http://localhost:5174
+cd frontend/apps/child
+pnpm dev
+pnpm typecheck
+pnpm test:run
+
+# Workspace-wide (from frontend/)
+pnpm -r typecheck  # type-check all apps + packages
+pnpm -r test:run   # run vitest in every workspace
 ```
 
-### Backend
+### Server (backend, agent, scheduler_worker — single uv workspace)
+
+Run from `server/`:
 
 ```bash
-cd server/apps/backend
-uv run uvicorn app.main:app --reload --port 8000  # Dev server (hot reload)
-uv run pytest tests/ -v                            # Run tests
-uv run alembic upgrade head                        # Apply migrations
-uv run alembic downgrade -1                        # Rollback last migration
+# Backend API
+uv run uvicorn apps.backend.app.main:app --reload --port 8000
+
+# AI agent
+uv run uvicorn apps.agent.app.main:app --reload --port 8001
+
+# Scheduler worker
+uv run uvicorn apps.scheduler_worker.main:app --reload --port 8002
+
+# Tests + lint + typecheck (scope to a path)
+uv run pytest apps/backend/tests/ -v
+uv run ruff check apps/backend/
+uv run mypy apps/backend/
+
+# Migrations (backend only)
+cd apps/backend
+uv run alembic upgrade head        # apply all pending
+uv run alembic revision --autogenerate -m "description"
+uv run alembic downgrade -1
 ```
 
-### Docker (All Services)
+### Docker (all services)
 
 ```bash
-docker-compose up -d          # Start all services
-docker-compose logs -f        # View logs
+docker-compose up -d          # Start everything (backend + agent + worker + frontend nginx)
+docker-compose logs -f        # Follow logs
 docker-compose up -d --build  # Rebuild after code changes
-docker-compose down           # Stop all services
+docker-compose down           # Stop all
 # Access at http://localhost:8080
 ```

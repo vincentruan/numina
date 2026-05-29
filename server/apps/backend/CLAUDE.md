@@ -75,24 +75,114 @@ JSON output automatically converts IDs to strings:
 JavaScript loses precision for integers > 2^53. Snowflake IDs are 18-19 digits.
 Serializing as strings preserves exact values across the API boundary.
 
+## App Layout
+
+```
+app/
+├── main.py            # FastAPI entry point + router registration (~52 routers)
+├── config.py          # AppSettings (pydantic-settings)
+├── database.py        # SessionLocal binding + dependency
+├── error_handlers.py  # Global exception handlers (HTTPException → JSON envelope)
+├── responses.py       # Shared response helpers
+├── auth/              # JWT helpers, password hashing, dependency-injection guards
+├── routers/           # All HTTP route definitions (one file per resource)
+├── schemas/           # Pydantic request/response models (all extend SnowflakeBase when returning IDs)
+├── models/            # SQLAlchemy ORM models (joined to packages.db.session.Base)
+├── services/          # Business logic above ORM, below routers
+├── middleware/        # request_id, rate_limit, family_context
+├── seed/              # System-category and seed-data loaders (run on startup)
+├── constants/         # Static lookups (categories, currencies, etc.)
+└── utils/             # Shared helpers
+```
+
+Models referenced from `packages/db` (Base inheritance) and from `packages/db/models/` for cross-app entities (currencies, exchange rates, devices, notifications, reminders, audit logs).
+
 ## Router Inventory
 
-| Router | Path prefix | Purpose |
-|--------|-------------|---------|
-| `auth` | `/api/v1/auth` | Login, register, token refresh |
-| `assets` | `/api/v1/assets` | CRUD, batch ops |
-| `liabilities` | `/api/v1/liabilities` | CRUD |
-| `family` | `/api/v1/family` | Invite, members |
+All routers live in `app/routers/` and are mounted with `prefix="/api/v1"` in `app/main.py`. Final paths combine that prefix with the router's own prefix (shown below).
+
+### Core (assets, identity, dashboard)
+
+| Router | Final prefix | Purpose |
+|--------|--------------|---------|
+| `auth` | `/api/v1/auth` | Login, register, refresh, `/me`, family-join |
+| `device` | `/api/v1/auth` | Trusted device + WebAuthn (shares `/auth` prefix) |
+| `family` | `/api/v1/family` | Invite code, member list, transfer ownership |
+| `assets` | `/api/v1/assets` | CRUD + batch + `/{id}/archive` (soft-delete) |
+| `assets_analysis` | `/api/v1` | Asset projection + purchasing-power endpoints |
+| `liabilities` | `/api/v1/liabilities` | CRUD + repayment |
 | `dashboard` | `/api/v1/dashboard` | Overview, trend, allocation |
-| `categories` | `/api/v1/categories` | System category list |
+| `categories` | `/api/v1/categories` | System category list (read-only) |
 | `tags` | `/api/v1/tags` | CRUD |
-| `chores` | `/api/v1/chores` | Child chore tracking |
-| `wishes` | `/api/v1/wishes` | Child wish list |
-| `ai` | `/api/v1/ai` | Chat, capabilities (backend → agent proxy) |
-| `internal` | `/api/v1/internal` | Service-to-service (agent → backend) |
-| `devices` | `/api/v1/devices` | Trusted device management |
-| `exchange_rates` | `/api/v1/exchange-rates` | Currency rates |
-| `audit` | `/api/v1/audit` | Audit log (admin only) |
+| `wishes` | `/api/v1/wishes` | Adult wish list |
+| `currencies` | `/api/v1/currencies` | Currency master + exchange rates |
+
+### Children & gamification
+
+| Router | Final prefix | Purpose |
+|--------|--------------|---------|
+| `children` | `/api/v1/family` | Child profile management (under family) |
+| `chores` | `/api/v1` | Chore tracking + approval flow |
+| `coins` | `/api/v1` | Coin ledger + balance |
+| `child_wishes` | `/api/v1` | Wish list visible to children |
+| `milestones` | `/api/v1` | Milestone unlocks |
+| `treasures` | `/api/v1` | Treasure rewards |
+| `calendar` | `/api/v1` | Family calendar (lunar + Gregorian) |
+| `blind_box` | `/api/v1/blind-box` | Adult-side blind-box config |
+| `child_blind_box` | `/api/v1/child/blind-box` | Child-side blind-box draw |
+| `challenge_grants` | `/api/v1/challenges` + `/api/v1/child/challenges` | Two routers from one file: parent-issue + child-claim |
+
+### Files, import, export, utilities
+
+| Router | Final prefix | Purpose |
+|--------|--------------|---------|
+| `upload` | `/api/v1/upload` | File upload entry |
+| `files` | `/api/v1/files` | File listing + download |
+| `export` | `/api/v1/export` | Family data export |
+| `import_` | `/api/v1/import` | CSV/JSON import |
+| `import_report` | `/api/v1/import` | Import status reports (shares `/import` prefix) |
+| `captcha` | `/api/v1/captcha` | ALTCHA challenge issuance |
+| `activities` | `/api/v1/activities` | Activity feed |
+
+### Notifications & reminders
+
+| Router | Final prefix | Purpose |
+|--------|--------------|---------|
+| `notifications` | `/api/v1/notifications` | User-facing notification inbox |
+| `notification_channels` | `/api/v1/notification-channels` | Channel CRUD (email, webhook, etc.) |
+| `notification_config` | `/api/v1/notification-config` | Per-user channel binding |
+| `reminders` | `/api/v1/reminders` | Smart reminder rules |
+
+### AI (frontend → backend → agent proxy)
+
+| Router | Final prefix | Purpose |
+|--------|--------------|---------|
+| `ai_capabilities` | `/api/v1/ai/capabilities` | Capability discovery |
+| `ai_config` | `/api/v1/ai` | Per-family AI provider config (encrypted at rest) |
+| `ai_chat` | `/api/v1/ai/chat` + `/api/v1/ai` (sessions_router) | Chat + session journal |
+| `ai_report` | `/api/v1/ai/report` | Family report generation |
+| `ai_suggest` | `/api/v1/ai/suggest` | Asset suggestions |
+| `ai_alerts` | `/api/v1/ai/asset-alerts` | Asset aging alerts |
+| `ai_spending_leaks` | `/api/v1/ai/spending-leaks` | Spending leak detection |
+| `ai_disposal` | `/api/v1/ai/disposal-suggestions` | Disposal recommendations |
+| `ai_liability` | `/api/v1/ai/liability-advice` | Liability advice |
+| `ai_allocation` | `/api/v1/ai/allocation-target` | Allocation drift |
+| `ai_time_machine` | `/api/v1/ai` | Time-machine projections |
+| `ai_tasks` | `/api/v1/ai/tasks` | Long-running AI task tracking |
+| `ai_skills` | `/api/v1/ai/skills` | Per-family skill overrides |
+| `ai_mcp` | `/api/v1/ai/mcp` | MCP tool catalogue |
+| `ai_agents` | `/api/v1/ai/agents` | Agent catalogue (frontend) |
+
+### Internal (agent ↔ backend, admin)
+
+| Router | Final prefix | Purpose |
+|--------|--------------|---------|
+| `ai_internal` | `/api/v1/internal` | Agent → backend data access (`X-Agent-Token`) |
+| `ai_agents_internal` | `/api/v1/internal/ai/agents` | Agent → backend (agent-side) |
+| `mcp_internal` | `/api/v1/internal/mcp` | MCP runtime → backend |
+| `admin_ai_extraction` | `/api/v1/admin` | Admin tooling for AI extraction review |
+
+When adding a new router: register it in `app/main.py`, set `prefix=""` for root-path decorators (see §URL Style in root [CLAUDE.md](../../../CLAUDE.md)), and inherit response schemas from `SnowflakeBase`.
 
 ## Patterns
 
