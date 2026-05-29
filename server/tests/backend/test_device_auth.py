@@ -256,8 +256,14 @@ def test_trust_device_reuses_session(client, auth_headers, db):
         headers={"Authorization": auth_headers["Authorization"]},
         cookies={"refresh_token": auth_headers["_refresh_token"]},
     )
+    assert trust_resp1.status_code == 200
     device_id = trust_resp1.json()["data"]["device_id"]
     session_id_1 = trust_resp1.json()["data"]["session_id"]
+
+    # First call rotated the refresh token. Use the new one on the next call,
+    # mirroring how a real browser session would carry forward the new cookie.
+    new_refresh_token = trust_resp1.cookies.get("refresh_token")
+    assert new_refresh_token is not None
 
     # Count sessions before second trust
     count_before = db.query(DeviceSession).filter(
@@ -265,13 +271,13 @@ def test_trust_device_reuses_session(client, auth_headers, db):
         DeviceSession.is_revoked.is_(False),
     ).count()
 
-    # Trust again with same device_id — omit refresh_token cookie so the
-    # already-revoked JTI is not re-inserted into revoked_tokens.
     trust_resp2 = client.post(
         "/api/v1/auth/device/trust",
         json={"device_id": device_id},
         headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": new_refresh_token},
     )
+    assert trust_resp2.status_code == 200
     session_id_2 = trust_resp2.json()["data"]["session_id"]
 
     # Same session row was reused
