@@ -61,9 +61,15 @@ class UserFactory:
         role: str = "owner",
         avatar_color: str = "#4F46E5",
     ) -> tuple[User, bool]:
-        """Returns (user, created). created=False means it already existed."""
+        """Returns (user, created). created=False means it already existed.
+
+        On re-seed (existing user), password is re-hashed to keep it consistent
+        with the seed definition.  This avoids stale credentials when the DB
+        persists across container rebuilds (e.g. bind-mounted SQLite).
+        """
         existing = db.query(User).filter(User.username == username).first()
         if existing:
+            existing.password_hash = _hash(password)
             return existing, False
         user = User(
             id=next_id(),
@@ -89,13 +95,21 @@ class UserFactory:
         pin: str | None = None,
         avatar_color: str = "#FF6B6B",
     ) -> tuple[User, bool]:
-        """Child accounts have role='child', optional username, required password, optional PIN."""
+        """Child accounts have role='child', optional username, required password, optional PIN.
+
+        On re-seed (existing user), password and PIN are re-hashed to keep them
+        consistent with the seed definition.  This avoids stale credentials when
+        the DB persists across container rebuilds (e.g. bind-mounted SQLite).
+        """
         existing = (
             db.query(User)
             .filter(User.family_id == family_id, User.display_name == display_name, User.role == "child")
             .first()
         )
         if existing:
+            existing.password_hash = _hash(password)
+            if pin is not None:
+                existing.pin_hash = _hash(pin)
             return existing, False
         child = User(
             id=next_id(),

@@ -75,6 +75,70 @@ def parse_args():
 SEED_USERNAMES = ["test_empty", "test_asset", "test_rich", "demouser", "demouser_spouse"]
 
 
+# Authoritative credential map for seed accounts. Used to re-sync passwords
+# and PINs on every seed run so stale hashes (e.g. from bind-mounted SQLite
+# that survives `docker compose down -v`) don't block login. Keys are usernames
+# for adults; child entries are matched by (family_owner_username, display_name)
+# since children may have null username.
+_ADULT_CREDENTIALS: dict[str, str] = {
+    "test_empty": "TestEmpty123!",
+    "test_asset": "TestAsset123!",
+    "test_rich": "TestRich123!",
+    "demouser": "DemoPass123",
+    "demouser_spouse": "DemoPass123",
+}
+
+# (owner_username, child_display_name) → (password, pin)
+_CHILD_CREDENTIALS: dict[tuple[str, str], tuple[str, str]] = {
+    ("test_rich", "test_child"): ("TestRich123!", "🐱🐶🌟🌈"),
+    ("demouser", "小宝"): ("DemoPass123", "🐱🐶🌟🌈"),
+    ("demouser", "大宝"): ("DemoPass123", "🐱🐶🌟🌈"),
+}
+
+
+def _sync_seed_credentials(db) -> None:
+    """Re-hash passwords and PINs for known seed accounts.
+
+    Runs before scenarios so that pre-existing rows (e.g. from a bind-mounted
+    SQLite DB that wasn't cleared by `docker compose down -v`) get fresh
+    credential hashes matching the current seed definitions. Skips silently
+    when an account doesn't exist yet — the scenario will create it.
+    """
+    from factories.users import _hash
+
+    print("【Sync】对齐 seed 账号凭据...")
+
+    updated = 0
+    for username, password in _ADULT_CREDENTIALS.items():
+        user = db.query(User).filter(User.username == username).first()
+        if user is None:
+            continue
+        user.password_hash = _hash(password)
+        updated += 1
+
+    for (owner_username, display_name), (password, pin) in _CHILD_CREDENTIALS.items():
+        owner = db.query(User).filter(User.username == owner_username).first()
+        if owner is None or not owner.family_id:
+            continue
+        child = (
+            db.query(User)
+            .filter(
+                User.family_id == owner.family_id,
+                User.display_name == display_name,
+                User.role == "child",
+            )
+            .first()
+        )
+        if child is None:
+            continue
+        child.password_hash = _hash(password)
+        child.pin_hash = _hash(pin)
+        updated += 1
+
+    db.flush()
+    print(f"  [ok] 已对齐 {updated} 个账号的凭据\n")
+
+
 def _reset_seed_accounts(db) -> None:
     """删除所有 seed 账号及其家庭数据，允许场景重新创建。"""
     from sqlalchemy import text
@@ -168,6 +232,10 @@ def main():
         # --reset: 删除所有 seed 账号及其关联数据，让场景重新创建
         if args.reset:
             _reset_seed_accounts(db)
+
+        # 对齐已有 seed 账号的凭据（修复 bind mount 导致的 stale hash）
+        if not args.reset:
+            _sync_seed_credentials(db)
 
         # Part 1: 固定测试账号
         print("【Part 1】固定测试账号\n")
