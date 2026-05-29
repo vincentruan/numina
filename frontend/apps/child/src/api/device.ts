@@ -9,7 +9,7 @@ export interface DeviceCheckResponse {
   user_id?: string
 }
 
-export async function checkDevice(fingerprint: string): Promise<DeviceCheckResponse> {
-  const { data } = await http.post<DeviceCheckResponse>('/auth/device/check', { fingerprint })
+export async function checkDevice(deviceId: string): Promise<DeviceCheckResponse> {
+  const { data } = await http.post<DeviceCheckResponse>('/auth/device/check', { device_id: deviceId })
   return data
 }

@@ -7,14 +7,15 @@
       <div class="step-header">
         <div class="step-title-row">
           <span class="tool-icon">{{ displayIcon }}</span>
-          <span class="step-title">{{ toolDisplayName }}</span>
-          <span class="tool-badge">{{ toolName }}</span>
+          <!-- U4: Show toolType summary during running, otherwise displayName -->
+          <span class="step-title">{{ toolSummary || toolDisplayName }}</span>
+          <span v-if="!toolSummary" class="tool-badge">{{ toolName }}</span>
         </div>
         <span v-if="elapsedMs" class="step-time">{{ formatElapsedMs(elapsedMs) }}</span>
       </div>
 
-      <!-- Args summary -->
-      <div class="step-args" :class="{ 'args-running': status === 'running' }">
+      <!-- Args summary (hide during running for cleaner display) -->
+      <div v-if="status !== 'running'" class="step-args" :class="{ 'args-running': status === 'running' }">
         <span class="args-label">{{ t('aiProcess.argsLabel') }}</span>
         <span class="args-value">{{ argsSummary }}</span>
         <button
@@ -48,10 +49,13 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getToolDisplayInfo, formatArgsSummary, formatResultSummary } from '@/utils/toolDisplayMapping'
 import { truncateJson } from '@/utils/contentTruncator'
+import { getToolSummaryTemplate } from '@/utils/toolTypeRegistry'
 
 const props = defineProps<{
   toolCallId: string
   toolName: string
+  // U4: toolType from backend for differentiated display
+  toolType?: string
   displayName?: string
   icon?: string
   args: Record<string, unknown>
@@ -69,6 +73,14 @@ const showFullArgs = ref(false)
 const displayInfo = computed(() => getToolDisplayInfo(props.toolName, props.displayName, props.icon))
 const toolDisplayName = computed(() => displayInfo.value.displayName)
 const displayIcon = computed(() => displayInfo.value.icon)
+
+// U4: Use toolType for summary during running state
+const toolSummary = computed(() => {
+  if (props.status === 'running' && props.toolType) {
+    return t(getToolSummaryTemplate(props.toolType))
+  }
+  return null
+})
 
 const statusIcon = computed(() => {
   switch (props.status) {

@@ -1,5 +1,6 @@
 """Device session service — trust, list, revoke, rotate."""
 
+import uuid
 from datetime import datetime, timedelta
 
 from sqlalchemy.orm import Session
@@ -35,6 +36,60 @@ def create_device_session(
     db.commit()
     db.refresh(session)
     return session
+
+
+def trust_or_reuse_device(
+    db: Session,
+    *,
+    user_id: int,
+    family_id: int,
+    refresh_jti: str,
+    device_name: str,
+    device_id: str | None,
+) -> tuple[DeviceSession, bool]:
+    """Trust device: reuse active session if same user+device_id, else create new.
+
+    Returns (session, is_new). is_new=False means an existing session was reused.
+    """
+    now = datetime.utcnow()
+    expires_at = now + timedelta(days=30)
+
+    if device_id:
+        existing = (
+            db.query(DeviceSession)
+            .filter(
+                DeviceSession.user_id == user_id,
+                DeviceSession.device_id == device_id,
+                DeviceSession.is_revoked.is_(False),
+                DeviceSession.expires_at > now,
+            )
+            .first()
+        )
+        if existing:
+            existing.refresh_jti = refresh_jti
+            existing.device_name = device_name
+            existing.last_seen_at = now
+            existing.expires_at = expires_at
+            db.commit()
+            db.refresh(existing)
+            return existing, False
+
+    new_device_id = device_id or str(uuid.uuid4())
+    session = DeviceSession(
+        user_id=user_id,
+        family_id=family_id,
+        refresh_jti=refresh_jti,
+        device_name=device_name,
+        device_id=new_device_id,
+        created_at=now,
+        last_seen_at=now,
+        expires_at=expires_at,
+        is_revoked=False,
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
+    return session, True
 
 
 def list_device_sessions(db: Session, *, user_id: int) -> list[DeviceSession]:
@@ -156,7 +211,8 @@ def list_family_device_sessions(
     for session, user in rows:
         result.append(
             {
-                "id": session.id,
+                "session_id": session.id,
+                "device_id": session.device_id,
                 "user_id": session.user_id,
                 "display_name": user.display_name,
                 "avatar_color": user.avatar_color,

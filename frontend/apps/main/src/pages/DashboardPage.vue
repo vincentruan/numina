@@ -88,6 +88,13 @@
         <div v-if="!selectionMode" class="asset-section">
           <div class="section-header">
             <span class="section-title">{{ sectionTitle }}</span>
+            <button
+              class="view-toggle-btn"
+              :aria-label="t('asset.toggleViewMode')"
+              @click="onToggleViewMode"
+            >
+              <van-icon :name="viewMode === 'card' ? 'bars' : 'apps-o'" size="18" />
+            </button>
           </div>
 
           <!-- Sentinel: top of asset list, used to detect when to unfreeze filter bar -->
@@ -268,6 +275,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
+import { updateSettings } from '@/api/auth'
 
 import { getIconId } from '@/utils/icon'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
@@ -284,6 +292,17 @@ const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
+
+async function onToggleViewMode() {
+  const next = viewMode.value === 'card' ? 'list' : 'card'
+  try {
+    await updateSettings({ view_mode: next })
+    await authStore.fetchMe()
+    showToast(next === 'list' ? t('toast.viewSwitchedToList') : t('toast.viewSwitchedToCard'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 
@@ -697,6 +716,26 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.view-toggle-btn:active {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-primary);
+}
+[data-theme='dark'] .view-toggle-btn:active {
+  background: rgba(255, 255, 255, 0.08);
 }
 .asset-list {
   /* cards have their own margin-bottom */

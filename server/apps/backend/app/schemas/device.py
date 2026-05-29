@@ -6,13 +6,15 @@ from apps.backend.app.schemas.base import SnowflakeBase
 
 
 class DeviceTrustResponse(SnowflakeBase):
-    device_id: int
+    session_id: int
+    device_id: str
     device_name: str
     expires_at: datetime
 
 
 class DeviceSessionResponse(SnowflakeBase):
-    id: int
+    session_id: int
+    device_id: str | None
     device_name: str
     created_at: datetime
     last_seen_at: datetime
@@ -21,7 +23,7 @@ class DeviceSessionResponse(SnowflakeBase):
 
 
 class DeviceCheckRequest(BaseModel):
-    fingerprint: str
+    device_id: str
 
 
 class DeviceCheckResponse(BaseModel):
@@ -35,11 +37,12 @@ class DeviceCheckResponse(BaseModel):
 
 
 class DeviceTrustRequest(BaseModel):
-    fingerprint: str | None = None  # optional browser fingerprint
+    device_id: str | None = None
 
 
 class FamilyDeviceResponse(SnowflakeBase):
-    id: int
+    session_id: int
+    device_id: str | None
     user_id: int
     display_name: str
     avatar_color: str

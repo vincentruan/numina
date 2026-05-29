@@ -143,7 +143,7 @@ async function handleDelete(agent: Agent) {
 
 <style scoped>
 .page {
-  padding-bottom: 80px;
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
 
 .hint-text {
@@ -160,11 +160,10 @@ async function handleDelete(agent: Agent) {
 
 .bottom-bar {
   position: fixed;
-  bottom: 0;
+  bottom: calc(50px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   padding: 12px 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background: var(--van-background);
 }
 </style>

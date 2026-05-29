@@ -1,8 +1,10 @@
 /**
- * Browser fingerprint utility for device trust detection.
+ * DEPRECATED: This module is no longer used by the device trust flow.
  *
- * Uses FingerprintJS open-source library for stable device identification.
- * Falls back to localStorage-persisted UUID if FingerprintJS is unavailable.
+ * Device identity now uses a server-issued UUID stored in cookie + localStorage.
+ * See deviceIdentity.ts for the new approach.
+ *
+ * This file is retained for potential future risk-control use.
  */
 
 import FingerprintJS from '@fingerprintjs/fingerprintjs'

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import { showToast } from 'vant'
 import { useAgentStore } from '@/stores/agent'
+import MarkdownEditor from '@/components/common/MarkdownEditor.vue'
 import { getAgent } from '@/api/agent'
 import { getSkillsGrouped } from '@/api/ai'
 import type { AgentCreatePayload, AgentUpdatePayload } from '@/types/agent'
@@ -194,11 +195,8 @@ function toggleSkill(skillId: string) {
     </van-cell-group>
 
     <van-cell-group v-if="!isBuiltin && !isSystemAgent" inset :title="t('agents.form.soulMd')">
-      <van-field
+      <MarkdownEditor
         v-model="form.soul_md"
-        type="textarea"
-        rows="8"
-        autosize
         :placeholder="t('agents.form.soulMdHint')"
       />
     </van-cell-group>
@@ -262,7 +260,7 @@ function toggleSkill(skillId: string) {
 
 <style scoped>
 .page {
-  padding-bottom: 80px;
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
 
 .icon-grid {
@@ -314,11 +312,10 @@ function toggleSkill(skillId: string) {
 
 .bottom-bar {
   position: fixed;
-  bottom: 0;
+  bottom: calc(50px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
   padding: 12px 16px;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background: var(--van-background);
 }
 </style>

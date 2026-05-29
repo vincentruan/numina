@@ -170,7 +170,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
-import { TrustedDeviceCard, getDeviceFingerprint } from '@numina/auth'
+import { TrustedDeviceCard, readDeviceId } from '@numina/auth'
 import { checkDevice } from '@/api/device'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
@@ -217,8 +217,9 @@ const form = ref({
 
 onMounted(async () => {
   try {
-    const fingerprint = await getDeviceFingerprint()
-    const { data } = await checkDevice(fingerprint)
+    const deviceId = readDeviceId()
+    if (!deviceId) return
+    const { data } = await checkDevice(deviceId)
     if (data.trusted && data.temp_token && data.display_name && data.avatar_color) {
       tempToken.value = data.temp_token
       secondFactorType.value = data.second_factor_type ?? 'numeric_pin'

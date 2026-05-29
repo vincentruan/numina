@@ -116,7 +116,9 @@ def test_trust_device_endpoint(client, auth_headers):
     )
     assert response.status_code == 200
     data = response.json()["data"]
+    assert "session_id" in data
     assert "device_id" in data
+    assert len(data["device_id"]) == 36  # UUID v4 format
     assert "device_name" in data
     assert "expires_at" in data
 
@@ -137,6 +139,8 @@ def test_list_devices_endpoint(client, auth_headers):
     devices = response.json()["data"]
     assert isinstance(devices, list)
     assert len(devices) >= 1
+    assert "session_id" in devices[0]
+    assert "device_id" in devices[0]
     assert "device_name" in devices[0]
     assert "is_current" in devices[0]
 
@@ -148,9 +152,9 @@ def test_revoke_device_endpoint(client, auth_headers):
         headers={"Authorization": auth_headers["Authorization"]},
         cookies={"refresh_token": auth_headers["_refresh_token"]},
     )
-    device_id = trust_resp.json()["data"]["device_id"]
+    session_id = trust_resp.json()["data"]["session_id"]
     response = client.delete(
-        f"/api/v1/auth/devices/{device_id}",
+        f"/api/v1/auth/devices/{session_id}",
         headers={"Authorization": auth_headers["Authorization"]},
         cookies={"refresh_token": auth_headers["_refresh_token"]},
     )
@@ -160,8 +164,8 @@ def test_revoke_device_endpoint(client, auth_headers):
         headers={"Authorization": auth_headers["Authorization"]},
         cookies={"refresh_token": auth_headers["_refresh_token"]},
     )
-    ids = [d["id"] for d in list_resp.json()["data"]]
-    assert device_id not in ids
+    ids = [d["session_id"] for d in list_resp.json()["data"]]
+    assert session_id not in ids
 
 
 def test_revoke_all_devices_endpoint(client, auth_headers):
@@ -192,7 +196,7 @@ def test_refresh_rotates_device_session_jti(client, auth_headers, db):
         cookies={"refresh_token": auth_headers["_refresh_token"]},
     )
     assert trust_resp.status_code == 200
-    device_id = trust_resp.json()["data"]["device_id"]
+    session_id = trust_resp.json()["data"]["session_id"]
 
     # Refresh token
     refresh_resp = client.post(
@@ -208,5 +212,100 @@ def test_refresh_rotates_device_session_jti(client, auth_headers, db):
         headers={"Authorization": f"Bearer {new_access_token}"},
     )
     assert list_resp.status_code == 200
-    device_ids = [d["id"] for d in list_resp.json()["data"]]
-    assert device_id in device_ids
+    device_session_ids = [d["session_id"] for d in list_resp.json()["data"]]
+    assert session_id in device_session_ids
+
+
+def test_check_device_trusted(client, auth_headers):
+    """POST /auth/device/check with valid device_id returns trusted=true."""
+    trust_resp = client.post(
+        "/api/v1/auth/device/trust",
+        headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": auth_headers["_refresh_token"]},
+    )
+    device_id = trust_resp.json()["data"]["device_id"]
+
+    check_resp = client.post(
+        "/api/v1/auth/device/check",
+        json={"device_id": device_id},
+    )
+    assert check_resp.status_code == 200
+    data = check_resp.json()["data"]
+    assert data["trusted"] is True
+    assert data["temp_token"] is not None
+    assert data["display_name"] is not None
+
+
+def test_check_device_not_trusted(client):
+    """POST /auth/device/check with unknown device_id returns trusted=false."""
+    check_resp = client.post(
+        "/api/v1/auth/device/check",
+        json={"device_id": "00000000-0000-0000-0000-000000000000"},
+    )
+    assert check_resp.status_code == 200
+    data = check_resp.json()["data"]
+    assert data["trusted"] is False
+
+
+def test_check_device_inactive_user(client, auth_headers, db):
+    """POST /auth/device/check returns trusted=false when the owner is deactivated."""
+    trust_resp = client.post(
+        "/api/v1/auth/device/trust",
+        headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": auth_headers["_refresh_token"]},
+    )
+    device_id = trust_resp.json()["data"]["device_id"]
+
+    user = db.query(User).filter(User.username == "testuser").first()
+    user.is_active = False
+    db.commit()
+
+    check_resp = client.post(
+        "/api/v1/auth/device/check",
+        json={"device_id": device_id},
+    )
+    assert check_resp.status_code == 200
+    data = check_resp.json()["data"]
+    assert data["trusted"] is False
+
+
+def test_trust_device_reuses_session(client, auth_headers, db):
+    """Trust with same device_id reuses existing session (no new row)."""
+    trust_resp1 = client.post(
+        "/api/v1/auth/device/trust",
+        headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": auth_headers["_refresh_token"]},
+    )
+    assert trust_resp1.status_code == 200
+    device_id = trust_resp1.json()["data"]["device_id"]
+    session_id_1 = trust_resp1.json()["data"]["session_id"]
+
+    # First call rotated the refresh token. Use the new one on the next call,
+    # mirroring how a real browser session would carry forward the new cookie.
+    new_refresh_token = trust_resp1.cookies.get("refresh_token")
+    assert new_refresh_token is not None
+
+    # Count sessions before second trust
+    count_before = db.query(DeviceSession).filter(
+        DeviceSession.device_id == device_id,
+        DeviceSession.is_revoked.is_(False),
+    ).count()
+
+    trust_resp2 = client.post(
+        "/api/v1/auth/device/trust",
+        json={"device_id": device_id},
+        headers={"Authorization": auth_headers["Authorization"]},
+        cookies={"refresh_token": new_refresh_token},
+    )
+    assert trust_resp2.status_code == 200
+    session_id_2 = trust_resp2.json()["data"]["session_id"]
+
+    # Same session row was reused
+    assert session_id_1 == session_id_2
+
+    # No new row was created
+    count_after = db.query(DeviceSession).filter(
+        DeviceSession.device_id == device_id,
+        DeviceSession.is_revoked.is_(False),
+    ).count()
+    assert count_after == count_before

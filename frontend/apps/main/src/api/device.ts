@@ -9,18 +9,20 @@ export interface DeviceCheckResponse {
   user_id?: string
 }
 
-export function checkDevice(fingerprint: string) {
-  return http.post<DeviceCheckResponse>('/auth/device/check', { fingerprint })
+export function checkDevice(deviceId: string) {
+  return http.post<DeviceCheckResponse>('/auth/device/check', { device_id: deviceId })
 }
 
 export interface DeviceTrustResponse {
+  session_id: string
   device_id: string
   device_name: string
   expires_at: string
 }
 
 export interface DeviceSession {
-  id: string
+  session_id: string
+  device_id: string | null
   device_name: string
   created_at: string
   last_seen_at: string
@@ -28,16 +30,12 @@ export interface DeviceSession {
   is_current: boolean
 }
 
-export function trustDevice() {
-  return http.post<DeviceTrustResponse>('/auth/device/trust')
-}
-
 export function listDevices() {
   return http.get<DeviceSession[]>('/auth/devices')
 }
 
-export function revokeDevice(deviceId: string) {
-  return http.delete(`/auth/devices/${deviceId}`)
+export function revokeDevice(sessionId: string) {
+  return http.delete(`/auth/devices/${sessionId}`)
 }
 
 export function revokeAllDevices() {
@@ -45,7 +43,8 @@ export function revokeAllDevices() {
 }
 
 export interface FamilyDevice {
-  id: string
+  session_id: string
+  device_id: string | null
   user_id: string
   display_name: string
   avatar_color: string

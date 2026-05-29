@@ -25,7 +25,6 @@
       </van-cell>
       <van-cell :title="t('settings.language')" :value="languageLabel" is-link @click="showLanguagePicker = true" />
       <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" is-link @click="showCurrencyPicker = true" />
-      <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" is-link @click="showViewModePicker = true" />
     </van-cell-group>
 
     <!-- 家庭管理 -->
@@ -69,6 +68,7 @@
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.enableAI')"
         :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
+        icon="flash-o"
       >
         <template #value>
           <van-switch
@@ -84,6 +84,7 @@
       <van-cell :title="t('settings.skillsManage')" icon="star-o" is-link to="/settings/ai/skills" />
       <van-cell
         :title="t('settings.agentsManage')"
+        icon="service-o"
         is-link
         to="/settings/ai/agents"
       />
@@ -126,16 +127,6 @@
       v-model:show="showCurrencyPicker"
       v-model="selectedCurrency"
     />
-
-    <!-- View Mode Picker -->
-    <van-popup v-model:show="showViewModePicker" round position="bottom">
-      <van-picker
-        :columns="viewModeOptions"
-        :model-value="[authStore.user?.view_mode || 'card']"
-        @confirm="onViewModeConfirm"
-        @cancel="showViewModePicker = false"
-      />
-    </van-popup>
 
     <!-- Theme Color Picker -->
     <van-popup v-model:show="showThemeColorPicker" round position="bottom">
@@ -249,7 +240,6 @@ async function onToggleAI(val: boolean) {
 const showThemePicker = ref(false)
 const showLanguagePicker = ref(false)
 const showCurrencyPicker = ref(false)
-const showViewModePicker = ref(false)
 const showThemeColorPicker = ref(false)
 const showTitleDialog = ref(false)
 const editTitleValue = ref('')
@@ -279,11 +269,6 @@ const languageOptions = [
   { text: t('settings.languageEnUS'), value: 'en-US' },
 ]
 
-const viewModeOptions = [
-  { text: t('settings.viewCard'), value: 'card' },
-  { text: t('settings.viewList'), value: 'list' },
-]
-
 const themeLabel = computed(() => {
   const theme = authStore.user?.theme
   if (theme === 'dark') return '🌙 ' + t('settings.themeDark')
@@ -293,10 +278,6 @@ const themeLabel = computed(() => {
 
 const languageLabel = computed(() => {
   return authStore.user?.language === 'en-US' ? t('settings.languageEnUS') : t('settings.languageZhCN')
-})
-
-const viewModeLabel = computed(() => {
-  return authStore.user?.view_mode === 'list' ? t('settings.viewList') : t('settings.viewCard')
 })
 
 async function updateSetting(key: string, value: string) {
@@ -325,11 +306,6 @@ watch(selectedCurrency, (newCurrency) => {
     updateSetting('default_currency', newCurrency)
   }
 })
-
-function onViewModeConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  updateSetting('view_mode', selectedOptions[0].value)
-  showViewModePicker.value = false
-}
 
 function onEditFamilyTitle() {
   if (authStore.user?.role !== 'owner') {

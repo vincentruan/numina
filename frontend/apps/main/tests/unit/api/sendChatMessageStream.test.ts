@@ -47,7 +47,8 @@ describe('sendChatMessageStream — ADV-001 contract', () => {
     expect(body.question).toBe('hello')
     expect(body.agent_id).toBe('numina-agent-id')
     expect(body.deep_think).toBe(false)
-    expect(body.web_search).toBe(false)
+    // U2: web_search removed from payload (smart mode agents decide search behavior)
+    expect(body.web_search).toBeUndefined()
   })
 
   it('omits agent_id from the POST body when agentId is not provided', async () => {
@@ -59,20 +60,23 @@ describe('sendChatMessageStream — ADV-001 contract', () => {
     expect('agent_id' in body).toBe(false)
   })
 
-  it('still sends deep_think and web_search flags alongside agent_id', async () => {
+  it('sends deep_think and reasoning_effort alongside agent_id for smart mode', async () => {
     await sendChatMessageStream(
       'analyze allocation',
       true,
-      true,
+      false,
       undefined,
       undefined,
       'custom-agent-id',
+      'high',
     )
     const [, init] = fetchMock.mock.calls[0]
     const body = JSON.parse(init.body as string)
     expect(body.agent_id).toBe('custom-agent-id')
     expect(body.deep_think).toBe(true)
-    expect(body.web_search).toBe(true)
+    expect(body.reasoning_effort).toBe('high')
+    // U2: web_search removed from payload
+    expect(body.web_search).toBeUndefined()
   })
 
   it('passes sessionId via X-Thread-Id header regardless of agentId', async () => {
