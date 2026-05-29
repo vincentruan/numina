@@ -103,11 +103,8 @@ def trust_device(
     child_refresh_token_cookie: str | None = Cookie(None, alias=CHILD_REFRESH_TOKEN_COOKIE),
     db: Session = Depends(get_db),
 ):
-    """Trust the current device — issue 30-day refresh token and create DeviceSession.
-
-    Optionally accepts a browser fingerprint to enable fingerprint-based device detection.
-    """
-    body_fingerprint: str | None = body.fingerprint if body else None
+    """Trust the current device — issue 30-day refresh token and create/reuse DeviceSession."""
+    body_device_id: str | None = body.device_id if body else None
     payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
     user_id = int(payload["sub"])
     family_id = int(payload["fid"])
@@ -129,13 +126,23 @@ def trust_device(
         revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 3600)
 
     device_name = _parse_device_name(request)
-    session = device_service.create_device_session(
+    session, _is_new = device_service.trust_or_reuse_device(
         db,
         user_id=user_id,
         family_id=family_id,
         refresh_jti=new_jti,
         device_name=device_name,
-        browser_fingerprint=body_fingerprint,
+        device_id=body_device_id,
+    )
+
+    # Set device_id cookie — not httpOnly so JS can read it for /device/check
+    response.set_cookie(
+        key="numina_device_id",
+        value=session.device_id,
+        max_age=30 * 24 * 3600,
+        secure=settings.ENVIRONMENT == "production",
+        samesite="lax",
+        path="/",
     )
 
     cookie_name = CHILD_REFRESH_TOKEN_COOKIE if role == "child" else REFRESH_TOKEN_COOKIE
@@ -150,7 +157,8 @@ def trust_device(
     )
 
     return DeviceTrustResponse(
-        device_id=session.id,
+        session_id=session.id,
+        device_id=session.device_id,
         device_name=session.device_name,
         expires_at=session.expires_at,
     )
@@ -174,7 +182,8 @@ def list_devices(
     sessions = device_service.list_device_sessions(db, user_id=user_id)
     return [
         DeviceSessionResponse(
-            id=s.id,
+            session_id=s.id,
+            device_id=s.device_id,
             device_name=s.device_name,
             created_at=s.created_at,
             last_seen_at=s.last_seen_at,
@@ -185,9 +194,9 @@ def list_devices(
     ]
 
 
-@router.delete("/devices/{device_id}")
+@router.delete("/devices/{session_id}")
 def revoke_device(
-    device_id: str,
+    session_id: str,
     request: Request,
     response: Response,
     access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
@@ -202,7 +211,7 @@ def revoke_device(
     role = payload["role"]
 
     session = device_service.revoke_device_session(
-        db, device_id=int(device_id), user_id=user_id
+        db, device_id=int(session_id), user_id=user_id
     )
     revoke_jti(session.refresh_jti, ttl_seconds=30 * 24 * 3600)
 
@@ -246,11 +255,7 @@ def check_device(
     req: DeviceCheckRequest,
     db: Session = Depends(get_db),
 ):
-    """Check if a device fingerprint is trusted. No auth required — used before login.
-
-    When trusted, loads the associated user and returns a temp_token so the
-    frontend can skip Step 1 of the two-step login flow entirely.
-    """
+    """Check if a device_id is trusted. No auth required — used before login."""
     from datetime import datetime
 
     from apps.backend.app.auth.deps import create_temp_token
@@ -261,7 +266,7 @@ def check_device(
     session = (
         db.query(DeviceSession)
         .filter(
-            DeviceSession.browser_fingerprint == req.fingerprint,
+            DeviceSession.device_id == req.device_id,
             DeviceSession.is_revoked.is_(False),
             DeviceSession.expires_at > now,
         )
@@ -279,8 +284,6 @@ def check_device(
 
     temp_token = create_temp_token(user.id, user.role)
 
-    # Determine second factor type correctly for children (who use pin_hash)
-    # vs adults (who use configured second_factor_type)
     if user.role == "child" and user.pin_hash:
         second_factor_type = "emoji_pin"
     elif user.second_factor_enabled and user.second_factor_type:
