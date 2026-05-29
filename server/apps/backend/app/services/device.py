@@ -3,6 +3,7 @@
 import uuid
 from datetime import datetime, timedelta
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.errors import AppError, ErrorCode
@@ -63,6 +64,7 @@ def trust_or_reuse_device(
                 DeviceSession.is_revoked.is_(False),
                 DeviceSession.expires_at > now,
             )
+            .with_for_update()
             .first()
         )
         if existing:
@@ -75,6 +77,18 @@ def trust_or_reuse_device(
             return existing, False
 
     new_device_id = device_id or str(uuid.uuid4())
+
+    # Revoke expired-but-not-revoked sessions for same user+device so the
+    # partial unique index (WHERE is_revoked = FALSE) doesn't block the insert.
+    if new_device_id:
+        db.query(DeviceSession).filter(
+            DeviceSession.user_id == user_id,
+            DeviceSession.device_id == new_device_id,
+            DeviceSession.is_revoked.is_(False),
+            DeviceSession.expires_at <= now,
+        ).update({"is_revoked": True}, synchronize_session="fetch")
+        db.flush()
+
     session = DeviceSession(
         user_id=user_id,
         family_id=family_id,
@@ -86,8 +100,25 @@ def trust_or_reuse_device(
         expires_at=expires_at,
         is_revoked=False,
     )
-    db.add(session)
-    db.commit()
+    try:
+        db.add(session)
+        db.commit()
+    except IntegrityError:
+        # Concurrent trust won the race — load the winning session instead.
+        db.rollback()
+        existing = (
+            db.query(DeviceSession)
+            .filter(
+                DeviceSession.user_id == user_id,
+                DeviceSession.device_id == new_device_id,
+                DeviceSession.is_revoked.is_(False),
+                DeviceSession.expires_at > now,
+            )
+            .first()
+        )
+        if existing:
+            return existing, False
+        raise
     db.refresh(session)
     return session, True
 
