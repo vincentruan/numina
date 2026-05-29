@@ -32,6 +32,9 @@ export {
 // Device fingerprint
 export { getDeviceFingerprint } from './utils/fingerprint'
 
+// Device identity (replaces fingerprint-based device trust)
+export { readDeviceId, writeDeviceId, clearDeviceId } from './utils/deviceIdentity'
+
 // Stores
 export { useAuthStore } from './stores/auth'
 export { useChildAuthStore, CHILD_AUTH_ERROR } from './stores/childAuth'
