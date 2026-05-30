@@ -12,6 +12,58 @@ Session memory injection:
   reload_app_config() resets the global config for a different family.
 - All families share one checkpointer instance; DeerFlow namespaces state by
   thread_id so family isolation is maintained at the conversation level.
+
+Deep-think → provider effort mapping
+------------------------------------
+The frontend exposes a single boolean ``deep_think`` toggle. DeerFlow 2 selects
+between two pre-built sub-configs based on that boolean:
+
+- ``deep_think=True``  → ``model.when_thinking_enabled``  (high-effort path)
+- ``deep_think=False`` → ``model.when_thinking_disabled`` (low-effort path)
+
+Provider-specific contracts (verified against context7 official docs, 2026):
+
+- **DeepSeek R1** — thinking is intrinsic to the model. Both branches set
+  ``extra_body.thinking.{type: enabled|disabled}`` per the DeerFlow CONFIGURATION.md
+  example. DeepSeek still emits reasoning_content even when disabled (a model-level
+  behaviour we cannot turn off).
+
+- **OpenAI-compatible vendors via OpenAI Chat Completions endpoint** (GLM/Qwen/QwQ
+  on DashScope, Novita, Together, vLLM, etc.) — accept ``extra_body.enable_thinking``
+  boolean as a vendor extension. Verified against DeerFlow 2 vLLM example
+  (``chat_template_kwargs.enable_thinking``) and Novita example (``thinking.type``).
+
+- **Native OpenAI** (gpt-5*, o-series) — does NOT accept ``enable_thinking``. The
+  reasoning effort is a top-level parameter (``reasoning_effort: 'low' | 'medium'
+  | 'high'``) on the Chat Completions / Responses APIs; DeerFlow harness reads
+  ``supports_reasoning_effort: true`` on the model entry and emits the correct
+  shape automatically. Source: openai-python ChatCompletionReasoningEffort,
+  DeerFlow CONFIGURATION.md "Codex CLI" example.
+
+- **Anthropic Claude (native Messages API)** — uses ``thinking.type=enabled``
+  with ``budget_tokens`` (extended thinking). Verified against
+  anthropic-sdk-python `examples/thinking.py`. Budget is now computed as a
+  fraction (60% high-effort) of the resolved max_tokens via
+  ``_compute_anthropic_thinking_budget`` so it adapts to per-model output
+  ceilings (Sonnet 4 → 64K, Haiku 4 → 8K, etc.). When the resolved budget
+  cannot satisfy Anthropic's constraints (>=1024, <max_tokens), the branch
+  gracefully degrades to ``thinking.type=disabled``.
+  ``ANTHROPIC_LOW_EFFORT_FRACTION`` is reserved for a future low-effort tier
+  (Anthropic SDK 2026 also exposes beta ``output_config.effort: "low"``).
+
+max_tokens resolution
+----------------------
+The model entry's ``max_tokens`` field is set by ``_resolve_max_tokens`` with
+three-tier priority:
+  1. ``ai_config['max_tokens']`` — user-set in the DB ``ai_providers`` row
+  2. ``system-config.yaml`` prefix-matched default (per ``packages.core.system_config``)
+  3. ``None`` — key is omitted; SDK / vendor defaults take over
+
+Status (2026-05-31):
+  Native OpenAI now opts into the Responses API (``use_responses_api: true``
+  + ``output_version: responses/v1``) per DeerFlow 2 README's
+  ``gpt-5-responses`` recipe. OpenAI-compatible gateways stay on Chat
+  Completions (no Responses support upstream).
 """
 
 import atexit
@@ -29,7 +81,74 @@ from typing import Any
 from deerflow.client import DeerFlowClient
 from deerflow.config.app_config import reload_app_config
 
+from packages.core.system_config import get_max_tokens_default
+
 logger = logging.getLogger(__name__)
+
+# Anthropic extended-thinking budget tokens are computed as a fraction of
+# the model's per-response max_tokens. Anthropic API constraints (verified
+# via context7 against anthropic-sdk-python `examples/thinking.py` and the
+# ModelInfo schema):
+#   - budget_tokens >= 1024  (hard minimum)
+#   - budget_tokens <  max_tokens  (must leave room for visible output)
+#
+# Sources:
+#   - anthropic-sdk-python `examples/thinking.py` (budget=1600, max=3200 → 50%)
+#   - simonw/llm-anthropic README (32000 for complex tasks)
+# DeerFlow 2 itself does not prescribe a default; we pick conservative
+# fractions that work for both small (Haiku 8K) and large (Sonnet 4 64K)
+# response budgets.
+ANTHROPIC_BUDGET_MIN_TOKENS = 1024  # API hard minimum
+ANTHROPIC_HIGH_EFFORT_FRACTION = 0.60  # deep_think=True → 60% of max_tokens
+ANTHROPIC_LOW_EFFORT_FRACTION = 0.25  # reserved for future low-effort tier (not yet wired)
+# Headroom keeps visible output from being crowded out by reasoning tokens:
+ANTHROPIC_BUDGET_OUTPUT_HEADROOM_TOKENS = 256
+# Fallback when the resolved max_tokens is None (model not in yaml table and
+# user did not set it). Matches DeerFlow 2 `claude-sonnet-4.6` example value.
+ANTHROPIC_FALLBACK_MAX_TOKENS = 4096
+
+
+def _resolve_max_tokens(ai_config: dict[str, Any]) -> int | None:
+    """Resolve the effective ``max_tokens`` for a family's AI config.
+
+    Three-tier priority:
+      1. ``ai_config['max_tokens']``   — user-set in DB ai_providers row
+      2. ``system-config.yaml`` prefix-matched default (via packages.core.system_config)
+      3. ``None``                       — caller should NOT emit max_tokens in the
+                                          model entry yaml; SDK / vendor defaults take over.
+    """
+    explicit = ai_config.get("max_tokens")
+    if isinstance(explicit, int) and explicit > 0:
+        return explicit
+    model_id = (ai_config.get("ai_model_id") or "").strip()
+    return get_max_tokens_default(model_id)
+
+
+def _compute_anthropic_thinking_budget(
+    max_tokens: int,
+    fraction: float,
+) -> int | None:
+    """Compute Anthropic ``budget_tokens`` for the given max_tokens / fraction.
+
+    Returns ``None`` when ``max_tokens`` is too small to satisfy both
+    ``budget >= ANTHROPIC_BUDGET_MIN_TOKENS`` and ``budget < max_tokens`` —
+    caller must fall back to ``thinking.type=disabled``.
+
+    Algorithm::
+
+        raw    = floor(max_tokens * fraction)
+        capped = min(raw, max_tokens - ANTHROPIC_BUDGET_OUTPUT_HEADROOM_TOKENS)
+        if capped < ANTHROPIC_BUDGET_MIN_TOKENS:
+            return None
+        return capped
+    """
+    if max_tokens <= 0 or fraction <= 0:
+        return None
+    raw = int(max_tokens * fraction)
+    capped = min(raw, max_tokens - ANTHROPIC_BUDGET_OUTPUT_HEADROOM_TOKENS)
+    if capped < ANTHROPIC_BUDGET_MIN_TOKENS:
+        return None
+    return capped
 
 # Safe ID pattern for family_id validation (prevents path traversal)
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
@@ -190,18 +309,25 @@ def _generate_temp_config(
         thinking_supported = bool(ai_config.get("thinking_supported", False))
 
     # Select appropriate LangChain model class based on provider and thinking support.
-    # DeerFlow provides patched model classes for specific providers that handle
-    # reasoning_content extraction from streaming deltas correctly.
+    # DeerFlow provides patched model classes for vendor-specific reasoning_content
+    # extraction. Native OpenAI uses the stock class because reasoning is delivered
+    # via standard top-level fields (not vendor reasoning_content streams).
     if thinking_supported:
         if "deepseek" in model_id.lower():
             # DeepSeek R1 requires patched class for reasoning content
             use_class = "deerflow.models.patched_deepseek:PatchedChatDeepSeek"
+        elif provider == "openai" and not base_url:
+            # Native OpenAI: stock ChatOpenAI; reasoning effort flows through
+            # supports_reasoning_effort (configured below).
+            use_class = "langchain_openai:ChatOpenAI"
         elif provider in ("openai", "openai_compatible"):
-            # OpenAI-compatible models (GLM-5, Qwen3, QwQ, etc.) that support thinking
+            # OpenAI-compatible vendors (GLM-5, Qwen3, QwQ via DashScope/Novita/vLLM)
+            # need the patched class to capture reasoning_content from vendor-specific
+            # streaming deltas.
             use_class = "deerflow.models.patched_openai:ReasoningChatOpenAI"
         elif provider == "anthropic":
-            # Anthropic-compatible endpoint (including DashScope GLM/Qwen via /anthropic).
-            # The adapter handles both reasoning_content and Anthropic thinking content blocks.
+            # Native Anthropic; reasoning lives in `thinking` content blocks which
+            # langchain-anthropic already handles.
             use_class = "langchain_anthropic:ChatAnthropic"
         else:
             use_class = provider_class_map.get(provider, "langchain_openai:ChatOpenAI")
@@ -217,37 +343,85 @@ def _generate_temp_config(
         "supports_thinking": thinking_supported,
     }
 
-    # Configure when_thinking_enabled/disabled according to DeerFlow2 spec.
-    # Different model families require different extra_body structures.
+    # Resolve max_tokens with three-tier priority: user (DB) > yaml prefix > None.
+    # When None, we deliberately omit the key so DeerFlow / SDK / vendor defaults
+    # take over (some vendors — DashScope notably — recommend not pre-setting it).
+    resolved_max_tokens = _resolve_max_tokens(ai_config)
+    if resolved_max_tokens is not None:
+        model_entry["max_tokens"] = resolved_max_tokens
+
+    # Native OpenAI: opt into the Responses API path (DeerFlow 2 README's
+    # `gpt-5-responses` recipe). The harness then emits `reasoning.effort`
+    # (Responses-style nested) instead of top-level `reasoning_effort` and
+    # ships output_version=responses/v1 for stable LangChain output shapes.
+    # OpenAI-compatible vendors (DashScope/Novita/vLLM, etc.) do NOT support
+    # Responses API — they stay on Chat Completions, identified by base_url.
+    if provider == "openai" and not base_url:
+        model_entry["use_responses_api"] = True
+        model_entry["output_version"] = "responses/v1"
+
+    # Configure when_thinking_enabled/disabled per provider contract.
+    # Provider-specific contracts verified against context7 official docs (2026):
+    # - DeepSeek R1: extra_body.thinking.type
+    # - OpenAI-compatible vendors (GLM/Qwen/QwQ via DashScope/Novita/vLLM): extra_body.enable_thinking
+    # - Native OpenAI (gpt-5/o-series): top-level reasoning_effort via supports_reasoning_effort
+    # - Anthropic Claude: thinking.type + budget_tokens
     if thinking_supported:
         if "deepseek" in model_id.lower():
-            # DeepSeek R1 uses 'thinking.type: enabled' format
             model_entry["when_thinking_enabled"] = {
                 "extra_body": {"thinking": {"type": "enabled"}}
             }
             model_entry["when_thinking_disabled"] = {
                 "extra_body": {"thinking": {"type": "disabled"}}
             }
+        elif provider == "openai" and not base_url:
+            # Native OpenAI endpoint — use the documented top-level reasoning_effort.
+            # DeerFlow 2 reads supports_reasoning_effort and emits the right shape
+            # (Chat Completions: top-level `reasoning_effort`; Responses API:
+            # `reasoning.effort` after enabling use_responses_api).
+            model_entry["supports_reasoning_effort"] = True
+            model_entry["when_thinking_enabled"] = {"reasoning_effort": "high"}
+            model_entry["when_thinking_disabled"] = {"reasoning_effort": "low"}
         elif provider in ("openai", "openai_compatible"):
-            # OpenAI-compatible models (GLM-5, Qwen3, QwQ, etc.) use 'enable_thinking' flag.
-            # Includes models accessed via Anthropic-compatible endpoints (DashScope).
+            # OpenAI-compatible vendors (GLM-5, Qwen3, QwQ, etc. via DashScope,
+            # Novita, Together, vLLM) accept extra_body.enable_thinking as a
+            # vendor extension. This branch matches `provider=openai` with a
+            # custom base_url and `provider=openai_compatible`.
             model_entry["when_thinking_enabled"] = {
                 "extra_body": {"enable_thinking": True}
             }
-            # Explicitly disable thinking when deep_think=false to prevent
-            # spurious reasoning_content in streaming responses
             model_entry["when_thinking_disabled"] = {
                 "extra_body": {"enable_thinking": False}
             }
         elif provider == "anthropic":
-            # Native Anthropic Claude models use the thinking parameter directly.
-            # Note: GLM/Qwen models accessed via an Anthropic-compatible endpoint
-            # (e.g. DashScope /apps/anthropic) do NOT support thinking this way —
-            # they require provider="openai_compatible" with the OpenAI-compatible
-            # endpoint and enable_thinking=true in extra_body.
-            model_entry["when_thinking_enabled"] = {
-                "thinking": {"type": "enabled", "budget_tokens": 10000}
-            }
+            # Native Anthropic Claude Messages API. Compute budget_tokens as a
+            # fraction of the resolved max_tokens. Anthropic enforces:
+            #   budget_tokens >= 1024  AND  budget_tokens < max_tokens
+            # If max_tokens is too small for both constraints, gracefully fall
+            # back to thinking.type=disabled so deep_think still goes through
+            # without an API error (user perception: "thinking didn't engage").
+            budget_max = resolved_max_tokens or ANTHROPIC_FALLBACK_MAX_TOKENS
+            high_budget = _compute_anthropic_thinking_budget(
+                budget_max, ANTHROPIC_HIGH_EFFORT_FRACTION
+            )
+            if high_budget is None:
+                logger.info(
+                    "anthropic max_tokens=%s too small for budget>=%s with %.0f%% fraction; "
+                    "falling back to thinking.type=disabled",
+                    budget_max,
+                    ANTHROPIC_BUDGET_MIN_TOKENS,
+                    ANTHROPIC_HIGH_EFFORT_FRACTION * 100,
+                )
+                model_entry["when_thinking_enabled"] = {
+                    "thinking": {"type": "disabled"}
+                }
+            else:
+                model_entry["when_thinking_enabled"] = {
+                    "thinking": {
+                        "type": "enabled",
+                        "budget_tokens": high_budget,
+                    }
+                }
             model_entry["when_thinking_disabled"] = {
                 "thinking": {"type": "disabled"}
             }

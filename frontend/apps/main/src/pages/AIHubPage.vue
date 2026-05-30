@@ -295,8 +295,8 @@ const recipientPickerHint = computed(() =>
 )
 
 // Default the recipient to 数鸣 once the agent store finishes loading.
-// Fall back to ai-assistant, then any other system agent if 数鸣 isn't seeded
-// (defensive — 数鸣 should always exist after migration b6745e8a2c14).
+// Defensive fallback: any other enabled system agent (e.g. time-machine), then
+// any enabled custom agent. 数鸣 should always exist after migration b6745e8a2c14.
 watch(
   () => [agentStore.systemAgents, agentStore.customAgents] as const,
   () => {

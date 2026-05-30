@@ -1,0 +1,140 @@
+# numina 系统级配置（不常变项）
+#
+# 与 .env / docker-compose.yml 同级。本文件维护"系统不常变配置"——
+# 主要是各厂商模型规格元数据（max_tokens 等）。
+#
+# 与其他配置层的边界：
+# - .env / settings.py        : 环境密钥与运行时参数（每环境差异大）
+# - DB ai_providers 表        : 用户 family 级配置（运行时可变）
+# - system-config.yaml (本文件): 系统级元数据（多环境共用，运维改后需重启）
+# - system-config.local.yaml  : 部署方按需覆盖（不进 git，由 .gitignore 忽略）
+#
+# 数据时间戳：2026-05-31，通过厂商官方文档 + 联网验证。
+# 维护者：当各厂商发布新模型或调整输出上限时更新本文件。
+
+ai_models:
+  # 输出 token 上限默认值（max_tokens 字段）。
+  # 用户在前端"AI 模型提供商"表单的 max_tokens 字段留空时，
+  # 后端按 model_id 前缀匹配此表，并通过 GET /api/v1/ai/providers/defaults
+  # 端点把推断值回写到表单（用户可改）。
+  #
+  # 命中顺序敏感：更长前缀放前面，避免被短前缀提前匹配。
+  # 未命中前缀 → 用户必须显式填，否则 emit yaml 不写 max_tokens 键
+  #             → SDK / 服务端默认接管。
+  max_tokens_defaults_by_prefix:
+    # ── OpenAI GPT-5 / o-series（2025 大幅扩容） ──
+    - prefix: gpt-5
+      max_tokens: 128000
+      note: GPT-5 / 5.1 / 5.2 / Codex 全 128K (openai.com/api 官方)
+    - prefix: o1-pro
+      max_tokens: 100000
+    - prefix: o1-mini
+      max_tokens: 65536
+    - prefix: o1
+      max_tokens: 100000
+    - prefix: o3
+      max_tokens: 100000
+    - prefix: o4
+      max_tokens: 100000
+
+    # ── OpenAI 常规 ──
+    - prefix: gpt-4o
+      max_tokens: 4096
+    - prefix: gpt-4-
+      max_tokens: 4096
+    - prefix: gpt-4
+      max_tokens: 4096
+    - prefix: gpt-3.5
+      max_tokens: 4096
+
+    # ── Anthropic Claude 4 系列（2025 升级到 64K） ──
+    - prefix: claude-opus-4
+      max_tokens: 64000
+    - prefix: claude-sonnet-4
+      max_tokens: 64000
+    - prefix: claude-haiku-4
+      max_tokens: 8192
+
+    # ── Claude 3.x 系列 ──
+    - prefix: claude-3-7
+      max_tokens: 8192
+      note: 8K base; 128K 需 'output-128k-2025-02-19' header（本系统不带）
+    - prefix: claude-3-5
+      max_tokens: 8192
+    - prefix: claude-haiku
+      max_tokens: 4096
+    - prefix: claude-3-opus
+      max_tokens: 4096
+    - prefix: claude
+      max_tokens: 8192
+
+    # ── DeepSeek（API 接受更高但官方建议保守） ──
+    - prefix: deepseek-reasoner
+      max_tokens: 8192
+      note: API 接受 32K 但官方建议 ≤8K (AWS Bedrock model card)
+    - prefix: deepseek-chat
+      max_tokens: 8192
+    - prefix: deepseek
+      max_tokens: 8192
+
+    # ── 阿里 Qwen / 通义 ──
+    - prefix: qwen3-max
+      max_tokens: 66000
+      note: Alibaba 官方规格 (cloudprice.net)
+    - prefix: qwen3
+      max_tokens: 8192
+    - prefix: qwen2.5
+      max_tokens: 8192
+    - prefix: qwen2
+      max_tokens: 8192
+    - prefix: qwen-max
+      max_tokens: 8192
+    - prefix: qwen-plus
+      max_tokens: 8192
+    - prefix: qwen-turbo
+      max_tokens: 8192
+    - prefix: qwen
+      max_tokens: 8192
+    - prefix: qwq
+      max_tokens: 8192
+
+    # ── Moonshot Kimi ──
+    - prefix: kimi-k2
+      max_tokens: 16384
+    - prefix: moonshot-v1
+      max_tokens: 16384
+    - prefix: moonshot
+      max_tokens: 16384
+    - prefix: kimi
+      max_tokens: 16384
+
+    # ── 智谱 GLM ──
+    - prefix: glm-4-6
+      max_tokens: 128000
+      note: GLM-4.6 官方 128K (cometapi.com)
+    - prefix: glm-4.6
+      max_tokens: 128000
+    - prefix: glm-4-5
+      max_tokens: 16384
+    - prefix: glm-4.5
+      max_tokens: 16384
+    - prefix: glm-4
+      max_tokens: 8192
+    - prefix: glm
+      max_tokens: 8192
+
+    # ── MiniMax ──
+    - prefix: MiniMax-M2
+      max_tokens: 4096
+    - prefix: minimax
+      max_tokens: 4096
+
+    # ── Google Gemini（如经 OpenAI-compatible 接入） ──
+    - prefix: gemini-3
+      max_tokens: 128000
+    - prefix: gemini-2.5
+      max_tokens: 65536
+    - prefix: gemini-2
+      max_tokens: 8192
+    - prefix: gemini
+      max_tokens: 8192

@@ -38,6 +38,15 @@ except ImportError:
     _select_model = None
 
 
+# IDs for system agents seeded by alembic migrations.
+# numina is the brand-primary system agent (b6745e8a2c14_demote_builtin_agents_seed_numina).
+# ai-assistant was the legacy chat-only system agent (a53453cf574b_unified_agent_model)
+# and is removed by the follow-up migration. Requests pinned to the legacy ID
+# fall back to numina so old client links keep working.
+_NUMINA_AGENT_ID: int = 100000000000005
+_LEGACY_AI_ASSISTANT_AGENT_ID: int = 100000000000003
+
+
 # ── Tool registry: tool_name → (tool_type, display_name, icon) ──────────────
 # Backend is the source of truth for these mappings; the frontend only owns
 # summary template text. Add new entries here when introducing a tool.
@@ -186,6 +195,7 @@ async def stream_agent_dispatch(
     thread_id: str | None,
     message: str,
     enable_thinking: bool = False,
+    web_search: bool = False,
     reasoning_effort: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Agent-first execution entry point. Streams NDJSON events."""
@@ -195,15 +205,29 @@ async def stream_agent_dispatch(
         capability_id=f"agent-{agent_id}", task_id=task_id
     )
 
-    # 1. Fetch agent config
+    # 1. Fetch agent config — fall back to numina when legacy ai-assistant ID is requested.
     client = BackendClient(family_id)
     try:
         agent_config = await client.get_agent_config(agent_id)
     except Exception as e:
-        yield builder_events.error(
-            f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR"
-        ).to_ndjson()
-        return
+        if agent_id == _LEGACY_AI_ASSISTANT_AGENT_ID:
+            logger.info(
+                "agent_id=%s removed; falling back to numina (id=%s)",
+                agent_id,
+                _NUMINA_AGENT_ID,
+            )
+            try:
+                agent_config = await client.get_agent_config(_NUMINA_AGENT_ID)
+            except Exception as fallback_err:
+                yield builder_events.error(
+                    f"获取智能体配置失败: {fallback_err}", code="AGENT_CONFIG_ERROR"
+                ).to_ndjson()
+                return
+        else:
+            yield builder_events.error(
+                f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR"
+            ).to_ndjson()
+            return
 
     if not agent_config.get("is_enabled", True):
         yield builder_events.error("智能体已禁用", code="AGENT_DISABLED").to_ndjson()
@@ -340,7 +364,21 @@ async def stream_agent_dispatch(
     # references the same step the .call event opened.
     tool_call_id_map: dict[str, str] = {}
 
-    state = {"messages": [{"role": "user", "content": message}]}
+    # Inject web_search behavioural guidance as a system message prefix so the
+    # LLM knows whether it may rely on its tools / pretend to search. Mirrors
+    # chat_adapter.py:92-96 — same wording, same stance, kept inline rather
+    # than extracted because two short occurrences don't justify a shared module.
+    web_search_guidance = (
+        "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+        if web_search
+        else "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+    )
+    state = {
+        "messages": [
+            {"role": "system", "content": f"## 联网搜索\n\n{web_search_guidance}"},
+            {"role": "user", "content": message},
+        ]
+    }
 
     try:
         async for event in agent_graph.astream(state, runnable_config):

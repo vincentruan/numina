@@ -396,6 +396,7 @@
       <AIChatInput
         v-model="inputText"
         v-model:mode="chatMode"
+        v-model:web-search="webSearch"
         :disabled="asking"
         :loading="asking || connecting"
         :show-clear="messages.length > 0"
@@ -622,19 +623,15 @@ const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
 const connectingSeconds = ref(0)
-// U5: 2-tier mode replaces deepThink/webSearch dual booleans.
-// "normal" → no extended thinking, no web search.
-// "smart_light" → deep_think=true, web_search omitted (agent decides), reasoning_effort=low.
-// "smart_full"  → deep_think=true, web_search=true, reasoning_effort=high.
-type ChatMode = 'normal' | 'smart_light' | 'smart_full'
+// 2-state deep-think + independent web-search toggle.
+// "normal"  → no extended thinking; reasoning_effort=low.
+// "smart"   → deep_think=true; reasoning_effort=high.
+// webSearch is orthogonal — independent boolean.
+type ChatMode = 'normal' | 'smart'
 const chatMode = ref<ChatMode>('normal')
-const deepThink = computed(() => chatMode.value !== 'normal')
-const webSearch = computed(() => chatMode.value === 'smart_full')
-const reasoningEffort = computed<'low' | 'medium' | 'high'>(() => {
-  if (chatMode.value === 'smart_light') return 'low'
-  if (chatMode.value === 'smart_full') return 'high'
-  return 'medium'
-})
+const webSearch = ref<boolean>(false)
+const deepThink = computed(() => chatMode.value === 'smart')
+const reasoningEffort = computed<'low' | 'high'>(() => (deepThink.value ? 'high' : 'low'))
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
 let programmaticScroll = false
@@ -1534,15 +1531,12 @@ onMounted(async () => {
   const routeWebSearch = route.query.webSearch === '1'
   const isNewSession = route.query.newSession === '1'
 
-  // U5: legacy deepThink/webSearch query params + aiStore flags map to chatMode.
-  // deepThink only → smart_light; deepThink + webSearch (or webSearch alone) → smart_full.
+  // Map legacy deepThink/webSearch query params + aiStore flags onto the
+  // 2-state chatMode + independent webSearch ref.
   const wantDeep = routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true
   const wantSearch = routeWebSearch || aiStore.webSearchEnabled
-  if (wantSearch) {
-    chatMode.value = 'smart_full'
-  } else if (wantDeep) {
-    chatMode.value = 'smart_light'
-  }
+  chatMode.value = wantDeep ? 'smart' : 'normal'
+  webSearch.value = wantSearch
   if (wantDeep) aiStore.deepThinkEnabled = false
   if (wantSearch) aiStore.webSearchEnabled = false
 

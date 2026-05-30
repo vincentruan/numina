@@ -22,6 +22,7 @@ export interface ProviderConfig {
   vision_model_id: string | null
   timeout_seconds: number
   is_active: boolean
+  max_tokens: number | null
   provider_name: string
   display_order: number
   model_2_id: string | null
@@ -51,6 +52,7 @@ export interface ProviderConfigCreate {
   vision_model_id?: string | null
   timeout_seconds?: number | null
   is_active?: boolean
+  max_tokens?: number | null
   provider_name?: string | null
   display_order?: number | null
   model_2_id?: string | null
@@ -69,7 +71,8 @@ export interface ProviderConfigUpdate {
   model_id?: string | null
   vision_model_id?: string | null
   timeout_seconds?: number | null
-  is_active?: boolean | null
+  is_active?: boolean
+  max_tokens?: number | null | null
   provider_name?: string | null
   display_order?: number | null
   model_2_id?: string | null
@@ -97,6 +100,15 @@ export const resetCircuitBreaker = (id: string) =>
 
 export const deleteAIConfig = (id: string) =>
   http.delete(`/ai/config/${id}`)
+
+/** Resolve system-default max_tokens for a model_id (from system-config.yaml).
+ *  Returns ``{ max_tokens: null }`` when no prefix matches.
+ *  Used by the provider form to pre-fill the max_tokens field on model_id blur.
+ */
+export const getProviderDefaults = (modelId: string) =>
+  http.get<{ max_tokens: number | null }>('/ai/config/defaults', {
+    params: { model_id: modelId },
+  })
 
 export interface ModelTestResult {
   connected: boolean
