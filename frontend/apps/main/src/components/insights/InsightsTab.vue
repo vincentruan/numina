@@ -14,9 +14,9 @@
       </div>
       <div class="insight-grid">
         <!-- 购入同比上月 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #f3f0ff, #e8f4ff)">
+        <div class="insight-stat-card isc-card--yoy">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ede9ff">🛍️</div>
+            <div class="isc-icon">🛍️</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.purchaseYoY') }}</div>
           </div>
           <div class="isc-value" :class="smartDiscovery.purchase_yoy >= 0 ? 'up' : 'down'">
@@ -26,15 +26,15 @@
             <span class="isc-badge" :class="smartDiscovery.purchase_yoy >= 0 ? 'up' : 'down'">
               {{ smartDiscovery.purchase_yoy >= 0 ? '▲' : '▼' }} {{ Math.abs(smartDiscovery.purchase_yoy) }}%
             </span>
-            <span style="color: #ccc">{{ t('insights.smartDiscovery.vsLastMonth') }}</span>
+            <span class="isc-sub-meta">{{ t('insights.smartDiscovery.vsLastMonth') }}</span>
           </div>
           <div class="isc-bg-icon">🛍️</div>
         </div>
 
         <!-- 最高日均成本 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #fff8f0, #fff3e0)">
+        <div class="insight-stat-card isc-card--high">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ffefd9">📈</div>
+            <div class="isc-icon">📈</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.highestDailyCost') }}</div>
           </div>
           <div class="isc-name" v-if="smartDiscovery.highest_daily_cost">{{ smartDiscovery.highest_daily_cost.name }}</div>
@@ -50,9 +50,9 @@
         </div>
 
         <!-- 最低日均成本 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #f0fff8, #e6faf2)">
+        <div class="insight-stat-card isc-card--low">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #d5f5e8">📉</div>
+            <div class="isc-icon">📉</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.lowestDailyCost') }}</div>
           </div>
           <div class="isc-name" v-if="smartDiscovery.lowest_daily_cost">{{ smartDiscovery.lowest_daily_cost.name }}</div>
@@ -68,9 +68,9 @@
         </div>
 
         <!-- 持有最久 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #f5f0ff, #ede4ff)">
+        <div class="insight-stat-card isc-card--long">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ede0ff">⏳</div>
+            <div class="isc-icon">⏳</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.longestHeld') }}</div>
           </div>
           <div class="isc-name" v-if="smartDiscovery.longest_held">{{ smartDiscovery.longest_held.name }}</div>
@@ -86,9 +86,9 @@
         </div>
 
         <!-- 占比最高分类 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #fff0f8, #ffe6f2); grid-column: span 2">
+        <div class="insight-stat-card isc-card--top">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ffdaee">🏆</div>
+            <div class="isc-icon">🏆</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.topCategoryByValue') }}</div>
           </div>
           <div class="isc-category-row" v-if="smartDiscovery.top_category">
@@ -614,6 +614,20 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+/* Light-mode card backgrounds — colored pastel gradients per category */
+.isc-card--yoy   { background: linear-gradient(135deg, #f3f0ff, #e8f4ff); }
+.isc-card--high  { background: linear-gradient(135deg, #fff8f0, #fff3e0); }
+.isc-card--low   { background: linear-gradient(135deg, #f0fff8, #e6faf2); }
+.isc-card--long  { background: linear-gradient(135deg, #f5f0ff, #ede4ff); }
+.isc-card--top   { background: linear-gradient(135deg, #fff0f8, #ffe6f2); grid-column: span 2; }
+
+/* Light-mode isc-icon backgrounds — match each card's hue */
+.isc-card--yoy  .isc-icon { background: #ede9ff; }
+.isc-card--high .isc-icon { background: #ffefd9; }
+.isc-card--low  .isc-icon { background: #d5f5e8; }
+.isc-card--long .isc-icon { background: #ede0ff; }
+.isc-card--top  .isc-icon { background: #ffdaee; }
+
 .isc-header {
   display: flex;
   align-items: center;
@@ -659,6 +673,8 @@ onMounted(async () => {
   align-items: center;
   gap: 3px;
 }
+
+.isc-sub-meta { color: #ccc; }
 
 .isc-badge {
   display: inline-flex;
@@ -734,29 +750,49 @@ onMounted(async () => {
 
 [data-theme='dark'] .isc-bg-icon { opacity: 0.12; }
 
-/* Dark mode overrides for insight-stat-card gradients */
-[data-theme='dark'] .insight-stat-card:nth-child(1) {
-  background: linear-gradient(135deg, rgba(189, 187, 255, 0.12), rgba(147, 197, 253, 0.08));
+/* Dark mode card backgrounds — deep navy base from --card-bg + low-opacity tint
+ * of each category's hue. Apple HIG dark mode pattern: keep categorical color
+ * semantics without lifting luminance above ~#1c1d2e.
+ *
+ * No !important is needed here — the modifier classes own the background, so
+ * normal cascade specificity ([data-theme='dark'] adds 1 attribute selector =
+ * specificity (0,2,0)) wins over the bare class rule (0,1,0).
+ */
+[data-theme='dark'] .isc-card--yoy {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.14), rgba(147, 197, 253, 0.08));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(2) {
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.06));
+[data-theme='dark'] .isc-card--high {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(251, 191, 36, 0.07));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(3) {
-  background: linear-gradient(135deg, rgba(110, 231, 160, 0.12), rgba(110, 231, 160, 0.06));
+[data-theme='dark'] .isc-card--low {
+  background: linear-gradient(135deg, rgba(110, 231, 160, 0.14), rgba(110, 231, 160, 0.07));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(4) {
-  background: linear-gradient(135deg, rgba(189, 187, 255, 0.15), rgba(167, 139, 255, 0.08));
+[data-theme='dark'] .isc-card--long {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.16), rgba(167, 139, 255, 0.09));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(5) {
-  background: linear-gradient(135deg, rgba(255, 107, 157, 0.12), rgba(255, 107, 157, 0.06));
+[data-theme='dark'] .isc-card--top {
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.14), rgba(255, 107, 157, 0.07));
 }
 
-/* Dark mode for isc-icon backgrounds */
-[data-theme='dark'] .insight-stat-card:nth-child(1) .isc-icon { background: rgba(189, 187, 255, 0.2); }
-[data-theme='dark'] .insight-stat-card:nth-child(2) .isc-icon { background: rgba(251, 191, 36, 0.2); }
-[data-theme='dark'] .insight-stat-card:nth-child(3) .isc-icon { background: rgba(110, 231, 160, 0.2); }
-[data-theme='dark'] .insight-stat-card:nth-child(4) .isc-icon { background: rgba(189, 187, 255, 0.25); }
-[data-theme='dark'] .insight-stat-card:nth-child(5) .isc-icon { background: rgba(255, 107, 157, 0.2); }
+/* Dark mode isc-icon backgrounds — same hue family at slightly higher alpha */
+[data-theme='dark'] .isc-card--yoy  .isc-icon { background: rgba(189, 187, 255, 0.22); }
+[data-theme='dark'] .isc-card--high .isc-icon { background: rgba(251, 191, 36, 0.22); }
+[data-theme='dark'] .isc-card--low  .isc-icon { background: rgba(110, 231, 160, 0.22); }
+[data-theme='dark'] .isc-card--long .isc-icon { background: rgba(189, 187, 255, 0.26); }
+[data-theme='dark'] .isc-card--top  .isc-icon { background: rgba(255, 107, 157, 0.22); }
+
+/* Dark mode secondary labels — intentionally dimmer than --text-secondary
+ * (#c8c8d0 ≈ 0.78 opacity equivalent on dark). Card surfaces already carry a
+ * colored tint, so we step the label/caption down to keep the colored chip and
+ * primary value visually dominant. Computed contrast ≈ 5:1 on the tinted
+ * backgrounds — meets WCAG AA for the 11–12px text size used here.
+ *
+ * .isc-name and .isc-category-name keep var(--text-primary) (#f5f5f5 in dark)
+ * — no override needed; the bug was never about text color, only about the
+ * card background being overridden by inline style.
+ */
+[data-theme='dark'] .isc-label { color: rgba(255, 255, 255, 0.6); }
+[data-theme='dark'] .isc-category-sub { color: rgba(255, 255, 255, 0.55); }
 
 /* Dark mode for gradient title */
 [data-theme='dark'] .gradient-title .gradient-icon {
@@ -775,7 +811,7 @@ onMounted(async () => {
 [data-theme='dark'] .isc-category-pct { color: #ff6b9d; }
 
 /* Dark mode for isc-sub separator text */
-[data-theme='dark'] .isc-sub span[style*="color: #ccc"] { color: rgba(255, 255, 255, 0.4) !important; }
+[data-theme='dark'] .isc-sub-meta { color: rgba(255, 255, 255, 0.4); }
 
 /* Dark mode for isc-cost-unit and isc-days-unit */
 [data-theme='dark'] .isc-cost-unit { color: rgba(255, 255, 255, 0.4); }
