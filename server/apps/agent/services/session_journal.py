@@ -72,20 +72,43 @@ class SessionJournalService:
 
     def __init__(self, base_dir: str | Path) -> None:
         self._base_dir = Path(base_dir)
-        # Maps session_id → resolved Path, set on write_session_start.
-        # Allows orchestrator to pass a date-based jsonl_path without
-        # changing every write_* method signature.
-        self._path_cache: dict[str, Path] = {}
+        # Maps (family_id, session_id) → resolved Path, set on
+        # write_session_start. Allows orchestrator to pass a date-based
+        # jsonl_path without changing every write_* method signature.
+        # Keying on family_id is load-bearing: thread_id arrives from the
+        # request body and a malicious or scripted client can reuse any
+        # value, so a session_id-only key risks cross-tenant path bleed
+        # where family A's writes redirect into family B's JSONL.
+        self._path_cache: dict[tuple[str, str], Path] = {}
 
     def _session_path(self, family_id: str, session_id: str, capability: str = "_default", user_id: str = "_shared") -> Path:
         _validate_id(family_id, "family_id")
         _validate_id(session_id, "session_id")
         _validate_id(capability, "capability")
         _validate_id(user_id, "user_id")
-        # Use cached path if available (set by write_session_start)
-        if session_id in self._path_cache:
-            return self._path_cache[session_id]
+        # Use cached path if available (set by write_session_start).
+        # Cache key includes family_id to prevent cross-tenant collisions.
+        cache_key = (family_id, session_id)
+        if cache_key in self._path_cache:
+            return self._path_cache[cache_key]
         return self._base_dir / family_id / "agent" / capability / user_id / f"{session_id}.jsonl"
+
+    def resolve_path(
+        self,
+        family_id: str,
+        session_id: str,
+        capability: str = "agent",
+        user_id: str = "_shared",
+    ) -> Path:
+        """Public resolver for the jsonl path of a session.
+
+        Used by ``agent_dispatch`` to compute the path string passed to
+        ``write_session_start`` (and stored alongside ai_chat_sessions). Note
+        ``capability`` is restricted by ``_validate_id``'s ``[A-Za-z0-9_\\-]+``
+        regex — Chinese agent names like 数鸣 don't pass it, so callers must
+        pin the segment to the literal ``"agent"`` token.
+        """
+        return self._session_path(family_id, session_id, capability=capability, user_id=user_id)
 
     def append_event(self, family_id: str, session_id: str, event: dict[str, Any]) -> None:
         """Append one event line. Failures are logged and swallowed."""
@@ -152,8 +175,9 @@ class SessionJournalService:
     ) -> None:
         # Cache the resolved path so all subsequent writes for this session
         # use the date-based directory structure set by the orchestrator.
+        # Cache key is (family_id, session_id) — see __init__ for rationale.
         resolved = Path(jsonl_path)
-        self._path_cache[session_id] = resolved
+        self._path_cache[(family_id, session_id)] = resolved
         event = _make_event(
             "session.start",
             session_id=session_id,
