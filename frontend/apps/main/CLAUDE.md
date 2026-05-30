@@ -183,7 +183,7 @@ Three user preferences. Language and theme mode are persisted server-side on `Us
    （在 `#12122a` + 14% tint 上 ≈ 5:1，AA 余量已经很薄）。`WishDetailPage`/`AssetDetailPage`/`AIHubPage` 的
    α=0.30/0.40/0.45 是已知技术债，新代码勿沿袭。
 4. **语义高亮** — 红绿蓝琥珀保留色相家族；暗黑下用"提亮 + 降饱和"变体并校验对比度 ≥4.5:1。
-   `var(--van-primary-color)` 已自动切到 `--color-lavender` (`#bdbbff`)，勿另立强调色。
+   `var(--van-primary-color)` 在暗黑下被赋为字面量 `#bdbbff`（与日间 `--color-lavender` 同值），勿另立强调色。
 
 **红线 1**：themable 元素禁止静态 `style="background:..."` / `style="color:..."`。inline 特异性 (1,0,0,0) 静默压过所有 `[data-theme='dark']` 规则。
 参见 `docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md`。

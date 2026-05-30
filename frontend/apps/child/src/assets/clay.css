@@ -138,6 +138,7 @@
   --color-brand-peach:   #e09870;
   --color-brand-lavender:#9a8cd0;
   --color-brand-mint:    #8abcad;
+  --color-brand-pink:    #a82960;
 
   /* Coin colors — slightly brightened for dark backgrounds */
   --color-coin-gold-hi:  #FFE566;
@@ -167,7 +168,7 @@
   --color-on-feature-ochre:   #fff8e8;
   --color-on-feature-peach:   #fff4ec;
   --color-on-feature-lavender:#f0ecff;
-  --color-on-feature-pink:    #ffffff;
+  --color-on-feature-pink:    #fff4ec;
   --color-on-feature-teal:    #f0ece0;
 
   /* ── Calendar heat colors (dark mode — teal-green tones for contrast) ── */

@@ -61,6 +61,9 @@
   --separator: var(--color-hairline);
   --card-bg: var(--color-canvas);
 
+  /* Semantic accent — opportunity cost / amber. Dark variant brightens to #ffc04d. */
+  --color-cost: #f5a623;
+
   /* ── Vant Theme Overrides ── */
   --van-primary-color: var(--color-primary);
   --van-button-primary-background: var(--color-primary);

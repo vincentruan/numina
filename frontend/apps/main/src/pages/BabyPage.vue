@@ -222,20 +222,20 @@
             type="digit"
             :label="t('baby.grantAmountLabel')"
             :placeholder="t('baby.grantAmountPlaceholder')"
-            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+            class="grant-field"
           />
           <van-field
             v-model="grantReason"
             :label="t('baby.grantReasonLabel')"
             :placeholder="t('baby.grantReasonPlaceholder')"
-            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+            class="grant-field"
           />
           <van-button
             block
             type="primary"
             :disabled="!grantAmountStr || parseInt(grantAmountStr, 10) <= 0"
             :loading="grantingCoins"
-            style="margin-top: 16px; border-radius: 12px; background: #f5a623; border: none"
+            class="grant-confirm-btn"
             @click="doGrant"
           >{{ t('baby.grantConfirm') }}</van-button>
         </van-popup>
@@ -648,6 +648,19 @@ onMounted(async () => {
   font-weight: 600;
   margin: 0 0 12px;
   color: var(--text-primary);
+}
+
+.grant-field {
+  margin-top: 8px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+}
+
+.grant-confirm-btn {
+  margin-top: 16px;
+  border-radius: 12px;
+  background: var(--color-cost, #f5a623);
+  border: none;
 }
 
 .content-tabs {

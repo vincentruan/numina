@@ -141,7 +141,8 @@ HIG 标准映射到 Clay 现有暖调 token：
    不要硬编码 `rgba(255,255,255,0.55)`（冷调，破暖）。
 4. **语义高亮 / feature card** — 卡内文字优先用 `--color-on-feature-{pink,teal,lavender,peach,ochre}`
    （已按底色调过、AA 达标）。`var(--color-primary)` 暗黑下 = ochre `#e8b94a`，自动适配，勿另立。
-   注意：`--color-on-feature-pink` 当前为 `#ffffff`（5 个中唯一冷调），必要时按品牌一致性偏好暖白替代。
+   注意：`--color-on-feature-pink` 在暗黑下取暖白 `#fff4ec`（与同色 brand-pink `#a82960` 配对，AAA 7.8:1）；
+   日间维持 `var(--color-on-primary)` (`#ffffff`)。修改时务必同步校验对比度。
 
 **Token 双向定义铁律**：`--color-on-feature-*` 当前**只在 `[data-theme="dark"]` 块定义，`:root` 缺失** —
 新加 token 时必须在 `:root` 与 `[data-theme="dark"]` 双向赋值，否则光照模式静默失效。
