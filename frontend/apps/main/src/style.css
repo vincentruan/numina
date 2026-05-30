@@ -64,6 +64,14 @@
   /* Semantic accent — opportunity cost / amber. Dark variant brightens to #ffc04d. */
   --color-cost: #f5a623;
 
+  /* Trend / status palette — dark variants brighten and desaturate per
+   * WCAG AA on #12122a card-bg. Used by InsightsTab (and future
+   * analytics surfaces) to express up/down/warn without inheriting
+   * the more emphatic --color-error family. */
+  --color-trend-up:   #FF4D4D;
+  --color-trend-down: #00A854;
+  --color-trend-warn: #FF8800;
+
   /* ── Badge & tag palette (light defaults; dark overrides below) ──
    * Consumed via var(--token, light-fallback) in pages — defaults here
    * keep light/dark in lockstep and prevent silent failures when the
@@ -146,6 +154,9 @@
   --color-hairline: rgba(255, 255, 255, 0.08);
   --color-success: #2f9e44;
   --color-cost: #ffc04d;
+  --color-trend-up:   #fca5a5;
+  --color-trend-down: #6ee7a0;
+  --color-trend-warn: #fbbf24;
   --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.28);
   --badge-high-bg: rgba(192, 57, 43, 0.2);
   --badge-high-text: #e57373;
