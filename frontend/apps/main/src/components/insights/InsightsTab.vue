@@ -663,18 +663,15 @@ onMounted(async () => {
 .isc-value.down { color: var(--color-trend-down); }
 .isc-value.purple { color: var(--van-primary-color); }
 
-[data-theme='dark'] .isc-value.up { color: var(--color-trend-up); }
-[data-theme='dark'] .isc-value.down { color: var(--color-trend-down); }
-
 .isc-sub {
   font-size: 11px;
-  color: #bbb;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   gap: 3px;
 }
 
-.isc-sub-meta { color: #ccc; }
+.isc-sub-meta { color: var(--text-tertiary); }
 
 .isc-badge {
   display: inline-flex;
@@ -716,7 +713,7 @@ onMounted(async () => {
 .isc-cost-unit {
   font-size: 10px;
   font-weight: 400;
-  color: #ccc;
+  color: var(--text-tertiary);
 }
 
 .isc-days-val {
@@ -728,7 +725,7 @@ onMounted(async () => {
 .isc-days-unit {
   font-size: 10px;
   font-weight: 400;
-  color: #ccc;
+  color: var(--text-tertiary);
 }
 
 .isc-bg-icon {
@@ -944,7 +941,7 @@ onMounted(async () => {
 
 .rank-cost-unit {
   font-size: 11px;
-  color: #bbb;
+  color: var(--text-tertiary);
 }
 
 .rank-sort-group {
@@ -1020,7 +1017,7 @@ onMounted(async () => {
 }
 
 .view-all-arrow {
-  color: #ccc;
+  color: var(--text-tertiary);
   font-size: 14px;
 }
 
@@ -1058,10 +1055,6 @@ onMounted(async () => {
 .gc-val.green { color: var(--color-trend-down); }
 .gc-val.orange { color: var(--color-trend-warn); }
 .gc-val.red { color: var(--color-trend-up); }
-
-[data-theme='dark'] .gc-val.green { color: var(--color-trend-down); }
-[data-theme='dark'] .gc-val.orange { color: var(--color-trend-warn); }
-[data-theme='dark'] .gc-val.red { color: var(--color-trend-up); }
 
 .gc-label {
   font-size: 11px;
@@ -1148,10 +1141,6 @@ onMounted(async () => {
 .goal-pct.on-track { color: var(--color-trend-down); }
 .goal-pct.near-end { color: var(--color-trend-warn); }
 .goal-pct.overdue { color: var(--color-trend-up); }
-
-[data-theme='dark'] .goal-pct.on-track { color: var(--color-trend-down); }
-[data-theme='dark'] .goal-pct.near-end { color: var(--color-trend-warn); }
-[data-theme='dark'] .goal-pct.overdue { color: var(--color-trend-up); }
 
 .goal-fill {
   height: 100%;
@@ -1450,8 +1439,6 @@ onMounted(async () => {
 .pres-val.green { color: var(--color-trend-down); }
 
 [data-theme='dark'] .pres-val.purple { color: var(--color-lavender); }
-[data-theme='dark'] .pres-val.red { color: var(--color-trend-up); }
-[data-theme='dark'] .pres-val.green { color: var(--color-trend-down); }
 
 .pres-profit-big {
   display: flex;
@@ -1470,8 +1457,6 @@ onMounted(async () => {
   font-weight: 800;
   color: var(--color-trend-up);
 }
-
-[data-theme='dark'] .ppb-val { color: var(--color-trend-up); }
 
 .podium-label {
   font-size: 12px;
@@ -1567,9 +1552,6 @@ onMounted(async () => {
 .podium-rate.green { color: var(--color-trend-down); }
 .podium-rate.red { color: var(--color-trend-up); }
 
-[data-theme='dark'] .podium-rate.green { color: var(--color-trend-down); }
-[data-theme='dark'] .podium-rate.red { color: var(--color-trend-up); }
-
 .podium-base {
   width: 100%;
   border-radius: 8px 8px 0 0;
@@ -1607,7 +1589,7 @@ onMounted(async () => {
   width: 22px;
   font-size: 14px;
   font-weight: 700;
-  color: #ccc;
+  color: var(--text-tertiary);
   text-align: center;
   flex-shrink: 0;
 }
@@ -1667,9 +1649,6 @@ onMounted(async () => {
 .pres-rate-val.green { color: var(--color-trend-down); }
 .pres-rate-val.red { color: var(--color-trend-up); }
 
-[data-theme='dark'] .pres-rate-val.green { color: var(--color-trend-down); }
-[data-theme='dark'] .pres-rate-val.red { color: var(--color-trend-up); }
-
 .pres-profit {
   font-size: 12px;
   font-weight: 600;
@@ -1677,7 +1656,4 @@ onMounted(async () => {
 
 .pres-profit.red { color: var(--color-trend-up); }
 .pres-profit.green { color: var(--color-trend-down); }
-
-[data-theme='dark'] .pres-profit.red { color: var(--color-trend-up); }
-[data-theme='dark'] .pres-profit.green { color: var(--color-trend-down); }
 </style>
