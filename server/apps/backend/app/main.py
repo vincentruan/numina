@@ -162,6 +162,21 @@ async def lifespan(app: FastAPI):
     )
     logger.info("统一日志配置已初始化")
 
+    # SQLite-only fail-fast: partial unique indexes (e.g. device_sessions
+    # active-row uniqueness, users.username NOT NULL) require SQLite ≥ 3.8.0.
+    # Skipped on other backends (Postgres, MySQL) since they don't have the
+    # same version floor. Fails the lifespan early so the schema migration
+    # below can't produce a confusing CREATE INDEX error first.
+    if engine.dialect.name == "sqlite":
+        import sqlite3
+
+        sqlite_version = tuple(int(p) for p in sqlite3.sqlite_version.split("."))
+        if sqlite_version < (3, 8, 0):
+            raise RuntimeError(
+                f"SQLite {sqlite3.sqlite_version} too old; partial unique indexes "
+                f"require ≥ 3.8.0. Upgrade libsqlite3 in the runtime image."
+            )
+
     # Run schema migration with distributed locking (handles all DB types)
     logger.info("执行数据库结构对齐检查...")
     migration_summary = run_schema_migration(engine)

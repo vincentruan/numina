@@ -1,3 +1,9 @@
+# SQLite version requirement: ≥ 3.8.0 for partial unique indexes
+# (e.g. CREATE UNIQUE INDEX ... WHERE is_revoked = FALSE on device_sessions).
+# python:3.13-slim ships Debian Trixie's libsqlite3 ≈ 3.46, well above the floor.
+# If switching to a different base image, verify `python3 -c "import sqlite3; print(sqlite3.sqlite_version)"`
+# returns ≥ 3.8.0, otherwise schema migration will fail. main.py also asserts
+# this at lifespan startup when DATABASE_URL is sqlite://.
 FROM python:3.13-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends tzdata && rm -rf /var/lib/apt/lists/*
