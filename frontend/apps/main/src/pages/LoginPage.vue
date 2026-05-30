@@ -5,6 +5,9 @@
     <!-- Deer-masked particle canvas (bright particles clipped to deer silhouette) -->
     <canvas ref="deerCanvasRef" class="deer-canvas deer-canvas--deer" aria-hidden="true"></canvas>
 
+    <!-- Pixel-style loading shown briefly when transitioning into step 2 -->
+    <PixelLoading :visible="stepLoading" :aria-label="t('common.loading')" />
+
     <!-- Login content (above canvas) -->
     <div class="login-content">
       <div class="login-header">
@@ -170,7 +173,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
-import { TrustedDeviceCard, readDeviceId } from '@numina/auth'
+import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'
 import { checkDevice } from '@/api/device'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
@@ -188,6 +191,7 @@ const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
 useDeerField(bgCanvasRef, deerCanvasRef)
 
 const step = ref<1 | 2>(1)
+const stepLoading = ref(false)
 const tempToken = ref('')
 const secondFactorType = ref('')
 const pinInput = ref('')
@@ -224,7 +228,11 @@ onMounted(async () => {
       tempToken.value = data.temp_token
       secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
       trustedUser.value = { displayName: data.display_name, avatarColor: data.avatar_color }
-      step.value = 2
+      stepLoading.value = true
+      setTimeout(() => {
+        step.value = 2
+        stepLoading.value = false
+      }, 700)
     }
   } catch {
     // Device check failure is non-fatal — fall through to normal step 1
@@ -247,7 +255,11 @@ async function onStep1Submit() {
       if (result.display_name && result.avatar_color) {
         step2User.value = { displayName: result.display_name, avatarColor: result.avatar_color }
       }
-      step.value = 2
+      stepLoading.value = true
+      setTimeout(() => {
+        step.value = 2
+        stepLoading.value = false
+      }, 700)
     } else if (!result.second_factor_required) {
       // Single-step login complete — token already set via cookie
       await authStore.fetchMe()
