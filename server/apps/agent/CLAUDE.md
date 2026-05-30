@@ -55,6 +55,11 @@ DeerFlow 2.0 is batteries-included: it already provides runtime, tools, skills, 
 | `SubAgentCoordinator` | DeerFlow supports nested subagents | `subagent_enabled` + skill triggers |
 | `MCPRuntime` | DeerFlow runs MCP servers internally | MCP config in deerflow_config |
 
+### Design Constraints
+
+- **No langchain-native reimplementation.** If DeerFlow provides a capability (long-task orchestration, tool calling, memory, planning), use it via adapter — never rebuild equivalent logic with `langchain` primitives.
+- **Reuse DeerFlow interaction patterns.** Streaming, progress reporting, and multi-step planning UX must follow DeerFlow's canonical patterns. Do not invent new interaction protocols.
+
 ### Prohibited Dependencies
 
 Never add these unless explicitly asked to migrate frameworks:
@@ -62,12 +67,13 @@ Never add these unless explicitly asked to migrate frameworks:
 
 ### Pre-Change Checklist
 
-Before modifying any agent runtime code:
+Before any agent design or code change:
 
-1. Does `DeerFlowClient` config already support this? (`model_name`, `thinking_enabled`, `plan_mode`, `subagent_enabled`, `available_skills`, `checkpointer`)
-2. Does existing DeerFlow skill/tool/memory/MCP cover this?
-3. If no: extend `deerflow_adapter/adapter.py` minimally — never build parallel harness.
-4. If yes: call adapter from business code, don't wrap it again.
+1. **Context7 lookup required.** Resolve `deerflow` via context7 (`resolve-library-id` → `query-docs`) and read the latest API. Never assume DeerFlow lacks a capability — verify first.
+2. Does `DeerFlowClient` config already support this? (`model_name`, `thinking_enabled`, `plan_mode`, `subagent_enabled`, `available_skills`, `checkpointer`)
+3. Does existing DeerFlow skill/tool/memory/MCP cover this?
+4. If no: extend `deerflow_adapter/adapter.py` minimally — never build parallel harness.
+5. If yes: call adapter from business code, don't wrap it again.
 
 ### Adapter Location
 
@@ -97,7 +103,7 @@ agent/
 │   ├── desensitize.py         # Structural PII stripping (assets/liabilities/members)
 │   ├── llm.py                 # LLMClient (Anthropic + OpenAI), ThinkingTagParser
 │   └── logging.py             # setup_logging()
-├── routers/                   # Top-level router registrations (16 routers)
+├── routers/                   # Top-level router registrations (14 routers)
 │   ├── agent_stream.py        # Generic agent NDJSON streaming endpoint
 │   ├── alerts.py              # POST /alerts/aging, /alerts/stream
 │   ├── allocation.py          # POST /allocation/drift, /allocation/stream
@@ -124,7 +130,7 @@ agent/
 │   ├── session_journal.py     # Append-only JSONL event log per session (local disk)
 │   ├── session_store.py       # AiSessionRepository (delegates to backend via HTTP)
 │   ├── stream_events.py       # EventStreamBuilder → NDJSON event protocol
-│   ├── output_mapper.py       # Maps DeerFlow/fallback output → AgentResponse
+│   ├── output_mapper.py       # Maps DeerFlow output → AgentResponse
 │   └── capability_registry.py # Loads capabilities from skills/*.md frontmatter
 ├── schemas/
 │   ├── capability.py          # CapabilityDefinition, CapabilityUISchema, CapabilityPolicy
@@ -187,7 +193,7 @@ Two streaming protocols coexist — do not mix them:
 | Protocol | Content-Type | Used by |
 |----------|-------------|---------|
 | Raw text chunks | `text/plain` | All capabilities except chat |
-| NDJSON events | `application/x-ndjson` | `chat/ask/stream`, `sessions/{id}/events` |
+| NDJSON events | `application/x-ndjson` | `chat/ask/stream`, `sessions/{id}/events`, `agent_stream` |
 
 NDJSON event types: `phase.{connecting|thinking|answering}`, `token.stream`, `tool.call`, `tool.result`, `capability.end`, `capability.error`.
 
