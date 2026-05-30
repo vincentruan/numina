@@ -534,7 +534,7 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 [data-theme='dark'] .hero-category {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .hero-usage {
@@ -611,7 +611,7 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 [data-theme='dark'] .hero-value-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .hero-value-item :deep(.money-display) {

@@ -237,11 +237,11 @@ onMounted(loadMonth)
   --cal-nav-bg: rgba(255, 255, 255, 0.08);
   --cal-nav-bg-active: rgba(255, 255, 255, 0.14);
   --cal-nav-color: #c8c8d0;
-  --cal-weekday-color: rgba(255, 255, 255, 0.45);
+  --cal-weekday-color: var(--text-tertiary);
   --cal-day-color: #e8e8f0;
   --cal-legend-border: rgba(255, 255, 255, 0.08);
   --cal-legend-color: rgba(255, 255, 255, 0.5);
-  --cal-stats-color: rgba(255, 255, 255, 0.45);
+  --cal-stats-color: var(--text-tertiary);
   --cal-stats-sep: rgba(255, 255, 255, 0.2);
   --cal-heat-1: rgba(245, 166, 35, 0.12);
   --cal-heat-2: rgba(245, 166, 35, 0.24);

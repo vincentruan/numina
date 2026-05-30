@@ -127,7 +127,7 @@ const changeText = computed(() => {
   font-family: 'Georgia', monospace;
 }
 [data-theme='dark'] .ov-label {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .ov-amount {
@@ -228,7 +228,7 @@ const changeText = computed(() => {
   color: rgba(0, 0, 0, 0.50);
 }
 [data-theme='dark'] .ov-count {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .ov-change.positive {
@@ -280,7 +280,7 @@ const changeText = computed(() => {
   font-family: 'Georgia', monospace;
 }
 [data-theme='dark'] .ov-detail-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .ov-detail-value {

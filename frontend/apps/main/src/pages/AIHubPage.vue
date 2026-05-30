@@ -547,7 +547,7 @@ onMounted(async () => {
 }
 
 [data-theme='dark'] .hub-greeting-label {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 /* Display name: tight negative tracking */
@@ -637,7 +637,7 @@ onMounted(async () => {
 }
 
 [data-theme='dark'] .score-label {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 /* Stats row: frosted glass, 8px radius, dark-blue-tinted shadow */
@@ -694,7 +694,7 @@ onMounted(async () => {
 }
 
 [data-theme='dark'] .hub-stat-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .hub-stat-divider {
@@ -722,7 +722,7 @@ onMounted(async () => {
 }
 
 [data-theme='dark'] .hub-stat-meta {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .refresh-btn {
@@ -741,7 +741,7 @@ onMounted(async () => {
 }
 
 [data-theme='dark'] .refresh-btn {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .refresh-btn:hover { color: #000000; }
@@ -783,7 +783,7 @@ onMounted(async () => {
 }
 
 [data-theme='dark'] .report-summary-title {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .report-summary-title svg { color: rgba(0, 0, 0, 0.35); }

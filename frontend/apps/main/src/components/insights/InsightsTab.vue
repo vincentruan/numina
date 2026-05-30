@@ -811,11 +811,11 @@ onMounted(async () => {
 [data-theme='dark'] .isc-category-pct { color: #ff6b9d; }
 
 /* Dark mode for isc-sub separator text */
-[data-theme='dark'] .isc-sub-meta { color: rgba(255, 255, 255, 0.4); }
+[data-theme='dark'] .isc-sub-meta { color: var(--text-tertiary); }
 
 /* Dark mode for isc-cost-unit and isc-days-unit */
-[data-theme='dark'] .isc-cost-unit { color: rgba(255, 255, 255, 0.4); }
-[data-theme='dark'] .isc-days-unit { color: rgba(255, 255, 255, 0.4); }
+[data-theme='dark'] .isc-cost-unit { color: var(--text-tertiary); }
+[data-theme='dark'] .isc-days-unit { color: var(--text-tertiary); }
 
 .isc-category-row {
   display: flex;

@@ -505,7 +505,7 @@ onMounted(async () => {
   color: rgba(0, 0, 0, 0.50);
 }
 [data-theme='dark'] .hero-card.cancelled .hero-name {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 /* Mono label for category */
@@ -518,7 +518,7 @@ onMounted(async () => {
   font-family: 'Georgia', monospace;
 }
 [data-theme='dark'] .hero-category {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .hero-status-tag {
@@ -567,7 +567,7 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 [data-theme='dark'] .hero-value-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .hero-value-num {
