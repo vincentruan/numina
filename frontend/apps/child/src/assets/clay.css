@@ -69,6 +69,14 @@
   --color-primary-active:   #1f1f1f;
   --color-primary-disabled: #e5e5e5;
 
+  /* ── Feature card text (light mode — per DESIGN.md textColor mapping) ── */
+  /* pink/teal saturated cards → white; lavender/peach/ochre soft cards → ink */
+  --color-on-feature-pink:     var(--color-on-primary);
+  --color-on-feature-teal:     var(--color-on-dark);
+  --color-on-feature-lavender: var(--color-ink);
+  --color-on-feature-peach:    var(--color-ink);
+  --color-on-feature-ochre:    var(--color-ink);
+
   /* ── Spacing ── */
   --space-xxs: 4px;
   --space-xs:  8px;

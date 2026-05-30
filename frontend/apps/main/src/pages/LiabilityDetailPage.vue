@@ -14,7 +14,7 @@
           :percentage="paidPercent"
           :stroke-width="8"
           color="#07c160"
-          track-color="rgba(255,255,255,0.3)"
+          track-color="rgba(255,255,255,0.55)"
           :show-pivot="false"
           class="progress-bar"
         />
