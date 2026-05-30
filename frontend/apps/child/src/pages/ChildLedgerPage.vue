@@ -142,7 +142,12 @@ onMounted(load)
   margin-bottom: var(--space-lg);
   color: var(--color-on-dark);
 }
-[data-theme="dark"] .balance-card { color: var(--color-on-feature-teal); }
+[data-theme="dark"] .balance-card {
+  background:
+    linear-gradient(135deg, rgba(var(--color-brand-mint-rgb), 0.14), rgba(var(--color-brand-mint-rgb), 0.06)),
+    var(--color-surface-card);
+  color: var(--color-on-feature-teal);
+}
 .balance-label {
   font-family: Inter, sans-serif;
   font-size: 13px;

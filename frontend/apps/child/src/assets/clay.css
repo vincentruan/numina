@@ -13,6 +13,16 @@
   --color-brand-mint:    #a4d4c5;
   --color-brand-coral:   #ff6b5a;
 
+  /* RGB triples for brand colors — pair with the hex tokens for dark-mode
+   * tint backgrounds: rgba(var(--color-brand-X-rgb), 0.14). Light mode
+   * keeps the saturated hex values intact. */
+  --color-brand-pink-rgb:     255, 77, 139;
+  --color-brand-teal-rgb:     26, 58, 58;
+  --color-brand-lavender-rgb: 184, 164, 237;
+  --color-brand-peach-rgb:    255, 176, 132;
+  --color-brand-ochre-rgb:    232, 185, 74;
+  --color-brand-mint-rgb:     164, 212, 197;
+
   /* ── Semantic ── */
   --color-success: #22c55e;
   --color-warning: #f59e0b;
