@@ -126,6 +126,30 @@ Two user-configurable preferences, both persisted to `localStorage` and applied 
 
 When you need a token that doesn't exist yet, add it to `clay.css` under both `:root` and `[data-theme="dark"]`.
 
+#### 🌙 暗黑模式视觉规范 (HIG → Clay warm-throughout)
+
+Clay 暗黑沿用日间的 warm 基调 — **禁止纯白 `#FFFFFF` / 冷灰**，会破坏品牌声音。
+HIG 标准映射到 Clay 现有暖调 token：
+
+1. **多色卡片** — 不要平铺纯灰，也不要直接复用日间品牌色。底层 `var(--color-surface-card)`
+   (`#152828` 暖深青)，叠 `rgba(<日间 brand-pink|teal|lavender|peach|ochre>, 0.12)`。
+   暖底 + 低饱 tint 既保留 Clay 暖意又留住语义身份。当前各页面 `.hero-card` / `.balance-card` / `.summary-card`
+   是直接渐变硬编码，新组件统一走"暖底 + tint"路线。
+2. **主文本** — `var(--color-ink)` (`#f0ece0` 暖米白，对 `#0a1a1a` ≈ 14.6:1，AAA)。
+   切勿替换为 `#FFFFFF`；DESIGN.md 的 warm-throughout 优先于 HIG 字面值。
+3. **次级标签** — `var(--color-body)` (`#c0bcb0`) 即 Clay 的 secondary-label 等价物，
+   不要硬编码 `rgba(255,255,255,0.55)`（冷调，破暖）。
+4. **语义高亮 / feature card** — 卡内文字优先用 `--color-on-feature-{pink,teal,lavender,peach,ochre}`
+   （已按底色调过、AA 达标）。`var(--color-primary)` 暗黑下 = ochre `#e8b94a`，自动适配，勿另立。
+   注意：`--color-on-feature-pink` 当前为 `#ffffff`（5 个中唯一冷调），必要时按品牌一致性偏好暖白替代。
+
+**Token 双向定义铁律**：`--color-on-feature-*` 当前**只在 `[data-theme="dark"]` 块定义，`:root` 缺失** —
+新加 token 时必须在 `:root` 与 `[data-theme="dark"]` 双向赋值，否则光照模式静默失效。
+
+**红线 1**：themable 元素禁止静态 `style="background:..."` / `style="color:..."`。inline 特异性 (1,0,0,0) 静默压过所有 `[data-theme="dark"]` 规则。
+
+**红线 2**：组件级 `[data-theme="dark"]` 不要再写新的颜色字面量；消费 token，token 缺就先补到 `clay.css` 双向定义。
+
 ## Documented Solutions
 
 `docs/solutions/` contains documented fixes for past problems relevant to child frontend development:
