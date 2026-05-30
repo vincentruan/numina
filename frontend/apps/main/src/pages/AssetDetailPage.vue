@@ -684,9 +684,9 @@ onMounted(async () => {
 }
 
 .positive { color: #059669; }
-[data-theme='dark'] .positive { color: #6ee7a0; }
+[data-theme='dark'] .positive { color: var(--color-trend-down); }
 .negative { color: #dc2626; }
-[data-theme='dark'] .negative { color: #fca5a5; }
+[data-theme='dark'] .negative { color: var(--color-trend-up); }
 
 .tags {
   display: flex;
