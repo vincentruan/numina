@@ -37,6 +37,18 @@ summarization:
     {messages}
     请直接输出摘要，不要有任何前言或解释：
 
+# 工具配置（DeerFlow 原生工具）
+# 各 skill 通过 allowed-tools 门控可用工具
+tools:
+  - name: web_search
+    group: web
+    use: deerflow.community.tavily.tools:web_search_tool
+    max_results: 5
+  - name: web_fetch
+    group: web
+    use: deerflow.community.jina_ai.tools:web_fetch_tool
+    timeout: 10
+
 # 沙盒安全设置
 sandbox:
   use: deerflow.sandbox.local:LocalSandboxProvider

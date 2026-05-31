@@ -128,8 +128,9 @@ class ChatAdapter:
         )
         context = RedactedContext(family_id=family_id, free_text=augmented_text)
 
+        skill_name = "chat-search" if web_search else "chat"
         async for chunk in adapter.stream_dispatch(
-            "chat",
+            skill_name,
             context,
             thread_id,
             enable_thinking=enable_thinking or deep_think,
