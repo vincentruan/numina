@@ -259,6 +259,19 @@ Financial assets carry return fields:
 - Cause: response schema inherits from plain `BaseModel` — IDs are serialized as JSON integers, which exceed JS's safe integer range (2⁵³) for Snowflake IDs
 - Fix: inherit the response schema from `SnowflakeBase` (from `apps.backend.app.schemas.base`); IDs are then serialized as strings automatically — no manual `str()` calls needed
 
+## MCP Caller Binding Invariants
+
+These must hold for all MCP tool execution paths:
+
+1. **Caller identity frozen at SSE handshake** — `MCPSession.__slots__` contains `_family_id`, `_caller_user_id`, `_caller_role`, `_server`. All frozen at construction. Tool handlers NEVER read identity from tool args.
+2. **No silent fallback** — If caller validation fails (unknown, inactive, cross-family, child role), the SSE handshake returns 403. Never fall back to owner.
+3. **Protocol-layer filtering** — `list_tools()` returns only tools where `caller_role ∈ allowed_roles`. `call_tool()` re-checks (defense in depth).
+4. **permission_denied = permanent** — Role check failure returns `{"error": "permission_denied", "retryable": false}`. LLM must not retry.
+5. **Zero outbound HTTP** — `mcp_session.py` and `mcp_tool_registry.py` must never import `httpx`, `aiohttp`, or `apps.agent`. Enforced by static AST test + dynamic httpx patch test.
+6. **Audit fields** — All log paths include `caller_user_id` and `caller_role`. Success = INFO, permission_denied = WARNING, service error = ERROR.
+7. **Tool registry SSOT** — All tool metadata lives in `mcp_tool_registry.py`. `validate_registry()` runs at startup; missing `allowed_roles` = fail-fast.
+8. **POST /messages isolation** — Relies on MCP SDK's UUID4 session_id for session routing. No additional caller check needed on POST path.
+
 ## Links
 
 - Root [`CLAUDE.md`](../CLAUDE.md) — behavioral guidelines, cross-cutting conventions
