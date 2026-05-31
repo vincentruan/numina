@@ -89,6 +89,8 @@ export default {
     section: {
       assetList: '资产列表 ({count})',
     },
+    viewModeCard: '卡片视图',
+    viewModeList: '列表视图',
     upcomingPayments: {
       title: '即将到期还款',
     },

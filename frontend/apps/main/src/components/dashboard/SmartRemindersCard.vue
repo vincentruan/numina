@@ -6,6 +6,7 @@
           <span>🔔 {{ t('alertCards.reminder') }}</span>
           <span v-if="totalCount > 0" class="reminder-summary">
             <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
+            <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
             <template v-if="idleAssets.length > 0"> · {{ t('reminders.idleAssets') }} {{ idleAssets.length }}</template>
             <template v-if="store.summary.maturity > 0"> · {{ t('reminders.types.maturity') }} {{ store.summary.maturity }}</template>
             <template v-if="store.summary.allocation_drift > 0"> · {{ t('reminders.types.allocation_drift') }} {{ store.summary.allocation_drift }}</template>
@@ -17,10 +18,11 @@
         <!-- Dynamic section order: 有数据的在前，都有/都无时智能提醒在前 -->
         <template v-for="section in sectionOrder" :key="section">
 
-          <!-- 即将到期 + 闲置资产 -->
+          <!-- 即将到期 + 即将还款 + 闲置资产 -->
           <template v-if="section === 'expiring'">
-            <div class="reminder-section-label">{{ t('reminders.expiringSoon') }}</div>
+            <!-- 资产到期 -->
             <template v-if="expiringAssets.length > 0">
+              <div class="reminder-section-label">{{ t('reminders.expiringSoon') }}</div>
               <div
                 v-for="item in expiringAssets"
                 :key="`exp-${item.id}`"
@@ -38,8 +40,34 @@
                 </div>
               </div>
             </template>
+
+            <!-- 还款到期 -->
+            <template v-if="upcomingPayments.length > 0">
+              <div class="reminder-section-label">{{ t('reminders.upcomingPayments') }}</div>
+              <div
+                v-for="item in upcomingPayments"
+                :key="`pay-${item.liability_id}`"
+                class="expiring-row payment-row"
+                :class="getPaymentUrgencyClass(item.due_date)"
+                @click="goToLiability(item.liability_id)"
+              >
+                <van-icon name="gold-coin-o" class="expiring-icon" />
+                <div class="expiring-content">
+                  <div class="expiring-name">{{ item.name }}</div>
+                  <div class="expiring-meta">{{ item.due_date }} · {{ t('liability.title') }}</div>
+                </div>
+                <div class="expiring-right">
+                  <div class="payment-amount">¥{{ (item.amount ?? 0).toLocaleString() }}</div>
+                  <div class="expiring-remaining" :class="getPaymentUrgencyClass(item.due_date)">
+                    {{ formatPaymentDays(item.due_date) }}
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- 无任何到期时的空状态 -->
             <van-empty
-              v-else
+              v-if="expiringAssets.length === 0 && upcomingPayments.length === 0"
               :description="t('reminders.expiringSoonEmpty')"
               image-size="60"
               class="section-empty"
@@ -101,11 +129,12 @@ import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useRemindersStore } from '@/stores/reminders'
 import type { LowUsageItem } from '@/types'
-import type { ExpiringSoonItem } from '@/api/dashboard'
+import type { ExpiringSoonItem, UpcomingPaymentItem } from '@/api/dashboard'
 
 const props = defineProps<{
   idleAssets?: LowUsageItem[]
   expiringAssets?: ExpiringSoonItem[]
+  upcomingPayments?: UpcomingPaymentItem[]
 }>()
 
 defineEmits<{
@@ -120,10 +149,11 @@ const loaded = ref(false)
 
 const idleAssets = computed(() => props.idleAssets ?? [])
 const expiringAssets = computed(() => props.expiringAssets ?? [])
+const upcomingPayments = computed(() => props.upcomingPayments ?? [])
 
 // 排序规则：有数据的在前；都有/都无时，智能提醒在前
 // 注意：闲置资产固定跟在即将到期后面，不参与排序决策
-const hasExpiringSoon = computed(() => expiringAssets.value.length > 0)
+const hasExpiringSoon = computed(() => expiringAssets.value.length > 0 || upcomingPayments.value.length > 0)
 const hasSmartReminders = computed(() => store.reminders.length > 0)
 
 const sectionOrder = computed(() => {
@@ -136,7 +166,7 @@ const sectionOrder = computed(() => {
 })
 
 const totalCount = computed(
-  () => expiringAssets.value.length + idleAssets.value.length + store.summary.total
+  () => expiringAssets.value.length + idleAssets.value.length + upcomingPayments.value.length + store.summary.total
 )
 
 onMounted(() => {
@@ -178,6 +208,32 @@ function getRemainingClass(item: ExpiringSoonItem): string {
 
 function goToAsset(id: string) {
   router.push(`/assets/${id}`)
+}
+
+function goToLiability(id: string) {
+  router.push(`/liabilities/${id}`)
+}
+
+function daysUntilDue(dueDateStr: string): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDateStr)
+  due.setHours(0, 0, 0, 0)
+  return Math.round((due.getTime() - today.getTime()) / 86_400_000)
+}
+
+function formatPaymentDays(dueDateStr: string): string {
+  const days = daysUntilDue(dueDateStr)
+  if (days < 0) return t('reminders.expiredDays', { days: Math.abs(days) })
+  if (days === 0) return t('reminders.dueToday')
+  return t('reminders.dueInDays', { days })
+}
+
+function getPaymentUrgencyClass(dueDateStr: string): string {
+  const days = daysUntilDue(dueDateStr)
+  if (days <= 3) return 'urgent'
+  if (days <= 7) return 'warning'
+  return 'normal'
 }
 </script>
 
@@ -274,5 +330,29 @@ function goToAsset(id: string) {
 .expiring-remaining.expired {
   background: #f5f5f5;
   color: #999;
+}
+
+.expiring-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.payment-amount {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--van-text-color);
+}
+
+[data-theme='dark'] .expiring-remaining.warning {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+}
+
+[data-theme='dark'] .expiring-remaining.urgent {
+  background: rgba(248, 113, 113, 0.15);
+  color: #f87171;
 }
 </style>

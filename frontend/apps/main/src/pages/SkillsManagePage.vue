@@ -17,6 +17,9 @@
         :label="t(`skills.capability.${skill.id}.description`)"
         center
       >
+        <template #icon>
+          <span class="skill-icon">{{ getSkillIcon(skill.id) }}</span>
+        </template>
         <template #value>
           <van-switch
             :model-value="skill.is_enabled"
@@ -403,6 +406,20 @@ const RESERVED_NAMES = ['chat', 'time_machine']
 
 const SKILL_ID_RE = /^[a-z][a-z0-9_-]*$/
 
+// Skill icons mapping - matches skills.capability.{id}.name emoji prefixes in i18n
+const skillIcons: Record<string, string> = {
+  alerts: '🔔',
+  allocation: '⚖️',
+  disposal: '🗑️',
+  liability: '💳',
+  report: '📊',
+  spending_leak: '🔍',
+}
+
+function getSkillIcon(skillId: string): string {
+  return skillIcons[skillId] || '✨'
+}
+
 function deriveSlug(raw: string): string {
   return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 }
@@ -646,6 +663,11 @@ onMounted(loadSkills)
 
 .section {
   margin-top: 12px;
+}
+
+.skill-icon {
+  margin-right: 8px;
+  font-size: 20px;
 }
 
 .custom-skill-actions {

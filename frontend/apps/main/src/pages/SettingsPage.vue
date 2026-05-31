@@ -25,7 +25,6 @@
       </van-cell>
       <van-cell :title="t('settings.language')" :value="languageLabel" is-link @click="showLanguagePicker = true" />
       <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" is-link @click="showCurrencyPicker = true" />
-      <van-cell :title="t('settings.defaultView')" :value="viewModeLabel" is-link @click="showViewModePicker = true" />
     </van-cell-group>
 
     <!-- 家庭管理 -->
@@ -70,6 +69,9 @@
         :title="t('settings.enableAI')"
         :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
       >
+        <template #icon>
+          <span class="cell-icon">💡</span>
+        </template>
         <template #value>
           <van-switch
             :model-value="aiEnabled"
@@ -79,14 +81,26 @@
           />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.aiAssistant')" icon="smile-o" is-link to="/settings/ai" />
-      <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
-      <van-cell :title="t('settings.skillsManage')" icon="star-o" is-link to="/settings/ai/skills" />
-      <van-cell
-        :title="t('settings.agentsManage')"
-        is-link
-        to="/settings/ai/agents"
-      />
+      <van-cell :title="t('settings.aiAssistant')" is-link to="/settings/ai">
+        <template #icon>
+          <NuminaLogo :width="24" class="cell-logo" />
+        </template>
+      </van-cell>
+      <van-cell :title="t('settings.mcpManage')" is-link to="/settings/ai/mcp">
+        <template #icon>
+          <span class="cell-icon">🔗</span>
+        </template>
+      </van-cell>
+      <van-cell :title="t('settings.skillsManage')" is-link to="/settings/ai/skills">
+        <template #icon>
+          <span class="cell-icon">✨</span>
+        </template>
+      </van-cell>
+      <van-cell :title="t('settings.agentsManage')" is-link to="/settings/ai/agents">
+        <template #icon>
+          <span class="cell-icon">🤖</span>
+        </template>
+      </van-cell>
     </van-cell-group>
 
     <!-- 数据管理 -->
@@ -126,16 +140,6 @@
       v-model:show="showCurrencyPicker"
       v-model="selectedCurrency"
     />
-
-    <!-- View Mode Picker -->
-    <van-popup v-model:show="showViewModePicker" round position="bottom">
-      <van-picker
-        :columns="viewModeOptions"
-        :model-value="[authStore.user?.view_mode || 'card']"
-        @confirm="onViewModeConfirm"
-        @cancel="showViewModePicker = false"
-      />
-    </van-popup>
 
     <!-- Theme Color Picker -->
     <van-popup v-model:show="showThemeColorPicker" round position="bottom">
@@ -193,6 +197,7 @@ import { updateSettings } from '@/api/auth'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
+import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import axios from 'axios'
 
 const { t } = useI18n()
@@ -249,7 +254,6 @@ async function onToggleAI(val: boolean) {
 const showThemePicker = ref(false)
 const showLanguagePicker = ref(false)
 const showCurrencyPicker = ref(false)
-const showViewModePicker = ref(false)
 const showThemeColorPicker = ref(false)
 const showTitleDialog = ref(false)
 const editTitleValue = ref('')
@@ -279,11 +283,6 @@ const languageOptions = [
   { text: t('settings.languageEnUS'), value: 'en-US' },
 ]
 
-const viewModeOptions = [
-  { text: t('settings.viewCard'), value: 'card' },
-  { text: t('settings.viewList'), value: 'list' },
-]
-
 const themeLabel = computed(() => {
   const theme = authStore.user?.theme
   if (theme === 'dark') return '🌙 ' + t('settings.themeDark')
@@ -293,10 +292,6 @@ const themeLabel = computed(() => {
 
 const languageLabel = computed(() => {
   return authStore.user?.language === 'en-US' ? t('settings.languageEnUS') : t('settings.languageZhCN')
-})
-
-const viewModeLabel = computed(() => {
-  return authStore.user?.view_mode === 'list' ? t('settings.viewList') : t('settings.viewCard')
 })
 
 async function updateSetting(key: string, value: string) {
@@ -325,11 +320,6 @@ watch(selectedCurrency, (newCurrency) => {
     updateSetting('default_currency', newCurrency)
   }
 })
-
-function onViewModeConfirm({ selectedOptions }: { selectedOptions: Array<{ text: string; value: string }> }) {
-  updateSetting('view_mode', selectedOptions[0].value)
-  showViewModePicker.value = false
-}
 
 function onEditFamilyTitle() {
   if (authStore.user?.role !== 'owner') {
@@ -427,5 +417,14 @@ async function onLogout() {
 }
 [data-theme='dark'] .color-option.active {
   border-color: var(--text-primary);
+}
+
+.cell-logo {
+  margin-right: 8px;
+}
+
+.cell-icon {
+  margin-right: 8px;
+  font-size: 20px;
 }
 </style>

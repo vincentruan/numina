@@ -44,6 +44,8 @@ export default {
     returns: 'Investment Returns',
     fabAddAsset: 'Add Asset',
     fabImportBill: 'Import Statement',
+    viewModeCard: 'Card View',
+    viewModeList: 'List View',
     upcomingPayments: {
       title: 'Upcoming Payments',
     },

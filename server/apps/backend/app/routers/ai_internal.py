@@ -498,17 +498,24 @@ def internal_get_skill_config(
 
 @router.get("/skill-registry/{family_id}")
 def get_skill_registry(
-    family_id: int,
-    x_internal_token: str = Header(..., alias="X-Internal-Token"),
+    family_id: str,
+    auth_family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ) -> list[dict]:
-    """Internal endpoint for agent to fetch family skill registry."""
-    if x_internal_token != settings.INTERNAL_TOKEN:
-        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS, "invalid token")
+    """Internal endpoint for agent to fetch family skill registry.
 
+    Uses verify_agent_token dependency like other internal routes.
+    The family_id in path must match the authenticated family_id from token.
+    """
+    # Verify path family_id matches authenticated family_id
+    if family_id != auth_family_id:
+        raise AppError(ErrorCode.FORBIDDEN, "family_id mismatch")
+
+    # Convert str to int for database query (Snowflake IDs are passed as strings)
+    family_id_int = int(family_id)
     records = (
         db.query(SkillRegistry)
-        .filter(SkillRegistry.family_id == family_id)
+        .filter(SkillRegistry.family_id == family_id_int)
         .all()
     )
     return [

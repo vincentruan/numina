@@ -26,15 +26,13 @@
           />
         </div>
 
-        <!-- Smart Reminders (includes expiring soon + idle + AI reminders) -->
+        <!-- Smart Reminders (includes expiring soon + upcoming payments + idle + AI reminders) -->
         <SmartRemindersCard
           :idle-assets="dashboardStore.lowUsageAssets.filter((a) => a.usage_frequency === 'idle')"
           :expiring-assets="dashboardStore.expiringSoonAssets"
+          :upcoming-payments="upcomingPayments"
           @select-status="onStatusSelect"
         />
-
-        <!-- Upcoming Liability Payments -->
-        <UpcomingPaymentsCard v-if="upcomingPayments.length > 0" :payments="upcomingPayments" />
 
         <!-- Sticky Filter Bar: Status + Category -->
         <div ref="filterBarRef" class="filter-bar-sticky">
@@ -91,6 +89,28 @@
         <div v-if="!selectionMode" class="asset-section">
           <div class="section-header">
             <span class="section-title">{{ sectionTitle }}</span>
+            <div class="view-mode-toggle">
+              <button
+                class="view-toggle-btn"
+                :class="{ active: viewMode === 'list' }"
+                :aria-label="t('dashboard.viewModeList')"
+                :aria-pressed="viewMode === 'list'"
+                :disabled="updatingViewMode"
+                @click="setViewMode('list')"
+              >
+                <van-icon name="bars" size="18" />
+              </button>
+              <button
+                class="view-toggle-btn"
+                :class="{ active: viewMode === 'card' }"
+                :aria-label="t('dashboard.viewModeCard')"
+                :aria-pressed="viewMode === 'card'"
+                :disabled="updatingViewMode"
+                @click="setViewMode('card')"
+              >
+                <van-icon name="apps-o" size="18" />
+              </button>
+            </div>
           </div>
 
           <!-- Sentinel: top of asset list, used to detect when to unfreeze filter bar -->
@@ -275,6 +295,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
 import { getUpcomingPayments } from '@/api/dashboard'
+import { updateSettings } from '@/api/auth'
 import type { UpcomingPaymentItem } from '@/api/dashboard'
 
 import { getIconId } from '@/utils/icon'
@@ -284,7 +305,6 @@ import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
-import UpcomingPaymentsCard from '@/components/dashboard/UpcomingPaymentsCard.vue'
 import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 
 const { t } = useI18n()
@@ -294,6 +314,7 @@ const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
 const choreStore = useChoreStore()
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
+const updatingViewMode = ref(false)
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
 
@@ -569,6 +590,19 @@ async function onRefresh() {
   refreshing.value = false
 }
 
+async function setViewMode(mode: 'card' | 'list') {
+  if (updatingViewMode.value || viewMode.value === mode) return
+  updatingViewMode.value = true
+  try {
+    await updateSettings({ view_mode: mode })
+    await authStore.fetchMe()
+  } catch {
+    showToast(t('toast.operationFailed'))
+  } finally {
+    updatingViewMode.value = false
+  }
+}
+
 onMounted(() => {
   // Fetch dashboard bundle first, then load first page of assets
   dashboardStore.fetchAll().then(() => {
@@ -736,6 +770,43 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.view-mode-toggle {
+  display: flex;
+  gap: 4px;
+}
+.view-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-xs);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  border: 1px solid var(--separator);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+.view-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.view-toggle-btn.active {
+  background: var(--van-primary-color);
+  color: var(--color-on-primary);
+  border-color: var(--van-primary-color);
+}
+[data-theme='dark'] .view-toggle-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+[data-theme='dark'] .view-toggle-btn.active {
+  background: var(--color-lavender);
+  color: #010120;
+  border-color: var(--color-lavender);
 }
 .asset-list {
   /* cards have their own margin-bottom */

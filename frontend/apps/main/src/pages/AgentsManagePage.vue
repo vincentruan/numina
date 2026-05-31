@@ -54,12 +54,13 @@ async function handleDelete(agent: Agent) {
         "
       >
         <template #icon>
-          <span style="margin-right: 8px; font-size: 20px;">
+          <span class="agent-icon-wrapper">
             <NuminaLogo
               v-if="agent.agent_name === NUMINA_AGENT_NAME"
+              :width="24"
               class="numina-logo-small"
             />
-            <span v-else>{{ agent.icon || '🤖' }}</span>
+            <span v-else class="agent-icon">{{ agent.icon || '🤖' }}</span>
           </span>
         </template>
         <template #value>
@@ -93,7 +94,9 @@ async function handleDelete(agent: Agent) {
         @click="router.push({ name: 'AgentEdit', params: { id: agent.id } })"
       >
         <template #icon>
-          <span style="margin-right: 8px; font-size: 20px;">{{ agent.icon || '🤖' }}</span>
+          <span class="agent-icon-wrapper">
+            <span class="agent-icon">{{ agent.icon || '🤖' }}</span>
+          </span>
         </template>
         <template #value>
           <div class="cell-actions" @click.stop>
@@ -150,6 +153,23 @@ async function handleDelete(agent: Agent) {
   font-size: 12px;
   color: var(--van-text-color-3);
   margin-left: 8px;
+}
+
+.agent-icon-wrapper {
+  margin-right: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.agent-icon {
+  font-size: 20px;
+}
+
+.numina-logo-small {
+  width: 24px;
 }
 
 .cell-actions {
