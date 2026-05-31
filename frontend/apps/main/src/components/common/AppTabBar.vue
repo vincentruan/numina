@@ -37,7 +37,6 @@ const activeTab = computed(() => {
   if (path === '/baby' || path.startsWith('/baby/')) return 'baby'
   if (path.startsWith('/blind-box/')) return 'baby'
   if (path === '/chore-approvals') return 'baby'
-  if (path === '/wish-review') return 'baby'
   return 'dashboard'
 })
 

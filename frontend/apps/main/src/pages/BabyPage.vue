@@ -81,111 +81,271 @@
 
           <van-tab :title="t('baby.tabWishes')">
             <div class="wish-list">
-              <div
-                v-for="wish in filteredWishes"
-                :key="wish.id"
-                class="wish-item"
-                @click="$router.push('/family/wish-review')"
-              >
-                <div class="wish-header">
-                  <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
-                  <span class="wish-name">{{ wish.name }}</span>
-                  <van-tag :type="getWishStatusType(wish.status)">{{ getWishStatusLabel(wish.status) }}</van-tag>
+              <!-- 待审批 -->
+              <template v-if="pendingReviewWishes.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.wishGroupPending') }}</h4>
+                <div
+                  v-for="wish in pendingReviewWishes"
+                  :key="wish.id"
+                  class="wish-card"
+                  @click="openWishDetail(wish)"
+                >
+                  <div class="wish-card-top">
+                    <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
+                    <div class="wish-card-info">
+                      <span class="wish-name">{{ wish.name }}</span>
+                    </div>
+                    <van-tag :type="getWishStatusType(wish.status)">{{ getWishStatusLabel(wish.status) }}</van-tag>
+                  </div>
+                  <div class="wish-meta-row">
+                    <span v-if="wish.star_coin_cost" class="wish-cost">{{ wish.star_coin_cost }} ⭐</span>
+                    <span v-else class="wish-cost wish-cost--unset">— ⭐</span>
+                    <span class="wish-owner">{{ wish.child_display_name }}</span>
+                    <span class="priority-icon" :class="wish.priority">{{ priorityShortLabel(wish.priority) }}</span>
+                  </div>
+                  <p v-if="wish.description" class="wish-desc-text">{{ truncateDesc(wish.description) }}</p>
+                  <div v-if="wish.status === 'pending_review'" class="card-actions">
+                    <button class="action-btn action-btn--success" :disabled="actioningId === wish.id" @click.stop="openApprove(wish)">
+                      <van-icon name="passed" size="16" />
+                      <span>{{ t('baby.wishApprove') }}</span>
+                    </button>
+                    <button class="action-btn action-btn--danger" :disabled="actioningId === wish.id" @click.stop="openReject(wish)">
+                      <van-icon name="close" size="16" />
+                      <span>{{ t('baby.wishReject') }}</span>
+                    </button>
+                  </div>
+                  <div v-else-if="wish.status === 'redemption_requested'" class="card-actions">
+                    <button class="action-btn action-btn--success" :disabled="actioningId === wish.id" @click.stop="openRealize(wish)">
+                      <van-icon name="gift-o" size="16" />
+                      <span>{{ t('baby.wishRealize') }}</span>
+                    </button>
+                    <button class="action-btn action-btn--muted" :disabled="actioningId === wish.id" @click.stop="doDefer(wish.id)">
+                      <van-icon name="clock-o" size="16" />
+                      <span>{{ t('baby.wishDefer') }}</span>
+                    </button>
+                  </div>
                 </div>
-                <div v-if="wish.star_coin_cost" class="wish-cost">{{ wish.star_coin_cost }} ⭐</div>
-                <van-progress
-                  v-if="wish.status === 'active' && wish.star_coin_cost"
-                  :percentage="Math.min(Math.round(((childBalances[wish.child_user_id] ?? 0) / wish.star_coin_cost) * 100), 100)"
-                  stroke-width="6"
-                  color="#f5a623"
-                />
-              </div>
+              </template>
+
+              <!-- 待实现 -->
+              <template v-if="activeWishes.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.wishGroupActive') }}</h4>
+                <div
+                  v-for="wish in activeWishes"
+                  :key="wish.id"
+                  class="wish-card"
+                  @click="openWishDetail(wish)"
+                >
+                  <div class="wish-card-top">
+                    <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
+                    <div class="wish-card-info">
+                      <span class="wish-name">{{ wish.name }}</span>
+                    </div>
+                    <van-tag :type="getWishStatusType(wish.status)">{{ getWishStatusLabel(wish.status) }}</van-tag>
+                  </div>
+                  <div class="wish-meta-row">
+                    <span v-if="wish.star_coin_cost" class="wish-cost">{{ wish.star_coin_cost }} ⭐</span>
+                    <span v-else class="wish-cost wish-cost--unset">— ⭐</span>
+                    <span class="wish-owner">{{ wish.child_display_name }}</span>
+                    <span class="priority-icon" :class="wish.priority">{{ priorityShortLabel(wish.priority) }}</span>
+                  </div>
+                  <p v-if="wish.description" class="wish-desc-text">{{ truncateDesc(wish.description) }}</p>
+                  <van-progress
+                    v-if="wish.star_coin_cost"
+                    :percentage="Math.min(Math.round(((childBalances[wish.child_user_id] ?? 0) / wish.star_coin_cost) * 100), 100)"
+                    stroke-width="6"
+                    color="#f5a623"
+                  />
+                  <div v-if="(wish.star_coin_cost ?? 0) > 0" class="card-actions">
+                    <button class="action-btn action-btn--primary" @click.stop="openEditCost(wish)">
+                      <van-icon name="edit" size="16" />
+                      <span>{{ t('baby.wishEditCost') }}</span>
+                    </button>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 已实现 -->
+              <template v-if="fulfilledWishes.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.wishGroupFulfilled') }}</h4>
+                <div
+                  v-for="wish in fulfilledWishes"
+                  :key="wish.id"
+                  class="wish-card wish-card--fulfilled"
+                  @click="openWishDetail(wish)"
+                >
+                  <div class="wish-card-top">
+                    <span class="wish-emoji-icon">{{ wish.emoji || '🌟' }}</span>
+                    <div class="wish-card-info">
+                      <span class="wish-name">{{ wish.name }}</span>
+                    </div>
+                    <van-tag :type="getWishStatusType(wish.status)">{{ getWishStatusLabel(wish.status) }}</van-tag>
+                  </div>
+                  <div class="wish-meta-row">
+                    <span v-if="wish.star_coin_cost" class="wish-cost">{{ wish.star_coin_cost }} ⭐</span>
+                    <span v-else class="wish-cost wish-cost--unset">— ⭐</span>
+                    <span class="wish-owner">{{ wish.child_display_name }}</span>
+                    <span class="priority-icon" :class="wish.priority">{{ priorityShortLabel(wish.priority) }}</span>
+                  </div>
+                  <p v-if="wish.description" class="wish-desc-text">{{ truncateDesc(wish.description) }}</p>
+                  <p v-if="wish.rejection_reason" class="wish-rejection">{{ t('baby.wishRejectionReasonLabel') }}：{{ wish.rejection_reason }}</p>
+                </div>
+              </template>
+
               <van-empty v-if="filteredWishes.length === 0" :description="t('baby.noWishes')" image-size="60" />
             </div>
           </van-tab>
 
           <van-tab :title="t('baby.tabChores')">
             <div class="chore-list">
-              <div
-                v-for="chore in filteredChores"
-                :key="chore.id"
-                class="chore-card"
-              >
-                <!-- Card top -->
-                <div class="chore-card-top">
-                  <div class="chore-card-left">
-                    <!-- Child avatar or unclaimed tag -->
-                    <template v-if="chore.is_pool_unclaimed">
-                      <van-tag type="default" class="unclaimed-tag">{{ t('baby.choreUnclaimed') }}</van-tag>
-                    </template>
-                    <template v-else-if="getChildForChore(chore)">
-                      <div
-                        class="chore-child-avatar"
-                        :style="{ background: getChildForChore(chore)?.avatar_color || '#FF6B6B' }"
-                      >
-                        {{ (getChildForChore(chore)?.display_name ?? '?').charAt(0) }}
-                      </div>
-                      <span class="chore-child-name">{{ getChildForChore(chore)?.display_name }}</span>
-                    </template>
-                  </div>
-                  <div class="chore-card-center">
+              <!-- 待审批 -->
+              <template v-if="pendingApprovalChores.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.choreGroupPendingApproval') }}</h4>
+                <div
+                  v-for="chore in pendingApprovalChores"
+                  :key="chore.id"
+                  class="chore-card"
+                >
+                  <div class="chore-card-top">
                     <span class="chore-emoji-icon">{{ chore.chore_emoji || '📋' }}</span>
-                    <span class="chore-name">{{ chore.chore_name }}</span>
-                  </div>
-                  <div class="chore-card-right">
+                    <div class="chore-card-info">
+                      <span class="chore-name">{{ chore.chore_name }}</span>
+                    </div>
                     <van-tag :type="getChoreStatusType(chore.status)">{{ getChoreStatusLabel(chore.status) }}</van-tag>
                   </div>
-                </div>
-
-                <!-- Card meta: reward + streak -->
-                <div class="chore-card-meta">
-                  <span class="chore-reward">+{{ chore.coin_reward }}⭐</span>
-                  <template v-if="chore.streak_count > 0">
-                    <span class="meta-sep">·</span>
-                    <span class="chore-streak">{{ t('baby.choreStreak', { count: chore.streak_count }) }}</span>
-                  </template>
-                </div>
-
-                <!-- Action row -->
-                <div
-                  v-if="chore.status === 'available'"
-                  class="card-actions"
-                >
-                  <!-- Pool unclaimed: show assign button -->
-                  <template v-if="chore.is_pool_unclaimed">
+                  <div class="chore-meta-row">
+                    <span class="chore-assignee">{{ getChoreAssignee(chore) }}</span>
+                    <span class="chore-reward-inline">+{{ chore.coin_reward }}⭐</span>
+                    <template v-if="chore.streak_count > 0">
+                      <span class="chore-streak-icon">🔥{{ chore.streak_count }}</span>
+                    </template>
+                  </div>
+                  <div class="card-actions">
                     <button
-                      class="action-btn action-btn--primary"
-                      :disabled="assigningId === chore.id"
-                      @click="openAssignPicker(chore)"
+                      class="action-btn action-btn--success"
+                      :disabled="actioningId === chore.id"
+                      @click.stop="doApproveChore(chore)"
                     >
-                      <van-icon name="friends" size="16" />
-                      <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
-                      <span v-else>{{ t('baby.choreAssign') }}</span>
-                    </button>
-                  </template>
-                  <!-- Assigned: show reassign + void -->
-                  <template v-else>
-                    <button
-                      class="action-btn action-btn--warning"
-                      :disabled="assigningId === chore.id || voidingId === chore.id"
-                      @click="openAssignPicker(chore)"
-                    >
-                      <van-icon name="exchange" size="16" />
-                      <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
-                      <span v-else>{{ t('baby.choreReassign') }}</span>
+                      <van-icon name="passed" size="16" />
+                      <span>{{ t('baby.choreApprove') }}</span>
                     </button>
                     <button
                       class="action-btn action-btn--danger"
-                      :disabled="assigningId === chore.id || voidingId === chore.id"
-                      @click="doVoidChore(chore)"
+                      :disabled="actioningId === chore.id"
+                      @click.stop="doRejectChore(chore)"
                     >
                       <van-icon name="close" size="16" />
-                      <span v-if="voidingId === chore.id">{{ t('baby.choreVoiding') }}</span>
-                      <span v-else>{{ t('baby.choreVoid') }}</span>
+                      <span>{{ t('baby.choreRedo') }}</span>
                     </button>
-                  </template>
+                  </div>
                 </div>
-              </div>
+              </template>
+
+              <!-- 待完成 -->
+              <template v-if="availableChores.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.choreGroupAvailable') }}</h4>
+                <div
+                  v-for="chore in availableChores"
+                  :key="chore.id"
+                  class="chore-card"
+                >
+                  <div class="chore-card-top">
+                    <span class="chore-emoji-icon">{{ chore.chore_emoji || '📋' }}</span>
+                    <div class="chore-card-info">
+                      <span class="chore-name">{{ chore.chore_name }}</span>
+                    </div>
+                    <van-tag :type="getChoreStatusType(chore.status)">{{ getChoreStatusLabel(chore.status) }}</van-tag>
+                  </div>
+                  <div class="chore-meta-row">
+                    <span class="chore-assignee">{{ getChoreAssignee(chore) }}</span>
+                    <span class="chore-reward-inline">+{{ chore.coin_reward }}⭐</span>
+                    <template v-if="chore.streak_count > 0">
+                      <span class="chore-streak-icon">🔥{{ chore.streak_count }}</span>
+                    </template>
+                  </div>
+                  <div class="card-actions">
+                    <template v-if="chore.is_pool_unclaimed">
+                      <button
+                        class="action-btn action-btn--primary"
+                        :disabled="assigningId === chore.id"
+                        @click.stop="openAssignPicker(chore)"
+                      >
+                        <van-icon name="friends" size="16" />
+                        <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
+                        <span v-else>{{ t('baby.choreAssign') }}</span>
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button
+                        class="action-btn action-btn--primary"
+                        :disabled="assigningId === chore.id || voidingId === chore.id"
+                        @click.stop="openAssignPicker(chore)"
+                      >
+                        <van-icon name="exchange" size="16" />
+                        <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
+                        <span v-else>{{ t('baby.choreReassign') }}</span>
+                      </button>
+                      <button
+                        class="action-btn action-btn--danger"
+                        :disabled="assigningId === chore.id || voidingId === chore.id"
+                        @click.stop="doVoidChore(chore)"
+                      >
+                        <van-icon name="close" size="16" />
+                        <span v-if="voidingId === chore.id">{{ t('baby.choreVoiding') }}</span>
+                        <span v-else>{{ t('baby.choreVoid') }}</span>
+                      </button>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 已完成 -->
+              <template v-if="completedChores.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.choreGroupCompleted') }}</h4>
+                <div
+                  v-for="chore in completedChores"
+                  :key="chore.id"
+                  class="chore-card chore-card--completed"
+                >
+                  <div class="chore-card-top">
+                    <span class="chore-emoji-icon">{{ chore.chore_emoji || '📋' }}</span>
+                    <div class="chore-card-info">
+                      <span class="chore-name">{{ chore.chore_name }}</span>
+                    </div>
+                    <van-tag :type="getChoreStatusType(chore.status)">{{ getChoreStatusLabel(chore.status) }}</van-tag>
+                  </div>
+                  <div class="chore-meta-row">
+                    <span class="chore-assignee">{{ getChoreAssignee(chore) }}</span>
+                    <span class="chore-reward-inline">+{{ chore.coin_reward }}⭐</span>
+                    <template v-if="chore.streak_count > 0">
+                      <span class="chore-streak-icon">🔥{{ chore.streak_count }}</span>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 已拒绝 -->
+              <template v-if="rejectedChores.length > 0">
+                <h4 class="wish-group-title">{{ t('baby.choreGroupRejected') }}</h4>
+                <div
+                  v-for="chore in rejectedChores"
+                  :key="chore.id"
+                  class="chore-card chore-card--completed"
+                >
+                  <div class="chore-card-top">
+                    <span class="chore-emoji-icon">{{ chore.chore_emoji || '📋' }}</span>
+                    <div class="chore-card-info">
+                      <span class="chore-name">{{ chore.chore_name }}</span>
+                    </div>
+                    <van-tag :type="getChoreStatusType(chore.status)">{{ getChoreStatusLabel(chore.status) }}</van-tag>
+                  </div>
+                  <div class="chore-meta-row">
+                    <span class="choreAssignee">{{ getChoreAssignee(chore) }}</span>
+                    <span class="chore-reward-inline">+{{ chore.coin_reward }}⭐</span>
+                  </div>
+                </div>
+              </template>
+
               <van-empty v-if="filteredChores.length === 0" :description="t('baby.noChores')" image-size="60" />
             </div>
 
@@ -257,6 +417,112 @@
             </template>
           </van-cell>
         </van-popup>
+
+        <!-- Wish detail bottom sheet -->
+        <van-popup v-model:show="showWishDetail" position="bottom" round style="padding: 24px 16px 40px">
+          <template v-if="detailWish">
+            <h3 class="sheet-title">{{ detailWish.emoji || '🌟' }} {{ detailWish.name }}</h3>
+            <div class="detail-row">
+              <span class="detail-label">{{ t('baby.wishDetailOwner') }}</span>
+              <span class="detail-value">{{ detailWish.child_display_name }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ t('baby.wishDetailStatus') }}</span>
+              <van-tag :type="getWishStatusType(detailWish.status)">{{ getWishStatusLabel(detailWish.status) }}</van-tag>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ t('baby.wishDetailPriority') }}</span>
+              <span class="priority-icon" :class="detailWish.priority">{{ priorityFullLabel(detailWish.priority) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">{{ t('baby.wishDetailCost') }}</span>
+              <span class="detail-value">{{ detailWish.star_coin_cost != null ? `${detailWish.star_coin_cost} ⭐` : '— ⭐' }}</span>
+            </div>
+            <div v-if="detailWish.description" class="detail-desc">
+              <span class="detail-label">{{ t('baby.wishDetailDesc') }}</span>
+              <p class="detail-desc-text">{{ detailWish.description }}</p>
+            </div>
+            <p v-if="detailWish.rejection_reason" class="wish-rejection">{{ t('baby.wishRejectionReasonLabel') }}：{{ detailWish.rejection_reason }}</p>
+            <div class="detail-actions">
+              <template v-if="detailWish.status === 'pending_review'">
+                <button class="btn-cancel" @click="showWishDetail = false">{{ t('baby.wishCancel') }}</button>
+                <button class="btn-reject-confirm" :disabled="actioning" @click="openReject(detailWish)">{{ t('baby.wishReject') }}</button>
+                <button class="btn-submit" :disabled="actioning" @click="openApprove(detailWish)">{{ t('baby.wishApprove') }}</button>
+              </template>
+              <template v-else-if="detailWish.status === 'redemption_requested'">
+                <button class="btn-cancel" @click="showWishDetail = false">{{ t('baby.wishCancel') }}</button>
+                <button class="btn-reject-confirm" :disabled="actioning" @click="openReject(detailWish)">{{ t('baby.wishReject') }}</button>
+                <button class="btn-realize-confirm" :disabled="actioning" @click="openRealize(detailWish)">{{ t('baby.wishRealize') }}</button>
+              </template>
+              <template v-else>
+                <button class="btn-cancel" style="flex:1" @click="showWishDetail = false">{{ t('baby.wishCancel') }}</button>
+              </template>
+            </div>
+          </template>
+        </van-popup>
+
+        <!-- Approve dialog -->
+        <van-popup v-model:show="showApproveDialog" position="bottom" round style="padding: 24px 16px 40px">
+          <template v-if="approveTarget">
+            <h3 class="sheet-title"><van-icon name="passed" size="20" color="var(--color-success)" /> {{ t('baby.wishApproveTitle') }}</h3>
+            <p class="dialog-desc">{{ t('baby.wishApproveDesc', { name: approveTarget.name }) }}</p>
+            <div class="cost-field">
+              <span class="cost-label">{{ t('baby.wishCostLabel') }}</span>
+              <van-field
+                v-model="approveCostInput"
+                type="number"
+                input-align="right"
+                :placeholder="t('baby.wishCostPlaceholder')"
+                class="cost-input-field"
+              />
+            </div>
+            <StarCoinSuggestion
+              :child-id="approveTarget.child_user_id"
+              @select="approveCostInput = String($event)"
+            />
+            <div v-if="wishDialogError" class="error-msg">{{ wishDialogError }}</div>
+            <div class="detail-actions">
+              <button class="btn-cancel" @click="showApproveDialog = false">{{ t('baby.wishCancel') }}</button>
+              <button class="btn-submit" :disabled="actioning || !isApproveCostValid" @click="doApprove">{{ t('baby.wishConfirmApprove') }}</button>
+            </div>
+          </template>
+        </van-popup>
+
+        <!-- Reject dialog -->
+        <van-popup v-model:show="showRejectDialog" position="bottom" round style="padding: 24px 16px 40px">
+          <template v-if="rejectTarget">
+            <h3 class="sheet-title"><van-icon name="close" size="20" color="#dc3545" /> {{ t('baby.wishRejectTitle') }}</h3>
+            <p class="dialog-desc">{{ t('baby.wishRejectDesc', { name: rejectTarget.name }) }}</p>
+            <input v-model="rejectReason" class="input" :placeholder="t('baby.wishRejectReasonPlaceholder')" maxlength="200" />
+            <div v-if="wishDialogError" class="error-msg">{{ wishDialogError }}</div>
+            <div class="detail-actions">
+              <button class="btn-cancel" @click="showRejectDialog = false">{{ t('baby.wishCancel') }}</button>
+              <button class="btn-reject-confirm" :disabled="actioning" @click="doReject">{{ t('baby.wishConfirmReject') }}</button>
+            </div>
+          </template>
+        </van-popup>
+
+        <!-- Realize dialog -->
+        <van-popup v-model:show="showRealizeDialog" position="bottom" round style="padding: 24px 16px 40px">
+          <template v-if="realizeTarget">
+            <h3 class="sheet-title">{{ t('baby.wishRealizeTitle') }}</h3>
+            <p class="dialog-desc">{{ t('baby.wishRealizeDesc', { name: realizeTarget.name, cost: realizeTarget.star_coin_cost }) }}</p>
+            <div v-if="wishDialogError" class="error-msg">{{ wishDialogError }}</div>
+            <div class="detail-actions">
+              <button class="btn-cancel" @click="showRealizeDialog = false">{{ t('baby.wishCancel') }}</button>
+              <button class="btn-realize-confirm" :disabled="actioning" @click="doRealize">{{ t('baby.wishConfirmRealize') }}</button>
+            </div>
+          </template>
+        </van-popup>
+
+        <!-- Cost-edit dialog -->
+        <WishCostEditDialog
+          v-if="editCostTarget"
+          :visible="editCostVisible"
+          :wish="editCostTarget"
+          @update:visible="editCostVisible = $event"
+          @saved="onCostEditSaved"
+        />
       </template>
     </van-pull-refresh>
   </div>
@@ -274,10 +540,12 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import PendingApprovalsSection from '@/components/dashboard/PendingApprovalsSection.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import { getAllChildBalances, getChildrenChoreStats, type ChoreStats } from '@/api/family'
-import { listParentChildWishes, type ParentWish } from '@/api/childWishes'
+import { listParentChildWishes, approveChildWish, rejectChildWish, realizeChildWish, deferChildWish, type ParentWish } from '@/api/childWishes'
 import { getFamilyChildCalendar } from '@/api/calendar'
 import { grantCoins } from '@/api/coins'
-import { getChildrenChores, assignChoreInstance, voidChoreInstance, type ChoreInstance } from '@/api/chores'
+import { getChildrenChores, assignChoreInstance, voidChoreInstance, approveChore, rejectChore, type ChoreInstance } from '@/api/chores'
+import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
+import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -347,14 +615,219 @@ const currentWishCount = computed(() => {
 })
 
 const filteredWishes = computed(() => {
-  if (!selectedChildId.value) return allWishes.value
-  return allWishes.value.filter(w => w.child_user_id === selectedChildId.value)
+  const base = selectedChildId.value
+    ? allWishes.value.filter(w => w.child_user_id === selectedChildId.value)
+    : allWishes.value
+  return base
 })
 
-const filteredChores = computed(() => {
-  if (!selectedChildId.value) return allChores.value
-  return allChores.value.filter(c => c.child_user_id === String(selectedChildId.value))
+const priorityOrder: Record<string, number> = { high: 0, medium: 1, low: 2 }
+
+function sortWishes(wishes: ParentWish[]): ParentWish[] {
+  return [...wishes].sort((a, b) => {
+    const pDiff = (priorityOrder[a.priority] ?? 9) - (priorityOrder[b.priority] ?? 9)
+    if (pDiff !== 0) return pDiff
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  })
+}
+
+const pendingReviewWishes = computed(() =>
+  sortWishes(filteredWishes.value.filter(w => ['pending_review', 'redemption_requested'].includes(w.status))),
+)
+
+const activeWishes = computed(() =>
+  sortWishes(filteredWishes.value.filter(w => w.status === 'active')),
+)
+
+const fulfilledWishes = computed(() =>
+  sortWishes(filteredWishes.value.filter(w => ['fulfilled', 'realized', 'rejected'].includes(w.status))),
+)
+
+// Wish review state
+const actioningId = ref<string | null>(null)
+const actioning = ref(false)
+const wishDialogError = ref('')
+const showWishDetail = ref(false)
+const detailWish = ref<ParentWish | null>(null)
+const showApproveDialog = ref(false)
+const approveTarget = ref<ParentWish | null>(null)
+const approveCostInput = ref('')
+const isApproveCostValid = computed(() => {
+  const n = Number(approveCostInput.value)
+  return Number.isFinite(n) && n >= 1 && Math.floor(n) === n
 })
+const showRejectDialog = ref(false)
+const rejectTarget = ref<ParentWish | null>(null)
+const rejectReason = ref('')
+const showRealizeDialog = ref(false)
+const realizeTarget = ref<ParentWish | null>(null)
+const editCostTarget = ref<ParentWish | null>(null)
+const editCostVisible = ref(false)
+
+function truncateDesc(desc: string, max = 50): string {
+  return desc.length > max ? desc.slice(0, max) + '...' : desc
+}
+
+function priorityShortLabel(p: string): string {
+  const map: Record<string, string> = { high: '🔥高', medium: '⭐中', low: '💤低' }
+  return map[p] ?? p
+}
+
+function priorityFullLabel(p: string): string {
+  const map: Record<string, string> = { high: t('baby.wishPriorityHigh'), medium: t('baby.wishPriorityMedium'), low: t('baby.wishPriorityLow') }
+  return map[p] ?? p
+}
+
+function openWishDetail(wish: ParentWish) {
+  detailWish.value = wish
+  showWishDetail.value = true
+}
+
+function openApprove(wish: ParentWish) {
+  approveTarget.value = wish
+  approveCostInput.value = wish.star_coin_cost != null ? String(wish.star_coin_cost) : ''
+  wishDialogError.value = ''
+  showWishDetail.value = false
+  showApproveDialog.value = true
+}
+
+function openReject(wish: ParentWish) {
+  rejectTarget.value = wish
+  rejectReason.value = ''
+  wishDialogError.value = ''
+  showWishDetail.value = false
+  showRejectDialog.value = true
+}
+
+function openRealize(wish: ParentWish) {
+  realizeTarget.value = wish
+  wishDialogError.value = ''
+  showWishDetail.value = false
+  showRealizeDialog.value = true
+}
+
+async function doApprove() {
+  if (!approveTarget.value) return
+  const cost = Math.round(Number(approveCostInput.value))
+  if (!Number.isFinite(cost) || cost < 1) return
+  actioning.value = true
+  wishDialogError.value = ''
+  try {
+    await approveChildWish(approveTarget.value.id, cost)
+    showApproveDialog.value = false
+    showToast(t('toast.wishApproved'))
+    await loadData()
+  } catch {
+    wishDialogError.value = t('baby.wishOperationFailed')
+  } finally {
+    actioning.value = false
+  }
+}
+
+async function doReject() {
+  if (!rejectTarget.value) return
+  actioning.value = true
+  wishDialogError.value = ''
+  try {
+    await showConfirmDialog({
+      title: t('baby.wishRejectTitle'),
+      message: t('baby.wishRejectConfirmMsg', { name: rejectTarget.value.name }),
+    })
+  } catch {
+    actioning.value = false
+    return
+  }
+  try {
+    await rejectChildWish(rejectTarget.value.id, rejectReason.value || undefined)
+    showRejectDialog.value = false
+    showToast(t('toast.wishRejected'))
+    await loadData()
+  } catch {
+    wishDialogError.value = t('baby.wishOperationFailed')
+  } finally {
+    actioning.value = false
+  }
+}
+
+async function doRealize() {
+  if (!realizeTarget.value) return
+  actioning.value = true
+  wishDialogError.value = ''
+  try {
+    await realizeChildWish(realizeTarget.value.id)
+    showRealizeDialog.value = false
+    showToast(t('toast.wishRealized'))
+    await loadData()
+  } catch {
+    wishDialogError.value = t('baby.wishOperationFailed')
+  } finally {
+    actioning.value = false
+  }
+}
+
+async function doDefer(wishId: string) {
+  actioningId.value = wishId
+  try {
+    await deferChildWish(wishId)
+    showToast(t('toast.wishDeferred'))
+    await loadData()
+  } catch {
+    showToast(t('baby.wishOperationFailed'))
+  } finally {
+    actioningId.value = null
+  }
+}
+
+function openEditCost(wish: ParentWish) {
+  editCostTarget.value = wish
+  editCostVisible.value = true
+}
+
+function onCostEditSaved() {
+  editCostTarget.value = null
+  loadData()
+}
+
+const filteredChores = computed(() => {
+  const base = selectedChildId.value
+    ? allChores.value.filter(c => c.child_user_id === String(selectedChildId.value))
+    : allChores.value
+  return base
+})
+
+const pendingApprovalChores = computed(() =>
+  [...filteredChores.value.filter(c => c.status === 'pending_approval')].sort((a, b) => {
+    const ta = a.submitted_at ? new Date(a.submitted_at).getTime() : 0
+    const tb = b.submitted_at ? new Date(b.submitted_at).getTime() : 0
+    return tb - ta
+  }),
+)
+
+const availableChores = computed(() =>
+  [...filteredChores.value.filter(c => c.status === 'available')].sort((a, b) => {
+    const ta = a.claimed_at ? new Date(a.claimed_at).getTime() : 0
+    const tb = b.claimed_at ? new Date(b.claimed_at).getTime() : 0
+    return ta - tb
+  }),
+)
+
+const completedChores = computed(() =>
+  [...filteredChores.value.filter(c => c.status === 'approved')].sort((a, b) => {
+    const ta = a.approved_at ? new Date(a.approved_at).getTime() : 0
+    const tb = b.approved_at ? new Date(b.approved_at).getTime() : 0
+    return tb - ta
+  }),
+)
+
+const rejectedChores = computed(() =>
+  [...filteredChores.value.filter(c => c.status === 'rejected')],
+)
+
+function getChoreAssignee(chore: ChoreInstance): string {
+  if (chore.is_pool_unclaimed) return t('baby.choreUnclaimed')
+  const child = getChildForChore(chore)
+  return child?.display_name ?? '?'
+}
 
 const weeklyCompletionRate = computed(() => {
   const stats = currentChoreStats.value
@@ -380,6 +853,7 @@ function getWishStatusType(status: string): 'primary' | 'success' | 'warning' | 
     active: 'primary',
     redemption_requested: 'warning',
     fulfilled: 'success',
+    realized: 'success',
     rejected: 'danger',
   }
   return map[status] ?? 'default'
@@ -391,6 +865,7 @@ function getWishStatusLabel(status: string): string {
     active: t('baby.wishStatusActive'),
     redemption_requested: t('baby.wishStatusRedemptionRequested'),
     fulfilled: t('baby.wishStatusFulfilled'),
+    realized: t('baby.wishStatusFulfilled'),
     rejected: t('baby.wishStatusRejected'),
   }
   return map[status] ?? status
@@ -486,6 +961,48 @@ async function selectChildForAssign(child: { id: string | number; display_name?:
   } finally {
     assigningId.value = null
     assigningChore.value = null
+  }
+}
+
+async function doApproveChore(chore: ChoreInstance) {
+  try {
+    await showConfirmDialog({
+      title: t('baby.choreApprove'),
+      message: t('baby.choreApproveConfirm', { name: chore.chore_name }),
+    })
+  } catch {
+    return
+  }
+  actioningId.value = chore.id
+  try {
+    await approveChore(chore.id)
+    showToast(t('baby.choreApproveSuccess'))
+    await loadData()
+  } catch {
+    showToast(t('baby.choreApproveFailed'))
+  } finally {
+    actioningId.value = null
+  }
+}
+
+async function doRejectChore(chore: ChoreInstance) {
+  try {
+    await showConfirmDialog({
+      title: t('baby.choreRedo'),
+      message: t('baby.choreRedoConfirm', { name: chore.chore_name }),
+    })
+  } catch {
+    return
+  }
+  actioningId.value = chore.id
+  try {
+    await rejectChore(chore.id, true)
+    showToast(t('baby.choreRedoSuccess'))
+    await loadData()
+  } catch {
+    showToast(t('baby.choreRedoFailed'))
+  } finally {
+    actioningId.value = null
   }
 }
 
@@ -672,201 +1189,441 @@ onMounted(async () => {
   padding: 12px;
 }
 
-.wish-item {
+.wish-group-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 16px 0 8px;
+}
+
+.wish-group-title:first-child {
+  margin-top: 0;
+}
+
+.wish-card {
   background: var(--card-bg);
-  border-radius: 8px;
+  border-radius: 12px;
   padding: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-elevated, 0 2px 8px rgba(1, 1, 32, 0.06));
   cursor: pointer;
 }
 
-.wish-header {
+.wish-card--fulfilled {
+  opacity: 0.75;
+}
+
+.wish-card-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-  gap: 6px;
-}
-
-.wish-emoji-icon {
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.wish-name {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-primary);
-  flex: 1;
-}
-
-.wish-cost {
-  font-size: 12px;
-  color: #f5a623;
-  font-weight: 500;
+  gap: 8px;
   margin-bottom: 6px;
 }
 
-.calendar-wrap {
-  margin: 12px 16px 0;
-}
-
-/* Chore card styles */
-.chore-card {
-  background: var(--card-bg);
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 8px;
-}
-
-.chore-card-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.chore-card-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-.unclaimed-tag {
-  font-size: 11px;
-}
-
-.chore-child-avatar {
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
-  color: #fff;
-  flex-shrink: 0;
-}
-
-.chore-child-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.chore-card-center {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.wish-card-info {
   flex: 1;
   min-width: 0;
 }
 
-.chore-emoji-icon {
-  font-size: 18px;
+.wish-emoji-icon {
+  font-size: 20px;
   flex-shrink: 0;
 }
 
-.chore-name {
-  font-size: 14px;
-  font-weight: 500;
+.wish-name {
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.chore-card-right {
+.wish-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.wish-cost {
+  color: var(--color-cost, #f5a623);
+  font-weight: 600;
+}
+
+.wish-cost--unset {
+  color: var(--text-tertiary);
+}
+
+.wish-owner {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.priority-icon {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 8px;
+}
+
+.priority-icon.high {
+  background: var(--badge-high-bg, #ffe0e0);
+  color: var(--badge-high-text, #c0392b);
+}
+
+.priority-icon.medium {
+  background: var(--badge-medium-bg, #fff3cd);
+  color: var(--badge-medium-text, #856404);
+}
+
+.priority-icon.low {
+  background: var(--badge-low-bg, #e8f4fd);
+  color: var(--badge-low-text, #1a6fa8);
+}
+
+.wish-desc-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+  line-height: 1.4;
+}
+
+.wish-rejection {
+  font-size: 12px;
+  color: var(--van-danger-color, #ee0a24);
+  margin: 4px 0 0;
+}
+
+/* Wish detail bottom sheet */
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.detail-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.detail-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.detail-desc {
+  padding: 8px 0;
+}
+
+.detail-desc-text {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin: 4px 0 0;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.cost-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 6px 14px;
+  gap: 8px;
+}
+
+.cost-input-field {
+  flex: 1;
+  background: transparent;
+  padding: 0;
+}
+
+.cost-label {
+  font-size: 14px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.btn-submit {
+  flex: 2;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--color-success);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-reject-confirm {
+  flex: 2;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: #dc3545;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-reject-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-realize-confirm {
+  flex: 2;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f9ca24, #f0932b);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btn-realize-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 12px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.input {
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 15px;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.error-msg {
+  background: var(--error-bg, #f8d7da);
+  color: var(--error-text, #721c24);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
+.dialog-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.calendar-wrap {
+  margin: 12px 16px 0;
+}
+
+/* Chore card styles — matches wish card layout */
+.chore-card {
+  background: var(--card-bg);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-elevated, 0 2px 8px rgba(1, 1, 32, 0.06));
+}
+
+.chore-card--completed {
+  opacity: 0.75;
+}
+
+.chore-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.chore-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.chore-emoji-icon {
+  font-size: 20px;
   flex-shrink: 0;
 }
 
-/* Piano-key action buttons (from PendingApprovalsSection) */
-.card-actions {
-  display: flex;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-  margin-top: 12px;
+.chore-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
   overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-[data-theme='dark'] .card-actions {
-  border-color: rgba(255, 255, 255, 0.08);
+.chore-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
 }
 
-.action-btn {
+.chore-assignee {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.chore-reward-inline {
+  color: var(--color-cost, #f5a623);
+  font-weight: 600;
+}
+
+.chore-streak-icon {
+  font-size: 11px;
+  color: var(--van-warning-color, #ff976a);
+}
+
+/* Wish action buttons — pill style */
+.wish-card .card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: none;
+}
+
+.wish-card .action-btn {
   flex: 1;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 8px 4px;
+  gap: 5px;
+  padding: 10px 12px;
   border: none;
-  background: transparent;
-  color: var(--van-text-color-2, #969799);
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: opacity 0.15s, transform 0.1s;
+  min-height: 40px;
   position: relative;
-  min-height: 36px;
 }
 
-.action-btn + .action-btn::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 20%;
-  height: 60%;
-  width: 1px;
-  background: rgba(0, 0, 0, 0.06);
+.wish-card .action-btn:active {
+  transform: scale(0.97);
 }
 
-[data-theme='dark'] .action-btn + .action-btn::before {
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.action-btn:active {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-.action-btn:disabled {
+.wish-card .action-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+  transform: none;
 }
 
-.action-btn--primary {
-  color: var(--van-primary-color, #1989fa);
+.wish-card .action-btn--success {
+  color: #fff;
+  background: var(--color-success);
 }
 
-.action-btn--warning {
-  color: var(--van-warning-color, #ff976a);
+.wish-card .action-btn--danger {
+  color: #fff;
+  background: var(--van-danger-color, #ee0a24);
 }
 
-.action-btn--danger {
-  color: var(--van-danger-color, #ee0a24);
+.wish-card .action-btn--muted {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
 }
 
-/* Chore card meta row */
-.chore-card-meta {
+.wish-card .action-btn--primary {
+  color: #fff;
+  background: var(--van-primary-color, #1989fa);
+}
+
+/* Chore card action buttons — pill style, matching wish cards */
+.chore-card .card-actions {
   display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: none;
+}
+
+.chore-card .action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  font-size: 12px;
+  justify-content: center;
+  gap: 5px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+  min-height: 40px;
+  position: relative;
 }
 
-.chore-reward {
-  color: var(--van-warning-color, #ff976a);
-  font-weight: 500;
+.chore-card .action-btn:active {
+  transform: scale(0.97);
 }
 
-.meta-sep {
-  color: var(--van-text-color-3, #c8c8cc);
+.chore-card .action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
 }
 
-.chore-streak {
-  color: var(--van-text-color-2, #969799);
+.chore-card .action-btn--primary {
+  color: #fff;
+  background: var(--van-primary-color, #1989fa);
+}
+
+.chore-card .action-btn--warning {
+  color: #fff;
+  background: var(--van-warning-color, #ff976a);
+}
+
+.chore-card .action-btn--danger {
+  color: #fff;
+  background: var(--van-danger-color, #ee0a24);
+}
+
+.chore-card .action-btn--success {
+  color: #fff;
+  background: var(--color-success);
+}
+
+.chore-card .action-btn--muted {
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
 }
 
 /* FAB */
