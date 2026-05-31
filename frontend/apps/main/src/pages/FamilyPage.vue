@@ -18,15 +18,18 @@
         <div class="section">
           <p class="section-heading">👥 {{ t('family.memberManagement') }}</p>
           <div class="member-cards">
-            <div v-for="member in adultMembers" :key="member.id" class="child-mgmt-card">
+            <div v-for="member in adultMembers" :key="member.id" class="child-mgmt-card" :class="{ 'member-disabled': member.is_active === false }">
               <div class="child-mgmt-header">
                 <span
                   class="child-avatar"
-                  :style="{ background: member.avatar_color || 'var(--color-primary)' }"
+                  :style="{ background: member.is_active === false ? 'var(--text-tertiary)' : (member.avatar_color || 'var(--color-primary)') }"
                 >{{ member.display_name[0] }}</span>
                 <span class="child-name">{{ member.display_name }}</span>
                 <span v-if="member.username" class="child-username">@{{ member.username }}</span>
-                <van-tag :type="getRoleTagType(member)" size="medium" style="margin-left: auto">
+                <van-tag v-if="member.is_active === false" type="danger" size="medium" style="margin-left: auto">
+                  {{ t('family.disabledTag') }}
+                </van-tag>
+                <van-tag v-else :type="getRoleTagType(member)" size="medium" style="margin-left: auto">
                   {{ getRoleLabel(member) }}
                 </van-tag>
               </div>
@@ -777,6 +780,10 @@ onMounted(async () => {
   flex-direction: column;
   gap: 12px;
   padding: 0 16px;
+}
+
+.member-disabled {
+  opacity: 0.55;
 }
 
 .sheet-title {

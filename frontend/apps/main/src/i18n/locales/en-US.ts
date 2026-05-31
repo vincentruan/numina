@@ -617,6 +617,7 @@ export default {
     memberDisabled: '✅ Account disabled',
     memberEnabled: '✅ Account enabled',
     memberPasswordReset: '✅ Password reset',
+    disabledTag: 'Disabled',
     memberCount: 'members',
     inviteCodeCopied: 'Invite code copied',
     regenerateInviteCode: 'Regenerate Invite Code',

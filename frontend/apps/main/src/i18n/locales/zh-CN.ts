@@ -773,6 +773,7 @@ export default {
     memberDisabled: '✅ 账户已禁用',
     memberEnabled: '✅ 账户已启用',
     memberPasswordReset: '✅ 密码已重置',
+    disabledTag: '已禁用',
     childManagement: '孩子管理',
     memberCount: '人',
     inviteCodeCopied: '邀请码已复制',

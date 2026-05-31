@@ -11,7 +11,7 @@ def get_family_info(db: Session, user: User) -> Family:
 
 
 def get_family_members(db: Session, user: User) -> list[User]:
-    return db.query(User).filter(User.family_id == user.family_id, User.is_active == True).all()
+    return db.query(User).filter(User.family_id == user.family_id).all()
 
 
 def is_root(db: Session, user: User) -> bool:
