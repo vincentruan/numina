@@ -949,7 +949,7 @@ export default {
     mcpManage: 'MCP 服务管理',
     skillsManage: '技能管理',
     agentsManage: '智能体管理',
-    coinRate: '⭐ 星星币兑换比例',
+    coinRate: '星星币兑换比例',
     coinRateValue: '铜→银 {c2s}，银→金 {s2g}',
     coinCopperToSilver: '铜→银',
     coinSilverToGold: '银→金',

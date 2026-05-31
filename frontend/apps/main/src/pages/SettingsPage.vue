@@ -7,24 +7,25 @@
       <van-cell
         :title="t('family.familyName')"
         :value="familyStore.family?.custom_title || familyStore.family?.name"
+        icon="home-o"
         :is-link="authStore.user?.role === 'owner'"
         @click="onEditFamilyTitle"
       />
-      <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name" />
-      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" />
-      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" />
+      <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name" icon="user-o" />
+      <van-cell :title="t('settings.username')" :value="authStore.user?.username ?? ''" icon="idcard-o" />
+      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" icon="medal-o" />
     </van-cell-group>
 
     <!-- 外观与偏好 -->
     <van-cell-group inset :title="t('settings.userSettings')" class="section">
-      <van-cell :title="t('settings.theme')" :value="themeLabel" is-link @click="showThemePicker = true" />
-      <van-cell :title="t('settings.themeColor')" is-link @click="showThemeColorPicker = true">
+      <van-cell :title="t('settings.theme')" :value="themeLabel" icon="sun-o" is-link @click="showThemePicker = true" />
+      <van-cell :title="t('settings.themeColor')" icon="diamond-o" is-link @click="showThemeColorPicker = true">
         <template #value>
           <span class="theme-color-preview" :style="{ backgroundColor: currentThemeColor }"></span>
         </template>
       </van-cell>
-      <van-cell :title="t('settings.language')" :value="languageLabel" is-link @click="showLanguagePicker = true" />
-      <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" is-link @click="showCurrencyPicker = true" />
+      <van-cell :title="t('settings.language')" :value="languageLabel" icon="global-o" is-link @click="showLanguagePicker = true" />
+      <van-cell :title="t('settings.defaultCurrency')" :value="authStore.user?.default_currency || 'CNY'" icon="balance-o" is-link @click="showCurrencyPicker = true" />
     </van-cell-group>
 
     <!-- 家庭管理 -->
@@ -39,6 +40,7 @@
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.coinRate')"
         :value="t('settings.coinRateValue', { c2s: familyStore.coinCopperToSilver, s2g: familyStore.coinSilverToGold })"
+        icon="star-o"
         is-link
         to="/settings/family/coin-rates"
       />

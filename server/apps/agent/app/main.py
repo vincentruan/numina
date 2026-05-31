@@ -48,6 +48,15 @@ async def lifespan(app: FastAPI):
         import logging
         logging.getLogger(__name__).warning("DeerFlow engine init failed: %s", _e)
 
+    # Initialize AsyncSqliteSaver checkpointer for LangGraph conversation persistence.
+    # Must be done in async context (lifespan) so the async context manager is entered properly.
+    try:
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import async_init_checkpointer
+        await async_init_checkpointer()
+    except Exception as _e:
+        import logging
+        logging.getLogger(__name__).warning("AsyncSqliteSaver init failed: %s", _e)
+
     yield
 
     # Shutdown
@@ -57,7 +66,7 @@ async def lifespan(app: FastAPI):
         from apps.agent.services.deerflow_adapter.family_adapter_cache import (
             close_shared_checkpointer,
         )
-        close_shared_checkpointer()
+        await close_shared_checkpointer()
     except Exception:
         pass
     try:

@@ -752,7 +752,7 @@ export default {
     enableAI: 'Enable AI Assistant',
     enableAIDesc: 'Requires at least one model configured',
     enableAINoModel: '⚠️ Please configure at least one model first',
-    coinRate: '⭐ Star Coin Exchange Rate',
+    coinRate: 'Star Coin Exchange Rate',
     coinRateValue: 'Bronze→Silver {c2s}, Silver→Gold {s2g}',
     coinCopperToSilver: 'Bronze→Silver',
     coinSilverToGold: 'Silver→Gold',
