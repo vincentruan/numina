@@ -89,3 +89,11 @@ export function updateMemberInfo(
 ) {
   return http.patch(`/family/members/${memberId}/info`, data)
 }
+
+export function resetMemberPassword(memberId: string, newPassword: string) {
+  return http.post(`/family/members/${memberId}/reset-password`, { new_password: newPassword })
+}
+
+export function updateMemberStatus(memberId: string, isActive: boolean) {
+  return http.patch(`/family/members/${memberId}/status`, { is_active: isActive })
+}
