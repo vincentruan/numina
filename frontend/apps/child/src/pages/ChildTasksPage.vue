@@ -647,6 +647,9 @@ onUnmounted(() => {
 }
 
 [data-theme="dark"] .balance-card {
+  background:
+    linear-gradient(135deg, rgba(var(--color-brand-ochre-rgb), 0.16), rgba(var(--color-brand-peach-rgb), 0.10)),
+    var(--color-surface-card);
   --coin-text-gold:   var(--color-on-feature-ochre);
   --coin-text-silver: var(--color-on-feature-ochre);
   --coin-text-copper: var(--color-on-feature-ochre);

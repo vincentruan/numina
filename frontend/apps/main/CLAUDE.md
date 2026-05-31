@@ -170,6 +170,26 @@ Three user preferences. Language and theme mode are persisted server-side on `Us
 - Vant adapts automatically via `<van-config-provider>` — do not override Vant colors manually.
 - Test both modes before reporting done.
 
+#### 🌙 暗黑模式视觉规范 (HIG-aligned, Together AI 系)
+
+四条标准在 token 之外补足"该写成什么样"。WCAG AA (≥4.5:1) 是底线，不是目标。
+
+1. **多色卡片** — 在 `var(--card-bg)` (`#12122a` 深午夜蓝) 之上叠日间语义色的低饱和 tint：
+   `linear-gradient(135deg, rgba(<日间色>, 0.14), rgba(<辅色>, 0.08))`，alpha ≤ 0.18。
+   `NetWorthCard` / FAB 菜单是参考实现；`AlertCards` / hero 卡的"纯换底"是历史路线，新代码统一走 tint 叠色。
+2. **主文本** — 一律 `var(--text-primary)` (`#f5f5f5`)，对齐 DESIGN.md "Pure White on dark"。
+   不允许局部硬编码 `#fff` / `#f0f0f0` 等等价值。
+3. **次级标签** — `var(--text-secondary)` (`#c8c8d0`) 优先；卡片内 caption 在 tint 表面上的 alpha **floor 是 0.55**
+   （在 `#12122a` + 14% tint 上 ≈ 5:1，AA 余量已经很薄）。`WishDetailPage`/`AssetDetailPage`/`AIHubPage` 的
+   α=0.30/0.40/0.45 是已知技术债，新代码勿沿袭。
+4. **语义高亮** — 红绿蓝琥珀保留色相家族；暗黑下用"提亮 + 降饱和"变体并校验对比度 ≥4.5:1。
+   `var(--van-primary-color)` 在暗黑下被赋为字面量 `#bdbbff`（与日间 `--color-lavender` 同值），勿另立强调色。
+
+**红线 1**：themable 元素禁止静态 `style="background:..."` / `style="color:..."`。inline 特异性 (1,0,0,0) 静默压过所有 `[data-theme='dark']` 规则。
+参见 `docs/solutions/ui-bugs/dark-mode-inline-style-specificity-2026-05-30.md`。
+
+**红线 2**：组件级 `[data-theme='dark']` 规则**不要硬编码颜色字面量**（如 `#6ee7a0`、`#fca5a5`）。消费 token；token 缺时按上文规则补到 `style.css`。
+
 ### Theme color (`localStorage('theme-primary')` → `--van-primary-color` + `--theme-primary`)
 
 - Interactive elements use `var(--van-primary-color)` — never hardcode primary colors.

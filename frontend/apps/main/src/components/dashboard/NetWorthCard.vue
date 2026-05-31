@@ -105,7 +105,7 @@ const changeText = computed(() => {
       rgba(189, 187, 255, 0.04) 50%,
       transparent 100%),
     #010120;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 [data-theme='dark'] .overview-card::before {
   background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
@@ -127,7 +127,7 @@ const changeText = computed(() => {
   font-family: 'Georgia', monospace;
 }
 [data-theme='dark'] .ov-label {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .ov-amount {
@@ -146,7 +146,7 @@ const changeText = computed(() => {
   line-height: 1.05;
 }
 [data-theme='dark'] .ov-amount :deep(.money-display) {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 /* Trend entry: icon + text, flex item aligned right */
@@ -228,7 +228,7 @@ const changeText = computed(() => {
   color: rgba(0, 0, 0, 0.50);
 }
 [data-theme='dark'] .ov-count {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .ov-change.positive {
@@ -236,14 +236,14 @@ const changeText = computed(() => {
   font-weight: 500;
 }
 [data-theme='dark'] .ov-change.positive {
-  color: #6ee7a0;
+  color: var(--color-trend-down);
 }
 .ov-change.negative {
   color: #dc2626;
   font-weight: 500;
 }
 [data-theme='dark'] .ov-change.negative {
-  color: #fca5a5;
+  color: var(--color-trend-up);
 }
 
 /* Stats row: glass container, sharp 8px radius, dark-blue-tinted shadow */
@@ -280,7 +280,7 @@ const changeText = computed(() => {
   font-family: 'Georgia', monospace;
 }
 [data-theme='dark'] .ov-detail-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .ov-detail-value {
@@ -293,7 +293,7 @@ const changeText = computed(() => {
   letter-spacing: -0.16px;
 }
 [data-theme='dark'] .ov-detail-value :deep(.money-display) {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .ov-detail-divider {

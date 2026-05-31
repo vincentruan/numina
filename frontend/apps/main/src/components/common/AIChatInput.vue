@@ -378,7 +378,7 @@ onBeforeUnmount(() => {
   position: relative;
   /* Dark mode defaults */
   --ai-btn-border: rgba(255, 255, 255, 0.1);
-  --ai-btn-color: rgba(255, 255, 255, 0.4);
+  --ai-btn-color: var(--text-tertiary);
   --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
   --ai-btn-hover-color: rgba(255, 255, 255, 0.7);
   --ai-plus-border: rgba(255, 255, 255, 0.12);

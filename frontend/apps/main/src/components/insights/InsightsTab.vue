@@ -14,9 +14,9 @@
       </div>
       <div class="insight-grid">
         <!-- 购入同比上月 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #f3f0ff, #e8f4ff)">
+        <div class="insight-stat-card isc-card--yoy">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ede9ff">🛍️</div>
+            <div class="isc-icon">🛍️</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.purchaseYoY') }}</div>
           </div>
           <div class="isc-value" :class="smartDiscovery.purchase_yoy >= 0 ? 'up' : 'down'">
@@ -26,15 +26,15 @@
             <span class="isc-badge" :class="smartDiscovery.purchase_yoy >= 0 ? 'up' : 'down'">
               {{ smartDiscovery.purchase_yoy >= 0 ? '▲' : '▼' }} {{ Math.abs(smartDiscovery.purchase_yoy) }}%
             </span>
-            <span style="color: #ccc">{{ t('insights.smartDiscovery.vsLastMonth') }}</span>
+            <span class="isc-sub-meta">{{ t('insights.smartDiscovery.vsLastMonth') }}</span>
           </div>
           <div class="isc-bg-icon">🛍️</div>
         </div>
 
         <!-- 最高日均成本 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #fff8f0, #fff3e0)">
+        <div class="insight-stat-card isc-card--high">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ffefd9">📈</div>
+            <div class="isc-icon">📈</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.highestDailyCost') }}</div>
           </div>
           <div class="isc-name" v-if="smartDiscovery.highest_daily_cost">{{ smartDiscovery.highest_daily_cost.name }}</div>
@@ -50,9 +50,9 @@
         </div>
 
         <!-- 最低日均成本 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #f0fff8, #e6faf2)">
+        <div class="insight-stat-card isc-card--low">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #d5f5e8">📉</div>
+            <div class="isc-icon">📉</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.lowestDailyCost') }}</div>
           </div>
           <div class="isc-name" v-if="smartDiscovery.lowest_daily_cost">{{ smartDiscovery.lowest_daily_cost.name }}</div>
@@ -68,9 +68,9 @@
         </div>
 
         <!-- 持有最久 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #f5f0ff, #ede4ff)">
+        <div class="insight-stat-card isc-card--long">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ede0ff">⏳</div>
+            <div class="isc-icon">⏳</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.longestHeld') }}</div>
           </div>
           <div class="isc-name" v-if="smartDiscovery.longest_held">{{ smartDiscovery.longest_held.name }}</div>
@@ -86,9 +86,9 @@
         </div>
 
         <!-- 占比最高分类 -->
-        <div class="insight-stat-card" style="background: linear-gradient(135deg, #fff0f8, #ffe6f2); grid-column: span 2">
+        <div class="insight-stat-card isc-card--top">
           <div class="isc-header">
-            <div class="isc-icon" style="background: #ffdaee">🏆</div>
+            <div class="isc-icon">🏆</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.topCategoryByValue') }}</div>
           </div>
           <div class="isc-category-row" v-if="smartDiscovery.top_category">
@@ -614,6 +614,20 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+/* Light-mode card backgrounds — colored pastel gradients per category */
+.isc-card--yoy   { background: linear-gradient(135deg, #f3f0ff, #e8f4ff); }
+.isc-card--high  { background: linear-gradient(135deg, #fff8f0, #fff3e0); }
+.isc-card--low   { background: linear-gradient(135deg, #f0fff8, #e6faf2); }
+.isc-card--long  { background: linear-gradient(135deg, #f5f0ff, #ede4ff); }
+.isc-card--top   { background: linear-gradient(135deg, #fff0f8, #ffe6f2); grid-column: span 2; }
+
+/* Light-mode isc-icon backgrounds — match each card's hue */
+.isc-card--yoy  .isc-icon { background: #ede9ff; }
+.isc-card--high .isc-icon { background: #ffefd9; }
+.isc-card--low  .isc-icon { background: #d5f5e8; }
+.isc-card--long .isc-icon { background: #ede0ff; }
+.isc-card--top  .isc-icon { background: #ffdaee; }
+
 .isc-header {
   display: flex;
   align-items: center;
@@ -645,20 +659,19 @@ onMounted(async () => {
   color: var(--text-primary);
 }
 
-.isc-value.up { color: #FF4D4D; }
-.isc-value.down { color: #00C77F; }
+.isc-value.up { color: var(--color-trend-up); }
+.isc-value.down { color: var(--color-trend-down); }
 .isc-value.purple { color: var(--van-primary-color); }
-
-[data-theme='dark'] .isc-value.up { color: #fca5a5; }
-[data-theme='dark'] .isc-value.down { color: #6ee7a0; }
 
 .isc-sub {
   font-size: 11px;
-  color: #bbb;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   gap: 3px;
 }
+
+.isc-sub-meta { color: var(--text-tertiary); }
 
 .isc-badge {
   display: inline-flex;
@@ -670,11 +683,11 @@ onMounted(async () => {
   border-radius: 5px;
 }
 
-.isc-badge.up { background: #FFE8E8; color: #FF4D4D; }
-.isc-badge.down { background: #E2FBF0; color: #00A854; }
+.isc-badge.up { background: #FFE8E8; color: var(--color-trend-up); }
+.isc-badge.down { background: #E2FBF0; color: var(--color-trend-down); }
 
-[data-theme='dark'] .isc-badge.up { background: rgba(252, 165, 165, 0.15); color: #fca5a5; }
-[data-theme='dark'] .isc-badge.down { background: rgba(110, 231, 160, 0.15); color: #6ee7a0; }
+[data-theme='dark'] .isc-badge.up { background: rgba(252, 165, 165, 0.15); color: var(--color-trend-up); }
+[data-theme='dark'] .isc-badge.down { background: rgba(110, 231, 160, 0.15); color: var(--color-trend-down); }
 
 .isc-name {
   font-size: 14px;
@@ -689,18 +702,18 @@ onMounted(async () => {
 .isc-cost-val {
   font-size: 13px;
   font-weight: 700;
-  color: #FF8800;
+  color: var(--color-trend-warn);
 }
 
-.isc-cost-val.green { color: #00A854; }
+.isc-cost-val.green { color: var(--color-trend-down); }
 
-[data-theme='dark'] .isc-cost-val { color: #fbbf24; }
-[data-theme='dark'] .isc-cost-val.green { color: #6ee7a0; }
+[data-theme='dark'] .isc-cost-val { color: var(--color-trend-warn); }
+[data-theme='dark'] .isc-cost-val.green { color: var(--color-trend-down); }
 
 .isc-cost-unit {
   font-size: 10px;
   font-weight: 400;
-  color: #ccc;
+  color: var(--text-tertiary);
 }
 
 .isc-days-val {
@@ -712,7 +725,7 @@ onMounted(async () => {
 .isc-days-unit {
   font-size: 10px;
   font-weight: 400;
-  color: #ccc;
+  color: var(--text-tertiary);
 }
 
 .isc-bg-icon {
@@ -734,29 +747,49 @@ onMounted(async () => {
 
 [data-theme='dark'] .isc-bg-icon { opacity: 0.12; }
 
-/* Dark mode overrides for insight-stat-card gradients */
-[data-theme='dark'] .insight-stat-card:nth-child(1) {
-  background: linear-gradient(135deg, rgba(189, 187, 255, 0.12), rgba(147, 197, 253, 0.08));
+/* Dark mode card backgrounds — deep navy base from --card-bg + low-opacity tint
+ * of each category's hue. Apple HIG dark mode pattern: keep categorical color
+ * semantics without lifting luminance above ~#1c1d2e.
+ *
+ * No !important is needed here — the modifier classes own the background, so
+ * normal cascade specificity ([data-theme='dark'] adds 1 attribute selector =
+ * specificity (0,2,0)) wins over the bare class rule (0,1,0).
+ */
+[data-theme='dark'] .isc-card--yoy {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.14), rgba(147, 197, 253, 0.08));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(2) {
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.06));
+[data-theme='dark'] .isc-card--high {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.14), rgba(251, 191, 36, 0.07));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(3) {
-  background: linear-gradient(135deg, rgba(110, 231, 160, 0.12), rgba(110, 231, 160, 0.06));
+[data-theme='dark'] .isc-card--low {
+  background: linear-gradient(135deg, rgba(110, 231, 160, 0.14), rgba(110, 231, 160, 0.07));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(4) {
-  background: linear-gradient(135deg, rgba(189, 187, 255, 0.15), rgba(167, 139, 255, 0.08));
+[data-theme='dark'] .isc-card--long {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.16), rgba(167, 139, 255, 0.09));
 }
-[data-theme='dark'] .insight-stat-card:nth-child(5) {
-  background: linear-gradient(135deg, rgba(255, 107, 157, 0.12), rgba(255, 107, 157, 0.06));
+[data-theme='dark'] .isc-card--top {
+  background: linear-gradient(135deg, rgba(255, 107, 157, 0.14), rgba(255, 107, 157, 0.07));
 }
 
-/* Dark mode for isc-icon backgrounds */
-[data-theme='dark'] .insight-stat-card:nth-child(1) .isc-icon { background: rgba(189, 187, 255, 0.2); }
-[data-theme='dark'] .insight-stat-card:nth-child(2) .isc-icon { background: rgba(251, 191, 36, 0.2); }
-[data-theme='dark'] .insight-stat-card:nth-child(3) .isc-icon { background: rgba(110, 231, 160, 0.2); }
-[data-theme='dark'] .insight-stat-card:nth-child(4) .isc-icon { background: rgba(189, 187, 255, 0.25); }
-[data-theme='dark'] .insight-stat-card:nth-child(5) .isc-icon { background: rgba(255, 107, 157, 0.2); }
+/* Dark mode isc-icon backgrounds — same hue family at slightly higher alpha */
+[data-theme='dark'] .isc-card--yoy  .isc-icon { background: rgba(189, 187, 255, 0.22); }
+[data-theme='dark'] .isc-card--high .isc-icon { background: rgba(251, 191, 36, 0.22); }
+[data-theme='dark'] .isc-card--low  .isc-icon { background: rgba(110, 231, 160, 0.22); }
+[data-theme='dark'] .isc-card--long .isc-icon { background: rgba(189, 187, 255, 0.26); }
+[data-theme='dark'] .isc-card--top  .isc-icon { background: rgba(255, 107, 157, 0.22); }
+
+/* Dark mode secondary labels — intentionally dimmer than --text-secondary
+ * (#c8c8d0 ≈ 0.78 opacity equivalent on dark). Card surfaces already carry a
+ * colored tint, so we step the label/caption down to keep the colored chip and
+ * primary value visually dominant. Computed contrast ≈ 5:1 on the tinted
+ * backgrounds — meets WCAG AA for the 11–12px text size used here.
+ *
+ * .isc-name and .isc-category-name keep var(--text-primary) (#f5f5f5 in dark)
+ * — no override needed; the bug was never about text color, only about the
+ * card background being overridden by inline style.
+ */
+[data-theme='dark'] .isc-label { color: rgba(255, 255, 255, 0.6); }
+[data-theme='dark'] .isc-category-sub { color: rgba(255, 255, 255, 0.55); }
 
 /* Dark mode for gradient title */
 [data-theme='dark'] .gradient-title .gradient-icon {
@@ -775,11 +808,11 @@ onMounted(async () => {
 [data-theme='dark'] .isc-category-pct { color: #ff6b9d; }
 
 /* Dark mode for isc-sub separator text */
-[data-theme='dark'] .isc-sub span[style*="color: #ccc"] { color: rgba(255, 255, 255, 0.4) !important; }
+[data-theme='dark'] .isc-sub-meta { color: var(--text-tertiary); }
 
 /* Dark mode for isc-cost-unit and isc-days-unit */
-[data-theme='dark'] .isc-cost-unit { color: rgba(255, 255, 255, 0.4); }
-[data-theme='dark'] .isc-days-unit { color: rgba(255, 255, 255, 0.4); }
+[data-theme='dark'] .isc-cost-unit { color: var(--text-tertiary); }
+[data-theme='dark'] .isc-days-unit { color: var(--text-tertiary); }
 
 .isc-category-row {
   display: flex;
@@ -908,7 +941,7 @@ onMounted(async () => {
 
 .rank-cost-unit {
   font-size: 11px;
-  color: #bbb;
+  color: var(--text-tertiary);
 }
 
 .rank-sort-group {
@@ -984,7 +1017,7 @@ onMounted(async () => {
 }
 
 .view-all-arrow {
-  color: #ccc;
+  color: var(--text-tertiary);
   font-size: 14px;
 }
 
@@ -1019,13 +1052,9 @@ onMounted(async () => {
   line-height: 1.1;
 }
 
-.gc-val.green { color: #00A854; }
-.gc-val.orange { color: #FF8800; }
-.gc-val.red { color: #FF4D4D; }
-
-[data-theme='dark'] .gc-val.green { color: #6ee7a0; }
-[data-theme='dark'] .gc-val.orange { color: #fbbf24; }
-[data-theme='dark'] .gc-val.red { color: #fca5a5; }
+.gc-val.green { color: var(--color-trend-down); }
+.gc-val.orange { color: var(--color-trend-warn); }
+.gc-val.red { color: var(--color-trend-up); }
 
 .gc-label {
   font-size: 11px;
@@ -1078,13 +1107,13 @@ onMounted(async () => {
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
 }
 
-.status-chip.good { background: rgba(5, 150, 105, 0.08); color: #00A854; }
-.status-chip.warn { background: rgba(250, 140, 22, 0.08); color: #E07800; }
-.status-chip.over { background: rgba(220, 38, 38, 0.08); color: #FF4D4D; }
+.status-chip.good { background: rgba(5, 150, 105, 0.08); color: var(--color-trend-down); }
+.status-chip.warn { background: rgba(250, 140, 22, 0.08); color: var(--color-trend-warn); }
+.status-chip.over { background: rgba(220, 38, 38, 0.08); color: var(--color-trend-up); }
 
-[data-theme='dark'] .status-chip.good { background: rgba(110, 231, 160, 0.15); color: #6ee7a0; }
-[data-theme='dark'] .status-chip.warn { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
-[data-theme='dark'] .status-chip.over { background: rgba(252, 165, 165, 0.15); color: #fca5a5; }
+[data-theme='dark'] .status-chip.good { background: rgba(110, 231, 160, 0.15); color: var(--color-trend-down); }
+[data-theme='dark'] .status-chip.warn { background: rgba(251, 191, 36, 0.15); color: var(--color-trend-warn); }
+[data-theme='dark'] .status-chip.over { background: rgba(252, 165, 165, 0.15); color: var(--color-trend-up); }
 
 .goal-track-wrap {
   display: flex;
@@ -1109,26 +1138,22 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.goal-pct.on-track { color: #00A854; }
-.goal-pct.near-end { color: #FF8800; }
-.goal-pct.overdue { color: #FF4D4D; }
-
-[data-theme='dark'] .goal-pct.on-track { color: #6ee7a0; }
-[data-theme='dark'] .goal-pct.near-end { color: #fbbf24; }
-[data-theme='dark'] .goal-pct.overdue { color: #fca5a5; }
+.goal-pct.on-track { color: var(--color-trend-down); }
+.goal-pct.near-end { color: var(--color-trend-warn); }
+.goal-pct.overdue { color: var(--color-trend-up); }
 
 .goal-fill {
   height: 100%;
   border-radius: 4px;
 }
 
-.goal-fill.on-track { background: linear-gradient(90deg, #00C77F, #00E090); }
-.goal-fill.near-end { background: linear-gradient(90deg, #FF8800, #FFB340); }
-.goal-fill.overdue { background: linear-gradient(90deg, #FF4D4D, #FF7070); }
+.goal-fill.on-track { background: linear-gradient(90deg, var(--color-trend-down), #00E090); }
+.goal-fill.near-end { background: linear-gradient(90deg, var(--color-trend-warn), #FFB340); }
+.goal-fill.overdue { background: linear-gradient(90deg, var(--color-trend-up), #FF7070); }
 
-[data-theme='dark'] .goal-fill.on-track { background: linear-gradient(90deg, #22C55E, #6ee7a0); }
-[data-theme='dark'] .goal-fill.near-end { background: linear-gradient(90deg, #F59E0B, #fbbf24); }
-[data-theme='dark'] .goal-fill.overdue { background: linear-gradient(90deg, #EF4444, #fca5a5); }
+[data-theme='dark'] .goal-fill.on-track { background: linear-gradient(90deg, #22C55E, var(--color-trend-down)); }
+[data-theme='dark'] .goal-fill.near-end { background: linear-gradient(90deg, #F59E0B, var(--color-trend-warn)); }
+[data-theme='dark'] .goal-fill.overdue { background: linear-gradient(90deg, #EF4444, var(--color-trend-up)); }
 
 .goal-meta {
   display: flex;
@@ -1410,12 +1435,10 @@ onMounted(async () => {
 }
 
 .pres-val.purple { color: var(--van-primary-color); }
-.pres-val.red { color: #FF4D4D; }
-.pres-val.green { color: #00A854; }
+.pres-val.red { color: var(--color-trend-up); }
+.pres-val.green { color: var(--color-trend-down); }
 
 [data-theme='dark'] .pres-val.purple { color: var(--color-lavender); }
-[data-theme='dark'] .pres-val.red { color: #fca5a5; }
-[data-theme='dark'] .pres-val.green { color: #6ee7a0; }
 
 .pres-profit-big {
   display: flex;
@@ -1432,10 +1455,8 @@ onMounted(async () => {
 .ppb-val {
   font-size: 22px;
   font-weight: 800;
-  color: #FF4D4D;
+  color: var(--color-trend-up);
 }
-
-[data-theme='dark'] .ppb-val { color: #fca5a5; }
 
 .podium-label {
   font-size: 12px;
@@ -1528,11 +1549,8 @@ onMounted(async () => {
 
 .podium-item.rank1 .podium-rate { font-size: 16px; }
 
-.podium-rate.green { color: #00A854; }
-.podium-rate.red { color: #FF4D4D; }
-
-[data-theme='dark'] .podium-rate.green { color: #6ee7a0; }
-[data-theme='dark'] .podium-rate.red { color: #fca5a5; }
+.podium-rate.green { color: var(--color-trend-down); }
+.podium-rate.red { color: var(--color-trend-up); }
 
 .podium-base {
   width: 100%;
@@ -1571,7 +1589,7 @@ onMounted(async () => {
   width: 22px;
   font-size: 14px;
   font-weight: 700;
-  color: #ccc;
+  color: var(--text-tertiary);
   text-align: center;
   flex-shrink: 0;
 }
@@ -1628,20 +1646,14 @@ onMounted(async () => {
   margin-bottom: 2px;
 }
 
-.pres-rate-val.green { color: #00A854; }
-.pres-rate-val.red { color: #FF4D4D; }
-
-[data-theme='dark'] .pres-rate-val.green { color: #6ee7a0; }
-[data-theme='dark'] .pres-rate-val.red { color: #fca5a5; }
+.pres-rate-val.green { color: var(--color-trend-down); }
+.pres-rate-val.red { color: var(--color-trend-up); }
 
 .pres-profit {
   font-size: 12px;
   font-weight: 600;
 }
 
-.pres-profit.red { color: #FF4D4D; }
-.pres-profit.green { color: #00A854; }
-
-[data-theme='dark'] .pres-profit.red { color: #fca5a5; }
-[data-theme='dark'] .pres-profit.green { color: #6ee7a0; }
+.pres-profit.red { color: var(--color-trend-up); }
+.pres-profit.green { color: var(--color-trend-down); }
 </style>

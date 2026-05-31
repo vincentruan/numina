@@ -13,6 +13,17 @@
   --color-brand-mint:    #a4d4c5;
   --color-brand-coral:   #ff6b5a;
 
+  /* RGB triples for brand colors — pair with the hex tokens for dark-mode
+   * tint backgrounds: rgba(var(--color-brand-X-rgb), 0.14). Light mode
+   * keeps the saturated hex values intact. */
+  --color-brand-pink-rgb:     255, 77, 139;
+  --color-brand-teal-rgb:     26, 58, 58;
+  --color-brand-lavender-rgb: 184, 164, 237;
+  --color-brand-peach-rgb:    255, 176, 132;
+  --color-brand-ochre-rgb:    232, 185, 74;
+  --color-brand-mint-rgb:     164, 212, 197;
+  --color-brand-coral-rgb:    255, 107, 90;
+
   /* ── Semantic ── */
   --color-success: #22c55e;
   --color-warning: #f59e0b;
@@ -68,6 +79,14 @@
   --color-primary:          #0a0a0a;
   --color-primary-active:   #1f1f1f;
   --color-primary-disabled: #e5e5e5;
+
+  /* ── Feature card text (light mode — per DESIGN.md textColor mapping) ── */
+  /* pink/teal saturated cards → white; lavender/peach/ochre soft cards → ink */
+  --color-on-feature-pink:     var(--color-on-primary);
+  --color-on-feature-teal:     var(--color-on-dark);
+  --color-on-feature-lavender: var(--color-ink);
+  --color-on-feature-peach:    var(--color-ink);
+  --color-on-feature-ochre:    var(--color-ink);
 
   /* ── Spacing ── */
   --space-xxs: 4px;
@@ -130,6 +149,7 @@
   --color-brand-peach:   #e09870;
   --color-brand-lavender:#9a8cd0;
   --color-brand-mint:    #8abcad;
+  --color-brand-pink:    #a82960;
 
   /* Coin colors — slightly brightened for dark backgrounds */
   --color-coin-gold-hi:  #FFE566;
@@ -159,7 +179,7 @@
   --color-on-feature-ochre:   #fff8e8;
   --color-on-feature-peach:   #fff4ec;
   --color-on-feature-lavender:#f0ecff;
-  --color-on-feature-pink:    #ffffff;
+  --color-on-feature-pink:    #fff4ec;
   --color-on-feature-teal:    #f0ece0;
 
   /* ── Calendar heat colors (dark mode — teal-green tones for contrast) ── */

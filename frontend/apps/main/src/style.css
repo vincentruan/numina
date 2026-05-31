@@ -61,6 +61,37 @@
   --separator: var(--color-hairline);
   --card-bg: var(--color-canvas);
 
+  /* Semantic accent — opportunity cost / amber. Dark variant brightens to #ffc04d. */
+  --color-cost: #f5a623;
+
+  /* Trend / status palette — dark variants brighten and desaturate per
+   * WCAG AA on #12122a card-bg. Used by InsightsTab (and future
+   * analytics surfaces) to express up/down/warn without inheriting
+   * the more emphatic --color-error family. */
+  --color-trend-up:   #FF4D4D;
+  --color-trend-down: #00A854;
+  --color-trend-warn: #FF8800;
+
+  /* ── Badge & tag palette (light defaults; dark overrides below) ──
+   * Consumed via var(--token, light-fallback) in pages — defaults here
+   * keep light/dark in lockstep and prevent silent failures when the
+   * dark consumer renders before [data-theme='dark'] is applied.
+   * Light values selected from existing fallbacks; all text/bg pairs
+   * verified ≥4.5:1 except tag-approved-text (#4caf50/#e8f5e9 ≈2.5:1)
+   * which is a pre-existing design choice tracked separately. */
+  --badge-high-bg: #ffe0e0;
+  --badge-high-text: #c0392b;
+  --badge-medium-bg: #fff3cd;
+  --badge-medium-text: #856404;
+  --badge-low-bg: #e8f4fd;
+  --badge-low-text: #1a6fa8;
+  --error-bg: #f8d7da;
+  --error-text: #721c24;
+  --tag-approved-bg: #e8f5e9;
+  --tag-approved-text: #4caf50;
+  --tag-milestone-bg: #f3e5f5;
+  --tag-milestone-text: #9c27b0;
+
   /* ── Vant Theme Overrides ── */
   --van-primary-color: var(--color-primary);
   --van-button-primary-background: var(--color-primary);
@@ -123,6 +154,9 @@
   --color-hairline: rgba(255, 255, 255, 0.08);
   --color-success: #2f9e44;
   --color-cost: #ffc04d;
+  --color-trend-up:   #fca5a5;
+  --color-trend-down: #6ee7a0;
+  --color-trend-warn: #fbbf24;
   --shadow-elevated: 0 2px 8px rgba(0, 0, 0, 0.28);
   --badge-high-bg: rgba(192, 57, 43, 0.2);
   --badge-high-text: #e57373;

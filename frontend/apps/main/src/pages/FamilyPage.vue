@@ -15,54 +15,81 @@
         </van-cell-group>
 
         <!-- Adult Members -->
-        <van-cell-group inset :title="t('family.memberManagement')" class="section">
-          <van-swipe-cell v-for="member in adultMembers" :key="member.id">
-            <van-cell :title="member.display_name" :label="'@' + member.username">
-              <template #icon>
-                <div class="avatar" :style="{ background: member.avatar_color || 'var(--color-primary)' }">
-                  {{ member.display_name.charAt(0) }}
-                </div>
-              </template>
-              <template #value>
-                <van-tag :type="member.role === 'owner' ? 'primary' : 'default'" size="medium">
-                  {{ member.role === 'owner' ? t('family.owner') : t('family.member') }}
+        <div class="section">
+          <p class="section-heading">👥 {{ t('family.memberManagement') }}</p>
+          <div class="member-cards">
+            <div v-for="member in adultMembers" :key="member.id" class="child-mgmt-card" :class="{ 'member-disabled': member.is_active === false }">
+              <div class="child-mgmt-header">
+                <span
+                  class="child-avatar"
+                  :style="{ background: member.is_active === false ? 'var(--text-tertiary)' : (member.avatar_color || 'var(--color-primary)') }"
+                >{{ member.display_name[0] }}</span>
+                <span class="child-name">{{ member.display_name }}</span>
+                <span v-if="member.username" class="child-username">@{{ member.username }}</span>
+                <van-tag v-if="member.is_active === false" type="danger" size="medium" style="margin-left: auto">
+                  {{ t('family.disabledTag') }}
                 </van-tag>
-              </template>
-            </van-cell>
-            <template v-if="isOwner" #right>
-              <van-button
-                v-if="member.id !== currentUserId && member.role !== 'owner'"
-                square
-                type="primary"
-                :text="t('family.promoteToOwner')"
-                class="swipe-btn"
-                @click="onSetOwner(member.id)"
-              />
-              <van-button
-                v-if="member.id !== currentUserId"
-                square
-                type="danger"
-                :text="t('family.removeMember')"
-                class="swipe-btn"
-                @click="onRemoveMember(member)"
-              />
-            </template>
-          </van-swipe-cell>
-          <van-cell v-if="isOwner">
-            <template #title>
-              <van-button
-                block
-                plain
-                type="primary"
-                size="small"
-                :loading="regenerating"
-                @click="onRegenerate"
-              >
-                {{ t('family.regenerateInviteCode') }}
-              </van-button>
-            </template>
-          </van-cell>
-        </van-cell-group>
+                <van-tag v-else :type="getRoleTagType(member)" size="medium" style="margin-left: auto">
+                  {{ getRoleLabel(member) }}
+                </van-tag>
+              </div>
+              <div v-if="canShowActions(member)" class="child-mgmt-actions">
+                <button
+                  v-if="canChangeRole(member) && member.role === 'member'"
+                  class="action-btn"
+                  @click="onPromoteToAdmin(member)"
+                >
+                  <van-icon name="manager-o" size="18" />
+                  <span>{{ t('family.promoteToOwner') }}</span>
+                </button>
+                <button
+                  v-if="canChangeRole(member) && member.role === 'owner'"
+                  class="action-btn"
+                  @click="onDemoteToMember(member)"
+                >
+                  <van-icon name="friends-o" size="18" />
+                  <span>{{ t('family.demoteToMember') }}</span>
+                </button>
+                <button
+                  v-if="canManage(member)"
+                  class="action-btn action-btn--warn"
+                  @click="onToggleStatus(member)"
+                >
+                  <van-icon :name="member.is_active !== false ? 'close' : 'success'" size="18" />
+                  <span>{{ member.is_active !== false ? t('family.disableAccount') : t('family.enableAccount') }}</span>
+                </button>
+                <button
+                  v-if="canManage(member)"
+                  class="action-btn action-btn--danger"
+                  @click="onRemoveMember(member)"
+                >
+                  <van-icon name="delete-o" size="18" />
+                  <span>{{ t('family.removeMember') }}</span>
+                </button>
+                <button
+                  v-if="canManage(member)"
+                  class="action-btn action-btn--edit"
+                  @click="onResetPassword(member)"
+                >
+                  <van-icon name="lock" size="18" />
+                  <span>{{ t('family.resetPassword') }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          <van-button
+            v-if="isOwner"
+            block
+            plain
+            type="primary"
+            size="small"
+            :loading="regenerating"
+            style="margin: 12px 16px 0"
+            @click="onRegenerate"
+          >
+            {{ t('family.regenerateInviteCode') }}
+          </van-button>
+        </div>
 
         <!-- Children management dashboard (owner only) -->
         <div v-if="isOwner && childMembers.length > 0" class="section">
@@ -108,14 +135,6 @@
                 </div>
               </div>
               <div class="child-mgmt-actions">
-                <button class="action-btn" @click="$router.push('/family/chore-approvals')">
-                  <van-icon name="todo-list-o" size="18" />
-                  <span>{{ t('pendingApprovals.approveChores') }}</span>
-                </button>
-                <button class="action-btn" @click="$router.push('/family/wish-review')">
-                  <van-icon name="gift-o" size="18" />
-                  <span>{{ t('pendingApprovals.approveWishes') }}</span>
-                </button>
                 <button class="action-btn action-btn--edit" @click="openEditSheet(child)">
                   <van-icon name="edit" size="18" />
                   <span>{{ t('family.editChildBtn') }}</span>
@@ -228,6 +247,33 @@
           >{{ t('family.createAccount') }}</van-button>
         </van-popup>
 
+        <!-- Reset member password bottom sheet -->
+        <van-popup v-model:show="resetPwdVisible" position="bottom" round style="padding: 24px 16px 40px">
+          <p class="sheet-title">{{ t('family.resetPasswordTitle3', { name: resetPwdTarget?.display_name ?? '' }) }}</p>
+          <van-field
+            v-model="resetPwdForm.password"
+            type="password"
+            :label="t('family.newPasswordLabel')"
+            :placeholder="t('family.newPasswordPlaceholder')"
+            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          />
+          <van-field
+            v-model="resetPwdForm.confirm"
+            type="password"
+            :label="t('family.confirmNewPassword')"
+            :placeholder="t('family.confirmNewPasswordPlaceholder')"
+            style="margin-top: 8px; border-radius: 8px; background: #f9f9f9"
+          />
+          <van-button
+            block
+            type="primary"
+            :loading="resetPwdSubmitting"
+            :disabled="!resetPwdForm.password || resetPwdForm.password.length < 8"
+            style="margin-top: 16px; border-radius: 12px"
+            @click="submitResetPassword"
+          >{{ t('family.confirmResetPassword') }}</van-button>
+        </van-popup>
+
 
       </template>
 
@@ -243,7 +289,7 @@ import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, type ChoreStats } from '@/api/family'
+import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemberPassword, updateMemberStatus, type ChoreStats } from '@/api/family'
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
@@ -274,6 +320,12 @@ const editForm = ref({
 const editBirthdayParts = ref<string[]>([])
 const editSubmitting = ref(false)
 const isOwner = computed(() => authStore.user?.role === 'owner')
+const isCurrentUserRoot = computed(() =>
+  authStore.user?.id === familyStore.family?.created_by,
+)
+const isCurrentUserAdmin = computed(() =>
+  authStore.user?.role === 'owner' && !isCurrentUserRoot.value,
+)
 const childMembers = computed(() =>
   familyStore.members.filter(m => m.role === 'child'),
 )
@@ -283,12 +335,46 @@ const adultMembers = computed(() =>
 const currentUserId = computed(() => authStore.user?.id)
 const regenerating = ref(false)
 
+function canManage(member: { id: string; role: string }): boolean {
+  if (member.id === currentUserId.value) return false
+  if (member.id === familyStore.family?.created_by) return false
+  if (isCurrentUserRoot.value) return true
+  if (isCurrentUserAdmin.value && member.role === 'member') return true
+  return false
+}
+
+function canChangeRole(member: { id: string; role: string }): boolean {
+  return isCurrentUserRoot.value && member.id !== familyStore.family?.created_by
+}
+
+function canShowActions(member: { id: string; role: string }): boolean {
+  return canManage(member) || canChangeRole(member)
+}
+
+function getRoleTagType(member: { id: string; role: string }): string {
+  if (member.id === familyStore.family?.created_by) return 'primary'
+  if (member.role === 'owner') return 'success'
+  return 'default'
+}
+
+function getRoleLabel(member: { id: string; role: string }): string {
+  if (member.id === familyStore.family?.created_by) return t('family.rootOwner')
+  if (member.role === 'owner') return t('family.owner')
+  return t('family.member')
+}
+
 const CHILD_EMOJIS = ['🐱', '🐶', '🐸', '🦊', '🐼', '🐨', '🦁', '🐯', '🌟', '🌈', '🍎', '🎈']
 
 // Add child sheet
 const showAddChildSheet = ref(false)
 const addingChild = ref(false)
 const newChild = ref({ display_name: '', username: '', password: '', pin: [] as string[] })
+
+// Reset password sheet
+const resetPwdVisible = ref(false)
+const resetPwdTarget = ref<{ id: string; display_name: string } | null>(null)
+const resetPwdForm = ref({ password: '', confirm: '' })
+const resetPwdSubmitting = ref(false)
 
 
 function copyInviteCode() {
@@ -340,13 +426,42 @@ async function loadChildDashboard() {
   } catch { /* non-critical */ }
 }
 
-async function onSetOwner(userId: string) {
+async function onPromoteToAdmin(member: { id: string; display_name: string }) {
   try {
-    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmPromoteMember') })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('family.confirmPromoteAdmin', { name: member.display_name }) })
   } catch { return }
   try {
-    await familyStore.updateMemberRole(userId, 'owner')
-    showToast(t('toast.memberPromoted'))
+    await familyStore.updateMemberRole(member.id, 'owner')
+    showToast(t('family.memberPromoted'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
+
+async function onDemoteToMember(member: { id: string; display_name: string }) {
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message: t('family.confirmDemoteMember', { name: member.display_name }) })
+  } catch { return }
+  try {
+    await familyStore.updateMemberRole(member.id, 'member')
+    showToast(t('family.memberDemoted'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
+
+async function onToggleStatus(member: { id: string; display_name: string; is_active?: boolean }) {
+  const willDisable = member.is_active !== false
+  const msg = willDisable
+    ? t('family.confirmDisableAccount', { name: member.display_name })
+    : t('family.confirmEnableAccount', { name: member.display_name })
+  try {
+    await showConfirmDialog({ title: t('common.confirm'), message: msg })
+  } catch { return }
+  try {
+    await updateMemberStatus(member.id, !willDisable)
+    showToast(willDisable ? t('family.memberDisabled') : t('family.memberEnabled'))
+    await familyStore.fetchFamily()
   } catch {
     showToast(t('toast.operationFailed2'))
   }
@@ -354,13 +469,41 @@ async function onSetOwner(userId: string) {
 
 async function onRemoveMember(member: { id: string; display_name: string }) {
   try {
-    await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmRemoveMember', { name: member.display_name }) })
+    await showConfirmDialog({ title: t('common.confirm'), message: t('family.confirmRemoveMember2', { name: member.display_name }) })
   } catch { return }
   try {
     await familyStore.removeMember(member.id)
     showToast(t('toast.memberRemoved'))
   } catch {
     showToast(t('toast.operationFailed2'))
+  }
+}
+
+async function onResetPassword(member: { id: string; display_name: string }) {
+  resetPwdTarget.value = member
+  resetPwdForm.value = { password: '', confirm: '' }
+  resetPwdVisible.value = true
+}
+
+async function submitResetPassword() {
+  if (!resetPwdTarget.value) return
+  if (resetPwdForm.value.password.length < 8) {
+    showToast(t('family.newPasswordPlaceholder'))
+    return
+  }
+  if (resetPwdForm.value.password !== resetPwdForm.value.confirm) {
+    showToast(t('family.passwordMismatch'))
+    return
+  }
+  resetPwdSubmitting.value = true
+  try {
+    await resetMemberPassword(resetPwdTarget.value.id, resetPwdForm.value.password)
+    showToast(t('family.memberPasswordReset'))
+    resetPwdVisible.value = false
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  } finally {
+    resetPwdSubmitting.value = false
   }
 }
 
@@ -632,6 +775,17 @@ onMounted(async () => {
 }
 
 
+.member-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.member-disabled {
+  opacity: 0.55;
+}
+
 .sheet-title {
   font-size: 17px;
   font-weight: 600;
@@ -640,18 +794,6 @@ onMounted(async () => {
   text-align: center;
 }
 
-.avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 500;
-  margin-right: 10px;
-}
 .action-btn--danger {
   color: #ee0a24;
 }
@@ -700,9 +842,6 @@ onMounted(async () => {
   letter-spacing: 4px;
 }
 
-.swipe-btn {
-  height: 100%;
-}
 
 .color-swatch-picker {
   display: flex;

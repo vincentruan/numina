@@ -35,6 +35,14 @@ class UpdateRoleRequest(BaseModel):
     role: str
 
 
+class ResetPasswordRequest(BaseModel):
+    new_password: str
+
+
+class UpdateStatusRequest(BaseModel):
+    is_active: bool
+
+
 @router.get("/info", response_model=FamilyResponse)
 @router.get("", response_model=FamilyResponse)
 def get_family(
@@ -198,6 +206,28 @@ def remove_member(
 ):
     family_service.remove_member(db, user, member_id)
     return {"detail": "已移除"}
+
+
+@router.post("/members/{member_id}/reset-password")
+def reset_member_password(
+    member_id: int,
+    body: ResetPasswordRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    family_service.reset_member_password(db, user, member_id, body.new_password)
+    return {"detail": "✅ 密码已重置"}
+
+
+@router.patch("/members/{member_id}/status", response_model=UserResponse)
+def update_member_status(
+    member_id: int,
+    body: UpdateStatusRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    member = family_service.update_member_status(db, user, member_id, body.is_active)
+    return UserResponse.model_validate(member)
 
 
 @router.post("/invite-code")

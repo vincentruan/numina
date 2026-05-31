@@ -420,7 +420,7 @@ onMounted(async () => {
       rgba(189, 187, 255, 0.04) 50%,
       transparent 100%),
     #010120;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 [data-theme='dark'] .hero-card::before {
   background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
@@ -520,7 +520,7 @@ onMounted(async () => {
   color: #000000;
 }
 [data-theme='dark'] .hero-name {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 /* Mono label style for category */
@@ -534,7 +534,7 @@ onMounted(async () => {
   margin-bottom: 8px;
 }
 [data-theme='dark'] .hero-category {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .hero-usage {
@@ -611,7 +611,7 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 [data-theme='dark'] .hero-value-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .hero-value-item :deep(.money-display) {
@@ -621,7 +621,7 @@ onMounted(async () => {
   letter-spacing: -0.16px;
 }
 [data-theme='dark'] .hero-value-item :deep(.money-display) {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .hero-daily-cost {
@@ -631,7 +631,7 @@ onMounted(async () => {
   color: #000000;
 }
 [data-theme='dark'] .hero-daily-cost {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .hero-change {
@@ -643,13 +643,13 @@ onMounted(async () => {
   color: #059669;
 }
 [data-theme='dark'] .hero-change.positive {
-  color: #6ee7a0;
+  color: var(--color-trend-down);
 }
 .hero-change.negative {
   color: #dc2626;
 }
 [data-theme='dark'] .hero-change.negative {
-  color: #fca5a5;
+  color: var(--color-trend-up);
 }
 
 .sell-summary {
@@ -673,20 +673,20 @@ onMounted(async () => {
   color: #d97706;
 }
 [data-theme='dark'] .daily-cost {
-  color: #fbbf24;
+  color: var(--color-trend-warn);
 }
 
 .target-cost {
   color: #059669;
 }
 [data-theme='dark'] .target-cost {
-  color: #6ee7a0;
+  color: var(--color-trend-down);
 }
 
 .positive { color: #059669; }
-[data-theme='dark'] .positive { color: #6ee7a0; }
+[data-theme='dark'] .positive { color: var(--color-trend-down); }
 .negative { color: #dc2626; }
-[data-theme='dark'] .negative { color: #fca5a5; }
+[data-theme='dark'] .negative { color: var(--color-trend-up); }
 
 .tags {
   display: flex;

@@ -464,7 +464,7 @@ const tabActiveColor = computed(() =>
 [data-theme='dark'] .status-tile--in-use {
   background: rgba(110, 231, 160, 0.12);
 }
-[data-theme='dark'] .status-tile--in-use .status-count { color: #6ee7a0; }
+[data-theme='dark'] .status-tile--in-use .status-count { color: var(--color-trend-down); }
 
 .status-tile--idle {
   background: rgba(250, 140, 22, 0.08);
@@ -474,7 +474,7 @@ const tabActiveColor = computed(() =>
 [data-theme='dark'] .status-tile--idle {
   background: rgba(251, 191, 36, 0.12);
 }
-[data-theme='dark'] .status-tile--idle .status-count { color: #fbbf24; }
+[data-theme='dark'] .status-tile--idle .status-count { color: var(--color-trend-warn); }
 
 .status-tile--sold {
   background: rgba(59, 130, 246, 0.08);

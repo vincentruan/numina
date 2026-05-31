@@ -405,7 +405,7 @@ onMounted(async () => {
       rgba(189, 187, 255, 0.04) 50%,
       transparent 100%),
     #010120;
-  color: #ffffff;
+  color: var(--text-primary);
 }
 [data-theme='dark'] .hero-card::before {
   background: radial-gradient(circle, rgba(189, 187, 255, 0.10) 0%, transparent 70%);
@@ -478,7 +478,7 @@ onMounted(async () => {
   color: #059669;
 }
 [data-theme='dark'] .hero-card.realized .hero-status-icon {
-  color: #6ee7a0;
+  color: var(--color-trend-down);
 }
 
 .hero-info {
@@ -499,13 +499,13 @@ onMounted(async () => {
   color: #000000;
 }
 [data-theme='dark'] .hero-name {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 .hero-card.cancelled .hero-name {
   color: rgba(0, 0, 0, 0.50);
 }
 [data-theme='dark'] .hero-card.cancelled .hero-name {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 /* Mono label for category */
@@ -518,7 +518,7 @@ onMounted(async () => {
   font-family: 'Georgia', monospace;
 }
 [data-theme='dark'] .hero-category {
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-tertiary);
 }
 
 .hero-status-tag {
@@ -567,7 +567,7 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 [data-theme='dark'] .hero-value-label {
-  color: rgba(255, 255, 255, 0.40);
+  color: var(--text-tertiary);
 }
 
 .hero-value-num {
@@ -577,15 +577,12 @@ onMounted(async () => {
   color: #000000;
 }
 [data-theme='dark'] .hero-value-num {
-  color: #ffffff;
+  color: var(--text-primary);
 }
 
 .hero-value-unset {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.35);
-}
-[data-theme='dark'] .hero-value-unset {
-  color: rgba(255, 255, 255, 0.30);
+  color: var(--text-secondary);
 }
 
 .hero-realized-info {
@@ -596,7 +593,7 @@ onMounted(async () => {
   margin-bottom: 4px;
 }
 [data-theme='dark'] .hero-realized-info {
-  color: #6ee7a0;
+  color: var(--color-trend-down);
 }
 
 .hero-description {

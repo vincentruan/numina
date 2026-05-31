@@ -90,7 +90,12 @@ onMounted(load)
   margin-bottom: var(--space-lg);
   color: var(--color-ink);
 }
-[data-theme="dark"] .summary-card { color: var(--color-on-feature-lavender); }
+[data-theme="dark"] .summary-card {
+  background:
+    linear-gradient(135deg, rgba(var(--color-brand-lavender-rgb), 0.16), rgba(var(--color-brand-lavender-rgb), 0.08)),
+    var(--color-surface-card);
+  color: var(--color-on-feature-lavender);
+}
 .summary-title {
   font-family: Inter, sans-serif;
   font-size: 18px;
