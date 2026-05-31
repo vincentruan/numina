@@ -5,4 +5,5 @@ from packages.security.revoke_jti import (  # noqa: F401
     cleanup_expired_revoked_tokens,
     revoke_all_user_tokens,
     revoke_jti,
+    revoke_jti_atomic,
 )

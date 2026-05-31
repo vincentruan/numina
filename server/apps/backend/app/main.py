@@ -79,6 +79,7 @@ from apps.backend.app.models.wish import Wish  # noqa: F401
 from apps.backend.app.responses import EnvelopeResponse
 from apps.backend.app.routers import activities as activities_router
 from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_router
+from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
 from apps.backend.app.routers import ai_alerts as ai_alerts_router
@@ -387,6 +388,7 @@ app.include_router(files_router.router, prefix="/api/v1")
 # Register more specific AI routes first to avoid prefix conflicts
 app.include_router(ai_capabilities_router.router, prefix="/api/v1")
 app.include_router(admin_ai_extraction_router.router, prefix="/api/v1")
+app.include_router(admin_audit_logs_router.router, prefix="/api/v1")
 app.include_router(ai_config_router.router, prefix="/api/v1")
 app.include_router(ai_internal_router.router, prefix="/api/v1")
 app.include_router(mcp_internal_router.router, prefix="/api/v1")

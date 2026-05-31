@@ -79,9 +79,13 @@ async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
         f"AppError: error_code={exc.code.value} path={request.url.path} "
         f"method={request.method} request_id={request_id} user_id={user_id}"
     )
+    headers: dict[str, str] | None = None
+    if exc.retry_after is not None:
+        headers = {"Retry-After": str(exc.retry_after)}
     return JSONResponse(
         status_code=ERROR_META[exc.code],
         content=_error_envelope(exc.code.value, message, request_id, exc.details),
+        headers=headers,
     )
 
 

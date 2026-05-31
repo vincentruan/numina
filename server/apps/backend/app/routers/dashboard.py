@@ -11,13 +11,14 @@ from apps.backend.app.schemas.dashboard import (
     AllocationResponse,
     DailyCostItem,
     ExpiringSoonItem,
-    InvestmentReturnItem,
     InsightsResponse,
+    InvestmentReturnItem,
     LowUsageItem,
     NewAssetsResponse,
     OverviewResponse,
     TopAssetItem,
     TrendResponse,
+    UpcomingPaymentsResponse,
 )
 from apps.backend.app.services import dashboard as dashboard_service
 
@@ -170,3 +171,13 @@ def get_insights(
     Returns S0-S5 all sections in one API call for efficiency.
     """
     return dashboard_service.get_insights(db, user)
+
+
+@router.get("/upcoming-payments", response_model=UpcomingPaymentsResponse)
+def get_upcoming_payments(
+    days: int = Query(7, ge=0, le=365),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """获取即将到期的负债还款列表（默认7天内）"""
+    return dashboard_service.get_upcoming_payments(db, user, days)

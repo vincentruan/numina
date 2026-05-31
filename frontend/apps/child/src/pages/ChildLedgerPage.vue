@@ -13,10 +13,13 @@
 
     <div v-else-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else-if="transactions.length === 0" class="empty">
-      <p class="empty-emoji">💫</p>
-      <p class="empty-text">{{ t('ledger.empty') }}</p>
-    </div>
+    <EmptyState
+      v-else-if="transactions.length === 0"
+      :illustration="noRecordsSvg"
+      :text="t('empty.noRecords')"
+      :action-text="t('nav.tasks')"
+      action-to="/tasks"
+    />
 
     <div v-else class="tx-list">
       <div v-for="tx in transactions" :key="tx.id" class="tx-card">
@@ -74,6 +77,10 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import noRecordsSvgRaw from '@/assets/empty-states/no-records.svg?raw'
+
+const noRecordsSvg = noRecordsSvgRaw
 import { useFamilyStore } from '@/stores/family'
 import { useBalancePolling } from '@/composables/useBalancePolling'
 

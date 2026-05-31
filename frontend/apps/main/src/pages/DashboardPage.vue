@@ -33,6 +33,9 @@
           @select-status="onStatusSelect"
         />
 
+        <!-- Upcoming Liability Payments -->
+        <UpcomingPaymentsCard v-if="upcomingPayments.length > 0" :payments="upcomingPayments" />
+
         <!-- Sticky Filter Bar: Status + Category -->
         <div ref="filterBarRef" class="filter-bar-sticky">
           <!-- Placeholder: maintains layout space when content is fixed -->
@@ -256,6 +259,9 @@
       :cancel-text="t('common.cancel')"
       @select="onMoreActionSelect"
     />
+
+    <!-- New User Onboarding Overlay -->
+    <OnboardingOverlay :visible="showOnboarding" @complete="onOnboardingComplete" />
   </div>
 </template>
 
@@ -268,6 +274,8 @@ import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
 import { batchArchiveAssets, batchUpdateStatus, batchExportAssets } from '@/api/assets'
+import { getUpcomingPayments } from '@/api/dashboard'
+import type { UpcomingPaymentItem } from '@/api/dashboard'
 
 import { getIconId } from '@/utils/icon'
 import NetWorthCard from '@/components/dashboard/NetWorthCard.vue'
@@ -276,6 +284,8 @@ import AssetCard from '@/components/asset/AssetCard.vue'
 import AssetListItem from '@/components/asset/AssetListItem.vue'
 import DashboardSkeleton from '@/components/dashboard/DashboardSkeleton.vue'
 import SmartRemindersCard from '@/components/dashboard/SmartRemindersCard.vue'
+import UpcomingPaymentsCard from '@/components/dashboard/UpcomingPaymentsCard.vue'
+import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -286,6 +296,9 @@ const choreStore = useChoreStore()
 const viewMode = computed(() => authStore.user?.view_mode || 'card')
 const refreshing = ref(false)
 const activeStatus = ref<string | null>(null)
+
+// Upcoming payments
+const upcomingPayments = ref<UpcomingPaymentItem[]>([])
 
 // Pagination state
 const loadingMore = ref(false)
@@ -304,6 +317,22 @@ const showMoreActions = ref(false)
 
 // FAB menu
 const fabMenuOpen = ref(false)
+
+// Onboarding overlay
+const showOnboarding = ref(false)
+
+function onOnboardingComplete() {
+  showOnboarding.value = false
+  localStorage.setItem('onboarding_completed', 'true')
+}
+
+function maybeShowOnboarding() {
+  if (localStorage.getItem('onboarding_completed') === 'true') return
+  // Only show when there are no assets yet
+  if ((overview.value?.asset_count ?? 0) === 0) {
+    showOnboarding.value = true
+  }
+}
 
 // Filter bar sticky/frozen control
 const filterBarRef = ref<HTMLElement | null>(null)
@@ -546,10 +575,20 @@ onMounted(() => {
     const initialStatus = activeStatus.value || 'in_use'
     dashboardStore.fetchAssetsPage(initialStatus, 1, 20, undefined)
     dashboardStore.fetchCategoryCounts(initialStatus)
+    maybeShowOnboarding()
   })
   if (authStore.user?.role === 'owner') {
     choreStore.fetchPendingApprovals()
   }
+
+  // Fetch upcoming liability payments
+  getUpcomingPayments()
+    .then((res) => {
+      upcomingPayments.value = res.data.items
+    })
+    .catch(() => {
+      // Non-critical: silently ignore if endpoint not available
+    })
 
   // Attach scroll listener for freeze/unfreeze logic
   window.addEventListener('scroll', onScroll, { passive: true })

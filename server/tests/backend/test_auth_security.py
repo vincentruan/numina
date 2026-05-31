@@ -119,6 +119,17 @@ def test_change_password_weak_new_password(client, auth_headers):
     assert resp.status_code == 422
 
 
+def test_change_password_same_as_old(client, auth_headers):
+    """New password identical to old password returns 400 AUTH_PASSWORD_SAME."""
+    resp = client.post(
+        "/api/v1/auth/me/password",
+        json={"old_password": "TestPass123", "new_password": "TestPass123"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "AUTH_PASSWORD_SAME"
+
+
 def test_change_password_revokes_all_tokens(client, auth_headers):
     """After password change, the old access token should be rejected."""
     resp = client.post(
@@ -647,6 +658,58 @@ def test_password_change_rate_limit(client, auth_headers):
         headers=auth_headers,
     )
     assert resp.status_code == 429
+
+
+def test_password_change_rate_limit_includes_retry_after(client, auth_headers):
+    """Password-change rate-limited response includes Retry-After header."""
+    from jose import jwt
+
+    from apps.backend.app.auth.deps import ALGORITHM
+    from apps.backend.app.config import settings
+    from apps.backend.app.services import auth as auth_service
+    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+
+    token = auth_headers["Authorization"].split(" ")[1]
+    user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
+
+    # Exhaust the password change rate limit
+    cache = get_rate_limit_cache()
+    key = f"password_change_attempts:{user_id}"
+    cache.set(key, auth_service._PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+
+    resp = client.post(
+        "/api/v1/auth/me/password",
+        json={"old_password": "TestPass123", "new_password": "NewPass456"},
+        headers=auth_headers,
+    )
+    assert resp.status_code == 429
+    assert "retry-after" in resp.headers
+    assert int(resp.headers["retry-after"]) > 0
+
+
+def test_rate_limit_retry_after_header(client, auth_headers):
+    """Rate-limited responses include a Retry-After header with a positive value."""
+    from jose import jwt
+
+    from apps.backend.app.auth.deps import ALGORITHM
+    from apps.backend.app.config import settings
+    from apps.backend.app.services import auth as auth_service
+    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+
+    token = auth_headers["Authorization"].split(" ")[1]
+    user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
+
+    # Exhaust the refresh rate limit
+    cache = get_rate_limit_cache()
+    key = f"refresh_attempts:{user_id}"
+    cache.set(key, auth_service._REFRESH_RATE_LIMIT_PER_MINUTE, ttl_seconds=60)
+
+    resp = client.post("/api/v1/auth/refresh", json={
+        "refresh_token": auth_headers["_refresh_token"]
+    })
+    assert resp.status_code == 429
+    assert "retry-after" in resp.headers
+    assert int(resp.headers["retry-after"]) > 0
 
 
 def test_update_profile_invalid_avatar_color(client, auth_headers):

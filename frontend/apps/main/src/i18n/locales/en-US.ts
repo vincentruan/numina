@@ -43,7 +43,10 @@ export default {
     lowUsage: 'Low Usage Assets',
     returns: 'Investment Returns',
     fabAddAsset: 'Add Asset',
-    fabImportBill: 'Import Statement'
+    fabImportBill: 'Import Statement',
+    upcomingPayments: {
+      title: 'Upcoming Payments',
+    },
   },
   aiChat: {
     connecting: 'Connecting model',
@@ -399,6 +402,10 @@ export default {
     detailPaymentAmountLabel: 'Payment Amount',
     detailPaymentAmountPlaceholder: 'Enter amount',
     detailPaymentUnit: 'CNY',
+    countdown: {
+      daysLeft: '{days} days until next payment',
+      today: '⚠️ Payment due today',
+    },
   },
   wish: {
     detail: 'Wish Detail',
@@ -485,6 +492,14 @@ export default {
       deleteBtn: 'Delete',
       saveBtn: 'Save',
       addBtn: 'Add',
+    },
+    suggestion: {
+      title: 'Suggested Stars',
+      insufficient: 'Not enough data for suggestions',
+      basis: 'Based on last 7 days earning rate',
+      days7: '~7 days',
+      days14: '~14 days',
+      days30: '~30 days',
     },
   },
   baby: {
@@ -1238,6 +1253,23 @@ export default {
     editFamilyTitlePlaceholder: 'Enter new family name',
   },
 
+  onboarding: {
+    step1: {
+      title: 'Family Asset Overview',
+      desc: 'This shows your family assets and liabilities at a glance',
+    },
+    step2: {
+      title: 'Add an Asset',
+      desc: 'Tap here to add your first asset',
+    },
+    step3: {
+      title: 'Invite Family',
+      desc: 'Invite family members to manage together in Settings',
+    },
+    skip: 'Skip',
+    next: 'Next',
+    done: 'Done',
+  },
   importReport: {
     uploadTitle: 'Upload Financial Statement PDF',
     uploadDesc: 'Supports broker statements, bank statements, and other financial documents',

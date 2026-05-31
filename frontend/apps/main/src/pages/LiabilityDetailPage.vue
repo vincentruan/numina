@@ -20,6 +20,15 @@
         />
       </div>
 
+      <!-- Payment Countdown -->
+      <div class="countdown-wrapper">
+        <PaymentCountdown
+          :start-date="liability.start_date ?? null"
+          :end-date="liability.end_date ?? null"
+          :is-active="liability.is_active"
+        />
+      </div>
+
       <!-- Basic Info -->
       <van-cell-group inset :title="t('liability.detailSectionBasicInfo')">
         <van-cell :title="t('liability.detailFieldName')" :value="liability.name" />
@@ -110,6 +119,7 @@ import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
+import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
 
 const { t } = useI18n()
 
@@ -246,5 +256,8 @@ onMounted(() => {
   height: 18px;
   margin-right: 4px;
   fill: currentColor;
+}
+.countdown-wrapper {
+  padding: 8px 16px 0;
 }
 </style>

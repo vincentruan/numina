@@ -75,15 +75,22 @@ def purge_old_audit_logs(retention_days: int = 90) -> int:
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
         db = SessionLocal()
+        count = 0
         try:
             count = db.query(SecurityAuditLog).filter(
                 SecurityAuditLog.created_at < cutoff
             ).delete(synchronize_session=False)
             db.commit()
             logger.info(f"[audit_log] purged {count} entries older than {retention_days} days")
-            return count
+            write_audit_log(
+                event_type="audit_log_purge",
+                outcome="success",
+                detail=f"purged {count} entries older than {retention_days} days",
+            )
         finally:
             db.close()
+
+        return count
     except Exception as exc:
         logger.warning(f"[audit_log] purge failed: {exc}")
         return 0

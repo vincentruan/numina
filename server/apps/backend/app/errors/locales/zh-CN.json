@@ -8,6 +8,7 @@
   "AUTH_INVITE_CODE_INVALID": "邀请码无效",
   "AUTH_USERNAME_EXISTS": "用户名已存在",
   "AUTH_PASSWORD_INCORRECT": "原密码错误",
+  "AUTH_PASSWORD_SAME": "新密码不能与原密码相同",
   "AUTH_CHILD_NOT_FOUND": "孩子不存在",
   "AUTH_OWNER_ONLY": "仅家庭管理员可执行此操作",
   "AUTH_NO_PASSKEY_REGISTERED": "该账户未注册通行密钥",

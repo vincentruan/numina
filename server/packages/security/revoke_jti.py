@@ -9,12 +9,12 @@ Revocation state persists across server restarts.
 
 import time
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from packages.core.settings import settings
-from packages.db.session import SessionLocal
-
 from packages.db.models.revoked_token import RevokedToken
+from packages.db.session import SessionLocal
 
 
 def revoke_jti(jti: str, ttl_seconds: float) -> None:
@@ -31,6 +31,29 @@ def revoke_jti(jti: str, ttl_seconds: float) -> None:
         )
         db.add(record)
         db.commit()
+    finally:
+        db.close()
+
+
+def revoke_jti_atomic(jti: str, ttl_seconds: float) -> bool:
+    """Atomically revoke a JTI using INSERT OR IGNORE.
+
+    Returns True if this call won the race (row inserted),
+    False if another request already revoked this JTI.
+    """
+    db = SessionLocal()
+    try:
+        now = time.time()
+        expires_at = now + ttl_seconds
+        result = db.execute(
+            text(
+                "INSERT OR IGNORE INTO revoked_tokens (jti, revoked_at, expires_at)"
+                " VALUES (:jti, :revoked_at, :expires_at)"
+            ),
+            {"jti": jti, "revoked_at": now, "expires_at": expires_at},
+        )
+        db.commit()
+        return result.rowcount == 1
     finally:
         db.close()
 

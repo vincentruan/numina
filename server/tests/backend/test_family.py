@@ -103,6 +103,49 @@ def test_regenerate_invite_code_non_owner_forbidden(client, auth_headers):
     assert response.status_code == 403
 
 
+def test_regenerate_invite_code_rate_limit(client, auth_headers):
+    """POST /family/invite-code returns 429 after 5 attempts per hour."""
+    from jose import jwt
+
+    from apps.backend.app.auth.deps import ALGORITHM
+    from apps.backend.app.config import settings
+    from apps.backend.app.services import auth as auth_service
+    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+
+    token = auth_headers["Authorization"].split(" ")[1]
+    user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
+
+    cache = get_rate_limit_cache()
+    key = f"invite_code_attempts:{user_id}"
+    cache.set(key, auth_service._INVITE_CODE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+
+    response = client.post("/api/v1/family/invite-code", headers=auth_headers)
+    assert response.status_code == 429
+
+
+def test_regenerate_invite_code_rate_limit_includes_retry_after(client, auth_headers):
+    """Invite-code rate-limited response includes Retry-After header."""
+    from jose import jwt
+
+    from apps.backend.app.auth.deps import ALGORITHM
+    from apps.backend.app.config import settings
+    from apps.backend.app.services import auth as auth_service
+    from apps.backend.app.services.cache.factory import get_rate_limit_cache
+
+    token = auth_headers["Authorization"].split(" ")[1]
+    user_id = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])["sub"]
+
+    # Exhaust the invite code rate limit
+    cache = get_rate_limit_cache()
+    key = f"invite_code_attempts:{user_id}"
+    cache.set(key, auth_service._INVITE_CODE_RATE_LIMIT_PER_HOUR, ttl_seconds=3600)
+
+    response = client.post("/api/v1/family/invite-code", headers=auth_headers)
+    assert response.status_code == 429
+    assert "retry-after" in response.headers
+    assert int(response.headers["retry-after"]) > 0
+
+
 def test_cross_family_isolation_family_info(client, auth_headers, second_user_headers):
     """Family A user cannot see Family B's data via /family endpoint."""
     resp_a = client.get("/api/v1/family", headers=auth_headers).json()["data"]

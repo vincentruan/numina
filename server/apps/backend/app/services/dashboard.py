@@ -34,6 +34,8 @@ from apps.backend.app.schemas.dashboard import (
     TrendResponse,
     TypeDistributionItem,
     TypeDistributionResponse,
+    UpcomingPaymentItem,
+    UpcomingPaymentsResponse,
 )
 from apps.backend.app.services.asset import compute_daily_cost, compute_return_rate
 from apps.backend.app.services.exchange_rate import ExchangeRateService
@@ -1020,3 +1022,63 @@ def get_insights(db: Session, user: User) -> InsightsResponse:
         duration_distribution=get_duration_distribution(db, user),
         retention_rate=get_retention_rate(db, user),
     )
+
+
+def _next_payment_date(start_day: int, today: date) -> date:
+    """Return the next occurrence of start_day on or after today.
+
+    Month-end clamping: if start_day exceeds the number of days in the
+    candidate month, the last day of that month is used instead.
+    """
+    import calendar
+
+    def _clamp(year: int, month: int, day: int) -> date:
+        last = calendar.monthrange(year, month)[1]
+        return date(year, month, min(day, last))
+
+    candidate = _clamp(today.year, today.month, start_day)
+    if candidate >= today:
+        return candidate
+
+    # Advance to next month
+    if today.month == 12:
+        return _clamp(today.year + 1, 1, start_day)
+    return _clamp(today.year, today.month + 1, start_day)
+
+
+def get_upcoming_payments(db: Session, user: User, days: int = 7) -> UpcomingPaymentsResponse:
+    """Return active liabilities whose next payment date falls within *days* days from today."""
+    today = date.today()
+    cutoff = today + timedelta(days=days)
+
+    liabilities = (
+        db.query(Liability)
+        .filter(
+            Liability.family_id == user.family_id,
+            Liability.is_active == True,  # noqa: E712
+            Liability.start_date.isnot(None),
+        )
+        .all()
+    )
+
+    items: list[UpcomingPaymentItem] = []
+    for liability in liabilities:
+        # Exclude liabilities whose end_date is in the past
+        if liability.end_date is not None and liability.end_date < today:
+            continue
+
+        next_due = _next_payment_date(liability.start_date.day, today)
+        if next_due > cutoff:
+            continue
+
+        items.append(
+            UpcomingPaymentItem(
+                liability_id=liability.id,
+                name=liability.name,
+                amount=liability.monthly_payment,
+                due_date=next_due.isoformat(),
+            )
+        )
+
+    total_amount = sum(item.amount for item in items if item.amount is not None)
+    return UpcomingPaymentsResponse(items=items, total_amount=total_amount)

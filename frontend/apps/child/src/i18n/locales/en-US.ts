@@ -148,6 +148,9 @@ export default {
     themeDark: '🌙 Dark',
     logout: '👋 Log Out',
     logoutConfirm: '⚠️ Are you sure you want to log out?',
+    progressRingNoTasks: 'No tasks today, enjoy your rest!',
+    progressRingSubtitle: '{completed} of {total} tasks done',
+    progressRingAriaLabel: 'Today\'s task progress: {completed} of {total} done',
   },
   ledger: {
     myStars: 'My Star Coins',
@@ -351,5 +354,12 @@ export default {
     purchaseDate: 'Purchase Date',
     purchasePrice: 'Purchase Price',
     currentValue: 'Current Value',
+  },
+  empty: {
+    noTasks: 'No tasks today, enjoy your rest 🌟',
+    allDone: 'All done for today! Amazing 🎉',
+    noWishes: 'Make a wish — hard work makes it happen! ✨',
+    noTreasures: 'Treasures will appear here after wishes come true 🎁',
+    noRecords: 'Start doing tasks and Star Coins will roll in 💫',
   },
 }

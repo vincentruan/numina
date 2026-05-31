@@ -119,3 +119,15 @@ def test_join_family_invalid_code(client):
         "invite_code": "INVALID"
     })
     assert response.status_code == 404
+
+
+def test_register_short_password(client):
+    """Registration with a password shorter than 8 characters returns 422."""
+    response = client.post("/api/v1/auth/register", json={
+        "username": "shortpwuser",
+        "display_name": "Short PW",
+        "password": "Ab1",
+        "family_name": "Test Family",
+        "family_invitation_code": "AUTO-SHORT"
+    })
+    assert response.status_code == 422

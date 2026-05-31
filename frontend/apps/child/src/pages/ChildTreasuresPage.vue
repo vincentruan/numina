@@ -14,10 +14,13 @@
 
     <div v-else-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else-if="treasures.length === 0" class="empty">
-      <p class="empty-emoji">🎁</p>
-      <p class="empty-text">{{ t('treasures.empty') }}</p>
-    </div>
+    <EmptyState
+      v-else-if="treasures.length === 0"
+      :illustration="noTreasuresSvg"
+      :text="t('empty.noTreasures')"
+      :action-text="t('nav.wishes')"
+      action-to="/wishes"
+    />
 
     <div v-else class="grid">
       <div v-for="item in treasures" :key="item.id" class="treasure-card">
@@ -44,6 +47,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
+import EmptyState from '@/components/EmptyState.vue'
+import noTreasuresSvgRaw from '@/assets/empty-states/no-treasures.svg?raw'
+
+const noTreasuresSvg = noTreasuresSvgRaw
 
 const { t, locale } = useI18n()
 const treasures = ref<TreasureItem[]>([])

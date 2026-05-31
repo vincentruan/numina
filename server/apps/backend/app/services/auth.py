@@ -51,6 +51,8 @@ _dummy_hash_cache: str | None = None
 _REFRESH_RATE_LIMIT_PER_MINUTE = 10
 # Password change rate limit: 3 per hour per user_id
 _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR = 3
+# Invite code regeneration rate limit: 5 per hour per user_id
+_INVITE_CODE_RATE_LIMIT_PER_HOUR = 5
 
 
 def _check_refresh_rate_limit(user_id: str) -> None:
@@ -67,7 +69,7 @@ def _check_refresh_rate_limit(user_id: str) -> None:
                 user_id=user_id,
                 reason="rate_limited",
             )
-            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=60)
         new_count = cache.increment(key)
         if new_count == 1:
             cache.set(key, 1, ttl_seconds=60)
@@ -91,7 +93,26 @@ def _check_password_change_rate_limit(user_id: str) -> None:
                 user_id=user_id,
                 reason="rate_limited",
             )
-            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=3600)
+        new_count = cache.increment(key)
+        if new_count == 1:
+            cache.set(key, 1, ttl_seconds=3600)
+    except AppError:
+        raise
+    except Exception:
+        pass
+
+
+def _check_invite_code_rate_limit(user_id: str) -> None:
+    """Limit invite code regeneration to 5 per hour per user."""
+    try:
+        from apps.backend.app.services.cache.factory import get_rate_limit_cache
+
+        cache = get_rate_limit_cache()
+        key = f"invite_code_attempts:{user_id}"
+        count = cache.get(key)
+        if count is not None and int(count) >= _INVITE_CODE_RATE_LIMIT_PER_HOUR:
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=3600)
         new_count = cache.increment(key)
         if new_count == 1:
             cache.set(key, 1, ttl_seconds=3600)
@@ -163,11 +184,10 @@ def _check_register_rate_limit(client_ip: str) -> None:
         count = cache.get(key)
         if count is not None and int(count) >= max_per_hour:
             ttl = cache.get_ttl(key) or 0
-            remaining_minutes = max(1, ttl // 60)
             _log_security_event(
                 SecurityEventType.REGISTER_RATE_LIMITED, client_ip=client_ip
             )
-            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, ttl))
     except AppError:
         raise
     except Exception:
@@ -205,7 +225,7 @@ def _check_rate_limit(username: str) -> None:
             ttl = cache.get_ttl(key) or 0
             remaining = max(1, (ttl // 60) + 1)
             _log_security_event(SecurityEventType.LOGIN_RATE_LIMITED, username=username)
-            raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+            raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, ttl))
     except Exception:
         # Fallback to in-memory if cache not available
         if username not in _login_attempts:
@@ -214,11 +234,10 @@ def _check_rate_limit(username: str) -> None:
         if count >= max_attempts:
             elapsed = time.time() - first_time
             if elapsed < lockout_seconds:
-                remaining = int((lockout_seconds - elapsed) / 60) + 1
                 _log_security_event(
                     SecurityEventType.LOGIN_RATE_LIMITED, username=username
                 )
-                raise AppError(ErrorCode.AUTH_RATE_LIMITED)
+                raise AppError(ErrorCode.AUTH_RATE_LIMITED, retry_after=max(1, int(lockout_seconds - elapsed))) from None
             del _login_attempts[username]
 
 
@@ -412,7 +431,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     from jose import JWTError, jwt
 
     from apps.backend.app.auth.deps import ALGORITHM, _verify_token
-    from apps.backend.app.auth.revoke_jti import revoke_jti
+    from apps.backend.app.auth.revoke_jti import revoke_jti_atomic
     from apps.backend.app.config import settings
 
     # Use _verify_token so JTI revocation check is applied
@@ -440,10 +459,20 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     # Rate limit refresh attempts per user
     _check_refresh_rate_limit(user_id)
 
-    # Revoke the old refresh token JTI so it can't be reused
+    # Atomically revoke the old JTI — if another request already revoked it,
+    # this is a concurrent replay; reject immediately to prevent token reuse.
+    if old_jti:
+        won_race = revoke_jti_atomic(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
+        if not won_race:
+            _log_security_event(
+                SecurityEventType.TOKEN_REFRESH_FAILED,
+                user_id=user_id,
+                reason="concurrent_replay",
+            )
+            raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
+
     new_refresh_token = create_refresh_token(user_claims(user, token_version=user.token_version))
     if old_jti:
-        revoke_jti(old_jti, ttl_seconds=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400)
         new_payload = jwt.decode(new_refresh_token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         new_jti = new_payload.get("jti")
         if new_jti:
@@ -499,6 +528,9 @@ def change_password(
     if not verify_password(old_password, user.password_hash):
         _log_security_event(SecurityEventType.PASSWORD_CHANGE_FAILED, user_id=user.id)
         raise AppError(ErrorCode.AUTH_PASSWORD_INCORRECT)
+
+    if verify_password(new_password, user.password_hash):
+        raise AppError(ErrorCode.AUTH_PASSWORD_SAME)
 
     user.password_hash = hash_password(new_password)
     db.commit()

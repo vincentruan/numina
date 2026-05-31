@@ -38,11 +38,19 @@
 
     <div v-else-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else-if="chores.length === 0" class="empty">
-      <p>{{ t('chore.noChoresTitle') }}</p>
-    </div>
+    <EmptyState
+      v-else-if="chores.length === 0"
+      :illustration="noTasksSvg"
+      :text="t('empty.noTasks')"
+    />
 
-    <div v-else class="chore-list">
+    <EmptyState
+      v-else-if="allDone"
+      :illustration="allDoneSvg"
+      :text="t('empty.allDone')"
+    />
+
+    <div v-else-if="!allDone" class="chore-list">
       <div
         v-for="chore in chores"
         :key="chore.id"
@@ -227,6 +235,12 @@ import { useReducedMotion } from '@/composables/useReducedMotion'
 import { tryVibrate } from '@/composables/useHaptic'
 import { MOTION } from '@/utils/motionTokens'
 import { useFamilyStore } from '@/stores/family'
+import EmptyState from '@/components/EmptyState.vue'
+import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
+import allDoneSvgRaw from '@/assets/empty-states/all-done.svg?raw'
+
+const noTasksSvg = noTasksSvgRaw
+const allDoneSvg = allDoneSvgRaw
 
 const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
@@ -251,6 +265,10 @@ const showAutoDrawOverlay = ref(false)
 // Balance polling via composable
 const { balance, lastChange: balanceLastChange } = useBalancePolling()
 const reducedMotion = useReducedMotion()
+
+const allDone = computed(() =>
+  chores.value.length > 0 && chores.value.every(c => c.status === 'approved'),
+)
 
 // Streak tier helper: returns threshold value (7, 14, 30) or '0' for below 7
 function streakTier(count: number): string {

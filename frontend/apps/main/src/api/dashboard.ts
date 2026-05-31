@@ -183,3 +183,19 @@ export interface ActivityItem {
   amount: number | null
   created_at: string
 }
+
+export interface UpcomingPaymentItem {
+  liability_id: string
+  name: string
+  amount: number | null
+  due_date: string
+}
+
+export interface UpcomingPaymentsResponse {
+  items: UpcomingPaymentItem[]
+  total_amount: number
+}
+
+export function getUpcomingPayments() {
+  return http.get<UpcomingPaymentsResponse>('/dashboard/upcoming-payments')
+}

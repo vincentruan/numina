@@ -149,6 +149,9 @@ export default {
     themeDark: '🌙 夜间模式',
     logout: '👋 退出登录',
     logoutConfirm: '⚠️ 确定要退出登录吗？',
+    progressRingNoTasks: '今天没有任务，好好休息吧！',
+    progressRingSubtitle: '已完成 {completed} / {total} 项任务',
+    progressRingAriaLabel: '今日任务进度：已完成 {completed} 项，共 {total} 项',
   },
   ledger: {
     myStars: '我的星星币',
@@ -352,5 +355,12 @@ export default {
     purchaseDate: '购入日期',
     purchasePrice: '购入价格',
     currentValue: '当前价值',
+  },
+  empty: {
+    noTasks: '今天没有任务，好好休息吧 🌟',
+    allDone: '今天的任务都完成啦！太棒了 🎉',
+    noWishes: '许个心愿吧，努力就能实现！✨',
+    noTreasures: '完成心愿后，宝贝会出现在这里 🎁',
+    noRecords: '开始做任务，星星币就会到账 💫',
   },
 }

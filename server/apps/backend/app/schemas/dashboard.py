@@ -238,3 +238,21 @@ class InsightsResponse(BaseModel):
     type_distribution: TypeDistributionResponse
     duration_distribution: DurationDistributionResponse
     retention_rate: RetentionRateResponse
+
+
+# ═══════════════════════════════════════
+# Upcoming Payments (Track A)
+# ═══════════════════════════════════════
+
+
+class UpcomingPaymentItem(SnowflakeBase):
+    """Single liability payment due within the requested window."""
+    liability_id: int
+    name: str
+    amount: float | None
+    due_date: str  # ISO date string, e.g. "2025-06-15"
+
+
+class UpcomingPaymentsResponse(BaseModel):
+    items: list[UpcomingPaymentItem]
+    total_amount: float

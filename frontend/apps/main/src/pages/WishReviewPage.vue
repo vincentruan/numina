@@ -87,18 +87,28 @@
     </template>
 
     <!-- Approve dialog -->
-    <div v-if="approveTarget" class="dialog-overlay" tabindex="-1" autofocus @click.self="approveTarget = null" @keydown.escape="approveTarget = null">
+    <div v-if="approveTarget" class="dialog-overlay" tabindex="-1" autofocus @click.self="closeApprove" @keydown.escape="closeApprove">
       <div class="dialog" role="dialog" aria-modal="true">
         <h3 class="dialog-title"><van-icon name="passed" size="20" color="#28a745" /> {{ t('wishReview.dialog.approveTitle') }}</h3>
         <p class="dialog-desc">{{ t('wishReview.dialog.approveDesc', { name: approveTarget.name }) }}</p>
-        <div class="cost-readonly">
+        <div class="cost-field">
           <span class="cost-label">{{ t('wishReview.dialog.costLabel') }}</span>
-          <span class="cost-value">{{ approveTarget.star_coin_cost ?? '-' }} ⭐</span>
+          <van-field
+            v-model="approveCostInput"
+            type="number"
+            input-align="right"
+            :placeholder="t('wishReview.dialog.costPlaceholder')"
+            class="cost-input-field"
+          />
         </div>
+        <StarCoinSuggestion
+          :child-id="approveTarget.child_user_id"
+          @select="approveCostInput = String($event)"
+        />
         <div v-if="dialogError" class="error-msg">{{ dialogError }}</div>
         <div class="dialog-actions">
-          <button class="btn-cancel" @click="approveTarget = null">{{ t('wishReview.btn.cancel') }}</button>
-          <button class="btn-submit" :disabled="actioning" @click="approve">{{ t('wishReview.btn.confirmApprove') }}</button>
+          <button class="btn-cancel" @click="closeApprove">{{ t('wishReview.btn.cancel') }}</button>
+          <button class="btn-submit" :disabled="actioning || !isApproveCostValid" @click="approve">{{ t('wishReview.btn.confirmApprove') }}</button>
         </div>
       </div>
     </div>
@@ -150,6 +160,7 @@ import {
 } from '@/api/childWishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
+import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 
 const { t } = useI18n()
 
@@ -159,6 +170,11 @@ const error = ref('')
 const actioningId = ref<string | null>(null)
 
 const approveTarget = ref<ParentWish | null>(null)
+const approveCostInput = ref('')
+const isApproveCostValid = computed(() => {
+  const n = Number(approveCostInput.value)
+  return Number.isFinite(n) && n >= 1 && Math.floor(n) === n
+})
 const rejectTarget = ref<ParentWish | null>(null)
 const realizeTarget = ref<ParentWish | null>(null)
 const rejectReason = ref('')
@@ -192,6 +208,13 @@ async function load() {
 
 function openApprove(wish: ParentWish) {
   approveTarget.value = wish
+  approveCostInput.value = wish.star_coin_cost != null ? String(wish.star_coin_cost) : ''
+  dialogError.value = ''
+}
+
+function closeApprove() {
+  approveTarget.value = null
+  approveCostInput.value = ''
   dialogError.value = ''
 }
 
@@ -208,13 +231,13 @@ function openRealize(wish: ParentWish) {
 
 async function approve() {
   if (!approveTarget.value) return
-  const cost = approveTarget.value.star_coin_cost
-  if (!cost || cost < 1) return
+  const cost = Math.round(Number(approveCostInput.value))
+  if (!Number.isFinite(cost) || cost < 1) return
   actioning.value = true
   dialogError.value = ''
   try {
     await approveChildWish(approveTarget.value.id, cost)
-    approveTarget.value = null
+    closeApprove()
     await load()
   } catch {
     dialogError.value = t('wishReview.error.operationFailed')
@@ -424,6 +447,20 @@ onMounted(load)
   background: var(--bg-secondary);
   border-radius: 10px;
   padding: 10px 14px;
+}
+.cost-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border-radius: 10px;
+  padding: 6px 14px;
+  gap: 8px;
+}
+.cost-input-field {
+  flex: 1;
+  background: transparent;
+  padding: 0;
 }
 .cost-label {
   font-size: 14px;

@@ -1,16 +1,29 @@
 <template>
   <div class="home-page">
-    <!-- Balance hero — ochre feature card -->
+    <!-- Balance hero — progress ring card -->
     <div class="hero-card">
       <p class="hero-label">{{ t('home.myStars') }}</p>
       <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+      <ProgressRing
+        v-if="!loadingChores && todayChores.length > 0"
+        :completed="completedChores"
+        :pending="pendingChores"
+        :total="todayChores.length"
+        :total-coins="totalChoreCoins"
+        :loading="loadingChores"
+        class="hero-ring"
+      />
     </div>
 
     <!-- Today's chores -->
     <div class="section">
       <p class="section-title">{{ t('home.todayTasks') }}</p>
       <div v-if="loadingChores" class="hint">{{ t('common.loading') }}</div>
-      <div v-else-if="todayChores.length === 0" class="hint">{{ t('home.noTasks') }}</div>
+      <EmptyState
+        v-else-if="todayChores.length === 0"
+        :illustration="noTasksSvg"
+        :text="t('empty.noTasks')"
+      />
       <div v-else class="chore-list">
         <div
           v-for="c in todayChores"
@@ -170,6 +183,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import ProgressRing from '@/components/ProgressRing.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
@@ -181,7 +195,11 @@ import CoinDisplay from '@/components/coins/CoinDisplay.vue'
 import ChildCalendar from '@/components/calendar/ChildCalendar.vue'
 import CelebrationAnimation from '@/components/CelebrationAnimation.vue'
 import ChallengeCard from '@/components/ChallengeCard.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import noTasksSvgRaw from '@/assets/empty-states/no-tasks.svg?raw'
 import { useFamilyStore } from '@/stores/family'
+
+const noTasksSvg = noTasksSvgRaw
 import { useDarkMode } from '@/utils/darkMode'
 import { useLocale } from '@/utils/locale'
 import { useCelebration } from '@/composables/useCelebration'
@@ -203,6 +221,11 @@ const { balance, refresh: refreshBalance } = useBalancePolling()
 const reducedMotion = useReducedMotion()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
+
+// ProgressRing derived data
+const completedChores = computed(() => todayChores.value.filter(c => c.status === 'approved').length)
+const pendingChores = computed(() => todayChores.value.filter(c => c.status === 'pending_approval').length)
+const totalChoreCoins = computed(() => todayChores.value.reduce((sum, c) => sum + (c.coin_reward ?? 0), 0))
 const submittingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
 const abandoningId = ref<string | null>(null)
@@ -414,6 +437,9 @@ onMounted(async () => {
 .hero-balance {
   font-size: 32px;
   font-weight: 600;
+}
+.hero-ring {
+  margin-top: 20px;
 }
 
 /* ── Sections ── */

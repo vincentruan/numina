@@ -43,3 +43,11 @@ class ChildBalanceResponse(BaseModel):
 class ChildLedgerEntryResponse(BaseModel):
     amount: int
     created_at: datetime
+
+
+class EarningRateResponse(BaseModel):
+    daily_avg: float
+    suggested_7d: int
+    suggested_14d: int
+    suggested_30d: int
+    data_days: int

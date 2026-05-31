@@ -36,3 +36,16 @@ export async function unlockChildPin(childId: string): Promise<void> {
 export async function resetChildPassword(childId: string, newPassword: string): Promise<void> {
   await http.post(`/auth/child/${childId}/password`, { new_password: newPassword })
 }
+
+export interface ChildEarningRate {
+  daily_avg: number
+  suggested_7d: number
+  suggested_14d: number
+  suggested_30d: number
+  data_days: number
+}
+
+export async function getChildEarningRate(childId: string): Promise<ChildEarningRate> {
+  const res = await http.get<ChildEarningRate>(`/family/children/${childId}/earning-rate`)
+  return res.data
+}

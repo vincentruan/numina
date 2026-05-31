@@ -14,7 +14,11 @@ from apps.backend.app.models.family import Family
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.auth import UpdateMemberInfoRequest, UserResponse
-from apps.backend.app.schemas.coin import ChildBalanceResponse, ChildLedgerEntryResponse
+from apps.backend.app.schemas.coin import (
+    ChildBalanceResponse,
+    ChildLedgerEntryResponse,
+    EarningRateResponse,
+)
 from apps.backend.app.schemas.family import (
     ChildEconomyConfigResponse,
     ChildEconomyConfigUpdate,
@@ -237,6 +241,8 @@ def regenerate_invite_code(
 ):
     if user.role != 'owner':
         raise AppError(ErrorCode.FAMILY_FORBIDDEN)
+    from apps.backend.app.services.auth import _check_invite_code_rate_limit
+    _check_invite_code_rate_limit(str(user.id))
     family = family_service.regenerate_invite_code(db, user)
     return {"invite_code": family.invite_code}
 
@@ -349,6 +355,84 @@ def get_child_ledger(
         ChildLedgerEntryResponse(amount=tx.amount, created_at=tx.created_at)
         for tx in txs
     ]
+
+
+@router.get("/children/{child_id}/earning-rate", response_model=EarningRateResponse)
+def get_child_earning_rate(
+    child_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_adult),
+):
+    """Return the child's average daily coin earning rate over the past 7 days.
+
+    Uses earning transactions (chore_earn, parent_grant with amount > 0) from
+    the last 7 days to compute a daily average and project suggested wish costs
+    for 7-, 14-, and 30-day savings horizons.
+
+    If fewer than 3 distinct earning days exist, daily_avg=0 and all suggestions=0
+    so the frontend can show an "insufficient data" notice.
+    """
+    from datetime import date, timedelta
+    from math import ceil
+
+    from apps.backend.app.models.coin_transaction import CoinTransaction
+
+    child = db.query(User).filter(
+        User.id == child_id,
+        User.family_id == user.family_id,
+        User.role == "child",
+    ).first()
+    if not child:
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
+
+    cutoff = date.today() - timedelta(days=7)
+    # SQLite stores DateTime without timezone; compare as naive date string
+    from sqlalchemy import func as sa_func
+
+    rows = (
+        db.query(CoinTransaction)
+        .filter(
+            CoinTransaction.child_user_id == child_id,
+            CoinTransaction.transaction_type.in_(["chore_earn", "parent_grant"]),
+            CoinTransaction.amount > 0,
+            sa_func.date(CoinTransaction.created_at) >= cutoff.isoformat(),
+        )
+        .all()
+    )
+
+    if not rows:
+        return EarningRateResponse(
+            daily_avg=0.0,
+            suggested_7d=0,
+            suggested_14d=0,
+            suggested_30d=0,
+            data_days=0,
+        )
+
+    total_earned = sum(tx.amount for tx in rows)
+    distinct_days = len({tx.created_at.date() for tx in rows})
+
+    if distinct_days < 3:
+        return EarningRateResponse(
+            daily_avg=0.0,
+            suggested_7d=0,
+            suggested_14d=0,
+            suggested_30d=0,
+            data_days=distinct_days,
+        )
+
+    daily_avg = total_earned / 7.0
+    suggested_7d = min(max(ceil(daily_avg * 7), 1), 9999)
+    suggested_14d = min(max(ceil(daily_avg * 14), 1), 9999)
+    suggested_30d = min(max(ceil(daily_avg * 30), 1), 9999)
+
+    return EarningRateResponse(
+        daily_avg=daily_avg,
+        suggested_7d=suggested_7d,
+        suggested_14d=suggested_14d,
+        suggested_30d=suggested_30d,
+        data_days=distinct_days,
+    )
 
 
 @router.get("/children/balances", response_model=dict[str, int])

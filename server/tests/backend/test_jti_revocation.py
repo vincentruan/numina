@@ -10,6 +10,7 @@ from apps.backend.app.auth.revoke_jti import (
     cleanup_expired_revoked_tokens,
     revoke_all_user_tokens,
     revoke_jti,
+    revoke_jti_atomic,
 )
 from apps.backend.app.models.revoked_token import RevokedToken
 
@@ -115,3 +116,99 @@ def test_cleanup_expired_revoked_tokens(db):
     # Should be removed
     assert deleted == 1
     assert db.query(RevokedToken).filter_by(jti="expired-jti").first() is None
+
+
+def test_revoke_jti_atomic_first_call_wins(db):
+    """revoke_jti_atomic() returns True when the JTI is not yet revoked."""
+    jti = "atomic-jti-new"
+    ttl = 3600
+
+    db.query(RevokedToken).filter_by(jti=jti).delete()
+    db.commit()
+
+    with patch.object(revoke_module, "SessionLocal", return_value=db):
+        result = revoke_jti_atomic(jti, ttl)
+
+    assert result is True
+    record = db.query(RevokedToken).filter_by(jti=jti).first()
+    assert record is not None
+    assert record.jti == jti
+
+
+def test_revoke_jti_atomic_second_call_loses(db):
+    """revoke_jti_atomic() returns False when the JTI is already revoked."""
+    jti = "atomic-jti-dup"
+    ttl = 3600
+
+    db.query(RevokedToken).filter_by(jti=jti).delete()
+    db.commit()
+
+    with patch.object(revoke_module, "SessionLocal", return_value=db):
+        first = revoke_jti_atomic(jti, ttl)
+        second = revoke_jti_atomic(jti, ttl)
+
+    assert first is True
+    assert second is False
+
+
+def test_refresh_token_replay_rejected_service_layer(db):
+    """Service-layer test: refresh_token() rejects a replayed token via revoke_jti_atomic.
+
+    Uses the db fixture directly (bypassing the SAVEPOINT-restart limitation of
+    the HTTP test client) to verify that the second call to revoke_jti_atomic
+    returns False and raises AUTH_REFRESH_FAILED.
+    """
+    from apps.backend.app.auth.deps import create_refresh_token
+    from apps.backend.app.auth.jwt_utils import user_claims
+    from apps.backend.app.errors import AppError, ErrorCode
+    from apps.backend.app.models.family import Family
+    from apps.backend.app.models.user import User
+    from apps.backend.app.services.auth import refresh_token as svc_refresh_token
+    from apps.backend.app.utils.snowflake import next_id
+
+    # Create a minimal family + user
+    family = Family(id=next_id(), name="Replay SVC Family", created_by=next_id())
+    db.add(family)
+    db.commit()
+
+    user = User(
+        id=next_id(),
+        family_id=family.id,
+        username="replay_svc_user",
+        display_name="Replay SVC",
+        password_hash="x",
+        role="owner",
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+
+    # Issue a refresh token
+    tok = create_refresh_token(user_claims(user, token_version=user.token_version))
+
+    # Wrap db so that close() is a no-op — revoke_jti_atomic calls db.close()
+    # in its finally block; closing the shared test session detaches ORM objects.
+    class _NoClose:
+        def close(self):
+            pass
+
+        def __getattr__(self, name):
+            return getattr(db, name)
+
+        def __setattr__(self, name, value):
+            setattr(db, name, value)
+
+    no_close_db = _NoClose()
+
+    # First call: should succeed — revoke_jti_atomic wins the race
+    with patch.object(revoke_module, "SessionLocal", return_value=no_close_db):
+        result1 = svc_refresh_token(db, tok)
+    assert result1.refresh_token != tok  # new token issued
+
+    # Second call with the original token: revoke_jti_atomic should return False
+    with patch.object(revoke_module, "SessionLocal", return_value=no_close_db):
+        try:
+            svc_refresh_token(db, tok)
+            assert False, "Expected AUTH_REFRESH_FAILED but no error was raised"
+        except AppError as exc:
+            assert exc.code == ErrorCode.AUTH_REFRESH_FAILED

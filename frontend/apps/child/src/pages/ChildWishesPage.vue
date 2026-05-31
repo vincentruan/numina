@@ -145,11 +145,13 @@
       </div>
 
       <!-- Empty state -->
-      <div v-if="!loading && totalWishes === 0" class="empty-state">
-        <p class="empty-icon">🌠</p>
-        <p class="empty-text">{{ t('wishes.emptyText') }}</p>
-        <button class="btn-create-inline" @click="router.push({ name: 'ChildWishCreate' })">{{ t('wishes.createBtn') }}</button>
-      </div>
+      <EmptyState
+        v-if="!loading && totalWishes === 0"
+        :illustration="noWishesSvg"
+        :text="t('empty.noWishes')"
+        :action-text="t('wishes.createBtn')"
+        action-to="/wishes/new"
+      />
     </van-pull-refresh>
 
     <!-- FAB -->
@@ -173,6 +175,10 @@ import { useBalancePolling } from '@/composables/useBalancePolling'
 import { useReducedMotion } from '@/composables/useReducedMotion'
 import { daysEstimate, reachabilityTint, previewSpend, type ReachabilityTint, type SpendDelta } from '@numina/math'
 import WishConstellationGrid from '@/components/wishes/WishConstellationGrid.vue'
+import EmptyState from '@/components/EmptyState.vue'
+import noWishesSvgRaw from '@/assets/empty-states/no-wishes.svg?raw'
+
+const noWishesSvg = noWishesSvgRaw
 
 const { t } = useI18n()
 const router = useRouter()
@@ -541,28 +547,6 @@ onMounted(load)
   font-size: 12px;
   color: var(--color-muted-soft);
   margin: 4px 0 0;
-}
-
-/* Empty state */
-.empty-state { text-align: center; padding: 60px 20px; }
-.empty-icon  { font-size: 56px; margin: 0 0 12px; }
-.empty-text  {
-  font-family: Inter, sans-serif;
-  font-size: 16px;
-  color: var(--color-muted-soft);
-  margin: 0 0 20px;
-}
-.btn-create-inline {
-  background: var(--color-brand-peach);
-  color: var(--color-ink);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 0 28px;
-  font-family: Inter, sans-serif;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  height: 44px;
 }
 
 .loading {

@@ -90,7 +90,7 @@ function onSelect(status: string | null) {
   transition: background 0.18s, color 0.18s, border-color 0.18s;
   white-space: nowrap;
   flex-shrink: 0;
-  min-height: 36px;
+  min-height: 44px;
 }
 .status-tab:active {
   transform: scale(0.96);

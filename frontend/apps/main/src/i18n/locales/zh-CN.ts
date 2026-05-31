@@ -89,6 +89,9 @@ export default {
     section: {
       assetList: '资产列表 ({count})',
     },
+    upcomingPayments: {
+      title: '即将到期还款',
+    },
   },
   ai: {
     systemAgents: '系统智能体',
@@ -481,6 +484,10 @@ export default {
     detailPaymentAmountLabel: '还款金额',
     detailPaymentAmountPlaceholder: '请输入还款金额',
     detailPaymentUnit: '元',
+    countdown: {
+      daysLeft: '距下次还款还有 {days} 天',
+      today: '⚠️ 今天还款',
+    },
   },
   wish: {
     detail: '心愿详情',
@@ -567,6 +574,14 @@ export default {
       deleteBtn: '删除',
       saveBtn: '保存',
       addBtn: '添加',
+    },
+    suggestion: {
+      title: '建议积分',
+      insufficient: '数据不足，暂无建议',
+      basis: '基于近7天赚取速率',
+      days7: '约7天',
+      days14: '约14天',
+      days30: '约30天',
     },
   },
   wishReview: {
@@ -1512,6 +1527,23 @@ export default {
     addBtn: '添加礼物',
   },
 
+  onboarding: {
+    step1: {
+      title: '家庭资产全貌',
+      desc: '这里展示您家庭的资产和负债概览',
+    },
+    step2: {
+      title: '添加资产',
+      desc: '点击这里添加第一笔资产',
+    },
+    step3: {
+      title: '邀请家人',
+      desc: '在设置中邀请家人一起管理',
+    },
+    skip: '跳过',
+    next: '下一步',
+    done: '完成',
+  },
   importReport: {
     uploadTitle: '上传金融账单 PDF',
     uploadDesc: '支持券商日结单、银行账单等金融文档，系统将自动识别持仓信息',

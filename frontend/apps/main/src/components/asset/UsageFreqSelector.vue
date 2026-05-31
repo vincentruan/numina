@@ -5,7 +5,9 @@
       :key="opt.value"
       class="freq-item"
       :class="{ selected: modelValue === opt.value }"
+      tabindex="0"
       @click="$emit('update:modelValue', opt.value)"
+      @keydown.enter.space.prevent="$emit('update:modelValue', opt.value)"
     >
       <van-icon :name="opt.icon" class="icon" aria-hidden="true" />
       <span class="label">{{ opt.label }}</span>
@@ -48,6 +50,10 @@ const options = computed(() => [
   border: 1.5px solid transparent;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
+}
+.freq-item:focus-visible {
+  outline: 2px solid var(--van-primary-color);
+  outline-offset: 2px;
 }
 .freq-item.selected {
   border-color: var(--van-primary-color);
