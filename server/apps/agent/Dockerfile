@@ -12,6 +12,11 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --extra agent
 
+# Apply compatibility patches to DeerFlow harness
+COPY apps/agent/scripts/patch-langgraph-runtime.py apps/agent/scripts/patch-deerflow-thread-data.py ./apps/agent/scripts/
+RUN uv run python apps/agent/scripts/patch-langgraph-runtime.py && \
+    uv run python apps/agent/scripts/patch-deerflow-thread-data.py
+
 # Copy application code
 COPY apps/agent/ ./apps/agent/
 COPY packages/ ./packages/

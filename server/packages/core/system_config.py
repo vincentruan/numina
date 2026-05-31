@@ -23,6 +23,7 @@ Loader behaviour:
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -33,14 +34,27 @@ logger = logging.getLogger(__name__)
 
 _CONFIG_FILENAME = "system-config.yaml"
 _LOCAL_OVERRIDE_FILENAME = "system-config.local.yaml"
+_PROJECT_ROOT_ENV = "NUMINA_PROJECT_ROOT"
 
 
 def _project_root() -> Path:
-    """Walk up from this module to find the project root.
+    """Resolve project root via env override or filesystem walk.
 
-    Identified by the presence of ``docker-compose.yml`` (and absence of any
-    parent that has it). Raises if not found within 8 levels.
+    Container environments set ``NUMINA_PROJECT_ROOT=/app`` to bypass the
+    docker-compose.yml filesystem probe. Falls back to walking up from this
+    module when env var is absent or invalid.
     """
+    env_root = os.environ.get(_PROJECT_ROOT_ENV)
+    if env_root:
+        root = Path(env_root).resolve()
+        if root.exists() and root.is_dir():
+            return root
+        logger.warning(
+            "%s=%s is not a valid directory; falling back to filesystem probe",
+            _PROJECT_ROOT_ENV,
+            env_root,
+        )
+
     cur = Path(__file__).resolve()
     for _ in range(8):
         if (cur / "docker-compose.yml").exists():

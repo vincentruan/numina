@@ -68,10 +68,8 @@
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.enableAI')"
         :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
+        icon="star-o"
       >
-        <template #icon>
-          <span class="cell-icon">💡</span>
-        </template>
         <template #value>
           <van-switch
             :model-value="aiEnabled"
@@ -86,21 +84,9 @@
           <NuminaLogo :width="24" class="cell-logo" />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.mcpManage')" is-link to="/settings/ai/mcp">
-        <template #icon>
-          <span class="cell-icon">🔗</span>
-        </template>
-      </van-cell>
-      <van-cell :title="t('settings.skillsManage')" is-link to="/settings/ai/skills">
-        <template #icon>
-          <span class="cell-icon">✨</span>
-        </template>
-      </van-cell>
-      <van-cell :title="t('settings.agentsManage')" is-link to="/settings/ai/agents">
-        <template #icon>
-          <span class="cell-icon">🤖</span>
-        </template>
-      </van-cell>
+      <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
+      <van-cell :title="t('settings.skillsManage')" icon="gem-o" is-link to="/settings/ai/skills" />
+      <van-cell :title="t('settings.agentsManage')" icon="manager-o" is-link to="/settings/ai/agents" />
     </van-cell-group>
 
     <!-- 数据管理 -->
@@ -421,10 +407,5 @@ async function onLogout() {
 
 .cell-logo {
   margin-right: 8px;
-}
-
-.cell-icon {
-  margin-right: 8px;
-  font-size: 20px;
 }
 </style>

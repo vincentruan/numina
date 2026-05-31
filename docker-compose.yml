@@ -45,6 +45,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AI_MODEL=${AI_MODEL:-placeholder}
       - AI_API_KEY=${AI_API_KEY:-placeholder}
+      - NUMINA_PROJECT_ROOT=/app
     depends_on:
       backend:
         condition: service_healthy

@@ -173,40 +173,78 @@ _checkpointer_lock = threading.Lock()
 _checkpointer_ctx = None  # open context manager keeping the SqliteSaver connection alive
 
 
-def _get_shared_checkpointer(base_config_dir: str | None = None):
-    """Return the shared LangGraph checkpointer, creating it on first call.
+async def async_init_checkpointer(db_path: str | None = None) -> None:
+    """Initialize the shared AsyncSqliteSaver checkpointer at startup.
 
-    Reads the checkpointer config from the base config.yaml so the DB path
-    matches what the operator configured (default: /app/data/deerflow-checkpoints.db).
-    Falls back to InMemorySaver if the config is absent or the sqlite package
-    is not installed.
+    Must be called from an async context (FastAPI lifespan). This properly
+    enters the async context manager so checkpoint state persists across
+    restarts.
+
+    Args:
+        db_path: Optional override for the checkpointer DB path. If not
+            provided, reads from settings.DEERFLOW_DB_PATH.
     """
     global _shared_checkpointer, _checkpointer_ctx
 
+    if db_path is None:
+        from apps.agent.app.config import settings
+        db_path = settings.DEERFLOW_DB_PATH
+
     with _checkpointer_lock:
         if _shared_checkpointer is not None:
-            return _shared_checkpointer
-
-        if base_config_dir is None:
-            base_config_dir = os.path.join(os.path.dirname(__file__), "..", "..", "deerflow_config")
-
-        # Read checkpointer path from base config.yaml
-        db_path = _read_checkpointer_path(base_config_dir)
+            return
 
         try:
-            from langgraph.checkpoint.sqlite import SqliteSaver
+            from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
             os.makedirs(os.path.dirname(db_path) if os.path.dirname(db_path) else ".", exist_ok=True)
-            _checkpointer_ctx = SqliteSaver.from_conn_string(db_path)
-            _shared_checkpointer = _checkpointer_ctx.__enter__()
-            _shared_checkpointer.setup()
-            logger.info("[deerflow_cache] shared checkpointer: SqliteSaver(%s)", db_path)
+
+            # Enter the async context manager properly
+            _checkpointer_ctx = AsyncSqliteSaver.from_conn_string(db_path)
+            _shared_checkpointer = await _checkpointer_ctx.__aenter__()
+            logger.info("[deerflow_cache] shared checkpointer: AsyncSqliteSaver(%s)", db_path)
         except ImportError:
             from langgraph.checkpoint.memory import InMemorySaver
 
             _shared_checkpointer = InMemorySaver()
             logger.warning(
-                "[deerflow_cache] langgraph-checkpoint-sqlite not installed; "
+                "[deerflow_cache] langgraph-checkpoint-sqlite[aio] not installed; "
+                "using InMemorySaver — multi-turn memory will not survive restarts"
+            )
+        except Exception as e:
+            from langgraph.checkpoint.memory import InMemorySaver
+
+            _shared_checkpointer = InMemorySaver()
+            logger.warning(
+                "[deerflow_cache] checkpointer async init failed (%s); falling back to InMemorySaver", e
+            )
+
+
+def _get_shared_checkpointer(base_config_dir: str | None = None):
+    """Return the shared LangGraph checkpointer (must be pre-initialized).
+
+    This function returns the checkpointer that was initialized by
+    async_init_checkpointer() at startup. If not yet initialized, it
+    falls back to InMemorySaver.
+
+    Note: For proper persistence, call async_init_checkpointer() in the
+    FastAPI lifespan before yielding.
+    """
+    global _shared_checkpointer
+
+    with _checkpointer_lock:
+        if _shared_checkpointer is not None:
+            return _shared_checkpointer
+
+        # Not yet initialized — use InMemorySaver as fallback
+        from langgraph.checkpoint.memory import InMemorySaver
+        _shared_checkpointer = InMemorySaver()
+        logger.warning(
+            "[deerflow_cache] checkpointer not async-initialized; using InMemorySaver"
+        )
+        return _shared_checkpointer
+            logger.warning(
+                "[deerflow_cache] langgraph-checkpoint-sqlite[aio] not installed; "
                 "using InMemorySaver — multi-turn memory will not survive restarts"
             )
         except Exception as e:
