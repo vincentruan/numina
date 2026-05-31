@@ -1468,6 +1468,7 @@ export default {
   reminders: {
     title: '智能提醒',
     expiringSoon: '即将到期',
+    upcomingPayments: '即将还款',
     idleAssets: '闲置资产',
     empty: '暂无提醒',
     expiringSoonEmpty: '暂无即将到期资产',
@@ -1923,6 +1924,7 @@ export default {
     manageAgents: '前往智能体管理',
     timeMachineCardTitle: '资产时光机',
     timeMachineCardDesc: 'What-if 模拟、财务推演',
+    numinaAgentDesc: '您的家庭资产智能助手，提供全方位的资产分析与建议',
     lastReportAge: '{age}',
     justNow: '刚刚',
     minutesAgo: '{minutes} 分钟前',

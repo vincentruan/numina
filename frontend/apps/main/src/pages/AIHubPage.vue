@@ -115,41 +115,60 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent grid: system agents → time-machine app card → custom agents -->
+    <!-- Agent grid: 数鸣 featured card → other agents/apps → create -->
     <div class="feature-section">
-      <AgentGrid
-        :system-agents="agentStore.systemAgents.filter(a => a.is_enabled)"
-        :custom-agents="agentStore.customAgents.filter(a => a.is_enabled)"
-        :show-create="isOwner"
-        @consult="handleAgentConsult"
-        @edit="handleAgentEdit"
-        @create="router.push({ name: 'AgentCreate' })"
-      >
-        <template #between>
-          <!-- 应用区 (Apps): fixed-rule applications, not chat agents.
-               Rendered between system and custom zones per R1 + R13.
-               Hardcoded constant — not sourced from ai_agents table. -->
-          <div class="agent-section">
-            <div class="agent-section__title">{{ t('agents.apps') }}</div>
-            <div class="agent-grid">
-              <div
-                class="agent-card app-card"
-                role="button"
-                tabindex="0"
-                @click="router.push('/ai/time-machine')"
-                @keydown.enter="router.push('/ai/time-machine')"
-                @keydown.space.prevent="router.push('/ai/time-machine')"
-              >
-                <div class="agent-card__icon">⏰</div>
-                <div class="agent-card__body">
-                  <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
-                  <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
-                </div>
-              </div>
-            </div>
+      <!-- 数鸣 featured card (full width) -->
+      <NuminaAgentCard @consult="handleNuminaConsult" />
+
+      <!-- Grid section title -->
+      <div class="agent-section__title">{{ t('agents.apps') }}</div>
+
+      <!-- Agent grid: other system agents + time machine app + custom agents + create -->
+      <div class="agent-grid">
+        <!-- Time Machine app card -->
+        <div
+          class="agent-card app-card"
+          role="button"
+          tabindex="0"
+          @click="router.push('/ai/time-machine')"
+          @keydown.enter="router.push('/ai/time-machine')"
+          @keydown.space.prevent="router.push('/ai/time-machine')"
+        >
+          <div class="agent-card__icon">⏰</div>
+          <div class="agent-card__body">
+            <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
+            <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
           </div>
-        </template>
-      </AgentGrid>
+        </div>
+
+        <!-- Other system agents (excluding 数鸣) -->
+        <AgentCard
+          v-for="agent in otherSystemAgents"
+          :key="agent.id"
+          :agent="agent"
+          :show-actions="true"
+          @consult="handleAgentConsult"
+          @edit="handleAgentEdit"
+        />
+
+        <!-- Custom agents -->
+        <AgentCard
+          v-for="agent in enabledCustomAgents"
+          :key="agent.id"
+          :agent="agent"
+          :show-actions="true"
+          @consult="handleAgentConsult"
+          @edit="handleAgentEdit"
+        />
+
+        <!-- Create agent card -->
+        <div v-if="isOwner" class="agent-card agent-card--create" @click="router.push({ name: 'AgentCreate' })">
+          <div class="agent-card__icon">＋</div>
+          <div class="agent-card__body">
+            <div class="agent-card__name">{{ t('agents.createAgent') }}</div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Chat input -->
@@ -252,7 +271,8 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AIChatInput from '@/components/common/AIChatInput.vue'
-import AgentGrid from '@/components/agent/AgentGrid.vue'
+import AgentCard from '@/components/agent/AgentCard.vue'
+import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
@@ -282,6 +302,16 @@ const showRecipientPicker = ref(false)
 
 const numinaAgent = computed(() =>
   agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) || null,
+)
+
+// Other system agents (excluding 数鸣) for the grid
+const otherSystemAgents = computed(() =>
+  agentStore.systemAgents.filter((a) => a.agent_name !== NUMINA_AGENT_NAME && a.is_enabled),
+)
+
+// Enabled custom agents for the grid
+const enabledCustomAgents = computed(() =>
+  agentStore.customAgents.filter((a) => a.is_enabled),
 )
 
 // All agents the chip's action sheet can switch to: enabled system + custom.
@@ -458,6 +488,13 @@ function handleAgentConsult(agent: Agent) {
   // dead routing (the builtin agents that those branches targeted were
   // deleted by migration b6745e8a2c14).
   router.push({ name: 'AIChat', query: { agentId: agent.id } })
+}
+
+function handleNuminaConsult() {
+  // 数鸣 featured card click — route to AIChat with 数鸣 agent
+  if (numinaAgent.value) {
+    router.push({ name: 'AIChat', query: { agentId: numinaAgent.value.id } })
+  }
 }
 
 function handleAgentEdit(agent: Agent) {
@@ -909,6 +946,92 @@ onMounted(async () => {
   margin-top: 4px;
 }
 
+.agent-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--van-text-color-2);
+  padding: 16px 4px 8px;
+}
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+/* Agent card base styles (for inline cards, not the imported AgentCard component) */
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--van-background-2);
+  border: 1px solid var(--van-border-color);
+  cursor: pointer;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+
+.agent-card:active {
+  transform: scale(0.97);
+}
+
+.agent-card__icon {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.agent-card__body {
+  flex: 1;
+}
+
+.agent-card__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--van-text-color);
+}
+
+.agent-card__desc {
+  font-size: 12px;
+  color: var(--van-text-color-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* App card accent (time-machine) */
+.app-card {
+  border-left: 3px solid var(--theme-primary, #007aff);
+}
+
+/* Create agent card */
+.agent-card--create {
+  border: 2px dashed var(--van-border-color);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  cursor: pointer;
+}
+
+.agent-card--create .agent-card__icon {
+  font-size: 28px;
+  color: var(--van-text-color-3);
+}
+
+.agent-card--create .agent-card__name {
+  color: var(--van-text-color-3);
+  font-size: 13px;
+}
+
 /* ── Chat entry ── */
 .chat-entry {
   position: fixed;
@@ -1117,12 +1240,5 @@ onMounted(async () => {
   color: var(--text-secondary);
   font-size: 14px;
   margin: 0;
-}
-
-/* ── App card (U9 — time-machine) ── */
-.app-card {
-  /* Inherits .agent-card base styling; left-border accent distinguishes it
-     from chat agents — apps are fixed-rule, not conversational. */
-  border-left: 3px solid var(--theme-primary, #007aff);
 }
 </style>

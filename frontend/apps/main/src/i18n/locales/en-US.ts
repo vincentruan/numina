@@ -1235,6 +1235,7 @@ export default {
   reminders: {
     title: 'Smart Reminders',
     expiringSoon: 'Expiring Soon',
+    upcomingPayments: 'Upcoming Payments',
     idleAssets: 'Idle Assets',
     empty: 'No reminders',
     expiringSoonEmpty: 'No assets expiring soon',
@@ -1647,6 +1648,7 @@ export default {
     manageAgents: 'Manage agents',
     timeMachineCardTitle: 'Time Machine',
     timeMachineCardDesc: 'What-if simulation, financial projection',
+    numinaAgentDesc: 'Your family asset intelligent assistant, providing comprehensive analysis and advice',
     lastReportAge: '{age}',
     justNow: 'Just now',
     minutesAgo: '{minutes} min ago',
