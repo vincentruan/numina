@@ -48,6 +48,9 @@
 2. admin 不能操作其他 admin 或 root
 3. admin 只能操作 member
 4. root 可以操作所有非 root 成员
+5. 提升为管理员时需确认提示：管理员将获得 AI 配置、家务审批、孩子管理等所有 owner 级别权限
+
+**注意：** 此权限矩阵仅适用于成人成员（root/admin/member），child 角色不在管理范围内。
 
 ### R3: 移除孩子管理中的审批入口
 
@@ -65,15 +68,17 @@
 
 **POST `/api/v1/family/members/{member_id}/reset-password`**
 - 权限：owner（root 可操作所有非 root；admin 仅操作 member）
-- 请求体：`{ "new_password": "string" }`
+- 请求体：`{ "new_password": "string" }`（需满足密码复杂度规则，最少 8 位）
 - 响应：`{ "detail": "✅ 密码已重置" }`
-- 逻辑：hash 新密码并更新 `User.password_hash`
+- 逻辑：校验密码复杂度 → hash 新密码 → 更新 `User.password_hash` → 调用 `revoke_all_user_tokens(target.id)` 使现有 token 立即失效
+- 安全：复用 `_check_password_change_rate_limit(target.id)` 限速；校验 `target.family_id == operator.family_id` 防 IDOR
 
 **PATCH `/api/v1/family/members/{member_id}/status`**
 - 权限：owner（root 可操作所有非 root；admin 仅操作 member）
 - 请求体：`{ "is_active": bool }`
 - 响应：`UserResponse`
-- 逻辑：设置 `User.is_active`，禁用时同时 bump `token_version` 使现有 token 失效
+- 逻辑：设置 `User.is_active`，禁用时在同一事务中调用 `revoke_all_user_tokens(target.id)` 使现有 token 立即失效
+- 安全：校验 `target.family_id == operator.family_id` 防 IDOR
 
 #### 2. 修改现有端点
 
@@ -96,13 +101,20 @@
 def is_root(db: Session, user: User) -> bool:
     """判断用户是否为家庭创建者（root）"""
     family = db.query(Family).filter(Family.id == user.family_id).first()
-    return family and family.created_by == user.id
+    if not family:
+        raise AppError(ErrorCode.FAMILY_MEMBER_NOT_FOUND)
+    return family.created_by == user.id
 
 def can_manage(db: Session, operator: User, target: User) -> bool:
-    """判断 operator 是否有权管理 target"""
+    """判断 operator 是否有权管理 target（适用于禁用/启用、移除、重置密码）。
+    角色变更（PATCH role）需单独校验 is_root(db, operator)。"""
     if operator.role != 'owner':
         return False
+    if target.family_id != operator.family_id:
+        return False
     family = db.query(Family).filter(Family.id == operator.family_id).first()
+    if not family:
+        return False
     # root 不可被任何人管理
     if target.id == family.created_by:
         return False
