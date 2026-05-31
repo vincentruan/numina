@@ -13,9 +13,9 @@ const emit = defineEmits<{
   <div class="numina-agent-card" role="button" tabindex="0" @click="emit('consult')">
     <!-- Full-width featured card for 数鸣 agent - horizontal layout -->
     <div class="numina-card__inner">
-      <!-- Left: AI brain icon (from nav bar) -->
+      <!-- Left: AI brain icon (from nav bar) - colorful active state -->
       <div class="numina-card__icon">
-        <AIBrainIcon :active="false" />
+        <AIBrainIcon :active="true" />
       </div>
 
       <!-- Right: Colorful name + description -->

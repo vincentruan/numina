@@ -1329,6 +1329,8 @@ export default {
     aiTargetSaved: '✅ 目标已保存',
     aiGenerateFailed: '❌ 生成失败，请重试',
     aiChatError: '❌ AI 服务暂时不可用，请稍后再试',
+    fileSelected: '📄 已选择文件: {name}',
+    photoSelected: '📷 已选择图片',
     // Network
     networkTimeout: '📡 请求超时，请检查网络后重试',
     networkError: '📡 无法连接服务器，请检查网络',

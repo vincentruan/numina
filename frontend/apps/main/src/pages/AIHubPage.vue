@@ -171,34 +171,128 @@
       </div>
     </div>
 
-    <!-- Chat input - simple direct input for 数鸣 -->
+    <!-- Chat input with toolbar -->
     <div class="chat-entry">
-      <div class="chat-input-simple">
-        <div class="chat-input-icon" aria-hidden="true">
-          <AIBrainIcon :active="false" />
-        </div>
-        <input
+      <!-- Toolbar: agent selector, deep think, web search, upload -->
+      <div class="chat-toolbar">
+        <!-- Agent selector button -->
+        <button
+          class="toolbar-btn"
+          :class="{ 'toolbar-btn--active': showAgentPicker }"
+          :aria-label="t('aiHub.changeRecipient')"
+          @click="showAgentPicker = true"
+        >
+          <AIBrainIcon :active="selectedAgent?.agent_name === NUMINA_AGENT_NAME" />
+        </button>
+
+        <!-- Deep think toggle -->
+        <button
+          class="toolbar-btn"
+          :class="{ 'toolbar-btn--active': deepThink }"
+          :aria-pressed="deepThink"
+          :aria-label="t('aiChat.deepThink')"
+          @click="deepThink = !deepThink"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+            <path d="M9 21h6"/>
+          </svg>
+        </button>
+
+        <!-- Web search toggle -->
+        <button
+          class="toolbar-btn"
+          :class="{ 'toolbar-btn--active': webSearch }"
+          :aria-pressed="webSearch"
+          :aria-label="t('aiChat.webSearch')"
+          @click="webSearch = !webSearch"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+        </button>
+
+        <!-- Upload file -->
+        <button
+          class="toolbar-btn"
+          :aria-label="t('aiChat.panelFile')"
+          @click="triggerFileUpload"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+        </button>
+
+        <!-- Upload photo / camera -->
+        <button
+          class="toolbar-btn"
+          :aria-label="t('aiChat.panelCamera')"
+          @click="triggerPhotoUpload"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </button>
+
+        <!-- Hidden file inputs -->
+        <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
+        <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
+      </div>
+
+      <!-- Larger input box -->
+      <div class="chat-input-box">
+        <textarea
           v-model="chatInput"
-          type="text"
-          class="chat-input-field"
+          class="chat-input-area"
           :placeholder="t('aiHub.chatPlaceholder')"
-          :disabled="!numinaAgent"
-          @keyup.enter="startChatDirect"
+          :disabled="!selectedAgent"
+          rows="2"
+          @keydown.enter.exact.prevent="submitChat"
         />
         <button
           class="chat-send-btn"
           :class="{ 'chat-send-btn--active': chatInput.trim() }"
-          :disabled="!numinaAgent || !chatInput.trim()"
+          :disabled="!selectedAgent || !chatInput.trim()"
           :aria-label="t('common.send')"
-          @click="startChatDirect"
+          @click="submitChat"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
             <line x1="22" y1="2" x2="11" y2="13"/>
             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
         </button>
       </div>
     </div>
+
+    <!-- Agent picker action sheet -->
+    <van-action-sheet
+      v-model:show="showAgentPicker"
+      :title="t('aiHub.changeRecipient')"
+    >
+      <van-cell-group inset>
+        <van-cell
+          v-for="agent in agentChoices"
+          :key="agent.id"
+          :title="agent.display_name"
+          :label="agent.description || ''"
+          clickable
+          :class="{ 'agent-row--active': agent.id === selectedAgent?.id }"
+          @click="selectAgent(agent)"
+        >
+          <template #icon>
+            <div class="agent-row__icon">
+              <AIBrainIcon v-if="agent.agent_name === NUMINA_AGENT_NAME" :active="true" />
+              <span v-else class="agent-row__emoji">{{ agent.icon || '🤖' }}</span>
+            </div>
+          </template>
+        </van-cell>
+      </van-cell-group>
+    </van-action-sheet>
   </div>
 </template>
 
@@ -234,6 +328,12 @@ const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const chatInput = ref('')
+const deepThink = ref(false)
+const webSearch = ref(false)
+const showAgentPicker = ref(false)
+const selectedAgent = ref<Agent | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const photoInputRef = ref<HTMLInputElement | null>(null)
 
 const numinaAgent = computed(() =>
   agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) || null,
@@ -248,6 +348,80 @@ const otherSystemAgents = computed(() =>
 const enabledCustomAgents = computed(() =>
   agentStore.customAgents.filter((a) => a.is_enabled),
 )
+
+// Agent choices for picker - only actual agents, not apps like Time Machine
+const agentChoices = computed<Agent[]>(() => [
+  ...agentStore.systemAgents.filter((a) => a.is_enabled),
+  ...agentStore.customAgents.filter((a) => a.is_enabled),
+])
+
+// Default selected agent to 数鸣 once loaded
+watch(
+  () => agentStore.systemAgents,
+  () => {
+    if (selectedAgent.value) return
+    if (numinaAgent.value && numinaAgent.value.is_enabled) {
+      selectedAgent.value = numinaAgent.value
+    } else {
+      const fallback = agentChoices.value[0] || null
+      selectedAgent.value = fallback
+    }
+  },
+  { deep: true, immediate: true },
+)
+
+function selectAgent(agent: Agent) {
+  selectedAgent.value = agent
+  showAgentPicker.value = false
+}
+
+function triggerFileUpload() {
+  fileInputRef.value?.click()
+}
+
+function triggerPhotoUpload() {
+  photoInputRef.value?.click()
+}
+
+function handleFileSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.fileSelected', { name: file.name }))
+    // TODO: implement file upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+function handlePhotoSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.photoSelected'))
+    // TODO: implement photo upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+function submitChat() {
+  const q = chatInput.value.trim()
+  if (!q || !selectedAgent.value) return
+
+  aiStore.draftQuery = q
+  aiStore.deepThinkEnabled = deepThink.value
+  aiStore.webSearchEnabled = webSearch.value
+
+  router.push({
+    path: '/ai/chat',
+    query: {
+      q,
+      agentId: selectedAgent.value.id,
+      newSession: '1',
+      deepThink: deepThink.value ? '1' : undefined,
+      webSearch: webSearch.value ? '1' : undefined,
+    },
+  })
+
+  chatInput.value = ''
+}
 
 const userName = computed(() => getUser()?.display_name || t('aiHub.defaultUserName'))
 
@@ -350,24 +524,6 @@ async function refreshReport(silent?: boolean) {
   } finally {
     if (!silent) reportLoading.value = false
   }
-}
-
-function startChatDirect() {
-  const q = chatInput.value.trim()
-  if (!q) return
-  if (!numinaAgent.value) {
-    showToast(t('aiHub.noEnabledAgents'))
-    return
-  }
-  aiStore.draftQuery = q
-  router.push({
-    path: '/ai/chat',
-    query: {
-      q,
-      agentId: numinaAgent.value.id,
-      newSession: '1',
-    },
-  })
 }
 
 function handleAgentConsult(agent: Agent) {
@@ -935,7 +1091,156 @@ onMounted(async () => {
   border-top-color: rgba(255, 255, 255, 0.10);
 }
 
-/* ── AI disabled card ── */
+/* ── Chat toolbar ── */
+.chat-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.toolbar-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+[data-theme='dark'] .toolbar-btn {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] .toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-btn--active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+}
+
+.toolbar-btn :deep(.ai-button-wrapper) {
+  transform: translateY(0) scale(0.65);
+}
+
+.toolbar-btn :deep(.ai-button-3d) {
+  width: 32px;
+  height: 32px;
+}
+
+/* ── Chat input box (larger) ── */
+.chat-input-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  background: var(--card-bg);
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
+}
+
+[data-theme='dark'] .chat-input-box {
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
+}
+
+.chat-input-area {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  color: var(--text-primary);
+  outline: none;
+  resize: none;
+  min-height: 48px;
+  max-height: 120px;
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+.chat-input-area::placeholder {
+  color: var(--text-secondary);
+}
+
+.chat-input-area:disabled {
+  opacity: 0.5;
+}
+
+.chat-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: none;
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .chat-send-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.chat-send-btn--active {
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+}
+
+.chat-send-btn--active:hover {
+  transform: scale(1.05);
+}
+
+.chat-send-btn:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* ── Agent picker ── */
+.agent-row__icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+}
+
+.agent-row__icon :deep(.ai-button-wrapper) {
+  transform: translateY(0) scale(0.7);
+}
+
+.agent-row__icon :deep(.ai-button-3d) {
+  width: 36px;
+  height: 36px;
+}
+
+.agent-row__emoji {
+  font-size: 24px;
+}
+
+.agent-row--active {
+  background-color: rgba(99, 102, 241, 0.08);
+}
+</style>
 .ai-disabled-card {
   margin: 12px 16px;
   background: var(--card-bg);
@@ -1031,85 +1336,4 @@ onMounted(async () => {
   outline-color: rgba(255, 255, 255, 0.5);
 }
 
-/* ── Simple chat input ── */
-.chat-input-simple {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--card-bg);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 24px;
-  padding: 8px 12px;
-  box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
-}
-
-[data-theme='dark'] .chat-input-simple {
-  border-color: rgba(255, 255, 255, 0.15);
-  box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
-}
-
-.chat-input-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.chat-input-icon :deep(.ai-button-wrapper) {
-  transform: translateY(0) scale(0.6);
-}
-
-.chat-input-icon :deep(.ai-button-3d) {
-  width: 28px;
-  height: 28px;
-}
-
-.chat-input-field {
-  flex: 1;
-  border: none;
-  background: transparent;
-  font-size: 14px;
-  color: var(--text-primary);
-  outline: none;
-  min-width: 0;
-}
-
-.chat-input-field::placeholder {
-  color: var(--text-secondary);
-}
-
-.chat-input-field:disabled {
-  opacity: 0.5;
-}
-
-.chat-send-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-  flex-shrink: 0;
-}
-
-[data-theme='dark'] .chat-send-btn {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.chat-send-btn--active {
-  background: linear-gradient(135deg, #6366f1, #7c3aed);
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
-}
-
-.chat-send-btn:disabled {
-  cursor: default;
-  opacity: 0.4;
-}
-</style>
+/* ── AI disabled card ── */

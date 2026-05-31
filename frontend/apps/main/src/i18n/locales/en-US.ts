@@ -1109,6 +1109,8 @@ export default {
     aiTargetSaved: '✅ Target saved',
     aiGenerateFailed: '❌ Generation failed, please try again',
     aiChatError: '❌ AI service temporarily unavailable, please try again later',
+    fileSelected: '📄 File selected: {name}',
+    photoSelected: '📷 Photo selected',
     // Network
     networkTimeout: '📡 Request timed out, please check your connection',
     networkError: '📡 Cannot connect to server, please check your network',
