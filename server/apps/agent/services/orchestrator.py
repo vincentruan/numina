@@ -781,6 +781,7 @@ class Orchestrator:
                         deep_think=bool(enable_thinking_override),
                         web_search=web_search,
                         enable_thinking=("deep_thinking" in selected_caps and bool(enable_thinking_override)),
+                        caller_user_id=user_id,
                     ):
                         async for event_line in self._chunk_to_event_lines(
                             builder, chunk, answer_parts, family_id, effective_thread_id

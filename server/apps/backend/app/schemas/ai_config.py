@@ -28,6 +28,8 @@ class AIConfigResponse(SnowflakeBase):
     vision_model_id: str | None = None
     timeout_seconds: int | None = 60
     is_active: bool
+    # Per-response output token cap. None → server resolves via system-config.yaml.
+    max_tokens: int | None = None
     # Multi-provider fields
     provider_name: str = ""
     display_order: int = 0
@@ -66,6 +68,8 @@ class AIConfigCreate(BaseModel):
     vision_model_id: str | None = None
     timeout_seconds: int | None = 60
     is_active: bool = False
+    # Per-response output token cap. Leave null to use server-resolved default.
+    max_tokens: int | None = None
     # Multi-provider fields
     provider_name: str | None = None
     display_order: int | None = None
@@ -94,6 +98,8 @@ class AIConfigUpdate(BaseModel):
     vision_model_id: str | None = None
     timeout_seconds: int | None = None
     is_active: bool | None = None
+    # Per-response output token cap. Set to null/0 to clear and use server default.
+    max_tokens: int | None = None
     # Multi-provider fields
     provider_name: str | None = None
     display_order: int | None = None

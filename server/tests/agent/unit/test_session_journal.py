@@ -164,3 +164,84 @@ class TestSessionJournalService:
         assert "eventId" in parsed
         assert "timestamp" in parsed
         assert "schemaVersion" in parsed
+
+
+class TestPathCacheTenantIsolation:
+    """C1 regression: _path_cache must be keyed by (family_id, session_id).
+
+    A session_id-only key allows family A's write_session_start to set the
+    cache entry, then family B opening a stream with the same thread_id
+    would inherit family A's path — leaking conversation content into a
+    different tenant's JSONL.
+    """
+
+    def test_same_session_id_different_families_use_distinct_paths(self, tmp_path):
+        svc = SessionJournalService(tmp_path)
+        shared_session_id = "thread-shared-id"
+
+        # Family A starts a session, caches its path.
+        svc.write_session_start(
+            family_id="famA",
+            session_id=shared_session_id,
+            user_id="userA",
+            capability="agent",
+            model_name="m",
+            jsonl_path=str(
+                tmp_path / "famA" / "agent" / "agent" / "userA" / f"{shared_session_id}.jsonl"
+            ),
+        )
+        # Family B then opens with the SAME session_id.
+        svc.write_session_start(
+            family_id="famB",
+            session_id=shared_session_id,
+            user_id="userB",
+            capability="agent",
+            model_name="m",
+            jsonl_path=str(
+                tmp_path / "famB" / "agent" / "agent" / "userB" / f"{shared_session_id}.jsonl"
+            ),
+        )
+
+        # Each family should resolve to its own path, even via the cache hit.
+        path_a = svc._session_path("famA", shared_session_id)
+        path_b = svc._session_path("famB", shared_session_id)
+        assert path_a != path_b
+        assert "famA" in str(path_a)
+        assert "famB" in str(path_b)
+
+    def test_subsequent_writes_route_to_owning_family(self, tmp_path):
+        """Family A's write_user_message must land in famA's JSONL even
+        after famB has cached a path under the same session_id."""
+        svc = SessionJournalService(tmp_path)
+        shared = "thread-collision"
+
+        path_a = tmp_path / "famA" / "agent" / "agent" / "userA" / f"{shared}.jsonl"
+        path_b = tmp_path / "famB" / "agent" / "agent" / "userB" / f"{shared}.jsonl"
+
+        svc.write_session_start(
+            family_id="famA", session_id=shared, user_id="userA",
+            capability="agent", model_name="m", jsonl_path=str(path_a),
+        )
+        svc.write_session_start(
+            family_id="famB", session_id=shared, user_id="userB",
+            capability="agent", model_name="m", jsonl_path=str(path_b),
+        )
+        # famA writes — must NOT bleed into famB's file.
+        svc.write_user_message(
+            family_id="famA", session_id=shared, user_id="userA", content="A's secret"
+        )
+        svc.write_user_message(
+            family_id="famB", session_id=shared, user_id="userB", content="B's secret"
+        )
+
+        events_a = svc.read_events("famA", shared)
+        events_b = svc.read_events("famB", shared)
+
+        a_user_msgs = [e for e in events_a if e["type"] == "user.message"]
+        b_user_msgs = [e for e in events_b if e["type"] == "user.message"]
+
+        assert any(e["content"] == "A's secret" for e in a_user_msgs)
+        assert not any(e["content"] == "B's secret" for e in a_user_msgs)
+        assert any(e["content"] == "B's secret" for e in b_user_msgs)
+        assert not any(e["content"] == "A's secret" for e in b_user_msgs)
+

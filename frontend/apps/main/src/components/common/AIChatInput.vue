@@ -51,42 +51,36 @@
     <!-- Bottom toolbar: mode toggle left, plus right -->
     <div class="toolbar">
       <div class="toolbar-left">
-        <!-- U5: 2-tier mode toggle — normal / smart -->
+        <!-- Two-state deep-think toggle -->
         <button
           class="toggle-btn"
-          :class="{ 'toggle-btn--active': isSmartMode }"
-          :aria-pressed="isSmartMode"
-          :aria-label="modeLabel"
-          :title="modeLabel"
-          @click="cycleMode"
+          :class="{ 'toggle-btn--active': mode === 'smart' }"
+          :aria-pressed="mode === 'smart'"
+          :aria-label="t('aiChat.modeSmart')"
+          :title="t('aiChat.modeSmart')"
+          @click="toggleMode"
         >
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
             <path d="M9 21h6"/>
           </svg>
-          <span>{{ modeLabel }}</span>
+          <span>{{ t('aiChat.modeSmart') }}</span>
         </button>
-        <!-- U5: smart-mode sub-options (轻量/完整) — only visible when smart mode active -->
-        <template v-if="isSmartMode">
-          <button
-            class="toggle-btn toggle-btn--sm"
-            :class="{ 'toggle-btn--active': mode === 'smart_light' }"
-            :aria-pressed="mode === 'smart_light'"
-            :aria-label="t('aiChat.smartLight')"
-            @click="emit('update:mode', 'smart_light')"
-          >
-            <span>{{ t('aiChat.smartLight') }}</span>
-          </button>
-          <button
-            class="toggle-btn toggle-btn--sm"
-            :class="{ 'toggle-btn--active': mode === 'smart_full' }"
-            :aria-pressed="mode === 'smart_full'"
-            :aria-label="t('aiChat.smartFull')"
-            @click="emit('update:mode', 'smart_full')"
-          >
-            <span>{{ t('aiChat.smartFull') }}</span>
-          </button>
-        </template>
+        <!-- Independent web-search toggle (orthogonal to deep-think) -->
+        <button
+          class="toggle-btn"
+          :class="{ 'toggle-btn--active': webSearch }"
+          :aria-pressed="webSearch"
+          :aria-label="t('aiChat.webSearch')"
+          :title="t('aiChat.webSearch')"
+          @click="toggleWebSearch"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>{{ t('aiChat.webSearch') }}</span>
+        </button>
       </div>
       <div class="toolbar-right">
         <!-- Plus button -->
@@ -187,7 +181,8 @@ const props = defineProps<{
   disabled?: boolean
   loading?: boolean
   showClear?: boolean
-  mode?: 'normal' | 'smart_light' | 'smart_full'
+  mode?: 'normal' | 'smart'
+  webSearch?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -195,14 +190,16 @@ const emit = defineEmits<{
   (e: 'submit', value: string): void
   (e: 'abort'): void
   (e: 'action', type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history'): void
-  (e: 'update:mode', value: 'normal' | 'smart_light' | 'smart_full'): void
+  (e: 'update:mode', value: 'normal' | 'smart'): void
+  (e: 'update:webSearch', value: boolean): void
 }>()
 
 const internalValue = ref(props.modelValue)
 const expanded = ref(false)
 const focused = ref(false)
 const panelOpen = ref(false)
-const mode = ref(props.mode ?? 'normal')
+const mode = ref<'normal' | 'smart'>(props.mode ?? 'normal')
+const webSearch = ref<boolean>(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 
 const router = useRouter()
@@ -211,21 +208,14 @@ const capabilityStore = useCapabilityStore()
 const slashPaletteOpen = ref(false)
 const selectedIndex = ref(0)
 
-// U5: derived mode helpers
-const isSmartMode = computed(() => mode.value !== 'normal')
-
-const modeLabel = computed(() => {
-  if (mode.value === 'normal') return t('aiChat.modeNormal')
-  return t('aiChat.modeSmart')
-})
-
-function cycleMode() {
-  if (mode.value === 'normal') {
-    mode.value = 'smart_light'
-  } else {
-    mode.value = 'normal'
-  }
+function toggleMode() {
+  mode.value = mode.value === 'normal' ? 'smart' : 'normal'
   emit('update:mode', mode.value)
+}
+
+function toggleWebSearch() {
+  webSearch.value = !webSearch.value
+  emit('update:webSearch', webSearch.value)
 }
 
 const panelItems = computed(() => [
@@ -258,7 +248,9 @@ watch(
 
 watch(internalValue, (val) => emit('update:modelValue', val))
 watch(mode, (val) => emit('update:mode', val))
-watch(() => props.mode, (val) => { if (val !== undefined) mode.value = val })
+watch(() => props.mode, (val) => { if (val !== undefined && val !== mode.value) mode.value = val })
+watch(webSearch, (val) => emit('update:webSearch', val))
+watch(() => props.webSearch, (val) => { if (val !== undefined && val !== webSearch.value) webSearch.value = val })
 
 function onInput() {
   adjustHeight()

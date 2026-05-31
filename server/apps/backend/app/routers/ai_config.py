@@ -68,6 +68,7 @@ def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: 
         vision_model_id=cfg.vision_model_id,
         timeout_seconds=cfg.timeout_seconds if cfg.timeout_seconds is not None else 60,
         is_active=cfg.is_active,
+        max_tokens=cfg.max_tokens,
         provider_name=cfg.provider_name or "",
         display_order=cfg.display_order or 0,
         model_2_id=cfg.model_2_id,
@@ -150,6 +151,7 @@ def create_ai_config(
         vision_model_id=payload.vision_model_id,
         timeout_seconds=payload.timeout_seconds if payload.timeout_seconds is not None else 60,
         is_active=payload.is_active,
+        max_tokens=payload.max_tokens,
         provider_name=payload.provider_name or payload.provider.capitalize(),
         display_order=max_order,
         model_2_id=payload.model_2_id,
@@ -206,6 +208,10 @@ def update_ai_config(
         cfg.timeout_seconds = payload.timeout_seconds
     if payload.is_active is not None:
         cfg.is_active = payload.is_active
+    # max_tokens: 0/None means "use server default (yaml prefix)"; positive int → explicit override.
+    # We treat None as "field not in payload" (don't touch); to clear, client should send 0.
+    if payload.max_tokens is not None:
+        cfg.max_tokens = payload.max_tokens if payload.max_tokens > 0 else None
     if payload.ai_api_key is not None:
         if payload.ai_api_key == "":
             cfg.api_key_encrypted = None
@@ -457,3 +463,22 @@ async def test_ai_config(
         vision_text_message=data.get("vision_text_message"),
         vision_text_latency_ms=data.get("vision_text_latency_ms"),
     )
+
+
+@router.get("/config/defaults", response_model=dict)
+def get_provider_defaults(
+    model_id: str,
+    current_user: User = Depends(require_adult),
+) -> dict:
+    """Resolve system-default ``max_tokens`` for a given model_id by prefix match.
+
+    Used by the frontend AI provider form to pre-fill the max_tokens field when
+    the user types a model_id. Returns ``{"max_tokens": null}`` if no prefix
+    matches; the form should then fall back to placeholder hint text.
+
+    The defaults table is maintained in ``system-config.yaml`` at the project
+    root; see ``packages/core/system_config.py``.
+    """
+    from packages.core.system_config import get_max_tokens_default
+
+    return {"max_tokens": get_max_tokens_default(model_id)}

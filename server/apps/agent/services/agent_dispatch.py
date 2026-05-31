@@ -7,12 +7,20 @@ Replaces the old DeerFlowAdapter path with:
 No global singleton mutation. No ContextVar. No reload_app_config().
 """
 
+import contextlib
+import re
 import time
 import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
+from apps.agent.schemas.policy import CapabilityPolicy
+from apps.agent.services.audit_logger import AuditEntry, audit_logger
+from apps.agent.services.pii_redactor import pii_redactor
+from apps.agent.services.policy_guard import policy_guard
+from apps.agent.services.session_journal import session_journal
 from apps.agent.services.stream_events import EventStreamBuilder
 from packages.core import get_path_manager
 from packages.core.effective_config import EffectiveConfigBuilder
@@ -33,9 +41,23 @@ except ImportError:
     AppConfig = None
 
 try:
-    from apps.agent.services.orchestrator import _select_model
+    from apps.agent.services.orchestrator import _fire_and_forget, _select_model
 except ImportError:
     _select_model = None
+    _fire_and_forget = None  # type: ignore[assignment]
+
+
+# IDs for system agents seeded by alembic migrations.
+# numina is the brand-primary system agent (b6745e8a2c14_demote_builtin_agents_seed_numina).
+# ai-assistant was the legacy chat-only system agent (a53453cf574b_unified_agent_model)
+# and is removed by the follow-up migration. Requests pinned to the legacy ID
+# fall back to numina so old client links keep working.
+_NUMINA_AGENT_ID: int = 100000000000005
+_LEGACY_AI_ASSISTANT_AGENT_ID: int = 100000000000003
+
+# Skills that are reserved for internal system use only — never dispatched to any agent.
+_INTERNAL_ONLY_SKILLS: frozenset[str] = frozenset({"skill-creator", "skill-installer"})
+
 
 
 # ── Tool registry: tool_name → (tool_type, display_name, icon) ──────────────
@@ -74,14 +96,15 @@ def _resolve_skills(
     agent_skills: list[str] | None,
     family_enabled_skills: list[dict],
 ) -> list[dict]:
-    """Resolve which skills an agent dispatches with, enforcing R5/R6/R15.
+    """Resolve which skills an agent dispatches with, enforcing R5/R6/R15 + U9.
 
     Branches:
     - ``agent_skills == ["chat"]`` → ``[]`` (R5: AI问答 reserved chat capability,
       pure LLM mode, no business skill catalog injection).
-    - ``"*" in agent_skills`` → all of ``family_enabled_skills`` (R6: 数鸣 sentinel).
+    - ``"*" in agent_skills`` → ``family_enabled_skills`` minus
+      ``_INTERNAL_ONLY_SKILLS`` (R6: sentinel + U9 exclusion).
     - non-empty specific list → intersection with ``family_enabled_skills`` by
-      ``skill_id`` (R15: custom agents).
+      ``skill_id``, excluding ``_INTERNAL_ONLY_SKILLS`` (R15 + U9 exclusion).
     - ``None`` / ``[]`` → ``[]`` (defensive default).
 
     The resolved list preserves the original dict shape from BackendClient
@@ -95,8 +118,8 @@ def _resolve_skills(
     if agent_skills == ["chat"]:
         return []
     if "*" in agent_skills:
-        return list(family_enabled_skills)
-    allowed = set(agent_skills)
+        return [s for s in family_enabled_skills if s.get("skill_id") not in _INTERNAL_ONLY_SKILLS]
+    allowed = set(agent_skills) - _INTERNAL_ONLY_SKILLS
     return [s for s in family_enabled_skills if s.get("skill_id") in allowed]
 
 
@@ -186,37 +209,120 @@ async def stream_agent_dispatch(
     thread_id: str | None,
     message: str,
     enable_thinking: bool = False,
+    web_search: bool = False,
     reasoning_effort: str | None = None,
 ) -> AsyncGenerator[str, None]:
     """Agent-first execution entry point. Streams NDJSON events."""
     t_start = time.monotonic()
     task_id = str(uuid.uuid4())
+    audit_id = str(uuid.uuid4())
+    # Mutable holders so the finally-block audit emit can reflect the latest
+    # state regardless of which early-return path the function took.
+    audit_state: dict[str, Any] = {
+        "agent_name": None,
+        "error_type": None,
+        "deerflow_attempted": False,
+        "success": False,
+    }
     builder_events = EventStreamBuilder(
         capability_id=f"agent-{agent_id}", task_id=task_id
     )
 
-    # 1. Fetch agent config
+    def _emit_audit(error_type: str | None) -> None:
+        """Emit one AuditEntry — wraps audit_logger.log_call so the audit
+        invariant from agent/CLAUDE.md Key Invariants #3 is satisfied on
+        every code path (success, denial, exception). Never raises."""
+        # Audit must never break the main path. Mirrors AuditLogger.log_call's
+        # internal swallow.
+        with contextlib.suppress(Exception):
+            audit_logger.log_call(
+                AuditEntry(
+                    family_id=family_id,
+                    audit_id=audit_id,
+                    user_id=user_id,
+                    capability=audit_state["agent_name"] or f"agent-{agent_id}",
+                    success=error_type is None,
+                    error_type=error_type,
+                    deerflow_attempted=audit_state["deerflow_attempted"],
+                    duration_ms=int((time.monotonic() - t_start) * 1000),
+                )
+            )
+
+    # 1. Fetch agent config — fall back to numina when legacy ai-assistant ID is requested.
     client = BackendClient(family_id)
     try:
         agent_config = await client.get_agent_config(agent_id)
     except Exception as e:
-        yield builder_events.error(
-            f"获取智能体配置失败: {e}", code="AGENT_CONFIG_ERROR"
-        ).to_ndjson()
-        return
+        if agent_id == _LEGACY_AI_ASSISTANT_AGENT_ID:
+            logger.info(
+                "agent_id=%s removed; falling back to numina (id=%s)",
+                agent_id,
+                _NUMINA_AGENT_ID,
+            )
+            try:
+                agent_config = await client.get_agent_config(_NUMINA_AGENT_ID)
+            except Exception as fallback_err:
+                logger.warning(
+                    "[agent_dispatch] agent_config fetch failed family=%s err_type=%s",
+                    family_id,
+                    type(fallback_err).__name__,
+                )
+                _emit_audit("AgentConfigError")
+                yield builder_events.error(
+                    "获取智能体配置失败", code="AGENT_CONFIG_ERROR"
+                ).to_ndjson()
+                return
+        else:
+            logger.warning(
+                "[agent_dispatch] agent_config fetch failed family=%s agent_id=%s err_type=%s",
+                family_id,
+                agent_id,
+                type(e).__name__,
+            )
+            _emit_audit("AgentConfigError")
+            yield builder_events.error(
+                "获取智能体配置失败", code="AGENT_CONFIG_ERROR"
+            ).to_ndjson()
+            return
 
     if not agent_config.get("is_enabled", True):
+        _emit_audit("AgentDisabled")
         yield builder_events.error("智能体已禁用", code="AGENT_DISABLED").to_ndjson()
         return
 
     agent_name = agent_config["agent_name"]
+    audit_state["agent_name"] = agent_name
 
     # 2. Fetch AI provider config + skills + MCP in parallel-safe sequence
     try:
         ai_config = await client.get_family_ai_config()
     except Exception as e:
+        logger.warning(
+            "[agent_dispatch] ai_config fetch failed family=%s err_type=%s",
+            family_id,
+            type(e).__name__,
+        )
+        _emit_audit("AiConfigError")
         yield builder_events.error(
-            f"获取 AI 配置失败: {e}", code="AI_CONFIG_ERROR"
+            "获取 AI 配置失败", code="AI_CONFIG_ERROR"
+        ).to_ndjson()
+        return
+
+    # 2a. Policy guard — required by agent/CLAUDE.md Key Invariants #2.
+    # CapabilityPolicy fields come from BackendClient.get_family_ai_config; the
+    # capability scoped to this dispatch is the agent_name (e.g. "numina"), so
+    # families can whitelist agents by name in allowed_capabilities.
+    policy = CapabilityPolicy(
+        ai_enabled=ai_config.get("ai_enabled", True),
+        allowed_capabilities=ai_config.get("allowed_capabilities", []),
+        admin_only_capabilities=ai_config.get("admin_only_capabilities", []),
+        member_role=ai_config.get("member_role", "member"),
+    )
+    decision = policy_guard.check(policy, agent_name)
+    if not decision.allowed:
+        _emit_audit("PolicyDenied")
+        yield builder_events.error(
+            decision.reason or "该功能不可用", code="POLICY_DENIED"
         ).to_ndjson()
         return
 
@@ -238,11 +344,13 @@ async def stream_agent_dispatch(
     # 3. Multi-slot provider selection
     providers = ai_config.get("providers", [])
     if not providers:
+        _emit_audit("NoProvider")
         yield builder_events.error("未配置 AI 供应商", code="NO_PROVIDER").to_ndjson()
         return
 
     task_type = "thinking" if enable_thinking else "text"
     if _select_model is None:
+        _emit_audit("RuntimeUnavailable")
         yield builder_events.error(
             "Agent 运行环境未就绪", code="RUNTIME_ERROR"
         ).to_ndjson()
@@ -268,8 +376,14 @@ async def stream_agent_dispatch(
             mcp_servers=mcp_servers,
         )
     except Exception as e:
+        logger.warning(
+            "[agent_dispatch] effective config build failed family=%s err_type=%s",
+            family_id,
+            type(e).__name__,
+        )
+        _emit_audit("ConfigBuildError")
         yield builder_events.error(
-            f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR"
+            "生成运行配置失败", code="CONFIG_BUILD_ERROR"
         ).to_ndjson()
         return
 
@@ -281,6 +395,7 @@ async def stream_agent_dispatch(
     # DeerFlow expects an AppConfig pydantic instance, not a dict.
     # SandboxConfig.use is required (no default), so seed it before validation.
     if AppConfig is None:
+        _emit_audit("RuntimeUnavailable")
         yield builder_events.error(
             "Agent 运行环境未就绪", code="RUNTIME_ERROR"
         ).to_ndjson()
@@ -299,8 +414,14 @@ async def stream_agent_dispatch(
     try:
         app_config_obj = AppConfig.model_validate(app_config_dict)
     except Exception as e:
+        logger.warning(
+            "[agent_dispatch] AppConfig.model_validate failed family=%s err_type=%s",
+            family_id,
+            type(e).__name__,
+        )
+        _emit_audit("ConfigBuildError")
         yield builder_events.error(
-            f"生成运行配置失败: {e}", code="CONFIG_BUILD_ERROR"
+            "生成运行配置失败", code="CONFIG_BUILD_ERROR"
         ).to_ndjson()
         return
 
@@ -317,108 +438,232 @@ async def stream_agent_dispatch(
 
     # 8. Create agent graph and stream
     if make_lead_agent is None:
+        _emit_audit("RuntimeUnavailable")
         yield builder_events.error(
             "Agent 运行环境未就绪", code="RUNTIME_ERROR"
         ).to_ndjson()
         return
 
-    try:
-        agent_graph = make_lead_agent(runnable_config)
-    except Exception as e:
-        yield builder_events.error(
-            f"创建智能体失败: {e}", code="AGENT_CREATE_ERROR"
-        ).to_ndjson()
-        return
-
-    # 9. Stream events — dispatch by message kind so the UI can render
-    # phase.thinking, tool.call/result, and answer tokens distinctly.
+    # All control flow from here lives inside `try/finally` so the persistence
+    # hook + audit emit fire whether the stream completes, errors, or returns
+    # early. From here on we treat DeerFlow as attempted; the audit log will
+    # reflect that even if make_lead_agent itself raises.
+    audit_state["deerflow_attempted"] = True
     answer_parts: list[str] = []
-    thinking_started = False
-    answering_started = False
-    tools_used: list[str] = []
-    # Map provider tool_call_id → backend-issued tool_id so the .result event
-    # references the same step the .call event opened.
-    tool_call_id_map: dict[str, str] = {}
-
-    state = {"messages": [{"role": "user", "content": message}]}
-
+    success = False
+    agent_graph: Any = None
+    stream_error_type: str | None = None
     try:
-        async for event in agent_graph.astream(state, runnable_config):
-            if not isinstance(event, dict):
-                continue
-            for _node_name, node_output in event.items():
-                if not isinstance(node_output, dict) or "messages" not in node_output:
+        try:
+            agent_graph = make_lead_agent(runnable_config)
+        except Exception as e:
+            stream_error_type = type(e).__name__
+            logger.warning(
+                "[agent_dispatch] make_lead_agent failed session=%s err_type=%s",
+                thread_id,
+                stream_error_type,
+            )
+            yield builder_events.error(
+                "创建智能体失败", code="AGENT_CREATE_ERROR"
+            ).to_ndjson()
+            return
+
+        # Decision 6 (plan §Decisions): make_lead_agent returns a graph with
+        # checkpointer=None — verified by U1 step 1. Bind the shared SqliteSaver
+        # post-compile so aget_state(...) below can read the title that
+        # TitleMiddleware writes via aafter_model. Reuses the same instance
+        # the orchestrator path holds, so thread_id namespace is shared.
+        try:
+            from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+                _get_shared_checkpointer,
+            )
+            agent_graph.checkpointer = _get_shared_checkpointer()
+        except Exception:
+            # Non-fatal: stream still works; aget_state will raise later and
+            # the persistence hook falls back to the date-based title.
+            logger.warning(
+                "[agent_dispatch] checkpointer bind failed session=%s", thread_id
+            )
+
+        # Synchronous journal writes — must land before astream so event
+        # replay order is correct. Both writes go through pii_redactor;
+        # session_journal.append_event swallows file errors internally.
+        user_segment = user_id if user_id else "_shared"
+        try:
+            jsonl_path = str(
+                session_journal.resolve_path(
+                    family_id=family_id,
+                    session_id=thread_id,
+                    capability="agent",
+                    user_id=user_segment,
+                )
+            )
+        except ValueError:
+            # Invalid family_id / user_id / session_id slug — skip journal but
+            # let the rest of the dispatch continue. The persistence hook
+            # still fires (jsonl_path stays None for repo.upsert below).
+            logger.warning(
+                "[agent_dispatch] resolve_path rejected ids session=%s", thread_id
+            )
+            jsonl_path = ""
+        if jsonl_path:
+            session_journal.write_session_start(
+                family_id=family_id,
+                session_id=thread_id,
+                user_id=user_id,
+                capability="agent",
+                model_name=model_id,
+                jsonl_path=jsonl_path,
+            )
+            redacted_user_msg, _ = pii_redactor.redact_text(message or "")
+            session_journal.write_user_message(
+                family_id=family_id,
+                session_id=thread_id,
+                user_id=user_id,
+                content=redacted_user_msg,
+            )
+
+        # 9. Stream events — dispatch by message kind so the UI can render
+        # phase.thinking, tool.call/result, and answer tokens distinctly.
+        thinking_started = False
+        answering_started = False
+        tools_used: list[str] = []
+        # Map provider tool_call_id → backend-issued tool_id so the .result event
+        # references the same step the .call event opened.
+        tool_call_id_map: dict[str, str] = {}
+
+        # Inject web_search behavioural guidance as a system message prefix so the
+        # LLM knows whether it may rely on its tools / pretend to search. Mirrors
+        # chat_adapter.py:92-96 — same wording, same stance, kept inline rather
+        # than extracted because two short occurrences don't justify a shared module.
+        web_search_guidance = (
+            "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+            if web_search
+            else "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+        )
+        state = {
+            "messages": [
+                {"role": "system", "content": f"## 联网搜索\n\n{web_search_guidance}"},
+                {"role": "user", "content": message},
+            ]
+        }
+
+        try:
+            # ``context`` is the LangGraph 0.6+ Runtime context. The harness's
+            # ``ThreadDataMiddleware.before_agent`` reads ``runtime.context.get
+            # ("run_id")`` without a None guard (vendored harness
+            # ``thread_data_middleware.py:110``), so we seed thread_id +
+            # run_id here. Locked by U1 step 3.
+            run_id = str(uuid.uuid4())
+            astream_context = {"thread_id": thread_id, "run_id": run_id}
+            async for event in agent_graph.astream(
+                state, runnable_config, context=astream_context
+            ):
+                if not isinstance(event, dict):
                     continue
-                for msg in node_output["messages"]:
-                    kind = _classify_message(msg)
-
-                    if kind == "thinking":
-                        reasoning = _extract_reasoning(msg) or ""
-                        if not thinking_started:
-                            yield builder_events.phase("thinking").to_ndjson()
-                            thinking_started = True
-                        if reasoning:
-                            yield builder_events.token(
-                                reasoning, is_thinking=True
-                            ).to_ndjson()
+                for _node_name, node_output in event.items():
+                    if not isinstance(node_output, dict) or "messages" not in node_output:
                         continue
+                    for msg in node_output["messages"]:
+                        kind = _classify_message(msg)
 
-                    if kind == "tool_call":
-                        for call in _extract_tool_calls(msg):
-                            tname = call["name"]
-                            ttype, tdisplay, ticon = _resolve_tool_metadata(tname)
-                            tools_used.append(tname)
-                            evt = builder_events.tool_call(
-                                tool_name=tname,
-                                arguments=call["args"],
-                                display_name=tdisplay,
-                                icon=ticon,
-                                tool_type=ttype,
-                            )
-                            # Remember the mapping so .result can target this step.
-                            backend_id = evt.payload["tool"]["id"]
-                            if call["id"]:
-                                tool_call_id_map[str(call["id"])] = backend_id
-                            yield evt.to_ndjson()
-                        continue
-
-                    if kind == "tool_result":
-                        provider_id, content = _extract_tool_result(msg)
-                        backend_id = tool_call_id_map.get(provider_id, provider_id)
-                        # Tool messages from langchain don't carry success/timing —
-                        # we report success when content is present, no exception
-                        # bubbled up; failures arrive via the surrounding except.
-                        yield builder_events.tool_result(
-                            tool_id=backend_id,
-                            success=True,
-                            execution_time_ms=0,
-                            data=content,
-                        ).to_ndjson()
-                        continue
-
-                    if kind == "text":
-                        content = _extract_content(msg)
-                        if not content:
+                        if kind == "thinking":
+                            reasoning = _extract_reasoning(msg) or ""
+                            if not thinking_started:
+                                yield builder_events.phase("thinking").to_ndjson()
+                                thinking_started = True
+                            if reasoning:
+                                yield builder_events.token(
+                                    reasoning, is_thinking=True
+                                ).to_ndjson()
                             continue
-                        if not answering_started:
-                            yield builder_events.phase("answering").to_ndjson()
-                            answering_started = True
-                        answer_parts.append(content)
-                        yield builder_events.token(
-                            content, is_thinking=False
-                        ).to_ndjson()
-    except Exception as e:
-        yield builder_events.error(str(e), code="STREAM_ERROR").to_ndjson()
-        return
 
-    # 10. Emit end
-    elapsed_ms = int((time.monotonic() - t_start) * 1000)
-    yield builder_events.end(
-        summary="".join(answer_parts)[:200],
-        tokens_used=0,
-        execution_time_ms=elapsed_ms,
-        tools_used=tools_used or None,
-    ).to_ndjson()
+                        if kind == "tool_call":
+                            for call in _extract_tool_calls(msg):
+                                tname = call["name"]
+                                ttype, tdisplay, ticon = _resolve_tool_metadata(tname)
+                                tools_used.append(tname)
+                                evt = builder_events.tool_call(
+                                    tool_name=tname,
+                                    arguments=call["args"],
+                                    display_name=tdisplay,
+                                    icon=ticon,
+                                    tool_type=ttype,
+                                )
+                                # Remember the mapping so .result can target this step.
+                                backend_id = evt.payload["tool"]["id"]
+                                if call["id"]:
+                                    tool_call_id_map[str(call["id"])] = backend_id
+                                yield evt.to_ndjson()
+                            continue
+
+                        if kind == "tool_result":
+                            provider_id, content = _extract_tool_result(msg)
+                            backend_id = tool_call_id_map.get(provider_id, provider_id)
+                            # Tool messages from langchain don't carry success/timing —
+                            # we report success when content is present, no exception
+                            # bubbled up; failures arrive via the surrounding except.
+                            yield builder_events.tool_result(
+                                tool_id=backend_id,
+                                success=True,
+                                execution_time_ms=0,
+                                data=content,
+                            ).to_ndjson()
+                            continue
+
+                        if kind == "text":
+                            content = _extract_content(msg)
+                            if not content:
+                                continue
+                            if not answering_started:
+                                yield builder_events.phase("answering").to_ndjson()
+                                answering_started = True
+                            answer_parts.append(content)
+                            yield builder_events.token(
+                                content, is_thinking=False
+                            ).to_ndjson()
+        except Exception as e:
+            stream_error_type = type(e).__name__
+            logger.warning(
+                "[agent_dispatch] astream failed session=%s err_type=%s",
+                thread_id,
+                stream_error_type,
+            )
+            yield builder_events.error(
+                "智能体执行失败", code="STREAM_ERROR"
+            ).to_ndjson()
+            return
+
+        # 10. Emit end
+        elapsed_ms = int((time.monotonic() - t_start) * 1000)
+        yield builder_events.end(
+            summary="".join(answer_parts)[:200],
+            tokens_used=0,
+            execution_time_ms=elapsed_ms,
+            tools_used=tools_used or None,
+        ).to_ndjson()
+        success = True
+    finally:
+        audit_state["success"] = success
+        # Audit emit FIRST so the invariant lands even if the persistence
+        # fire-and-forget never runs (e.g. loop-shutdown teardown).
+        _emit_audit(None if success else (stream_error_type or "StreamAborted"))
+        # Schedule persistence as fire-and-forget so a slow backend write
+        # never blocks the response close. _fire_and_forget no-ops cleanly
+        # when no event loop is running (e.g. during teardown).
+        if _fire_and_forget is not None:
+            _fire_and_forget(_persist_session_metadata(
+                agent_graph=agent_graph,
+                runnable_config=runnable_config,
+                family_id=family_id,
+                user_id=user_id,
+                session_id=thread_id,
+                agent_name=agent_name,
+                answer="".join(answer_parts),
+                model_id=model_id,
+                success=success,
+                start_ms=t_start,
+            ))
 
 
 def _extract_content(msg) -> str | None:
@@ -429,3 +674,172 @@ def _extract_content(msg) -> str | None:
         if isinstance(content, str):
             return content
     return None
+
+
+# ── Session persistence ─────────────────────────────────────────────────────
+
+
+async def _build_fallback_title(
+    family_id: str, agent_name: str, user_id: str | None
+) -> str:
+    """Build a `YYYY-MM-DD agent_name user_name` title.
+
+    Mirrors orchestrator._generate_title's non-chat branch (kept as a copy
+    rather than imported because the orchestrator helper is private and
+    bundles LLM logic we don't want here). Truncated to 50 chars to fit
+    ai_chat_sessions.title.
+    """
+    date_str = time.strftime("%Y-%m-%d", time.localtime())
+    user_name = "匿名用户"
+    if user_id:
+        try:
+            client = BackendClient(family_id=family_id)
+            user_info = await client.get_user(user_id)
+            if user_info:
+                user_name = (
+                    user_info.get("display_name")
+                    or user_info.get("username")
+                    or user_name
+                )
+        except Exception:
+            logger.warning(
+                "[agent_dispatch] fallback title user fetch failed family=%s",
+                family_id,
+            )
+    return f"{date_str} {agent_name} {user_name}"[:50]
+
+
+async def _persist_session_metadata(
+    *,
+    agent_graph: Any,
+    runnable_config: dict[str, Any] | None,
+    family_id: str,
+    user_id: str | None,
+    session_id: str,
+    agent_name: str,
+    answer: str,
+    model_id: str | None,
+    success: bool,
+    start_ms: float | None = None,
+) -> None:
+    """Persist title / summary / status to backend after the stream finishes.
+
+    All inputs that came from user content (DeerFlow-generated title and the
+    streamed assistant answer) pass through ``pii_redactor.redact_text``
+    before being written — required by agent/CLAUDE.md Key Invariant #1.
+
+    Failure modes:
+    - ``aget_state`` missing or raising → fall back to date+name template
+    - ``_get_shared_checkpointer`` not bound → fall back to date+name template
+    - backend write raises → swallowed by AiSessionRepository.update_summary
+    """
+    raw_title: str | None = None
+    if agent_graph is not None and runnable_config is not None:
+        aget_state = getattr(agent_graph, "aget_state", None)
+        try:
+            if aget_state is not None:
+                snapshot = await aget_state(runnable_config)
+            else:
+                # Older langgraph versions only expose sync get_state.
+                import asyncio
+                loop = asyncio.get_running_loop()
+                snapshot = await loop.run_in_executor(
+                    None, agent_graph.get_state, runnable_config
+                )
+            values = getattr(snapshot, "values", None) or {}
+            raw_title_val = values.get("title") if isinstance(values, dict) else None
+            if isinstance(raw_title_val, str) and raw_title_val.strip():
+                raw_title = raw_title_val
+        except Exception as e:
+            # Never log str(e) — state payloads can include the conversation.
+            logger.warning(
+                "[agent_dispatch] aget_state failed session=%s err_type=%s",
+                session_id,
+                type(e).__name__,
+            )
+
+    title: str | None = None
+    if raw_title:
+        redacted_title, _ = pii_redactor.redact_text(raw_title)
+        # Strip HTML-style tags so a future v-html consumer can't execute
+        # markup smuggled in by the LLM. Plan §Risks row 6 — the existing
+        # frontend uses mustache (safe) but defence-in-depth keeps the DB clean.
+        redacted_title = re.sub(r"<[^>]+>", "", redacted_title)
+        if redacted_title.strip():
+            title = redacted_title.strip()[:50]
+    if not title:
+        try:
+            title = await _build_fallback_title(family_id, agent_name, user_id)
+        except Exception:
+            logger.warning(
+                "[agent_dispatch] fallback title build failed session=%s",
+                session_id,
+            )
+            title = None
+
+    redacted_answer = ""
+    if answer:
+        redacted_answer, _ = pii_redactor.redact_text(answer)
+    summary: str | None = None
+    if redacted_answer.strip():
+        summary = redacted_answer.strip()[:200]
+
+    user_segment = user_id if user_id else "_shared"
+    jsonl_path = (
+        f"{settings.SESSIONS_DATA_DIR}/{family_id}/agent/agent/"
+        f"{user_segment}/{session_id}.jsonl"
+    )
+
+    # Journal — assistant_message and session_end. session_journal.append_event
+    # already logs and swallows file I/O errors, but resolve_path can raise on
+    # invalid id slugs; guard the whole block.
+    try:
+        if redacted_answer:
+            session_journal.write_assistant_message(
+                family_id=family_id,
+                session_id=session_id,
+                content=redacted_answer,
+                model_name=model_id,
+            )
+        duration_ms = (
+            int((time.monotonic() - start_ms) * 1000) if start_ms is not None else 0
+        )
+        session_journal.write_session_end(
+            family_id=family_id,
+            session_id=session_id,
+            success=success,
+            duration_ms=duration_ms,
+            tokens_used=0,
+        )
+    except Exception:
+        logger.warning(
+            "[agent_dispatch] journal end-of-stream write failed session=%s",
+            session_id,
+        )
+
+    try:
+        from apps.agent.services.session_store import AiSessionRepository
+
+        repo = AiSessionRepository(family_id)
+        await repo.upsert(
+            session_id=session_id,
+            family_id=family_id,
+            user_id=user_id,
+            capability=agent_name,
+            jsonl_path=jsonl_path,
+            last_model=model_id,
+        )
+        await repo.update_summary(
+            session_id=session_id,
+            family_id=family_id,
+            summary=summary,
+            model=model_id,
+            status="completed" if success else "error",
+            title=title,
+        )
+    except Exception as e:
+        logger.warning(
+            "[agent_dispatch] persist failed session=%s err_type=%s",
+            session_id,
+            type(e).__name__,
+        )

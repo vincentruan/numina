@@ -65,12 +65,52 @@ async def mcp_sse(
     family_id: str,
     x_agent_token: str | None = Header(None, alias="X-Agent-Token"),
     x_family_id: str | None = Header(None, alias="X-Family-Id"),
+    x_caller_user_id: str | None = Header(None, alias="X-Caller-User-Id"),
 ):
     """SSE endpoint that speaks MCP protocol for the given family_id."""
     _verify_agent_token(x_agent_token)
     if x_family_id and x_family_id != family_id:
         raise AppError(ErrorCode.FORBIDDEN, "family_id mismatch")
-    session = MCPSession(family_id=family_id)
+    if not x_caller_user_id:
+        raise AppError(ErrorCode.FORBIDDEN, "missing caller_user_id")
+
+    from apps.backend.app.database import SessionLocal
+    from apps.backend.app.models.user import User
+
+    with SessionLocal() as db:
+        user = db.query(User).filter(User.id == x_caller_user_id).first()
+        if not user:
+            logger.warning(
+                "[mcp_sse] caller not found: family=%s caller_user_id=%s",
+                family_id, x_caller_user_id,
+            )
+            raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
+        if not user.is_active:
+            logger.warning(
+                "[mcp_sse] caller inactive: family=%s caller_user_id=%s",
+                family_id, x_caller_user_id,
+            )
+            raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
+        if str(user.family_id) != str(family_id):
+            logger.warning(
+                "[mcp_sse] caller cross-family: family=%s caller_user_id=%s actual_family=%s",
+                family_id, x_caller_user_id, user.family_id,
+            )
+            raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
+        if user.role == "child":
+            logger.warning(
+                "[mcp_sse] child caller rejected: family=%s caller_user_id=%s",
+                family_id, x_caller_user_id,
+            )
+            raise AppError(ErrorCode.FORBIDDEN, "caller invalid")
+
+        caller_role = user.role
+
+    session = MCPSession(
+        family_id=family_id,
+        caller_user_id=x_caller_user_id,
+        caller_role=caller_role,
+    )
     return MCPSSEResponse(session=session, family_id=family_id)
 
 

@@ -71,9 +71,7 @@ export default {
     deepThink: 'Deep think',
     webSearch: 'Web search',
     modeNormal: 'Normal',
-    modeSmart: 'Smart',
-    smartLight: 'Light',
-    smartFull: 'Full',
+    modeSmart: 'Deep think',
     streaming: 'AI is answering',
     suggestionsAria: 'Follow-up suggestions',
     chipFollowupReason: 'Why is that?',
@@ -1315,6 +1313,10 @@ export default {
     visionModelIdPlaceholderOpenAI: 'e.g. gpt-4o',
     apiTimeout: 'API Timeout (seconds)',
     timeoutPlaceholder: 'Default 60s, recommended 60-300',
+    maxTokensLabel: 'Max output tokens',
+    maxTokensPlaceholder: 'Leave blank for system default',
+    maxTokensSystemDefault: 'System default: {value} tokens',
+    maxTokensUnknownModel: 'Unknown model — set explicitly or leave blank',
     saveConfig: 'Save Configuration',
     currentStatus: 'Current Status',
     statusEnabled: 'Enabled',
@@ -1491,6 +1493,31 @@ export default {
       updateSuccess: '✅ Skill updated',
       deleteSuccess: '🗑️ Skill deleted',
       reorderSuccess: '✅ Order saved',
+    },
+
+    tabs: {
+      install: 'Install',
+      aiCreate: 'AI Generate',
+      manual: 'Manual',
+    },
+
+    install: {
+      placeholder: 'Paste install command or URL...',
+      button: 'Install',
+      success: '✅ Skill installed',
+      exists: '⚠️ Skill already exists',
+      failed: '❌ Install failed',
+    },
+
+    aiCreate: {
+      placeholder: 'Describe the skill you want...',
+      button: '🤖 AI Generate Skill',
+      preview: 'Generated Preview',
+      confirm: 'Confirm & Save',
+      success: '✅ Skill created',
+      failed: '❌ AI generation failed',
+      invalidName: '⚠️ AI-generated name cannot be converted to a valid ID, please edit manually',
+      generating: 'AI generating...',
     },
 
     detail: {

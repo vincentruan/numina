@@ -123,9 +123,7 @@ export default {
     deepThink: '深度思考',
     webSearch: '联网搜索',
     modeNormal: '普通',
-    modeSmart: '智能',
-    smartLight: '轻量',
-    smartFull: '完整',
+    modeSmart: '深度思考',
     streaming: 'AI 正在回答',
     suggestionsAria: '建议追问',
     chipFollowupReason: '为什么会这样？',
@@ -1663,6 +1661,31 @@ export default {
       reorderSuccess: '✅ 排序已保存',
     },
 
+    tabs: {
+      install: '命令安装',
+      aiCreate: 'AI 生成',
+      manual: '手动编辑',
+    },
+
+    install: {
+      placeholder: '粘贴安装命令或 URL...',
+      button: '安装',
+      success: '✅ 技能安装成功',
+      exists: '⚠️ 该技能已存在',
+      failed: '❌ 安装失败',
+    },
+
+    aiCreate: {
+      placeholder: '描述你想要的技能功能...',
+      button: '🤖 技能智能分析和生成',
+      preview: '生成预览',
+      confirm: '确认保存',
+      success: '✅ 技能创建成功',
+      failed: '❌ AI 生成失败',
+      invalidName: '⚠️ AI 生成的名称无法转换为有效 ID，请手动编辑',
+      generating: 'AI 生成中...',
+    },
+
     detail: {
       viewPrompt: '查看提示词',
       hidePrompt: '收起提示词',
@@ -1733,6 +1756,10 @@ export default {
     visionModelIdPlaceholderOpenAI: '如: gpt-4o',
     apiTimeout: 'API 超时（秒）',
     timeoutPlaceholder: '默认 60 秒，建议 60-300',
+    maxTokensLabel: '单次输出上限',
+    maxTokensPlaceholder: '留空走系统默认',
+    maxTokensSystemDefault: '系统默认 {value} tokens',
+    maxTokensUnknownModel: '未识别模型，建议手动填写或留空',
     saveConfig: '保存配置',
     currentStatus: '当前状态',
     statusEnabled: '已启用',

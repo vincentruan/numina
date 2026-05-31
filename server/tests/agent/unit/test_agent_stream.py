@@ -13,8 +13,15 @@ def test_agent_stream_request_defaults():
     per plan U2 (non-nullable Literal['low','medium','high'])."""
     req = AgentStreamRequest(message="hello")
     assert req.enable_thinking == False
+    assert req.web_search == False
     assert req.thread_id is None
     assert req.reasoning_effort == "medium"
+
+
+def test_agent_stream_request_web_search_true():
+    """web_search=True is accepted and exposed via the model."""
+    req = AgentStreamRequest(message="test", web_search=True)
+    assert req.web_search is True
 
 
 def test_agent_stream_request_with_reasoning_effort_low():

@@ -14,6 +14,16 @@
 .codegraph/
 
 # ===========================
+# System config local override (per-deployment, not committed)
+# ===========================
+/system-config.local.yaml
+
+# ===========================
+# Claude Code agent runtime (session lock, not project state)
+# ===========================
+.claude/scheduled_tasks.lock
+
+# ===========================
 # OS Generated Files
 # ===========================
 .DS_Store

@@ -16,6 +16,7 @@ class AgentStreamRequest(BaseModel):
     message: str
     thread_id: str | None = None
     enable_thinking: bool = False
+    web_search: bool = False
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
 
 
@@ -41,6 +42,7 @@ async def stream_agent(
             thread_id=thread_id,
             message=body.message,
             enable_thinking=body.enable_thinking,
+            web_search=body.web_search,
             reasoning_effort=body.reasoning_effort,
         ),
         media_type="application/x-ndjson",

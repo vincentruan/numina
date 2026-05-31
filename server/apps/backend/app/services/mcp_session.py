@@ -1,4 +1,10 @@
-"""MCP Session — family_id-bound tool registry for AI Chat data access."""
+"""MCP Session — caller-bound tool registry for AI Chat data access.
+
+Tenant + caller isolation via __slots__:
+- _family_id, _caller_user_id, _caller_role are captured at construction and frozen
+- Tool handlers NEVER read family_id/caller from tool args — only from self
+"""
+
 import json
 import logging
 from typing import Any
@@ -13,42 +19,54 @@ from apps.backend.app.models.user import User
 logger = logging.getLogger(__name__)
 
 
-def _get_owner_user(family_id: str, db: Session) -> User:
-    """Return the family's owner user for service-layer authorization."""
+def _get_caller_user(family_id: str, caller_user_id: str, db: Session) -> User:
+    """Return the caller user, validating family membership and active status."""
     user = (
         db.query(User)
-        .filter(User.family_id == family_id, User.role == "owner", User.is_active.is_(True))
+        .filter(User.id == caller_user_id)
         .first()
     )
-    if not user:
-        user = (
-            db.query(User)
-            .filter(User.family_id == family_id, User.is_active.is_(True))
-            .first()
+    if not user or not user.is_active or str(user.family_id) != str(family_id):
+        raise RuntimeError(
+            f"caller invalid: user_id={caller_user_id} family={family_id}"
         )
-    if not user:
-        raise RuntimeError(f"No active member found for family={family_id}")
     return user
 
 
 class MCPSession:
-    """Per-connection MCP session bound to a single family_id.
+    """Per-connection MCP session bound to a single family_id and caller.
 
-    Tenant isolation via __slots__:
-    - _family_id is captured at construction and frozen
-    - Tool handlers NEVER read family_id from tool args — only from self
+    Tenant + caller isolation via __slots__:
+    - _family_id, _caller_user_id, _caller_role are frozen at construction
+    - Tool handlers NEVER read these from tool args — only from self
     """
 
-    __slots__ = ("_family_id", "_server")
+    __slots__ = ("_family_id", "_caller_user_id", "_caller_role", "_server")
 
-    def __init__(self, family_id: str) -> None:
+    def __init__(self, family_id: str, caller_user_id: str, caller_role: str) -> None:
+        if not family_id:
+            raise ValueError("family_id must not be empty")
+        if not caller_user_id:
+            raise ValueError("caller_user_id must not be empty")
+        if not caller_role:
+            raise ValueError("caller_role must not be empty")
         self._family_id = family_id
+        self._caller_user_id = caller_user_id
+        self._caller_role = caller_role
         self._server = Server(f"numina-family-{family_id}")
         self._register_tools()
 
     @property
     def family_id(self) -> str:
         return self._family_id
+
+    @property
+    def caller_user_id(self) -> str:
+        return self._caller_user_id
+
+    @property
+    def caller_role(self) -> str:
+        return self._caller_role
 
     @property
     def server(self) -> Server:
@@ -66,62 +84,50 @@ class MCPSession:
             return await self.call_tool(name, arguments)
 
     async def list_tools(self) -> list[Tool]:
+        from apps.backend.app.services.mcp_tool_registry import list_tools_for_role
+
         return [
             Tool(
-                name="get_family_overview",
-                description="获取家庭财务总览：净资产、总资产、总负债、配置占比、近期变化。",
-                inputSchema={"type": "object", "properties": {}, "required": []},
-            ),
-            Tool(
-                name="get_assets",
-                description="查询家庭资产列表。支持按类别过滤、限制条数。",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "category": {"type": "string", "description": "资产类别（可选）"},
-                        "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100},
-                    },
-                    "required": [],
-                },
-            ),
-            Tool(
-                name="get_liabilities",
-                description="查询家庭负债列表（贷款、信用卡等）。",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "default": 20, "minimum": 1, "maximum": 100},
-                    },
-                    "required": [],
-                },
-            ),
-            Tool(
-                name="get_members",
-                description="查询家庭成员列表。",
-                inputSchema={"type": "object", "properties": {}, "required": []},
-            ),
-            Tool(
-                name="get_recent_alerts",
-                description="查询家庭最近的资产预警和处置建议。",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "default": 10, "minimum": 1, "maximum": 50},
-                    },
-                    "required": [],
-                },
-            ),
+                name=meta.name,
+                description=meta.description,
+                inputSchema=meta.input_schema,
+            )
+            for meta in list_tools_for_role(self._caller_role)
         ]
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> list[TextContent]:
-        # SECURITY: ignore any family_id in arguments — always use bound self._family_id
+        # SECURITY: ignore any family_id/caller_user_id/role in arguments — slots are the only truth
         from apps.backend.app.services import asset as asset_service
         from apps.backend.app.services import dashboard as dashboard_service
         from apps.backend.app.services import family as family_service
         from apps.backend.app.services import liability as liability_service
+        from apps.backend.app.services.mcp_tool_registry import get_tool
+
+        meta = get_tool(name)
+        if not meta or self._caller_role not in meta.allowed_roles:
+            logger.warning(
+                "[mcp_session] permission_denied family=%s caller_user_id=%s caller_role=%s attempted_tool=%s",
+                self._family_id,
+                self._caller_user_id,
+                self._caller_role,
+                name,
+            )
+            return [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {
+                            "error": "permission_denied",
+                            "retryable": False,
+                            "reason": "该工具对当前角色不可用",
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+            ]
 
         with SessionLocal() as db:
-            user = _get_owner_user(self._family_id, db)
+            user = _get_caller_user(self._family_id, self._caller_user_id, db)
             try:
                 if name == "get_family_overview":
                     data = dashboard_service.get_overview(db, user)
@@ -145,13 +151,21 @@ class MCPSession:
                     raise ValueError(f"Unknown tool: {name}")
 
                 logger.info(
-                    "[mcp_session] family=%s tool=%s args=%s ok",
-                    self._family_id, name, arguments,
+                    "[mcp_session] family=%s caller_user_id=%s caller_role=%s tool=%s args=%s ok",
+                    self._family_id,
+                    self._caller_user_id,
+                    self._caller_role,
+                    name,
+                    arguments,
                 )
                 return [TextContent(type="text", text=json.dumps(data, ensure_ascii=False, default=str))]
             except Exception as e:
                 logger.error(
-                    "[mcp_session] family=%s tool=%s failed: %s",
-                    self._family_id, name, e,
+                    "[mcp_session] family=%s caller_user_id=%s caller_role=%s tool=%s failed: %s",
+                    self._family_id,
+                    self._caller_user_id,
+                    self._caller_role,
+                    name,
+                    e,
                 )
                 return [TextContent(type="text", text=json.dumps({"error": "查询失败，请稍后重试"}, ensure_ascii=False))]

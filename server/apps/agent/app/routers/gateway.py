@@ -4,17 +4,24 @@
 - GET  /internal/gateway/models          — 查询可用模型列表
 - PUT  /internal/gateway/skills/{name}   — 更新技能启用状态
 - DELETE /internal/gateway/threads/{id} — 清理线程数据
+- POST /internal/gateway/skill-dispatch — 内部技能调度（skill-creator/skill-installer）
 
 所有端点使用 X-Agent-Token 认证（与 backend 共享同一 token）。
 """
 
 import logging
 import re
+from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, Header, HTTPException
+from pydantic import BaseModel
 
 from apps.agent.app.config import settings
+from apps.agent.core.backend_client import BackendClient
+from apps.agent.schemas.context import RedactedContext
+from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
+from apps.agent.services.deerflow_adapter.exceptions import DeerFlowTimeoutError
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +29,17 @@ router = APIRouter(prefix="/internal/gateway", tags=["internal"])
 
 # Same pattern as DeerFlow's _validate_id — alphanumeric, dash, underscore only.
 _SAFE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_\-]+$")
+
+# Whitelist of internal skills that can be dispatched via this endpoint.
+_ALLOWED_SKILLS = {"skill-creator", "skill-installer"}
+
+
+class SkillDispatchRequest(BaseModel):
+    """Request body for internal skill dispatch."""
+
+    skill_name: str
+    family_id: str
+    input_text: str
 
 
 def _verify_token(x_agent_token: str) -> None:
@@ -118,3 +136,81 @@ def delete_thread(
     except httpx.RequestError as e:
         logger.error("[gateway] delete_thread request failed thread=%s: %s", thread_id, e)
         raise HTTPException(status_code=502, detail=f"Gateway unreachable: {e}") from e
+
+
+@router.post("/skill-dispatch")
+async def skill_dispatch(
+    body: SkillDispatchRequest,
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
+) -> dict:
+    """内部技能调度端点 — 供 backend 调用内部技能（skill-creator/skill-installer）。
+
+    # Trust: family_id is trusted because this endpoint requires X-Agent-Token
+    # and the backend always passes JWT-derived current_user.family_id
+    """
+    _verify_token(x_agent_token)
+
+    # Whitelist validation — only internal skills allowed
+    if body.skill_name not in _ALLOWED_SKILLS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid skill_name: '{body.skill_name}'. Must be one of {sorted(_ALLOWED_SKILLS)}",
+        )
+
+    # Fetch family AI config
+    try:
+        client = BackendClient(body.family_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid family_id: {e}") from e
+
+    try:
+        ai_config = await client.get_family_ai_config()
+    except Exception as e:
+        logger.error(
+            "[gateway] skill_dispatch fetch ai_config failed family=%s: %s",
+            body.family_id,
+            e,
+        )
+        raise HTTPException(status_code=502, detail=f"Failed to fetch AI config: {e}") from e
+
+    # Construct adapter and dispatch
+    try:
+        adapter = create_family_adapter(
+            body.family_id,
+            ai_config,
+            timeout_seconds=60,
+        )
+    except Exception as e:
+        logger.error(
+            "[gateway] skill_dispatch adapter creation failed family=%s: %s",
+            body.family_id,
+            e,
+        )
+        raise HTTPException(status_code=502, detail=f"Adapter creation failed: {e}") from e
+
+    context = RedactedContext(
+        family_id=body.family_id,
+        free_text=body.input_text,
+    )
+    thread_id = str(uuid4())
+
+    try:
+        result = await adapter.dispatch(body.skill_name, context, thread_id=thread_id)
+    except DeerFlowTimeoutError as e:
+        logger.error(
+            "[gateway] skill_dispatch timeout family=%s skill=%s: %s",
+            body.family_id,
+            body.skill_name,
+            e,
+        )
+        raise HTTPException(status_code=504, detail=f"DeerFlow dispatch timed out: {e}") from e
+    except Exception as e:
+        logger.error(
+            "[gateway] skill_dispatch failed family=%s skill=%s: %s",
+            body.family_id,
+            body.skill_name,
+            e,
+        )
+        raise HTTPException(status_code=502, detail=f"DeerFlow dispatch failed: {e}") from e
+
+    return {"content": result}

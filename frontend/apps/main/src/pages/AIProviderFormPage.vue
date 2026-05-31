@@ -69,6 +69,17 @@
         :placeholder="t('aiConfig.timeoutPlaceholder')"
         type="digit"
       />
+      <van-field
+        v-model="form.max_tokens"
+        :label="t('aiConfig.maxTokensLabel')"
+        :placeholder="maxTokensPlaceholder"
+        type="digit"
+        clearable
+      >
+        <template #extra>
+          <span v-if="maxTokensHint" class="max-tokens-hint">{{ maxTokensHint }}</span>
+        </template>
+      </van-field>
     </van-cell-group>
 
     <!-- Model slots -->
@@ -80,6 +91,7 @@
           :label="t('aiConfig.modelId')"
           :placeholder="t('aiConfig.modelIdPlaceholder')"
           clearable
+          @blur="slot === 1 ? onPrimaryModelBlur() : null"
         />
         <van-cell
           :title="t('aiConfig.capabilities')"
@@ -153,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -193,7 +205,51 @@ const form = reactive({
   api_key: '',
   base_url: '',
   timeout_seconds: '60',
+  max_tokens: '',  // empty string ⇒ "use system default"; positive int ⇒ explicit override
 })
+
+// User-edited flag — once the user touches max_tokens manually, we stop
+// auto-filling on subsequent model_id blur events (avoid clobbering intent).
+const maxTokensDirty = ref(false)
+// Hint shown next to the max_tokens field after a defaults lookup.
+const maxTokensHint = ref('')
+const maxTokensPlaceholder = computed(() =>
+  maxTokensHint.value || t('aiConfig.maxTokensPlaceholder'),
+)
+
+watch(() => form.max_tokens, () => {
+  // Mark dirty when user types/edits in the field directly. We can't
+  // distinguish programmatic writes from user writes without a flag, so
+  // we set dirty on any change after the first model_id blur. The
+  // onPrimaryModelBlur handler resets dirty=false before its own write
+  // so its programmatic update doesn't trigger this dirty state.
+  maxTokensDirty.value = true
+})
+
+async function onPrimaryModelBlur() {
+  const modelId = formModels[0].id.trim()
+  if (!modelId) {
+    maxTokensHint.value = ''
+    return
+  }
+  try {
+    const res = await aiApi.getProviderDefaults(modelId)
+    const def = res.data?.max_tokens ?? null
+    if (def !== null) {
+      maxTokensHint.value = t('aiConfig.maxTokensSystemDefault', { value: def })
+      // Only auto-fill if the field is empty AND the user hasn't manually edited it.
+      if (!form.max_tokens && !maxTokensDirty.value) {
+        // Reset dirty so the watcher doesn't trip on our programmatic write.
+        form.max_tokens = String(def)
+        nextTick(() => { maxTokensDirty.value = false })
+      }
+    } else {
+      maxTokensHint.value = t('aiConfig.maxTokensUnknownModel')
+    }
+  } catch {
+    maxTokensHint.value = ''
+  }
+}
 
 const formModels = reactive<ModelSlot[]>([
   { id: '', capabilities: ['text_generation'] },
@@ -243,6 +299,10 @@ function loadConfig(cfg: ProviderConfig) {
   form.api_key = ''
   form.base_url = cfg.base_url || ''
   form.timeout_seconds = String(cfg.timeout_seconds)
+  // Pre-fill max_tokens with the persisted value (or empty string if NULL in DB).
+  // Set dirty=true so a later model_id blur doesn't clobber the user's saved choice.
+  form.max_tokens = cfg.max_tokens != null ? String(cfg.max_tokens) : ''
+  nextTick(() => { maxTokensDirty.value = !!cfg.max_tokens })
   formModels[0].id = cfg.model_id || ''
   formModels[0].capabilities = [...cfg.model_1_capabilities]
   formModels[1].id = cfg.model_2_id || ''
@@ -298,6 +358,7 @@ async function onSave() {
         provider: form.provider,
         base_url: form.base_url || null,
         timeout_seconds: parseInt(form.timeout_seconds) || 60,
+        max_tokens: form.max_tokens ? (parseInt(form.max_tokens) || 0) : 0,
         model_id: formModels[0].id || null,
         model_2_id: formModels[1].id || null,
         model_3_id: formModels[2].id || null,
@@ -314,6 +375,7 @@ async function onSave() {
         ai_api_key: form.api_key.trim() || undefined,
         base_url: form.base_url || undefined,
         timeout_seconds: parseInt(form.timeout_seconds) || 60,
+        max_tokens: form.max_tokens ? (parseInt(form.max_tokens) || null) : null,
         model_id: formModels[0].id || undefined,
         model_2_id: formModels[1].id || undefined,
         model_3_id: formModels[2].id || undefined,
