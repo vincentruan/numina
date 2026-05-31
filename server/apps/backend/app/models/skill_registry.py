@@ -52,6 +52,10 @@ class SkillRegistry(Base):
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     custom_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)  # for builtin prompt override
 
+    # Provenance
+    creation_type: Mapped[str] = mapped_column(String(16), nullable=False, server_default="manual")  # 'manual' | 'cmd' | 'ai_created'
+    source_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+
     # Audit
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

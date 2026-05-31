@@ -55,6 +55,10 @@ except ImportError:
 _NUMINA_AGENT_ID: int = 100000000000005
 _LEGACY_AI_ASSISTANT_AGENT_ID: int = 100000000000003
 
+# Skills that are reserved for internal system use only — never dispatched to any agent.
+_INTERNAL_ONLY_SKILLS: frozenset[str] = frozenset({"skill-creator", "skill-installer"})
+
+
 
 # ── Tool registry: tool_name → (tool_type, display_name, icon) ──────────────
 # Backend is the source of truth for these mappings; the frontend only owns
@@ -92,14 +96,15 @@ def _resolve_skills(
     agent_skills: list[str] | None,
     family_enabled_skills: list[dict],
 ) -> list[dict]:
-    """Resolve which skills an agent dispatches with, enforcing R5/R6/R15.
+    """Resolve which skills an agent dispatches with, enforcing R5/R6/R15 + U9.
 
     Branches:
     - ``agent_skills == ["chat"]`` → ``[]`` (R5: AI问答 reserved chat capability,
       pure LLM mode, no business skill catalog injection).
-    - ``"*" in agent_skills`` → all of ``family_enabled_skills`` (R6: 数鸣 sentinel).
+    - ``"*" in agent_skills`` → ``family_enabled_skills`` minus
+      ``_INTERNAL_ONLY_SKILLS`` (R6: sentinel + U9 exclusion).
     - non-empty specific list → intersection with ``family_enabled_skills`` by
-      ``skill_id`` (R15: custom agents).
+      ``skill_id``, excluding ``_INTERNAL_ONLY_SKILLS`` (R15 + U9 exclusion).
     - ``None`` / ``[]`` → ``[]`` (defensive default).
 
     The resolved list preserves the original dict shape from BackendClient
@@ -113,8 +118,8 @@ def _resolve_skills(
     if agent_skills == ["chat"]:
         return []
     if "*" in agent_skills:
-        return list(family_enabled_skills)
-    allowed = set(agent_skills)
+        return [s for s in family_enabled_skills if s.get("skill_id") not in _INTERNAL_ONLY_SKILLS]
+    allowed = set(agent_skills) - _INTERNAL_ONLY_SKILLS
     return [s for s in family_enabled_skills if s.get("skill_id") in allowed]
 
 

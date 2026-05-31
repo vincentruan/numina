@@ -1612,6 +1612,31 @@ export default {
       reorderSuccess: '✅ 排序已保存',
     },
 
+    tabs: {
+      install: '命令安装',
+      aiCreate: 'AI 生成',
+      manual: '手动编辑',
+    },
+
+    install: {
+      placeholder: '粘贴安装命令或 URL...',
+      button: '安装',
+      success: '✅ 技能安装成功',
+      exists: '⚠️ 该技能已存在',
+      failed: '❌ 安装失败',
+    },
+
+    aiCreate: {
+      placeholder: '描述你想要的技能功能...',
+      button: '🤖 技能智能分析和生成',
+      preview: '生成预览',
+      confirm: '确认保存',
+      success: '✅ 技能创建成功',
+      failed: '❌ AI 生成失败',
+      invalidName: '⚠️ AI 生成的名称无法转换为有效 ID，请手动编辑',
+      generating: 'AI 生成中...',
+    },
+
     detail: {
       viewPrompt: '查看提示词',
       hidePrompt: '收起提示词',

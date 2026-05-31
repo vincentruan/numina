@@ -1444,6 +1444,31 @@ export default {
       reorderSuccess: '✅ Order saved',
     },
 
+    tabs: {
+      install: 'Install',
+      aiCreate: 'AI Generate',
+      manual: 'Manual',
+    },
+
+    install: {
+      placeholder: 'Paste install command or URL...',
+      button: 'Install',
+      success: '✅ Skill installed',
+      exists: '⚠️ Skill already exists',
+      failed: '❌ Install failed',
+    },
+
+    aiCreate: {
+      placeholder: 'Describe the skill you want...',
+      button: '🤖 AI Generate Skill',
+      preview: 'Generated Preview',
+      confirm: 'Confirm & Save',
+      success: '✅ Skill created',
+      failed: '❌ AI generation failed',
+      invalidName: '⚠️ AI-generated name cannot be converted to a valid ID, please edit manually',
+      generating: 'AI generating...',
+    },
+
     detail: {
       viewPrompt: 'View Prompt',
       hidePrompt: 'Hide Prompt',

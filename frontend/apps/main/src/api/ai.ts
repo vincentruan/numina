@@ -672,3 +672,27 @@ export const toggleSkill = (skillId: string, isEnabled: boolean) =>
 
 export const reorderSkills = (skillIds: string[]) =>
   http.put<{ ok: boolean }>('/ai/skills/reorder', { skill_ids: skillIds })
+
+// ── Skill Install & AI Create ──────────────────────────────────────────────────
+
+export interface AICreateResponse {
+  content: string
+  parsed_name: string | null
+  parsed_description: string | null
+}
+
+export interface RawSkillSavePayload {
+  skill_id: string
+  content: string
+  icon: string
+  color: string
+}
+
+export const installSkill = (command: string) =>
+  http.post<SkillDefinition>('/ai/skills/install', { command }).then(res => res.data)
+
+export const aiCreateSkill = (description: string) =>
+  http.post<AICreateResponse>('/ai/skills/ai-create', { description }).then(res => res.data)
+
+export const saveRawSkill = (payload: RawSkillSavePayload) =>
+  http.post<SkillDefinition>('/ai/skills/custom/raw', payload).then(res => res.data)

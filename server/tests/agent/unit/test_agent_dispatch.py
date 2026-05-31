@@ -1,10 +1,12 @@
-"""Tests for U4: agent_dispatch._resolve_skills inline helper.
+"""Tests for U4+U9: agent_dispatch._resolve_skills inline helper.
 
 Per plan U4 + KD1, the skill resolution layer lives inline in agent_dispatch.py
-as a module-level pure function. It enforces R5/R6/R15:
+as a module-level pure function. It enforces R5/R6/R15 + U9:
 - R5: AI问答 (skills=["chat"]) → empty skill list (pure LLM mode)
 - R6: 数鸣 (skills=["*"] sentinel) → all family-enabled skills
 - R15: custom agent (skills=["report", ...]) → intersect with family-enabled
+- U9: INTERNAL_ONLY_SKILLS (skill-creator, skill-installer) excluded from
+  both sentinel and specific-list branches
 
 These tests run TEST-FIRST per the unit's Execution note.
 """
@@ -117,3 +119,77 @@ def test_sentinel_preserves_skill_dict_shape():
     assert result[0]["skill_id"] == "report"
     assert result[0]["skill_type"] == "builtin"
     assert result[0]["extra"] == "data"
+
+
+# ── U9: INTERNAL_ONLY_SKILLS exclusion ─────────────────────────────────────────
+
+
+def test_sentinel_excludes_skill_creator():
+    """AE6: sentinel ["*"] with family_enabled containing skill-creator excludes it."""
+    family_enabled = _enabled("report", "skill-creator", "allocation")
+    result = _resolve_skills(["*"], family_enabled)
+    ids = {s["skill_id"] for s in result}
+    assert "skill-creator" not in ids
+    assert ids == {"report", "allocation"}
+
+
+def test_sentinel_excludes_skill_installer():
+    """AE6: sentinel ["*"] with family_enabled containing skill-installer excludes it."""
+    family_enabled = _enabled("skill-installer", "report")
+    result = _resolve_skills(["*"], family_enabled)
+    ids = {s["skill_id"] for s in result}
+    assert "skill-installer" not in ids
+    assert ids == {"report"}
+
+
+def test_sentinel_with_normal_skills_unchanged():
+    """Sentinel with normal skills (report, alerts) includes them unchanged."""
+    family_enabled = _enabled("report", "alerts")
+    result = _resolve_skills(["*"], family_enabled)
+    assert {s["skill_id"] for s in result} == {"report", "alerts"}
+
+
+def test_sentinel_excludes_all_internal_only_skills():
+    """Sentinel with both internal-only skills in family_enabled excludes both."""
+    family_enabled = _enabled("skill-creator", "skill-installer", "report")
+    result = _resolve_skills(["*"], family_enabled)
+    ids = {s["skill_id"] for s in result}
+    assert "skill-creator" not in ids
+    assert "skill-installer" not in ids
+    assert ids == {"report"}
+
+
+def test_sentinel_only_internal_skills_returns_empty():
+    """Sentinel with only internal-only skills in family_enabled returns []."""
+    family_enabled = _enabled("skill-creator", "skill-installer")
+    result = _resolve_skills(["*"], family_enabled)
+    assert result == []
+
+
+def test_custom_agent_cannot_explicitly_list_skill_creator():
+    """Non-sentinel agent that explicitly lists skill-creator has it filtered out."""
+    family_enabled = _enabled("report", "skill-creator")
+    result = _resolve_skills(["report", "skill-creator"], family_enabled)
+    ids = {s["skill_id"] for s in result}
+    assert "skill-creator" not in ids
+    assert ids == {"report"}
+
+
+def test_custom_agent_cannot_explicitly_list_skill_installer():
+    """Non-sentinel agent that explicitly lists skill-installer has it filtered out."""
+    family_enabled = _enabled("skill-installer")
+    result = _resolve_skills(["skill-installer"], family_enabled)
+    assert result == []
+
+
+def test_custom_agent_with_only_normal_skills_unchanged():
+    """Non-sentinel agent with only normal skills behaves unchanged."""
+    family_enabled = _enabled("report", "allocation")
+    result = _resolve_skills(["report", "allocation"], family_enabled)
+    assert {s["skill_id"] for s in result} == {"report", "allocation"}
+
+
+def test_chat_path_unchanged_by_internal_exclusion():
+    """["chat"] path still returns [] regardless of internal-only skills."""
+    family_enabled = _enabled("skill-creator", "report")
+    assert _resolve_skills(["chat"], family_enabled) == []

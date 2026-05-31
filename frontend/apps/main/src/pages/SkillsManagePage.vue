@@ -69,90 +69,262 @@
       round
       :style="{ height: '90%', display: 'flex', flexDirection: 'column' }"
     >
-      <div class="form-header">
-        <span class="form-title">{{ isEditing ? t('skills.form.updateBtn') : t('skills.form.createBtn') }}</span>
-        <van-button size="small" type="primary" :loading="saving" :disabled="!formValid" @click="onSubmitForm">
-          {{ isEditing ? t('skills.form.updateBtn') : t('skills.form.createBtn') }}
-        </van-button>
-      </div>
+      <!-- Edit mode: keep existing single-form layout -->
+      <template v-if="isEditing">
+        <div class="form-header">
+          <span class="form-title">{{ t('skills.form.updateBtn') }}</span>
+          <van-button size="small" type="primary" :loading="saving" :disabled="!formValid" @click="onSubmitForm">
+            {{ t('skills.form.updateBtn') }}
+          </van-button>
+        </div>
 
-      <div class="form-body">
-        <!-- Skill ID (only for create) -->
-        <van-field
-          v-if="!isEditing"
-          v-model="formDraft.skill_id"
-          :label="t('skills.form.skillId')"
-          :placeholder="t('skills.form.skillIdPlaceholder')"
-          :error-message="skillIdError"
-          @update:model-value="validateSkillId"
-        />
+        <div class="form-body">
+          <!-- Name -->
+          <van-field
+            v-model="formDraft.name"
+            :label="t('skills.form.skillName')"
+            :placeholder="t('skills.form.skillNamePlaceholder')"
+            required
+          />
 
-        <!-- Name -->
-        <van-field
-          v-model="formDraft.name"
-          :label="t('skills.form.skillName')"
-          :placeholder="t('skills.form.skillNamePlaceholder')"
-          required
-        />
+          <!-- Description -->
+          <van-field
+            v-model="formDraft.description"
+            :label="t('skills.form.skillDescription')"
+            :placeholder="t('skills.form.skillDescriptionPlaceholder')"
+          />
 
-        <!-- Description -->
-        <van-field
-          v-model="formDraft.description"
-          :label="t('skills.form.skillDescription')"
-          :placeholder="t('skills.form.skillDescriptionPlaceholder')"
-        />
+          <!-- Icon -->
+          <van-field :label="t('skills.form.skillIcon')">
+            <template #input>
+              <div class="icon-picker">
+                <span
+                  v-for="emoji in emojiOptions"
+                  :key="emoji"
+                  class="icon-option"
+                  :class="{ active: formDraft.icon === emoji }"
+                  @click="formDraft.icon = emoji"
+                >{{ emoji }}</span>
+              </div>
+            </template>
+          </van-field>
 
-        <!-- Icon -->
-        <van-field :label="t('skills.form.skillIcon')">
-          <template #input>
-            <div class="icon-picker">
-              <span
-                v-for="emoji in emojiOptions"
-                :key="emoji"
-                class="icon-option"
-                :class="{ active: formDraft.icon === emoji }"
-                @click="formDraft.icon = emoji"
-              >{{ emoji }}</span>
-            </div>
-          </template>
-        </van-field>
+          <!-- Color -->
+          <van-field :label="t('skills.form.skillColor')">
+            <template #input>
+              <div class="color-picker">
+                <span
+                  v-for="color in colorOptions"
+                  :key="color"
+                  class="color-option"
+                  :class="{ active: formDraft.color === color }"
+                  :style="{ backgroundColor: color }"
+                  @click="formDraft.color = color"
+                />
+              </div>
+            </template>
+          </van-field>
 
-        <!-- Color -->
-        <van-field :label="t('skills.form.skillColor')">
-          <template #input>
-            <div class="color-picker">
-              <span
-                v-for="color in colorOptions"
-                :key="color"
-                class="color-option"
-                :class="{ active: formDraft.color === color }"
-                :style="{ backgroundColor: color }"
-                @click="formDraft.color = color"
+          <!-- Input Mode -->
+          <van-field :label="t('skills.form.skillInputMode')">
+            <template #input>
+              <van-radio-group v-model="formDraft.input_mode" direction="horizontal">
+                <van-radio name="trigger">{{ t('skills.form.inputModeTrigger') }}</van-radio>
+                <van-radio name="free_text">{{ t('skills.form.inputModeFreeText') }}</van-radio>
+              </van-radio-group>
+            </template>
+          </van-field>
+
+          <!-- Prompt Content -->
+          <van-field
+            v-model="formDraft.prompt_content"
+            type="textarea"
+            :label="t('skills.form.skillPrompt')"
+            :placeholder="t('skills.form.skillPromptPlaceholder')"
+            :autosize="{ minHeight: 150 }"
+            required
+          />
+        </div>
+      </template>
+
+      <!-- Create mode: three tabs -->
+      <template v-else>
+        <van-tabs v-model:active="activeTab" sticky shrink>
+          <!-- Tab 1: Install -->
+          <van-tab :title="t('skills.tabs.install')">
+            <div class="tab-content">
+              <van-field
+                v-model="installCommand"
+                type="textarea"
+                :placeholder="t('skills.install.placeholder')"
+                :autosize="{ minHeight: 80, maxHeight: 200 }"
+                class="install-input"
               />
+              <van-button
+                block
+                type="primary"
+                :loading="installLoading"
+                :disabled="!installCommand.trim()"
+                @click="onInstall"
+              >
+                {{ t('skills.install.button') }}
+              </van-button>
             </div>
-          </template>
-        </van-field>
+          </van-tab>
 
-        <!-- Input Mode -->
-        <van-field :label="t('skills.form.skillInputMode')">
-          <template #input>
-            <van-radio-group v-model="formDraft.input_mode" direction="horizontal">
-              <van-radio name="trigger">{{ t('skills.form.inputModeTrigger') }}</van-radio>
-              <van-radio name="free_text">{{ t('skills.form.inputModeFreeText') }}</van-radio>
-            </van-radio-group>
-          </template>
-        </van-field>
+          <!-- Tab 2: AI Generate -->
+          <van-tab :title="t('skills.tabs.aiCreate')">
+            <div class="tab-content">
+              <van-field
+                v-model="aiDescription"
+                type="textarea"
+                :placeholder="t('skills.aiCreate.placeholder')"
+                :autosize="{ minHeight: 80, maxHeight: 200 }"
+                class="ai-input"
+              />
+              <van-button
+                block
+                type="primary"
+                :loading="aiLoading"
+                :disabled="!aiDescription.trim()"
+                @click="onAICreate"
+              >
+                {{ t('skills.aiCreate.button') }}
+              </van-button>
 
-        <!-- Prompt Content -->
-        <van-field
-          v-model="formDraft.prompt_content"
-          type="textarea"
-          :label="t('skills.form.skillPrompt')"
-          :placeholder="t('skills.form.skillPromptPlaceholder')"
-          :autosize="{ minHeight: 150 }"
-          required
-        />
-      </div>
+              <!-- Preview section -->
+              <div v-if="aiPreviewContent" class="ai-preview-section">
+                <div class="ai-preview-header">
+                  <span class="ai-preview-title">{{ t('skills.aiCreate.preview') }}</span>
+                  <span v-if="aiParsedName" class="ai-preview-name">{{ aiParsedName }}</span>
+                </div>
+                <pre class="ai-preview-content">{{ aiPreviewContent }}</pre>
+                <div class="ai-preview-meta">
+                  <van-field :label="t('skills.form.skillIcon')">
+                    <template #input>
+                      <div class="icon-picker">
+                        <span
+                          v-for="emoji in emojiOptions"
+                          :key="emoji"
+                          class="icon-option"
+                          :class="{ active: formDraft.icon === emoji }"
+                          @click="formDraft.icon = emoji"
+                        >{{ emoji }}</span>
+                      </div>
+                    </template>
+                  </van-field>
+                  <van-field :label="t('skills.form.skillColor')">
+                    <template #input>
+                      <div class="color-picker">
+                        <span
+                          v-for="color in colorOptions"
+                          :key="color"
+                          class="color-option"
+                          :class="{ active: formDraft.color === color }"
+                          :style="{ backgroundColor: color }"
+                          @click="formDraft.color = color"
+                        />
+                      </div>
+                    </template>
+                  </van-field>
+                </div>
+                <van-button
+                  block
+                  type="primary"
+                  :loading="saving"
+                  :disabled="!aiParsedName"
+                  @click="onAISave"
+                >
+                  {{ t('skills.aiCreate.confirm') }}
+                </van-button>
+              </div>
+            </div>
+          </van-tab>
+
+          <!-- Tab 3: Manual Edit -->
+          <van-tab :title="t('skills.tabs.manual')">
+            <div class="tab-content">
+              <van-field
+                v-model="formDraft.skill_id"
+                :label="t('skills.form.skillId')"
+                :placeholder="t('skills.form.skillIdPlaceholder')"
+                :error-message="skillIdError"
+                @update:model-value="validateSkillId"
+              />
+
+              <van-field
+                v-model="formDraft.name"
+                :label="t('skills.form.skillName')"
+                :placeholder="t('skills.form.skillNamePlaceholder')"
+                required
+              />
+
+              <van-field
+                v-model="formDraft.description"
+                :label="t('skills.form.skillDescription')"
+                :placeholder="t('skills.form.skillDescriptionPlaceholder')"
+              />
+
+              <van-field :label="t('skills.form.skillIcon')">
+                <template #input>
+                  <div class="icon-picker">
+                    <span
+                      v-for="emoji in emojiOptions"
+                      :key="emoji"
+                      class="icon-option"
+                      :class="{ active: formDraft.icon === emoji }"
+                      @click="formDraft.icon = emoji"
+                    >{{ emoji }}</span>
+                  </div>
+                </template>
+              </van-field>
+
+              <van-field :label="t('skills.form.skillColor')">
+                <template #input>
+                  <div class="color-picker">
+                    <span
+                      v-for="color in colorOptions"
+                      :key="color"
+                      class="color-option"
+                      :class="{ active: formDraft.color === color }"
+                      :style="{ backgroundColor: color }"
+                      @click="formDraft.color = color"
+                    />
+                  </div>
+                </template>
+              </van-field>
+
+              <van-field :label="t('skills.form.skillInputMode')">
+                <template #input>
+                  <van-radio-group v-model="formDraft.input_mode" direction="horizontal">
+                    <van-radio name="trigger">{{ t('skills.form.inputModeTrigger') }}</van-radio>
+                    <van-radio name="free_text">{{ t('skills.form.inputModeFreeText') }}</van-radio>
+                  </van-radio-group>
+                </template>
+              </van-field>
+
+              <van-field
+                v-model="formDraft.prompt_content"
+                type="textarea"
+                :label="t('skills.form.skillPrompt')"
+                :placeholder="t('skills.form.skillPromptPlaceholder')"
+                :autosize="{ minHeight: 150 }"
+                required
+              />
+
+              <van-button
+                block
+                type="primary"
+                :loading="saving"
+                :disabled="!formValid"
+                @click="onSubmitForm"
+              >
+                {{ t('skills.form.createBtn') }}
+              </van-button>
+            </div>
+          </van-tab>
+        </van-tabs>
+      </template>
     </van-popup>
   </div>
 </template>
@@ -168,6 +340,9 @@ import {
   updateCustomSkill,
   deleteCustomSkill,
   toggleSkill,
+  installSkill,
+  aiCreateSkill,
+  saveRawSkill,
   type SkillDefinition,
   type SkillListResponse,
 } from '@/api/ai'
@@ -184,6 +359,20 @@ const isEditing = ref(false)
 const editingSkillId = ref<string | null>(null)
 const saving = ref(false)
 const skillIdError = ref('')
+
+// Tab state
+const activeTab = ref(0) // 0: install, 1: aiCreate, 2: manual
+
+// Install tab state
+const installCommand = ref('')
+const installLoading = ref(false)
+
+// AI create tab state
+const aiDescription = ref('')
+const aiLoading = ref(false)
+const aiPreviewContent = ref('')
+const aiParsedName = ref<string | null>(null)
+const aiParsedDescription = ref<string | null>(null)
 
 // All builtin skills (including disabled ones for toggle display)
 const allBuiltinSkills = ref<SkillDefinition[]>([])
@@ -211,6 +400,12 @@ const builtinIds = ['alerts', 'allocation', 'disposal', 'liability', 'report', '
 // Names reserved for system internal use; cannot be reused as custom skill IDs.
 // Mirrors the backend's RESERVED_NAMES constant in ai_skills.py.
 const RESERVED_NAMES = ['chat', 'time_machine']
+
+const SKILL_ID_RE = /^[a-z][a-z0-9_-]*$/
+
+function deriveSlug(raw: string): string {
+  return raw.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+}
 
 // Computed
 const formValid = computed(() => {
@@ -281,16 +476,7 @@ async function onToggle(skillId: string, enabled: boolean) {
 function onCreateSkill() {
   isEditing.value = false
   editingSkillId.value = null
-  formDraft.value = {
-    skill_id: '',
-    name: '',
-    description: '',
-    icon: '✨',
-    color: '#6366f1',
-    input_mode: 'trigger',
-    prompt_content: '',
-  }
-  skillIdError.value = ''
+  resetCreateForm()
   showForm.value = true
 }
 
@@ -358,6 +544,96 @@ async function onDeleteSkill(skill: SkillDefinition) {
   } catch {
     // cancelled
   }
+}
+
+// Install tab methods
+async function onInstall() {
+  if (!installCommand.value.trim()) return
+  installLoading.value = true
+  try {
+    await installSkill(installCommand.value.trim())
+    showToast(t('skills.install.success'))
+    showForm.value = false
+    installCommand.value = ''
+    await loadSkills()
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { message?: string } } }
+    const message = error?.response?.data?.message
+    if (message?.includes('已存在')) {
+      showToast(t('skills.install.exists'))
+    } else {
+      showToast(t('skills.install.failed'))
+    }
+  } finally {
+    installLoading.value = false
+  }
+}
+
+// AI create tab methods
+async function onAICreate() {
+  if (!aiDescription.value.trim()) return
+  aiLoading.value = true
+  aiPreviewContent.value = ''
+  aiParsedName.value = null
+  aiParsedDescription.value = null
+  try {
+    const res = await aiCreateSkill(aiDescription.value.trim())
+    aiPreviewContent.value = res.content
+    aiParsedName.value = res.parsed_name
+    aiParsedDescription.value = res.parsed_description
+  } catch {
+    showToast(t('skills.aiCreate.failed'))
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+async function onAISave() {
+  if (!aiPreviewContent.value || !aiParsedName.value) return
+  const slug = deriveSlug(aiParsedName.value)
+  if (!slug || !SKILL_ID_RE.test(slug)) {
+    showToast(t('skills.aiCreate.invalidName'))
+    return
+  }
+  saving.value = true
+  try {
+    await saveRawSkill({
+      skill_id: slug,
+      content: aiPreviewContent.value,
+      icon: formDraft.value.icon,
+      color: formDraft.value.color,
+    })
+    showToast(t('skills.aiCreate.success'))
+    showForm.value = false
+    aiDescription.value = ''
+    aiPreviewContent.value = ''
+    aiParsedName.value = null
+    aiParsedDescription.value = null
+    await loadSkills()
+  } catch {
+    showToast(t('toast.operationFailed'))
+  } finally {
+    saving.value = false
+  }
+}
+
+function resetCreateForm() {
+  activeTab.value = 0
+  installCommand.value = ''
+  aiDescription.value = ''
+  aiPreviewContent.value = ''
+  aiParsedName.value = null
+  aiParsedDescription.value = null
+  formDraft.value = {
+    skill_id: '',
+    name: '',
+    description: '',
+    icon: '✨',
+    color: '#6366f1',
+    input_mode: 'trigger',
+    prompt_content: '',
+  }
+  skillIdError.value = ''
 }
 
 onMounted(loadSkills)
@@ -455,5 +731,55 @@ onMounted(loadSkills)
 .color-option.active {
   border-color: var(--van-text-color);
   box-shadow: 0 0 0 2px var(--van-background);
+}
+
+.tab-content {
+  padding: 16px;
+  padding-bottom: 40px;
+}
+
+.install-input,
+.ai-input {
+  margin-bottom: 16px;
+}
+
+.ai-preview-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--van-border-color);
+}
+
+.ai-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ai-preview-title {
+  font-size: 14px;
+  color: var(--van-text-color-2);
+}
+
+.ai-preview-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--van-primary-color);
+}
+
+.ai-preview-content {
+  background: var(--van-active-color);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+  max-height: 200px;
+  margin-bottom: 16px;
+}
+
+.ai-preview-meta {
+  margin-bottom: 16px;
 }
 </style>
