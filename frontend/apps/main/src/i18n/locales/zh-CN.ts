@@ -1925,6 +1925,7 @@ export default {
     timeMachineCardTitle: '资产时光机',
     timeMachineCardDesc: 'What-if 模拟、财务推演',
     numinaAgentDesc: '您的家庭资产智能助手，提供全方位的资产分析与建议',
+    myAgentsAndApps: '我的智能体以及分析应用',
     lastReportAge: '{age}',
     justNow: '刚刚',
     minutesAgo: '{minutes} 分钟前',

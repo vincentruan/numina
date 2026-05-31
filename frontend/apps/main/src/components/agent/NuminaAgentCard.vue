@@ -11,45 +11,40 @@ const emit = defineEmits<{
 
 <template>
   <div class="numina-agent-card" role="button" tabindex="0" @click="emit('consult')">
-    <!-- Full-width featured card for 数鸣 agent -->
+    <!-- Full-width featured card for 数鸣 agent - horizontal layout -->
     <div class="numina-card__inner">
-      <!-- AI brain icon (from nav bar) -->
+      <!-- Left: AI brain icon (from nav bar) -->
       <div class="numina-card__icon">
         <AIBrainIcon :active="false" />
       </div>
 
-      <!-- Colorful name: 数 · 鸣 (zh) / numin~A~gent (en) -->
-      <div class="numina-card__name">
-        <template v-if="locale === 'zh-CN'">
-          <span class="numina-char nc1">数</span>
-          <span class="numina-char dot">·</span>
-          <span class="numina-char nc2">鸣</span>
-        </template>
-        <template v-else>
-          <span class="numina-char nc1">n</span>
-          <span class="numina-char nc2">u</span>
-          <span class="numina-char nc3">m</span>
-          <span class="numina-char nc4">i</span>
-          <span class="numina-char nc5">n</span>
-          <span class="numina-char tilde">~</span>
-          <span class="numina-char nc6">A</span>
-          <span class="numina-char tilde">~</span>
-          <span class="numina-char nc7">g</span>
-          <span class="numina-char nc8">e</span>
-          <span class="numina-char nc9">n</span>
-          <span class="numina-char nc1">t</span>
-        </template>
-      </div>
+      <!-- Right: Colorful name + description -->
+      <div class="numina-card__content">
+        <!-- Colorful name: 数 · 鸣 (zh) / numin~A~gent (en) -->
+        <div class="numina-card__name">
+          <template v-if="locale === 'zh-CN'">
+            <span class="numina-char nc1">数</span>
+            <span class="numina-char dot">·</span>
+            <span class="numina-char nc2">鸣</span>
+          </template>
+          <template v-else>
+            <span class="numina-char nc1">n</span>
+            <span class="numina-char nc2">u</span>
+            <span class="numina-char nc3">m</span>
+            <span class="numina-char nc4">i</span>
+            <span class="numina-char nc5">n</span>
+            <span class="numina-char tilde">~</span>
+            <span class="numina-char nc6">A</span>
+            <span class="numina-char tilde">~</span>
+            <span class="numina-char nc7">g</span>
+            <span class="numina-char nc8">e</span>
+            <span class="numina-char nc9">n</span>
+            <span class="numina-char nc1">t</span>
+          </template>
+        </div>
 
-      <!-- Description -->
-      <div class="numina-card__desc">{{ t('aiHub.numinaAgentDesc') }}</div>
-
-      <!-- CTA -->
-      <div class="numina-card__cta">
-        <span>{{ t('agents.consult') }}</span>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="9 18 15 12 9 6"/>
-        </svg>
+        <!-- Description -->
+        <div class="numina-card__desc">{{ t('aiHub.numinaAgentDesc') }}</div>
       </div>
     </div>
   </div>
@@ -77,20 +72,21 @@ const emit = defineEmits<{
   transform: scale(0.98);
 }
 
+/* Horizontal layout: icon left, name/desc right */
 .numina-card__inner {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  padding: 20px 16px 16px;
-  gap: 8px;
+  padding: 16px;
+  gap: 16px;
 }
 
-/* Icon wrapper - adjust the AIBrainIcon sizing */
+/* Icon wrapper */
 .numina-card__icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: scale(1.2);
+  flex-shrink: 0;
 }
 
 .numina-card__icon :deep(.ai-button-wrapper) {
@@ -98,15 +94,24 @@ const emit = defineEmits<{
 }
 
 .numina-card__icon :deep(.ai-button-3d) {
-  width: 52px;
-  height: 52px;
+  width: 48px;
+  height: 48px;
+}
+
+/* Right content area */
+.numina-card__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
 }
 
 /* Colorful name with rainbow colors (adapted from LoginPage subtitle) */
 .numina-card__name {
   font-family: 'ZCOOL KuaiLe', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  font-size: 24px;
-  letter-spacing: 0.12em;
+  font-size: 22px;
+  letter-spacing: 0.08em;
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -158,20 +163,8 @@ const emit = defineEmits<{
 }
 
 .numina-card__desc {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
-  text-align: center;
-  max-width: 280px;
   line-height: 1.4;
-}
-
-.numina-card__cta {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--van-primary-color);
-  margin-top: 4px;
 }
 </style>

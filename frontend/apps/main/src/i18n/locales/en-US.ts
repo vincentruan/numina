@@ -1649,6 +1649,7 @@ export default {
     timeMachineCardTitle: 'Time Machine',
     timeMachineCardDesc: 'What-if simulation, financial projection',
     numinaAgentDesc: 'Your family asset intelligent assistant, providing comprehensive analysis and advice',
+    myAgentsAndApps: 'My Agents & Analysis Apps',
     lastReportAge: '{age}',
     justNow: 'Just now',
     minutesAgo: '{minutes} min ago',
