@@ -13,19 +13,19 @@ def mock_db():
 
 
 def test_session_binds_family_id_at_construction():
-    session = MCPSession(family_id="100")
+    session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     assert session.family_id == "100"
 
 
 def test_session_family_id_is_immutable():
-    session = MCPSession(family_id="100")
+    session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     with pytest.raises(AttributeError):
-        session.family_id = "200"
+        session._undeclared = "200"  # type: ignore[attr-defined]
 
 
 @pytest.mark.asyncio
 async def test_list_tools_returns_five_tools():
-    session = MCPSession(family_id="100")
+    session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     names = {t.name for t in tools}
     assert names == {
@@ -39,7 +39,7 @@ async def test_list_tools_returns_five_tools():
 
 @pytest.mark.asyncio
 async def test_no_tool_exposes_family_id_parameter():
-    session = MCPSession(family_id="100")
+    session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     tools = await session.list_tools()
     for tool in tools:
         schema = tool.inputSchema
@@ -49,11 +49,11 @@ async def test_no_tool_exposes_family_id_parameter():
 
 @pytest.mark.asyncio
 async def test_get_family_overview_uses_bound_family_id(mock_db):
-    session = MCPSession(family_id="100")
+    session = MCPSession(family_id="100", caller_user_id="u1", caller_role="owner")
     with patch("apps.backend.app.services.mcp_session.SessionLocal") as mock_session_local:
         mock_session_local.return_value.__enter__ = MagicMock(return_value=mock_db)
         mock_session_local.return_value.__exit__ = MagicMock(return_value=False)
-        with patch("apps.backend.app.services.mcp_session._get_owner_user") as mock_user:
+        with patch("apps.backend.app.services.mcp_session._get_caller_user") as mock_user:
             mock_user.return_value = MagicMock(id="u1", family_id="100")
             with patch("apps.backend.app.services.dashboard.get_overview") as mock_get_overview:
                 mock_get_overview.return_value = {"net_worth": 1000000}

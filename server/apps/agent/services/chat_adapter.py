@@ -81,6 +81,7 @@ class ChatAdapter:
         deep_think: bool = False,
         web_search: bool = False,
         enable_thinking: bool = False,
+        caller_user_id: str | None = None,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Stream chat response via DeerFlow with family MCP server injected.
 
@@ -94,12 +95,18 @@ class ChatAdapter:
             system_prompt += "\n\n## 联网搜索\n\n用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
         else:
             system_prompt += "\n\n## 联网搜索\n\n用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+        mcp_headers: dict[str, str] = {
+            "X-Agent-Token": self._internal_token,
+            "X-Family-Id": family_id,
+        }
+        if caller_user_id:
+            mcp_headers["X-Caller-User-Id"] = caller_user_id
         mcp_servers = [
             {
                 "name": "numina-family-data",
                 "url": self._mcp_url(family_id),
                 "transport": "sse",
-                "headers": {"X-Agent-Token": self._internal_token},
+                "headers": mcp_headers,
             }
         ]
 

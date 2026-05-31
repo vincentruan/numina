@@ -230,6 +230,11 @@ async def lifespan(app: FastAPI):
     if settings.ENABLE_SECURITY_LOGGING:
         logger.info("安全日志已启用（使用统一日志配置）")
 
+    from apps.backend.app.services.mcp_tool_registry import validate_registry
+
+    validate_registry()
+    logger.info("MCP tool registry validated")
+
     yield
 
 

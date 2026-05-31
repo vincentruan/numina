@@ -451,6 +451,27 @@ def _generate_temp_config(
     with open(temp_config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 
+    # Generate extensions_config.json for DeerFlow's ExtensionsConfig.from_file()
+    # DeerFlow reads MCP server configs from this file (not from config.yaml).
+    # The DEER_FLOW_EXTENSIONS_CONFIG_PATH env var is set in adapter._produce()
+    # to point here, under _init_lock serialization.
+    if mcp_servers:
+        import json as _json
+
+        mcp_servers_dict = {}
+        for srv in mcp_servers:
+            name = srv.get("name", "default")
+            mcp_servers_dict[name] = {
+                "type": srv.get("transport", "sse"),
+                "url": srv.get("url", ""),
+                "headers": srv.get("headers", {}),
+                "enabled": True,
+            }
+        extensions_data = {"mcpServers": mcp_servers_dict}
+        extensions_path = temp_dir / "extensions_config.json"
+        with open(extensions_path, "w", encoding="utf-8") as f:
+            _json.dump(extensions_data, f, ensure_ascii=False)
+
     return temp_config_path
 
 

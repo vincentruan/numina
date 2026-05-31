@@ -15,7 +15,10 @@ import traceback
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Literal
+
+from deerflow.config.app_config import reload_app_config
 
 from apps.agent.schemas.context import RedactedContext
 from apps.agent.services.deerflow_adapter.exceptions import (
@@ -28,7 +31,6 @@ from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     get_family_adapter,
     invalidate_family_adapter,
 )
-from deerflow.config.app_config import reload_app_config
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,7 @@ class StreamChunk:
 # not at import time, to avoid circular imports and allow test overrides.
 _executor: ThreadPoolExecutor | None = None
 _semaphore: asyncio.Semaphore | None = None
-_init_lock = threading.Lock()
+_init_lock = threading.Lock()  # noqa: F811 — intentional redefinition; module-level lock used by _produce()
 
 # Separate lock for SQLite checkpointer writes — prevents SQLITE_BUSY under concurrency.
 # The harness uses SqliteSaver (langgraph-checkpoint-sqlite) which does not handle
@@ -231,6 +233,13 @@ class DeerFlowAdapter:
                         # Set DEER_FLOW_CONFIG_PATH env var so get_app_config() resolves to our temp config
                         prev_config_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
                         os.environ["DEER_FLOW_CONFIG_PATH"] = str(self._config_path)
+                        # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH so ExtensionsConfig.from_file()
+                        # reads our per-family extensions_config.json (contains MCP headers
+                        # including X-Caller-User-Id for caller-bound principal).
+                        extensions_path = Path(self._config_path).parent / "extensions_config.json"
+                        prev_extensions_path = os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
+                        if extensions_path.exists():
+                            os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
                         try:
                             reload_app_config(str(self._config_path))
                             message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
@@ -242,6 +251,10 @@ class DeerFlowAdapter:
                                 os.environ["DEER_FLOW_CONFIG_PATH"] = prev_config_path
                             else:
                                 os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+                            if prev_extensions_path is not None:
+                                os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_path
+                            else:
+                                os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
                 else:
                     # Global config mode - no serialization needed
                     message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
