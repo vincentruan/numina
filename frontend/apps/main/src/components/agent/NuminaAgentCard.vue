@@ -7,15 +7,19 @@ const { t, locale } = useI18n()
 const emit = defineEmits<{
   consult: []
 }>()
+
+function handleClick() {
+  emit('consult')
+}
 </script>
 
 <template>
-  <div class="numina-agent-card" role="button" tabindex="0" @click="emit('consult')">
+  <div class="numina-agent-card" role="button" tabindex="0" @click="handleClick" @keydown.enter="handleClick" @keydown.space.prevent="handleClick">
     <!-- Full-width featured card for 数鸣 agent - horizontal layout -->
     <div class="numina-card__inner">
-      <!-- Left: AI brain icon (from nav bar) - colorful active state -->
+      <!-- Left: AI brain icon (from nav bar) - colorful active state with breathing effect -->
       <div class="numina-card__icon">
-        <AIBrainIcon :active="true" />
+        <AIBrainIcon :active="true" class="breathing-icon" />
       </div>
 
       <!-- Right: Colorful name + description -->
@@ -96,6 +100,28 @@ const emit = defineEmits<{
 .numina-card__icon :deep(.ai-button-3d) {
   width: 48px;
   height: 48px;
+}
+
+/* Breathing effect for the colorful icon */
+.breathing-icon :deep(.ai-button-3d) {
+  animation: breathe 2.5s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing-icon :deep(.ai-button-3d) {
+    animation: none;
+  }
 }
 
 /* Right content area */

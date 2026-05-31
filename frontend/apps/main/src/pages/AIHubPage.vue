@@ -171,89 +171,27 @@
       </div>
     </div>
 
-    <!-- Chat input with toolbar -->
+    <!-- Chat input with integrated toolbar -->
     <div class="chat-entry">
-      <!-- Toolbar: agent selector, deep think, web search, upload -->
-      <div class="chat-toolbar">
-        <!-- Agent selector button -->
-        <button
-          class="toolbar-btn"
-          :class="{ 'toolbar-btn--active': showAgentPicker }"
-          :aria-label="t('aiHub.changeRecipient')"
-          @click="showAgentPicker = true"
-        >
+      <div class="chat-input-container">
+        <!-- Left top: AI logo -->
+        <div class="chat-logo">
           <AIBrainIcon :active="selectedAgent?.agent_name === NUMINA_AGENT_NAME" />
-        </button>
+        </div>
 
-        <!-- Deep think toggle -->
-        <button
-          class="toolbar-btn"
-          :class="{ 'toolbar-btn--active': deepThink }"
-          :aria-pressed="deepThink"
-          :aria-label="t('aiChat.deepThink')"
-          @click="deepThink = !deepThink"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
-            <path d="M9 21h6"/>
-          </svg>
-        </button>
+        <!-- Input area -->
+        <div class="chat-input-area-wrapper">
+          <textarea
+            v-model="chatInput"
+            class="chat-textarea"
+            :placeholder="chatPlaceholder"
+            :disabled="!selectedAgent"
+            rows="3"
+            @keydown.enter.exact.prevent="submitChat"
+          />
+        </div>
 
-        <!-- Web search toggle -->
-        <button
-          class="toolbar-btn"
-          :class="{ 'toolbar-btn--active': webSearch }"
-          :aria-pressed="webSearch"
-          :aria-label="t('aiChat.webSearch')"
-          @click="webSearch = !webSearch"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-        </button>
-
-        <!-- Upload file -->
-        <button
-          class="toolbar-btn"
-          :aria-label="t('aiChat.panelFile')"
-          @click="triggerFileUpload"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <line x1="12" y1="18" x2="12" y2="12"/>
-            <line x1="9" y1="15" x2="15" y2="15"/>
-          </svg>
-        </button>
-
-        <!-- Upload photo / camera -->
-        <button
-          class="toolbar-btn"
-          :aria-label="t('aiChat.panelCamera')"
-          @click="triggerPhotoUpload"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </button>
-
-        <!-- Hidden file inputs -->
-        <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
-        <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
-      </div>
-
-      <!-- Larger input box -->
-      <div class="chat-input-box">
-        <textarea
-          v-model="chatInput"
-          class="chat-input-area"
-          :placeholder="t('aiHub.chatPlaceholder')"
-          :disabled="!selectedAgent"
-          rows="2"
-          @keydown.enter.exact.prevent="submitChat"
-        />
+        <!-- Right side: send button -->
         <button
           class="chat-send-btn"
           :class="{ 'chat-send-btn--active': chatInput.trim() }"
@@ -266,13 +204,85 @@
             <polygon points="22 2 15 22 11 13 2 9 22 2"/>
           </svg>
         </button>
+
+        <!-- Bottom toolbar inside input box -->
+        <div class="chat-toolbar-inner">
+          <!-- Agent selector button (only clickable if there are custom agents) -->
+          <button
+            class="toolbar-icon"
+            :class="{ 'toolbar-icon--active': showAgentPicker }"
+            :aria-label="t('aiHub.selectAgent')"
+            :disabled="!hasCustomAgents"
+            @click="hasCustomAgents && (showAgentPicker = true)"
+          >
+            <AIBrainIcon :active="selectedAgent?.agent_name === NUMINA_AGENT_NAME" />
+          </button>
+
+          <!-- Deep think toggle -->
+          <button
+            class="toolbar-icon"
+            :class="{ 'toolbar-icon--active': deepThink }"
+            :aria-pressed="deepThink"
+            :aria-label="t('aiChat.deepThink')"
+            @click="deepThink = !deepThink"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+              <path d="M9 21h6"/>
+            </svg>
+          </button>
+
+          <!-- Web search toggle -->
+          <button
+            class="toolbar-icon"
+            :class="{ 'toolbar-icon--active': webSearch }"
+            :aria-pressed="webSearch"
+            :aria-label="t('aiChat.webSearch')"
+            @click="webSearch = !webSearch"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+            </svg>
+          </button>
+
+          <!-- Upload file -->
+          <button
+            class="toolbar-icon"
+            :aria-label="t('aiChat.panelFile')"
+            @click="triggerFileUpload"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="12" y1="18" x2="12" y2="12"/>
+              <line x1="9" y1="15" x2="15" y2="15"/>
+            </svg>
+          </button>
+
+          <!-- Upload photo / camera -->
+          <button
+            class="toolbar-icon"
+            :aria-label="t('aiChat.panelCamera')"
+            @click="triggerPhotoUpload"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Hidden file inputs -->
+        <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
+        <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
       </div>
     </div>
 
-    <!-- Agent picker action sheet -->
+    <!-- Agent picker action sheet (only shows actual agents, not Time Machine) -->
     <van-action-sheet
       v-model:show="showAgentPicker"
-      :title="t('aiHub.changeRecipient')"
+      :title="t('aiHub.selectAgent')"
     >
       <van-cell-group inset>
         <van-cell
@@ -349,11 +359,20 @@ const enabledCustomAgents = computed(() =>
   agentStore.customAgents.filter((a) => a.is_enabled),
 )
 
+// Check if user has custom agents (for agent selector button state)
+const hasCustomAgents = computed(() => enabledCustomAgents.value.length > 0)
+
 // Agent choices for picker - only actual agents, not apps like Time Machine
 const agentChoices = computed<Agent[]>(() => [
   ...agentStore.systemAgents.filter((a) => a.is_enabled),
   ...agentStore.customAgents.filter((a) => a.is_enabled),
 ])
+
+// Dynamic placeholder based on selected agent
+const chatPlaceholder = computed(() => {
+  if (!selectedAgent.value) return t('aiHub.chatPlaceholderNoAgent')
+  return t('aiHub.chatPlaceholderWithAgent', { name: selectedAgent.value.display_name })
+})
 
 // Default selected agent to 数鸣 once loaded
 watch(
@@ -1091,98 +1110,75 @@ onMounted(async () => {
   border-top-color: rgba(255, 255, 255, 0.10);
 }
 
-/* ── Chat toolbar ── */
-.chat-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-bottom: 8px;
-}
-
-.toolbar-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: none;
-  background: rgba(0, 0, 0, 0.04);
-  color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-
-[data-theme='dark'] .toolbar-btn {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.toolbar-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
-}
-
-[data-theme='dark'] .toolbar-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.toolbar-btn--active {
-  background: rgba(99, 102, 241, 0.15);
-  color: #6366f1;
-}
-
-.toolbar-btn :deep(.ai-button-wrapper) {
-  transform: translateY(0) scale(0.65);
-}
-
-.toolbar-btn :deep(.ai-button-3d) {
-  width: 32px;
-  height: 32px;
-}
-
-/* ── Chat input box (larger) ── */
-.chat-input-box {
-  display: flex;
-  align-items: flex-end;
+/* ── Chat input container (integrated layout) ── */
+.chat-input-container {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-rows: auto auto;
   gap: 8px;
   background: var(--card-bg);
   border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: 16px;
-  padding: 12px;
+  border-radius: 20px;
+  padding: 12px 16px 10px;
   box-shadow: rgba(1, 1, 32, 0.06) 0px 2px 8px;
 }
 
-[data-theme='dark'] .chat-input-box {
+[data-theme='dark'] .chat-input-container {
   border-color: rgba(255, 255, 255, 0.15);
   box-shadow: rgba(1, 1, 32, 0.3) 0px 2px 8px;
 }
 
-.chat-input-area {
-  flex: 1;
+/* Left top: AI logo */
+.chat-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-right: 8px;
+}
+
+.chat-logo :deep(.ai-button-wrapper) {
+  transform: translateY(0) scale(0.55);
+}
+
+.chat-logo :deep(.ai-button-3d) {
+  width: 32px;
+  height: 32px;
+}
+
+/* Input textarea area */
+.chat-input-area-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chat-textarea {
+  width: 100%;
   border: none;
   background: transparent;
   font-size: 15px;
   color: var(--text-primary);
   outline: none;
   resize: none;
-  min-height: 48px;
-  max-height: 120px;
+  min-height: 72px;
+  max-height: 150px;
   line-height: 1.5;
   padding: 4px 0;
 }
 
-.chat-input-area::placeholder {
+.chat-textarea::placeholder {
   color: var(--text-secondary);
 }
 
-.chat-input-area:disabled {
+.chat-textarea:disabled {
   opacity: 0.5;
 }
 
+/* Send button */
 .chat-send-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
   border: none;
   background: rgba(0, 0, 0, 0.06);
   color: rgba(0, 0, 0, 0.4);
@@ -1192,6 +1188,7 @@ onMounted(async () => {
   cursor: pointer;
   transition: background 0.2s, color 0.2s, transform 0.15s;
   flex-shrink: 0;
+  align-self: flex-end;
 }
 
 [data-theme='dark'] .chat-send-btn {
@@ -1212,6 +1209,61 @@ onMounted(async () => {
 .chat-send-btn:disabled {
   cursor: default;
   opacity: 0.4;
+}
+
+/* Bottom toolbar inside input box */
+.chat-toolbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  grid-column: 1 / -1;
+  padding-top: 4px;
+}
+
+.toolbar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+[data-theme='dark'] .toolbar-icon {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.toolbar-icon:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+[data-theme='dark'] .toolbar-icon:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.toolbar-icon--active {
+  background: rgba(99, 102, 241, 0.15);
+  color: #6366f1;
+}
+
+.toolbar-icon:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.toolbar-icon :deep(.ai-button-wrapper) {
+  transform: translateY(0) scale(0.55);
+}
+
+.toolbar-icon :deep(.ai-button-3d) {
+  width: 28px;
+  height: 28px;
 }
 
 /* ── Agent picker ── */
