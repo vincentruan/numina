@@ -3,6 +3,7 @@
 import logging
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult, require_owner
@@ -16,6 +17,7 @@ from apps.backend.app.schemas.web_search_provider import (
     WebSearchProviderTemplate,
     WebSearchProviderUpdate,
     WebSearchStatusResponse,
+    WebSearchTestResponse,
 )
 from apps.backend.app.services.ai_crypto import encrypt_api_key
 from apps.backend.app.services.security_log import _log_security_event
@@ -28,16 +30,12 @@ router = APIRouter(prefix="/ai/web-search", tags=["ai-web-search"])
 logger = logging.getLogger(__name__)
 
 
-def _get_provider_or_404(provider_id: str, family_id: int, db: Session) -> FamilyWebSearchProvider:
-    """Parse provider_id and fetch provider, raising 404 if not found."""
-    try:
-        pid = int(provider_id)
-    except ValueError:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
+def _get_provider_or_404(provider_id: int, family_id: int, db: Session) -> FamilyWebSearchProvider:
+    """Fetch provider by id, raising 404 if not found."""
     provider = (
         db.query(FamilyWebSearchProvider)
         .filter(
-            FamilyWebSearchProvider.id == pid,
+            FamilyWebSearchProvider.id == provider_id,
             FamilyWebSearchProvider.family_id == family_id,
         )
         .first()
@@ -119,11 +117,11 @@ def create_provider(
     display_order = payload.display_order
     if display_order is None:
         max_order = (
-            db.query(FamilyWebSearchProvider)
+            db.query(func.coalesce(func.max(FamilyWebSearchProvider.display_order), -1))
             .filter(FamilyWebSearchProvider.family_id == current_user.family_id)
-            .count()
+            .scalar()
         )
-        display_order = max_order
+        display_order = max_order + 1
 
     # Create provider
     provider = FamilyWebSearchProvider(
@@ -151,7 +149,7 @@ def create_provider(
 
 @router.put("/{provider_id}", response_model=WebSearchProviderResponse)
 def update_provider(
-    provider_id: str,  # String from URL, convert to int
+    provider_id: int,
     payload: WebSearchProviderUpdate,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
@@ -193,7 +191,7 @@ def update_provider(
 
 @router.delete("/{provider_id}", status_code=204)
 def delete_provider(
-    provider_id: str,  # String from URL, convert to int
+    provider_id: int,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> None:
@@ -213,7 +211,7 @@ def delete_provider(
 
 @router.post("/{provider_id}/enable", response_model=WebSearchProviderResponse)
 def enable_provider(
-    provider_id: str,  # String from URL, convert to int
+    provider_id: int,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> WebSearchProviderResponse:
@@ -241,7 +239,7 @@ def enable_provider(
 
 @router.post("/{provider_id}/disable", response_model=WebSearchProviderResponse)
 def disable_provider(
-    provider_id: str,  # String from URL, convert to int
+    provider_id: int,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> WebSearchProviderResponse:
@@ -262,17 +260,14 @@ def disable_provider(
     return WebSearchProviderResponse.model_validate(provider)
 
 
-@router.post("/{provider_id}/test")
+@router.post("/{provider_id}/test", response_model=WebSearchTestResponse)
 def test_provider(
-    provider_id: str,  # String from URL, convert to int
+    provider_id: int,  # Native int from FastAPI path param
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
-) -> dict:
+) -> WebSearchTestResponse:
     """Test web search provider connectivity (stub for now, owner only)."""
     _get_provider_or_404(provider_id, current_user.family_id, db)
 
     # Stub implementation - will be implemented in Task 6
-    return {
-        "success": False,
-        "message": "测试功能尚未实现",
-    }
+    return WebSearchTestResponse(success=False, message="测试功能尚未实现")

@@ -2334,5 +2334,6 @@ export default {
     testFailed: '❌ 连通性测试失败',
     confirmDelete: '⚠️ 确定要删除「{name}」吗？',
     noProviderToast: '⚠️ 请先在设置→AI助手→联网搜索中启用至少一个搜索源',
+    saveFailed: '❌ 保存失败',
   },
 }

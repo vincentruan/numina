@@ -2016,5 +2016,6 @@ export default {
     testFailed: '❌ Connection test failed',
     confirmDelete: '⚠️ Are you sure you want to delete "{name}"?',
     noProviderToast: '⚠️ Please enable at least one search source in Settings → AI → Web Search',
+    saveFailed: '❌ Save failed',
   },
 }

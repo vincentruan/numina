@@ -702,11 +702,18 @@ async def stream_agent_dispatch(
                 provider_id = first_provider.get("provider_id")
                 if provider_id:
                     # Fire-and-forget circuit report — never blocks the error response
-                    with contextlib.suppress(Exception):
+                    try:
                         await report_web_search_circuit(
                             family_id=family_id,
                             provider_id=int(provider_id),
                             failure_type=_classify_stream_error(e),
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "circuit report failed family=%s provider=%s: %s",
+                            family_id,
+                            provider_id,
+                            type(exc).__name__,
                         )
 
             yield builder_events.error(

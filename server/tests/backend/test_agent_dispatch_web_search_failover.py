@@ -87,7 +87,6 @@ def test_half_open_recovery_flow(db, family_providers):
 
     db.refresh(tavily)
     assert tavily.circuit_state == "open"
-    assert tavily.recovery_schedule is not None
 
     # Manually set last_failure_at to 61 seconds ago (bypass the 60s wait)
     tavily.last_failure_at = datetime.now() - timedelta(seconds=61)

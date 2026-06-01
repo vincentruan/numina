@@ -12,7 +12,7 @@ HALF_OPEN_SUCCESS_THRESHOLD = 3
 class WebSearchCircuitService:
     @staticmethod
     def report_failure(provider_id: int, failure_type: str, db: Session) -> None:
-        provider = db.query(FamilyWebSearchProvider).filter_by(id=provider_id).first()
+        provider = db.query(FamilyWebSearchProvider).filter_by(id=provider_id).with_for_update().first()
         if not provider:
             return
 
@@ -31,19 +31,15 @@ class WebSearchCircuitService:
         provider.last_failure_at = datetime.now()
         provider.failure_count += 1
 
-        if failure_type.startswith("permanent_"):
+        if failure_type.startswith("permanent_") or provider.failure_count >= TRANSIENT_FAILURE_THRESHOLD:
             provider.circuit_state = "open"
             provider.circuit_reason = failure_type
-        elif provider.failure_count >= TRANSIENT_FAILURE_THRESHOLD:
-            provider.circuit_state = "open"
-            provider.circuit_reason = failure_type
-            provider.recovery_schedule = ":01,:31"
 
         db.commit()
 
     @staticmethod
     def report_success(provider_id: int, db: Session) -> None:
-        provider = db.query(FamilyWebSearchProvider).filter_by(id=provider_id).first()
+        provider = db.query(FamilyWebSearchProvider).filter_by(id=provider_id).with_for_update().first()
         if not provider:
             return
 
@@ -60,16 +56,17 @@ class WebSearchCircuitService:
         elif provider.circuit_state == "closed":
             if provider.failure_count > 0:
                 provider.failure_count = max(0, provider.failure_count - 1)
+                if provider.failure_count == 0:
+                    provider.last_failure_type = None
+                    provider.last_failure_at = None
+                    provider.circuit_reason = None
 
         db.commit()
 
     @staticmethod
     def check_recovery(provider_id: int, db: Session) -> bool:
-        provider = db.query(FamilyWebSearchProvider).filter_by(id=provider_id).first()
+        provider = db.query(FamilyWebSearchProvider).filter_by(id=provider_id).with_for_update().first()
         if not provider or provider.circuit_state != "open":
-            return False
-
-        if not provider.recovery_schedule:
             return False
 
         if provider.circuit_reason and provider.circuit_reason.startswith("permanent_"):

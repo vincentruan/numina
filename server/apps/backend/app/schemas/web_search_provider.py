@@ -59,3 +59,9 @@ class WebSearchStatusResponse(BaseModel):
     """Status response showing enabled count and availability."""
     has_web_search: bool
     enabled_count: int
+
+
+class WebSearchTestResponse(BaseModel):
+    """Response for provider connectivity test."""
+    success: bool
+    message: str

@@ -100,7 +100,7 @@ async function handleSave() {
     router.back()
   } catch (e: unknown) {
     const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-    showToast(detail || '❌ 保存失败')
+    showToast(detail || t('webSearch.saveFailed'))
   } finally {
     saving.value = false
   }
