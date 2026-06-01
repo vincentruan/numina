@@ -54,7 +54,7 @@ This skill handles **domain knowledge** — facts about people, projects, tasks,
 ```yaml
 # Agents & People
 Person: { name, email?, phone?, notes? }
-Organization: { name, type?, members[] }
+Organization: { name, type?, members (via member_of relation) }
 
 # Work
 Project: { name, status, goals[], owner? }
@@ -132,6 +132,32 @@ python3 scripts/ontology.py stats
 python3 scripts/ontology.py migrate
 ```
 
+### Type & Relation Rules
+
+```bash
+# Manage custom type definitions
+python3 scripts/ontology.py add-type --type Milestone --required '["name","date"]'
+python3 scripts/ontology.py list-types
+python3 scripts/ontology.py get-type --type Milestone
+
+# Manage relation type rules
+python3 scripts/ontology.py add-relation-type --rel sponsors --from-types '["Organization"]' --to-types '["Project"]'
+python3 scripts/ontology.py list-relation-types
+```
+
+### Plan Execution
+
+```bash
+# Create multi-step plan
+python3 scripts/ontology.py plan-create --steps '[{"op":"create","type":"Task","props":{"title":"Draft","status":"open"}}]'
+
+# Execute atomically (rollback on failure)
+python3 scripts/ontology.py plan-execute --plan-id plan_abc123
+
+# Check plan status
+python3 scripts/ontology.py plan-status --plan-id plan_abc123
+```
+
 ## Relation Types
 
 ```yaml
@@ -168,21 +194,17 @@ located_at: Event/Person/Device → Location (many_to_one)
 Skills can communicate through shared ontology entities:
 
 ```python
-# Email skill creates a commitment
-ontology.create("Commitment", {
-    "source_message": msg_id,
-    "description": "Send report by Friday",
+# Email skill creates a Task
+ontology.create("Task", {
+    "title": "Send report by Friday",
+    "status": "open",
     "due": "2026-01-31"
 })
 
-# Task skill picks it up later
-commitments = ontology.query("Commitment", {"status": "pending"})
-for c in commitments:
-    ontology.create("Task", {
-        "title": c["properties"]["description"],
-        "due": c["properties"]["due"],
-        "source": c["id"]
-    })
+# Scheduler skill picks up pending tasks
+tasks = ontology.query("Task", {"status": "open"})
+for t in tasks:
+    # Process pending tasks...
 ```
 
 ### Causal Action Logging
