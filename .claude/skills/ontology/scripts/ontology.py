@@ -180,6 +180,70 @@ def seed_default_rules(conn: sqlite3.Connection) -> dict:
     return {"seeded_types": seeded_types, "seeded_relations": seeded_relations}
 
 
+def add_type_rule(conn: sqlite3.Connection, type_name: str, required: list = None, enums: dict = None, forbidden: list = None) -> dict:
+    """Add or update a type rule."""
+    ts = now_iso()
+    required = required or []
+    enums = enums or {}
+    forbidden = forbidden or []
+
+    conn.execute(
+        "INSERT OR REPLACE INTO type_rules (type_name, required_props, enum_constraints, forbidden_props, created, updated) VALUES (?, ?, ?, ?, ?, ?)",
+        (type_name, json.dumps(required, ensure_ascii=False), json.dumps(enums, ensure_ascii=False), json.dumps(forbidden, ensure_ascii=False), ts, ts),
+    )
+    conn.commit()
+    return {"type_name": type_name, "required": required, "enums": enums, "forbidden": forbidden, "created": ts, "updated": ts}
+
+
+def get_type_rule(conn: sqlite3.Connection, type_name: str) -> dict | None:
+    """Get a type rule by name."""
+    row = conn.execute("SELECT * FROM type_rules WHERE type_name = ?", (type_name,)).fetchone()
+    if not row:
+        return None
+    return {
+        "type_name": row["type_name"],
+        "required": json.loads(row["required_props"]),
+        "enums": json.loads(row["enum_constraints"]),
+        "forbidden": json.loads(row["forbidden_props"]),
+        "created": row["created"],
+        "updated": row["updated"],
+    }
+
+
+def list_type_rules(conn: sqlite3.Connection) -> list:
+    """List all type rules."""
+    rows = conn.execute("SELECT * FROM type_rules ORDER BY type_name").fetchall()
+    return [{
+        "type_name": r["type_name"],
+        "required": json.loads(r["required_props"]),
+        "enums": json.loads(r["enum_constraints"]),
+        "forbidden": json.loads(r["forbidden_props"]),
+        "created": r["created"],
+        "updated": r["updated"],
+    } for r in rows]
+
+
+def update_type_rule(conn: sqlite3.Connection, type_name: str, required: list = None, enums: dict = None, forbidden: list = None) -> dict | None:
+    """Update specific fields of a type rule (merge with existing)."""
+    existing = get_type_rule(conn, type_name)
+    if not existing:
+        return None
+
+    # Merge updates
+    new_required = required if required is not None else existing["required"]
+    new_enums = enums if enums is not None else existing["enums"]
+    new_forbidden = forbidden if forbidden is not None else existing["forbidden"]
+
+    return add_type_rule(conn, type_name, new_required, new_enums, new_forbidden)
+
+
+def delete_type_rule(conn: sqlite3.Connection, type_name: str) -> bool:
+    """Delete a type rule."""
+    cur = conn.execute("DELETE FROM type_rules WHERE type_name = ?", (type_name,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None) -> dict:
     entity_id = entity_id or generate_id(type_name)
     ts = now_iso()
@@ -538,6 +602,27 @@ def main():
     # Stats
     subparsers.add_parser("stats", help="Show graph statistics")
 
+    # Type rule commands
+    add_type_p = subparsers.add_parser("add-type", help="Add or update type rule")
+    add_type_p.add_argument("--type", "-t", required=True, help="Type name")
+    add_type_p.add_argument("--required", "-r", default="[]", help="Required properties JSON array")
+    add_type_p.add_argument("--enums", "-e", default="{}", help="Enum constraints JSON dict")
+    add_type_p.add_argument("--forbidden", "-f", default="[]", help="Forbidden properties JSON array")
+
+    list_types_p = subparsers.add_parser("list-types", help="List all type rules")
+
+    get_type_p = subparsers.add_parser("get-type", help="Get type rule details")
+    get_type_p.add_argument("--type", "-t", required=True, help="Type name")
+
+    update_type_p = subparsers.add_parser("update-type", help="Update type rule fields")
+    update_type_p.add_argument("--type", "-t", required=True, help="Type name")
+    update_type_p.add_argument("--required", "-r", help="Required properties JSON array (optional)")
+    update_type_p.add_argument("--enums", "-e", help="Enum constraints JSON dict (optional)")
+    update_type_p.add_argument("--forbidden", "-f", help="Forbidden properties JSON array (optional)")
+
+    delete_type_p = subparsers.add_parser("delete-type", help="Delete type rule")
+    delete_type_p.add_argument("--type", "-t", required=True, help="Type name")
+
     # Migrate
     migrate_p = subparsers.add_parser("migrate", help="Migrate JSONL to SQLite (idempotent)")
     migrate_p.add_argument("--jsonl", default=LEGACY_GRAPH_PATH, help="Source JSONL path")
@@ -611,6 +696,40 @@ def main():
     elif args.command == "stats":
         stats = graph_stats(conn)
         print(json.dumps(stats, indent=2, ensure_ascii=False))
+
+    elif args.command == "add-type":
+        required = json.loads(args.required)
+        enums = json.loads(args.enums)
+        forbidden = json.loads(args.forbidden)
+        rule = add_type_rule(conn, args.type, required, enums, forbidden)
+        print(json.dumps(rule, indent=2, ensure_ascii=False))
+
+    elif args.command == "list-types":
+        rules = list_type_rules(conn)
+        print(json.dumps(rules, indent=2, ensure_ascii=False))
+
+    elif args.command == "get-type":
+        rule = get_type_rule(conn, args.type)
+        if rule:
+            print(json.dumps(rule, indent=2, ensure_ascii=False))
+        else:
+            print(f"Type rule not found: {args.type}")
+
+    elif args.command == "update-type":
+        required = json.loads(args.required) if args.required else None
+        enums = json.loads(args.enums) if args.enums else None
+        forbidden = json.loads(args.forbidden) if args.forbidden else None
+        rule = update_type_rule(conn, args.type, required, enums, forbidden)
+        if rule:
+            print(json.dumps(rule, indent=2, ensure_ascii=False))
+        else:
+            print(f"Type rule not found: {args.type}")
+
+    elif args.command == "delete-type":
+        if delete_type_rule(conn, args.type):
+            print(f"Deleted type rule: {args.type}")
+        else:
+            print(f"Type rule not found: {args.type}")
 
     elif args.command == "migrate":
         result = migrate_jsonl(conn, args.jsonl)

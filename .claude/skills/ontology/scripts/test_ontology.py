@@ -10,7 +10,7 @@ from pathlib import Path
 # Import from the skill directory
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from ontology import get_db, seed_default_rules
+from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule
 
 def test_type_rules_table_exists():
     """type_rules table should be created on init"""
@@ -84,6 +84,51 @@ def test_seed_is_idempotent():
 
         count2 = conn.execute("SELECT COUNT(*) FROM type_rules").fetchone()[0]
         assert count1 == count2, "Count should be unchanged"
+        conn.close()
+
+def test_add_type_command():
+    """add-type should create new type rule"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        # Add custom type
+        add_type_rule(conn, "Milestone", required=["name", "date"], enums={"status": ["planned", "done"]})
+
+        # Verify it exists
+        rule = conn.execute("SELECT * FROM type_rules WHERE type_name='Milestone'").fetchone()
+        assert rule is not None
+        required = json.loads(rule["required_props"])
+        assert required == ["name", "date"]
+        enums = json.loads(rule["enum_constraints"])
+        assert enums["status"] == ["planned", "done"]
+        conn.close()
+
+def test_list_types_command():
+    """list-types should return all type rules"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        types = list_type_rules(conn)
+        assert len(types) >= 16, "Should have at least default types"
+        type_names = [t["type_name"] for t in types]
+        assert "Task" in type_names
+        assert "Person" in type_names
+        conn.close()
+
+def test_delete_type_command():
+    """delete-type should remove type rule"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        # Add then delete
+        add_type_rule(conn, "TempType", required=["name"])
+        assert get_type_rule(conn, "TempType") is not None
+
+        delete_type_rule(conn, "TempType")
+        assert get_type_rule(conn, "TempType") is None
         conn.close()
 
 if __name__ == "__main__":
