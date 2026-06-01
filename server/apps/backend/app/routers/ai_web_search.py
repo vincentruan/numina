@@ -28,6 +28,25 @@ router = APIRouter(prefix="/ai/web-search", tags=["ai-web-search"])
 logger = logging.getLogger(__name__)
 
 
+def _get_provider_or_404(provider_id: str, family_id: int, db: Session) -> FamilyWebSearchProvider:
+    """Parse provider_id and fetch provider, raising 404 if not found."""
+    try:
+        pid = int(provider_id)
+    except ValueError:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
+    provider = (
+        db.query(FamilyWebSearchProvider)
+        .filter(
+            FamilyWebSearchProvider.id == pid,
+            FamilyWebSearchProvider.family_id == family_id,
+        )
+        .first()
+    )
+    if not provider:
+        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
+    return provider
+
+
 @router.get("/templates", response_model=list[WebSearchProviderTemplate])
 def list_templates(
     current_user: User = Depends(require_adult),
@@ -48,6 +67,7 @@ def get_status(
         .filter(
             FamilyWebSearchProvider.family_id == current_user.family_id,
             FamilyWebSearchProvider.is_enabled.is_(True),
+            FamilyWebSearchProvider.circuit_state != "open",
         )
         .count()
     )
@@ -137,23 +157,7 @@ def update_provider(
     db: Session = Depends(get_db),
 ) -> WebSearchProviderResponse:
     """Update a web search provider (owner only)."""
-    # Convert provider_id from string to int
-    try:
-        pid = int(provider_id)
-    except ValueError:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
-
-    # Find provider
-    provider = (
-        db.query(FamilyWebSearchProvider)
-        .filter(
-            FamilyWebSearchProvider.id == pid,
-            FamilyWebSearchProvider.family_id == current_user.family_id,
-        )
-        .first()
-    )
-    if not provider:
-        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
+    provider = _get_provider_or_404(provider_id, current_user.family_id, db)
 
     # Update fields
     if payload.api_key is not None:
@@ -194,23 +198,7 @@ def delete_provider(
     db: Session = Depends(get_db),
 ) -> None:
     """Delete a web search provider (owner only)."""
-    # Convert provider_id from string to int
-    try:
-        pid = int(provider_id)
-    except ValueError:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
-
-    # Find provider
-    provider = (
-        db.query(FamilyWebSearchProvider)
-        .filter(
-            FamilyWebSearchProvider.id == pid,
-            FamilyWebSearchProvider.family_id == current_user.family_id,
-        )
-        .first()
-    )
-    if not provider:
-        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
+    provider = _get_provider_or_404(provider_id, current_user.family_id, db)
 
     db.delete(provider)
     db.commit()
@@ -230,23 +218,12 @@ def enable_provider(
     db: Session = Depends(get_db),
 ) -> WebSearchProviderResponse:
     """Enable a web search provider (owner only)."""
-    # Convert provider_id from string to int
-    try:
-        pid = int(provider_id)
-    except ValueError:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
+    provider = _get_provider_or_404(provider_id, current_user.family_id, db)
 
-    # Find provider
-    provider = (
-        db.query(FamilyWebSearchProvider)
-        .filter(
-            FamilyWebSearchProvider.id == pid,
-            FamilyWebSearchProvider.family_id == current_user.family_id,
-        )
-        .first()
-    )
-    if not provider:
-        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
+    # Validate API key requirement
+    template = get_provider_template(provider.provider_name)
+    if template and template.get("requires_api_key") and not provider.api_key_encrypted:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "该搜索引擎需要 API Key 才能启用")
 
     provider.is_enabled = True
     db.commit()
@@ -269,23 +246,7 @@ def disable_provider(
     db: Session = Depends(get_db),
 ) -> WebSearchProviderResponse:
     """Disable a web search provider (owner only)."""
-    # Convert provider_id from string to int
-    try:
-        pid = int(provider_id)
-    except ValueError:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
-
-    # Find provider
-    provider = (
-        db.query(FamilyWebSearchProvider)
-        .filter(
-            FamilyWebSearchProvider.id == pid,
-            FamilyWebSearchProvider.family_id == current_user.family_id,
-        )
-        .first()
-    )
-    if not provider:
-        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
+    provider = _get_provider_or_404(provider_id, current_user.family_id, db)
 
     provider.is_enabled = False
     db.commit()
@@ -308,23 +269,7 @@ def test_provider(
     db: Session = Depends(get_db),
 ) -> dict:
     """Test web search provider connectivity (stub for now, owner only)."""
-    # Convert provider_id from string to int
-    try:
-        pid = int(provider_id)
-    except ValueError:
-        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
-
-    # Find provider
-    provider = (
-        db.query(FamilyWebSearchProvider)
-        .filter(
-            FamilyWebSearchProvider.id == pid,
-            FamilyWebSearchProvider.family_id == current_user.family_id,
-        )
-        .first()
-    )
-    if not provider:
-        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
+    _get_provider_or_404(provider_id, current_user.family_id, db)
 
     # Stub implementation - will be implemented in Task 6
     return {

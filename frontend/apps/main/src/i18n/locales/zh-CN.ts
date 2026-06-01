@@ -2326,6 +2326,7 @@ export default {
     formTitle: '配置搜索引擎',
     formEditTitle: '编辑搜索引擎',
     saveSuccess: '✅ 保存成功',
+    saveBtn: '保存',
     deleteSuccess: '🗑️ 已删除',
     enableSuccess: '✅ 已启用',
     disableSuccess: '✅ 已禁用',

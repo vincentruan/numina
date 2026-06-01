@@ -158,7 +158,7 @@ onMounted(load)
           native-type="submit"
           :loading="saving"
         >
-          {{ t('webSearch.saveSuccess').replace('✅ ', '') }}
+          {{ t('webSearch.saveBtn') }}
         </van-button>
 
         <van-button

@@ -16,6 +16,17 @@ class WebSearchCircuitService:
         if not provider:
             return
 
+        # Half-open failure: immediately re-open the circuit
+        if provider.circuit_state == "half_open":
+            provider.half_open_failure_count += 1
+            provider.circuit_state = "open"
+            provider.half_open_success_count = 0
+            provider.half_open_window_start = None
+            provider.last_failure_type = failure_type
+            provider.last_failure_at = datetime.now()
+            db.commit()
+            return
+
         provider.last_failure_type = failure_type
         provider.last_failure_at = datetime.now()
         provider.failure_count += 1

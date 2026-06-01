@@ -2008,6 +2008,7 @@ export default {
     formTitle: 'Configure Search Engine',
     formEditTitle: 'Edit Search Engine',
     saveSuccess: '✅ Saved successfully',
+    saveBtn: 'Save',
     deleteSuccess: '🗑️ Deleted',
     enableSuccess: '✅ Enabled',
     disableSuccess: '✅ Disabled',

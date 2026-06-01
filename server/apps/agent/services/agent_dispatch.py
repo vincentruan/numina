@@ -60,6 +60,38 @@ _LEGACY_AI_ASSISTANT_AGENT_ID: int = 100000000000003
 _INTERNAL_ONLY_SKILLS: frozenset[str] = frozenset({"skill-creator", "skill-installer"})
 
 
+def _classify_stream_error(e: Exception) -> str:
+    """Map a Python exception to a web search circuit failure_type enum value.
+
+    The backend circuit endpoint expects one of the enum literals defined in
+    WebSearchCircuitReportRequest.failure_type. Python exception class names
+    (e.g. 'ConnectionError') are not valid values there.
+    """
+    import asyncio
+
+    try:
+        import httpx as _httpx
+    except ImportError:
+        _httpx = None  # type: ignore[assignment]
+
+    if isinstance(e, (TimeoutError, asyncio.TimeoutError)):
+        return "transient_timeout"
+    if _httpx is not None:
+        if isinstance(e, _httpx.HTTPStatusError):
+            status = e.response.status_code
+            if status in (401, 403):
+                return "permanent_auth"
+            if status == 429:
+                return "transient_rate_limit"
+            if status >= 500:
+                return "transient_server"
+        if isinstance(e, _httpx.ConnectError):
+            return "transient_network"
+    if isinstance(e, ConnectionError):
+        return "transient_network"
+    return "transient_network"
+
+
 
 # ── Tool registry: tool_name → (tool_type, display_name, icon) ──────────────
 # Backend is the source of truth for these mappings; the frontend only owns
@@ -674,7 +706,7 @@ async def stream_agent_dispatch(
                         await report_web_search_circuit(
                             family_id=family_id,
                             provider_id=int(provider_id),
-                            failure_type=stream_error_type or "StreamError",
+                            failure_type=_classify_stream_error(e),
                         )
 
             yield builder_events.error(

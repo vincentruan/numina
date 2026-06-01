@@ -515,6 +515,7 @@ def _generate_temp_config(
     temp_config_path = temp_dir / "config.yaml"
     with open(temp_config_path, "w", encoding="utf-8") as f:
         yaml.dump(config, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+    os.chmod(temp_config_path, 0o600)
 
     # Generate extensions_config.json for DeerFlow's ExtensionsConfig.from_file()
     # DeerFlow reads MCP server configs from this file (not from config.yaml).
