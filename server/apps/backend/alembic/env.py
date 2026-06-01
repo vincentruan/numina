@@ -28,12 +28,16 @@ from apps.backend.app.models.child_wish_cost_history import (
 from apps.backend.app.models.family_invitation_code import (
     FamilyInvitationCode,  # noqa: F401
 )
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
+from apps.backend.app.models.family_web_search_provider import (
+    FamilyWebSearchProvider,  # noqa: F401
+)
 from apps.backend.app.models.liability import Liability  # noqa: F401
 from apps.backend.app.models.payment_record import PaymentRecord  # noqa: F401
-from apps.backend.app.models.tag import Tag  # noqa: F401
 
 # Import all models
 from apps.backend.app.models.skill_registry import SkillRegistry  # noqa: F401
+from apps.backend.app.models.tag import Tag  # noqa: F401
 from apps.backend.app.models.valuation import AssetValuation  # noqa: F401
 from apps.backend.app.models.wish import Wish  # noqa: F401
 

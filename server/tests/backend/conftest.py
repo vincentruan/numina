@@ -36,6 +36,8 @@ from apps.backend.app.models.category_financial_default import CategoryFinancial
 from apps.backend.app.models.device_session import DeviceSession  # noqa: F401
 from apps.backend.app.models.family import Family  # noqa: F401
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode  # noqa: F401
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer  # noqa: F401
+from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider  # noqa: F401
 from apps.backend.app.models.notification_channel import NotificationChannel  # noqa: F401
 from apps.backend.app.models.notification_config import NotificationConfig  # noqa: F401
 from apps.backend.app.models.notification_subscription import NotificationSubscription  # noqa: F401
