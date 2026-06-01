@@ -6,10 +6,20 @@
       <van-cell
         v-for="server in servers"
         :key="server.id"
-        :title="server.name"
         :label="server.url"
         center
       >
+        <template #title>
+          <span>{{ server.name }}</span>
+          <van-tag
+            v-if="server.mcp_type === 'websearch'"
+            type="primary"
+            size="small"
+            style="margin-left: 6px"
+          >
+            {{ t('webSearch.title') }}
+          </van-tag>
+        </template>
         <template #value>
           <div class="cell-actions">
             <van-switch

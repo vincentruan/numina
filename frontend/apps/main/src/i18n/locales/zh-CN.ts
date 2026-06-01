@@ -1636,6 +1636,9 @@ export default {
     nameUrlRequired: '⚠️ 名称和地址不能为空',
     envVarsInvalidJson: '⚠️ 环境变量格式错误，请输入有效 JSON',
     deleteConfirm: '确认删除服务器「{name}」？',
+    type: '类型',
+    typeGeneral: '通用',
+    typeWebsearch: '联网搜索',
   },
   skills: {
     title: '技能管理',

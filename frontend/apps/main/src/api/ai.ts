@@ -609,6 +609,7 @@ export interface MCPServer {
   transport: 'sse' | 'stdio'
   env_vars: Record<string, string>  // empty object when not set or caller lacks permission
   is_enabled: boolean
+  mcp_type: 'general' | 'websearch'
 }
 
 export interface MCPServerCreate {
@@ -617,6 +618,7 @@ export interface MCPServerCreate {
   transport: 'sse' | 'stdio'
   env_vars?: Record<string, string> | null
   is_enabled?: boolean
+  mcp_type?: 'general' | 'websearch'
 }
 
 export interface MCPServerUpdate {
@@ -625,6 +627,7 @@ export interface MCPServerUpdate {
   transport?: 'sse' | 'stdio'
   env_vars?: Record<string, string> | null
   is_enabled?: boolean
+  mcp_type?: 'general' | 'websearch'
 }
 
 export const getMCPServers = () => http.get<MCPServer[]>('/ai/mcp')

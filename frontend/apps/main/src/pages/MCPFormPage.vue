@@ -23,12 +23,14 @@ const isEdit = computed(() => !!serverId.value)
 
 const saving = ref(false)
 const showTransportPicker = ref(false)
+const showMcpTypePicker = ref(false)
 const loaded = ref(!isEdit.value)
 
 const form = reactive({
   name: '',
   url: '',
   transport: 'sse' as 'sse' | 'stdio',
+  mcp_type: 'general' as 'general' | 'websearch',
   envVarsText: '',
 })
 
@@ -37,14 +39,24 @@ const transportOptions = [
   { text: 'stdio', value: 'stdio' },
 ]
 
+const mcpTypeOptions = [
+  { text: t('mcp.typeGeneral'), value: 'general' },
+  { text: t('mcp.typeWebsearch'), value: 'websearch' },
+]
+
 function transportLabel(transport: 'sse' | 'stdio'): string {
   return transport === 'sse' ? 'SSE' : 'stdio'
+}
+
+function mcpTypeLabel(mcpType: 'general' | 'websearch'): string {
+  return mcpType === 'general' ? t('mcp.typeGeneral') : t('mcp.typeWebsearch')
 }
 
 function loadServer(server: MCPServer) {
   form.name = server.name
   form.url = server.url
   form.transport = server.transport
+  form.mcp_type = server.mcp_type || 'general'
   form.envVarsText =
     server.env_vars && Object.keys(server.env_vars).length > 0
       ? JSON.stringify(server.env_vars, null, 2)
@@ -54,6 +66,11 @@ function loadServer(server: MCPServer) {
 function onTransportConfirm({ selectedValues }: { selectedValues: string[] }) {
   form.transport = selectedValues[0] as 'sse' | 'stdio'
   showTransportPicker.value = false
+}
+
+function onMcpTypeConfirm({ selectedValues }: { selectedValues: string[] }) {
+  form.mcp_type = selectedValues[0] as 'general' | 'websearch'
+  showMcpTypePicker.value = false
 }
 
 async function onSave() {
@@ -76,6 +93,7 @@ async function onSave() {
       name: form.name.trim(),
       url: form.url.trim(),
       transport: form.transport,
+      mcp_type: form.mcp_type,
       env_vars: envVars,
     }
     if (isEdit.value && serverId.value) {
@@ -138,6 +156,12 @@ onMounted(async () => {
         is-link
         @click="showTransportPicker = true"
       />
+      <van-cell
+        :title="t('mcp.type')"
+        :value="mcpTypeLabel(form.mcp_type)"
+        is-link
+        @click="showMcpTypePicker = true"
+      />
       <van-field
         v-model="form.envVarsText"
         :label="t('mcp.envVars')"
@@ -166,6 +190,15 @@ onMounted(async () => {
         :model-value="[form.transport]"
         @confirm="onTransportConfirm"
         @cancel="showTransportPicker = false"
+      />
+    </van-popup>
+
+    <van-popup v-model:show="showMcpTypePicker" position="bottom" round>
+      <van-picker
+        :columns="mcpTypeOptions"
+        :model-value="[form.mcp_type]"
+        @confirm="onMcpTypeConfirm"
+        @cancel="showMcpTypePicker = false"
       />
     </van-popup>
   </div>

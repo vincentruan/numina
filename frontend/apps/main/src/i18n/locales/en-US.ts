@@ -1471,6 +1471,9 @@ export default {
     nameUrlRequired: '⚠️ Name and URL are required',
     envVarsInvalidJson: '⚠️ Invalid JSON format for environment variables',
     deleteConfirm: 'Delete server "{name}"?',
+    type: 'Type',
+    typeGeneral: 'General',
+    typeWebsearch: 'Web Search',
   },
   skills: {
     title: 'Skill Management',
