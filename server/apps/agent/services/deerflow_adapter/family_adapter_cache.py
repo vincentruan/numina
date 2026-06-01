@@ -470,6 +470,46 @@ def _generate_temp_config(
     if mcp_servers:
         config["mcp_servers"] = mcp_servers
 
+    # Web search provider injection — inject first available native provider or remove tool
+    # when only MCP fallback available. Priority: native providers > MCP servers.
+    web_search_providers = ai_config.get("web_search_providers", [])
+    web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
+
+    if web_search_providers:
+        # Inject first available native provider into web_search tool
+        first_provider = web_search_providers[0]
+        provider_class = first_provider.get("provider_class", "")
+        provider_api_key = first_provider.get("api_key", "")
+        provider_max_results = first_provider.get("max_results", 5)
+
+        # Find and update the web_search tool entry
+        tools = config.get("tools", [])
+        for tool in tools:
+            if tool.get("name") == "web_search":
+                tool["use"] = provider_class
+                tool["api_key"] = provider_api_key
+                tool["max_results"] = provider_max_results
+                break
+    else:
+        # No native providers — remove web_search tool (MCP fallback handled separately)
+        tools = config.get("tools", [])
+        config["tools"] = [t for t in tools if t.get("name") != "web_search"]
+
+        # Inject web search MCP servers from ai_config if available and not already injected
+        # The mcp_servers parameter may contain general MCP servers; web_search_mcp_servers
+        # are web search-specific servers that should also be added when native providers unavailable
+        if web_search_mcp_servers and not mcp_servers:
+            config["mcp_servers"] = web_search_mcp_servers
+        elif web_search_mcp_servers and mcp_servers:
+            # Merge web search MCP servers with existing MCP servers
+            existing_servers = config.get("mcp_servers", [])
+            # Avoid duplicates by name
+            existing_names = {s.get("name") for s in existing_servers}
+            for ws_server in web_search_mcp_servers:
+                if ws_server.get("name") not in existing_names:
+                    existing_servers.append(ws_server)
+            config["mcp_servers"] = existing_servers
+
     # 写入临时文件
     temp_dir = Path(tempfile.mkdtemp(prefix="deerflow_config_"))
     temp_config_path = temp_dir / "config.yaml"

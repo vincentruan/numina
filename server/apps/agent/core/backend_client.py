@@ -680,3 +680,27 @@ async def report_half_open_result(
         )
         resp.raise_for_status()
         return _unwrap(resp)
+
+
+async def report_web_search_circuit(family_id: str, provider_id: int, failure_type: str) -> None:
+    """Report web search tool failure to trigger circuit breaker.
+
+    Args:
+        family_id: 家庭 ID（自动验证格式）
+        provider_id: Web search provider ID
+        failure_type: Failure type classification
+
+    Raises:
+        ValueError: family_id 格式无效
+        httpx.HTTPStatusError: Backend API 错误
+    """
+    validated_id = _validate_family_id(family_id)
+    async with httpx.AsyncClient(
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+    ) as client:
+        resp = await client.post(
+            f"/api/v1/internal/ai/web-search/{provider_id}/circuit",
+            json={"failure_type": failure_type},
+            headers=_make_headers(validated_id),
+        )
+        resp.raise_for_status()

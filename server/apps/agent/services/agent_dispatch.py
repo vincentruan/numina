@@ -16,7 +16,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 
 from apps.agent.app.config import settings
-from apps.agent.core.backend_client import BackendClient
+from apps.agent.core.backend_client import BackendClient, report_web_search_circuit
 from apps.agent.schemas.policy import CapabilityPolicy
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.pii_redactor import pii_redactor
@@ -560,11 +560,19 @@ async def stream_agent_dispatch(
         # LLM knows whether it may rely on its tools / pretend to search. Mirrors
         # chat_adapter.py:92-96 — same wording, same stance, kept inline rather
         # than extracted because two short occurrences don't justify a shared module.
-        web_search_guidance = (
-            "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
-            if web_search
-            else "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
-        )
+        # Multi-branch logic: native providers > MCP fallback > disabled.
+        web_search_providers = ai_config.get("web_search_providers", [])
+        web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
+
+        if web_search_providers:
+            web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+        elif web_search_mcp_servers:
+            web_search_guidance = (
+                "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
+            )
+        else:
+            web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+
         state = {
             "messages": [
                 {"role": "system", "content": f"## 联网搜索\n\n{web_search_guidance}"},
@@ -653,6 +661,22 @@ async def stream_agent_dispatch(
                 thread_id,
                 stream_error_type,
             )
+
+            # Report web search circuit failure if providers are configured
+            # This triggers the circuit breaker backend to track failures
+            web_search_providers = ai_config.get("web_search_providers", [])
+            if web_search_providers:
+                first_provider = web_search_providers[0]
+                provider_id = first_provider.get("provider_id")
+                if provider_id:
+                    # Fire-and-forget circuit report — never blocks the error response
+                    with contextlib.suppress(Exception):
+                        await report_web_search_circuit(
+                            family_id=family_id,
+                            provider_id=int(provider_id),
+                            failure_type=stream_error_type or "StreamError",
+                        )
+
             yield builder_events.error(
                 "智能体执行失败", code="STREAM_ERROR"
             ).to_ndjson()
