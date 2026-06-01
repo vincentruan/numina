@@ -182,7 +182,9 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { showToast } from 'vant'
 import { useCapabilityStore } from '@/stores/capability'
+import { getWebSearchStatus } from '@/api/webSearch'
 import type { AICapability } from '@/api/ai'
 
 interface AgentOption {
@@ -239,7 +241,20 @@ function toggleMode() {
   emit('update:mode', mode.value)
 }
 
-function toggleWebSearch() {
+async function toggleWebSearch() {
+  if (!webSearch.value) {
+    // Pre-check: verify at least one provider is enabled before turning on
+    try {
+      const status = await getWebSearchStatus()
+      if (!status.has_web_search) {
+        showToast(t('webSearch.noProviderToast'))
+        return
+      }
+    } catch {
+      showToast(t('webSearch.noProviderToast'))
+      return
+    }
+  }
   webSearch.value = !webSearch.value
   emit('update:webSearch', webSearch.value)
 }
