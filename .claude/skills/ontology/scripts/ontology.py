@@ -244,6 +244,57 @@ def delete_type_rule(conn: sqlite3.Connection, type_name: str) -> bool:
     return cur.rowcount > 0
 
 
+def add_relation_rule(conn: sqlite3.Connection, rel_type: str, from_types: list = None, to_types: list = None, cardinality: str = "many_to_many", acyclic: bool = False) -> dict:
+    """Add or update a relation rule."""
+    ts = now_iso()
+    from_types = from_types or []
+    to_types = to_types or []
+
+    conn.execute(
+        "INSERT OR REPLACE INTO relation_rules (rel_type, from_types, to_types, cardinality, acyclic, relation_props_schema, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (rel_type, json.dumps(from_types, ensure_ascii=False), json.dumps(to_types, ensure_ascii=False), cardinality, int(acyclic), "{}", ts, ts),
+    )
+    conn.commit()
+    return {"rel_type": rel_type, "from_types": from_types, "to_types": to_types, "cardinality": cardinality, "acyclic": acyclic, "created": ts, "updated": ts}
+
+
+def get_relation_rule(conn: sqlite3.Connection, rel_type: str) -> dict | None:
+    """Get a relation rule by type."""
+    row = conn.execute("SELECT * FROM relation_rules WHERE rel_type = ?", (rel_type,)).fetchone()
+    if not row:
+        return None
+    return {
+        "rel_type": row["rel_type"],
+        "from_types": json.loads(row["from_types"]),
+        "to_types": json.loads(row["to_types"]),
+        "cardinality": row["cardinality"],
+        "acyclic": bool(row["acyclic"]),
+        "created": row["created"],
+        "updated": row["updated"],
+    }
+
+
+def list_relation_rules(conn: sqlite3.Connection) -> list:
+    """List all relation rules."""
+    rows = conn.execute("SELECT * FROM relation_rules ORDER BY rel_type").fetchall()
+    return [{
+        "rel_type": r["rel_type"],
+        "from_types": json.loads(r["from_types"]),
+        "to_types": json.loads(r["to_types"]),
+        "cardinality": r["cardinality"],
+        "acyclic": bool(r["acyclic"]),
+        "created": r["created"],
+        "updated": r["updated"],
+    } for r in rows]
+
+
+def delete_relation_rule(conn: sqlite3.Connection, rel_type: str) -> bool:
+    """Delete a relation rule."""
+    cur = conn.execute("DELETE FROM relation_rules WHERE rel_type = ?", (rel_type,))
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None) -> dict:
     entity_id = entity_id or generate_id(type_name)
     ts = now_iso()
@@ -623,6 +674,22 @@ def main():
     delete_type_p = subparsers.add_parser("delete-type", help="Delete type rule")
     delete_type_p.add_argument("--type", "-t", required=True, help="Type name")
 
+    # Relation rule commands
+    add_rel_p = subparsers.add_parser("add-relation-type", help="Add or update relation rule")
+    add_rel_p.add_argument("--rel", "-r", required=True, help="Relation type name")
+    add_rel_p.add_argument("--from-types", "-f", default="[]", help="Allowed from types JSON array")
+    add_rel_p.add_argument("--to-types", "-t", default="[]", help="Allowed to types JSON array")
+    add_rel_p.add_argument("--cardinality", "-c", default="many_to_many", choices=["one_to_many", "many_to_one", "many_to_many"])
+    add_rel_p.add_argument("--acyclic", "-a", action="store_true", help="Enforce acyclic constraint")
+
+    list_rel_p = subparsers.add_parser("list-relation-types", help="List all relation rules")
+
+    get_rel_p = subparsers.add_parser("get-relation-type", help="Get relation rule details")
+    get_rel_p.add_argument("--rel", "-r", required=True, help="Relation type name")
+
+    delete_rel_p = subparsers.add_parser("delete-relation-type", help="Delete relation rule")
+    delete_rel_p.add_argument("--rel", "-r", required=True, help="Relation type name")
+
     # Migrate
     migrate_p = subparsers.add_parser("migrate", help="Migrate JSONL to SQLite (idempotent)")
     migrate_p.add_argument("--jsonl", default=LEGACY_GRAPH_PATH, help="Source JSONL path")
@@ -730,6 +797,29 @@ def main():
             print(f"Deleted type rule: {args.type}")
         else:
             print(f"Type rule not found: {args.type}")
+
+    elif args.command == "add-relation-type":
+        from_types = json.loads(args.from_types)
+        to_types = json.loads(args.to_types)
+        rule = add_relation_rule(conn, args.rel, from_types, to_types, args.cardinality, args.acyclic)
+        print(json.dumps(rule, indent=2, ensure_ascii=False))
+
+    elif args.command == "list-relation-types":
+        rules = list_relation_rules(conn)
+        print(json.dumps(rules, indent=2, ensure_ascii=False))
+
+    elif args.command == "get-relation-type":
+        rule = get_relation_rule(conn, args.rel)
+        if rule:
+            print(json.dumps(rule, indent=2, ensure_ascii=False))
+        else:
+            print(f"Relation rule not found: {args.rel}")
+
+    elif args.command == "delete-relation-type":
+        if delete_relation_rule(conn, args.rel):
+            print(f"Deleted relation rule: {args.rel}")
+        else:
+            print(f"Relation rule not found: {args.rel}")
 
     elif args.command == "migrate":
         result = migrate_jsonl(conn, args.jsonl)

@@ -10,7 +10,7 @@ from pathlib import Path
 # Import from the skill directory
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule
+from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule, add_relation_rule, get_relation_rule, list_relation_rules, delete_relation_rule
 
 def test_type_rules_table_exists():
     """type_rules table should be created on init"""
@@ -129,6 +129,45 @@ def test_delete_type_command():
 
         delete_type_rule(conn, "TempType")
         assert get_type_rule(conn, "TempType") is None
+        conn.close()
+
+def test_add_relation_rule():
+    """add-relation-type should create new relation rule"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        add_relation_rule(conn, "custom_rel", from_types=["Project"], to_types=["Document"], cardinality="many_to_many")
+
+        rule = conn.execute("SELECT * FROM relation_rules WHERE rel_type='custom_rel'").fetchone()
+        assert rule is not None
+        from_types = json.loads(rule["from_types"])
+        assert from_types == ["Project"]
+        conn.close()
+
+def test_get_relation_rule():
+    """get-relation-type should return rule details"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        rule = get_relation_rule(conn, "blocks")
+        assert rule is not None
+        assert rule["acyclic"] == True
+        assert "Task" in rule["from_types"]
+        conn.close()
+
+def test_list_relation_rules():
+    """list-relation-types should return all rules"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        rules = list_relation_rules(conn)
+        assert len(rules) >= 15, "Should have at least default relations"
+        rel_types = [r["rel_type"] for r in rules]
+        assert "blocks" in rel_types
+        assert "has_owner" in rel_types
         conn.close()
 
 if __name__ == "__main__":
