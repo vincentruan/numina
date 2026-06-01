@@ -67,7 +67,7 @@ def test_create_unknown_provider_fails(client, owner_headers):
         "provider_name": "unknown_engine",
         "api_key": "key",
     })
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_list_providers(client, owner_headers):

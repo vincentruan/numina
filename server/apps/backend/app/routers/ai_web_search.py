@@ -2,11 +2,12 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import require_adult, require_owner
 from apps.backend.app.database import get_db
+from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.web_search_provider import (
@@ -81,27 +82,18 @@ def create_provider(
     # Validate provider_name against registry
     template = get_provider_template(payload.provider_name)
     if not template:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="不支持的搜索引擎类型",
-        )
+        raise AppError(ErrorCode.VALIDATION_ERROR, "不支持的搜索引擎类型")
 
     # Check if API key is required
     if template["requires_api_key"] and not payload.api_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="该搜索引擎需要 API Key",
-        )
+        raise AppError(ErrorCode.VALIDATION_ERROR, "该搜索引擎需要 API Key")
 
     # Encrypt API key if provided
     api_key_encrypted = None
     if payload.api_key:
         api_key_encrypted = encrypt_api_key(payload.api_key)
         if api_key_encrypted is None:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="加密服务不可用",
-            )
+            raise AppError(ErrorCode.INTERNAL_ERROR, "加密服务不可用")
 
     # Auto-assign display_order if not provided
     display_order = payload.display_order
@@ -149,10 +141,7 @@ def update_provider(
     try:
         pid = int(provider_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的搜索引擎配置 ID",
-        ) from None
+        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
 
     # Find provider
     provider = (
@@ -164,10 +153,7 @@ def update_provider(
         .first()
     )
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="搜索引擎配置不存在",
-        )
+        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
 
     # Update fields
     if payload.api_key is not None:
@@ -176,10 +162,7 @@ def update_provider(
         else:
             encrypted = encrypt_api_key(payload.api_key)
             if encrypted is None:
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="加密服务不可用",
-                )
+                raise AppError(ErrorCode.INTERNAL_ERROR, "加密服务不可用")
             provider.api_key_encrypted = encrypted
 
     if payload.max_results is not None:
@@ -215,10 +198,7 @@ def delete_provider(
     try:
         pid = int(provider_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的搜索引擎配置 ID",
-        ) from None
+        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
 
     # Find provider
     provider = (
@@ -230,10 +210,7 @@ def delete_provider(
         .first()
     )
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="搜索引擎配置不存在",
-        )
+        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
 
     db.delete(provider)
     db.commit()
@@ -257,10 +234,7 @@ def enable_provider(
     try:
         pid = int(provider_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的搜索引擎配置 ID",
-        ) from None
+        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
 
     # Find provider
     provider = (
@@ -272,10 +246,7 @@ def enable_provider(
         .first()
     )
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="搜索引擎配置不存在",
-        )
+        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
 
     provider.is_enabled = True
     db.commit()
@@ -302,10 +273,7 @@ def disable_provider(
     try:
         pid = int(provider_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的搜索引擎配置 ID",
-        ) from None
+        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
 
     # Find provider
     provider = (
@@ -317,10 +285,7 @@ def disable_provider(
         .first()
     )
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="搜索引擎配置不存在",
-        )
+        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
 
     provider.is_enabled = False
     db.commit()
@@ -347,10 +312,7 @@ def test_provider(
     try:
         pid = int(provider_id)
     except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="无效的搜索引擎配置 ID",
-        ) from None
+        raise AppError(ErrorCode.VALIDATION_ERROR, "无效的搜索引擎配置 ID") from None
 
     # Find provider
     provider = (
@@ -362,10 +324,7 @@ def test_provider(
         .first()
     )
     if not provider:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="搜索引擎配置不存在",
-        )
+        raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
 
     # Stub implementation - will be implemented in Task 6
     return {
