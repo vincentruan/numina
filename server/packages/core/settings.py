@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8080", "http://127.0.0.1:8080"]
     ENVIRONMENT: str = "development"  # development / production
 
+    # Bootstrap: initial invitation codes for production (comma-separated)
+    INIT_INVITATION_CODES: str = ""
+
+    # Reconciliation system
+    DISABLE_RECONCILE: bool = False  # Set True to skip reconciliation (fallback to legacy bootstrap)
+    RECONCILE_MODE: str = ""  # Override mode: "normal", "check-only", "dry-run", "offline", "strict"
+
     # Cache configuration
     CACHE_BACKEND: str = "memory"  # "memory" or "redis"
     REDIS_URL: str = "redis://localhost:6379/0"

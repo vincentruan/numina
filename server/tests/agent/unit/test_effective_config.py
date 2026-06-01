@@ -171,10 +171,12 @@ class TestEffectiveConfigMCPServers:
     def test_mcp_servers_included_when_provided(self, builder, sample_ai_provider, sample_agent_config):
         mcp = [{"name": "filesystem", "transport": "stdio", "command": "mcp-filesystem"}]
         result = builder.build(family_id=12345, agent_name="my-agent", ai_provider=sample_ai_provider, agent_config=sample_agent_config, enabled_skills=[], mcp_servers=mcp)
-        assert result.config_dict.get("mcp_servers") == mcp
+        assert result.extensions_config_path != ""
+        assert "mcp_servers" not in result.config_dict
 
     def test_mcp_servers_omitted_when_empty(self, builder, sample_ai_provider, sample_agent_config):
         result = builder.build(family_id=12345, agent_name="my-agent", ai_provider=sample_ai_provider, agent_config=sample_agent_config, enabled_skills=[], mcp_servers=[])
+        assert result.extensions_config_path == ""
         assert "mcp_servers" not in result.config_dict
 
 

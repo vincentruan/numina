@@ -162,7 +162,7 @@ class TestCheckpointerInjection:
 
         clear_cache()
 
-    def test_close_shared_checkpointer_resets_singleton(self, base_config_dir):
+    async def test_close_shared_checkpointer_resets_singleton(self, base_config_dir):
         """close_shared_checkpointer must allow a fresh checkpointer to be created."""
         import apps.agent.services.deerflow_adapter.family_adapter_cache as cache_mod
 
@@ -173,7 +173,7 @@ class TestCheckpointerInjection:
 
         try:
             cp1 = _get_shared_checkpointer(base_config_dir)
-            close_shared_checkpointer()
+            await close_shared_checkpointer()
             assert cache_mod._shared_checkpointer is None
         finally:
             cache_mod._shared_checkpointer = orig

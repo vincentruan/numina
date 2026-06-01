@@ -325,7 +325,7 @@ async def test_stream_dispatch_writes_start_and_user_message_on_disk(
     monkeypatch.setattr(
         "apps.agent.services.agent_dispatch.EffectiveConfigBuilder",
         lambda _pm: SimpleNamespace(
-            build=lambda **_kw: SimpleNamespace(config_dict={})
+            build=lambda **_kw: SimpleNamespace(config_dict={}, extensions_config_path="", skill_sources=[])
         ),
     )
 

@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from apps.backend.app.bootstrap import run_bootstrap
 from apps.backend.app.config import settings
 from apps.backend.app.core.logging_config import setup_logging
 from apps.backend.app.database import SessionLocal, engine
@@ -133,10 +134,6 @@ from apps.backend.app.routers import notification_config as notification_config_
 from apps.backend.app.routers import notifications as notifications_router
 from apps.backend.app.routers import reminders as reminders_router
 from apps.backend.app.routers import treasures as treasures_router
-from apps.backend.app.seed.categories import seed_categories
-from apps.backend.app.seed.currencies import seed_currencies
-from apps.backend.app.seed.invitation_codes import seed_invitation_codes
-from apps.backend.app.seed.storage_backends import seed_storage_backends
 from apps.backend.app.services.db_migrate import run_schema_migration
 from apps.backend.app.services.exchange_rate import ExchangeRateService
 from apps.backend.app.services.snapshot import auto_generate_daily_snapshots
@@ -199,14 +196,40 @@ async def lifespan(app: FastAPI):
 
     db = SessionLocal()
     try:
-        seed_categories(db)
-        seed_currencies(db)
-        seed_invitation_codes(db)
-        seed_storage_backends(db)
-        from apps.backend.app.seed.category_financial_defaults import (
-            seed_category_financial_defaults,
-        )
-        seed_category_financial_defaults(db)
+        # --- Desired State Reconciliation ---
+        if not settings.DISABLE_RECONCILE:
+            from apps.backend.app.reconcile.lock import create_lock_provider
+            from apps.backend.app.reconcile.registry import get_all_resources
+            from apps.backend.app.reconcile.runner import DesiredStateRunner, RunMode
+
+            reconcile_mode = RunMode.NORMAL
+            if settings.RECONCILE_MODE:
+                reconcile_mode = RunMode(settings.RECONCILE_MODE)
+
+            lock_provider = create_lock_provider(engine)
+            resources = get_all_resources()
+            runner = DesiredStateRunner(
+                resources=resources,
+                engine=engine,
+                db=db,
+                mode=reconcile_mode,
+                lock_provider=lock_provider,
+            )
+            report = runner.run()
+
+            if not report.success:
+                logger.error(report.summary_text())
+                raise RuntimeError(
+                    f"系统状态协调失败: {report.critical_failures} 个关键资源未就绪。"
+                    "请查看日志获取修复步骤。"
+                )
+            if report.features_disabled:
+                logger.warning(
+                    f"部分功能已降级禁用: {', '.join(report.features_disabled)}"
+                )
+        else:
+            run_bootstrap(db)
+
         # Auto-generate daily snapshots for all families
         try:
             auto_generate_daily_snapshots(db)

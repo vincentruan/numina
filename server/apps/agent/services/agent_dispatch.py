@@ -8,6 +8,7 @@ No global singleton mutation. No ContextVar. No reload_app_config().
 """
 
 import contextlib
+import os
 import re
 import time
 import uuid
@@ -341,6 +342,18 @@ async def stream_agent_dispatch(
     except Exception:
         mcp_servers = []
 
+    # 3a. Inject auth headers into MCP servers (required for SSE handshake)
+    # The backend API returns MCP servers without auth headers; we add them here.
+    from apps.agent.app.config import settings as agent_settings
+    mcp_headers: dict[str, str] = {
+        "X-Agent-Token": agent_settings.AGENT_INTERNAL_TOKEN,
+        "X-Family-Id": family_id,
+    }
+    if user_id:
+        mcp_headers["X-Caller-User-Id"] = user_id
+    for srv in mcp_servers:
+        srv["headers"] = mcp_headers
+
     # 3. Multi-slot provider selection
     providers = ai_config.get("providers", [])
     if not providers:
@@ -386,6 +399,11 @@ async def stream_agent_dispatch(
             "生成运行配置失败", code="CONFIG_BUILD_ERROR"
         ).to_ndjson()
         return
+
+    # 4a. Prepare extensions_config.json for MCP tool loading
+    # DeerFlow reads MCP servers from extensions_config.json via DEER_FLOW_EXTENSIONS_CONFIG_PATH.
+    extensions_config_path = effective.extensions_config_path
+    prev_extensions_env: str | None = None
 
     # 5. Determine thread_id
     if not thread_id:
@@ -443,6 +461,12 @@ async def stream_agent_dispatch(
             "Agent 运行环境未就绪", code="RUNTIME_ERROR"
         ).to_ndjson()
         return
+
+    # 8a. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading
+    # DeerFlow reads MCP server configs from this file. Must be set before make_lead_agent.
+    if extensions_config_path:
+        prev_extensions_env = os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
+        os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = extensions_config_path
 
     # All control flow from here lives inside `try/finally` so the persistence
     # hook + audit emit fire whether the stream completes, errors, or returns
@@ -644,6 +668,12 @@ async def stream_agent_dispatch(
         ).to_ndjson()
         success = True
     finally:
+        # Restore DEER_FLOW_EXTENSIONS_CONFIG_PATH env var
+        if extensions_config_path and prev_extensions_env is not None:
+            os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
+        elif extensions_config_path:
+            os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+
         audit_state["success"] = success
         # Audit emit FIRST so the invariant lands even if the persistence
         # fire-and-forget never runs (e.g. loop-shutdown teardown).

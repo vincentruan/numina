@@ -140,7 +140,7 @@ def smoke_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]
     monkeypatch.setattr(
         "apps.agent.services.agent_dispatch.EffectiveConfigBuilder",
         lambda _pm: SimpleNamespace(
-            build=lambda **_kw: SimpleNamespace(config_dict={})
+            build=lambda **_kw: SimpleNamespace(config_dict={}, extensions_config_path="", skill_sources=[])
         ),
     )
 

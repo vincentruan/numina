@@ -68,7 +68,7 @@ def _wire_minimal_seams(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(
         "apps.agent.services.agent_dispatch.EffectiveConfigBuilder",
         lambda _pm: SimpleNamespace(
-            build=lambda **_k: SimpleNamespace(config_dict={})
+            build=lambda **_k: SimpleNamespace(config_dict={}, extensions_config_path="", skill_sources=[])
         ),
     )
     monkeypatch.setattr(
