@@ -83,6 +83,7 @@ from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_
 from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
+from apps.backend.app.routers import ai_web_search as ai_web_search_router
 from apps.backend.app.routers import ai_alerts as ai_alerts_router
 from apps.backend.app.routers import ai_allocation as ai_allocation_router
 from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
@@ -452,6 +453,7 @@ app.include_router(ai_mcp_router.router, prefix="/api/v1")
 app.include_router(ai_skills_router.router, prefix="/api/v1")
 app.include_router(ai_agents_router.router, prefix="/api/v1")
 app.include_router(ai_agents_internal_router.router, prefix="/api/v1")
+app.include_router(ai_web_search_router.router, prefix="/api/v1")
 
 # Serve uploaded files
 # Serve uploaded files — mount only the uploads subtree, not the entire workspace

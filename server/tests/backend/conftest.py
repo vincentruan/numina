@@ -16,6 +16,9 @@ import tempfile
 _TEST_LIFESPAN_DIR = tempfile.mkdtemp(prefix="numina-tests-")
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_LIFESPAN_DIR}/lifespan.db"
 
+# Set AI_ENCRYPTION_KEY for tests that need encryption (web search providers, AI config)
+os.environ["AI_ENCRYPTION_KEY"] = "TWkvLCaoHF_ZlwIUzytBOveIw5wmZj4ggVjWMgJr9BM="
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
