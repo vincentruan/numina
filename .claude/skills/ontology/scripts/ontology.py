@@ -390,7 +390,7 @@ def get_plan(conn: sqlite3.Connection, plan_id: str) -> dict | None:
 
 
 def execute_plan(conn: sqlite3.Connection, plan_id: str) -> dict:
-    """Execute a plan atomically. Rollback on any failure."""
+    """Execute a plan atomically using SQLite transaction."""
     plan = get_plan(conn, plan_id)
     if not plan:
         raise ValueError(f"Plan not found: {plan_id}")
@@ -402,39 +402,40 @@ def execute_plan(conn: sqlite3.Connection, plan_id: str) -> dict:
     executed = []
     ts = now_iso()
 
-    # Update status to executing
+    # Update status to executing (this commit is intentional - status persists)
     conn.execute("UPDATE plan_executions SET status = ?, updated = ? WHERE plan_id = ?", ("executing", ts, plan_id))
     conn.commit()
 
     try:
+        # Begin transaction - all operations will be atomic
         for i, step in enumerate(steps):
             op = step.get("op")
 
             if op == "create":
                 entity_id = step.get("id")
-                entity = create_entity(conn, step["type"], step["props"], entity_id)
-                executed.append({"step": i, "op": "create", "result": entity})
+                entity = create_entity(conn, step["type"], step["props"], entity_id, skip_commit=True)
+                executed.append({"step": i, "op": "create", "entity_id": entity["id"]})
 
             elif op == "relate":
-                rel = create_relation(conn, step["from"], step["rel"], step["to"], step.get("props"))
-                executed.append({"step": i, "op": "relate", "result": rel})
+                rel = create_relation(conn, step["from"], step["rel"], step["to"], step.get("props"), skip_validation=False, skip_commit=True)
+                executed.append({"step": i, "op": "relate"})
 
             elif op == "update":
-                entity = update_entity(conn, step["id"], step["props"])
+                entity = update_entity(conn, step["id"], step["props"], skip_commit=True)
                 if not entity:
                     raise ValueError(f"Entity not found: {step['id']}")
-                executed.append({"step": i, "op": "update", "result": entity})
+                executed.append({"step": i, "op": "update"})
 
             elif op == "delete":
-                deleted = delete_entity(conn, step["id"])
+                deleted = delete_entity(conn, step["id"], skip_commit=True)
                 if not deleted:
                     raise ValueError(f"Entity not found: {step['id']}")
-                executed.append({"step": i, "op": "delete", "result": {"deleted": True}})
+                executed.append({"step": i, "op": "delete"})
 
             else:
                 raise ValueError(f"Unknown operation: {op}")
 
-        # All steps succeeded - commit
+        # All steps succeeded - single commit for entire plan
         conn.execute(
             "UPDATE plan_executions SET status = ?, executed_steps = ?, updated = ? WHERE plan_id = ?",
             ("committed", json.dumps(executed, ensure_ascii=False), now_iso(), plan_id),
@@ -443,23 +444,10 @@ def execute_plan(conn: sqlite3.Connection, plan_id: str) -> dict:
         return {"plan_id": plan_id, "status": "committed", "executed": executed}
 
     except Exception as e:
-        # Rollback by undoing executed operations in reverse order
-        for exec_record in reversed(executed):
-            try:
-                if exec_record["op"] == "create":
-                    delete_entity(conn, exec_record["result"]["id"])
-                elif exec_record["op"] == "relate":
-                    delete_relation(conn, exec_record["result"]["from"], exec_record["result"]["rel"], exec_record["result"]["to"])
-                elif exec_record["op"] == "update":
-                    # Note: This doesn't fully undo update since we don't have the old values
-                    # For full undo, we'd need to snapshot before state
-                    pass
-                elif exec_record["op"] == "delete":
-                    # Can't undo delete without snapshot
-                    pass
-            except Exception:
-                pass  # Ignore errors during rollback
+        # Single rollback undoes ALL changes (entities, relations, status update)
+        conn.rollback()
 
+        # Mark plan as rolled_back (new transaction for status only)
         conn.execute(
             "UPDATE plan_executions SET status = ?, executed_steps = ?, updated = ? WHERE plan_id = ?",
             ("rolled_back", json.dumps(executed, ensure_ascii=False), now_iso(), plan_id),
@@ -468,14 +456,15 @@ def execute_plan(conn: sqlite3.Connection, plan_id: str) -> dict:
         return {"plan_id": plan_id, "status": "rolled_back", "executed": executed, "error": str(e)}
 
 
-def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None) -> dict:
+def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None, skip_commit: bool = False) -> dict:
     entity_id = entity_id or generate_id(type_name)
     ts = now_iso()
     conn.execute(
         "INSERT INTO entities (id, type, properties, created, updated) VALUES (?, ?, ?, ?, ?)",
         (entity_id, type_name, json.dumps(properties, ensure_ascii=False), ts, ts),
     )
-    conn.commit()
+    if not skip_commit:
+        conn.commit()
     return {"id": entity_id, "type": type_name, "properties": properties, "created": ts, "updated": ts}
 
 
@@ -523,7 +512,7 @@ def search_entities(conn: sqlite3.Connection, query: str, type_name: str = None)
              "created": r["created"], "updated": r["updated"]} for r in rows]
 
 
-def update_entity(conn: sqlite3.Connection, entity_id: str, properties: dict) -> dict | None:
+def update_entity(conn: sqlite3.Connection, entity_id: str, properties: dict, skip_commit: bool = False) -> dict | None:
     row = conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
     if not row:
         return None
@@ -534,20 +523,22 @@ def update_entity(conn: sqlite3.Connection, entity_id: str, properties: dict) ->
         "UPDATE entities SET properties = ?, updated = ? WHERE id = ?",
         (json.dumps(existing, ensure_ascii=False), ts, entity_id),
     )
-    conn.commit()
+    if not skip_commit:
+        conn.commit()
     return {"id": entity_id, "type": row["type"], "properties": existing, "created": row["created"], "updated": ts}
 
 
-def delete_entity(conn: sqlite3.Connection, entity_id: str) -> bool:
+def delete_entity(conn: sqlite3.Connection, entity_id: str, skip_commit: bool = False) -> bool:
     row = conn.execute("SELECT id FROM entities WHERE id = ?", (entity_id,)).fetchone()
     if not row:
         return False
     conn.execute("DELETE FROM entities WHERE id = ?", (entity_id,))
-    conn.commit()
+    if not skip_commit:
+        conn.commit()
     return True
 
 
-def create_relation(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id: str, properties: dict = None, skip_validation: bool = False) -> dict:
+def create_relation(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id: str, properties: dict = None, skip_validation: bool = False, skip_commit: bool = False) -> dict:
     """Create a relation between entities, with validation."""
     if not skip_validation:
         type_errors = validate_relation_types(conn, from_id, rel_type, to_id)
@@ -564,7 +555,8 @@ def create_relation(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id
         "INSERT OR REPLACE INTO relations (from_id, rel_type, to_id, properties, created) VALUES (?, ?, ?, ?, ?)",
         (from_id, rel_type, to_id, json.dumps(props, ensure_ascii=False), ts),
     )
-    conn.commit()
+    if not skip_commit:
+        conn.commit()
     return {"from": from_id, "rel": rel_type, "to": to_id, "properties": props, "created": ts}
 
 

@@ -10,7 +10,7 @@ from pathlib import Path
 # Import from the skill directory
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule, add_relation_rule, get_relation_rule, list_relation_rules, delete_relation_rule, validate_graph, now_iso
+from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule, add_relation_rule, get_relation_rule, list_relation_rules, delete_relation_rule, validate_graph, now_iso, create_entity
 
 def test_type_rules_table_exists():
     """type_rules table should be created on init"""
@@ -330,6 +330,56 @@ def test_plan_rollback_on_error():
         assert task is None, "Entity should be rolled back"
         conn.close()
 
+def test_plan_with_update():
+    """Plan with update operation should execute atomically"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_plan, execute_plan, get_entity
+
+        # Create entity first
+        create_entity(conn, "Task", {"title": "Original", "status": "open"}, "task_001")
+
+        steps = [
+            {"op": "update", "id": "task_001", "props": {"title": "Updated"}},
+        ]
+
+        plan = create_plan(conn, steps)
+        result = execute_plan(conn, plan["plan_id"])
+
+        assert result["status"] == "committed"
+
+        # Verify update happened
+        entity = get_entity(conn, "task_001")
+        assert entity["properties"]["title"] == "Updated"
+        conn.close()
+
+def test_plan_rollback_preserves_original():
+    """Rollback should leave database unchanged"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_plan, execute_plan, get_entity
+
+        create_entity(conn, "Task", {"title": "Original", "status": "open"}, "task_001")
+
+        steps = [
+            {"op": "update", "id": "task_001", "props": {"title": "Should not persist"}},
+            {"op": "relate", "from": "nonexistent", "rel": "has_owner", "to": "pers_001"},  # Will fail
+        ]
+
+        plan = create_plan(conn, steps)
+        result = execute_plan(conn, plan["plan_id"])
+
+        assert result["status"] == "rolled_back"
+
+        # Verify rollback worked - title should be original
+        entity = get_entity(conn, "task_001")
+        assert entity["properties"]["title"] == "Original", "Update should be rolled back"
+        conn.close()
+
 if __name__ == "__main__":
     test_type_rules_table_exists()
     test_relation_rules_table_exists()
@@ -350,4 +400,6 @@ if __name__ == "__main__":
     test_skip_validation_bypass()
     test_plan_create_and_execute()
     test_plan_rollback_on_error()
+    test_plan_with_update()
+    test_plan_rollback_preserves_original()
     print("All tests passed!")
