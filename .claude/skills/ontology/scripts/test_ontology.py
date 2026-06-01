@@ -10,7 +10,7 @@ from pathlib import Path
 # Import from the skill directory
 import sys
 sys.path.insert(0, str(Path(__file__).parent))
-from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule, add_relation_rule, get_relation_rule, list_relation_rules, delete_relation_rule
+from ontology import get_db, seed_default_rules, add_type_rule, get_type_rule, list_type_rules, delete_type_rule, add_relation_rule, get_relation_rule, list_relation_rules, delete_relation_rule, validate_graph, now_iso
 
 def test_type_rules_table_exists():
     """type_rules table should be created on init"""
@@ -238,6 +238,48 @@ def test_acyclic_validation():
         assert "cycle" in errors[0].lower()
         conn.close()
 
+def test_validate_graph_entity_errors():
+    """validate_graph should find entity property violations"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        # Create entity missing required property
+        conn.execute(
+            "INSERT INTO entities (id, type, properties, created, updated) VALUES (?, ?, ?, ?, ?)",
+            ("task_bad", "Task", json.dumps({"title": "No status"}), now_iso(), now_iso()),
+        )
+        conn.commit()
+
+        errors = validate_graph(conn)
+        assert len(errors) > 0, "Should find missing 'status' property"
+        assert any("status" in e for e in errors), "Error should mention 'status'"
+        conn.close()
+
+def test_skip_validation_bypass():
+    """create_relation with skip_validation=True should bypass checks"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_entity, create_relation
+        create_entity(conn, "Person", {"name": "Alice"}, "pers_001")
+        create_entity(conn, "Task", {"title": "T", "status": "open"}, "task_001")
+
+        # Person blocks Task would normally fail (wrong from_type)
+        # But skip_validation allows it
+        rel = create_relation(conn, "pers_001", "blocks", "task_001", skip_validation=True)
+        assert rel["from"] == "pers_001"
+        assert rel["rel"] == "blocks"
+
+        # Verify relation exists
+        row = conn.execute(
+            "SELECT * FROM relations WHERE from_id=? AND rel_type=? AND to_id=?",
+            ("pers_001", "blocks", "task_001"),
+        ).fetchone()
+        assert row is not None
+        conn.close()
+
 if __name__ == "__main__":
     test_type_rules_table_exists()
     test_relation_rules_table_exists()
@@ -254,4 +296,6 @@ if __name__ == "__main__":
     test_relation_type_validation_allowed()
     test_relation_type_validation_rejected()
     test_acyclic_validation()
+    test_validate_graph_entity_errors()
+    test_skip_validation_bypass()
     print("All tests passed!")

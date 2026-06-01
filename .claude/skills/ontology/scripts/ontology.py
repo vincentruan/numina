@@ -304,9 +304,11 @@ def validate_relation_types(conn: sqlite3.Connection, from_id: str, rel_type: st
 
     if not from_entity:
         errors.append(f"from_id '{from_id}' does not exist")
-        return errors
     if not to_entity:
         errors.append(f"to_id '{to_id}' does not exist")
+
+    # Return early only if entities don't exist (can't check types)
+    if errors:
         return errors
 
     rule = get_relation_rule(conn, rel_type)
