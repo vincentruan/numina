@@ -295,6 +295,66 @@ def delete_relation_rule(conn: sqlite3.Connection, rel_type: str) -> bool:
     return cur.rowcount > 0
 
 
+def validate_relation_types(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id: str) -> list:
+    """Validate that relation types match the rule constraints."""
+    errors = []
+
+    from_entity = get_entity(conn, from_id)
+    to_entity = get_entity(conn, to_id)
+
+    if not from_entity:
+        errors.append(f"from_id '{from_id}' does not exist")
+        return errors
+    if not to_entity:
+        errors.append(f"to_id '{to_id}' does not exist")
+        return errors
+
+    rule = get_relation_rule(conn, rel_type)
+    if not rule:
+        return errors  # No rule defined - allow by default
+
+    from_type = from_entity["type"]
+    to_type = to_entity["type"]
+
+    if rule["from_types"] and from_type not in rule["from_types"]:
+        errors.append(f"Relation '{rel_type}' requires from_types={rule['from_types']}, got '{from_type}'")
+
+    if rule["to_types"] and to_type not in rule["to_types"]:
+        errors.append(f"Relation '{rel_type}' requires to_types={rule['to_types']}, got '{to_type}'")
+
+    return errors
+
+
+def validate_acyclic(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id: str) -> list:
+    """Check if adding this relation would create a cycle."""
+    errors = []
+
+    rule = get_relation_rule(conn, rel_type)
+    if not rule or not rule["acyclic"]:
+        return errors
+
+    visited = set()
+    stack = [to_id]
+
+    while stack:
+        current = stack.pop()
+        if current == from_id:
+            errors.append(f"Adding '{rel_type}' from {from_id} to {to_id} would create a cycle")
+            return errors
+        if current in visited:
+            continue
+        visited.add(current)
+
+        rows = conn.execute(
+            "SELECT to_id FROM relations WHERE from_id = ? AND rel_type = ?",
+            (current, rel_type),
+        ).fetchall()
+        for row in rows:
+            stack.append(row["to_id"])
+
+    return errors
+
+
 def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None) -> dict:
     entity_id = entity_id or generate_id(type_name)
     ts = now_iso()
@@ -374,7 +434,17 @@ def delete_entity(conn: sqlite3.Connection, entity_id: str) -> bool:
     return True
 
 
-def create_relation(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id: str, properties: dict = None) -> dict:
+def create_relation(conn: sqlite3.Connection, from_id: str, rel_type: str, to_id: str, properties: dict = None, skip_validation: bool = False) -> dict:
+    """Create a relation between entities, with validation."""
+    if not skip_validation:
+        type_errors = validate_relation_types(conn, from_id, rel_type, to_id)
+        if type_errors:
+            raise ValueError(f"Relation type validation failed: {type_errors}")
+
+        acyclic_errors = validate_acyclic(conn, from_id, rel_type, to_id)
+        if acyclic_errors:
+            raise ValueError(f"Acyclic validation failed: {acyclic_errors}")
+
     ts = now_iso()
     props = properties or {}
     conn.execute(
@@ -445,56 +515,49 @@ def get_related(conn: sqlite3.Connection, entity_id: str, rel_type: str = None, 
 
 
 def validate_graph(conn: sqlite3.Connection) -> list:
-    """Validate entities against built-in type constraints."""
+    """Validate entities and relations against all constraints."""
     errors = []
 
-    type_constraints = {
-        "Person": {"required": ["name"]},
-        "Organization": {"required": ["name"]},
-        "Project": {"required": ["name"]},
-        "Task": {"required": ["title", "status"], "enums": {"status": ["open", "in_progress", "blocked", "done", "cancelled"],
-                                                             "priority": ["low", "medium", "high", "urgent"]}},
-        "Goal": {"required": ["description"]},
-        "Event": {"required": ["title", "start"]},
-        "Location": {"required": ["name"]},
-        "Document": {"required": ["title"]},
-        "Message": {"required": ["content", "sender"]},
-        "Thread": {"required": ["subject"]},
-        "Note": {"required": ["content"]},
-        "Account": {"required": ["service", "username"]},
-        "Device": {"required": ["name", "type"]},
-        "Credential": {"required": ["service", "secret_ref"],
-                       "forbidden": ["password", "secret", "token", "key", "api_key"]},
-        "Action": {"required": ["type", "target", "timestamp"]},
-        "Policy": {"required": ["scope", "rule"]},
-    }
+    # Layer 1: Entity property validation from type_rules table
+    rows = conn.execute(
+        "SELECT e.*, t.required_props, t.enum_constraints, t.forbidden_props "
+        "FROM entities e LEFT JOIN type_rules t ON e.type = t.type_name"
+    ).fetchall()
 
-    rows = conn.execute("SELECT * FROM entities").fetchall()
     for row in rows:
         entity_id = row["id"]
-        type_name = row["type"]
         props = json.loads(row["properties"])
-        constraints = type_constraints.get(type_name, {})
 
-        for prop in constraints.get("required", []):
+        required = json.loads(row["required_props"] or "[]")
+        for prop in required:
             if prop not in props:
                 errors.append(f"{entity_id}: missing required property '{prop}'")
 
-        for prop in constraints.get("forbidden", []):
+        forbidden = json.loads(row["forbidden_props"] or "[]")
+        for prop in forbidden:
             if prop in props:
                 errors.append(f"{entity_id}: contains forbidden property '{prop}'")
 
-        for field, allowed in constraints.get("enums", {}).items():
+        enums = json.loads(row["enum_constraints"] or "{}")
+        for field, allowed in enums.items():
             value = props.get(field)
             if value and value not in allowed:
                 errors.append(f"{entity_id}: '{field}' must be one of {allowed}, got '{value}'")
 
-    # Check for dangling relations
-    rel_rows = conn.execute(
-        "SELECT r.* FROM relations r LEFT JOIN entities e1 ON r.from_id = e1.id "
-        "LEFT JOIN entities e2 ON r.to_id = e2.id WHERE e1.id IS NULL OR e2.id IS NULL"
-    ).fetchall()
+    # Layer 2: Relation type validation
+    rel_rows = conn.execute("SELECT * FROM relations").fetchall()
     for rel in rel_rows:
+        type_errors = validate_relation_types(conn, rel["from_id"], rel["rel_type"], rel["to_id"])
+        errors.extend(type_errors)
+
+    # Layer 3: Dangling relation check
+    danglings = conn.execute(
+        "SELECT r.* FROM relations r "
+        "LEFT JOIN entities e1 ON r.from_id = e1.id "
+        "LEFT JOIN entities e2 ON r.to_id = e2.id "
+        "WHERE e1.id IS NULL OR e2.id IS NULL"
+    ).fetchall()
+    for rel in danglings:
         errors.append(f"Dangling relation: {rel['from_id']} --{rel['rel_type']}--> {rel['to_id']}")
 
     return errors
@@ -738,8 +801,11 @@ def main():
 
     elif args.command == "relate":
         props = json.loads(args.props)
-        rel = create_relation(conn, args.from_id, args.rel, args.to_id, props)
-        print(json.dumps(rel, indent=2, ensure_ascii=False))
+        try:
+            rel = create_relation(conn, args.from_id, args.rel, args.to_id, props)
+            print(json.dumps(rel, indent=2, ensure_ascii=False))
+        except ValueError as e:
+            print(f"Error: {e}")
 
     elif args.command == "unrelate":
         if delete_relation(conn, args.from_id, args.rel, args.to_id):

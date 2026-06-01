@@ -188,6 +188,56 @@ def test_delete_relation_rule():
         assert delete_relation_rule(conn, "nonexistent") == False
         conn.close()
 
+def test_relation_type_validation_allowed():
+    """Relation with valid types should succeed"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_entity, validate_relation_types
+        create_entity(conn, "Task", {"title": "T1", "status": "open"}, "task_001")
+        create_entity(conn, "Task", {"title": "T2", "status": "open"}, "task_002")
+
+        # blocks: Task -> Task is allowed
+        errors = validate_relation_types(conn, "task_001", "blocks", "task_002")
+        assert len(errors) == 0, f"Should be valid, got {errors}"
+        conn.close()
+
+def test_relation_type_validation_rejected():
+    """Relation with invalid types should fail"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_entity, validate_relation_types
+        create_entity(conn, "Task", {"title": "T1", "status": "open"}, "task_001")
+        create_entity(conn, "Person", {"name": "Alice"}, "pers_001")
+
+        # blocks: Task -> Task only, Person not allowed
+        errors = validate_relation_types(conn, "pers_001", "blocks", "task_001")
+        assert len(errors) > 0, "Should fail - Person cannot blocks Task"
+        assert "from_types" in errors[0]
+        conn.close()
+
+def test_acyclic_validation():
+    """Acyclic relations should reject cycles"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_entity, create_relation, validate_acyclic
+        create_entity(conn, "Task", {"title": "T1", "status": "open"}, "task_001")
+        create_entity(conn, "Task", {"title": "T2", "status": "open"}, "task_002")
+
+        # First relation OK
+        create_relation(conn, "task_001", "blocks", "task_002")
+
+        # Reverse would create cycle
+        errors = validate_acyclic(conn, "task_002", "blocks", "task_001")
+        assert len(errors) > 0, "Should detect cycle"
+        assert "cycle" in errors[0].lower()
+        conn.close()
+
 if __name__ == "__main__":
     test_type_rules_table_exists()
     test_relation_rules_table_exists()
@@ -201,4 +251,7 @@ if __name__ == "__main__":
     test_get_relation_rule()
     test_list_relation_rules()
     test_delete_relation_rule()
+    test_relation_type_validation_allowed()
+    test_relation_type_validation_rejected()
+    test_acyclic_validation()
     print("All tests passed!")
