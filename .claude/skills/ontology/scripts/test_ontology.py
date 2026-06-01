@@ -170,8 +170,35 @@ def test_list_relation_rules():
         assert "has_owner" in rel_types
         conn.close()
 
+def test_delete_relation_rule():
+    """delete-relation-type should remove relation rule"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        # Add then delete
+        add_relation_rule(conn, "temp_rel", from_types=["Task"], to_types=["Task"])
+        assert get_relation_rule(conn, "temp_rel") is not None
+
+        # Delete should return True
+        assert delete_relation_rule(conn, "temp_rel") == True
+        assert get_relation_rule(conn, "temp_rel") is None
+
+        # Deleting non-existent should return False
+        assert delete_relation_rule(conn, "nonexistent") == False
+        conn.close()
+
 if __name__ == "__main__":
     test_type_rules_table_exists()
     test_relation_rules_table_exists()
     test_plan_executions_table_exists()
+    test_seed_default_rules()
+    test_seed_is_idempotent()
+    test_add_type_command()
+    test_list_types_command()
+    test_delete_type_command()
+    test_add_relation_rule()
+    test_get_relation_rule()
+    test_list_relation_rules()
+    test_delete_relation_rule()
     print("All tests passed!")
