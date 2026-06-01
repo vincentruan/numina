@@ -105,19 +105,20 @@ describe('AIHubPage chat entry', () => {
         stubs: {
           AIChatInput: {
             name: 'AIChatInput',
-            props: ['modelValue', 'deepThink', 'webSearch'],
-            emits: ['update:modelValue', 'update:deepThink', 'update:webSearch', 'submit'],
+            props: ['modelValue', 'mode', 'webSearch'],
+            emits: ['update:modelValue', 'update:mode', 'update:webSearch', 'submit'],
             template: '<button class="chat-input" @click="$emit(\'submit\', modelValue)">send</button>',
           },
           VanLoading: true,
-          AgentGrid: true,
+          AgentCard: true,
+          NuminaAgentCard: true,
         },
       },
     })
 
     const input = wrapper.findComponent({ name: 'AIChatInput' })
     await input.vm.$emit('update:modelValue', '我们家净资产是多少？')
-    await input.vm.$emit('update:deepThink', true)
+    await input.vm.$emit('update:mode', 'smart')
     await input.vm.$emit('update:webSearch', true)
     await input.vm.$emit('submit', '我们家净资产是多少？')
 
@@ -137,13 +138,14 @@ describe('AIHubPage chat entry', () => {
     })
   })
 
-  it('calls loadAgents on mount and renders AgentGrid', async () => {
+  it('calls loadAgents on mount and renders agent cards', async () => {
     const wrapper = shallowMount(AIHubPage, {
       global: {
         stubs: {
           AIChatInput: true,
           VanLoading: true,
-          AgentGrid: true,
+          AgentCard: true,
+          NuminaAgentCard: true,
         },
       },
     })
@@ -152,6 +154,6 @@ describe('AIHubPage chat entry', () => {
     await nextTick()
 
     expect(loadAgents).toHaveBeenCalled()
-    expect(wrapper.findComponent({ name: 'AgentGrid' }).exists()).toBe(true)
+    expect(wrapper.findComponent({ name: 'NuminaAgentCard' }).exists()).toBe(true)
   })
 })
