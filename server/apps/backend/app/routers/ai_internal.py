@@ -8,12 +8,11 @@ import json
 from datetime import datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import verify_agent_token
-from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_provider_config import (
@@ -21,10 +20,12 @@ from apps.backend.app.models.ai_provider_config import (
 )
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_skill_config import FamilySkillConfig
+from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.user import User
 from apps.backend.app.services import dashboard as dashboard_service
 from apps.backend.app.services.ai_crypto import decrypt_api_key
+from apps.backend.app.services.web_search_provider_registry import get_provider_template
 
 router = APIRouter(prefix="/internal", tags=["internal-agent"])
 
@@ -185,7 +186,58 @@ def internal_get_ai_config(
     )
 
     if not all_cfgs:
-        return {"ai_enabled": False, "providers": []}
+        # No AI providers configured, but web search providers might exist
+        family_id_int = int(family_id)
+        web_search_providers_query = (
+            db.query(FamilyWebSearchProvider)
+            .filter(
+                FamilyWebSearchProvider.family_id == family_id_int,
+                FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+                FamilyWebSearchProvider.circuit_state != "open",
+            )
+            .order_by(FamilyWebSearchProvider.display_order.asc())
+            .all()
+        )
+
+        web_search_providers = []
+        for provider in web_search_providers_query:
+            template = get_provider_template(provider.provider_name)
+            api_key = None
+            if provider.api_key_encrypted:
+                api_key = decrypt_api_key(provider.api_key_encrypted)
+
+            web_search_providers.append({
+                "provider_name": provider.provider_name,
+                "provider_class": template.get("provider_class") if template else None,
+                "api_key": api_key,
+                "max_results": provider.max_results,
+            })
+
+        websearch_mcp_servers = (
+            db.query(FamilyMCPServer)
+            .filter(
+                FamilyMCPServer.family_id == family_id_int,
+                FamilyMCPServer.is_enabled == True,  # noqa: E712
+                FamilyMCPServer.mcp_type == "websearch",
+            )
+            .all()
+        )
+
+        web_search_mcp_servers = [
+            {
+                "name": mcp.name,
+                "url": mcp.url,
+                "transport": mcp.transport,
+            }
+            for mcp in websearch_mcp_servers
+        ]
+
+        return {
+            "ai_enabled": False,
+            "providers": [],
+            "web_search_providers": web_search_providers,
+            "web_search_mcp_servers": web_search_mcp_servers,
+        }
 
     providers = []
     state_changed = False
@@ -269,7 +321,59 @@ def internal_get_ai_config(
     if state_changed:
         db.commit()
 
-    return {"ai_enabled": bool(providers), "providers": providers}
+    # Query enabled web search providers (exclude open circuit state)
+    family_id_int = int(family_id)
+    web_search_providers_query = (
+        db.query(FamilyWebSearchProvider)
+        .filter(
+            FamilyWebSearchProvider.family_id == family_id_int,
+            FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+            FamilyWebSearchProvider.circuit_state != "open",
+        )
+        .order_by(FamilyWebSearchProvider.display_order.asc())
+        .all()
+    )
+
+    web_search_providers = []
+    for provider in web_search_providers_query:
+        template = get_provider_template(provider.provider_name)
+        api_key = None
+        if provider.api_key_encrypted:
+            api_key = decrypt_api_key(provider.api_key_encrypted)
+
+        web_search_providers.append({
+            "provider_name": provider.provider_name,
+            "provider_class": template.get("provider_class") if template else None,
+            "api_key": api_key,
+            "max_results": provider.max_results,
+        })
+
+    # Query enabled websearch-type MCP servers
+    websearch_mcp_servers = (
+        db.query(FamilyMCPServer)
+        .filter(
+            FamilyMCPServer.family_id == family_id_int,
+            FamilyMCPServer.is_enabled == True,  # noqa: E712
+            FamilyMCPServer.mcp_type == "websearch",
+        )
+        .all()
+    )
+
+    web_search_mcp_servers = [
+        {
+            "name": mcp.name,
+            "url": mcp.url,
+            "transport": mcp.transport,
+        }
+        for mcp in websearch_mcp_servers
+    ]
+
+    return {
+        "ai_enabled": bool(providers),
+        "providers": providers,
+        "web_search_providers": web_search_providers,
+        "web_search_mcp_servers": web_search_mcp_servers,
+    }
 
 
 def _parse_capabilities(cap_str: str | None) -> list[str]:
@@ -389,6 +493,56 @@ def internal_circuit_reset(
 
 class HalfOpenResultRequest(BaseModel):
     success: bool
+
+
+class WebSearchCircuitReportRequest(BaseModel):
+    failure_type: Literal[
+        "transient_rate_limit",
+        "transient_server",
+        "transient_timeout",
+        "transient_network",
+        "permanent_auth",
+        "permanent_account",
+    ]
+    error_message: str | None = None
+
+
+@router.post("/ai/web-search/{provider_id}/circuit")
+def internal_web_search_circuit_report(
+    provider_id: int,
+    body: WebSearchCircuitReportRequest,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """记录 web search 供应商调用失败，触发熔断逻辑。
+
+    错误类型分类：
+    - permanent_auth/permanent_account: 立即熔断，无自动恢复
+    - transient_*: 累计失败次数，达到阈值后熔断
+    """
+    from apps.backend.app.services.web_search_circuit_service import (
+        WebSearchCircuitService,
+    )
+
+    provider = (
+        db.query(FamilyWebSearchProvider)
+        .filter(
+            FamilyWebSearchProvider.id == provider_id,
+            FamilyWebSearchProvider.family_id == int(family_id),
+        )
+        .first()
+    )
+    if not provider:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    WebSearchCircuitService.report_failure(provider_id, body.failure_type, db)
+    db.refresh(provider)
+
+    return {
+        "ok": True,
+        "circuit_state": provider.circuit_state,
+        "circuit_reason": provider.circuit_reason,
+    }
 
 
 @router.post("/ai/config/{config_id}/half-open-result")
