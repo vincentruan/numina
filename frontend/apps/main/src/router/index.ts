@@ -200,7 +200,11 @@ const router = createRouter({
           name: 'WebSearch',
           component: () => import('@/pages/WebSearchPage.vue'),
         },
-        // WebSearchForm route is added in Task 10
+        {
+          path: 'settings/ai/web-search/form',
+          name: 'WebSearchForm',
+          component: () => import('@/pages/WebSearchFormPage.vue'),
+        },
         {
           path: 'settings/ai/skills',
           name: 'SkillsManage',
