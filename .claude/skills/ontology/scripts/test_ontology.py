@@ -280,6 +280,56 @@ def test_skip_validation_bypass():
         assert row is not None
         conn.close()
 
+def test_plan_create_and_execute():
+    """Plan should execute all steps atomically"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_plan, execute_plan, get_entity
+
+        steps = [
+            {"op": "create", "type": "Task", "props": {"title": "T1", "status": "open"}},
+            {"op": "create", "type": "Person", "props": {"name": "Alice"}, "id": "pers_001"},
+        ]
+
+        plan = create_plan(conn, steps)
+        assert plan["plan_id"].startswith("plan_")
+        assert plan["status"] == "pending"
+
+        result = execute_plan(conn, plan["plan_id"])
+        assert result["status"] == "committed"
+        assert len(result["executed"]) == 2
+
+        # Verify entities created
+        person = get_entity(conn, "pers_001")
+        assert person is not None
+        assert person["properties"]["name"] == "Alice"
+        conn.close()
+
+def test_plan_rollback_on_error():
+    """Plan should rollback on step failure"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        db_path = os.path.join(tmpdir, "test.db")
+        conn = get_db(db_path)
+
+        from ontology import create_plan, execute_plan, get_entity
+
+        steps = [
+            {"op": "create", "type": "Task", "props": {"title": "T1", "status": "open"}, "id": "task_001"},
+            {"op": "relate", "from": "nonexistent", "rel": "has_owner", "to": "pers_001"},
+        ]
+
+        plan = create_plan(conn, steps)
+        result = execute_plan(conn, plan["plan_id"])
+
+        assert result["status"] == "rolled_back"
+
+        # Verify first entity was NOT created (rolled back)
+        task = get_entity(conn, "task_001")
+        assert task is None, "Entity should be rolled back"
+        conn.close()
+
 if __name__ == "__main__":
     test_type_rules_table_exists()
     test_relation_rules_table_exists()
@@ -298,4 +348,6 @@ if __name__ == "__main__":
     test_acyclic_validation()
     test_validate_graph_entity_errors()
     test_skip_validation_bypass()
+    test_plan_create_and_execute()
+    test_plan_rollback_on_error()
     print("All tests passed!")
