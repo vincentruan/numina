@@ -44,13 +44,13 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_family_web_search_providers_family_id'), 'family_web_search_providers', ['family_id'], unique=False)
 
-    # Add mcp_type column to ai_mcp_servers
-    op.add_column('ai_mcp_servers', sa.Column('mcp_type', sa.String(length=20), nullable=False, server_default='general'))
+    # Add mcp_type column to family_mcp_servers
+    op.add_column('family_mcp_servers', sa.Column('mcp_type', sa.String(length=20), nullable=False, server_default='general'))
 
 
 def downgrade() -> None:
-    # Remove mcp_type column from ai_mcp_servers
-    op.drop_column('ai_mcp_servers', 'mcp_type')
+    # Remove mcp_type column from family_mcp_servers
+    op.drop_column('family_mcp_servers', 'mcp_type')
 
     # Drop family_web_search_providers table
     op.drop_index(op.f('ix_family_web_search_providers_family_id'), table_name='family_web_search_providers')
