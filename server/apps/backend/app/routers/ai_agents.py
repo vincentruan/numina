@@ -95,12 +95,12 @@ def create_agent(
     if existing:
         raise AppError(ErrorCode.VALIDATION_ERROR, "agent_name 已存在")
 
-    builtin_conflict = (
+    system_name_conflict = (
         db.query(AIAgent)
         .filter(AIAgent.family_id == 0, AIAgent.agent_name == payload.agent_name)
         .first()
     )
-    if builtin_conflict:
+    if system_name_conflict:
         raise AppError(ErrorCode.VALIDATION_ERROR, "不能使用内置智能体的名称")
 
     agent = AIAgent(
