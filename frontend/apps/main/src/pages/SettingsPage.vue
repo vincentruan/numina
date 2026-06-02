@@ -83,7 +83,7 @@
       </van-cell>
       <van-cell :title="t('settings.aiAssistant')" is-link to="/settings/ai">
         <template #icon>
-          <NuminaLogo :width="24" class="cell-logo" />
+          <ButlerIcon :size="24" class="cell-logo" />
         </template>
       </van-cell>
       <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
@@ -186,6 +186,7 @@ import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
+import ButlerIcon from '@/components/common/ButlerIcon.vue'
 import axios from 'axios'
 
 const { t } = useI18n()
