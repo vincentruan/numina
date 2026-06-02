@@ -2,6 +2,23 @@
 
 Detailed type constraints and validation rules. For the type listing and relation vocabulary, see SKILL.md.
 
+## Database Location
+
+Default: `.ontology/ontology.db` at project root. Override via `--db` flag:
+
+```bash
+python3 scripts/ontology.py stats --db /custom/path/ontology.db
+```
+
+## Architecture: Core vs Extension Tiers
+
+The ontology uses tiered seeding to keep the default schema focused:
+
+- **Core tier** (8 types, 11 relations): Seeded automatically on first run. Covers people, work, documents, and actions.
+- **Extension tier** (8 types, 4 relations): Loaded via `seed-extensions` command. Covers events, locations, messaging, accounts, and governance.
+
+Extension types can also be added individually via `add-type`.
+
 ## Property Types
 
 ```yaml
@@ -13,6 +30,7 @@ datetime:  ISO 8601 with timezone ("2026-01-15T09:30:00+08:00")
 url:       valid URL string
 enum:      one of a fixed set of values
 ref:       entity ID reference (e.g., "p_001")
+code_ref:  code symbol reference ("symbol:ClassName.method" or "file:path/to/file.py")
 object:    nested JSON object
 array:     JSON array (typed elements noted as type[])
 ```
@@ -26,7 +44,62 @@ Format: `{type_prefix}_{uuid_hex8}`
 - Examples: `pers_a1b2c3d4`, `proj_e5f6a7b8`, `task_12345678`
 - Custom IDs accepted via `--id` flag (must be unique)
 
+## Namespace Partitioning
+
+Entities have an optional `namespace` field (default: `"default"`). Use namespaces to separate bounded contexts:
+
+```bash
+# Create in a namespace
+python3 scripts/ontology.py create --type Person --props '{"name":"Alice"}' --namespace family-assets
+
+# Query within namespace
+python3 scripts/ontology.py list --type Task --namespace work
+
+# Relations cross namespaces — the graph is unified
+python3 scripts/ontology.py relate --from pers_001 --rel has_task --to task_001
+```
+
+Namespaces are for organization, not isolation. Relations can link entities across namespaces.
+
 ## Constraint Tables
+
+### entities
+
+Core storage for domain entities:
+
+```sql
+CREATE TABLE entities (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL,
+    namespace TEXT NOT NULL DEFAULT 'default',
+    properties TEXT NOT NULL DEFAULT '{}',
+    created TEXT NOT NULL,
+    updated TEXT NOT NULL
+);
+
+CREATE INDEX idx_entities_type ON entities(type);
+CREATE INDEX idx_entities_namespace ON entities(namespace);
+CREATE INDEX idx_entities_ns_type ON entities(namespace, type);
+```
+
+### relations
+
+Entity relationships:
+
+```sql
+CREATE TABLE relations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id TEXT NOT NULL,
+    rel_type TEXT NOT NULL,
+    to_id TEXT NOT NULL,
+    properties TEXT NOT NULL DEFAULT '{}',
+    created TEXT NOT NULL,
+    FOREIGN KEY (from_id) REFERENCES entities(id) ON DELETE CASCADE,
+    FOREIGN KEY (to_id) REFERENCES entities(id) ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX idx_relations_unique ON relations(from_id, rel_type, to_id);
+```
 
 ### type_rules
 
@@ -104,22 +177,29 @@ Status values: `pending`, `executing`, `committed`, `rolled_back`
 
 Entity must have these properties set (non-null) to pass validation:
 
+#### Core Tier
+
 ```yaml
 Person:       [name]
 Organization: [name]
 Project:      [name]
 Task:         [title, status]
 Goal:         [description]
+Document:     [title]
+Note:         [content]
+Action:       [type, target, timestamp]
+```
+
+#### Extension Tier
+
+```yaml
 Event:        [title, start]
 Location:     [name]
-Document:     [title]
 Message:      [content, sender]
 Thread:       [subject]
-Note:         [content]
 Account:      [service, username]
 Device:       [name, type]
 Credential:   [service, secret_ref]
-Action:       [type, target, timestamp]
 Policy:       [scope, rule]
 ```
 
@@ -128,15 +208,18 @@ Policy:       [scope, rule]
 Properties restricted to specific values:
 
 ```yaml
+# Core tier
 Task.status:   [open, in_progress, blocked, done, cancelled]
 Task.priority: [low, medium, high, urgent]
 Project.status: [planning, active, paused, completed, archived]
 Organization.type: [company, team, community, government, other]
+Action.outcome: [success, failure, pending]
+
+# Extension tier
 Event.status:  [confirmed, tentative, cancelled]
 Goal.status:   [active, achieved, abandoned]
 Device.type:   [computer, phone, tablet, server, iot, other]
 Policy.enforcement: [block, warn, log]
-Action.outcome: [success, failure, pending]
 ```
 
 ### Forbidden Properties
@@ -154,7 +237,7 @@ Credentials must use `secret_ref` to reference external secret storage.
 ```yaml
 acyclic:
   - blocks (Task → Task)
-  - depends_on (Task/Project → Task/Project/Event)
+  - depends_on (Task/Project → Task/Project)
 
 cardinality:
   many_to_one:  has_owner, assigned_to, part_of, located_at, follows_up
@@ -219,6 +302,20 @@ python3 scripts/ontology.py plan-execute --plan-id plan_abc123
 
 # Check plan status
 python3 scripts/ontology.py plan-status --plan-id plan_abc123
+```
+
+### Extension & Namespace Commands
+
+```bash
+# Load extension-tier types (Event, Location, messaging, IAM)
+python3 scripts/ontology.py seed-extensions
+
+# Create entity in a namespace
+python3 scripts/ontology.py create --type Person --props '{"name":"Alice"}' --namespace family-assets
+
+# Query within namespace
+python3 scripts/ontology.py list --type Task --namespace work
+python3 scripts/ontology.py search "asset" --namespace family-assets
 ```
 
 ### Validation

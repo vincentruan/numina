@@ -23,19 +23,22 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-DEFAULT_DB_PATH = "memory/ontology/ontology.db"
-LEGACY_GRAPH_PATH = "memory/ontology/graph.jsonl"
+DEFAULT_DB_PATH = ".ontology/ontology.db"
+LEGACY_GRAPH_PATH = ".ontology/graph.jsonl"
 
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS entities (
     id TEXT PRIMARY KEY,
     type TEXT NOT NULL,
+    namespace TEXT NOT NULL DEFAULT 'default',
     properties TEXT NOT NULL DEFAULT '{}',
     created TEXT NOT NULL,
     updated TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
+CREATE INDEX IF NOT EXISTS idx_entities_namespace ON entities(namespace);
+CREATE INDEX IF NOT EXISTS idx_entities_ns_type ON entities(namespace, type);
 
 CREATE TABLE IF NOT EXISTS relations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,6 +98,13 @@ def get_db(db_path: str) -> sqlite3.Connection:
     conn.execute("PRAGMA foreign_keys=ON")
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA_SQL)
+    # Migrate existing DBs: add namespace column if missing
+    cols = [row[1] for row in conn.execute("PRAGMA table_info(entities)").fetchall()]
+    if "namespace" not in cols:
+        conn.execute("ALTER TABLE entities ADD COLUMN namespace TEXT NOT NULL DEFAULT 'default'")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_namespace ON entities(namespace)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_ns_type ON entities(namespace, type)")
+        conn.commit()
     seed_default_rules(conn)
     return conn
 
@@ -109,48 +119,62 @@ def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# Default type rules (migrated from hardcoded type_constraints)
-DEFAULT_TYPE_RULES = {
+# Core tier entity types — seeded by default for domain knowledge graphs
+CORE_TYPE_RULES = {
     "Person": {"required": ["name"], "enums": {}, "forbidden": []},
     "Organization": {"required": ["name"], "enums": {"type": ["company", "team", "community", "government", "other"]}, "forbidden": []},
     "Project": {"required": ["name"], "enums": {"status": ["planning", "active", "paused", "completed", "archived"]}, "forbidden": []},
     "Task": {"required": ["title", "status"], "enums": {"status": ["open", "in_progress", "blocked", "done", "cancelled"], "priority": ["low", "medium", "high", "urgent"]}, "forbidden": []},
     "Goal": {"required": ["description"], "enums": {"status": ["active", "achieved", "abandoned"]}, "forbidden": []},
+    "Document": {"required": ["title"], "enums": {}, "forbidden": []},
+    "Note": {"required": ["content"], "enums": {}, "forbidden": []},
+    "Action": {"required": ["type", "target", "timestamp"], "enums": {"outcome": ["success", "failure", "pending"]}, "forbidden": []},
+}
+
+# Extension tier entity types — available via add-type, not seeded by default
+EXTENSION_TYPE_RULES = {
     "Event": {"required": ["title", "start"], "enums": {"status": ["confirmed", "tentative", "cancelled"]}, "forbidden": []},
     "Location": {"required": ["name"], "enums": {}, "forbidden": []},
-    "Document": {"required": ["title"], "enums": {}, "forbidden": []},
     "Message": {"required": ["content", "sender"], "enums": {}, "forbidden": []},
     "Thread": {"required": ["subject"], "enums": {"status": ["active", "archived"]}, "forbidden": []},
-    "Note": {"required": ["content"], "enums": {}, "forbidden": []},
     "Account": {"required": ["service", "username"], "enums": {}, "forbidden": []},
     "Device": {"required": ["name", "type"], "enums": {"type": ["computer", "phone", "tablet", "server", "iot", "other"]}, "forbidden": []},
     "Credential": {"required": ["service", "secret_ref"], "enums": {}, "forbidden": ["password", "secret", "token", "key", "api_key"]},
-    "Action": {"required": ["type", "target", "timestamp"], "enums": {"outcome": ["success", "failure", "pending"]}, "forbidden": []},
     "Policy": {"required": ["scope", "rule"], "enums": {"enforcement": ["block", "warn", "log"]}, "forbidden": []},
 }
 
-# Default relation rules (from original schema.md)
-DEFAULT_RELATION_RULES = {
-    "owns": {"from_types": ["Person", "Organization"], "to_types": ["Account", "Device", "Document", "Project"], "cardinality": "one_to_many", "acyclic": False},
+# Legacy full set (for backward compatibility with existing DBs)
+DEFAULT_TYPE_RULES = {**CORE_TYPE_RULES, **EXTENSION_TYPE_RULES}
+
+# Core tier relation rules — seeded by default (only involve core entity types)
+CORE_RELATION_RULES = {
+    "owns": {"from_types": ["Person", "Organization"], "to_types": ["Document", "Project"], "cardinality": "one_to_many", "acyclic": False},
     "has_owner": {"from_types": ["Project", "Task", "Document"], "to_types": ["Person"], "cardinality": "many_to_one", "acyclic": False},
     "assigned_to": {"from_types": ["Task"], "to_types": ["Person"], "cardinality": "many_to_one", "acyclic": False},
     "has_task": {"from_types": ["Project"], "to_types": ["Task"], "cardinality": "one_to_many", "acyclic": False},
     "has_goal": {"from_types": ["Project"], "to_types": ["Goal"], "cardinality": "one_to_many", "acyclic": False},
     "member_of": {"from_types": ["Person"], "to_types": ["Organization"], "cardinality": "many_to_many", "acyclic": False},
-    "part_of": {"from_types": ["Task", "Document", "Event"], "to_types": ["Project"], "cardinality": "many_to_one", "acyclic": False},
+    "part_of": {"from_types": ["Task", "Document"], "to_types": ["Project"], "cardinality": "many_to_one", "acyclic": False},
     "blocks": {"from_types": ["Task"], "to_types": ["Task"], "cardinality": "many_to_many", "acyclic": True},
-    "depends_on": {"from_types": ["Task", "Project"], "to_types": ["Task", "Project", "Event"], "cardinality": "many_to_many", "acyclic": True},
-    "requires": {"from_types": ["Action"], "to_types": ["Credential", "Policy"], "cardinality": "many_to_many", "acyclic": False},
-    "mentions": {"from_types": ["Document", "Message", "Note"], "to_types": ["Person", "Project", "Task", "Event"], "cardinality": "many_to_many", "acyclic": False},
+    "depends_on": {"from_types": ["Task", "Project"], "to_types": ["Task", "Project"], "cardinality": "many_to_many", "acyclic": True},
+    "mentions": {"from_types": ["Document", "Note"], "to_types": ["Person", "Project", "Task"], "cardinality": "many_to_many", "acyclic": False},
     "references": {"from_types": ["Document", "Note"], "to_types": ["Document", "Note"], "cardinality": "many_to_many", "acyclic": False},
+}
+
+# Extension tier relation rules — available via add-relation-type, not seeded by default
+EXTENSION_RELATION_RULES = {
+    "requires": {"from_types": ["Action"], "to_types": ["Credential", "Policy"], "cardinality": "many_to_many", "acyclic": False},
     "follows_up": {"from_types": ["Task", "Event"], "to_types": ["Event", "Message"], "cardinality": "many_to_one", "acyclic": False},
     "attendee_of": {"from_types": ["Person"], "to_types": ["Event"], "cardinality": "many_to_many", "acyclic": False},
     "located_at": {"from_types": ["Event", "Person", "Device"], "to_types": ["Location"], "cardinality": "many_to_one", "acyclic": False},
 }
 
+# Legacy full set (for backward compatibility with existing DBs)
+DEFAULT_RELATION_RULES = {**CORE_RELATION_RULES, **EXTENSION_RELATION_RULES}
+
 
 def seed_default_rules(conn: sqlite3.Connection) -> dict:
-    """Seed default type and relation rules if tables are empty."""
+    """Seed core-tier type and relation rules if tables are empty."""
     ts = now_iso()
 
     seeded_types = 0
@@ -159,7 +183,7 @@ def seed_default_rules(conn: sqlite3.Connection) -> dict:
     # Check if type_rules is empty
     existing_types = conn.execute("SELECT COUNT(*) FROM type_rules").fetchone()[0]
     if existing_types == 0:
-        for type_name, rules in DEFAULT_TYPE_RULES.items():
+        for type_name, rules in CORE_TYPE_RULES.items():
             conn.execute(
                 "INSERT INTO type_rules (type_name, required_props, enum_constraints, forbidden_props, created, updated) VALUES (?, ?, ?, ?, ?, ?)",
                 (type_name, json.dumps(rules["required"]), json.dumps(rules["enums"]), json.dumps(rules["forbidden"]), ts, ts),
@@ -169,7 +193,36 @@ def seed_default_rules(conn: sqlite3.Connection) -> dict:
     # Check if relation_rules is empty
     existing_relations = conn.execute("SELECT COUNT(*) FROM relation_rules").fetchone()[0]
     if existing_relations == 0:
-        for rel_type, rules in DEFAULT_RELATION_RULES.items():
+        for rel_type, rules in CORE_RELATION_RULES.items():
+            conn.execute(
+                "INSERT INTO relation_rules (rel_type, from_types, to_types, cardinality, acyclic, relation_props_schema, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (rel_type, json.dumps(rules["from_types"]), json.dumps(rules["to_types"]), rules["cardinality"], int(rules["acyclic"]), "{}", ts, ts),
+            )
+            seeded_relations += 1
+
+    conn.commit()
+    return {"seeded_types": seeded_types, "seeded_relations": seeded_relations}
+
+
+def seed_extension_rules(conn: sqlite3.Connection) -> dict:
+    """Seed extension-tier type and relation rules (Event, Location, messaging, IAM types)."""
+    ts = now_iso()
+
+    seeded_types = 0
+    seeded_relations = 0
+
+    for type_name, rules in EXTENSION_TYPE_RULES.items():
+        existing = conn.execute("SELECT 1 FROM type_rules WHERE type_name = ?", (type_name,)).fetchone()
+        if not existing:
+            conn.execute(
+                "INSERT INTO type_rules (type_name, required_props, enum_constraints, forbidden_props, created, updated) VALUES (?, ?, ?, ?, ?, ?)",
+                (type_name, json.dumps(rules["required"]), json.dumps(rules["enums"]), json.dumps(rules["forbidden"]), ts, ts),
+            )
+            seeded_types += 1
+
+    for rel_type, rules in EXTENSION_RELATION_RULES.items():
+        existing = conn.execute("SELECT 1 FROM relation_rules WHERE rel_type = ?", (rel_type,)).fetchone()
+        if not existing:
             conn.execute(
                 "INSERT INTO relation_rules (rel_type, from_types, to_types, cardinality, acyclic, relation_props_schema, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (rel_type, json.dumps(rules["from_types"]), json.dumps(rules["to_types"]), rules["cardinality"], int(rules["acyclic"]), "{}", ts, ts),
@@ -413,7 +466,8 @@ def execute_plan(conn: sqlite3.Connection, plan_id: str) -> dict:
 
             if op == "create":
                 entity_id = step.get("id")
-                entity = create_entity(conn, step["type"], step["props"], entity_id, skip_commit=True)
+                ns = step.get("namespace", "default")
+                entity = create_entity(conn, step["type"], step["props"], entity_id, namespace=ns, skip_commit=True)
                 executed.append({"step": i, "op": "create", "entity_id": entity["id"]})
 
             elif op == "relate":
@@ -456,49 +510,66 @@ def execute_plan(conn: sqlite3.Connection, plan_id: str) -> dict:
         return {"plan_id": plan_id, "status": "rolled_back", "executed": executed, "error": str(e)}
 
 
-def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None, skip_commit: bool = False) -> dict:
+def create_entity(conn: sqlite3.Connection, type_name: str, properties: dict, entity_id: str = None, namespace: str = "default", skip_commit: bool = False) -> dict:
     entity_id = entity_id or generate_id(type_name)
     ts = now_iso()
     conn.execute(
-        "INSERT INTO entities (id, type, properties, created, updated) VALUES (?, ?, ?, ?, ?)",
-        (entity_id, type_name, json.dumps(properties, ensure_ascii=False), ts, ts),
+        "INSERT INTO entities (id, type, namespace, properties, created, updated) VALUES (?, ?, ?, ?, ?, ?)",
+        (entity_id, type_name, namespace, json.dumps(properties, ensure_ascii=False), ts, ts),
     )
     if not skip_commit:
         conn.commit()
-    return {"id": entity_id, "type": type_name, "properties": properties, "created": ts, "updated": ts}
+    return {"id": entity_id, "type": type_name, "namespace": namespace, "properties": properties, "created": ts, "updated": ts}
 
 
 def get_entity(conn: sqlite3.Connection, entity_id: str) -> dict | None:
     row = conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
     if not row:
         return None
-    return {"id": row["id"], "type": row["type"], "properties": json.loads(row["properties"]),
-            "created": row["created"], "updated": row["updated"]}
+    return {"id": row["id"], "type": row["type"], "namespace": row["namespace"],
+            "properties": json.loads(row["properties"]), "created": row["created"], "updated": row["updated"]}
 
 
-def query_entities(conn: sqlite3.Connection, type_name: str, where: dict) -> list:
-    rows = conn.execute("SELECT * FROM entities WHERE type = ?", (type_name,)).fetchall()
+def query_entities(conn: sqlite3.Connection, type_name: str, where: dict, namespace: str = None) -> list:
+    if namespace:
+        rows = conn.execute("SELECT * FROM entities WHERE type = ? AND namespace = ?", (type_name, namespace)).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM entities WHERE type = ?", (type_name,)).fetchall()
     results = []
     for row in rows:
         props = json.loads(row["properties"])
         if all(props.get(k) == v for k, v in where.items()):
-            results.append({"id": row["id"], "type": row["type"], "properties": props,
-                            "created": row["created"], "updated": row["updated"]})
+            results.append({"id": row["id"], "type": row["type"], "namespace": row["namespace"],
+                            "properties": props, "created": row["created"], "updated": row["updated"]})
     return results
 
 
-def list_entities(conn: sqlite3.Connection, type_name: str = None) -> list:
-    if type_name:
+def list_entities(conn: sqlite3.Connection, type_name: str = None, namespace: str = None) -> list:
+    if namespace and type_name:
+        rows = conn.execute("SELECT * FROM entities WHERE type = ? AND namespace = ?", (type_name, namespace)).fetchall()
+    elif namespace:
+        rows = conn.execute("SELECT * FROM entities WHERE namespace = ?", (namespace,)).fetchall()
+    elif type_name:
         rows = conn.execute("SELECT * FROM entities WHERE type = ?", (type_name,)).fetchall()
     else:
         rows = conn.execute("SELECT * FROM entities").fetchall()
-    return [{"id": r["id"], "type": r["type"], "properties": json.loads(r["properties"]),
-             "created": r["created"], "updated": r["updated"]} for r in rows]
+    return [{"id": r["id"], "type": r["type"], "namespace": r["namespace"],
+             "properties": json.loads(r["properties"]), "created": r["created"], "updated": r["updated"]} for r in rows]
 
 
-def search_entities(conn: sqlite3.Connection, query: str, type_name: str = None) -> list:
+def search_entities(conn: sqlite3.Connection, query: str, type_name: str = None, namespace: str = None) -> list:
     pattern = f"%{query}%"
-    if type_name:
+    if namespace and type_name:
+        rows = conn.execute(
+            "SELECT * FROM entities WHERE namespace = ? AND type = ? AND (properties LIKE ? OR id LIKE ?)",
+            (namespace, type_name, pattern, pattern),
+        ).fetchall()
+    elif namespace:
+        rows = conn.execute(
+            "SELECT * FROM entities WHERE namespace = ? AND (properties LIKE ? OR id LIKE ?)",
+            (namespace, pattern, pattern),
+        ).fetchall()
+    elif type_name:
         rows = conn.execute(
             "SELECT * FROM entities WHERE type = ? AND (properties LIKE ? OR id LIKE ?)",
             (type_name, pattern, pattern),
@@ -508,8 +579,8 @@ def search_entities(conn: sqlite3.Connection, query: str, type_name: str = None)
             "SELECT * FROM entities WHERE properties LIKE ? OR id LIKE ?",
             (pattern, pattern),
         ).fetchall()
-    return [{"id": r["id"], "type": r["type"], "properties": json.loads(r["properties"]),
-             "created": r["created"], "updated": r["updated"]} for r in rows]
+    return [{"id": r["id"], "type": r["type"], "namespace": r["namespace"],
+             "properties": json.loads(r["properties"]), "created": r["created"], "updated": r["updated"]} for r in rows]
 
 
 def update_entity(conn: sqlite3.Connection, entity_id: str, properties: dict, skip_commit: bool = False) -> dict | None:
@@ -768,6 +839,7 @@ def main():
     create_p.add_argument("--type", "-t", required=True, help="Entity type")
     create_p.add_argument("--props", "-p", default="{}", help="Properties JSON")
     create_p.add_argument("--id", help="Entity ID (auto-generated if omitted)")
+    create_p.add_argument("--namespace", "-n", default="default", help="Namespace (default: 'default')")
 
     # Get
     get_p = subparsers.add_parser("get", help="Get entity by ID")
@@ -777,15 +849,18 @@ def main():
     query_p = subparsers.add_parser("query", help="Query entities by type + filter")
     query_p.add_argument("--type", "-t", required=True, help="Entity type")
     query_p.add_argument("--where", "-w", default="{}", help="Filter JSON")
+    query_p.add_argument("--namespace", "-n", help="Filter by namespace")
 
     # List
     list_p = subparsers.add_parser("list", help="List entities")
     list_p.add_argument("--type", "-t", help="Entity type (optional)")
+    list_p.add_argument("--namespace", "-n", help="Filter by namespace")
 
     # Search
     search_p = subparsers.add_parser("search", help="Full-text search across entities")
     search_p.add_argument("query", help="Search terms")
     search_p.add_argument("--type", "-t", help="Filter by entity type")
+    search_p.add_argument("--namespace", "-n", help="Filter by namespace")
 
     # Update
     update_p = subparsers.add_parser("update", help="Update entity properties")
@@ -872,12 +947,15 @@ def main():
     migrate_p = subparsers.add_parser("migrate", help="Migrate JSONL to SQLite (idempotent)")
     migrate_p.add_argument("--jsonl", default=LEGACY_GRAPH_PATH, help="Source JSONL path")
 
+    # Seed extensions
+    subparsers.add_parser("seed-extensions", help="Seed extension-tier type and relation rules")
+
     args = parser.parse_args()
     conn = get_db(args.db)
 
     if args.command == "create":
         props = json.loads(args.props)
-        entity = create_entity(conn, args.type, props, args.id)
+        entity = create_entity(conn, args.type, props, args.id, namespace=args.namespace)
         print(json.dumps(entity, indent=2, ensure_ascii=False))
 
     elif args.command == "get":
@@ -889,15 +967,15 @@ def main():
 
     elif args.command == "query":
         where = json.loads(args.where)
-        results = query_entities(conn, args.type, where)
+        results = query_entities(conn, args.type, where, namespace=args.namespace)
         print(json.dumps(results, indent=2, ensure_ascii=False))
 
     elif args.command == "list":
-        results = list_entities(conn, args.type)
+        results = list_entities(conn, args.type, namespace=args.namespace)
         print(json.dumps(results, indent=2, ensure_ascii=False))
 
     elif args.command == "search":
-        results = search_entities(conn, args.query, args.type)
+        results = search_entities(conn, args.query, args.type, namespace=args.namespace)
         print(json.dumps(results, indent=2, ensure_ascii=False))
 
     elif args.command == "update":
@@ -1023,6 +1101,10 @@ def main():
 
     elif args.command == "migrate":
         result = migrate_jsonl(conn, args.jsonl)
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+
+    elif args.command == "seed-extensions":
+        result = seed_extension_rules(conn)
         print(json.dumps(result, indent=2, ensure_ascii=False))
 
     conn.close()

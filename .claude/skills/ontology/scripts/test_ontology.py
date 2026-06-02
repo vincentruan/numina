@@ -105,16 +105,19 @@ def test_add_type_command():
         conn.close()
 
 def test_list_types_command():
-    """list-types should return all type rules"""
+    """list-types should return all type rules (core tier by default)"""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         conn = get_db(db_path)
 
         types = list_type_rules(conn)
-        assert len(types) >= 16, "Should have at least default types"
+        # Core tier: 8 types seeded by default
+        assert len(types) >= 8, "Should have at least core tier types"
         type_names = [t["type_name"] for t in types]
         assert "Task" in type_names
         assert "Person" in type_names
+        # Extension types NOT seeded by default
+        assert "Event" not in type_names, "Extension types not seeded by default"
         conn.close()
 
 def test_delete_type_command():
@@ -158,16 +161,19 @@ def test_get_relation_rule():
         conn.close()
 
 def test_list_relation_rules():
-    """list-relation-types should return all rules"""
+    """list-relation-types should return all rules (core tier by default)"""
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = os.path.join(tmpdir, "test.db")
         conn = get_db(db_path)
 
         rules = list_relation_rules(conn)
-        assert len(rules) >= 15, "Should have at least default relations"
+        # Core tier: 11 relations seeded by default
+        assert len(rules) >= 11, "Should have at least core tier relations"
         rel_types = [r["rel_type"] for r in rules]
         assert "blocks" in rel_types
         assert "has_owner" in rel_types
+        # Extension relations NOT seeded by default
+        assert "attendee_of" not in rel_types, "Extension relations not seeded by default"
         conn.close()
 
 def test_delete_relation_rule():
