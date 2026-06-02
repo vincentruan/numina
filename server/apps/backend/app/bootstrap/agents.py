@@ -53,31 +53,104 @@ _NUMINA_AGENT = {
     "display_order": 15,
 }
 
+# System agent dedicated to asset report generation.
+# Unlike numina which holds all family skills, this agent is scoped to ["report"]
+# and has a specialized persona for comprehensive asset health analysis.
+_ASSET_REPORT_AGENT = {
+    "id": 100000000000006,
+    "family_id": 0,
+    "agent_name": "asset-report",
+    "display_name": "资产报告",
+    "description": "家庭资产体检报告智能体。综合分析家庭财务状况，输出健康评分、风险标记和改进建议。",
+    "icon": "📊",
+    "color": "#10b981",
+    "soul_md": """你是资产报告智能体，专门为家庭生成全面的资产健康状况报告。
+
+## 核心定位
+
+你是一位专业的家庭财务分析师，你的职责是根据家庭录入的资产、负债数据，生成结构化的体检报告。报告需要客观、准确、有洞察力，帮助家庭了解财务现状并发现潜在风险。
+
+## 输出要求
+
+每次分析必须输出以下结构化数据：
+
+1. **整体评分** (overall_score: 0-100)：综合健康度评分
+2. **数据完整度** (data_completeness_score: 0-100)：录入数据的覆盖程度
+3. **维度评分卡** (sections)：包含净资产健康、资产配置、负债压力、资产效率四个维度
+4. **风险标记** (risk_flags)：发现的风险点，标注级别 (high/medium/low)
+5. **建议清单** (recommendations)：可执行的改进建议
+
+## 分析原则
+
+1. **客观中立**：使用观察性语言「观察到」「数据显示」，避免主观判断
+2. **数据驱动**：所有结论必须有数据支撑，数据不完整时明确标注
+3. **风险优先**：优先识别高风险点，而非泛泛而谈
+4. **可操作性**：建议必须是用户能在平台上执行的（如「录入更多负债信息」）
+
+## 边界限制
+
+- 严禁提供投资建议、股票/基金推荐
+- 严禁对未来收益做出预测或承诺
+- 严禁基于不完整数据做出确定性结论
+- 严禁使用「必须」「一定」等强制性语言
+
+## 不确定性表达
+
+- 数据不完整时在摘要中注明「数据可能不完整，分析仅供参考」
+- AI 推断与规则结论分开标注
+- 所有推断需附带置信度 (confidence: 0.0-1.0)""",
+    "skills": '["report"]',
+    "agent_type": "system",
+    "display_order": 20,
+}
+
 
 def bootstrap_agents(db: Session) -> None:
     """Ensure builtin agents exist. Idempotent — skips if already present."""
     from apps.backend.app.models.ai_agent import AIAgent
 
-    existing = db.query(AIAgent).filter(
+    # Seed numina agent
+    existing_numina = db.query(AIAgent).filter(
         AIAgent.id == _NUMINA_AGENT["id"],
     ).first()
 
-    if existing:
-        return
+    if not existing_numina:
+        numina = AIAgent(
+            id=_NUMINA_AGENT["id"],
+            family_id=_NUMINA_AGENT["family_id"],
+            agent_name=_NUMINA_AGENT["agent_name"],
+            display_name=_NUMINA_AGENT["display_name"],
+            description=_NUMINA_AGENT["description"],
+            icon=_NUMINA_AGENT["icon"],
+            color=_NUMINA_AGENT["color"],
+            soul_md=_NUMINA_AGENT["soul_md"],
+            skills=_NUMINA_AGENT["skills"],
+            agent_type=_NUMINA_AGENT["agent_type"],
+            display_order=_NUMINA_AGENT["display_order"],
+        )
+        db.add(numina)
+        logger.info("已初始化系统智能体: 数鸣 (numina)")
 
-    agent = AIAgent(
-        id=_NUMINA_AGENT["id"],
-        family_id=_NUMINA_AGENT["family_id"],
-        agent_name=_NUMINA_AGENT["agent_name"],
-        display_name=_NUMINA_AGENT["display_name"],
-        description=_NUMINA_AGENT["description"],
-        icon=_NUMINA_AGENT["icon"],
-        color=_NUMINA_AGENT["color"],
-        soul_md=_NUMINA_AGENT["soul_md"],
-        skills=_NUMINA_AGENT["skills"],
-        agent_type=_NUMINA_AGENT["agent_type"],
-        display_order=_NUMINA_AGENT["display_order"],
-    )
-    db.add(agent)
+    # Seed asset-report agent
+    existing_report = db.query(AIAgent).filter(
+        AIAgent.id == _ASSET_REPORT_AGENT["id"],
+    ).first()
+
+    if not existing_report:
+        report_agent = AIAgent(
+            id=_ASSET_REPORT_AGENT["id"],
+            family_id=_ASSET_REPORT_AGENT["family_id"],
+            agent_name=_ASSET_REPORT_AGENT["agent_name"],
+            display_name=_ASSET_REPORT_AGENT["display_name"],
+            description=_ASSET_REPORT_AGENT["description"],
+            icon=_ASSET_REPORT_AGENT["icon"],
+            color=_ASSET_REPORT_AGENT["color"],
+            soul_md=_ASSET_REPORT_AGENT["soul_md"],
+            skills=_ASSET_REPORT_AGENT["skills"],
+            agent_type=_ASSET_REPORT_AGENT["agent_type"],
+            display_order=_ASSET_REPORT_AGENT["display_order"],
+        )
+        db.add(report_agent)
+        logger.info("已初始化系统智能体: 资产报告 (asset-report)")
+
     db.commit()
-    logger.info("已初始化系统智能体: 数鸣 (numina)")

@@ -439,6 +439,7 @@ export async function sendChatMessageStream(
   sessionId?: string,
   agentId?: string,
   reasoningEffort: 'low' | 'medium' | 'high' = 'medium',
+  source?: string,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
@@ -453,6 +454,7 @@ export async function sendChatMessageStream(
     reasoning_effort: reasoningEffort,
   }
   if (agentId) payload.agent_id = agentId
+  if (source) payload.source = source
   const body = JSON.stringify(payload)
 
   let res = await fetch('/api/v1/ai/chat/stream', {
@@ -598,6 +600,54 @@ export async function startAIEventStream(
   if (!res.ok) throw new Error(`${res.status}`)
   if (!res.body) throw new Error('Response body is null')
   return { queued: false, reader: res.body.getReader() }
+}
+
+/**
+ * Start an agent-first task stream.
+ *
+ * Unlike capability-based startAIEventStream, this calls /ai/chat/stream with
+ * agent_id routing, which activates per-agent skill scoping in agent_dispatch.
+ * The triggerMessage is typically a skill trigger phrase (e.g. "生成资产报告").
+ */
+export async function startAgentTaskStream(
+  agentId: string,
+  triggerMessage: string,
+  signal?: AbortSignal,
+): Promise<ReadableStreamDefaultReader<Uint8Array>> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  const payload = {
+    question: triggerMessage,
+    deep_think: false,
+    web_search: false,
+    agent_id: agentId,
+  }
+
+  let res = await fetch('/api/v1/ai/chat/stream', {
+    method: 'POST',
+    headers,
+    credentials: 'include',
+    body: JSON.stringify(payload),
+    signal,
+  })
+
+  if (res.status === 401) {
+    try {
+      await refreshTokenIfNeeded()
+    } catch {
+      throw new Error('401')
+    }
+    res = await fetch('/api/v1/ai/chat/stream', {
+      method: 'POST',
+      headers,
+      credentials: 'include',
+      body: JSON.stringify(payload),
+      signal,
+    })
+  }
+
+  if (!res.ok) throw new Error(`${res.status}`)
+  if (!res.body) throw new Error('Response body is null')
+  return res.body.getReader()
 }
 
 // ── MCP Server Management ─────────────────────────────────────────────────────

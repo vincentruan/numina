@@ -24,10 +24,13 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.ai_ws_ticket import AIWsTicket
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.routers._ai_events_helper import (
+    ASSET_REPORT_AGENT_ID,
+    proxy_agent_first_events,
+)
+from apps.backend.app.schemas.ai_report_responses import WSTicketResponse
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
-from apps.backend.app.schemas.ai_report_responses import WSTicketResponse
 
 router = APIRouter(prefix="/ai/report", tags=["ai-report"])
 logger = logging.getLogger(__name__)
@@ -96,10 +99,15 @@ async def trigger_generate_events(
     task_id = task.id
     family_id = current_user.family_id
 
+    # Trigger message for the asset-report agent to invoke the report skill.
+    # The agent's soul_md and the skill's trigger_phrases will guide execution.
+    trigger_message = "生成家庭资产体检报告"
+
     return StreamingResponse(
-        proxy_capability_events(
-            agent_path="/report/events",
+        proxy_agent_first_events(
+            agent_id=ASSET_REPORT_AGENT_ID,
             capability="report",
+            trigger_message=trigger_message,
             task_id=task_id,
             session_id=session_id,
             family_id=family_id,
