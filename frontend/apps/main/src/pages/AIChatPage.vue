@@ -644,6 +644,7 @@ const sessionsAllLoaded = ref(false)
 const sessionsOffset = ref(0)
 const SESSIONS_PAGE_SIZE = 20
 const currentSessionId = ref<string | null>(null)
+const sessionSource = ref<string | null>(null)
 const historyScrollRef = ref<HTMLElement | null>(null)
 const paginationSentinelRef = ref<HTMLElement | null>(null)
 let paginationObserver: IntersectionObserver | null = null
@@ -1169,7 +1170,9 @@ async function onSend() {
       currentSessionId.value ?? undefined,
       activeAgent.value?.id,
       reasoningEffort.value,
+      sessionSource.value ?? undefined,
     )
+    sessionSource.value = null
     const parser = createAgentEventParser(handleEvent)
 
     // Connection established, hide connecting animation
@@ -1530,6 +1533,8 @@ onMounted(async () => {
   const routeDeepThink = route.query.deepThink === '1'
   const routeWebSearch = route.query.webSearch === '1'
   const isNewSession = route.query.newSession === '1'
+  const routeSource = typeof route.query.source === 'string' ? route.query.source : null
+  if (routeSource) sessionSource.value = routeSource
 
   // Map legacy deepThink/webSearch query params + aiStore flags onto the
   // 2-state chatMode + independent webSearch ref.
@@ -1544,9 +1549,10 @@ onMounted(async () => {
   if (isNewSession) {
     messages.value = []
   } else {
-    // Load existing history (normal navigation)
+    // Load existing history (normal navigation or cached session)
+    const targetSessionId = typeof route.query.sessionId === 'string' ? route.query.sessionId : undefined
     try {
-      const res = await getChatHistory()
+      const res = await getChatHistory(targetSessionId)
       if (res.data.session_id) {
         currentSessionId.value = res.data.session_id
       }

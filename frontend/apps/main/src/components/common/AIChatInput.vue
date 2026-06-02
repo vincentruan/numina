@@ -28,96 +28,40 @@
       </div>
     </transition>
 
-    <!-- Plus panel overlay -->
-    <transition name="panel">
-      <div v-if="panelOpen" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')">
-        <button
-          v-for="item in panelItems"
-          :key="item.action"
-          class="panel-item"
-          role="menuitem"
-          @click="onPanelItem(item.action)"
+    <!-- Text input row with bottom-left controls -->
+    <div class="input-row" :class="{ 'is-focused': focused, 'is-expanded': expanded }">
+      <!-- Attachments preview area (above textarea) -->
+      <div v-if="attachments && attachments.length > 0" class="attachments-row">
+        <div
+          v-for="(att, idx) in attachments"
+          :key="idx"
+          class="attachment-item"
+          :class="`attachment-item--${att.type}`"
         >
-          <span class="panel-item-icon" aria-hidden="true">
-            <svg :viewBox="item.icon.viewBox" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path v-for="(d, i) in item.icon.paths" :key="i" :d="d" />
+          <span class="attachment-icon" aria-hidden="true">
+            <svg v-if="att.type === 'image'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
             </svg>
           </span>
-          <span class="panel-item-label">{{ item.label }}</span>
-        </button>
+          <span class="attachment-name">{{ att.name }}</span>
+          <button
+            class="attachment-remove"
+            :aria-label="t('common.remove')"
+            @click="removeAttachment(idx)"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
       </div>
-    </transition>
-
-    <!-- Bottom toolbar: mode toggle left, plus right -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <!-- Optional agent selector (when agents list provided) -->
-        <button
-          v-if="agents && agents.length > 0"
-          class="toggle-btn toggle-btn--agent"
-          :aria-label="t('aiHub.selectAgent')"
-          :title="t('aiHub.selectAgent')"
-          @click="emit('selectAgent')"
-        >
-          <span v-if="agentIcon" class="agent-emoji" aria-hidden="true">{{ agentIcon }}</span>
-          <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="4"/>
-            <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
-            <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
-            <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
-          </svg>
-          <span class="toggle-btn__label">{{ agentLabel }}</span>
-        </button>
-        <!-- Two-state deep-think toggle -->
-        <button
-          class="toggle-btn"
-          :class="{ 'toggle-btn--active': mode === 'smart' }"
-          :aria-pressed="mode === 'smart'"
-          :aria-label="t('aiChat.modeSmart')"
-          :title="t('aiChat.modeSmart')"
-          @click="toggleMode"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
-            <path d="M9 21h6"/>
-          </svg>
-          <span class="toggle-btn__label">{{ t('aiChat.modeSmart') }}</span>
-        </button>
-        <!-- Independent web-search toggle (orthogonal to deep-think) -->
-        <button
-          class="toggle-btn"
-          :class="{ 'toggle-btn--active': webSearch }"
-          :aria-pressed="webSearch"
-          :aria-label="t('aiChat.webSearch')"
-          :title="t('aiChat.webSearch')"
-          @click="toggleWebSearch"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-          <span class="toggle-btn__label">{{ t('aiChat.webSearch') }}</span>
-        </button>
-      </div>
-      <div class="toolbar-right">
-        <!-- Plus button -->
-        <button
-          class="plus-btn"
-          :class="{ 'plus-btn--open': panelOpen }"
-          :aria-label="t('aiChat.moreFeatures')"
-          :aria-expanded="panelOpen"
-          @click.stop="panelOpen = !panelOpen"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-
-    <!-- Text input row -->
-    <div class="input-row" :class="{ 'is-focused': focused, 'is-expanded': expanded }">
       <textarea
         ref="inputRef"
         v-model="internalValue"
@@ -134,6 +78,7 @@
         @blur="focused = false"
         @keydown="onKeydown"
       />
+      <!-- Expand button (top-right) -->
       <button
         class="expand-btn"
         :aria-label="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
@@ -149,7 +94,88 @@
           <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
         </svg>
       </button>
-      <!-- Abort button -->
+      <!-- Bottom-left controls row -->
+      <div class="input-controls">
+        <!-- Plus panel (positioned relative to controls) -->
+        <transition name="panel">
+          <div v-if="panelOpen" class="plus-panel plus-panel--up" role="menu" :aria-label="t('aiChat.moreFeatures')">
+            <button
+              v-for="item in panelItems"
+              :key="item.action"
+              class="panel-item"
+              role="menuitem"
+              @click="onPanelItem(item.action)"
+            >
+              <span class="panel-item-icon" aria-hidden="true">
+                <svg :viewBox="item.icon.viewBox" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path v-for="(d, i) in item.icon.paths" :key="i" :d="d" />
+                </svg>
+              </span>
+              <span class="panel-item-label">{{ item.label }}</span>
+            </button>
+          </div>
+        </transition>
+        <!-- Optional agent selector (when agents list provided) -->
+        <button
+          v-if="agents && agents.length > 0"
+          class="control-btn control-btn--agent"
+          :aria-label="t('aiHub.selectAgent')"
+          :title="t('aiHub.selectAgent')"
+          @click="emit('selectAgent')"
+        >
+          <span v-if="agentIcon" class="agent-emoji" aria-hidden="true">{{ agentIcon }}</span>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4"/>
+            <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+            <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
+            <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
+          </svg>
+        </button>
+        <!-- Two-state deep-think toggle -->
+        <button
+          class="control-btn control-btn--think"
+          :class="{ 'control-btn--active': mode === 'smart' }"
+          :aria-pressed="mode === 'smart'"
+          :aria-label="t('aiChat.modeSmart')"
+          :title="t('aiChat.modeSmart')"
+          @click="toggleMode"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9.663 17h4.673M12 3a6 6 0 0 1 6 6c0 2.22-1.2 4.16-3 5.2V16a1 1 0 0 1-1 1H10a1 1 0 0 1-1-1v-1.8A6 6 0 0 1 12 3z"/>
+            <path d="M9 21h6"/>
+          </svg>
+          <span class="control-indicator" v-if="mode === 'smart'" aria-hidden="true"></span>
+        </button>
+        <!-- Independent web-search toggle -->
+        <button
+          class="control-btn control-btn--search"
+          :class="{ 'control-btn--active': webSearch }"
+          :aria-pressed="webSearch"
+          :aria-label="t('aiChat.webSearch')"
+          :title="t('aiChat.webSearch')"
+          @click="toggleWebSearch"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span class="control-indicator" v-if="webSearch" aria-hidden="true"></span>
+        </button>
+        <!-- Plus button -->
+        <button
+          class="control-btn control-btn--plus"
+          :class="{ 'control-btn--open': panelOpen }"
+          :aria-label="t('aiChat.moreFeatures')"
+          :aria-expanded="panelOpen"
+          @click.stop="panelOpen = !panelOpen"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
+      <!-- Abort button (bottom-right) -->
       <button
         v-if="loading"
         class="send-btn send-btn--abort"
@@ -160,7 +186,7 @@
           <rect x="4" y="4" width="16" height="16" rx="2"/>
         </svg>
       </button>
-      <!-- Send button -->
+      <!-- Send button (bottom-right) -->
       <button
         v-else
         class="send-btn"
@@ -194,6 +220,12 @@ interface AgentOption {
   icon?: string
 }
 
+interface Attachment {
+  type: 'file' | 'image'
+  name: string
+  path?: string
+}
+
 const props = defineProps<{
   modelValue: string
   placeholder?: string
@@ -204,6 +236,7 @@ const props = defineProps<{
   webSearch?: boolean
   agents?: AgentOption[]
   selectedAgentId?: string
+  attachments?: Attachment[]
 }>()
 
 const emit = defineEmits<{
@@ -214,6 +247,7 @@ const emit = defineEmits<{
   (e: 'update:mode', value: 'normal' | 'smart'): void
   (e: 'update:webSearch', value: boolean): void
   (e: 'selectAgent'): void
+  (e: 'removeAttachment', index: number): void
 }>()
 
 const internalValue = ref(props.modelValue)
@@ -238,7 +272,6 @@ const agentLabel = computed(() => selectedAgent.value?.display_name ?? t('aiHub.
 
 function toggleMode() {
   mode.value = mode.value === 'normal' ? 'smart' : 'normal'
-  emit('update:mode', mode.value)
 }
 
 async function toggleWebSearch() {
@@ -256,7 +289,6 @@ async function toggleWebSearch() {
     }
   }
   webSearch.value = !webSearch.value
-  emit('update:webSearch', webSearch.value)
 }
 
 const panelItems = computed(() => [
@@ -381,6 +413,10 @@ function closePanel() {
   panelOpen.value = false
 }
 
+function removeAttachment(index: number) {
+  emit('removeAttachment', index)
+}
+
 function onPanelItem(action: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {
   panelOpen.value = false
   emit('action', action)
@@ -415,11 +451,6 @@ onBeforeUnmount(() => {
   --ai-btn-color: var(--text-tertiary);
   --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
   --ai-btn-hover-color: rgba(255, 255, 255, 0.7);
-  --ai-plus-border: rgba(255, 255, 255, 0.12);
-  --ai-plus-bg: rgba(255, 255, 255, 0.06);
-  --ai-plus-color: rgba(255, 255, 255, 0.5);
-  --ai-plus-hover-bg: rgba(255, 255, 255, 0.1);
-  --ai-plus-hover-color: rgba(255, 255, 255, 0.8);
   --ai-panel-bg: #1e1e2e;
   --ai-panel-border: rgba(255, 255, 255, 0.1);
   --ai-panel-item-color: rgba(255, 255, 255, 0.6);
@@ -447,11 +478,6 @@ onBeforeUnmount(() => {
   --ai-btn-color: rgba(0, 0, 0, 0.75);
   --ai-btn-hover-bg: rgba(0, 0, 0, 0.1);
   --ai-btn-hover-color: rgba(0, 0, 0, 0.9);
-  --ai-plus-border: rgba(0, 0, 0, 0.45);
-  --ai-plus-bg: rgba(0, 0, 0, 0.06);
-  --ai-plus-color: rgba(0, 0, 0, 0.7);
-  --ai-plus-hover-bg: rgba(0, 0, 0, 0.12);
-  --ai-plus-hover-color: rgba(0, 0, 0, 0.9);
   --ai-panel-bg: #ffffff;
   --ai-panel-border: rgba(0, 0, 0, 0.25);
   --ai-panel-item-color: rgba(0, 0, 0, 0.75);
@@ -467,128 +493,183 @@ onBeforeUnmount(() => {
   --ai-expand-hover-color: rgba(0, 0, 0, 0.8);
 }
 
-/* ── Toolbar ── */
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 2px;
-}
-
-.toolbar-left {
+/* ── Input controls (bottom-left inside input-row) ── */
+.input-controls {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.toolbar-right {
-  display: flex;
-  align-items: center;
-}
-
-/* ── Toggle buttons ── */
-.toggle-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  border: 1px solid var(--ai-btn-border);
-  border-radius: 20px;
-  background: transparent;
-  color: var(--ai-btn-color);
-  font-size: 13px;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
-  min-height: 36px;
-  white-space: nowrap;
-}
-
-.toggle-btn__label {
-  pointer-events: none;
-}
-
-.toggle-btn:hover {
-  background: var(--ai-btn-hover-bg);
-  color: var(--ai-btn-hover-color);
-}
-
-.toggle-btn--active {
-  background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.5);
-  color: #818cf8;
-  box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
-}
-
-.toggle-btn--active:hover {
-  background: rgba(99, 102, 241, 0.22);
-}
-
-.toggle-btn--agent {
-  border-color: rgba(99, 102, 241, 0.3);
-}
-
-.agent-emoji {
-  font-size: 16px;
-  line-height: 1;
-}
-
-/* ── Plus button ── */
-.plus-btn {
-  width: 36px;
-  height: 36px;
+.control-btn {
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  border: 1px solid var(--ai-plus-border);
-  background: var(--ai-plus-bg);
-  color: var(--ai-plus-color);
+  border: none;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--ai-btn-color);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, transform 0.2s;
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+  position: relative;
 }
 
-.plus-btn:hover {
-  background: var(--ai-plus-hover-bg);
-  color: var(--ai-plus-hover-color);
-}
-
-.plus-btn--open {
-  transform: rotate(45deg);
+.control-btn:hover {
   background: rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.4);
-  color: #818cf8;
+  color: var(--ai-btn-hover-color);
 }
 
-/* ── Plus panel ── */
+.control-btn:active {
+  transform: scale(0.92);
+}
+
+/* Active state: solid colored background + bright icon + ring indicator */
+.control-btn--active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4), 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.control-btn--active:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.5), 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+/* Small indicator dot on active buttons (alternative visual cue) */
+.control-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.6);
+}
+
+.control-btn--agent {
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.control-btn--plus {
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+  position: relative;
+}
+
+.control-btn--open {
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.agent-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* ── Attachments row (above textarea) ── */
+.attachments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed rgba(99, 102, 241, 0.2);
+}
+
+.attachment-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  font-size: 12px;
+  color: var(--ai-text-color);
+  max-width: 180px;
+}
+
+.attachment-icon {
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.attachment-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.attachment-item--image {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.attachment-item--image .attachment-icon {
+  color: #10b981;
+}
+
+/* ── Plus panel (positioned relative to + button in input-controls) ── */
 .plus-panel {
   position: absolute;
-  bottom: calc(100% + 8px);
-  right: 0;
   background: var(--ai-panel-bg);
   border: 1px solid var(--ai-panel-border);
   border-radius: 14px;
   padding: 8px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 4px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   z-index: 100;
-  min-width: 220px;
+  min-width: 160px;
+}
+
+/* Plus panel positioned above the + button (last item in input-controls) */
+.plus-panel--up {
+  bottom: calc(100% + 8px);
+  right: 0;
 }
 
 .panel-item {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 6px;
-  padding: 10px 8px;
+  gap: 10px;
+  padding: 10px 12px;
   border: none;
   border-radius: 10px;
   background: transparent;
   color: var(--ai-panel-item-color);
-  font-size: 11px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
 }
 
 .panel-item:hover {
@@ -601,14 +682,15 @@ onBeforeUnmount(() => {
 }
 
 .panel-item-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   background: rgba(99, 102, 241, 0.12);
   display: flex;
   align-items: center;
   justify-content: center;
   color: #818cf8;
+  flex-shrink: 0;
 }
 
 .panel-item-label {
@@ -619,7 +701,7 @@ onBeforeUnmount(() => {
 .slash-palette {
   right: 0;
   left: 0;
-  grid-template-columns: 1fr;
+  bottom: calc(100% + 8px);
   min-width: unset;
   padding: 6px;
   max-height: 60vh;
@@ -680,8 +762,8 @@ onBeforeUnmount(() => {
   background: var(--ai-input-bg);
   border: 1px solid var(--ai-input-border);
   border-radius: 18px;
-  padding: 12px 48px 12px 14px;
-  min-height: 84px;
+  padding: 10px 48px 44px 14px;
+  min-height: 100px;
   transition: border-color 0.2s, box-shadow 0.2s, border-radius 0.2s, min-height 0.2s;
 }
 
@@ -806,8 +888,7 @@ onBeforeUnmount(() => {
 
 @media (prefers-reduced-motion: reduce) {
   .send-btn,
-  .toggle-btn,
-  .plus-btn,
+  .control-btn,
   .input-row,
   .panel-enter-active,
   .panel-leave-active {

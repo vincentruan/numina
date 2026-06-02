@@ -1,8 +1,13 @@
 import http from './index'
-import type { SessionsResponse } from '@/types/session'
+import type { SessionsResponse, SystemDefaultSessionResponse } from '@/types/session'
 
 export const getSessions = (limit = 20, offset = 0, capability?: string) =>
   http.get<SessionsResponse>('/ai/sessions', { params: { limit, offset, ...(capability ? { capability } : {}) } })
+
+export const getSystemDefaultSession = (maxAgeHours = 6) =>
+  http.get<SystemDefaultSessionResponse>('/ai/sessions/system-default', {
+    params: { max_age_hours: maxAgeHours },
+  })
 
 export const updateSession = (sessionId: string, data: { title?: string; is_pinned?: boolean }) =>
   http.patch(`/ai/sessions/${encodeURIComponent(sessionId)}`, data)

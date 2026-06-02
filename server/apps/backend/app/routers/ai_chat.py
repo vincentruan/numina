@@ -5,7 +5,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -61,6 +61,7 @@ class ChatStreamRequest(BaseModel):
     # scoping). Omitted requests fall back to the legacy /chat/ask/stream
     # adapter for backward compatibility.
     agent_id: str | None = None
+    source: str | None = None
 
     @field_validator("question")
     @classmethod
@@ -68,8 +69,8 @@ class ChatStreamRequest(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("问题不能为空")
-        if len(v) > 500:
-            raise ValueError("问题不能超过500字")
+        if len(v) > 3000:
+            raise ValueError("问题不能超过3000字")
         return v
 
     @field_validator("agent_id")
@@ -213,6 +214,9 @@ async def chat_stream(
         session = await ChatSessionService.create_session(
             current_user.family_id, current_user.id, db
         )
+        if body.source:
+            session.source = body.source
+            db.commit()
 
     await ChatSessionService.append_message(session, "user", body.question, current_user, db)
     db.refresh(session)
@@ -239,6 +243,7 @@ async def chat_stream(
                 "enable_thinking": body.deep_think,
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
+                "source": body.source,
             }
         else:
             agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
@@ -247,6 +252,7 @@ async def chat_stream(
                 "deep_think": body.deep_think,
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
+                "source": body.source,
             }
 
         answer_chunks: list[str] = []
@@ -459,12 +465,44 @@ def list_all_sessions(
                 "last_model": s.last_model,
                 "has_attachments": s.has_attachments,
                 "is_pinned": s.is_pinned,
+                "source": s.source,
                 "created_at": s.created_at.isoformat() if s.created_at else None,
                 "updated_at": s.updated_at.isoformat() if s.updated_at else None,
             }
             for s in rows
         ],
         "total": total,
+    }
+
+
+@sessions_router.get("/sessions/system-default")
+def get_system_default_session(
+    max_age_hours: int = Query(default=6, ge=1, le=24),
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """查找当前用户最近的系统默认会话（source=system_default），用于缓存复用。"""
+    cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
+    session = (
+        db.query(AIChatSession)
+        .filter(
+            AIChatSession.family_id == current_user.family_id,
+            AIChatSession.user_id == current_user.id,
+            AIChatSession.source == "system_default",
+            AIChatSession.created_at >= cutoff,
+        )
+        .order_by(AIChatSession.created_at.desc())
+        .first()
+    )
+    if session is None:
+        return {"session": None}
+    return {
+        "session": {
+            "session_id": str(session.id),
+            "status": session.status,
+            "created_at": session.created_at.isoformat() if session.created_at else None,
+            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        }
     }
 
 

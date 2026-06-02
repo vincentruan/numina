@@ -9,6 +9,7 @@ export interface SessionSummary {
   last_model: string | null
   has_attachments: boolean
   is_pinned: boolean
+  source: string | null
   created_at: string
   updated_at: string
 }
@@ -16,4 +17,13 @@ export interface SessionSummary {
 export interface SessionsResponse {
   sessions: SessionSummary[]
   total: number
+}
+
+export interface SystemDefaultSessionResponse {
+  session: {
+    session_id: string
+    status: string
+    created_at: string | null
+    updated_at: string | null
+  } | null
 }
