@@ -115,57 +115,107 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent grid: 数鸣 featured card → other agents/apps → create -->
+    <!-- Agent sections: 数鸣 featured card → My Agents → Analysis Apps -->
     <div class="feature-section">
       <!-- 数鸣 featured card (full width) -->
       <NuminaAgentCard @consult="handleNuminaConsult" />
 
-      <!-- Grid section title -->
-      <div class="agent-section__title">{{ t('aiHub.myAgentsAndApps') }}</div>
-
-      <!-- Agent grid: other system agents + time machine app + custom agents + create -->
-      <div class="agent-grid">
-        <!-- Time Machine app card -->
-        <div
-          class="agent-card app-card"
-          role="button"
-          tabindex="0"
-          @click="router.push('/ai/time-machine')"
-          @keydown.enter="router.push('/ai/time-machine')"
-          @keydown.space.prevent="router.push('/ai/time-machine')"
-        >
-          <div class="agent-card__icon">⏰</div>
-          <div class="agent-card__body">
-            <div class="agent-card__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
-            <div class="agent-card__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+      <!-- 我的智能体 Section -->
+      <div class="agent-section">
+        <div class="agent-section__header" @click="toggleMyAgents">
+          <span class="agent-section__title">{{ t('aiHub.myAgents') }}</span>
+          <span class="agent-section__count">{{ t('aiHub.myAgentsCount', { count: enabledCustomAgents.length }) }}</span>
+          <van-icon :name="myAgentsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
+        </div>
+        <div class="agent-section__content" :class="{ collapsed: myAgentsCollapsed }">
+          <!-- Empty state for custom agents -->
+          <div v-if="enabledCustomAgents.length === 0" class="agent-empty-state">
+            <div class="agent-empty-icon" aria-hidden="true">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </div>
+            <p class="agent-empty-text">{{ t('aiHub.myAgentsEmpty') }}</p>
+            <p class="agent-empty-hint">{{ t('aiHub.myAgentsEmptyHint') }}</p>
+            <van-button v-if="isOwner" size="small" type="primary" plain @click="router.push({ name: 'AgentCreate' })">
+              {{ t('aiHub.myAgentsCreate') }}
+            </van-button>
+          </div>
+          <!-- Custom agents grid -->
+          <div v-else class="agent-grid">
+            <AgentCard
+              v-for="agent in enabledCustomAgents"
+              :key="agent.id"
+              :agent="agent"
+              :show-actions="true"
+              @consult="handleAgentConsult"
+              @edit="handleAgentEdit"
+            />
+            <!-- Create agent card -->
+            <div v-if="isOwner" class="agent-card agent-card--create" @click="router.push({ name: 'AgentCreate' })">
+              <div class="agent-card__icon">＋</div>
+              <div class="agent-card__body">
+                <div class="agent-card__name">{{ t('agents.createAgent') }}</div>
+              </div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- Other system agents (excluding 数鸣) -->
-        <AgentCard
-          v-for="agent in otherSystemAgents"
-          :key="agent.id"
-          :agent="agent"
-          :show-actions="true"
-          @consult="handleAgentConsult"
-          @edit="handleAgentEdit"
-        />
+      <!-- 分析应用 Section -->
+      <div class="agent-section">
+        <div class="agent-section__header" @click="toggleAnalysisApps">
+          <span class="agent-section__title">{{ t('aiHub.analysisApps') }}</span>
+          <span class="agent-section__count">{{ t('aiHub.analysisAppsCount', { count: analysisApps.length }) }}</span>
+          <van-icon :name="analysisAppsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
+        </div>
+        <div class="agent-section__content" :class="{ collapsed: analysisAppsCollapsed }">
+          <!-- Analysis apps list -->
+          <div class="app-list">
+            <!-- Time Machine app card -->
+            <div
+              class="app-list-item"
+              role="button"
+              tabindex="0"
+              @click="router.push('/ai/time-machine')"
+              @keydown.enter="router.push('/ai/time-machine')"
+              @keydown.space.prevent="router.push('/ai/time-machine')"
+            >
+              <div class="app-list-item__icon">
+                <svg class="icon-svg" aria-hidden="true">
+                  <use href="#icon-time-machine" />
+                </svg>
+              </div>
+              <div class="app-list-item__body">
+                <div class="app-list-item__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
+                <div class="app-list-item__desc">{{ t('aiHub.timeMachineCardDesc') }}</div>
+              </div>
+              <van-icon name="arrow" class="app-list-item__arrow" />
+            </div>
+          </div>
+        </div>
+      </div>
 
-        <!-- Custom agents -->
-        <AgentCard
-          v-for="agent in enabledCustomAgents"
-          :key="agent.id"
-          :agent="agent"
-          :show-actions="true"
-          @consult="handleAgentConsult"
-          @edit="handleAgentEdit"
-        />
-
-        <!-- Create agent card -->
-        <div v-if="isOwner" class="agent-card agent-card--create" @click="router.push({ name: 'AgentCreate' })">
-          <div class="agent-card__icon">＋</div>
-          <div class="agent-card__body">
-            <div class="agent-card__name">{{ t('agents.createAgent') }}</div>
+      <!-- Other system agents (excluding 数鸣) - shown separately if any -->
+      <div v-if="otherSystemAgents.length > 0" class="agent-section">
+        <div class="agent-section__header" @click="toggleSystemAgents">
+          <span class="agent-section__title">{{ t('ai.systemAgents') }}</span>
+          <span class="agent-section__count">{{ otherSystemAgents.length }}</span>
+          <van-icon :name="systemAgentsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
+        </div>
+        <div class="agent-section__content" :class="{ collapsed: systemAgentsCollapsed }">
+          <div class="agent-grid">
+            <AgentCard
+              v-for="agent in otherSystemAgents"
+              :key="agent.id"
+              :agent="agent"
+              :show-actions="true"
+              @consult="handleAgentConsult"
+              @edit="handleAgentEdit"
+            />
           </div>
         </div>
       </div>
@@ -222,6 +272,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
+import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
@@ -232,6 +283,7 @@ import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 
@@ -256,6 +308,28 @@ const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const photoInputRef = ref<HTMLInputElement | null>(null)
+
+// Collapsible section states (default collapsed)
+const myAgentsCollapsed = ref(true)
+const analysisAppsCollapsed = ref(true)
+const systemAgentsCollapsed = ref(true)
+
+// Analysis apps list (currently only Time Machine)
+const analysisApps = computed(() => [
+  { id: 'time-machine', name: t('aiHub.timeMachineCardTitle'), desc: t('aiHub.timeMachineCardDesc'), route: '/ai/time-machine' },
+])
+
+function toggleMyAgents() {
+  myAgentsCollapsed.value = !myAgentsCollapsed.value
+}
+
+function toggleAnalysisApps() {
+  analysisAppsCollapsed.value = !analysisAppsCollapsed.value
+}
+
+function toggleSystemAgents() {
+  systemAgentsCollapsed.value = !systemAgentsCollapsed.value
+}
 
 const numinaAgent = computed(() =>
   agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) || null,
@@ -478,10 +552,21 @@ function handleAgentConsult(agent: Agent) {
 }
 
 function handleNuminaConsult() {
-  // 数鸣 featured card click — route to AIChat with 数鸣 agent
-  if (numinaAgent.value) {
-    router.push({ name: 'AIChat', query: { agentId: numinaAgent.value.id } })
-  }
+  if (!numinaAgent.value) return
+  const agentId = numinaAgent.value.id
+  getSystemDefaultSession(SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS)
+    .then((res) => {
+      const cached = res.data.session
+      if (cached) {
+        router.push({ name: 'AIChat', query: { agentId, sessionId: cached.session_id } })
+      } else {
+        aiStore.draftQuery = SHUMING_DEFAULT_PROMPT
+        router.push({ name: 'AIChat', query: { agentId, newSession: '1', source: 'system_default' } })
+      }
+    })
+    .catch(() => {
+      router.push({ name: 'AIChat', query: { agentId } })
+    })
 }
 
 function handleAgentEdit(agent: Agent) {
@@ -929,11 +1014,169 @@ onMounted(async () => {
   margin-top: 4px;
 }
 
+/* Collapsible section styles */
+.agent-section {
+  margin-top: 12px;
+}
+
+.agent-section__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.agent-section__header:active {
+  background: var(--van-background-2);
+}
+
 .agent-section__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.agent-section__count {
+  font-size: 12px;
+  color: var(--van-primary-color);
+  background: rgba(25, 137, 250, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+[data-theme='dark'] .agent-section__count {
+  background: rgba(189, 187, 255, 0.15);
+}
+
+.agent-section__icon {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+
+.agent-section__content {
+  transition: max-height 0.3s ease, opacity 0.3s ease, padding 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.agent-section__content.collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding: 0;
+  margin-bottom: 0;
+}
+
+/* Empty state for my agents */
+.agent-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20px 16px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  border: 1px solid var(--van-border-color);
+  gap: 8px;
+}
+
+.agent-empty-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.agent-empty-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.agent-empty-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0 0 8px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* App list (horizontal card list) */
+.app-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-list-item {
+  display: flex;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--van-border-color);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.app-list-item:active {
+  transform: scale(0.98);
+}
+
+.app-list-item__icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(25, 137, 250, 0.08) 0%, rgba(189, 187, 255, 0.12) 100%);
+  border-radius: 10px;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+[data-theme='dark'] .app-list-item__icon {
+  background: linear-gradient(135deg, rgba(189, 187, 255, 0.14) 0%, rgba(189, 187, 255, 0.08) 100%);
+}
+
+.icon-svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--van-primary-color);
+}
+
+[data-theme='dark'] .icon-svg {
+  stroke: #bdbbff;
+}
+
+.app-list-item__body {
+  flex: 1;
+}
+
+.app-list-item__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--van-text-color);
+  margin-bottom: 2px;
+}
+
+.app-list-item__desc {
+  font-size: 12px;
   color: var(--van-text-color-2);
-  padding: 16px 4px 8px;
+}
+
+.app-list-item__arrow {
+  color: var(--van-text-color-3);
+  font-size: 16px;
 }
 
 .agent-grid {
@@ -987,11 +1230,6 @@ onMounted(async () => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-/* App card accent (time-machine) */
-.app-card {
-  border-left: 3px solid var(--theme-primary, #007aff);
 }
 
 /* Create agent card */

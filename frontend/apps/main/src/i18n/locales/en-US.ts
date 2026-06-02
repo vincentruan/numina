@@ -1668,6 +1668,15 @@ export default {
     capStatusRunning: 'Analyzing',
     capStatusQueued: 'Queued',
     capStatusDone: 'Completed',
+    // New section keys
+    myAgents: 'My Agents',
+    myAgentsEmpty: 'No custom agents',
+    myAgentsEmptyHint: 'Create your own agent for personalized asset analysis',
+    myAgentsCreate: 'Create Agent',
+    myAgentsCount: '{count}',
+    analysisApps: 'Analysis Apps',
+    analysisAppsCount: '{count} apps',
+    analysisAppsEmpty: 'No analysis apps',
   },
   aiReport: {
     title: 'Asset Health Check',

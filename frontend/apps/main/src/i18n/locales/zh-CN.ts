@@ -1944,6 +1944,15 @@ export default {
     capStatusRunning: '分析中',
     capStatusQueued: '排队中',
     capStatusDone: '已完成',
+    // New section keys
+    myAgents: '我的智能体',
+    myAgentsEmpty: '暂无自定义智能体',
+    myAgentsEmptyHint: '创建您的专属智能体，提供个性化的资产分析服务',
+    myAgentsCreate: '创建智能体',
+    myAgentsCount: '{count} 个',
+    analysisApps: '分析应用',
+    analysisAppsCount: '{count} 个应用',
+    analysisAppsEmpty: '暂无分析应用',
   },
   aiReport: {
     title: '家庭资产体检',
