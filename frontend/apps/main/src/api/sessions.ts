@@ -1,12 +1,11 @@
 import http from './index'
 import type { SessionsResponse, SystemDefaultSessionResponse } from '@/types/session'
 
-export const getSessions = (limit = 20, offset = 0, capability?: string, agentId?: string) =>
+export const getSessions = (limit = 20, offset = 0, agentId?: string) =>
   http.get<SessionsResponse>('/ai/sessions', {
     params: {
       limit,
       offset,
-      ...(capability ? { capability } : {}),
       ...(agentId ? { agent_id: agentId } : {}),
     },
   })

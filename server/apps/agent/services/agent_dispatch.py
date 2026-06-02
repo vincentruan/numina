@@ -934,7 +934,6 @@ async def _persist_session_metadata(
             session_id=session_id,
             family_id=family_id,
             user_id=user_id,
-            capability=agent_name,
             agent_id=agent_id,
             jsonl_path=jsonl_path,
             last_model=model_id,

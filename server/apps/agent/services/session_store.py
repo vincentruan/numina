@@ -32,7 +32,6 @@ class AiSessionRepository:
         session_id: str,
         family_id: str,
         user_id: str | None,
-        capability: str,
         agent_id: str | None = None,
         jsonl_path: str,
         last_model: str | None = None,
@@ -41,7 +40,6 @@ class AiSessionRepository:
             await self._client.upsert_session(
                 session_id=session_id,
                 user_id=user_id,
-                capability=capability,
                 agent_id=agent_id,
                 jsonl_path=jsonl_path,
                 last_model=last_model,

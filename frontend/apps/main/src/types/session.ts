@@ -2,7 +2,6 @@ export interface SessionSummary {
   session_id: string
   family_id: string
   user_id: string | null
-  capability: string
   agent_id: string | null
   title: string | null
   status: 'active' | 'completed' | 'error'

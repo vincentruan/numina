@@ -732,7 +732,6 @@ def internal_get_mcp_servers(
 class SessionUpsertRequest(BaseModel):
     session_id: str
     user_id: str | None = None
-    capability: str
     agent_id: str | None = None
     jsonl_path: str
     last_model: str | None = None
@@ -751,7 +750,6 @@ def _session_to_dict(s: "object") -> dict:
         "session_id": s.id,  # type: ignore[attr-defined]
         "family_id": str(s.family_id),  # type: ignore[attr-defined]
         "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
-        "capability": s.capability,  # type: ignore[attr-defined]
         "agent_id": str(s.agent_id) if s.agent_id else None,  # type: ignore[attr-defined]
         "title": s.title,  # type: ignore[attr-defined]
         "status": s.status,  # type: ignore[attr-defined]
@@ -778,7 +776,6 @@ def internal_upsert_session(
             id=body.session_id,
             family_id=int(family_id),
             user_id=int(body.user_id) if body.user_id else None,
-            capability=body.capability,
             agent_id=int(body.agent_id) if body.agent_id else None,
             jsonl_path=body.jsonl_path,
             last_model=body.last_model,

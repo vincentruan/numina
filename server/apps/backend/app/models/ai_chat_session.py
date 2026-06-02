@@ -31,7 +31,6 @@ class AIChatSession(Base):
     cached_file_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("cached_files.id"), nullable=True
     )
-    capability: Mapped[str] = mapped_column(String(32), nullable=False, default="chat")
     agent_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("ai_agents.id"), nullable=True, index=True
     )

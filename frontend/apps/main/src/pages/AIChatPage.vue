@@ -936,7 +936,6 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
 }
 
 // Load session list when history panel opens (lazy, once per mount)
-// U12 (R10): default capability filter is 'all' so historical sessions
 // Agent filter for session history — defaults to activeAgent if set, else 'all'
 const selectedAgentId = ref<string>('all')
 
@@ -965,7 +964,7 @@ async function loadSessions() {
   try {
     // Pass agent_id filter - use null for "all"
     const agentIdParam = selectedAgentId.value === 'all' ? undefined : selectedAgentId.value
-    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, undefined, agentIdParam)
+    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, agentIdParam)
     sessions.value = res.data.sessions
     sessionsLoaded.value = true
     if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
@@ -986,7 +985,7 @@ async function loadMoreSessions() {
   const agentIdAtCall = selectedAgentId.value
   try {
     const agentIdParam = agentIdAtCall === 'all' ? undefined : agentIdAtCall
-    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, undefined, agentIdParam)
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, agentIdParam)
     if (selectedAgentId.value !== agentIdAtCall) return // stale response
     sessions.value = [...sessions.value, ...res.data.sessions]
     sessionsOffset.value += res.data.sessions.length
