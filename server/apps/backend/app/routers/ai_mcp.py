@@ -28,6 +28,7 @@ class MCPServerCreate(BaseModel):
     transport: str = "sse"
     env_vars: dict[str, str] | None = None
     is_enabled: bool = True
+    mcp_type: str = "general"
 
 
 class MCPServerUpdate(BaseModel):
@@ -36,6 +37,7 @@ class MCPServerUpdate(BaseModel):
     transport: str | None = None
     env_vars: dict[str, str] | None = None
     is_enabled: bool | None = None
+    mcp_type: str | None = None
 
 
 class MCPServerResponse(BaseModel):
@@ -47,6 +49,7 @@ class MCPServerResponse(BaseModel):
     transport: str
     env_vars: dict[str, str]  # empty dict when not set or caller lacks permission
     is_enabled: bool
+    mcp_type: str
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -72,6 +75,7 @@ def _to_response(server: FamilyMCPServer, include_env: bool = False) -> MCPServe
         transport=server.transport,
         env_vars=_decrypt_env_vars(server) if include_env else {},
         is_enabled=server.is_enabled,
+        mcp_type=server.mcp_type or "general",
     )
 
 
@@ -114,6 +118,7 @@ def create_mcp_server(
         transport=payload.transport,
         env_vars_encrypted=env_encrypted,
         is_enabled=payload.is_enabled,
+        mcp_type=payload.mcp_type,
     )
     db.add(server)
     db.commit()
@@ -148,6 +153,8 @@ def update_mcp_server(
         server.env_vars_encrypted = encrypt_api_key(json.dumps(payload.env_vars))
     if payload.is_enabled is not None:
         server.is_enabled = payload.is_enabled
+    if payload.mcp_type is not None:
+        server.mcp_type = payload.mcp_type
 
     db.commit()
     db.refresh(server)
