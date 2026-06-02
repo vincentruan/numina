@@ -18,6 +18,7 @@ dependencies = [
     "httpx>=0.28.0",
     # Scheduler (backend + agent + scheduler_worker)
     "apscheduler>=3.11.2",
+    "json-repair>=0.59.10",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,8 @@ backend = [
     "redis>=5.0.0",
     # MCP (Model Context Protocol) server
     "mcp>=1.0.0,<2.0.0",
+    # LLM fallback for structured extraction
+    "openai>=1.50.0",
 ]
 agent = [
     # AI/ML

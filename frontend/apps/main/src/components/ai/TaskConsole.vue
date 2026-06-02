@@ -17,7 +17,6 @@
     <div v-show="isOpen" class="console-body">
       <!-- Failed warning bar (R6.4) -->
       <div v-if="status === 'failed'" class="console-error-bar" role="alert">
-        <span class="error-bar-icon" aria-hidden="true">⚠️</span>
         <span class="error-bar-text">{{ failureMessage }}</span>
         <button class="error-bar-retry" @click.stop="$emit('retry')">
           {{ t('aiTask.retry') }}
@@ -429,11 +428,6 @@ const failureMessage = computed(() => {
   border-radius: 6px;
   font-size: 13px;
   color: var(--text-primary);
-}
-
-.error-bar-icon {
-  flex-shrink: 0;
-  font-size: 16px;
 }
 
 .error-bar-text {

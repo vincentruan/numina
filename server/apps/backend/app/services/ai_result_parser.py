@@ -3,7 +3,9 @@
 Strategy:
 1. Regex extraction: Look for `<!-- STRUCTURED_DATA ... -->` delimiter, then
    markdown ```json fence, then bare balanced JSON at tail.
-2. LLM fallback: Use cheapest available model from family's provider config
+2. JSON repair: Use json_repair to handle malformed JSON (thinking tags,
+   markdown fences, trailing commas, etc.)
+3. LLM fallback: Use cheapest available model from family's provider config
    to coerce the answer into JSON.
 """
 
@@ -12,6 +14,8 @@ import json
 import logging
 import re
 from typing import Any
+
+from json_repair import repair_json
 
 from sqlalchemy.orm import Session
 
@@ -255,14 +259,16 @@ async def parse_capability_result(
     block, method = _extract_structured_block(answer_text)
     if block:
         try:
-            data = json.loads(block)
+            # Use json_repair for robust parsing - handles malformed JSON
+            # from LLM output (thinking tags, markdown fences, trailing commas, etc)
+            data = repair_json(block, return_objects=True)
             if _validate_json(data, capability):
                 logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(data) if isinstance(data, list) else 1} items")
                 return data, method
             else:
                 logger.warning(f"[{capability}] regex extracted JSON via {method} but validation failed")
-        except json.JSONDecodeError as e:
-            logger.warning(f"[{capability}] regex found block via {method} but JSON parse failed: {e}")
+        except Exception as e:
+            logger.warning(f"[{capability}] regex found block via {method} but JSON repair failed: {e}")
 
     # Step 2: LLM fallback
     fallback_data = await _llm_fallback_extract(capability, answer_text, family_id, db)
@@ -344,9 +350,10 @@ async def _llm_fallback_extract(
     cleaned = _strip_markdown_fence(raw)
 
     try:
-        data = json.loads(cleaned)
-    except json.JSONDecodeError as e:
-        logger.warning(f"[{capability}] LLM fallback JSON parse failed: {e}")
+        # Use json_repair for robust parsing
+        data = repair_json(cleaned, return_objects=True)
+    except Exception as e:
+        logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e}")
         return None
 
     if _validate_json(data, capability):

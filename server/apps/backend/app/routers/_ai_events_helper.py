@@ -61,8 +61,8 @@ async def proxy_capability_events(
                 headers={
                     "X-Family-Id": str(family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Task-Id": task_id,
-                    "X-Thread-Id": session_id,
+                    "X-Task-Id": str(task_id),
+                    "X-Thread-Id": str(session_id),
                 },
             ) as resp,
         ):
@@ -242,9 +242,10 @@ async def proxy_agent_first_events(
     try:
         request_body = {
             "message": trigger_message,
-            "thread_id": session_id,
+            "thread_id": str(session_id),
             "enable_thinking": False,
             "web_search": False,
+            "reasoning_effort": "medium",
         }
         async with (
             httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)) as client,
@@ -255,8 +256,8 @@ async def proxy_agent_first_events(
                 headers={
                     "X-Family-Id": str(family_id),
                     "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Task-Id": task_id,
-                    "X-Thread-Id": session_id,
+                    "X-Task-Id": str(task_id),
+                    "X-Thread-Id": str(session_id),
                     "X-User-Id": str(user_id),
                 },
             ) as resp,
