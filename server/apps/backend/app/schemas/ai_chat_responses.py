@@ -23,13 +23,14 @@ class SessionDetailResponse(SnowflakeBase):
     session_id: int
     family_id: int
     user_id: int | None
-    capability: str
+    agent_id: int | None
     title: str | None
     status: str
     last_message_summary: str | None
     last_model: str | None
     has_attachments: bool
     is_pinned: bool
+    source: str | None
     created_at: str | None  # ISO format
     updated_at: str | None  # ISO format
 
