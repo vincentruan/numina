@@ -18,7 +18,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     op.add_column(
         "ai_chat_sessions",
-        sa.Column("agent_id", sa.BigInteger(), nullable=True),
+        sa.Column("agent_id", sa.BigInteger(), sa.ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True),
     )
     op.create_index(
         "ix_ai_chat_sessions_agent_id",

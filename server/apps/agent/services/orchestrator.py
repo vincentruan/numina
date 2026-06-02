@@ -435,7 +435,6 @@ class Orchestrator:
             session_id=effective_thread_id,
             family_id=family_id,
             user_id=user_id,
-            capability=capability,
             jsonl_path=jsonl_path,
             model_name=model_name,
         ))
@@ -963,7 +962,6 @@ class Orchestrator:
         session_id: str,
         family_id: str,
         user_id: str | None,
-        capability: str,
         jsonl_path: str,
         model_name: str | None,
     ) -> None:
@@ -974,7 +972,6 @@ class Orchestrator:
                 session_id=session_id,
                 family_id=family_id,
                 user_id=user_id,
-                capability=capability,
                 jsonl_path=jsonl_path,
                 last_model=model_name,
             )

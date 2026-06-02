@@ -32,7 +32,7 @@ class AIChatSession(Base):
         BigInteger, ForeignKey("cached_files.id"), nullable=True
     )
     agent_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("ai_agents.id"), nullable=True, index=True
+        BigInteger, ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")

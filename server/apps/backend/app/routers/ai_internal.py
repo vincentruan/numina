@@ -788,6 +788,8 @@ def internal_upsert_session(
         row.updated_at = datetime.utcnow()
         if body.last_model:
             row.last_model = body.last_model
+        if body.agent_id and not row.agent_id:
+            row.agent_id = int(body.agent_id)
     db.commit()
     return {"ok": True}
 

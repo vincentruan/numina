@@ -954,6 +954,7 @@ const agentFilters = computed(() => [
 watch(activeAgent, (agent) => {
   if (agent && selectedAgentId.value === 'all') {
     selectedAgentId.value = agent.id
+    if (sessionsLoaded.value) loadSessions()
   }
 }, { immediate: true })
 
