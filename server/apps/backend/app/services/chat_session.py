@@ -114,6 +114,7 @@ class ChatSessionService:
         family_id: int,
         user_id: int,
         db: Session,
+        agent_id: int | None = None,
     ) -> AIChatSession:
         """Create a new chat session with empty JSONL file.
 
@@ -139,6 +140,7 @@ class ChatSessionService:
             id=session_id,
             family_id=family_id,
             user_id=user_id,
+            agent_id=agent_id,
             jsonl_path=jsonl_path_relative,
             message_count=0,
             cached_file_id=None,  # Will be set on first append

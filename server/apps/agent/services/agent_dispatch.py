@@ -126,7 +126,7 @@ def _resolve_tool_metadata(tool_name: str) -> tuple[str, str, str]:
 
 
 def _resolve_skills(
-    agent_skills: list[str] | None,
+    agent_skills: list[str] | str | None,
     family_enabled_skills: list[dict],
 ) -> list[dict]:
     """Resolve which skills an agent dispatches with, enforcing R5/R6/R15 + U9.
@@ -143,7 +143,21 @@ def _resolve_skills(
     The resolved list preserves the original dict shape from BackendClient
     (``{"skill_id": ..., "skill_type": ..., ...}``) so downstream consumers
     (EffectiveConfigBuilder) see the same fields they would without resolution.
+
+    Defensive: if agent_skills is a JSON string (legacy DB bug), deserialize it.
     """
+    # Defensive: handle JSON string from legacy DB storage bug
+    if isinstance(agent_skills, str):
+        try:
+            import json
+            agent_skills = json.loads(agent_skills)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(
+                "[agent_dispatch] agent_skills is a non-JSON string: %s, treating as empty",
+                agent_skills[:50] if agent_skills else "",
+            )
+            return []
+
     if not agent_skills:
         return []
     # Chat-reserved capability handling must come before the sentinel branch
@@ -751,6 +765,7 @@ async def stream_agent_dispatch(
                 family_id=family_id,
                 user_id=user_id,
                 session_id=thread_id,
+                agent_id=str(agent_id),
                 agent_name=agent_name,
                 answer="".join(answer_parts),
                 model_id=model_id,
@@ -809,6 +824,7 @@ async def _persist_session_metadata(
     family_id: str,
     user_id: str | None,
     session_id: str,
+    agent_id: str | None = None,
     agent_name: str,
     answer: str,
     model_id: str | None,
@@ -919,6 +935,7 @@ async def _persist_session_metadata(
             family_id=family_id,
             user_id=user_id,
             capability=agent_name,
+            agent_id=agent_id,
             jsonl_path=jsonl_path,
             last_model=model_id,
         )

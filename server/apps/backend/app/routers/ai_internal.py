@@ -733,6 +733,7 @@ class SessionUpsertRequest(BaseModel):
     session_id: str
     user_id: str | None = None
     capability: str
+    agent_id: str | None = None
     jsonl_path: str
     last_model: str | None = None
     source: str | None = None
@@ -751,6 +752,7 @@ def _session_to_dict(s: "object") -> dict:
         "family_id": str(s.family_id),  # type: ignore[attr-defined]
         "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
         "capability": s.capability,  # type: ignore[attr-defined]
+        "agent_id": str(s.agent_id) if s.agent_id else None,  # type: ignore[attr-defined]
         "title": s.title,  # type: ignore[attr-defined]
         "status": s.status,  # type: ignore[attr-defined]
         "last_message_summary": s.last_message_summary,  # type: ignore[attr-defined]
@@ -777,6 +779,7 @@ def internal_upsert_session(
             family_id=int(family_id),
             user_id=int(body.user_id) if body.user_id else None,
             capability=body.capability,
+            agent_id=int(body.agent_id) if body.agent_id else None,
             jsonl_path=body.jsonl_path,
             last_model=body.last_model,
             source=body.source,
@@ -829,20 +832,18 @@ def internal_update_session_summary(
 def internal_list_sessions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    agent_id: str | None = Query(default=None),
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
     from apps.backend.app.models.ai_chat_session import AIChatSession
 
-    total = (
-        db.query(AIChatSession)
-        .filter(AIChatSession.family_id == int(family_id))
-        .count()
-    )
+    q = db.query(AIChatSession).filter(AIChatSession.family_id == int(family_id))
+    if agent_id:
+        q = q.filter(AIChatSession.agent_id == int(agent_id))
+    total = q.count()
     rows = (
-        db.query(AIChatSession)
-        .filter(AIChatSession.family_id == int(family_id))
-        .order_by(AIChatSession.updated_at.desc())
+        q.order_by(AIChatSession.updated_at.desc())
         .limit(limit)
         .offset(offset)
         .all()

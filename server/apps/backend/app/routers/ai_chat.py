@@ -211,8 +211,9 @@ async def chat_stream(
             raise AppError(ErrorCode.NOT_FOUND)
     else:
         # Always create a new session when session_id is not provided
+        agent_id_int = int(body.agent_id) if body.agent_id else None
         session = await ChatSessionService.create_session(
-            current_user.family_id, current_user.id, db
+            current_user.family_id, current_user.id, db, agent_id=agent_id_int
         )
         if body.source:
             session.source = body.source
@@ -436,15 +437,18 @@ def mark_read(
 @sessions_router.get("/sessions")
 def list_all_sessions(
     capability: str | None = Query(default=None),
+    agent_id: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    """列出当前家庭所有 AI 功能的会话，支持按 capability 过滤。"""
+    """列出当前家庭所有 AI 功能的会话，支持按 capability 和 agent_id 过滤。"""
     q = db.query(AIChatSession).filter_by(family_id=current_user.family_id)
     if capability:
         q = q.filter(AIChatSession.capability == capability)
+    if agent_id:
+        q = q.filter(AIChatSession.agent_id == int(agent_id))
     total = q.count()
     rows = (
         q.order_by(AIChatSession.is_pinned.desc(), AIChatSession.updated_at.desc())
@@ -459,6 +463,7 @@ def list_all_sessions(
                 "family_id": str(s.family_id),
                 "user_id": str(s.user_id) if s.user_id else None,
                 "capability": s.capability,
+                "agent_id": str(s.agent_id) if s.agent_id else None,
                 "title": s.title,
                 "status": s.status,
                 "last_message_summary": s.last_message_summary,

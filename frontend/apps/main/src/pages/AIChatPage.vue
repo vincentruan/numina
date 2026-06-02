@@ -64,14 +64,14 @@
           </button>
           <span class="history-title">{{ t('aiChat.historyTitle') }}</span>
         </div>
-        <!-- Capability filter tabs -->
+        <!-- Agent filter tabs -->
         <div class="history-filter">
           <button
-            v-for="f in capabilityFilters"
+            v-for="f in agentFilters"
             :key="f.value ?? 'all'"
             class="filter-tab"
-            :class="{ 'filter-tab--active': f.value === null ? selectedCapability === 'all' : selectedCapability === f.value }"
-            @click="onSelectCapability(f.value)"
+            :class="{ 'filter-tab--active': f.value === null ? selectedAgentId === 'all' : selectedAgentId === f.value }"
+            @click="onSelectAgent(f.value)"
           >{{ f.label }}</button>
         </div>
         <div v-if="sessionsLoading" class="history-empty">
@@ -937,42 +937,35 @@ function phaseLabel(phase: NonNullable<Message['phase']>) {
 
 // Load session list when history panel opens (lazy, once per mount)
 // U12 (R10): default capability filter is 'all' so historical sessions
-// from any skill surface remain visible. The 'chat' key in capabilityMeta
-// stays for backward compatibility with pre-restructure sessions tagged
-// capability='chat'.
-const selectedCapability = ref<string>('all')
+// Agent filter for session history — defaults to activeAgent if set, else 'all'
+const selectedAgentId = ref<string>('all')
 
-// Capability metadata from skills/*.md - icons, colors, display name keys, and AI flag
-const capabilityMeta: Record<string, { icon: string; color: string; nameKey: string; isAI: boolean }> = {
-  chat: { icon: '💬', color: '#06b6d4', nameKey: 'aiChat.filterChat', isAI: true },
-  alerts: { icon: '🔔', color: '#f59e0b', nameKey: 'aiChat.filterAlerts', isAI: true },
-  disposal: { icon: '🗑️', color: '#ef4444', nameKey: 'aiChat.filterDisposal', isAI: true },
-  report: { icon: '📋', color: '#6366f1', nameKey: 'aiChat.filterReport', isAI: true },
-  allocation: { icon: '📊', color: '#8b5cf6', nameKey: 'aiChat.filterAllocation', isAI: true },
-  liability: { icon: '💳', color: '#f97316', nameKey: 'aiChat.filterLiability', isAI: true },
-  spending_leak: { icon: '💧', color: '#10b981', nameKey: 'aiChat.filterSpendingLeak', isAI: true },
-  time_machine: { icon: '⏰', color: '#a855f7', nameKey: 'aiChat.filterTimeMachine', isAI: false },  // simulation, not AI chat
-}
-
-const capabilityFilters = computed(() => [
+// Agent filter options from agentStore
+const agentFilters = computed(() => [
   { label: t('aiChat.filterAll'), value: null },
-  // Filter tabs for AI capabilities only (skip time_machine which doesn't generate chat history)
-  ...Object.entries(capabilityMeta)
-    .filter(([_, meta]) => meta.isAI)
-    .map(([key, meta]) => ({
-      label: `${meta.icon} ${t(meta.nameKey)}`,
-      value: key,
+  ...agentStore.allAgents
+    .filter((a) => a.is_enabled)
+    .map((a) => ({
+      label: `${a.icon || '🤖'} ${a.display_name}`,
+      value: a.id,
     })),
 ])
+
+// Initialize selectedAgentId from activeAgent when it's loaded
+watch(activeAgent, (agent) => {
+  if (agent && selectedAgentId.value === 'all') {
+    selectedAgentId.value = agent.id
+  }
+}, { immediate: true })
 
 async function loadSessions() {
   sessionsLoading.value = true
   sessionsOffset.value = 0
   sessionsAllLoaded.value = false
   try {
-    // Pass capability filter - use null for "all" (when user explicitly selects filterAll)
-    const capabilityParam = selectedCapability.value === 'all' ? undefined : selectedCapability.value
-    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, capabilityParam)
+    // Pass agent_id filter - use null for "all"
+    const agentIdParam = selectedAgentId.value === 'all' ? undefined : selectedAgentId.value
+    const res = await getSessions(SESSIONS_PAGE_SIZE, 0, undefined, agentIdParam)
     sessions.value = res.data.sessions
     sessionsLoaded.value = true
     if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
@@ -989,12 +982,12 @@ async function loadSessions() {
 async function loadMoreSessions() {
   if (sessionsLoadingMore.value || sessionsAllLoaded.value || sessionsLoading.value) return
   sessionsLoadingMore.value = true
-  // Capture the capability at call time; discard results if it changed mid-flight
-  const capAtCall = selectedCapability.value
+  // Capture the agentId at call time; discard results if it changed mid-flight
+  const agentIdAtCall = selectedAgentId.value
   try {
-    const capabilityParam = capAtCall === 'all' ? undefined : capAtCall
-    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, capabilityParam)
-    if (selectedCapability.value !== capAtCall) return // stale response
+    const agentIdParam = agentIdAtCall === 'all' ? undefined : agentIdAtCall
+    const res = await getSessions(SESSIONS_PAGE_SIZE, sessionsOffset.value, undefined, agentIdParam)
+    if (selectedAgentId.value !== agentIdAtCall) return // stale response
     sessions.value = [...sessions.value, ...res.data.sessions]
     sessionsOffset.value += res.data.sessions.length
     if (res.data.sessions.length < SESSIONS_PAGE_SIZE || sessions.value.length >= res.data.total) {
@@ -1007,9 +1000,9 @@ async function loadMoreSessions() {
   }
 }
 
-async function onSelectCapability(cap: string | null) {
+async function onSelectAgent(agentId: string | null) {
   // null means "全部" (all) - store as 'all' for consistency
-  selectedCapability.value = cap ?? 'all'
+  selectedAgentId.value = agentId ?? 'all'
   sessions.value = []
   sessionsOffset.value = 0
   sessionsAllLoaded.value = false
