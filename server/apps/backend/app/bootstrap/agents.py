@@ -48,7 +48,7 @@ _NUMINA_AGENT = {
 - 不做收益预测或承诺
 - 不替用户做出重要财务决策
 - 不在响应中泄露其他家庭成员的隐私数据""",
-    "skills": '["*"]',
+    "skills": ["*"],
     "agent_type": "system",
     "display_order": 15,
 }
@@ -99,7 +99,7 @@ _ASSET_REPORT_AGENT = {
 - 数据不完整时在摘要中注明「数据可能不完整，分析仅供参考」
 - AI 推断与规则结论分开标注
 - 所有推断需附带置信度 (confidence: 0.0-1.0)""",
-    "skills": '["report"]',
+    "skills": ["report"],
     "agent_type": "system",
     "display_order": 20,
 }

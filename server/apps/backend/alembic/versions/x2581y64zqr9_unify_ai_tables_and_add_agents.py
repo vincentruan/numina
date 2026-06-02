@@ -77,7 +77,7 @@ def upgrade() -> None:
 - 不提供具体投资建议（如"买入某股票"）
 - 不做收益预测或承诺
 - 不替用户做出财务决策',
-            '["report", "alerts", "allocation", "disposal"]',
+            '["report", "alerts", "allocation", "disposal"]'::jsonb,
             true, 100
         )
     """)
@@ -105,7 +105,7 @@ def upgrade() -> None:
 - 不提供具体投资建议
 - 不推荐具体金融产品
 - 不替用户做出财务决策',
-            '["liability", "spending_leak"]',
+            '["liability", "spending_leak"]'::jsonb,
             true, 200
         )
     """)
