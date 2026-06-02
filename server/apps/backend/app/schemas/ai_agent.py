@@ -55,7 +55,7 @@ class AgentResponse(SnowflakeBase):
     subagent_enabled: bool
     tool_groups: list[str] | None
     agent_type: str  # system | builtin | custom
-    is_builtin: bool  # Computed from agent_type
+    is_builtin: bool  # Persisted DB column; true for system/builtin agents
     is_enabled: bool
     display_order: int
     created_by: int | None

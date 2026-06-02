@@ -20,8 +20,6 @@ router = APIRouter(prefix="/ai/agents", tags=["ai-agents"])
 def _to_response(agent: AIAgent, user: User) -> AgentResponse:
     is_owner = user.role == "owner"
     data = {col.name: getattr(agent, col.name) for col in agent.__table__.columns}
-    # Add computed fields
-    data["is_builtin"] = agent.is_builtin
     # Calculate permissions based on agent_type.
     #
     # system agents (ai-assistant, numina): owners can navigate to a read-only

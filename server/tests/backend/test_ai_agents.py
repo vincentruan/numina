@@ -20,6 +20,7 @@ def seed_builtin_agents(db):
             soul_md="你是资产健康顾问。" * 2,
             skills=["report", "alerts"],
             agent_type="builtin",
+            is_builtin=True,
             display_order=100,
         )
     )
@@ -35,6 +36,7 @@ def seed_builtin_agents(db):
             soul_md="你是财务优化师。" * 2,
             skills=["liability", "spending_leak"],
             agent_type="builtin",
+            is_builtin=True,
             display_order=200,
         )
     )
@@ -216,6 +218,7 @@ def seed_system_agents(db):
             soul_md="你是友好的 AI 助手。" * 2,
             skills=["chat"],
             agent_type="system",
+            is_builtin=True,
             display_order=10,
         )
     )
@@ -231,6 +234,7 @@ def seed_system_agents(db):
             soul_md="你是数鸣，家庭财务大使。" * 2,
             skills=["*"],
             agent_type="system",
+            is_builtin=True,
             display_order=15,
         )
     )
@@ -272,6 +276,7 @@ def _make_numina_agent():
         soul_md="你是数鸣。" * 2,
         skills=["*"],
         agent_type="system",
+        is_builtin=True,
         display_order=15,
         subagent_enabled=False,
         is_enabled=True,
