@@ -16,7 +16,6 @@ import re
 from typing import Any
 
 from json_repair import repair_json
-
 from sqlalchemy.orm import Session
 
 from apps.backend.app.models.ai_provider_config import AIProviderConfig
@@ -262,12 +261,16 @@ async def parse_capability_result(
             # Use json_repair for robust parsing - handles malformed JSON
             # from LLM output (thinking tags, markdown fences, trailing commas, etc)
             data = repair_json(block, return_objects=True)
-            if _validate_json(data, capability):
+            # Type guard: repair_json may return str on partial failure
+            if not isinstance(data, (dict, list)):
+                logger.warning(f"[{capability}] repair_json returned {type(data).__name__}, expected dict/list")
+                data = None
+            if data is not None and _validate_json(data, capability):
                 logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(data) if isinstance(data, list) else 1} items")
                 return data, method
             else:
                 logger.warning(f"[{capability}] regex extracted JSON via {method} but validation failed")
-        except Exception as e:
+        except (ValueError, TypeError) as e:
             logger.warning(f"[{capability}] regex found block via {method} but JSON repair failed: {e}")
 
     # Step 2: LLM fallback
@@ -337,7 +340,7 @@ async def _llm_fallback_extract(
             ),
             timeout=LLM_FALLBACK_TIMEOUT_SECONDS,
         )
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s")
         return None
     except Exception as e:
@@ -352,7 +355,11 @@ async def _llm_fallback_extract(
     try:
         # Use json_repair for robust parsing
         data = repair_json(cleaned, return_objects=True)
-    except Exception as e:
+        # Type guard: repair_json may return str on partial failure
+        if not isinstance(data, (dict, list)):
+            logger.warning(f"[{capability}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list")
+            return None
+    except (ValueError, TypeError) as e:
         logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e}")
         return None
 
