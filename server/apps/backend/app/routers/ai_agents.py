@@ -27,7 +27,7 @@ def _to_response(agent: AIAgent, user: User) -> AgentResponse:
     # below still rejects mutations on system agents (403); can_edit=True here
     # only controls the frontend's display of the edit affordance, not
     # mutation authority.
-    if agent.agent_type == "system" or agent.agent_type == "builtin":
+    if agent.agent_type == "system":
         data["can_edit"] = is_owner
         data["can_delete"] = False
     else:  # custom
@@ -53,15 +53,11 @@ def list_agents(
         .all()
     )
     system = [_to_response(a, current_user) for a in agents if a.agent_type == "system"]
-    builtin = [
-        _to_response(a, current_user) for a in agents if a.agent_type == "builtin"
-    ]
     custom = [_to_response(a, current_user) for a in agents if a.agent_type == "custom"]
     return AgentListGroupedResponse(
         system=system,
-        builtin=builtin,
         custom=custom,
-        total=len(system) + len(builtin) + len(custom),
+        total=len(system) + len(custom),
     )
 
 
@@ -140,14 +136,6 @@ def update_agent(
     if "skills" in updates and updates["skills"] and "*" in updates["skills"]:
         raise AppError(ErrorCode.VALIDATION_ERROR, "通配符 * 仅限系统智能体使用")
 
-    if agent.agent_type == "builtin":
-        allowed = {"icon", "color", "skills", "display_order"}
-        disallowed = set(updates.keys()) - allowed
-        if disallowed:
-            raise AppError(
-                ErrorCode.VALIDATION_ERROR, "内置智能体仅可修改外观和调用能力"
-            )
-
     for key, value in updates.items():
         setattr(agent, key, value)
 
@@ -165,8 +153,8 @@ def delete_agent(
     agent = db.query(AIAgent).filter(AIAgent.id == agent_id).first()
     if not agent:
         raise AppError(ErrorCode.NOT_FOUND)
-    if agent.agent_type in ("system", "builtin"):
-        raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体和内置智能体不可删除")
+    if agent.agent_type == "system":
+        raise AppError(ErrorCode.FAMILY_FORBIDDEN, "系统智能体不可删除")
     if agent.family_id != current_user.family_id:
         raise AppError(ErrorCode.NOT_FOUND)
     db.delete(agent)

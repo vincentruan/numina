@@ -184,7 +184,6 @@ const numinaAgentResponse = {
   agent_type: 'system' as const,
   is_enabled: true,
   display_order: 15,
-  is_builtin: true,
   can_edit: true,
   can_delete: false,
   created_by: null,

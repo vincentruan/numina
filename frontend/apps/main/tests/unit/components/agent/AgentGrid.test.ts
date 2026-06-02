@@ -49,7 +49,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     agent_type: 'custom',
     is_enabled: true,
     display_order: 0,
-    is_builtin: false,
     can_edit: true,
     can_delete: true,
     created_by: null,
@@ -64,7 +63,6 @@ const aiAssistant = makeAgent({
   agent_name: 'ai-assistant',
   display_name: 'AI 问答',
   agent_type: 'system',
-  is_builtin: true,
   can_edit: false,
   can_delete: false,
 })
@@ -75,7 +73,6 @@ const numina = makeAgent({
   display_name: '数鸣',
   icon: '✨',
   agent_type: 'system',
-  is_builtin: true,
   can_edit: true,
   can_delete: false,
 })

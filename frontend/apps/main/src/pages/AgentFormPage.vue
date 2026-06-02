@@ -30,11 +30,8 @@ const form = ref<AgentCreatePayload>({
 })
 
 // U13: agent_type drives the read-only mode for system agents (numina,
-// ai-assistant). isBuiltin remains for the legacy 6-builtin code path —
-// after migration b6745e8a2c14 there are no builtin agents in production
-// but the branch is preserved against down() rollback scenarios.
-const agentType = ref<'system' | 'builtin' | 'custom' | null>(null)
-const isBuiltin = ref(false)
+// ai-assistant).
+const agentType = ref<'system' | 'custom' | null>(null)
 const isSystemAgent = computed(() => agentType.value === 'system')
 
 const availableSkills = ref<SkillDefinition[]>([])
@@ -63,7 +60,6 @@ onMounted(async () => {
 
   if (isEdit.value) {
     const agent = await getAgent(agentId.value)
-    isBuiltin.value = agent.is_builtin
     agentType.value = agent.agent_type
     form.value = {
       agent_name: agent.agent_name,
@@ -88,19 +84,14 @@ async function handleSubmit() {
   try {
     if (isEdit.value) {
       const payload: AgentUpdatePayload = {}
-      if (isBuiltin.value) {
-        payload.icon = form.value.icon
-        payload.color = form.value.color
-      } else {
-        payload.display_name = form.value.display_name
-        payload.description = form.value.description
-        payload.icon = form.value.icon
-        payload.color = form.value.color
-        payload.soul_md = form.value.soul_md
-        payload.skills = form.value.skills
-        payload.model = form.value.model
-        payload.subagent_enabled = form.value.subagent_enabled
-      }
+      payload.display_name = form.value.display_name
+      payload.description = form.value.description
+      payload.icon = form.value.icon
+      payload.color = form.value.color
+      payload.soul_md = form.value.soul_md
+      payload.skills = form.value.skills
+      payload.model = form.value.model
+      payload.subagent_enabled = form.value.subagent_enabled
       await agentStore.editAgent(agentId.value, payload)
       showToast(t('agents.form.updateSuccess'))
     } else {
@@ -193,7 +184,7 @@ function toggleSkill(skillId: string) {
       </div>
     </van-cell-group>
 
-    <van-cell-group v-if="!isBuiltin && !isSystemAgent" inset :title="t('agents.form.soulMd')">
+    <van-cell-group v-if="!isSystemAgent" inset :title="t('agents.form.soulMd')">
       <van-field
         v-model="form.soul_md"
         type="textarea"
@@ -205,9 +196,9 @@ function toggleSkill(skillId: string) {
 
     <!-- Skills section: for system agents (numina with sentinel ['*']),
          render the family's currently-enabled skills as locked rows so the
-         owner sees what numina actually has access to. For builtin/custom
+         owner sees what numina actually has access to. For custom
          agents, render normal toggleable rows. -->
-    <van-cell-group v-if="!isBuiltin || isSystemAgent" inset :title="t('agents.form.skills')">
+    <van-cell-group v-if="isSystemAgent || !isSystemAgent" inset :title="t('agents.form.skills')">
       <van-skeleton v-if="skillsLoading" :row="3" />
       <van-empty
         v-else-if="!availableSkills.length"
@@ -232,7 +223,7 @@ function toggleSkill(skillId: string) {
       </template>
     </van-cell-group>
 
-    <van-cell-group v-if="!isBuiltin && !isSystemAgent" inset>
+    <van-cell-group v-if="!isSystemAgent" inset>
       <van-field
         v-model="form.model"
         :label="t('agents.form.model')"

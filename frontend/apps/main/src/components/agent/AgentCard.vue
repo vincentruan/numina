@@ -35,7 +35,7 @@ const emit = defineEmits<{
     </div>
     <div v-if="showActions" class="agent-card__actions" @click.stop>
       <van-button size="small" type="primary" plain @click="emit('consult', agent)">
-        {{ agent.is_builtin ? t('agents.consult') : t('agents.chat') }}
+        {{ agent.agent_type === 'system' ? t('agents.consult') : t('agents.chat') }}
       </van-button>
       <van-button v-if="agent.can_edit" size="small" plain @click="emit('edit', agent)">
         {{ t('agents.edit') }}

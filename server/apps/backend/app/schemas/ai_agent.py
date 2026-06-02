@@ -54,8 +54,7 @@ class AgentResponse(SnowflakeBase):
     model: str | None
     subagent_enabled: bool
     tool_groups: list[str] | None
-    agent_type: str  # system | builtin | custom
-    is_builtin: bool  # Persisted DB column; true for system/builtin agents
+    agent_type: str  # system | custom
     is_enabled: bool
     display_order: int
     created_by: int | None
@@ -68,6 +67,5 @@ class AgentResponse(SnowflakeBase):
 class AgentListGroupedResponse(BaseModel):
     """智能体分组响应"""
     system: list[AgentResponse] = []
-    builtin: list[AgentResponse] = []
     custom: list[AgentResponse] = []
     total: int = 0

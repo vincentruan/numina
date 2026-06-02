@@ -4,57 +4,55 @@ import pytest
 
 
 @pytest.fixture
-def seed_builtin_agents(db):
-    """Seed builtin agents into the test DB."""
+def seed_system_agents(db):
+    """Seed the two existing system agents (ai-assistant, time-machine) plus numina."""
     from apps.backend.app.models.ai_agent import AIAgent
 
     db.add(
         AIAgent(
-            id=100000000000001,
+            id=100000000000003,
             family_id=0,
-            agent_name="asset-health-advisor",
-            display_name="资产健康顾问",
-            description="test builtin",
-            icon="🏥",
-            color="#10B981",
-            soul_md="你是资产健康顾问。" * 2,
-            skills=["report", "alerts"],
-            agent_type="builtin",
-            is_builtin=True,
-            display_order=100,
+            agent_name="ai-assistant",
+            display_name="AI助手",
+            description="通用对话助手",
+            icon="🤖",
+            color="#3B82F6",
+            soul_md="你是友好的 AI 助手。" * 2,
+            skills=["chat"],
+            agent_type="system",
+            display_order=10,
         )
     )
     db.add(
         AIAgent(
-            id=100000000000002,
+            id=100000000000005,
             family_id=0,
-            agent_name="finance-optimizer",
-            display_name="财务优化师",
-            description="test builtin",
-            icon="💰",
-            color="#F59E0B",
-            soul_md="你是财务优化师。" * 2,
-            skills=["liability", "spending_leak"],
-            agent_type="builtin",
-            is_builtin=True,
-            display_order=200,
+            agent_name="numina",
+            display_name="数鸣",
+            description="家庭财务大使",
+            icon="✨",
+            color="#8b5cf6",
+            soul_md="你是数鸣，家庭财务大使。" * 2,
+            skills=["*"],
+            agent_type="system",
+            display_order=15,
         )
     )
     db.commit()
 
 
-def test_list_agents_returns_builtin(client, auth_headers, seed_builtin_agents):
+def test_list_agents_returns_system(client, auth_headers, seed_system_agents):
     resp = client.get("/api/v1/ai/agents", headers=auth_headers)
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert len(data["builtin"]) == 2
-    assert data["builtin"][0]["agent_name"] == "asset-health-advisor"
-    assert data["builtin"][1]["agent_name"] == "finance-optimizer"
+    assert len(data["system"]) == 2
+    assert data["system"][0]["agent_name"] == "ai-assistant"
+    assert data["system"][1]["agent_name"] == "numina"
     assert data["custom"] == []
-    assert isinstance(data["builtin"][0]["id"], str)
+    assert isinstance(data["system"][0]["id"], str)
 
 
-def test_create_agent_success(client, auth_headers, seed_builtin_agents):
+def test_create_agent_success(client, auth_headers, seed_system_agents):
     payload = {
         "agent_name": "my-test-agent",
         "display_name": "我的测试智能体",
@@ -68,12 +66,12 @@ def test_create_agent_success(client, auth_headers, seed_builtin_agents):
     data = resp.json()["data"]
     assert data["agent_name"] == "my-test-agent"
     assert data["display_name"] == "我的测试智能体"
-    assert data["is_builtin"] is False
+    assert data["agent_type"] == "custom"
     assert data["can_edit"] is True
     assert data["can_delete"] is True
 
 
-def test_create_agent_duplicate_name_fails(client, auth_headers, seed_builtin_agents):
+def test_create_agent_duplicate_name_fails(client, auth_headers, seed_system_agents):
     payload = {
         "agent_name": "dup-agent",
         "display_name": "Dup1",
@@ -86,17 +84,17 @@ def test_create_agent_duplicate_name_fails(client, auth_headers, seed_builtin_ag
     assert resp2.status_code == 422
 
 
-def test_create_agent_builtin_name_conflict(client, auth_headers, seed_builtin_agents):
+def test_create_agent_system_name_conflict(client, auth_headers, seed_system_agents):
     payload = {
-        "agent_name": "asset-health-advisor",
-        "display_name": "冒充内置",
-        "soul_md": "你是一个冒充内置智能体的自定义智能体。",
+        "agent_name": "numina",
+        "display_name": "冒充系统",
+        "soul_md": "你是一个冒充系统智能体的自定义智能体。",
     }
     resp = client.post("/api/v1/ai/agents", json=payload, headers=auth_headers)
     assert resp.status_code == 422
 
 
-def test_create_agent_invalid_name_format(client, auth_headers, seed_builtin_agents):
+def test_create_agent_invalid_name_format(client, auth_headers, seed_system_agents):
     payload = {
         "agent_name": "Invalid-Name",
         "display_name": "Invalid",
@@ -106,7 +104,7 @@ def test_create_agent_invalid_name_format(client, auth_headers, seed_builtin_age
     assert resp.status_code == 422
 
 
-def test_update_custom_agent(client, auth_headers, seed_builtin_agents):
+def test_update_custom_agent(client, auth_headers, seed_system_agents):
     create_resp = client.post(
         "/api/v1/ai/agents",
         json={
@@ -130,35 +128,20 @@ def test_update_custom_agent(client, auth_headers, seed_builtin_agents):
     assert update_resp.json()["data"]["display_name"] == "After"
 
 
-def test_update_builtin_agent_limited_fields(client, auth_headers, seed_builtin_agents):
-    builtin_id = "100000000000001"
+def test_update_system_agent_forbidden(client, auth_headers, seed_system_agents):
+    system_id = "100000000000005"
     resp = client.put(
-        f"/api/v1/ai/agents/{builtin_id}",
+        f"/api/v1/ai/agents/{system_id}",
         json={
             "icon": "🩺",
             "color": "#059669",
         },
         headers=auth_headers,
     )
-    assert resp.status_code == 200
-    assert resp.json()["data"]["icon"] == "🩺"
+    assert resp.status_code == 403
 
 
-def test_update_builtin_agent_disallowed_field(
-    client, auth_headers, seed_builtin_agents
-):
-    builtin_id = "100000000000001"
-    resp = client.put(
-        f"/api/v1/ai/agents/{builtin_id}",
-        json={
-            "soul_md": "Hacked soul",
-        },
-        headers=auth_headers,
-    )
-    assert resp.status_code == 422
-
-
-def test_delete_custom_agent(client, auth_headers, seed_builtin_agents):
+def test_delete_custom_agent(client, auth_headers, seed_system_agents):
     create_resp = client.post(
         "/api/v1/ai/agents",
         json={
@@ -177,33 +160,54 @@ def test_delete_custom_agent(client, auth_headers, seed_builtin_agents):
     assert get_resp.status_code == 404
 
 
-def test_delete_builtin_agent_forbidden(client, auth_headers, seed_builtin_agents):
-    builtin_id = "100000000000001"
-    resp = client.delete(f"/api/v1/ai/agents/{builtin_id}", headers=auth_headers)
+def test_delete_system_agent_forbidden(client, auth_headers, seed_system_agents):
+    system_id = "100000000000005"
+    resp = client.delete(f"/api/v1/ai/agents/{system_id}", headers=auth_headers)
     assert resp.status_code == 403
 
 
-def test_toggle_agent(client, auth_headers, seed_builtin_agents):
-    builtin_id = "100000000000001"
+def test_toggle_agent(client, auth_headers, seed_system_agents):
+    # Create a custom agent to test toggle (system agents cannot be toggled)
+    create_resp = client.post(
+        "/api/v1/ai/agents",
+        json={
+            "agent_name": "toggleable-agent",
+            "display_name": "Toggleable",
+            "soul_md": "你是可切换的测试智能体。" * 2,
+        },
+        headers=auth_headers,
+    )
+    assert create_resp.status_code == 201
+    agent_id = create_resp.json()["data"]["id"]
+
     resp = client.put(
-        f"/api/v1/ai/agents/{builtin_id}/toggle?enabled=false", headers=auth_headers
+        f"/api/v1/ai/agents/{agent_id}/toggle?enabled=false", headers=auth_headers
     )
     assert resp.status_code == 200
     assert resp.json()["data"]["is_enabled"] is False
 
     resp2 = client.put(
-        f"/api/v1/ai/agents/{builtin_id}/toggle?enabled=true", headers=auth_headers
+        f"/api/v1/ai/agents/{agent_id}/toggle?enabled=true", headers=auth_headers
     )
     assert resp2.status_code == 200
     assert resp2.json()["data"]["is_enabled"] is True
+
+
+def test_toggle_system_agent_forbidden(client, auth_headers, seed_system_agents):
+    """System agents cannot be disabled."""
+    system_id = "100000000000005"
+    resp = client.put(
+        f"/api/v1/ai/agents/{system_id}/toggle?enabled=false", headers=auth_headers
+    )
+    assert resp.status_code == 403
 
 
 # ── U5: system agent can_edit for owners enables read-only edit view ──────────
 
 
 @pytest.fixture
-def seed_system_agents(db):
-    """Seed the two existing system agents (ai-assistant, time-machine) plus numina."""
+def seed_system_agents_for_u5(db):
+    """Seed the two existing system agents (ai-assistant, numina)."""
     from apps.backend.app.models.ai_agent import AIAgent
 
     db.add(
@@ -218,7 +222,6 @@ def seed_system_agents(db):
             soul_md="你是友好的 AI 助手。" * 2,
             skills=["chat"],
             agent_type="system",
-            is_builtin=True,
             display_order=10,
         )
     )
@@ -234,7 +237,6 @@ def seed_system_agents(db):
             soul_md="你是数鸣，家庭财务大使。" * 2,
             skills=["*"],
             agent_type="system",
-            is_builtin=True,
             display_order=15,
         )
     )
@@ -242,7 +244,7 @@ def seed_system_agents(db):
 
 
 def test_owner_sees_can_edit_true_for_system_agents(
-    client, auth_headers, seed_system_agents
+    client, auth_headers, seed_system_agents_for_u5
 ):
     """U5: owner role gets can_edit=True on system agents (enables read-only AgentFormPage view)."""
     resp = client.get("/api/v1/ai/agents", headers=auth_headers)
@@ -276,7 +278,6 @@ def _make_numina_agent():
         soul_md="你是数鸣。" * 2,
         skills=["*"],
         agent_type="system",
-        is_builtin=True,
         display_order=15,
         subagent_enabled=False,
         is_enabled=True,
@@ -330,7 +331,7 @@ def test_owner_to_response_for_system_agent_yields_can_edit_true():
 
 
 def test_put_system_agent_still_returns_403_for_owner(
-    client, auth_headers, seed_system_agents
+    client, auth_headers, seed_system_agents_for_u5
 ):
     """U5: can_edit=True does NOT grant mutation authority — PUT to a system agent still 403s."""
     numina_id = "100000000000005"
@@ -342,7 +343,7 @@ def test_put_system_agent_still_returns_403_for_owner(
     assert resp.status_code == 403
 
 
-def test_delete_system_agent_returns_403(client, auth_headers, seed_system_agents):
+def test_delete_system_agent_returns_403(client, auth_headers, seed_system_agents_for_u5):
     """System agents are never deletable — can_delete=False is enforced at API level too."""
     numina_id = "100000000000005"
     resp = client.delete(f"/api/v1/ai/agents/{numina_id}", headers=auth_headers)
