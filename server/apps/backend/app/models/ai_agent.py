@@ -49,13 +49,9 @@ class AIAgent(Base):
     tool_groups = Column(JSON, nullable=True)
 
     agent_type = Column(String(20), nullable=False, server_default=text("'builtin'"))  # system | builtin | custom
+    is_builtin = Column(Boolean, nullable=False, default=False, server_default=text("false"))
     is_enabled = Column(Boolean, nullable=False, default=True)
     display_order = Column(Integer, nullable=False, default=0)
     created_by = Column(BigInteger, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-
-    @property
-    def is_builtin(self) -> bool:
-        """Computed property: True if agent_type is 'builtin' or 'system'."""
-        return self.agent_type in ("builtin", "system")

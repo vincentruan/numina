@@ -50,6 +50,7 @@ _NUMINA_AGENT = {
 - 不在响应中泄露其他家庭成员的隐私数据""",
     "skills": ["*"],
     "agent_type": "system",
+    "is_builtin": True,
     "display_order": 15,
 }
 
@@ -101,6 +102,7 @@ _ASSET_REPORT_AGENT = {
 - 所有推断需附带置信度 (confidence: 0.0-1.0)""",
     "skills": ["report"],
     "agent_type": "system",
+    "is_builtin": True,
     "display_order": 20,
 }
 
@@ -126,6 +128,7 @@ def bootstrap_agents(db: Session) -> None:
             soul_md=_NUMINA_AGENT["soul_md"],
             skills=_NUMINA_AGENT["skills"],
             agent_type=_NUMINA_AGENT["agent_type"],
+            is_builtin=_NUMINA_AGENT["is_builtin"],
             display_order=_NUMINA_AGENT["display_order"],
         )
         db.add(numina)
@@ -148,6 +151,7 @@ def bootstrap_agents(db: Session) -> None:
             soul_md=_ASSET_REPORT_AGENT["soul_md"],
             skills=_ASSET_REPORT_AGENT["skills"],
             agent_type=_ASSET_REPORT_AGENT["agent_type"],
+            is_builtin=_ASSET_REPORT_AGENT["is_builtin"],
             display_order=_ASSET_REPORT_AGENT["display_order"],
         )
         db.add(report_agent)
