@@ -349,7 +349,7 @@ def _generate_temp_config(
             # OpenAI-compatible vendors (GLM-5, Qwen3, QwQ via DashScope/Novita/vLLM)
             # need the patched class to capture reasoning_content from vendor-specific
             # streaming deltas.
-            use_class = "deerflow.models.patched_openai:ReasoningChatOpenAI"
+            use_class = "deerflow.models.patched_openai:PatchedChatOpenAI"
         elif provider == "anthropic":
             # Native Anthropic; reasoning lives in `thinking` content blocks which
             # langchain-anthropic already handles.
