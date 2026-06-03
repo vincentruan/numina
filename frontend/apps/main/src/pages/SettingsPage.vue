@@ -113,7 +113,7 @@
       </van-cell>
       <van-cell :title="t('settings.aiAssistant')" is-link to="/settings/ai">
         <template #icon>
-          <ButlerIcon :size="16" class="cell-logo" />
+          <ButlerIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
       <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
@@ -442,11 +442,6 @@ async function onLogout() {
 }
 [data-theme='dark'] .color-option.active {
   border-color: var(--text-primary);
-}
-
-.cell-logo {
-  margin-right: 8px;
-  flex-shrink: 0;
 }
 
 .cell-icon {

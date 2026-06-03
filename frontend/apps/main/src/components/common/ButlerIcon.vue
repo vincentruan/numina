@@ -43,7 +43,6 @@ const props = withDefaults(
 
 <style scoped>
 svg {
-  display: inline-block;
-  vertical-align: middle;
+  display: block;
 }
 </style>
