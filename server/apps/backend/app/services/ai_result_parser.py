@@ -96,7 +96,12 @@ CAPABILITY_SCHEMAS = {
             "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
             "data_completeness_score": {"type": "number"},
             "narrative": {"type": "string"},
+            "summary": {"type": "string"},
             "sections": {"type": "object"},
+            "net_worth_health": {"type": "object"},
+            "allocation_analysis": {"type": "object"},
+            "liability_pressure": {"type": "object"},
+            "asset_efficiency": {"type": "object"},
         },
     },
     "allocation": {

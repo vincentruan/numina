@@ -18,6 +18,16 @@ _BUILTIN_SKILLS = [
         "display_order": 10,
     },
     {
+        "id": 100000000000014,
+        "skill_id": "report",
+        "name": "资产健康报告",
+        "description": "家庭资产健康报告。综合分析家庭财务状况，输出评分、风险标记和建议。",
+        "icon": "📊",
+        "color": "#10B981",
+        "input_mode": "trigger",
+        "display_order": 5,
+    },
+    {
         "id": 100000000000011,
         "skill_id": "family-finance-insight-planner",
         "name": "财务深度研究",
