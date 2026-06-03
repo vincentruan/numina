@@ -607,24 +607,27 @@ async def stream_agent_dispatch(
         # chat_adapter.py:92-96 — same wording, same stance, kept inline rather
         # than extracted because two short occurrences don't justify a shared module.
         # Multi-branch logic: native providers > MCP fallback > disabled.
-        web_search_providers = ai_config.get("web_search_providers", [])
-        web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
+        # IMPORTANT: Only inject when web_search=True is explicitly requested.
+        # For capabilities like report that pass web_search=False, skip the preamble
+        # entirely to avoid corrupting structured JSON output.
+        messages = []
+        if web_search:
+            web_search_providers = ai_config.get("web_search_providers", [])
+            web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
 
-        if web_search_providers:
-            web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
-        elif web_search_mcp_servers:
-            web_search_guidance = (
-                "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
-            )
-        else:
-            web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+            if web_search_providers:
+                web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+            elif web_search_mcp_servers:
+                web_search_guidance = (
+                    "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
+                )
+            else:
+                web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+            messages.append({"role": "system", "content": f"## 联网搜索\n\n{web_search_guidance}"})
 
-        state = {
-            "messages": [
-                {"role": "system", "content": f"## 联网搜索\n\n{web_search_guidance}"},
-                {"role": "user", "content": message},
-            ]
-        }
+        messages.append({"role": "user", "content": message})
+
+        state = {"messages": messages}
 
         try:
             # ``context`` is the LangGraph 0.6+ Runtime context. The harness's

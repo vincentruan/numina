@@ -43,6 +43,9 @@ class WebSearchProviderResponse(SnowflakeBase):
     is_enabled: bool
     display_order: int
     max_results: int
+    # API key fields (masked display, never expose raw key)
+    has_api_key: bool = False
+    api_key_masked: str | None = None
     # Circuit breaker fields
     circuit_state: str = "closed"
     circuit_reason: str | None = None
@@ -53,6 +56,11 @@ class WebSearchProviderResponse(SnowflakeBase):
     last_failure_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class WebSearchKeyRevealResponse(BaseModel):
+    """Response for revealing web search API key."""
+    api_key: str
 
 
 class WebSearchStatusResponse(BaseModel):

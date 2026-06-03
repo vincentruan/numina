@@ -42,6 +42,10 @@ export function testWebSearchProvider(id: string): Promise<{ success: boolean; m
   return api.post(`/ai/web-search/${id}/test`).then((r) => r.data)
 }
 
+export function revealWebSearchKey(id: string): Promise<{ api_key: string }> {
+  return api.post(`/ai/web-search/${id}/reveal-key`).then((r) => r.data)
+}
+
 export function getWebSearchStatus(): Promise<WebSearchStatus> {
   return api.get('/ai/web-search/status').then((r) => r.data)
 }

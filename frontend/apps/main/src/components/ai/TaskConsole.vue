@@ -209,9 +209,42 @@ const failureMessage = computed(() => {
     case 'structured_extraction_failed':
       return t('aiTask.error.extractionFailed')
     case 'agent_stream_error':
+    case 'stream_error':
       return t('aiTask.error.streamError')
     case 'post_processing_timeout':
       return t('aiTask.error.postProcessingTimeout')
+    case 'deerflow_timeout':
+    case 'DeerFlowTimeoutError':
+      return t('aiTask.error.deerflowTimeout')
+    case 'deerflow_error':
+    case 'DeerFlowError':
+      return t('aiTask.error.deerflowError')
+    case 'agent_create_error':
+    case 'AGENT_CREATE_ERROR':
+      return t('aiTask.error.agentCreateError')
+    case 'config_build_error':
+    case 'CONFIG_BUILD_ERROR':
+      return t('aiTask.error.configBuildError')
+    case 'agent_config_error':
+    case 'AgentConfigError':
+    case 'AGENT_CONFIG_ERROR':
+      return t('aiTask.error.agentConfigError')
+    case 'ai_config_error':
+    case 'AiConfigError':
+    case 'AI_CONFIG_ERROR':
+      return t('aiTask.error.aiConfigError')
+    case 'no_provider':
+    case 'NoProvider':
+    case 'NO_PROVIDER':
+      return t('aiTask.error.noProvider')
+    case 'runtime_error':
+    case 'RuntimeUnavailable':
+    case 'RUNTIME_ERROR':
+      return t('aiTask.error.runtimeError')
+    case 'model_not_support_reasoning':
+      return t('aiTask.error.modelNotSupportReasoning')
+    case 'web_search_config_error':
+      return t('aiTask.error.webSearchConfigError')
     default:
       return t('aiTask.error.generic')
   }

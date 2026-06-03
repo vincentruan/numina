@@ -1,6 +1,6 @@
 <!-- frontend/apps/main/src/pages/WebSearchFormPage.vue -->
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -11,6 +11,7 @@ import {
   createWebSearchProvider,
   updateWebSearchProvider,
   testWebSearchProvider,
+  revealWebSearchKey,
 } from '@/api/webSearch'
 import type { WebSearchProvider, WebSearchProviderTemplate } from '@/types/webSearch'
 
@@ -36,10 +37,18 @@ const form = ref({
 
 const loading = ref(false)
 const saving = ref(false)
+const testing = ref(false)
+
+// API key reveal state (like AIProviderFormPage)
+const revealedKey = ref<string | null>(null)
+const revealing = ref(false)
 
 const pageTitle = computed(() =>
   isEdit.value ? t('webSearch.formEditTitle') : t('webSearch.formTitle'),
 )
+
+const maskedKey = computed(() => existingProvider.value?.api_key_masked ?? null)
+const hasApiKey = computed(() => existingProvider.value?.has_api_key ?? false)
 
 async function load() {
   loading.value = true
@@ -62,6 +71,7 @@ async function load() {
       if (template.value) {
         form.value.provider_name = template.value.provider_name
         form.value.display_name = template.value.display_name
+        form.value.max_results = template.value.config_fields.find((f) => f.key === 'max_results')?.default as number ?? 5
       }
     }
   } finally {
@@ -69,10 +79,48 @@ async function load() {
   }
 }
 
+async function onCopyKey() {
+  try {
+    let text = revealedKey.value
+    if (!text && providerId.value) {
+      const res = await revealWebSearchKey(providerId.value)
+      text = res.api_key
+    }
+    if (!text) return
+    await navigator.clipboard.writeText(text)
+    showToast(t('toast.copied'))
+  } catch {
+    showToast(t('toast.operationFailed2'))
+  }
+}
+
+async function onToggleReveal() {
+  if (revealedKey.value) {
+    revealedKey.value = null
+    return
+  }
+  if (!providerId.value) return
+  revealing.value = true
+  try {
+    const res = await revealWebSearchKey(providerId.value)
+    revealedKey.value = res.api_key
+  } catch {
+    showToast(t('webSearch.revealFailed'))
+  } finally {
+    revealing.value = false
+  }
+}
+
 async function handleSave() {
   if (!template.value) return
 
   if (template.value.requires_api_key && !form.value.api_key && !isEdit.value) {
+    showToast(t('webSearch.noApiKeyWarning'))
+    return
+  }
+
+  // For edit: if provider already has API key and user didn't enter new one, that's OK
+  if (isEdit.value && template.value.requires_api_key && !form.value.api_key && !hasApiKey.value) {
     showToast(t('webSearch.noApiKeyWarning'))
     return
   }
@@ -108,11 +156,19 @@ async function handleSave() {
 
 async function handleTest() {
   if (!providerId.value) return
+  testing.value = true
   try {
     const result = await testWebSearchProvider(providerId.value)
-    showToast(result.success ? t('webSearch.testSuccess') : t('webSearch.testFailed'))
-  } catch {
-    showToast(t('webSearch.testFailed'))
+    if (result.success) {
+      showToast(t('webSearch.testSuccess'))
+    } else {
+      showToast(t('webSearch.testFailedWithMsg', { msg: result.message }))
+    }
+  } catch (e: unknown) {
+    const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+    showToast(detail || t('webSearch.testFailed'))
+  } finally {
+    testing.value = false
   }
 }
 
@@ -131,16 +187,54 @@ onMounted(load)
           :placeholder="template?.display_name"
         />
 
+        <!-- Edit mode: show masked key with copy/eye toggle -->
+        <template v-if="isEdit && template?.requires_api_key">
+          <van-cell v-if="maskedKey" :title="t('webSearch.currentApiKey')">
+            <template #value>
+              <div class="key-reveal-row">
+                <span class="key-reveal-value">{{ revealedKey || maskedKey }}</span>
+                <button class="key-icon-btn" :title="t('webSearch.copyApiKey')" @click.stop="onCopyKey">
+                  <van-icon name="description" size="16" />
+                </button>
+                <button
+                  class="key-icon-btn"
+                  :title="revealedKey ? t('webSearch.hideApiKey') : t('webSearch.showApiKey')"
+                  :disabled="revealing"
+                  @click.stop="onToggleReveal"
+                >
+                  <van-icon
+                    v-if="revealing"
+                    name="loading"
+                    size="16"
+                    class="key-icon-spinning"
+                  />
+                  <van-icon v-else :name="revealedKey ? 'eye-o' : 'closed-eye'" size="16" />
+                </button>
+              </div>
+            </template>
+          </van-cell>
+          <van-cell v-else-if="!hasApiKey" :title="t('webSearch.currentApiKey')">
+            <template #value>
+              <span class="key-empty">{{ t('webSearch.noApiKeyConfigured') }}</span>
+            </template>
+          </van-cell>
+          <!-- New API key input (optional update) -->
+          <van-field
+            v-model="form.api_key"
+            :label="t('webSearch.newApiKey')"
+            :placeholder="t('webSearch.apiKeyUpdatePlaceholder')"
+            autocomplete="off"
+          />
+        </template>
+
+        <!-- Create mode: simple password field -->
         <van-field
-          v-if="template?.requires_api_key"
+          v-else-if="template?.requires_api_key"
           v-model="form.api_key"
           :label="t('webSearch.apiKey')"
-          :placeholder="
-            isEdit && existingProvider?.has_api_key
-              ? '••••••••（已配置，留空不修改）'
-              : t('webSearch.apiKeyPlaceholder')
-          "
+          :placeholder="t('webSearch.apiKeyPlaceholder')"
           type="password"
+          autocomplete="off"
         />
 
         <van-field
@@ -165,6 +259,7 @@ onMounted(load)
           v-if="isEdit && isOwner"
           plain
           block
+          :loading="testing"
           @click="handleTest"
         >
           {{ t('webSearch.testBtn') }}
@@ -199,5 +294,65 @@ onMounted(load)
 
 .provider-info a {
   color: var(--van-primary-color);
+}
+
+.key-reveal-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.key-reveal-value {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-family: monospace;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.key-empty {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.key-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s;
+}
+
+.key-icon-btn:active {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme='dark'] .key-icon-btn:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.key-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.key-icon-spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
 }
 </style>

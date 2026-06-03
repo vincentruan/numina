@@ -27,6 +27,7 @@ export interface WebSearchProvider {
   circuit_state: 'closed' | 'open' | 'half_open'
   circuit_reason: string | null
   has_api_key: boolean
+  api_key_masked: string | null
   created_at: string
   updated_at: string
 }

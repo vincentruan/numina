@@ -2,6 +2,7 @@
 
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -12,6 +13,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.web_search_provider import (
+    WebSearchKeyRevealResponse,
     WebSearchProviderCreate,
     WebSearchProviderResponse,
     WebSearchProviderTemplate,
@@ -19,7 +21,11 @@ from apps.backend.app.schemas.web_search_provider import (
     WebSearchStatusResponse,
     WebSearchTestResponse,
 )
-from apps.backend.app.services.ai_crypto import encrypt_api_key
+from apps.backend.app.services.ai_crypto import (
+    decrypt_api_key,
+    encrypt_api_key,
+    mask_api_key,
+)
 from apps.backend.app.services.security_log import _log_security_event
 from apps.backend.app.services.web_search_provider_registry import (
     get_provider_template,
@@ -43,6 +49,36 @@ def _get_provider_or_404(provider_id: int, family_id: int, db: Session) -> Famil
     if not provider:
         raise AppError(ErrorCode.NOT_FOUND, "搜索引擎配置不存在")
     return provider
+
+
+def _provider_to_response(provider: FamilyWebSearchProvider) -> WebSearchProviderResponse:
+    """Convert ORM model to response schema with masked API key."""
+    has_api_key = provider.api_key_encrypted is not None
+    api_key_masked = None
+    if provider.api_key_encrypted:
+        decrypted = decrypt_api_key(provider.api_key_encrypted)
+        if decrypted:
+            api_key_masked = mask_api_key(decrypted)
+    return WebSearchProviderResponse(
+        id=provider.id,
+        family_id=provider.family_id,
+        provider_name=provider.provider_name,
+        display_name=provider.display_name,
+        is_enabled=provider.is_enabled,
+        display_order=provider.display_order,
+        max_results=provider.max_results,
+        has_api_key=has_api_key,
+        api_key_masked=api_key_masked,
+        circuit_state=provider.circuit_state,
+        circuit_reason=provider.circuit_reason,
+        recovery_schedule=provider.recovery_schedule,
+        last_failure_type=provider.last_failure_type,
+        half_open_window_start=provider.half_open_window_start,
+        failure_count=provider.failure_count,
+        last_failure_at=provider.last_failure_at,
+        created_at=provider.created_at,
+        updated_at=provider.updated_at,
+    )
 
 
 @router.get("/templates", response_model=list[WebSearchProviderTemplate])
@@ -87,7 +123,7 @@ def list_providers(
         .order_by(FamilyWebSearchProvider.display_order)
         .all()
     )
-    return [WebSearchProviderResponse.model_validate(p) for p in providers]
+    return [_provider_to_response(p) for p in providers]
 
 
 @router.post("", response_model=WebSearchProviderResponse, status_code=201)
@@ -144,7 +180,7 @@ def create_provider(
         provider=payload.provider_name,
     )
 
-    return WebSearchProviderResponse.model_validate(provider)
+    return _provider_to_response(provider)
 
 
 @router.put("/{provider_id}", response_model=WebSearchProviderResponse)
@@ -186,7 +222,33 @@ def update_provider(
         provider=provider.provider_name,
     )
 
-    return WebSearchProviderResponse.model_validate(provider)
+    return _provider_to_response(provider)
+
+
+@router.post("/{provider_id}/reveal-key", response_model=WebSearchKeyRevealResponse)
+def reveal_provider_key(
+    provider_id: int,
+    current_user: User = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> WebSearchKeyRevealResponse:
+    """Reveal the decrypted API key for a web search provider (owner only)."""
+    provider = _get_provider_or_404(provider_id, current_user.family_id, db)
+
+    if not provider.api_key_encrypted:
+        raise AppError(ErrorCode.VALIDATION_ERROR, "该搜索引擎未配置 API Key")
+
+    decrypted = decrypt_api_key(provider.api_key_encrypted)
+    if not decrypted:
+        raise AppError(ErrorCode.INTERNAL_ERROR, "解密服务不可用")
+
+    _log_security_event(
+        "web_search_key_revealed",
+        user_id=current_user.id,
+        family_id=current_user.family_id,
+        provider=provider.provider_name,
+    )
+
+    return WebSearchKeyRevealResponse(api_key=decrypted)
 
 
 @router.delete("/{provider_id}", status_code=204)
@@ -234,7 +296,7 @@ def enable_provider(
         provider=provider.provider_name,
     )
 
-    return WebSearchProviderResponse.model_validate(provider)
+    return _provider_to_response(provider)
 
 
 @router.post("/{provider_id}/disable", response_model=WebSearchProviderResponse)
@@ -257,17 +319,179 @@ def disable_provider(
         provider=provider.provider_name,
     )
 
-    return WebSearchProviderResponse.model_validate(provider)
+    return _provider_to_response(provider)
 
 
 @router.post("/{provider_id}/test", response_model=WebSearchTestResponse)
 def test_provider(
-    provider_id: int,  # Native int from FastAPI path param
+    provider_id: int,
     current_user: User = Depends(require_owner),
     db: Session = Depends(get_db),
 ) -> WebSearchTestResponse:
-    """Test web search provider connectivity (stub for now, owner only)."""
-    _get_provider_or_404(provider_id, current_user.family_id, db)
+    """Test web search provider connectivity (owner only)."""
+    provider = _get_provider_or_404(provider_id, current_user.family_id, db)
+    template = get_provider_template(provider.provider_name)
 
-    # Stub implementation - will be implemented in Task 6
-    return WebSearchTestResponse(success=False, message="测试功能尚未实现")
+    if not template:
+        return WebSearchTestResponse(success=False, message="未知的搜索引擎类型")
+
+    provider_name = provider.provider_name
+
+    try:
+        # Test based on provider type
+        if provider_name == "tavily":
+            return _test_tavily(provider)
+        elif provider_name == "ddg_search":
+            return _test_duckduckgo(provider)
+        elif provider_name == "exa":
+            return _test_exa(provider)
+        elif provider_name == "serper":
+            return _test_serper(provider)
+        elif provider_name == "firecrawl":
+            return _test_firecrawl(provider)
+        else:
+            return WebSearchTestResponse(success=False, message="该搜索引擎暂不支持连通性测试")
+    except Exception as e:
+        logger.exception("Web search provider test failed")
+        return WebSearchTestResponse(success=False, message=str(e))
+
+
+def _test_tavily(provider: FamilyWebSearchProvider) -> WebSearchTestResponse:
+    """Test Tavily API connectivity."""
+    if not provider.api_key_encrypted:
+        return WebSearchTestResponse(success=False, message="未配置 API Key")
+
+    api_key = decrypt_api_key(provider.api_key_encrypted)
+    if not api_key:
+        return WebSearchTestResponse(success=False, message="解密 API Key 失败")
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": api_key,
+                    "query": "test",
+                    "max_results": 1,
+                },
+            )
+            if 200 <= resp.status_code < 300:
+                return WebSearchTestResponse(success=True, message="连接成功")
+            elif resp.status_code == 401:
+                return WebSearchTestResponse(success=False, message="API Key 无效")
+            else:
+                return WebSearchTestResponse(
+                    success=False, message=f"API 返回错误: {resp.status_code}"
+                )
+    except httpx.TimeoutException:
+        return WebSearchTestResponse(success=False, message="连接超时")
+    except httpx.RequestError as e:
+        return WebSearchTestResponse(success=False, message=f"网络错误: {str(e)}")
+
+
+def _test_duckduckgo(provider: FamilyWebSearchProvider) -> WebSearchTestResponse:
+    """Test DuckDuckGo connectivity (no API key required)."""
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            # DuckDuckGo HTML search endpoint - just verify the service is reachable
+            resp = client.get("https://duckduckgo.com/", params={"q": "test"})
+            if 200 <= resp.status_code < 300:
+                return WebSearchTestResponse(success=True, message="连接成功")
+            else:
+                return WebSearchTestResponse(
+                    success=False, message=f"服务返回错误: {resp.status_code}"
+                )
+    except httpx.TimeoutException:
+        return WebSearchTestResponse(success=False, message="连接超时")
+    except httpx.RequestError as e:
+        return WebSearchTestResponse(success=False, message=f"网络错误: {str(e)}")
+
+
+def _test_exa(provider: FamilyWebSearchProvider) -> WebSearchTestResponse:
+    """Test Exa API connectivity."""
+    if not provider.api_key_encrypted:
+        return WebSearchTestResponse(success=False, message="未配置 API Key")
+
+    api_key = decrypt_api_key(provider.api_key_encrypted)
+    if not api_key:
+        return WebSearchTestResponse(success=False, message="解密 API Key 失败")
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                "https://api.exa.ai/search",
+                headers={"x-api-key": api_key},
+                json={"query": "test", "numResults": 1},
+            )
+            if 200 <= resp.status_code < 300:
+                return WebSearchTestResponse(success=True, message="连接成功")
+            elif resp.status_code == 401:
+                return WebSearchTestResponse(success=False, message="API Key 无效")
+            else:
+                return WebSearchTestResponse(
+                    success=False, message=f"API 返回错误: {resp.status_code}"
+                )
+    except httpx.TimeoutException:
+        return WebSearchTestResponse(success=False, message="连接超时")
+    except httpx.RequestError as e:
+        return WebSearchTestResponse(success=False, message=f"网络错误: {str(e)}")
+
+
+def _test_serper(provider: FamilyWebSearchProvider) -> WebSearchTestResponse:
+    """Test Serper (Google Search) API connectivity."""
+    if not provider.api_key_encrypted:
+        return WebSearchTestResponse(success=False, message="未配置 API Key")
+
+    api_key = decrypt_api_key(provider.api_key_encrypted)
+    if not api_key:
+        return WebSearchTestResponse(success=False, message="解密 API Key 失败")
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            resp = client.post(
+                "https://google.serper.dev/search",
+                headers={"X-API-KEY": api_key},
+                json={"q": "test"},
+            )
+            if 200 <= resp.status_code < 300:
+                return WebSearchTestResponse(success=True, message="连接成功")
+            elif resp.status_code == 401:
+                return WebSearchTestResponse(success=False, message="API Key 无效")
+            else:
+                return WebSearchTestResponse(
+                    success=False, message=f"API 返回错误: {resp.status_code}"
+                )
+    except httpx.TimeoutException:
+        return WebSearchTestResponse(success=False, message="连接超时")
+    except httpx.RequestError as e:
+        return WebSearchTestResponse(success=False, message=f"网络错误: {str(e)}")
+
+
+def _test_firecrawl(provider: FamilyWebSearchProvider) -> WebSearchTestResponse:
+    """Test Firecrawl API connectivity."""
+    if not provider.api_key_encrypted:
+        return WebSearchTestResponse(success=False, message="未配置 API Key")
+
+    api_key = decrypt_api_key(provider.api_key_encrypted)
+    if not api_key:
+        return WebSearchTestResponse(success=False, message="解密 API Key 失败")
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            # Firecrawl has a /status endpoint to check API health
+            resp = client.get(
+                "https://api.firecrawl.dev/v1/status",
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            if 200 <= resp.status_code < 300:
+                return WebSearchTestResponse(success=True, message="连接成功")
+            elif resp.status_code == 401:
+                return WebSearchTestResponse(success=False, message="API Key 无效")
+            else:
+                return WebSearchTestResponse(
+                    success=False, message=f"API 返回错误: {resp.status_code}"
+                )
+    except httpx.TimeoutException:
+        return WebSearchTestResponse(success=False, message="连接超时")
+    except httpx.RequestError as e:
+        return WebSearchTestResponse(success=False, message=f"网络错误: {str(e)}")

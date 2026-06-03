@@ -9,6 +9,7 @@
         :status="taskStatus"
         :think-content="taskChunks"
         :elapsed-seconds="taskElapsed"
+        :error-code="errorCode"
       />
     </div>
 
@@ -165,6 +166,7 @@ const {
   thinkContent: taskChunks,
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
+  errorCode,
   startStream,
 } = useAITask('report', '/ai/report/generate/events')
 
