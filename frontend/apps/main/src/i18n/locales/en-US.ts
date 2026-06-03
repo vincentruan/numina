@@ -746,7 +746,7 @@ export default {
     notificationsAndAI: 'Notifications & AI',
     notificationSettings: 'Notification Settings',
     aiSettings: 'AI Settings',
-    aiAssistant: 'AI Assistant',
+    aiAssistant: 'AI Model Management',
     mcpManage: 'MCP Management',
     webSearchManage: 'Web Search Management',
     skillsManage: 'Skills Management',

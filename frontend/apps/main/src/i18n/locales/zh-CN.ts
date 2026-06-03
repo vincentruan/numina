@@ -942,7 +942,7 @@ export default {
     notificationsAndAI: '通知与 AI 助手设置',
     notificationSettings: '通知设置',
     aiSettings: 'AI 助手设置',
-    aiAssistant: 'AI 智能助手',
+    aiAssistant: 'AI 模型管理',
     enableAI: '启用 AI 助手',
     enableAIDesc: '需至少配置一个模型',
     enableAINoModel: '⚠️ 请先配置至少一个模型',
