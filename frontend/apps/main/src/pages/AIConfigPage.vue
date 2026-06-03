@@ -24,7 +24,7 @@
           <!-- Card header: logo + index + title + circuit -->
           <div class="card-header">
             <div class="drag-handle" :title="t('aiConfig.dragToReorder')">
-              <span class="drag-icon">⠿</span>
+              <van-icon name="wap-nav" />
             </div>
             <div
               class="card-logo"
@@ -49,8 +49,21 @@
                 <span class="card-index">{{ t('aiConfig.providerIndex', { n: index + 1 }) }}</span>
                 <span class="card-name">{{ cfg.name }}</span>
                 <span class="card-provider-fmt">({{ cfg.provider }})</span>
-                <span v-if="cfg.circuit_state === 'open'" class="circuit-badge">🔴</span>
-                <span v-if="cfg.circuit_state === 'half_open'" class="circuit-badge">🟡</span>
+              </div>
+              <div class="card-status-row">
+                <span
+                  class="health-dot"
+                  :style="{ background: getCircuitColor(cfg.circuit_state) }"
+                />
+                <span
+                  class="circuit-badge"
+                  :style="{ color: getCircuitColor(cfg.circuit_state) }"
+                >
+                  {{ getCircuitLabel(cfg.circuit_state) }}
+                </span>
+                <span v-if="cfg.circuit_reason" class="circuit-reason">
+                  {{ getCircuitReasonLabel(cfg.circuit_reason) }}
+                </span>
               </div>
             </div>
           </div>
@@ -240,6 +253,28 @@ function capShortLabel(cap: string): string {
   return t('aiConfig.capabilityVision')
 }
 
+// ── Circuit state helpers ───────────────────────────────────────────────────────
+
+function getCircuitLabel(state: string) {
+  if (state === 'open') return t('aiConfig.circuitOpen')
+  if (state === 'half_open') return t('aiConfig.circuitHalfOpen')
+  return t('aiConfig.circuitClosed')
+}
+
+function getCircuitColor(state: string) {
+  if (state === 'open') return 'var(--van-danger-color)'
+  if (state === 'half_open') return 'var(--van-warning-color)'
+  return 'var(--van-success-color)'
+}
+
+function getCircuitReasonLabel(reason: string | null) {
+  if (!reason) return ''
+  if (reason === 'transient') return t('aiConfig.circuitReasonTransient')
+  if (reason === 'permanent_auth') return t('aiConfig.circuitReasonPermanentAuth')
+  if (reason === 'permanent_account') return t('aiConfig.circuitReasonPermanentAccount')
+  return reason
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function getModelId(cfg: ProviderConfig, slot: number): string | null {
@@ -399,12 +434,6 @@ onMounted(async () => {
   cursor: grabbing;
 }
 
-.drag-icon {
-  font-size: 20px;
-  line-height: 1;
-  user-select: none;
-}
-
 /* ── Card ── */
 .provider-card {
   background: var(--bg-card, var(--card-bg));
@@ -497,8 +526,28 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
+.card-status-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .circuit-badge {
-  font-size: 15px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.circuit-reason {
+  font-size: 11px;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
