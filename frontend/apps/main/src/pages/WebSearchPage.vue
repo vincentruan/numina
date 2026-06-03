@@ -2,16 +2,16 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@numina/auth'
+import draggable from 'vuedraggable'
 import {
   getWebSearchTemplates,
   getWebSearchProviders,
   enableWebSearchProvider,
   disableWebSearchProvider,
-  deleteWebSearchProvider,
-  testWebSearchProvider,
+  updateWebSearchProvider,
 } from '@/api/webSearch'
 import type { WebSearchProvider, WebSearchProviderTemplate } from '@/types/webSearch'
 
@@ -23,8 +23,15 @@ const isOwner = computed(() => authStore.user?.role === 'owner')
 const templates = ref<WebSearchProviderTemplate[]>([])
 const providers = ref<WebSearchProvider[]>([])
 const loading = ref(false)
+const isReordering = ref(false)
 
 const enabledCount = computed(() => providers.value.filter((p) => p.is_enabled).length)
+
+const enabledProviders = computed(() =>
+  providers.value.filter((p) => p.is_enabled).sort((a, b) => a.display_order - b.display_order),
+)
+
+const disabledProviders = computed(() => providers.value.filter((p) => !p.is_enabled))
 
 function getTemplate(providerName: string) {
   return templates.value.find((t) => t.provider_name === providerName)
@@ -40,6 +47,14 @@ function getCircuitColor(state: string) {
   if (state === 'open') return 'var(--van-danger-color)'
   if (state === 'half_open') return 'var(--van-warning-color)'
   return 'var(--van-success-color)'
+}
+
+function getCircuitReasonLabel(reason: string | null) {
+  if (!reason) return ''
+  if (reason === 'transient') return t('webSearch.circuitReasonTransient')
+  if (reason === 'api_error') return t('webSearch.circuitReasonApiError')
+  if (reason === 'timeout') return t('webSearch.circuitReasonTimeout')
+  return reason
 }
 
 async function load() {
@@ -71,35 +86,37 @@ async function handleToggle(provider: WebSearchProvider) {
       showToast(t('webSearch.enableSuccess'))
     }
     await load()
-  } catch (e: any) {
-    showToast(e?.response?.data?.detail || t('webSearch.noApiKeyWarning'))
+  } catch {
+    showToast(t('webSearch.noApiKeyWarning'))
   }
 }
 
-async function handleDelete(provider: WebSearchProvider) {
-  try {
-    await showConfirmDialog({
-      title: t('webSearch.deleteBtn'),
-      message: t('webSearch.confirmDelete', { name: provider.display_name || provider.provider_name }),
-    })
-    await deleteWebSearchProvider(provider.id)
-    showToast(t('webSearch.deleteSuccess'))
-    await load()
-  } catch {
-    // User cancelled
-  }
-}
+async function onDragEnd() {
+  // Check if order actually changed
+  const newOrder = enabledProviders.value.map((p) => p.id)
+  const oldOrder = providers.value
+    .filter((p) => p.is_enabled)
+    .sort((a, b) => a.display_order - b.display_order)
+    .map((p) => p.id)
 
-async function handleTest(provider: WebSearchProvider) {
+  if (JSON.stringify(newOrder) === JSON.stringify(oldOrder)) {
+    return // No change, skip API calls
+  }
+
+  isReordering.value = true
   try {
-    const result = await testWebSearchProvider(provider.id)
-    if (result.success) {
-      showToast(t('webSearch.testSuccess'))
-    } else {
-      showToast(t('webSearch.testFailed'))
-    }
+    // Batch update display_order (index = new order)
+    const updates = enabledProviders.value.map((p, index) =>
+      updateWebSearchProvider(p.id, { display_order: index }),
+    )
+    await Promise.all(updates)
+    showToast(t('webSearch.reorderSuccess'))
+    await load() // Refresh to confirm
   } catch {
-    showToast(t('webSearch.testFailed'))
+    showToast(t('webSearch.reorderFailed'))
+    await load() // Reload to restore correct state
+  } finally {
+    isReordering.value = false
   }
 }
 
@@ -117,9 +134,62 @@ onMounted(load)
       <span v-else class="status-disabled">{{ t('webSearch.statusDisabled') }}</span>
     </div>
 
-    <van-cell-group :title="t('webSearch.subtitle')">
+    <!-- Enabled providers (draggable) -->
+    <van-cell-group v-if="enabledProviders.length > 0" :title="t('webSearch.enabledGroup')">
+      <div class="drag-hint">{{ t('webSearch.dragHint') }}</div>
+      <draggable
+        v-model="enabledProviders"
+        :disabled="!isOwner"
+        handle=".drag-handle"
+        ghost-class="ghost-item"
+        @end="onDragEnd"
+      >
+        <template #item="{ element: provider }">
+          <van-cell
+            :key="provider.id"
+            :title="provider.display_name || provider.provider_name"
+            :label="getTemplate(provider.provider_name)?.note"
+            is-link
+            @click="goToForm(undefined, provider.id)"
+          >
+            <template #icon>
+              <van-icon v-if="isOwner" name="wap-nav" class="drag-handle" />
+            </template>
+            <template #right-icon>
+              <div class="provider-actions">
+                <div class="health-dot" :style="{ background: getCircuitColor(provider.circuit_state) }" />
+                <div class="status-info">
+                  <span
+                    class="circuit-badge"
+                    :style="{ color: getCircuitColor(provider.circuit_state) }"
+                  >
+                    {{ getCircuitLabel(provider.circuit_state) }}
+                  </span>
+                  <span v-if="provider.circuit_reason" class="circuit-reason">
+                    {{ getCircuitReasonLabel(provider.circuit_reason) }}
+                  </span>
+                </div>
+                <van-switch
+                  v-if="isOwner"
+                  :model-value="provider.is_enabled"
+                  size="20px"
+                  @click.stop
+                  @update:model-value="handleToggle(provider)"
+                />
+              </div>
+            </template>
+          </van-cell>
+        </template>
+      </draggable>
+    </van-cell-group>
+
+    <!-- Disabled providers (static list) -->
+    <van-cell-group
+      v-if="disabledProviders.length > 0"
+      :title="t('webSearch.disabledGroup')"
+    >
       <van-cell
-        v-for="provider in providers"
+        v-for="provider in disabledProviders"
         :key="provider.id"
         :title="provider.display_name || provider.provider_name"
         :label="getTemplate(provider.provider_name)?.note"
@@ -128,12 +198,18 @@ onMounted(load)
       >
         <template #right-icon>
           <div class="provider-actions">
-            <span
-              class="circuit-badge"
-              :style="{ color: getCircuitColor(provider.circuit_state) }"
-            >
-              {{ getCircuitLabel(provider.circuit_state) }}
-            </span>
+            <div class="health-dot" :style="{ background: getCircuitColor(provider.circuit_state) }" />
+            <div class="status-info">
+              <span
+                class="circuit-badge"
+                :style="{ color: getCircuitColor(provider.circuit_state) }"
+              >
+                {{ getCircuitLabel(provider.circuit_state) }}
+              </span>
+              <span v-if="provider.circuit_reason" class="circuit-reason">
+                {{ getCircuitReasonLabel(provider.circuit_reason) }}
+              </span>
+            </div>
             <van-switch
               v-if="isOwner"
               :model-value="provider.is_enabled"
@@ -190,14 +266,49 @@ onMounted(load)
   color: var(--text-secondary);
 }
 
+.drag-hint {
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.drag-handle {
+  cursor: grab;
+  margin-right: 12px;
+  color: var(--text-secondary);
+}
+
+.ghost-item {
+  opacity: 0.5;
+}
+
+.health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 .provider-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.status-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
 .circuit-badge {
   font-size: 12px;
+}
+
+.circuit-reason {
+  font-size: 11px;
+  color: var(--text-secondary);
 }
 
 .mcp-hint {
