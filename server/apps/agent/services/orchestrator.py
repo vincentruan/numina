@@ -265,8 +265,12 @@ class Orchestrator:
             # ── 5. DeerFlow dispatch ───────────────────────────────────────
             deerflow_attempted = True
             try:
+                providers = ai_config.get("providers", [])
+                if not providers:
+                    raise ValueError("No AI providers configured for this family")
+                selected_provider, _, _ = _select_model(providers, "text")
                 family_adapter = _deerflow_adapter or _create_family_adapter(
-                    family_id, ai_config, timeout_seconds=ai_config.get("timeout_seconds", 60)
+                    family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 120)
                 )
                 raw_output = await family_adapter.dispatch(
                     skill_name=capability,
@@ -766,7 +770,6 @@ class Orchestrator:
                     session_id=effective_thread_id,
                     family_id=family_id,
                     user_id=user_id,
-                    capability=capability,
                     jsonl_path=jsonl_path,
                     model_name=model_name,
                 ))

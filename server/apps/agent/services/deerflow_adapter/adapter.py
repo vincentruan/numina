@@ -289,21 +289,48 @@ class DeerFlowAdapter:
     def _sync_dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
         """Synchronous DeerFlow call — runs in thread pool executor."""
         try:
-            prompt = self._build_prompt(skill_name, context)
+            message = self._build_message(skill_name, context, enable_thinking=False)
             chunks = []
-            for event in self._client.stream(
-                message=prompt,
-                thread_id=thread_id,
-            ):
-                if (
-                    hasattr(event, "type")
-                    and event.type == "messages-tuple"
-                    and isinstance(event.data, dict)
-                    and event.data.get("type") == "ai"
+
+            if self._config_path:
+                with _init_lock:
+                    prev_config_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
+                    os.environ["DEER_FLOW_CONFIG_PATH"] = str(self._config_path)
+                    try:
+                        reload_app_config(str(self._config_path))
+                        for event in self._client.stream(
+                            message=message,
+                            thread_id=thread_id,
+                        ):
+                            if (
+                                hasattr(event, "type")
+                                and event.type == "messages-tuple"
+                                and isinstance(event.data, dict)
+                                and event.data.get("type") == "ai"
+                            ):
+                                content = event.data.get("content")
+                                if isinstance(content, str) and content:
+                                    chunks.append(content)
+                    finally:
+                        if prev_config_path is not None:
+                            os.environ["DEER_FLOW_CONFIG_PATH"] = prev_config_path
+                        else:
+                            os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+            else:
+                for event in self._client.stream(
+                    message=message,
+                    thread_id=thread_id,
                 ):
-                    content = event.data.get("content")
-                    if isinstance(content, str) and content:
-                        chunks.append(content)
+                    if (
+                        hasattr(event, "type")
+                        and event.type == "messages-tuple"
+                        and isinstance(event.data, dict)
+                        and event.data.get("type") == "ai"
+                    ):
+                        content = event.data.get("content")
+                        if isinstance(content, str) and content:
+                            chunks.append(content)
+
             return "".join(chunks)
         except Exception as e:
             err_msg = str(e).lower()
