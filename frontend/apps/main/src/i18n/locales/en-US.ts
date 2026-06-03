@@ -2047,5 +2047,13 @@ export default {
     confirmDelete: '⚠️ Are you sure you want to delete "{name}"?',
     noProviderToast: '⚠️ Please enable at least one search source in Settings → AI → Web Search',
     saveFailed: '❌ Save failed',
+    reorderSuccess: '✅ Order updated',
+    reorderFailed: '❌ Failed to update order',
+    enabledGroup: 'Enabled search sources',
+    disabledGroup: 'Unconfigured search sources',
+    dragHint: 'Drag to adjust priority',
+    circuitReasonTransient: 'Transient error',
+    circuitReasonApiError: 'API error',
+    circuitReasonTimeout: 'Timeout',
   },
 }
