@@ -2364,5 +2364,13 @@ export default {
     confirmDelete: '⚠️ 确定要删除「{name}」吗？',
     noProviderToast: '⚠️ 请先在设置→AI助手→联网搜索中启用至少一个搜索源',
     saveFailed: '❌ 保存失败',
+    reorderSuccess: '✅ 排序已更新',
+    reorderFailed: '❌ 排序更新失败',
+    enabledGroup: '已启用的搜索源',
+    disabledGroup: '未配置的搜索源',
+    dragHint: '拖动调整优先级',
+    circuitReasonTransient: '临时故障',
+    circuitReasonApiError: 'API错误',
+    circuitReasonTimeout: '超时',
   },
 }
