@@ -83,10 +83,11 @@
       </van-cell>
       <van-cell :title="t('settings.aiAssistant')" is-link to="/settings/ai">
         <template #icon>
-          <ButlerIcon :size="24" class="cell-logo" />
+          <ButlerIcon :size="16" class="cell-logo" />
         </template>
       </van-cell>
       <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
+      <van-cell :title="t('settings.webSearchManage')" icon="search" is-link to="/settings/ai/web-search" />
       <van-cell :title="t('settings.skillsManage')" icon="gem-o" is-link to="/settings/ai/skills" />
       <van-cell :title="t('settings.agentsManage')" icon="manager-o" is-link to="/settings/ai/agents" />
     </van-cell-group>
