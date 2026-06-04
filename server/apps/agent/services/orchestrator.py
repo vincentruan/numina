@@ -270,7 +270,7 @@ class Orchestrator:
                     raise ValueError("No AI providers configured for this family")
                 selected_provider, _, _ = _select_model(providers, "text")
                 family_adapter = _deerflow_adapter or _create_family_adapter(
-                    family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 120)
+                    family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 240)
                 )
                 raw_output = await family_adapter.dispatch(
                     skill_name=capability,
@@ -847,7 +847,7 @@ class Orchestrator:
 
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
-                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 120), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
+                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 240), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
                 async for chunk in adapter.stream_dispatch(
                     capability,
                     redacted_context,
