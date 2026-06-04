@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1
-LLM_FALLBACK_TIMEOUT_SECONDS = 5.0
+LLM_FALLBACK_TIMEOUT_SECONDS = 30.0
 
 # Regex patterns for structured data extraction (priority order)
 # 1. HTML comment: <!-- STRUCTURED_DATA ... -->
@@ -139,6 +139,70 @@ CAPABILITY_SCHEMAS = {
         },
     },
 }
+
+
+def _extract_report_scores_from_markdown(answer_text: str) -> dict | None:
+    """Extract scoring data from markdown tables in report output.
+
+    The model outputs a '综合评分' section with markdown tables like:
+    | 维度 | 得分 | 评价 |
+    | 资产规模 | 85/100 | ... |
+
+    This function extracts those scores and maps them to the expected schema.
+    """
+    # Pattern for score rows: | dimension | score/100 | ... |
+    score_pattern = re.compile(
+        r'\|\s*([^|]+?)\s*\|\s*(\d{1,3})/100\s*\|',
+        re.MULTILINE
+    )
+
+    scores = {}
+    for match in score_pattern.finditer(answer_text):
+        dimension = match.group(1).strip()
+        score = int(match.group(2))
+        # Map Chinese dimension names to schema fields
+        if '资产规模' in dimension or '净资产' in dimension:
+            scores['net_worth_health'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
+        elif '资产配置' in dimension or '配置' in dimension:
+            scores['allocation_analysis'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
+        elif '负债' in dimension:
+            scores['liability_pressure'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
+        elif '流动性' in dimension:
+            scores['asset_efficiency'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
+        scores[dimension] = score  # Keep raw score for overall calculation
+
+    if not scores:
+        return None
+
+    # Calculate overall_score from available raw scores
+    raw_scores = [v for k, v in scores.items() if isinstance(v, int) and k not in
+                  ('net_worth_health', 'allocation_analysis', 'liability_pressure', 'asset_efficiency')]
+    if raw_scores:
+        overall_score = round(sum(raw_scores) / len(raw_scores))
+    else:
+        # Fallback: derive from mapped scores
+        mapped = [scores.get('net_worth_health', {}).get('score', 3),
+                  scores.get('allocation_analysis', {}).get('score', 3),
+                  scores.get('liability_pressure', {}).get('score', 3),
+                  scores.get('asset_efficiency', {}).get('score', 3)]
+        overall_score = round((sum(mapped) / len(mapped)) * 20)
+
+    # Extract narrative from "总结" section if present
+    summary_pattern = re.compile(r'\*{0,2}总结\*{0,2}[：:]\s*([^\n]+(?:\n[^\n|#]+)*?)(?:\n\n|\n##|\Z)', re.DOTALL)
+    summary_match = summary_pattern.search(answer_text)
+    summary = summary_match.group(1).strip() if summary_match else ""
+
+    result = {
+        'overall_score': overall_score,
+        'data_completeness_score': 0.8,  # Default assumption
+        'summary': summary[:200] if summary else "家庭资产体检报告",
+    }
+    # Add mapped dimension objects if present
+    for key in ['net_worth_health', 'allocation_analysis', 'liability_pressure', 'asset_efficiency']:
+        if key in scores:
+            result[key] = scores[key]
+
+    return result
 
 
 def _extract_bare_json(answer_text: str) -> str | None:
@@ -278,7 +342,14 @@ async def parse_capability_result(
         except (ValueError, TypeError) as e:
             logger.warning(f"[{capability}] regex found block via {method} but JSON repair failed: {e}")
 
-    # Step 2: LLM fallback
+    # Step 2: Capability-specific markdown extraction (report only)
+    if capability == "report":
+        report_data = _extract_report_scores_from_markdown(answer_text)
+        if report_data and _validate_json(report_data, capability):
+            logger.info("[report] markdown score extraction succeeded")
+            return report_data, "regex_markdown_scores"
+
+    # Step 3: LLM fallback
     fallback_data = await _llm_fallback_extract(capability, answer_text, family_id, db)
     if fallback_data is not None:
         return fallback_data, "llm_fallback_hit"
@@ -290,7 +361,10 @@ async def parse_capability_result(
 def _build_extraction_prompt(capability: str, answer_text: str) -> str:
     schema = CAPABILITY_SCHEMAS.get(capability, {})
     schema_str = json.dumps(schema, ensure_ascii=False, indent=2)
-    truncated = answer_text[:3000]
+    if capability == "report" and len(answer_text) > 3000:
+        truncated = answer_text[:1500] + "\n...\n" + answer_text[-2000:]
+    else:
+        truncated = answer_text[:3000]
     return (
         f"以下是 {capability} 分析文本，请提取其中的结构化信息为 JSON。\n"
         f"Schema：\n{schema_str}\n\n"
