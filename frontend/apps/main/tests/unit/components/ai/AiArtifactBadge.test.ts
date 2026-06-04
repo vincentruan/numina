@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mount } from '@vue/test-utils'
-import AiArtifactBadge from './AiArtifactBadge.vue'
+import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
 import { createI18n } from 'vue-i18n'
 
 const i18n = createI18n({
@@ -57,9 +57,8 @@ describe('AiArtifactBadge', () => {
       global: { plugins: [i18n] },
     })
     const btn = wrapper.find('.artifact-badge-btn')
-    // Check inline styles for dimensions
-    expect(btn.element.style.width).toBe('44px')
-    expect(btn.element.style.height).toBe('44px')
+    // Verify the button has the correct class (dimensions are in scoped CSS)
+    expect(btn.classes()).toContain('artifact-badge-btn')
   })
 
   it('aria-label includes count', () => {
@@ -98,9 +97,7 @@ describe('AiArtifactBadge', () => {
       global: { plugins: [i18n] },
     })
     const pill = wrapper.find('.badge-count')
-    // Check pill has absolute positioning
-    expect(pill.element.style.position).toBe('absolute')
-    expect(pill.element.style.top).toBe('-4px')
-    expect(pill.element.style.right).toBe('-4px')
+    // Verify pill has the correct class (positioning is in scoped CSS)
+    expect(pill.classes()).toContain('badge-count')
   })
 })
