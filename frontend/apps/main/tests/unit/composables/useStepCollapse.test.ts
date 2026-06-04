@@ -130,4 +130,46 @@ describe('useStepCollapse', () => {
 
     scope.stop()
   })
+
+  it('timer is cleared when status changes away from done during pending timer', () => {
+    const scope = effectScope()
+    const autoCollapseSignal = ref(false)
+    const status = ref('done')
+
+    let result: ReturnType<typeof useStepCollapse>
+    scope.run(() => {
+      result = useStepCollapse({ defaultExpanded: true, autoCollapseSignal, status })
+    })
+
+    autoCollapseSignal.value = true
+    vi.advanceTimersByTime(500)
+    // Status changes to streaming during timer wait
+    status.value = 'streaming'
+    vi.advanceTimersByTime(1000)
+    // Timer should have been cleared — step stays expanded
+    expect(result!.isExpanded.value).toBe(true)
+
+    scope.stop()
+  })
+
+  it('timer is cleared when signal becomes false during pending timer', () => {
+    const scope = effectScope()
+    const autoCollapseSignal = ref(false)
+    const status = ref('done')
+
+    let result: ReturnType<typeof useStepCollapse>
+    scope.run(() => {
+      result = useStepCollapse({ defaultExpanded: true, autoCollapseSignal, status })
+    })
+
+    autoCollapseSignal.value = true
+    vi.advanceTimersByTime(500)
+    // Signal becomes false during timer wait
+    autoCollapseSignal.value = false
+    vi.advanceTimersByTime(1000)
+    // Timer should have been cleared — step stays expanded
+    expect(result!.isExpanded.value).toBe(true)
+
+    scope.stop()
+  })
 })

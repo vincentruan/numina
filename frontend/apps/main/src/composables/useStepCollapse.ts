@@ -26,17 +26,40 @@ export function useStepCollapse(options: UseStepCollapseOptions) {
     isExpanded.value = !isExpanded.value
   }
 
+  // Clear timer when conditions no longer permit auto-collapse
+  function checkAndClearTimer() {
+    if (!autoCollapseSignal.value || status.value !== 'done' || hasAutoCollapsed.value) {
+      clearTimer()
+    }
+  }
+
+  // Watch signal changes
   watch(
     autoCollapseSignal,
     (signal) => {
       if (signal && status.value === 'done' && !hasAutoCollapsed.value) {
         clearTimer()
         timer = setTimeout(() => {
-          isExpanded.value = false
-          hasAutoCollapsed.value = true
+          // Re-check conditions before collapsing (status/signal may have changed)
+          if (autoCollapseSignal.value && status.value === 'done' && !hasAutoCollapsed.value) {
+            isExpanded.value = false
+            hasAutoCollapsed.value = true
+          }
           timer = null
         }, 1000)
+      } else {
+        // Signal became false or other condition changed — clear pending timer
+        checkAndClearTimer()
       }
+    },
+    { flush: 'sync' },
+  )
+
+  // Watch status changes to clear timer when status moves away from 'done'
+  watch(
+    status,
+    () => {
+      checkAndClearTimer()
     },
     { flush: 'sync' },
   )
