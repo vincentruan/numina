@@ -1,6 +1,6 @@
 ---
 title: "feat: Agent chat Phase B — Plan skeleton + subtask card upgrade + streaming unification"
-status: active
+status: completed
 origin: docs/brainstorms/2026-06-04-agent-chat-phase-b-requirements.md
 depends_on:
   - docs/plans/2026-06-04-001-feat-ai-step-block-accordion-plan.md
