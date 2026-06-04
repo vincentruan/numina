@@ -172,6 +172,8 @@ export default {
     openArtifact: 'Open',
     copyPath: 'Copy path',
     pathCopied: '✅ Path copied',
+    reasoningDuration: 'Thought {seconds}s',
+    thinkingLabel: 'Thinking...',
   },
   asset: {
     title: 'Assets',

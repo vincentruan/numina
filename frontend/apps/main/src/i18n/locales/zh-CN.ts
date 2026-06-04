@@ -224,6 +224,8 @@ export default {
     openArtifact: '打开',
     copyPath: '复制路径',
     pathCopied: '✅ 已复制路径',
+    reasoningDuration: '思考 {seconds}s',
+    thinkingLabel: '思考中...',
   },
   asset: {
     title: '资产',

@@ -15,64 +15,13 @@
 
     <!-- Body (collapsible) — unified steps rendering preserves arrival order between reasoning and tool calls (spec §3.3). U3: fade+slide collapse transition. -->
     <Transition name="process-body">
-      <div v-show="isExpanded" class="process-body">
-      <template v-for="step in steps" :key="step.id">
-        <AiProcessStep
-          v-if="step.type === 'reasoning'"
-          type="reasoning"
-          :content="step.content"
-          :status="step.status"
-          :elapsed-ms="step.elapsedMs"
-        />
-        <AiToolCallStep
-          v-else-if="step.type === 'tool_call'"
-          :tool-call-id="step.id"
-          :tool-name="step.name"
-          :display-name="step.displayName"
-          :icon="step.icon"
-          :tool-type="step.toolType"
-          :args="step.args"
-          :status="step.status"
-          :result-summary="step.resultSummary"
-          :error="step.error"
-          :elapsed-ms="step.elapsedMs"
-        />
-        <div
-          v-else-if="step.type === 'subagent'"
-          class="step-subagent"
-          :class="`step-subagent--${step.status}`"
-        >
-          <span class="step-subagent-icon" aria-hidden="true">{{ subagentIcon(step.status) }}</span>
-          <div class="step-subagent-body">
-            <div class="step-subagent-title">{{ step.title || step.taskId }}</div>
-            <div v-if="step.description" class="step-subagent-desc">{{ step.description }}</div>
-            <div v-if="step.result" class="step-subagent-result">{{ step.result }}</div>
-            <div v-if="step.error" class="step-subagent-error">{{ step.error }}</div>
-          </div>
-        </div>
-        <a
-          v-else-if="step.type === 'artifact'"
-          class="step-artifact"
-          :href="step.url || '#'"
-          :target="step.url ? '_blank' : undefined"
-          :rel="step.url ? 'noopener noreferrer' : undefined"
-        >
-          <span class="step-artifact-icon" aria-hidden="true">📎</span>
-          <span class="step-artifact-title">{{ step.title }}</span>
-          <span v-if="step.path" class="step-artifact-path">{{ step.path }}</span>
-        </a>
-        <div
-          v-else-if="step.type === 'progress'"
-          class="step-progress"
-          :class="`step-progress--${step.status}`"
-        >
-          <span class="step-progress-icon" aria-hidden="true">{{ progressIcon(step.status) }}</span>
-          <div class="step-progress-body">
-            <div class="step-progress-title">{{ step.title }}</div>
-            <div v-if="step.description" class="step-progress-desc">{{ step.description }}</div>
-          </div>
-        </div>
-      </template>
+      <div v-show="isExpanded" class="process-body" role="list">
+      <AiStepBlock
+        v-for="step in steps"
+        :key="step.id"
+        v-bind="stepProps(step)"
+        :auto-collapse-signal="reasoningAutoCollapse"
+      />
 
       <!-- Empty running state -->
       <div v-if="status === 'running' && steps.length === 0" class="process-empty">
@@ -96,8 +45,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import AiProcessStep from './AiProcessStep.vue'
-import AiToolCallStep from './AiToolCallStep.vue'
+import AiStepBlock from './AiStepBlock.vue'
 import AiLogo from './AiLogo.vue'
 import type { ProcessStep } from '@/types/agent-stream'
 
@@ -119,24 +67,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const isExpanded = ref(props.defaultExpanded ?? props.status === 'running')
 
-// U3: thinking-phase auto-collapse runs exactly once after thinking ends.
-// Subsequent toggles by the user are not re-collapsed automatically.
-const hasAutoCollapsed = ref(false)
-let autoCollapseTimer: ReturnType<typeof setTimeout> | null = null
-
-function clearAutoCollapseTimer() {
-  if (autoCollapseTimer) {
-    clearTimeout(autoCollapseTimer)
-    autoCollapseTimer = null
-  }
-}
-
 function toggleExpand() {
   isExpanded.value = !isExpanded.value
-  // User interaction cancels any pending auto-collapse and disables future ones,
-  // so we never undo an explicit user action.
-  clearAutoCollapseTimer()
-  hasAutoCollapsed.value = true
   emit('toggle-expand', isExpanded.value)
 }
 
@@ -144,42 +76,74 @@ function onRetry() {
   emit('retry')
 }
 
-// Auto-collapse rules (U3 spec):
-// - Status running → done while phase was thinking: collapse after 1s, once.
-// - Status running → done from non-thinking path: collapse immediately.
-// - Status → error: keep expanded so the retry button stays visible.
+// Auto-expand when status goes to running, collapse when done
 watch(
   () => props.status,
   (val, prev) => {
     if (val === 'running' && prev !== 'running') {
       isExpanded.value = true
-      hasAutoCollapsed.value = false
-      clearAutoCollapseTimer()
       return
     }
     if (val === 'done' && prev === 'running') {
-      const fromThinking = props.phase === 'thinking' || props.reasoningStartTime != null
-      if (fromThinking && !hasAutoCollapsed.value) {
-        clearAutoCollapseTimer()
-        autoCollapseTimer = setTimeout(() => {
-          isExpanded.value = false
-          hasAutoCollapsed.value = true
-          autoCollapseTimer = null
-        }, 1000)
-      } else {
-        isExpanded.value = false
-      }
+      isExpanded.value = false
       return
     }
     if (val === 'error') {
-      clearAutoCollapseTimer()
       isExpanded.value = true
     }
   },
 )
 
-// Tick once per second while phase is thinking, so the elapsed-seconds
-// subtitle updates without per-token re-renders.
+// Per-reasoning-step auto-collapse signal (replaces block-level auto-collapse)
+const reasoningAutoCollapse = computed(
+  () => props.phase === 'answering' || props.phase === 'done',
+)
+
+// Map ProcessStep union → AiStepBlock props
+function stepProps(step: ProcessStep) {
+  const base = {
+    type: step.type,
+    id: step.id,
+    status: step.status,
+  } as Record<string, unknown>
+
+  switch (step.type) {
+    case 'reasoning':
+      base.content = step.content
+      base.elapsedMs = step.elapsedMs
+      break
+    case 'tool_call':
+      base.name = step.name
+      base.displayName = step.displayName
+      base.icon = step.icon
+      base.toolType = step.toolType
+      base.args = step.args
+      base.resultSummary = step.resultSummary
+      base.error = step.error
+      base.elapsedMs = step.elapsedMs
+      base.compressed = step.status === 'done'
+      break
+    case 'subagent':
+      base.taskId = step.taskId
+      base.title = step.title
+      base.description = step.description
+      base.result = step.result
+      base.error = step.error
+      break
+    case 'artifact':
+      base.title = step.title
+      base.url = step.url
+      base.path = step.path
+      break
+    case 'progress':
+      base.title = step.title
+      base.description = step.description
+      break
+  }
+  return base
+}
+
+// Tick once per second while phase is thinking
 const nowMs = ref(Date.now())
 let tickInterval: ReturnType<typeof setInterval> | null = null
 
@@ -212,7 +176,6 @@ watch(
 
 onUnmounted(() => {
   stopTick()
-  clearAutoCollapseTimer()
 })
 
 const logoState = computed<'idle' | 'thinking' | 'done' | 'error'>(() => {
@@ -222,9 +185,6 @@ const logoState = computed<'idle' | 'thinking' | 'done' | 'error'>(() => {
   return 'idle'
 })
 
-// U3: Shimmer animation runs only while the agent is actively thinking.
-// Status transitions away from running stop the shimmer immediately so the
-// settled "done"/"error" state reads as static.
 const isShimmerActive = computed(
   () => props.status === 'running' && (props.phase === 'thinking' || props.phase === 'connecting'),
 )
@@ -265,22 +225,6 @@ const formattedElapsed = computed(() => {
   if (s < 60) return `${s}s`
   return `${Math.floor(s / 60)}m${s % 60}s`
 })
-
-function subagentIcon(status: 'running' | 'done' | 'failed'): string {
-  switch (status) {
-    case 'running': return '⏳'
-    case 'done': return '✓'
-    case 'failed': return '✕'
-  }
-}
-
-function progressIcon(status: 'running' | 'done' | 'error'): string {
-  switch (status) {
-    case 'running': return '⏳'
-    case 'done': return '✓'
-    case 'error': return '✕'
-  }
-}
 </script>
 
 <style scoped>
@@ -415,83 +359,6 @@ function progressIcon(status: 'running' | 'done' | 'error'): string {
   background: rgba(var(--color-error-rgb), 0.08);
 }
 
-.step-subagent,
-.step-progress {
-  display: flex;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 4px;
-  background: var(--card-bg);
-  border: 1px solid var(--color-card-border);
-  font-size: 12px;
-}
-
-.step-subagent--running .step-subagent-icon,
-.step-progress--running .step-progress-icon {
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-.step-subagent--failed,
-.step-progress--error {
-  border-color: var(--color-error);
-  background: rgba(var(--color-error-rgb), 0.08);
-}
-
-.step-subagent-body,
-.step-progress-body {
-  flex: 1;
-  min-width: 0;
-}
-
-.step-subagent-title,
-.step-progress-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.step-subagent-desc,
-.step-progress-desc {
-  margin-top: 2px;
-  color: var(--text-secondary);
-}
-
-.step-subagent-result {
-  margin-top: 4px;
-  color: var(--text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.step-subagent-error {
-  margin-top: 4px;
-  color: var(--color-error);
-  word-break: break-word;
-}
-
-.step-artifact {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  background: var(--card-bg);
-  border: 1px solid var(--color-card-border);
-  font-size: 12px;
-  color: var(--color-action-blue);
-  text-decoration: none;
-}
-
-.step-artifact:hover {
-  background: rgba(var(--color-action-blue-rgb), 0.08);
-}
-
-.step-artifact-path {
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
 /* U3: Shimmer animation on thinking title — CSS gradient sweep, 2s loop */
 .process-title.is-thinking {
   background-image: linear-gradient(
@@ -542,39 +409,6 @@ function progressIcon(status: 'running' | 'done' | 'error'): string {
 .process-body-leave-from {
   max-height: 800px;
   opacity: 1;
-}
-
-/* U4: vertical line connector between steps */
-.process-body > :deep(.ai-tool-call-step),
-.process-body > :deep(.ai-process-step),
-.process-body > :deep(.step-subagent),
-.process-body > :deep(.step-progress) {
-  position: relative;
-  padding-left: 14px;
-}
-
-.process-body > :deep(.ai-tool-call-step)::before,
-.process-body > :deep(.ai-process-step)::before,
-.process-body > :deep(.step-subagent)::before,
-.process-body > :deep(.step-progress)::before {
-  content: '';
-  position: absolute;
-  left: 9px;
-  top: -5px;
-  bottom: -5px;
-  width: 1px;
-  background: var(--separator);
-}
-
-/* Error steps get a dashed red connector segment */
-.process-body > :deep(.ai-tool-call-step.marker-error-connector)::before {
-  background: none;
-  border-left: 1px dashed var(--color-error);
-}
-
-/* Remove connector line from the first step */
-.process-body > :deep(:first-child)::before {
-  display: none;
 }
 
 /* Mobile responsive (spec §8 mobile risk mitigation) */
