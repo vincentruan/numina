@@ -274,6 +274,19 @@
                 <!-- eslint-enable vue/no-v-html -->
                 <AiUserBubble v-if="msg.role === 'user'" class="bubble-text" :content="msg.content" />
                 <span class="msg-time">{{ msg.displayTime }}</span>
+
+                <!-- U6: Process footnote for historical assistant messages (R13, R14, R15) -->
+                <AiProcessFootnote
+                  v-if="msg.role === 'assistant' && msg.phase === 'done' && msg.processSteps && msg.processSteps.length > 0"
+                  :step-count="msg.processSteps.length"
+                  :expanded="msg.processExpanded ?? false"
+                  :status="msg.processStatus || 'done'"
+                  :elapsed-ms="msg.processElapsedMs || 0"
+                  :steps="msg.processSteps"
+                  :phase="msg.phase"
+                  @toggle="(expanded) => { msg.processExpanded = expanded }"
+                />
+
                 <!-- User message send status indicator -->
                 <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
                   <span class="send-status-dot" aria-hidden="true" />
@@ -460,6 +473,7 @@ import { getAgent } from '@/api/agent'
 import type { Agent } from '@/types/agent'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
+import AiProcessFootnote from '@/components/ai/AiProcessFootnote.vue'
 import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
 import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
@@ -1076,6 +1090,10 @@ async function loadSessionMessages(session: SessionSummary) {
     reader = await streamSessionEvents(session.session_id)
     const decoder = new TextDecoder()
     let buf = ''
+
+    // U6: Create normalization state for process reconstruction
+    const normState = createNormalizationState()
+
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
@@ -1087,6 +1105,10 @@ async function loadSessionMessages(session: SessionSummary) {
         if (!line) { nl = buf.indexOf('\n'); continue }
         try {
           const event = JSON.parse(line)
+
+          // U6: Route ALL events through normalizer to reconstruct processSteps
+          normalizeAgentEvent(event, normState)
+
           if (event.type === 'user.message') {
             messages.value.push({
               id: event.eventId ?? Date.now().toString(),
@@ -1096,7 +1118,8 @@ async function loadSessionMessages(session: SessionSummary) {
               displayTime: formatTime(event.timestamp ?? new Date().toISOString()),
             })
           } else if (event.type === 'assistant.message') {
-            messages.value.push({
+            // U6: Assign reconstructed processSteps to historical message
+            const assistantMsg: Message = {
               id: event.eventId ?? Date.now().toString(),
               role: 'assistant',
               phase: 'done',
@@ -1104,9 +1127,53 @@ async function loadSessionMessages(session: SessionSummary) {
               renderedContent: renderMarkdown(event.content ?? ''),
               created_at: event.timestamp ?? new Date().toISOString(),
               displayTime: formatTime(event.timestamp ?? new Date().toISOString()),
-            })
+              // R12: processSteps populated from normalizer
+              processSteps: [...normState.steps],
+              processStatus: 'done',
+              processElapsedMs: normState.reasoningStartTime
+                ? Date.now() - normState.reasoningStartTime
+                : 0,
+              // R14: footnote collapsed initially
+              processExpanded: false,
+            }
+            messages.value.push(assistantMsg)
+
+            // U6: Extract artifacts from reconstructed steps
+            for (const step of normState.steps) {
+              if (step.type === 'tool_call' && step.status === 'done') {
+                const artifact = extractArtifactFromStep(step)
+                if (artifact && artifact.sourceStepId) {
+                  // Deduplicate by sourceStepId
+                  const exists = sessionArtifacts.value.some(
+                    (a) => a.sourceStepId === artifact.sourceStepId
+                  )
+                  if (!exists) {
+                    sessionArtifacts.value.push(artifact)
+                  }
+                }
+              }
+            }
+
+            // Reset normState for next assistant message
+            normState.steps = []
+            normState.phase = 'connecting'
+            normState.reasoningStartTime = null
+            normState.answerContent = ''
+            normState.artifacts = []
+            normState.subagents.clear()
+            normState.planSteps = []
+            normState.lastPlanHash = ''
+            normState.planSource = null
+            normState.inferredSteps = []
+            if (normState.planWaitTimer) {
+              clearTimeout(normState.planWaitTimer)
+              normState.planWaitTimer = null
+            }
           }
-        } catch { /* skip malformed */ }
+        } catch {
+          // U6: Malformed JSONL line → skip gracefully (console.warn)
+          console.warn('Failed to parse session event line:', line)
+        }
         nl = buf.indexOf('\n')
       }
     }
