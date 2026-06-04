@@ -178,12 +178,12 @@ def _extract_report_scores_from_markdown(answer_text: str) -> dict | None:
         raw_indicators = {}
 
         # Broader keyword sets for dimension mapping
-        LIABILITY_KEYWORDS = ('负债', '债务', '杠杆', '偿债', '还款', '贷款')
-        EFFICIENCY_KEYWORDS = ('流动', '现金', '应急', '储备', '变现')
-        ALLOCATION_KEYWORDS = ('配置', '集中', '分散', '多元', '房产', '投资')
-        NET_WORTH_KEYWORDS = ('净资产', '资产规模', '总资产', '净值', '财富')
+        LIABILITY_KEYWORDS = ('负债', '债务', '杠杆', '偿债', '还款', '贷款', '债', '月供')
+        EFFICIENCY_KEYWORDS = ('流动', '现金', '应急', '储备', '变现', '活期', '余额')
+        ALLOCATION_KEYWORDS = ('配置', '集中', '分散', '多元', '房产', '投资', '结构')
+        NET_WORTH_KEYWORDS = ('净资产', '资产规模', '总资产', '净值', '财富', '增长')
         # Header/separator patterns to skip
-        SKIP_KEYWORDS = ('指标', '项目', '---', '状态', '评价', '维度')
+        SKIP_KEYWORDS = ('指标', '项目', '---', '状态', '评价', '维度', '评级', '说明')
 
         for match in indicator_pattern.finditer(answer_text):
             indicator = match.group(1).strip()
@@ -222,6 +222,35 @@ def _extract_report_scores_from_markdown(answer_text: str) -> dict | None:
             avg = sum(raw_indicators.values()) / len(raw_indicators)
             # Net worth is usually better than individual indicators suggest
             scores['net_worth_health'] = {'score': min(5, max(1, round(avg + 1))), 'narrative': '净资产综合评估'}
+
+    # Strategy 3: Prose-based sentiment scan to fill missing dimensions
+    # Only runs if we have at least one dimension already (so we know it's a report)
+    if scores:
+        NEGATIVE_WORDS = ('偏高', '过高', '不足', '严重', '风险', '过低', '失衡', '极高', '过于集中', '过度')
+        MODERATE_WORDS = ('一般', '尚可', '适中', '中等')
+        POSITIVE_WORDS = ('健康', '良好', '充足', '合理', '优秀')
+
+        def _sentiment_score(text_segment: str) -> int:
+            if any(w in text_segment for w in NEGATIVE_WORDS):
+                return 2
+            if any(w in text_segment for w in POSITIVE_WORDS):
+                return 4
+            if any(w in text_segment for w in MODERATE_WORDS):
+                return 3
+            return 3
+
+        if 'liability_pressure' not in scores:
+            # Scan for liability-related sentences
+            for sentence in re.split(r'[。\n]', answer_text):
+                if any(kw in sentence for kw in ('负债', '债务', '贷款', '月供', '杠杆', '偿债')):
+                    scores['liability_pressure'] = {'score': _sentiment_score(sentence), 'narrative': sentence.strip()[:60]}
+                    break
+
+        if 'asset_efficiency' not in scores:
+            for sentence in re.split(r'[。\n]', answer_text):
+                if any(kw in sentence for kw in ('流动', '现金', '应急', '储备', '变现', '活期')):
+                    scores['asset_efficiency'] = {'score': _sentiment_score(sentence), 'narrative': sentence.strip()[:60]}
+                    break
 
     if not scores:
         return None
