@@ -193,6 +193,7 @@ export default {
     thinkingLabel: 'Thinking...',
     expandToolCall: 'Expand details',
     collapseToolCall: 'Collapse details',
+    viewProcess: 'View reasoning process ({count} steps)',
     toolStatus: {
       search: {
         short: '🔍 Searching...',
@@ -220,6 +221,16 @@ export default {
         long: '⏳ Taking a while, please wait...',
       },
     },
+  },
+  aiArtifact: {
+    badgeLabel: 'View {count} attachments',
+    sheetTitle: 'Attachments ({count})',
+    emptyMessage: 'No attachments',
+    openUrl: 'Open link',
+    copyPath: 'Copy path',
+    viewJson: 'View data',
+    pathCopied: '✅ Path copied',
+    jsonPreviewTitle: 'Data preview',
   },
   asset: {
     title: 'Assets',

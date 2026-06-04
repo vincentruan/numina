@@ -245,6 +245,7 @@ export default {
     thinkingLabel: '思考中...',
     expandToolCall: '展开详情',
     collapseToolCall: '收起详情',
+    viewProcess: '查看推理过程 ({count} 步)',
     toolStatus: {
       search: {
         short: '🔍 正在搜索...',
@@ -272,6 +273,16 @@ export default {
         long: '⏳ 处理时间较长，请稍候...',
       },
     },
+  },
+  aiArtifact: {
+    badgeLabel: '查看 {count} 个附件',
+    sheetTitle: '附件 ({count})',
+    emptyMessage: '暂无附件',
+    openUrl: '打开链接',
+    copyPath: '复制路径',
+    viewJson: '查看数据',
+    pathCopied: '✅ 已复制路径',
+    jsonPreviewTitle: '数据预览',
   },
   asset: {
     title: '资产',
