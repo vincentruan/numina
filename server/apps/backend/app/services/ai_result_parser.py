@@ -144,13 +144,11 @@ CAPABILITY_SCHEMAS = {
 def _extract_report_scores_from_markdown(answer_text: str) -> dict | None:
     """Extract scoring data from markdown tables in report output.
 
-    The model outputs a '综合评分' section with markdown tables like:
-    | 维度 | 得分 | 评价 |
-    | 资产规模 | 85/100 | ... |
-
-    This function extracts those scores and maps them to the expected schema.
+    Handles multiple formats the model produces:
+    1. Scoring table: | 维度 | 85/100 | ... |
+    2. Health indicator table: | 指标 | 值 | 范围 | 🔴 状态 |
     """
-    # Pattern for score rows: | dimension | score/100 | ... |
+    # Strategy 1: Direct X/100 scoring tables
     score_pattern = re.compile(
         r'\|\s*([^|]+?)\s*\|\s*(\d{1,3})/100\s*\|',
         re.MULTILINE
@@ -160,44 +158,74 @@ def _extract_report_scores_from_markdown(answer_text: str) -> dict | None:
     for match in score_pattern.finditer(answer_text):
         dimension = match.group(1).strip()
         score = int(match.group(2))
-        # Map Chinese dimension names to schema fields
         if '资产规模' in dimension or '净资产' in dimension:
             scores['net_worth_health'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
-        elif '资产配置' in dimension or '配置' in dimension:
+        elif '资产配置' in dimension or '配置' in dimension or '多元化' in dimension:
             scores['allocation_analysis'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
         elif '负债' in dimension:
             scores['liability_pressure'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
-        elif '流动性' in dimension:
+        elif '流动性' in dimension or '流动' in dimension:
             scores['asset_efficiency'] = {'score': min(5, max(1, score // 20)), 'narrative': dimension}
-        scores[dimension] = score  # Keep raw score for overall calculation
+        scores[dimension] = score
+
+    # Strategy 2: Health indicator tables with emoji status (🔴/🟡/🟢)
+    if not scores:
+        indicator_pattern = re.compile(
+            r'\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|\s*(🔴|🟡|🟢|⚠️)?\s*([^|]*?)\s*\|',
+            re.MULTILINE
+        )
+        emoji_score_map = {'🟢': 4, '🟡': 3, '🔴': 1, '⚠️': 2}
+        raw_indicators = {}
+
+        for match in indicator_pattern.finditer(answer_text):
+            indicator = match.group(1).strip()
+            emoji = match.group(4) or ''
+            status_text = match.group(5).strip()
+
+            if emoji not in emoji_score_map:
+                continue
+
+            s = emoji_score_map[emoji]
+            if '负债' in indicator or '资产负债' in indicator:
+                scores['liability_pressure'] = {'score': s, 'narrative': f'{indicator}: {status_text}'}
+            elif '流动' in indicator:
+                scores['asset_efficiency'] = {'score': s, 'narrative': f'{indicator}: {status_text}'}
+            elif '集中' in indicator or '配置' in indicator or '房产' in indicator:
+                scores['allocation_analysis'] = {'score': s, 'narrative': f'{indicator}: {status_text}'}
+            elif '投资' in indicator:
+                scores.setdefault('allocation_analysis', {'score': s, 'narrative': f'{indicator}: {status_text}'})
+            raw_indicators[indicator] = s
+
+        # Derive net_worth_health from overall pattern
+        if raw_indicators and 'net_worth_health' not in scores:
+            avg = sum(raw_indicators.values()) / len(raw_indicators)
+            # Net worth is usually better than individual indicators suggest
+            scores['net_worth_health'] = {'score': min(5, max(1, round(avg + 1))), 'narrative': '净资产综合评估'}
 
     if not scores:
         return None
 
-    # Calculate overall_score from available raw scores
-    raw_scores = [v for k, v in scores.items() if isinstance(v, int) and k not in
-                  ('net_worth_health', 'allocation_analysis', 'liability_pressure', 'asset_efficiency')]
-    if raw_scores:
-        overall_score = round(sum(raw_scores) / len(raw_scores))
-    else:
-        # Fallback: derive from mapped scores
-        mapped = [scores.get('net_worth_health', {}).get('score', 3),
-                  scores.get('allocation_analysis', {}).get('score', 3),
-                  scores.get('liability_pressure', {}).get('score', 3),
-                  scores.get('asset_efficiency', {}).get('score', 3)]
-        overall_score = round((sum(mapped) / len(mapped)) * 20)
+    # Calculate overall_score
+    dimension_scores = []
+    weights = {'net_worth_health': 0.30, 'allocation_analysis': 0.25, 'liability_pressure': 0.25, 'asset_efficiency': 0.20}
+    for key, weight in weights.items():
+        if key in scores:
+            dimension_scores.append(scores[key]['score'] * weight)
+        else:
+            dimension_scores.append(3 * weight)  # Default to "average"
 
-    # Extract narrative from "总结" section if present
+    overall_score = round(sum(dimension_scores) * 20)
+
+    # Extract summary from "总结" section
     summary_pattern = re.compile(r'\*{0,2}总结\*{0,2}[：:]\s*([^\n]+(?:\n[^\n|#]+)*?)(?:\n\n|\n##|\Z)', re.DOTALL)
     summary_match = summary_pattern.search(answer_text)
     summary = summary_match.group(1).strip() if summary_match else ""
 
     result = {
         'overall_score': overall_score,
-        'data_completeness_score': 0.8,  # Default assumption
+        'data_completeness_score': 0.8,
         'summary': summary[:200] if summary else "家庭资产体检报告",
     }
-    # Add mapped dimension objects if present
     for key in ['net_worth_health', 'allocation_analysis', 'liability_pressure', 'asset_efficiency']:
         if key in scores:
             result[key] = scores[key]
