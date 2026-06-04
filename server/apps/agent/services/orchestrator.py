@@ -833,7 +833,6 @@ class Orchestrator:
                 session_id=effective_thread_id,
                 family_id=family_id,
                 user_id=user_id,
-                capability=capability,
                 jsonl_path=jsonl_path,
                 model_name=model_name,
             ))
@@ -848,7 +847,7 @@ class Orchestrator:
 
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
-                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=selected_provider.get("timeout_seconds", 60), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
+                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 120), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
                 async for chunk in adapter.stream_dispatch(
                     capability,
                     redacted_context,
