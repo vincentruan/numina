@@ -11,6 +11,8 @@ export type AgentEventType =
   | 'subagent.update'
   | 'artifact.created'
   | 'state.snapshot'
+  | 'plan.update'
+  | 'tool.progress'
 
 export interface Artifact {
   id: string
@@ -73,6 +75,17 @@ export interface AgentEvent {
   messages?: unknown[]
   artifacts?: Artifact[]
   title?: string
+  // plan.update payload
+  todos?: Array<{ id: string; content: string; status: string }>
+  // tool.progress payload
+  progress_message?: string
+}
+
+// Plan step — represents a single step in an AI-generated plan (spec §4.2)
+export interface PlanStep {
+  id: string
+  label: string
+  status: 'pending' | 'active' | 'done' | 'error'
 }
 
 // Normalized event types for UI consumption (spec §4.1)
@@ -90,6 +103,8 @@ export type NormalizedAiEvent =
   | { type: 'state_snapshot'; messages?: unknown[]; artifacts?: Artifact[]; title?: string }
   | { type: 'error'; message: string; code?: string }
   | { type: 'session_end' }
+  | { type: 'plan_update'; steps: PlanStep[] }
+  | { type: 'tool_progress'; toolCallId: string; progressMessage: string }
 
 // Unified process step union — preserves event arrival order across reasoning, tool calls,
 // subagents, artifacts, and progress events. Spec §3.3 requires a single steps[] array
@@ -115,6 +130,7 @@ export type ProcessStep =
       resultSummary?: string
       error?: string
       elapsedMs?: number
+      progressMessage?: string
     }
   | {
       type: 'subagent'
@@ -149,4 +165,9 @@ export interface NormalizationState {
   steps: ProcessStep[]
   artifacts: Artifact[]
   subagents: Map<string, Subagent>
+  planSteps: PlanStep[]
+  lastPlanHash: string
+  planSource: 'explicit' | 'inferred' | null
+  inferredSteps: PlanStep[]
+  planWaitTimer: ReturnType<typeof setTimeout> | null
 }

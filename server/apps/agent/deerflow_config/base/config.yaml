@@ -45,10 +45,6 @@ tools:
     use: placeholder
     api_key: ""
     max_results: 5
-  - name: web_fetch
-    group: web
-    use: deerflow.community.jina_ai.tools:web_fetch_tool
-    timeout: 10
 
 # 沙盒安全设置
 sandbox:

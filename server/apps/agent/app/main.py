@@ -22,6 +22,21 @@ async def lifespan(app: FastAPI):
     setup_schedules()
     scheduler.start()
 
+    # Seed builtin skills: symlink source skill dirs into PathManager's expected data path
+    # so that EffectiveConfigBuilder._materialize_skills can find and resolve them.
+    from pathlib import Path
+    from packages.core import get_path_manager
+    pm = get_path_manager()
+    builtin_src = Path(__file__).resolve().parent.parent / "skills" / "builtin"
+    if builtin_src.is_dir():
+        pm.builtin_skills_dir.mkdir(parents=True, exist_ok=True)
+        for skill_dir in builtin_src.iterdir():
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                link = pm.builtin_skills_dir / skill_dir.name
+                if not link.exists():
+                    import os
+                    os.symlink(skill_dir, link)
+
     # Initialise DeerFlow persistence engine (checkpointer only — session metadata
     # is now stored in backend via HTTP). Supports sqlite (default) and postgres
     # via DEERFLOW_DB_URL env var.

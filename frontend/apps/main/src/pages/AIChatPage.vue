@@ -249,6 +249,8 @@
                   :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
                   :phase="msg.phase === 'interrupted' ? undefined : msg.phase"
                   :reasoning-start-time="msg.reasoningStartTime ?? null"
+                  :plan-steps="msg.planSteps"
+                  :plan-source="msg.planSource"
                   @retry="onRetryError(idx)"
                 />
                 <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
@@ -448,7 +450,7 @@ import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNormalizer'
-import type { AgentEvent, ProcessStep } from '@/types/agent-stream'
+import type { AgentEvent, ProcessStep, PlanStep } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -562,6 +564,9 @@ interface Message {
   processStatus?: 'running' | 'done' | 'error'
   processElapsedMs?: number
   processSteps?: ProcessStep[]
+  // Plan progress bar state (U10)
+  planSteps?: PlanStep[]
+  planSource?: 'explicit' | 'inferred' | null
 }
 
 interface ToolTimelineItem {
@@ -1197,6 +1202,11 @@ async function onSend() {
       messages.value[msgIdx].processSteps = [...normState.steps]
       messages.value[msgIdx].processStatus =
         normState.phase === 'done' ? 'done' : 'running'
+      // Sync plan state so AiProcessBlock can render AiPlanProgressBar (U10)
+      messages.value[msgIdx].planSteps = normState.planSteps.length > 0
+        ? [...normState.planSteps]
+        : undefined
+      messages.value[msgIdx].planSource = normState.planSource
     }
 
     function handleEvent(event: AgentEvent) {
