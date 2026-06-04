@@ -142,6 +142,7 @@ export function normalizeAgentEvent(
         if (target) {
           target.status = event.result?.success ? 'done' : 'error'
           target.resultSummary = event.result?.summary
+          target.data = event.result?.data
           target.error = event.result?.error
           target.elapsedMs = event.result?.execution_time_ms
           events.push({
@@ -335,4 +336,80 @@ export function normalizeAgentEvent(
   }
 
   return events
+}
+
+/**
+ * Extracts an artifact from a completed tool call step.
+ * Returns null for non-artifact steps (reasoning, subagent, etc.) or incomplete tool calls.
+ */
+export function extractArtifactFromStep(step: ProcessStep): import('@/types/agent-stream').Artifact | null {
+  // Only tool_call steps can produce artifacts
+  if (step.type !== 'tool_call') {
+    return null
+  }
+
+  // Only completed tool calls produce artifacts
+  if (step.status !== 'done') {
+    return null
+  }
+
+  // Exclude internal tools that don't produce user-facing artifacts
+  if (step.name === 'write_todos') {
+    return null
+  }
+
+  // Must have resultSummary to extract from
+  if (!step.resultSummary) {
+    return null
+  }
+
+  // URL extraction patterns
+  const urlPattern = /(https?:\/\/[^\s]+)/g
+  const imageExtensions = /\.(png|jpe?g|gif|svg)(\?.*)?$/i
+
+  // Check for image URLs
+  const urls = step.resultSummary.match(urlPattern)
+  if (urls && urls.length > 0) {
+    const url = urls[0]
+    const isImage = imageExtensions.test(url)
+    return {
+      id: `artifact-${step.id}`,
+      title: step.displayName || step.name,
+      url,
+      kind: isImage ? 'image' : 'link',
+      sourceStepId: step.id,
+      generatedAt: new Date().toISOString(),
+    }
+  }
+
+  // File path extraction pattern - match paths with file extensions
+  // Supports absolute paths (/path/to/file.ext) and relative paths (path/to/file.ext)
+  const fileExtensions = 'txt|csv|json|md|pdf|xlsx|docx?|png|jpe?g|gif|svg'
+  const pathPattern = new RegExp(`((?:/|[a-zA-Z]:)[^\\s]+\\.(?:${fileExtensions})(\\?.*)?)`, 'gi')
+
+  const pathMatches = step.resultSummary.match(pathPattern)
+  if (pathMatches && pathMatches.length > 0) {
+    const path = pathMatches[0]
+    return {
+      id: `artifact-${step.id}`,
+      title: step.displayName || step.name,
+      path,
+      kind: 'file',
+      sourceStepId: step.id,
+      generatedAt: new Date().toISOString(),
+    }
+  }
+
+  // Check for structured data in step.data
+  if (step.data && typeof step.data === 'object') {
+    return {
+      id: `artifact-${step.id}`,
+      title: step.displayName || step.name,
+      kind: 'data',
+      sourceStepId: step.id,
+      generatedAt: new Date().toISOString(),
+    }
+  }
+
+  return null
 }

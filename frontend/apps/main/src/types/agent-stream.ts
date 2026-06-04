@@ -20,6 +20,8 @@ export interface Artifact {
   url?: string
   path?: string
   kind?: 'report' | 'file' | 'image' | 'link' | 'other'
+  sourceStepId?: string
+  generatedAt?: string
 }
 
 export interface Subagent {
@@ -128,6 +130,7 @@ export type ProcessStep =
       args: Record<string, unknown>
       status: 'pending' | 'running' | 'done' | 'error'
       resultSummary?: string
+      data?: unknown
       error?: string
       elapsedMs?: number
       progressMessage?: string
