@@ -124,5 +124,19 @@ class EventStreamBuilder:
             },
         )
 
+    def plan_update(self, todos: list[dict]) -> StreamEvent:
+        normalized = [
+            {
+                "id": f"plan-{i}",
+                "content": todo.get("content", ""),
+                "status": todo.get("status", "pending"),
+            }
+            for i, todo in enumerate(todos)
+        ]
+        return self._event("plan.update", {"todos": normalized})
+
+    def tool_progress(self, tool_id: str, message: str) -> StreamEvent:
+        return self._event("tool.progress", {"tool_id": tool_id, "message": message})
+
     def error(self, message: str, code: str = "stream_error") -> StreamEvent:
         return self._event("capability.error", {"error": {"message": message, "code": code}})

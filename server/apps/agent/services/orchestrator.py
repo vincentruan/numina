@@ -775,6 +775,7 @@ class Orchestrator:
                 ))
 
                 try:
+                    chat_tool_id_map: dict[str, str] = {}
                     async for chunk in self._chat_adapter.stream(
                         family_id=family_id,
                         question=redacted_free_text,
@@ -786,7 +787,8 @@ class Orchestrator:
                         caller_user_id=user_id,
                     ):
                         async for event_line in self._chunk_to_event_lines(
-                            builder, chunk, answer_parts, family_id, effective_thread_id
+                            builder, chunk, answer_parts, family_id, effective_thread_id,
+                            tool_call_id_map=chat_tool_id_map,
                         ):
                             yield event_line
                     elapsed_ms = int(time.monotonic() * 1000) - start_ms
@@ -848,6 +850,7 @@ class Orchestrator:
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
                 adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 240), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
+                deerflow_tool_id_map: dict[str, str] = {}
                 async for chunk in adapter.stream_dispatch(
                     capability,
                     redacted_context,
@@ -855,7 +858,8 @@ class Orchestrator:
                     enable_thinking=enable_thinking,
                 ):
                     async for event_line in self._chunk_to_event_lines(
-                        builder, chunk, answer_parts, family_id, effective_thread_id
+                        builder, chunk, answer_parts, family_id, effective_thread_id,
+                        tool_call_id_map=deerflow_tool_id_map,
                     ):
                         yield event_line
                 elapsed_ms = int(time.monotonic() * 1000) - start_ms
@@ -948,11 +952,63 @@ class Orchestrator:
         answer_parts: list[str],
         family_id: str = "",
         session_id: str = "",
+        tool_call_id_map: dict[str, str] | None = None,
     ) -> AsyncGenerator[str, None]:
+        if tool_call_id_map is None:
+            tool_call_id_map = {}
+
         if chunk.type == "thinking":
             yield builder.phase("thinking").to_ndjson()
             yield builder.token(chunk.content, is_thinking=True).to_ndjson()
             return
+
+        if chunk.type == "tool_call":
+            data = chunk.data or {}
+            tool_name = data.get("tool_name", "")
+            args = data.get("args") or {}
+            tool_call_id = str(data.get("tool_call_id") or "")
+            if data.get("internal"):
+                evt = builder.tool_call(
+                    tool_name=tool_name,
+                    arguments=args,
+                    display_name="规划步骤",
+                    icon="🗂️",
+                    tool_type="internal",
+                )
+            else:
+                evt = builder.tool_call(
+                    tool_name=tool_name,
+                    arguments=args,
+                    display_name=data.get("display_name") or tool_name,
+                    icon=data.get("icon") or "tool",
+                    tool_type=data.get("tool_type") or "unknown",
+                )
+            backend_id = evt.payload["tool"]["id"]
+            if tool_call_id:
+                tool_call_id_map[tool_call_id] = backend_id
+            yield evt.to_ndjson()
+            return
+
+        if chunk.type == "tool_result":
+            data = chunk.data or {}
+            provider_id = str(data.get("tool_call_id") or "")
+            backend_id = tool_call_id_map.get(provider_id, provider_id)
+            yield builder.tool_result(
+                tool_id=backend_id,
+                success=True,
+                execution_time_ms=0,
+                data=data.get("content"),
+            ).to_ndjson()
+            return
+
+        if chunk.type == "plan_update":
+            data = chunk.data or {}
+            todos = data.get("todos")
+            if todos is None:
+                return
+            yield builder.plan_update(todos).to_ndjson()
+            return
+
         if chunk.content:
             answer_parts.append(chunk.content)
             yield builder.phase("answering").to_ndjson()
