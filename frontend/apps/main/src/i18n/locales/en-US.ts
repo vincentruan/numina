@@ -148,6 +148,23 @@ export default {
     slashPaletteHint: 'Select a feature, press Esc to close',
     slashPaletteEmpty: 'No features available',
   },
+  aiPlanProgress: {
+    ariaLabel: 'Plan progress: {completed} of {total} steps complete',
+    stepAria: 'Step {index}: {label}, {status}',
+    status_pending: 'pending',
+    status_active: 'in progress',
+    status_done: 'done',
+    status_error: 'error',
+    overflowTitle: '{count} more steps not shown',
+  },
+  aiPlanInference: {
+    labelSearch: 'Search',
+    labelCalculate: 'Calculate',
+    labelToolCall: 'Tool call',
+    labelReasoning: 'Thinking',
+    labelPlanning: 'AI is planning...',
+    labelPlanningDone: 'Planned {n} steps',
+  },
   aiProcess: {
     title: 'Execution Process',
     statusRunning: 'Running',
@@ -174,6 +191,35 @@ export default {
     pathCopied: '✅ Path copied',
     reasoningDuration: 'Thought {seconds}s',
     thinkingLabel: 'Thinking...',
+    expandToolCall: 'Expand details',
+    collapseToolCall: 'Collapse details',
+    toolStatus: {
+      search: {
+        short: '🔍 Searching...',
+        medium: '🔍 Searching deeper...',
+        long: '🔍 Broad search, please wait...',
+      },
+      data: {
+        short: '📊 Querying data...',
+        medium: '📊 Processing data...',
+        long: '📊 Large dataset, please wait...',
+      },
+      file: {
+        short: '📄 Processing file...',
+        medium: '📄 Reading/writing file...',
+        long: '📄 Large file, please wait...',
+      },
+      code: {
+        short: '⚙️ Executing...',
+        medium: '⚙️ Running...',
+        long: '⚙️ Long execution, please wait...',
+      },
+      generic: {
+        short: '⏳ Processing...',
+        medium: '⏳ Working...',
+        long: '⏳ Taking a while, please wait...',
+      },
+    },
   },
   asset: {
     title: 'Assets',

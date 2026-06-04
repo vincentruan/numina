@@ -200,6 +200,23 @@ export default {
     slashPaletteHint: '选择功能，按 Esc 关闭',
     slashPaletteEmpty: '暂无可用功能',
   },
+  aiPlanProgress: {
+    ariaLabel: '计划进度：已完成 {completed} / {total} 步',
+    stepAria: '第 {index} 步：{label}，{status}',
+    status_pending: '待执行',
+    status_active: '执行中',
+    status_done: '已完成',
+    status_error: '执行出错',
+    overflowTitle: '还有 {count} 步未显示',
+  },
+  aiPlanInference: {
+    labelSearch: '搜索',
+    labelCalculate: '计算',
+    labelToolCall: '工具调用',
+    labelReasoning: '思考',
+    labelPlanning: 'AI 正在规划...',
+    labelPlanningDone: '制定了 {n} 步计划',
+  },
   aiProcess: {
     title: '执行过程',
     statusRunning: '正在执行',
@@ -226,6 +243,35 @@ export default {
     pathCopied: '✅ 已复制路径',
     reasoningDuration: '思考 {seconds}s',
     thinkingLabel: '思考中...',
+    expandToolCall: '展开详情',
+    collapseToolCall: '收起详情',
+    toolStatus: {
+      search: {
+        short: '🔍 正在搜索...',
+        medium: '🔍 深入检索中...',
+        long: '🔍 搜索范围较广，请稍候...',
+      },
+      data: {
+        short: '📊 正在查询数据...',
+        medium: '📊 数据处理中...',
+        long: '📊 数据量较大，请稍候...',
+      },
+      file: {
+        short: '📄 正在处理文件...',
+        medium: '📄 文件读写中...',
+        long: '📄 文件较大，请稍候...',
+      },
+      code: {
+        short: '⚙️ 正在执行...',
+        medium: '⚙️ 运行中...',
+        long: '⚙️ 执行时间较长，请稍候...',
+      },
+      generic: {
+        short: '⏳ 正在处理...',
+        medium: '⏳ 处理中...',
+        long: '⏳ 处理时间较长，请稍候...',
+      },
+    },
   },
   asset: {
     title: '资产',

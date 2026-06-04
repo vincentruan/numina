@@ -10,18 +10,39 @@
     :aria-controls="canCollapse ? contentId : undefined"
   >
     <!-- Header -->
-    <div class="step-header" @click="canCollapse && toggle()">
+    <div
+      class="step-header"
+      :role="canCollapse ? 'button' : undefined"
+      :tabindex="canCollapse ? 0 : undefined"
+      :aria-expanded="canCollapse ? isExpanded : undefined"
+      :aria-label="canCollapse && compressed && type === 'tool_call'
+        ? (isExpanded ? t('aiProcess.collapseToolCall') : t('aiProcess.expandToolCall'))
+        : undefined"
+      @click="canCollapse && toggle()"
+      @keydown.enter="canCollapse && toggle()"
+      @keydown.space.prevent="canCollapse && toggle()"
+    >
       <span class="step-icon" aria-hidden="true">{{ statusIcon }}</span>
       <div class="step-info">
         <span class="step-title">
           {{ headerTitle }}
           <span v-if="showSummary && summary" class="step-summary">{{ summary }}</span>
         </span>
-        <span class="step-time" :aria-live="status === 'streaming' || status === 'running' ? 'polite' : undefined">
+        <span
+          class="step-time"
+          :class="{ 'step-time--compressed': compressed }"
+          :aria-live="status === 'streaming' || status === 'running' ? 'polite' : undefined"
+        >
           {{ formattedDuration }}
         </span>
       </div>
-      <van-icon v-if="canCollapse" :name="isExpanded ? 'arrow-down' : 'arrow-up'" class="step-toggle" />
+      <van-icon
+        v-if="canCollapse"
+        name="arrow-down"
+        class="step-toggle"
+        :class="{ 'step-toggle--expanded': isExpanded }"
+        aria-hidden="true"
+      />
     </div>
 
     <!-- Content (collapsible) -->
@@ -34,7 +55,18 @@
 
         <!-- Tool call content -->
         <template v-else-if="type === 'tool_call'">
-          <div v-if="!compressed" class="tool-args" :class="{ 'args-running': status === 'running' }">
+          <!-- Live status text (running only) -->
+          <div
+            v-if="status === 'running'"
+            class="tool-status-text"
+            aria-live="polite"
+          >
+            <Transition name="status-fade" mode="out-in">
+              <span :key="statusText" class="tool-status-inner">{{ statusText }}</span>
+            </Transition>
+          </div>
+
+          <div v-if="!compressed || isExpanded" class="tool-args" :class="{ 'args-running': status === 'running' }">
             <span class="args-label">{{ t('aiProcess.argsLabel') }}</span>
             <span class="args-value">{{ argsSummary }}</span>
           </div>
@@ -80,6 +112,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStepCollapse } from '@/composables/useStepCollapse'
+import { useToolStatusText } from '@/composables/useToolStatusText'
 import { getToolDisplayInfo, formatArgsSummary } from '@/utils/toolDisplayMapping'
 
 const props = withDefaults(defineProps<{
@@ -99,6 +132,7 @@ const props = withDefaults(defineProps<{
   autoCollapseSignal?: boolean
   defaultExpanded?: boolean
   compressed?: boolean
+  progressMessage?: string
   // subagent / progress / artifact props
   title?: string
   description?: string
@@ -114,13 +148,20 @@ const props = withDefaults(defineProps<{
 const { t } = useI18n()
 const contentId = computed(() => `step-content-${props.id}`)
 
-// Collapse logic for reasoning type
-const canCollapse = computed(() => props.type === 'reasoning')
+// Collapse logic: reasoning always, compressed tool_call can re-expand
+const canCollapse = computed(
+  () => props.type === 'reasoning' || (props.type === 'tool_call' && props.compressed),
+)
 const autoCollapseSignalRef = computed(() => props.autoCollapseSignal)
 const statusRef = computed(() => props.status)
 
+// Compressed tool_call starts collapsed (user must tap to expand)
+const effectiveDefaultExpanded = props.compressed && props.type === 'tool_call'
+  ? false
+  : props.defaultExpanded
+
 const { isExpanded, toggle } = useStepCollapse({
-  defaultExpanded: props.defaultExpanded,
+  defaultExpanded: effectiveDefaultExpanded,
   autoCollapseSignal: autoCollapseSignalRef,
   status: statusRef,
 })
@@ -131,9 +172,12 @@ const isActive = computed(() => props.status === 'streaming' || props.status ===
 // Duration ticker for active steps
 const tickMs = ref(0)
 let tickInterval: ReturnType<typeof setInterval> | null = null
+// Track when the step became active, for elapsed calculation
+let activeStartMs = 0
 
 function startTick() {
   if (tickInterval) return
+  activeStartMs = Date.now()
   tickMs.value = Date.now()
   tickInterval = setInterval(() => {
     tickMs.value = Date.now()
@@ -168,6 +212,18 @@ const computedElapsedMs = computed(() => {
   if (props.elapsedMs) return props.elapsedMs
   if (isActive.value) return tickMs.value - (props.elapsedMs || 0)
   return 0
+})
+
+// Live status text for running tool_call steps
+const toolTypeRef = computed(() => props.toolType)
+const liveElapsedMs = computed(() =>
+  isActive.value ? tickMs.value - activeStartMs : (props.elapsedMs ?? 0),
+)
+const progressMessageRef = computed(() => props.progressMessage)
+const { statusText } = useToolStatusText({
+  toolType: toolTypeRef,
+  elapsedMs: liveElapsedMs,
+  progressMessage: progressMessageRef,
 })
 
 const formattedDuration = computed(() => {
@@ -297,12 +353,10 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   gap: 8px;
 }
 
-.ai-step-block--compressed .step-body {
-  display: none;
-}
+/* step-body visibility for compressed mode is handled entirely by v-show (canCollapse=true for tool_call) */
 
 .ai-step-block--compressed .step-toggle {
-  display: none;
+  display: block;
 }
 
 /* Header */
@@ -311,6 +365,18 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   align-items: center;
   gap: 10px;
   cursor: default;
+}
+
+.step-header[role='button'] {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.step-header[role='button']:focus-visible {
+  outline: 2px solid var(--van-primary-color);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .ai-step-block--reasoning .step-header {
@@ -352,10 +418,21 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   font-variant-numeric: tabular-nums;
 }
 
+.step-time--compressed {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .step-toggle {
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 16px;
   flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.step-toggle--expanded {
+  transform: rotate(180deg);
 }
 
 /* Body */
@@ -454,6 +531,35 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* Tool status text */
+.tool-status-text {
+  height: 20px;
+  line-height: 20px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.tool-status-inner {
+  display: block;
+}
+
+/* Status text fade transition */
+.status-fade-enter-active,
+.status-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.status-fade-enter-from,
+.status-fade-leave-to {
+  opacity: 0;
+}
+
+.status-fade-enter-to,
+.status-fade-leave-from {
+  opacity: 1;
 }
 
 /* Content transition */
