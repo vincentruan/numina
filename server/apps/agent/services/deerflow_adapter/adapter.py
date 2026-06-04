@@ -21,6 +21,11 @@ from typing import Any, Literal
 from deerflow.config.app_config import reload_app_config
 
 from apps.agent.schemas.context import RedactedContext
+from apps.agent.services.message_classifier import (
+    extract_tool_calls,
+    extract_tool_result,
+    resolve_tool_metadata,
+)
 from apps.agent.services.deerflow_adapter.exceptions import (
     DeerFlowError,
     DeerFlowSkillNotFoundError,
@@ -38,8 +43,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StreamChunk:
     """Structured event from DeerFlow stream — replaces [THINK]/[TEXT] string prefixes."""
-    type: Literal["thinking", "text"]
+    type: Literal["thinking", "text", "tool_call", "tool_result", "tool_progress", "plan_update"]
     content: str
+    data: dict[str, Any] | None = None
 
 
 # Lazy-initialized executor and semaphore — read concurrency from settings at first use,
@@ -197,16 +203,81 @@ class DeerFlowAdapter:
 
         def _process_event(event) -> None:
             """Process a single stream event and put chunks into queue."""
+            if not hasattr(event, "type"):
+                return
+
+            # ── values event: plan todos ─────────────────────────────────────
+            if event.type == "values" and isinstance(event.data, dict):
+                todos = event.data.get("todos")
+                if todos is not None:
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait,
+                        StreamChunk("plan_update", content="", data={"todos": todos}),
+                    )
+                return
+
+            # ── messages-tuple events ────────────────────────────────────────
             if not (
-                hasattr(event, "type")
-                and event.type == "messages-tuple"
+                event.type == "messages-tuple"
                 and isinstance(event.data, dict)
-                and event.data.get("type") == "ai"
             ):
                 return
+
+            msg_type = event.data.get("type")
+
+            # Tool message (ToolMessage shape) — emit tool_result
+            if msg_type == "tool":
+                tool_call_id = str(event.data.get("tool_call_id") or "")
+                content = event.data.get("content")
+                tool_name = event.data.get("name") or ""
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    StreamChunk(
+                        "tool_result",
+                        content="",
+                        data={
+                            "tool_call_id": tool_call_id,
+                            "tool_name": tool_name,
+                            "content": content,
+                        },
+                    ),
+                )
+                return
+
+            # AI message — existing thinking/text extraction + new tool_call extraction
+            if msg_type != "ai":
+                return
+
             additional_kwargs = event.data.get("additional_kwargs") or {}
             content = event.data.get("content")
             reasoning = additional_kwargs.get("reasoning_content")
+
+            # tool_calls on AI message — emit one StreamChunk per call
+            tool_calls_raw = event.data.get("tool_calls")
+            if tool_calls_raw:
+                calls = extract_tool_calls(event.data)
+                for call in calls:
+                    tool_type, display_name, icon = resolve_tool_metadata(call["name"])
+                    is_internal = call["name"] == "write_todos"
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait,
+                        StreamChunk(
+                            "tool_call",
+                            content="",
+                            data={
+                                "tool_call_id": call["id"],
+                                "tool_name": call["name"],
+                                "tool_type": tool_type,
+                                "display_name": display_name,
+                                "icon": icon,
+                                "args": call["args"],
+                                "internal": is_internal,
+                            },
+                        ),
+                    )
+                return
+
+            # thinking / text content
             if isinstance(reasoning, str) and reasoning:
                 loop.call_soon_threadsafe(queue.put_nowait, StreamChunk("thinking", reasoning))
             if isinstance(content, list):
