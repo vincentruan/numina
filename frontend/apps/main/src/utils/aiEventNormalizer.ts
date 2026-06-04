@@ -1,4 +1,5 @@
 import type { AgentEvent, NormalizedAiEvent, NormalizationState, ProcessStep } from '@/types/agent-stream'
+import { hashTodos, mapTodosToPlanSteps } from '@/utils/planDiff'
 
 export function createNormalizationState(): NormalizationState {
   return {
@@ -8,6 +9,11 @@ export function createNormalizationState(): NormalizationState {
     steps: [],
     artifacts: [],
     subagents: new Map(),
+    planSteps: [],
+    lastPlanHash: '',
+    planSource: null,
+    inferredSteps: [],
+    planWaitTimer: null,
   }
 }
 
@@ -32,6 +38,17 @@ export function normalizeAgentEvent(
   const events: NormalizedAiEvent[] = []
 
   switch (event.type) {
+    case 'session.start':
+      // Start 3s inference fallback timer. If no explicit plan.update arrives
+      // within 3 seconds, tool.call events will activate inference mode.
+      if (state.planWaitTimer !== null) clearTimeout(state.planWaitTimer)
+      state.planWaitTimer = setTimeout(() => {
+        state.planWaitTimer = null
+        // Timer has expired; planSource remains null until a tool.call fires
+        // the inference activation branch below.
+      }, 3000)
+      break
+
     case 'phase.connecting':
       state.phase = 'connecting'
       events.push({ type: 'phase_change', phase: 'connecting' })
@@ -86,6 +103,12 @@ export function normalizeAgentEvent(
 
     case 'tool.call':
       if (event.tool) {
+        // If no explicit plan arrived and the 3s timer has already expired
+        // (planWaitTimer === null means it fired or was never started), activate
+        // inference mode so the UI can show inferred plan steps.
+        if (state.planSource === null && state.planWaitTimer === null) {
+          state.planSource = 'inferred'
+        }
         const toolStep: ProcessStep = {
           type: 'tool_call',
           id: event.tool.id,
@@ -133,7 +156,78 @@ export function normalizeAgentEvent(
       }
       break
 
+    case 'tool.progress':
+      if (event.tool_id && event.progress_message) {
+        const target = state.steps.find(
+          (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>
+            s.type === 'tool_call' && s.id === event.tool_id,
+        )
+        if (target) {
+          target.progressMessage = event.progress_message
+        }
+        events.push({
+          type: 'tool_progress',
+          toolCallId: event.tool_id,
+          progressMessage: event.progress_message,
+        })
+      }
+      break
+
+    case 'plan.update': {
+      // Clear the inference timer and set explicit source
+      if (state.planWaitTimer !== null) {
+        clearTimeout(state.planWaitTimer)
+        state.planWaitTimer = null
+      }
+      const prevSource = state.planSource
+      state.planSource = 'explicit'
+
+      if (event.todos && event.todos.length > 0) {
+        const newHash = hashTodos(event.todos)
+        if (newHash !== state.lastPlanHash) {
+          state.lastPlanHash = newHash
+          const newPlanSteps = mapTodosToPlanSteps(event.todos)
+
+          // Source switching: if inference was active, clear inferred steps
+          if (prevSource === 'inferred') {
+            state.inferredSteps = []
+          }
+
+          state.planSteps = newPlanSteps
+
+          // Insert/update progress-type ProcessStep entries in steps[] so they
+          // appear inline in the activity stream.
+          for (const planStep of newPlanSteps) {
+            const existingIdx = state.steps.findIndex(
+              (s): s is Extract<ProcessStep, { type: 'progress' }> =>
+                s.type === 'progress' && s.id === planStep.id,
+            )
+            const progressStep: Extract<ProcessStep, { type: 'progress' }> = {
+              type: 'progress',
+              id: planStep.id,
+              title: planStep.label,
+              status: planStep.status,
+            }
+            if (existingIdx >= 0) {
+              state.steps[existingIdx] = progressStep
+            } else {
+              state.steps.push(progressStep)
+            }
+          }
+
+          events.push({ type: 'plan_update', steps: newPlanSteps })
+        }
+        // If hash unchanged, skip emission (no duplicate event)
+      }
+      break
+    }
+
     case 'capability.end':
+      // Clear the plan inference timer to prevent dangling callbacks after stream ends
+      if (state.planWaitTimer !== null) {
+        clearTimeout(state.planWaitTimer)
+        state.planWaitTimer = null
+      }
       if (state.phase === 'answering') {
         events.push({ type: 'answer_done' })
       }
@@ -143,6 +237,11 @@ export function normalizeAgentEvent(
       break
 
     case 'capability.error':
+      // Clear the plan inference timer to prevent dangling callbacks after error
+      if (state.planWaitTimer !== null) {
+        clearTimeout(state.planWaitTimer)
+        state.planWaitTimer = null
+      }
       events.push({
         type: 'error',
         message: event.error?.message || event.message || 'Unknown error',
