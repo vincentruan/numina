@@ -274,6 +274,16 @@ export default {
       },
     },
   },
+  aiArtifact: {
+    badgeLabel: '查看 {count} 个附件',
+    sheetTitle: '附件 ({count})',
+    emptyMessage: '暂无附件',
+    openUrl: '打开链接',
+    copyPath: '复制路径',
+    viewJson: '查看数据',
+    pathCopied: '✅ 已复制路径',
+    jsonPreviewTitle: '数据预览',
+  },
   asset: {
     title: '资产',
     all: '全部',

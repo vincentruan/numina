@@ -222,6 +222,16 @@ export default {
       },
     },
   },
+  aiArtifact: {
+    badgeLabel: 'View {count} attachments',
+    sheetTitle: 'Attachments ({count})',
+    emptyMessage: 'No attachments',
+    openUrl: 'Open link',
+    copyPath: 'Copy path',
+    viewJson: 'View data',
+    pathCopied: '✅ Path copied',
+    jsonPreviewTitle: 'Data preview',
+  },
   asset: {
     title: 'Assets',
     all: 'All',
