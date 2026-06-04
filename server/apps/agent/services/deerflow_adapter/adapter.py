@@ -21,11 +21,6 @@ from typing import Any, Literal
 from deerflow.config.app_config import reload_app_config
 
 from apps.agent.schemas.context import RedactedContext
-from apps.agent.services.message_classifier import (
-    extract_tool_calls,
-    extract_tool_result,
-    resolve_tool_metadata,
-)
 from apps.agent.services.deerflow_adapter.exceptions import (
     DeerFlowError,
     DeerFlowSkillNotFoundError,
@@ -35,6 +30,10 @@ from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _init_lock,
     get_family_adapter,
     invalidate_family_adapter,
+)
+from apps.agent.services.message_classifier import (
+    extract_tool_calls,
+    resolve_tool_metadata,
 )
 
 logger = logging.getLogger(__name__)
