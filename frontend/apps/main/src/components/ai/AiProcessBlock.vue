@@ -13,12 +13,25 @@
       <van-icon :name="isExpanded ? 'arrow-down' : 'arrow-up'" class="process-toggle" />
     </div>
 
+    <!-- Plan progress bar — rendered between header and body, outside the body transition.
+         Conditionally shown when planSteps are available. Smooth max-height appearance. -->
+    <Transition name="plan-bar">
+      <AiPlanProgressBar
+        v-if="displayPlanSteps.length > 0"
+        :steps="displayPlanSteps"
+        :active-step-index="activeStepIndex"
+        class="process-plan-bar"
+        @step-tap="onStepTap"
+      />
+    </Transition>
+
     <!-- Body (collapsible) — unified steps rendering preserves arrival order between reasoning and tool calls (spec §3.3). U3: fade+slide collapse transition. -->
     <Transition name="process-body">
       <div v-show="isExpanded" class="process-body" role="list">
       <AiStepBlock
         v-for="step in steps"
         :key="step.id"
+        :ref="(el) => registerStepRef(step.id, el)"
         v-bind="stepProps(step)"
         :auto-collapse-signal="reasoningAutoCollapse"
       />
@@ -47,7 +60,9 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AiStepBlock from './AiStepBlock.vue'
 import AiLogo from './AiLogo.vue'
-import type { ProcessStep } from '@/types/agent-stream'
+import AiPlanProgressBar from './AiPlanProgressBar.vue'
+import { usePlanInference } from '@/composables/usePlanInference'
+import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 
 const props = defineProps<{
   status: 'running' | 'done' | 'error'
@@ -57,6 +72,8 @@ const props = defineProps<{
   errorMessage?: string
   phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error'
   reasoningStartTime?: number | null
+  planSteps?: PlanStep[]
+  planSource?: 'explicit' | 'inferred' | null
 }>()
 
 const emit = defineEmits<{
@@ -98,6 +115,103 @@ watch(
 const reasoningAutoCollapse = computed(
   () => props.phase === 'answering' || props.phase === 'done',
 )
+
+// ---------- Plan inference wiring ----------
+// When planSource is 'inferred', derive plan steps from process steps.
+// When planSource is 'explicit', the caller has passed explicit planSteps — use those directly.
+
+const stepsRef = computed(() => props.steps)
+const planSourceRef = computed(() => props.planSource ?? null)
+
+const { inferredPlanSteps } = usePlanInference({
+  steps: stepsRef,
+  planSource: planSourceRef,
+})
+
+// The plan steps to display: explicit takes priority, inferred as fallback
+const displayPlanSteps = computed<PlanStep[]>(() => {
+  if (props.planSource === 'explicit' && props.planSteps && props.planSteps.length > 0) {
+    return props.planSteps
+  }
+  if (props.planSource === 'inferred' || props.planSource == null) {
+    return inferredPlanSteps.value
+  }
+  return []
+})
+
+// Active step index: first step with status 'active', or last done step index
+const activeStepIndex = computed<number>(() => {
+  const steps = displayPlanSteps.value
+  const activeIdx = steps.findIndex((s) => s.status === 'active')
+  if (activeIdx >= 0) return activeIdx
+  // Fall back to last done step
+  let lastDone = -1
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].status === 'done') lastDone = i
+  }
+  return lastDone
+})
+
+// ---------- Step element registry for scroll-to-step ----------
+// Maps stepId → the DOM element of the corresponding AiStepBlock
+const stepElMap = new Map<string, Element>()
+
+function registerStepRef(stepId: string, el: unknown) {
+  if (el && typeof el === 'object' && '$el' in el) {
+    stepElMap.set(stepId, (el as { $el: Element }).$el)
+  } else if (el instanceof Element) {
+    stepElMap.set(stepId, el)
+  } else {
+    stepElMap.delete(stepId)
+  }
+}
+
+// Highlight class added briefly on scroll-to target
+const highlightedStepId = ref<string | null>(null)
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
+
+function onStepTap(stepId: string) {
+  // Find the corresponding process step for this plan step.
+  // Plan step IDs from plan.update are todo IDs — match by position when no direct match.
+  // For inferred steps the id may be 'inferred-N'; for explicit steps id === todo.id.
+  // Strategy: look for a step element already registered. If the plan step is explicit,
+  // we look for a tool_call or progress step at the same index position in the steps array.
+  const planIdx = displayPlanSteps.value.findIndex((s) => s.id === stepId)
+
+  // Try direct id match first (inferred steps reuse process step ids indirectly)
+  let targetEl: Element | undefined = stepElMap.get(stepId)
+
+  // If not found by id, try by positional mapping to process steps
+  if (!targetEl && planIdx >= 0) {
+    // Map plan step index to the closest process step index
+    const processSteps = props.steps
+    const targetProcessIdx = Math.min(planIdx, processSteps.length - 1)
+    if (targetProcessIdx >= 0) {
+      const processStep = processSteps[targetProcessIdx]
+      if (processStep) {
+        targetEl = stepElMap.get(processStep.id)
+      }
+    }
+  }
+
+  if (!targetEl) return
+
+  // Check if element is in viewport
+  const rect = targetEl.getBoundingClientRect()
+  const inViewport = rect.top >= 0 && rect.bottom <= window.innerHeight
+
+  if (!inViewport) {
+    targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+
+  // Add brief 200ms highlight flash
+  if (highlightTimer) clearTimeout(highlightTimer)
+  highlightedStepId.value = stepId
+  highlightTimer = setTimeout(() => {
+    highlightedStepId.value = null
+    highlightTimer = null
+  }, 200)
+}
 
 // Map ProcessStep union → AiStepBlock props
 function stepProps(step: ProcessStep) {
@@ -176,6 +290,8 @@ watch(
 
 onUnmounted(() => {
   stopTick()
+  if (highlightTimer) clearTimeout(highlightTimer)
+  stepElMap.clear()
 })
 
 const logoState = computed<'idle' | 'thinking' | 'done' | 'error'>(() => {
@@ -390,6 +506,31 @@ const formattedElapsed = computed(() => {
     color: var(--text-primary);
     animation: none;
   }
+}
+
+/* Plan progress bar — sits between header and body */
+.process-plan-bar {
+  padding: 4px 14px;
+  border-top: 1px solid var(--separator);
+}
+
+/* Smooth appearance transition for the plan bar */
+.plan-bar-enter-active,
+.plan-bar-leave-active {
+  transition: max-height 0.3s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+
+.plan-bar-enter-from,
+.plan-bar-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+.plan-bar-enter-to,
+.plan-bar-leave-from {
+  max-height: 40px;
+  opacity: 1;
 }
 
 /* U3: fade+slide transition for process-body collapse */
