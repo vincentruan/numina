@@ -245,6 +245,7 @@ export default {
     thinkingLabel: '思考中...',
     expandToolCall: '展开详情',
     collapseToolCall: '收起详情',
+    viewProcess: '查看推理过程 ({count} 步)',
     toolStatus: {
       search: {
         short: '🔍 正在搜索...',

@@ -193,6 +193,7 @@ export default {
     thinkingLabel: 'Thinking...',
     expandToolCall: 'Expand details',
     collapseToolCall: 'Collapse details',
+    viewProcess: 'View reasoning process ({count} steps)',
     toolStatus: {
       search: {
         short: '🔍 Searching...',
