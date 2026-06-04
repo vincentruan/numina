@@ -378,6 +378,20 @@
       </template>
     </div>
 
+    <!-- Artifact badge (U5) — floating button showing artifact count -->
+    <AiArtifactBadge
+      :count="sessionArtifacts.length"
+      @tap="showArtifactSheet = true"
+    />
+
+    <!-- Artifact sheet (U5) — bottom-sheet listing all session artifacts -->
+    <AiArtifactSheet
+      :visible="showArtifactSheet"
+      :artifacts="sessionArtifacts"
+      @close="showArtifactSheet = false"
+      @artifact-tap="onArtifactTap"
+    />
+
     <!-- Scroll-to-bottom floating button: shown when user scrolled up during streaming -->
     <transition name="scroll-btn">
       <button
@@ -447,10 +461,12 @@ import type { Agent } from '@/types/agent'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
 import AiUserBubble from '@/components/ai/AiUserBubble.vue'
+import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
+import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
-import { createNormalizationState, normalizeAgentEvent } from '@/utils/aiEventNormalizer'
-import type { AgentEvent, ProcessStep, PlanStep } from '@/types/agent-stream'
+import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
+import type { AgentEvent, ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -567,6 +583,8 @@ interface Message {
   // Plan progress bar state (U10)
   planSteps?: PlanStep[]
   planSource?: 'explicit' | 'inferred' | null
+  // Process footnote toggle state (U5)
+  processExpanded?: boolean
 }
 
 interface ToolTimelineItem {
@@ -628,6 +646,9 @@ const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
 const connectingSeconds = ref(0)
+// Artifact registry state (U5)
+const sessionArtifacts = ref<Artifact[]>([])
+const showArtifactSheet = ref(false)
 // 2-state deep-think + independent web-search toggle.
 // "normal"  → no extended thinking; reasoning_effort=low.
 // "smart"   → deep_think=true; reasoning_effort=high.
@@ -786,6 +807,30 @@ async function onDeleteSession() {
     // silently ignore
   }
 }
+
+// Watch messages for artifact extraction (U5)
+watch(
+  () => messages.value.map((m) => m.processSteps),
+  (stepsArrays) => {
+    for (const steps of stepsArrays) {
+      if (!steps) continue
+      for (const step of steps) {
+        // Only extract from newly completed tool calls
+        if (step.type === 'tool_call' && step.status === 'done') {
+          const artifact = extractArtifactFromStep(step)
+          if (artifact && artifact.sourceStepId) {
+            // Deduplicate by sourceStepId
+            const exists = sessionArtifacts.value.some((a) => a.sourceStepId === artifact.sourceStepId)
+            if (!exists) {
+              sessionArtifacts.value.push(artifact)
+            }
+          }
+        }
+      }
+    }
+  },
+  { deep: true }
+)
 
 // Throttled markdown rendering state (scoped to this component instance)
 let renderTimer: ReturnType<typeof setTimeout> | null = null
@@ -1082,6 +1127,7 @@ async function onNewChat() {
     messages.value = []
     currentSessionId.value = null
     customTitle.value = null
+    sessionArtifacts.value = []  // Clear artifact registry (R10)
     sessionsLoaded.value = false  // force refresh next time history panel opens
     sessions.value = []
     sessionsOffset.value = 0
@@ -1492,6 +1538,35 @@ async function onRetrySend(idx: number) {
   // Remove this user message so onSend re-pushes it fresh
   messages.value.splice(idx, 1)
   await onSend()
+}
+
+// Artifact action handler (U5)
+function onArtifactTap(artifact: Artifact) {
+  if (artifact.kind === 'link' || artifact.kind === 'image') {
+    // Open URL in new tab
+    if (artifact.url) {
+      window.open(artifact.url, '_blank', 'noopener,noreferrer')
+    }
+  } else if (artifact.kind === 'file') {
+    // Copy path to clipboard
+    if (artifact.path) {
+      onCopy(artifact.path)
+    }
+  } else if (artifact.kind === 'report') {
+    // Navigate to report page or open URL if available
+    if (artifact.url) {
+      window.open(artifact.url, '_blank', 'noopener,noreferrer')
+    }
+  } else if (artifact.kind === 'data' || !artifact.kind) {
+    // Show JSON preview dialog for data artifacts
+    const jsonStr = JSON.stringify(artifact, null, 2)
+    showConfirmDialog({
+      title: t('aiArtifact.jsonPreviewTitle'),
+      message: jsonStr,
+      confirmButtonText: t('common.close'),
+      showCancelButton: false,
+    }).catch(() => {})
+  }
 }
 
 // Infinite scroll: watch sentinel at setup level so the watcher is properly tracked
