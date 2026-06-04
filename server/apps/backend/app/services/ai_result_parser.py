@@ -177,26 +177,47 @@ def _extract_report_scores_from_markdown(answer_text: str) -> dict | None:
         emoji_score_map = {'🟢': 4, '🟡': 3, '🔴': 1, '⚠️': 2}
         raw_indicators = {}
 
+        # Broader keyword sets for dimension mapping
+        LIABILITY_KEYWORDS = ('负债', '债务', '杠杆', '偿债', '还款', '贷款')
+        EFFICIENCY_KEYWORDS = ('流动', '现金', '应急', '储备', '变现')
+        ALLOCATION_KEYWORDS = ('配置', '集中', '分散', '多元', '房产', '投资')
+        NET_WORTH_KEYWORDS = ('净资产', '资产规模', '总资产', '净值', '财富')
+        # Header/separator patterns to skip
+        SKIP_KEYWORDS = ('指标', '项目', '---', '状态', '评价', '维度')
+
         for match in indicator_pattern.finditer(answer_text):
             indicator = match.group(1).strip()
             emoji = match.group(4) or ''
             status_text = match.group(5).strip()
 
-            if emoji not in emoji_score_map:
+            # Skip table headers and separator rows
+            if any(kw in indicator for kw in SKIP_KEYWORDS):
                 continue
 
+            if emoji not in emoji_score_map:
+                # Try to find emoji in the status text column
+                for e in emoji_score_map:
+                    if e in status_text:
+                        emoji = e
+                        status_text = status_text.replace(e, '').strip()
+                        break
+                if emoji not in emoji_score_map:
+                    continue
+
             s = emoji_score_map[emoji]
-            if '负债' in indicator or '资产负债' in indicator:
-                scores['liability_pressure'] = {'score': s, 'narrative': f'{indicator}: {status_text}'}
-            elif '流动' in indicator:
-                scores['asset_efficiency'] = {'score': s, 'narrative': f'{indicator}: {status_text}'}
-            elif '集中' in indicator or '配置' in indicator or '房产' in indicator:
-                scores['allocation_analysis'] = {'score': s, 'narrative': f'{indicator}: {status_text}'}
-            elif '投资' in indicator:
-                scores.setdefault('allocation_analysis', {'score': s, 'narrative': f'{indicator}: {status_text}'})
+            narrative = f'{indicator}: {status_text}' if status_text else indicator
+
+            if any(kw in indicator for kw in LIABILITY_KEYWORDS):
+                scores.setdefault('liability_pressure', {'score': s, 'narrative': narrative})
+            elif any(kw in indicator for kw in EFFICIENCY_KEYWORDS):
+                scores.setdefault('asset_efficiency', {'score': s, 'narrative': narrative})
+            elif any(kw in indicator for kw in ALLOCATION_KEYWORDS):
+                scores.setdefault('allocation_analysis', {'score': s, 'narrative': narrative})
+            elif any(kw in indicator for kw in NET_WORTH_KEYWORDS):
+                scores.setdefault('net_worth_health', {'score': s, 'narrative': narrative})
             raw_indicators[indicator] = s
 
-        # Derive net_worth_health from overall pattern
+        # Derive net_worth_health from overall pattern if not directly matched
         if raw_indicators and 'net_worth_health' not in scores:
             avg = sum(raw_indicators.values()) / len(raw_indicators)
             # Net worth is usually better than individual indicators suggest
