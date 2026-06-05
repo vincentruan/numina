@@ -111,18 +111,17 @@ class EventStreamBuilder:
         tokens_used: int = 0,
         execution_time_ms: int = 0,
         tools_used: list[str] | None = None,
+        suggestions: list[str] | None = None,
     ) -> StreamEvent:
-        return self._event(
-            "capability.end",
-            {
-                "result": {
-                    "summary": summary,
-                    "tokens_used": tokens_used,
-                    "execution_time_ms": execution_time_ms,
-                    "tools_used": tools_used or [],
-                }
-            },
-        )
+        result: dict = {
+            "summary": summary,
+            "tokens_used": tokens_used,
+            "execution_time_ms": execution_time_ms,
+            "tools_used": tools_used or [],
+        }
+        if suggestions:
+            result["suggestions"] = suggestions
+        return self._event("capability.end", {"result": result})
 
     def plan_update(self, todos: list[dict]) -> StreamEvent:
         normalized = [
