@@ -642,6 +642,9 @@ def get_family_adapter(
                     config_path=str(temp_config_path),
                     checkpointer=checkpointer,
                     model_name="main",  # Use explicit model name to avoid config.models[0] IndexError
+                    # Init-time: provider CAPABILITY (can this model think at all?).
+                    # Per-request: orchestrator passes thinking_enabled= to stream()
+                    # via **kwargs, which overrides this default per-call. See HARNESS_API.md OD-4.
                     thinking_enabled=bool(ai_config.get("thinking_supported", False)),
                     subagent_enabled=subagent_enabled,
                     plan_mode=plan_mode,
