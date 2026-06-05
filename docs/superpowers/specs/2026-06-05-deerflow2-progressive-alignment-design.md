@@ -24,8 +24,8 @@ The agent module was built on the DeerFlow 2.0 harness but has drifted from its 
 | D2 | `_build_message()` JSON-encodes skill+context instead of using natural language trigger phrases | DeerFlow skill auto-routing disabled; harness receives opaque JSON |
 | D3 | All non-chat capabilities pre-fetch full family data via `_build_context()` | High token cost and latency; agent receives data it may not need |
 | D4 | Dual streaming paths (raw text + NDJSON) with ~200 lines of duplicated logic | Maintenance burden; divergent retry/circuit-breaker behavior |
-| D5 | Non-chat `agent_dispatch.py` path missing `phase.thinking` and `tool.call`/`tool.result` events | Frontend cannot differentiate tool types or show thinking animation |
-| D6 | `thinking_enabled` passed to `stream()` where it is ignored (init-time only param) | Misleading code; future harness change could break silently |
+| D5 | ~~Non-chat `agent_dispatch.py` path missing `phase.thinking` and `tool.call`/`tool.result` events~~ **Resolved** — `_chunk_to_event_lines()` already emits all event types; `agent_dispatch.py` also emits them | ~~Frontend cannot differentiate tool types~~ Already working |
+| D6 | `thinking_enabled` passed to `stream()` — initially believed to be ignored, but DeerFlow `stream(**kwargs)` routes it to `_get_runnable_config()` as a per-call override | Two-level thinking control (init-time default + per-request override) works correctly; code is not buggy but the two-level design should be documented |
 | D7 | Frontend uses hardcoded template suggestions instead of DeerFlow suggestions API | Lower quality follow-up suggestions |
 | D8 | DeerFlow Gateway API (models/skills/memory/threads management) not utilized | No runtime model/skill introspection; no thread lifecycle management |
 
@@ -35,30 +35,25 @@ The agent module was built on the DeerFlow 2.0 harness but has drifted from its 
 
 | ID | Criterion | Acceptance |
 |----|-----------|------------|
-| SC1 | `stream()` called with only `(message, thread_id)` — no extra kwargs | grep confirms zero `thinking_enabled` in stream() calls |
-| SC2 | Single NDJSON streaming path — `stream_dispatch()` removed | grep confirms `stream_dispatch` only exists as `stream_dispatch_events` |
+| SC1 | `stream()` `thinking_enabled` kwarg documented as per-call override | HARNESS_API.md documents two-level thinking control; code comment added |
+| SC2 | Single NDJSON streaming path — `stream_dispatch()` raw-text method removed | grep confirms exactly one `stream_dispatch` method in orchestrator.py, producing NDJSON; all `/stream` router endpoints removed or migrated |
 | SC3 | No global lock on concurrent family requests | Two families can stream simultaneously without blocking |
 | SC4 | All capabilities use MCP for data access (chat already does) | `_build_context()` only called as fallback, not default |
-| SC5 | Skill dispatch uses natural language format | DeerFlow trigger_phrases matching activates |
-| SC6 | Gateway API proxy endpoints available | `GET /internal/models`, `PUT /internal/skills/{name}`, `DELETE /internal/threads/{id}` return 200 |
+| SC5 | Skill dispatch uses natural language `[SKILL:xxx]` format | `_build_message()` replaced with `_build_prompt()` pattern; LLM skill selection accuracy validated |
+| SC6 | Gateway API proxy endpoints verified | `GET /internal/gateway/models`, `PUT /internal/gateway/skills/{name}`, `DELETE /internal/gateway/threads/{id}` return 200 |
 | SC7 | Suggestions API integrated | Chat responses include LLM-generated follow-up suggestions (with template fallback) |
 
 ---
 
 ## Phase 1: Corrections (Zero Risk)
 
-### U1.1 — Remove invalid `thinking_enabled` from `stream()` calls
+### U1.1 — ~~Remove `thinking_enabled` from `stream()` calls~~ — NOT A BUG
 
-**Drift addressed:** D6
+**Drift addressed:** D6 (reclassified — not a drift)
 
-**Files:**
-- `server/apps/agent/services/deerflow_adapter/adapter.py`
+**Finding from review:** DeerFlow `stream()` accepts `**kwargs` which flow into `_get_runnable_config()`. `thinking_enabled` passed as a kwarg overrides the init-time default per-request. This is intentional two-level control: init-time sets the default, per-call overrides it. Removing it would break the per-request thinking toggle.
 
-**Change:** Two call sites in `_produce()` (lines ~316 and ~331) pass `thinking_enabled=enable_thinking` to `self._client.stream()`. DeerFlow 2.0's `stream()` signature only accepts `message` and `thread_id`. The parameter is silently ignored.
-
-**Action:** Change both to `self._client.stream(message, thread_id=thread_id)`.
-
-**Verification:** `grep -n "thinking_enabled" adapter.py` only shows it in `__init__` and `DeerFlowClient()` constructor calls, not in `stream()` calls.
+**Revised action:** Keep `thinking_enabled=enable_thinking` in `stream()` calls. Instead, document the two-level design in `HARNESS_API.md` and add a code comment clarifying that `stream()` kwargs are per-call overrides, not dead code.
 
 ---
 
@@ -72,15 +67,15 @@ The agent module was built on the DeerFlow 2.0 harness but has drifted from its 
 
 **Change:** Remove `stream_dispatch()` method (lines 314-633) and any endpoints that use `text/plain` streaming. All frontend consumers already use NDJSON.
 
-**Scope check:** Before removing, verify all router endpoints that call `stream_dispatch()` have an NDJSON equivalent:
-- `alerts.py` `/alerts/stream` — uses `stream_dispatch_events()`
-- `allocation.py` `/allocation/stream` — uses `stream_dispatch_events()`
-- `chat.py` `/chat/ask/stream` — uses `stream_dispatch_events()`
-- `disposal.py` `/disposal/stream` — uses `stream_dispatch_events()`
-- `liability.py` `/liability/stream` — uses `stream_dispatch_events()`
-- `report.py` `/report/generate/stream` — uses `stream_dispatch_events()`
-- `spending_leak.py` `/spending-leak/stream` — uses `stream_dispatch_events()`
-- `time_machine.py` `/time-machine/stream` — uses `stream_dispatch_events()`
+**Scope check:** Before removing, verify which routers still have raw-text `/stream` endpoints and which have NDJSON `/events` endpoints:
+- `alerts.py` — has BOTH `/stream` (raw text, calls `stream_dispatch()`) AND `/events` (NDJSON)
+- `allocation.py` — has BOTH `/stream` (raw text) AND `/events` (NDJSON)
+- `chat.py` — NDJSON only (`stream_dispatch_events()`)
+- `disposal.py` — has BOTH `/stream` (raw text) AND `/events` (NDJSON)
+- `liability.py` — has BOTH `/stream` (raw text) AND `/events` (NDJSON)
+- `report.py` — NDJSON only (`/generate` + `/events`, no `/stream`)
+- `spending_leak.py` — has BOTH `/stream` (raw text) AND `/events` (NDJSON)
+- `time_machine.py` — has ONLY `/stream` (raw text), NO `/events` endpoint — **must add NDJSON variant first**
 
 If any endpoint only has a raw-text variant, add an NDJSON variant first.
 
@@ -115,27 +110,32 @@ If any endpoint only has a raw-text variant, add an NDJSON variant first.
 
 **Root cause:** DeerFlow's `get_app_config()` returns a module-level global singleton. `reload_app_config(path)` resets this singleton. Concurrent family requests overwrite each other's config, forcing Numina to serialize with `_init_lock`.
 
-**Approach: Thread-local config injection**
+**Approach: DeerFlow native ContextVar config injection**
 
-Replace the global `reload_app_config()` + `os.environ["DEER_FLOW_CONFIG_PATH"]` pattern with thread-local storage:
+DeerFlow's `app_config.py` already has a ContextVar-based config injection mechanism:
+- `_current_app_config: ContextVar[AppConfig | None]` — per-context config override
+- `push_current_app_config(config)` — set config for the current context
+- `pop_current_app_config()` — restore previous config
+- `get_app_config()` already checks `_current_app_config.get()` first (line 368-370)
 
-1. Create a thin wrapper module `services/deerflow_adapter/config_local.py`:
-   - `threading.local()` holds `_local.config_path` per thread
-   - `get_thread_config_path()` / `set_thread_config_path()` accessors
-   - Monkey-patch `deerflow.config.app_config.get_app_config()` to read from thread-local before falling back to global
+This eliminates the need for monkey-patching or thread-local storage:
 
-2. In `_produce()` (runs in thread pool):
-   - Call `set_thread_config_path(self._config_path)` before `self._client.stream()`
-   - Clear thread-local after stream completes
+1. In `_produce()` (runs in thread pool):
+   - Call `push_current_app_config(parsed_config)` before `self._client.stream()`
+   - Call `pop_current_app_config()` in a `finally` block after stream completes
    - Remove `_init_lock` acquisition from `_produce()`
+   - Remove `os.environ["DEER_FLOW_CONFIG_PATH"]` manipulation
+   - Remove `reload_app_config()` calls from `_produce()`
 
-3. In `get_family_adapter()`:
-   - Remove `_init_lock` acquisition around `reload_app_config()` + `DeerFlowClient()` construction
+2. In `get_family_adapter()`:
+   - Remove `_init_lock` acquisition around `DeerFlowClient()` construction
    - Keep `DeerFlowClient(config_path=...)` call — the constructor reads config once
 
-4. Remove `_init_lock` from `adapter.py` module level
+3. Remove `_init_lock` from `adapter.py` module level
 
-**Fallback:** If monkey-patching `get_app_config()` proves fragile (e.g., harness calls it at unexpected times), fall back to forking the vendor harness with a `from_config_dict()` factory method.
+**Caveat:** Python ContextVars propagate to new threads on creation, but `_produce()` runs in a ThreadPoolExecutor where threads are reused. The `push/pop` must happen *inside* `_produce()` (not in the calling async code) to ensure the ContextVar is visible to DeerFlow code running in the same thread. Test this explicitly.
+
+**Fallback:** If ContextVar propagation across ThreadPoolExecutor thread reuse proves unreliable, fall back to forking the vendor harness with a `from_config_dict()` factory method that accepts an explicit config object.
 
 **Concurrency model after change:**
 - `_cache_lock` — still needed for cache mutation (short hold, no I/O)
@@ -151,7 +151,7 @@ Replace the global `reload_app_config()` + `os.environ["DEER_FLOW_CONFIG_PATH"]`
 
 **Drift addressed:** D3
 
-**Current state:** Chat uses `ChatAdapter` which injects `numina-family-data` MCP server. Other 8 capabilities use `_build_context()` to pre-fetch all family data.
+**Current state:** Chat uses `ChatAdapter` which injects `numina-family-data` MCP server. Other 7 capabilities use `_build_context()` to pre-fetch all family data.
 
 **Approach:**
 
@@ -182,9 +182,11 @@ Replace the global `reload_app_config()` + `os.environ["DEER_FLOW_CONFIG_PATH"]`
 
 **Drift addressed:** D2
 
-**Current state:** `_build_message()` outputs `{"skill": "alerts", "context": {...}, "thinking": true}` as JSON.
+**Current state:** `_build_message()` outputs `{"skill": "alerts", "context": {...}, "thinking": true}` as JSON. Note: `_build_prompt()` (dead code at adapter.py:411-414) already uses the `[SKILL:xxx]` format but is not called in the streaming path.
 
-**Target state:** Output natural language that activates DeerFlow's skill trigger matching:
+**Important:** DeerFlow does NOT have a `trigger_phrases` routing mechanism. Skills are injected into the system prompt as a list and the LLM chooses which to invoke based on the message content. The `[SKILL:xxx]` tag helps the LLM identify the intended skill but there is no programmatic routing layer. The original SC5 ("DeerFlow trigger_phrases matching activates") is incorrect — there is no matching to activate.
+
+**Target state:** Output natural language that helps the LLM identify and invoke the correct skill:
 
 ```
 [SKILL:alerts]
@@ -194,12 +196,10 @@ Replace the global `reload_app_config()` + `os.environ["DEER_FLOW_CONFIG_PATH"]`
 {context JSON, pretty-printed}
 ```
 
-**Prerequisite:** Verify DeerFlow's `trigger_phrases` matching works with `[SKILL:xxx]` tags in the message. If it only matches against the skill file's `trigger_phrases` list, we need to include those phrases in the message as well.
-
 **Approach:**
-1. In `skill_loader.py`, add a `trigger_phrases: list[str]` field to `SkillConfig` (read from skill frontmatter)
-2. In `_build_message()`, include trigger phrases in the message text
-3. Keep context data in the message (until U2.2 MCP migration completes), but format it as readable text rather than opaque JSON
+1. Replace `_build_message()` with the existing `_build_prompt()` pattern (which already uses `[SKILL:xxx]`), or unify the two methods
+2. Keep context data in the message (until U2.2 MCP migration completes), but format it as readable text rather than opaque JSON
+3. Update `HARNESS_API.md` to document that `stream()` messages use natural language with `[SKILL:xxx]` tags, not JSON
 
 **Verification:** DeerFlow correctly routes to the intended skill based on trigger phrase matching. Agent output quality unchanged.
 
@@ -207,26 +207,19 @@ Replace the global `reload_app_config()` + `os.environ["DEER_FLOW_CONFIG_PATH"]`
 
 ## Phase 3: Enhancement (Low Risk)
 
-### U3.1 — Gateway API proxy endpoints
+### U3.1 — Gateway API proxy endpoints (already implemented)
 
 **Drift addressed:** D8
 
-**Implements:** Alignment Plan U8 (previously planned but not implemented)
+**Status:** All three Gateway proxy endpoints already exist in `server/apps/agent/app/routers/gateway.py`:
+- `GET /internal/gateway/models` (line 60) — proxy to DeerFlow `GET /api/models`
+- `PUT /internal/gateway/skills/{name}` (line 83) — proxy to `PUT /api/skills/{name}`
+- `DELETE /internal/gateway/threads/{id}` (line 113) — proxy to `DELETE /api/threads/{id}`
+- `POST /internal/gateway/skill-dispatch` (line 141) — additional dispatch endpoint
 
-**Files:**
-- `server/apps/agent/app/routers/cache.py` (extend) or new `app/routers/gateway.py`
-- `server/apps/agent/tests/unit/test_gateway_router.py`
+All require `X-Agent-Token` header. Path parameters validated against `_SAFE_ID_PATTERN` before forwarding (SSRF prevention).
 
-**Endpoints:**
-- `GET /internal/models` — proxy to DeerFlow `GET /api/models`
-- `PUT /internal/skills/{name}` — proxy to `PUT /api/skills/{name}`
-- `DELETE /internal/threads/{id}` — proxy to `DELETE /api/threads/{id}`
-
-All three require `X-Agent-Token` header. Path parameters validated against `_SAFE_ID_PATTERN` before forwarding (SSRF prevention).
-
-**Configuration:** `DEERFLOW_GATEWAY_URL` from `AgentSettings` (already defined).
-
-**Verification:** `pytest tests/unit/test_gateway_router.py -v` passes.
+**Action:** No new code needed. Update SC6 success criteria to reference the actual paths (`/internal/gateway/*`). Verify existing tests cover these endpoints.
 
 ---
 
@@ -272,33 +265,34 @@ All three require `X-Agent-Token` header. Path parameters validated against `_SA
 
 ```
 Phase 1 (corrections):
-  U1.1 (remove thinking_enabled from stream)
-  U1.2 (deprecate raw text path)
+  U1.1 (document thinking_enabled two-level design — NOT a code change)
+  U1.2 (deprecate raw text path — requires adding /events to time_machine first)
   U1.3 (document thinking invariant)
-  → All parallel, zero dependencies
+  → U1.1 and U1.3 are documentation-only, parallel
+  → U1.2 requires adding NDJSON endpoint to time_machine before removing stream_dispatch()
 
 Phase 2 (decoupling):
-  U2.1 (eliminate _init_lock) — independent
-  U2.2 (MCP for all capabilities) — independent but benefits from U2.3
-  U2.3 (natural language trigger) — prerequisite: verify DeerFlow trigger_phrases behavior
-  → U2.1 and U2.2 can proceed in parallel
+  U2.1 (eliminate _init_lock via ContextVar) — independent
+  U2.2 (MCP for all capabilities) — should precede U2.3 (context formatting will be superseded)
+  U2.3 (natural language trigger) — depends on U2.2 for full value; verify existing _build_prompt() pattern
+  → U2.1 and U2.2 can proceed in parallel; U2.3 should follow U2.2
 
 Phase 3 (enhancement):
-  U3.1 (Gateway API proxy) — depends on U2.1 (config isolation for clean Gateway interaction)
-  U3.2 (Suggestions API) — depends on U3.1 (needs Gateway endpoint)
-  U3.3 (Dynamic capabilities) — depends on U3.1 (needs Gateway endpoint)
-  → U3.2 and U3.3 can proceed in parallel after U3.1
+  U3.1 (Gateway API proxy — already implemented, verify only)
+  U3.2 (Suggestions API) — verify DeerFlow suggestions endpoint exists before implementing
+  U3.3 (Dynamic capabilities) — needs user story validation before implementation
+  → U3.1 is verification only; U3.2 and U3.3 can proceed after U3.1 verification
 ```
 
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| Monkey-patching `get_app_config()` breaks on DeerFlow upgrade | Medium | High | Wrap patch in try/except with fallback to current `_init_lock` behavior; add integration test |
-| DeerFlow `trigger_phrases` matching doesn't work with `[SKILL:xxx]` tags | Medium | Low | Include actual trigger phrases in message text; keep JSON fallback |
+| ContextVar propagation across ThreadPoolExecutor thread reuse | Medium | High | Test explicitly: push config in _produce(), verify DeerFlow reads it. Fallback: fork vendor harness with `from_config_dict()` factory |
+| DeerFlow has no `trigger_phrases` routing — LLM selects skill from system prompt | N/A (confirmed) | Low | `[SKILL:xxx]` tag helps LLM identify intent; validate output quality empirically |
 | MCP tool latency adds overhead vs pre-fetched context | Low | Medium | Measure p50/p95 latency before/after; keep `_build_context()` as fallback |
-| Gateway API endpoints not available in vendored DeerFlow version | Low | Medium | Check DeerFlow version and available endpoints before implementing U3.1 |
-| Removing `stream_dispatch()` breaks unknown consumers | Low | High | grep all router files for `stream_dispatch` references; verify frontend only uses NDJSON |
+| Removing `stream_dispatch()` breaks `/stream` router endpoints | High | High | First add NDJSON `/events` endpoint to `time_machine.py`; then deprecate and remove all `/stream` router endpoints alongside the method |
+| DeerFlow `POST /api/threads/{id}/suggestions` endpoint may not exist | Medium | Low | Verify endpoint exists in installed DeerFlow version before implementing U3.2; if absent, use local LLM call for suggestions instead |
 
 ---
 
