@@ -173,7 +173,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
-import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'
+import { TrustedDeviceCard, readDeviceId, recoverFromEtag, PixelLoading } from '@numina/auth'
 import { checkDevice } from '@/api/device'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
@@ -221,8 +221,14 @@ const form = ref({
 
 onMounted(async () => {
   try {
-    const deviceId = readDeviceId()
+    let deviceId = await readDeviceId()
+
+    if (!deviceId) {
+      deviceId = await recoverFromEtag()
+    }
+
     if (!deviceId) return
+
     const { data } = await checkDevice(deviceId)
     if (data.trusted && data.temp_token && data.display_name && data.avatar_color) {
       tempToken.value = data.temp_token
