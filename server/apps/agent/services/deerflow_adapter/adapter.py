@@ -175,8 +175,10 @@ class DeerFlowAdapter:
     ) -> AsyncGenerator[StreamChunk, None]:
         """Dispatch a skill call and yield text chunks as they arrive.
 
-        enable_thinking: if True and the model supports it, extended thinking is enabled.
-        Note: thinking flag is passed via context metadata; DeerFlow harness reads it.
+        enable_thinking: per-call override passed to client.stream() via **kwargs.
+        DeerFlowClient.stream() routes kwargs into _get_runnable_config(), which
+        overrides the init-time thinking_enabled default for this specific call.
+        See HARNESS_API.md OD-4 for the two-level control model.
 
         _CHECKPOINTER_LOCK is NOT held across the stream — only dispatch() needs it
         for synchronous SQLite checkpoint writes. Streaming reads do not write to the

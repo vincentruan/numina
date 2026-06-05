@@ -172,3 +172,31 @@ dispatch calls.
 **Decision: use `asyncio.Lock` for checkpointer writes** (not WAL mode),
 because the harness creates the SQLite connection internally and we cannot
 configure WAL mode from outside.
+
+## OD-4: Per-call parameter overrides via `stream()` kwargs
+
+`DeerFlowClient.stream()` accepts `**kwargs` that override init-time defaults on a
+per-call basis. The harness routes these kwargs into `_get_runnable_config()`, which
+merges them with the constructor defaults.
+
+### Two-level control model
+
+| Parameter | Init-time (constructor) | Per-call (stream kwargs) |
+|-----------|------------------------|-------------------------|
+| `thinking_enabled` | Default for all calls | Override for this call |
+| `model_name` | Default model | Override for this call |
+| `subagent_enabled` | Default for all calls | Override for this call |
+| `plan_mode` | Default for all calls | Override for this call |
+
+### Usage in Numina
+
+The orchestrator constructs `DeerFlowClient` with `thinking_enabled` set to the
+provider's capability flag (whether the model supports thinking at all). Per-request,
+`enable_thinking` is passed as `thinking_enabled=enable_thinking` to `stream()`, which
+overrides the init-time default for that specific call.
+
+This means:
+- Provider does NOT support thinking → init-time `thinking_enabled=False` → per-call
+  override has no effect (model cannot think regardless)
+- Provider supports thinking → init-time `thinking_enabled=True` → per-call override
+  controls whether thinking is active for this request
