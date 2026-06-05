@@ -4,6 +4,7 @@ from fastapi import APIRouter, Cookie, Depends, Request, Response
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from apps.backend.app.auth.captcha import verify_captcha
 from apps.backend.app.auth.cookies import clear_auth_cookies, clear_child_auth_cookies
 from apps.backend.app.auth.deps import (
     ACCESS_TOKEN_COOKIE,
@@ -23,6 +24,9 @@ from apps.backend.app.middleware.rate_limit import _get_real_client_ip
 from apps.backend.app.schemas.device import (
     DeviceCheckRequest,
     DeviceCheckResponse,
+    DeviceCheckUserItem,
+    DeviceSelectRequest,
+    DeviceSelectResponse,
     DeviceSessionResponse,
     DeviceTrustRequest,
     DeviceTrustResponse,
@@ -299,43 +303,125 @@ def check_device(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Check if a device_id is trusted. No auth required — used before login.
+    """Check if a device_id is trusted. Returns all bound users (max 6).
 
-    Rate-limited by IP (20/min) because the endpoint is unauthenticated and
-    returns a temp_token on success. The token alone cannot complete login
-    (still requires PIN/password), but rate-limiting prevents bulk probing.
+    No auth required — used before login. Rate-limited by IP (20/min).
     """
     client_ip = _get_real_client_ip(request)
     _check_device_check_rate_limit(client_ip)
 
     from datetime import datetime
 
-    from apps.backend.app.auth.deps import create_temp_token
     from apps.backend.app.models.device_session import DeviceSession
     from apps.backend.app.models.user import User
 
     now = datetime.utcnow()
-    session = (
+    sessions = (
         db.query(DeviceSession)
         .filter(
             DeviceSession.device_id == req.device_id,
             DeviceSession.is_revoked.is_(False),
             DeviceSession.expires_at > now,
         )
+        .order_by(DeviceSession.last_seen_at.desc())
+        .limit(6)
+        .all()
+    )
+
+    if not sessions:
+        return DeviceCheckResponse(trusted=False)
+
+    user_ids = [s.user_id for s in sessions]
+    users = (
+        db.query(User)
+        .filter(User.id.in_(user_ids), User.is_active.is_(True))
+        .all()
+    )
+    user_map = {u.id: u for u in users}
+
+    items: list[DeviceCheckUserItem] = []
+    for s in sessions:
+        user = user_map.get(s.user_id)
+        if not user:
+            continue
+
+        if user.role == "child" and user.pin_hash:
+            second_factor_type = "emoji_pin"
+        elif user.second_factor_enabled and user.second_factor_type:
+            second_factor_type = user.second_factor_type
+        else:
+            second_factor_type = None
+
+        items.append(
+            DeviceCheckUserItem(
+                user_id=user.id,
+                display_name=user.display_name,
+                avatar_color=user.avatar_color,
+                role=user.role,
+                second_factor_type=second_factor_type,
+                last_seen_at=s.last_seen_at,
+            )
+        )
+
+    if not items:
+        return DeviceCheckResponse(trusted=False)
+
+    return DeviceCheckResponse(trusted=True, users=items)
+
+
+@router.post("/device/select", response_model=DeviceSelectResponse)
+async def select_device(
+    req: DeviceSelectRequest,
+    request: Request,
+    response: Response,
+    _: None = Depends(verify_captcha),
+    db: Session = Depends(get_db),
+):
+    """Select a user from device-bound accounts. Requires ALTCHA captcha.
+
+    If user has second factor: returns temp_token for PIN step.
+    If no second factor: sets auth cookies and returns directly.
+    """
+    client_ip = _get_real_client_ip(request)
+    _check_device_check_rate_limit(client_ip)
+
+    from datetime import datetime, timedelta
+
+    from apps.backend.app.auth.cookies import set_auth_cookies
+    from apps.backend.app.auth.deps import (
+        create_access_token,
+        create_refresh_token,
+        create_temp_token,
+    )
+    from apps.backend.app.models.device_session import DeviceSession
+    from apps.backend.app.models.user import User
+
+    now = datetime.utcnow()
+    user_id = int(req.user_id)
+
+    session = (
+        db.query(DeviceSession)
+        .filter(
+            DeviceSession.device_id == req.device_id,
+            DeviceSession.user_id == user_id,
+            DeviceSession.is_revoked.is_(False),
+            DeviceSession.expires_at > now,
+        )
         .first()
     )
     if not session:
-        return DeviceCheckResponse(trusted=False)
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
 
-    user = db.query(User).filter(
-        User.id == session.user_id,
-        User.is_active.is_(True),
-    ).first()
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
     if not user:
-        return DeviceCheckResponse(trusted=False)
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
 
-    temp_token = create_temp_token(user.id, user.role)
+    # Refresh session last_seen_at + expires_at (rolling window)
+    session.last_seen_at = now
+    session.expires_at = now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS)
+    db.commit()
 
+    # Determine second factor
     if user.role == "child" and user.pin_hash:
         second_factor_type = "emoji_pin"
     elif user.second_factor_enabled and user.second_factor_type:
@@ -343,15 +429,23 @@ def check_device(
     else:
         second_factor_type = None
 
-    return DeviceCheckResponse(
-        trusted=True,
-        device_name=session.device_name,
-        user_id=user.id,
-        temp_token=temp_token,
-        display_name=user.display_name,
-        avatar_color=user.avatar_color,
-        second_factor_type=second_factor_type,
-    )
+    if second_factor_type:
+        temp_token = create_temp_token(user.id, user.role)
+        return DeviceSelectResponse(
+            second_factor_required=True,
+            temp_token=temp_token,
+            second_factor_type=second_factor_type,
+            display_name=user.display_name,
+            avatar_color=user.avatar_color,
+        )
+
+    # No second factor — issue tokens directly
+    claims = {"sub": str(user.id), "fid": str(user.family_id), "role": user.role}
+    access_token = create_access_token(claims)
+    refresh_token = create_refresh_token(claims)
+    set_auth_cookies(response, access_token, refresh_token)
+
+    return DeviceSelectResponse(second_factor_required=False)
 
 
 @router.get("/devices/family", response_model=list[FamilyDeviceResponse])
