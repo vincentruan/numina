@@ -22,7 +22,47 @@
 
       <!-- Step 1: username + password -->
       <Transition name="step-fade" mode="out-in">
-      <div v-if="step === 1" key="step1" class="login-form">
+      <!-- Step 0: Account carousel -->
+      <div v-if="step === 0" key="step0" class="account-select-step">
+        <NuminaLogo class="numina-logo" :width="220" />
+        <p class="step0-subtitle">{{ t('login.selectAccount') }}</p>
+
+        <van-swipe :loop="false" :width="260" :show-indicators="true" class="account-swipe">
+          <van-swipe-item
+            v-for="user in boundUsers"
+            :key="user.userId"
+            @click="onSelectUser(user)"
+          >
+            <div class="account-card" :class="{ selected: selectedUser?.userId === user.userId }">
+              <div class="account-avatar" :style="{ background: user.avatarColor }">
+                {{ user.displayName.charAt(0) }}
+              </div>
+              <p class="account-name">{{ user.displayName }}</p>
+              <span class="account-role">{{ t(`role.${user.role}`) }}</span>
+            </div>
+          </van-swipe-item>
+
+          <van-swipe-item @click="switchToStep1">
+            <div class="account-card account-card--other">
+              <div class="account-avatar account-avatar--add">+</div>
+              <p class="account-name">{{ t('login.otherAccount') }}</p>
+            </div>
+          </van-swipe-item>
+        </van-swipe>
+
+        <Transition name="step-fade">
+          <div v-if="selectedUser" class="select-captcha-area">
+            <p class="captcha-hint">{{ t('login.verifyToContinue') }}</p>
+            <AltchaWidget
+              ref="selectAltchaRef"
+              v-model="selectAltcha"
+              endpoint="login"
+            />
+          </div>
+        </Transition>
+      </div>
+
+      <div v-else-if="step === 1" key="step1" class="login-form">
         <van-cell-group inset>
           <van-field
             v-model="form.username"
@@ -167,14 +207,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
 import { TrustedDeviceCard, readDeviceId, recoverFromEtag, PixelLoading } from '@numina/auth'
-import { checkDevice } from '@/api/device'
+import { checkDevice, selectDeviceUser } from '@/api/device'
+import type { DeviceCheckUser } from '@/api/device'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
 const { t } = useI18n()
@@ -190,7 +231,7 @@ const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 const deerCanvasRef = ref<HTMLCanvasElement | null>(null)
 useDeerField(bgCanvasRef, deerCanvasRef)
 
-const step = ref<1 | 2>(1)
+const step = ref<0 | 1 | 2>(1)
 const stepLoading = ref(false)
 const tempToken = ref('')
 const secondFactorType = ref('')
@@ -209,6 +250,19 @@ interface TrustedUser {
   avatarColor: string
 }
 const trustedUser = ref<TrustedUser | null>(null)
+
+interface BoundUser {
+  userId: string
+  displayName: string
+  avatarColor: string
+  role: string
+  secondFactorType: string | null
+}
+const boundUsers = ref<BoundUser[]>([])
+const selectedUser = ref<BoundUser | null>(null)
+const deviceIdRef = ref<string | null>(null)
+const selectAltchaRef = ref()
+const selectAltcha = ref<string | undefined>(undefined)
 
 // User info from step1 response — shown in step2 header
 const step2User = ref<{ displayName: string; avatarColor: string } | null>(null)
@@ -229,19 +283,21 @@ onMounted(async () => {
 
     if (!deviceId) return
 
+    deviceIdRef.value = deviceId
     const { data } = await checkDevice(deviceId)
-    if (data.trusted && data.temp_token && data.display_name && data.avatar_color) {
-      tempToken.value = data.temp_token
-      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
-      trustedUser.value = { displayName: data.display_name, avatarColor: data.avatar_color }
-      stepLoading.value = true
-      setTimeout(() => {
-        step.value = 2
-        stepLoading.value = false
-      }, 700)
+
+    if (data.trusted && data.users.length > 0) {
+      boundUsers.value = data.users.map((u: DeviceCheckUser) => ({
+        userId: String(u.user_id),
+        displayName: u.display_name,
+        avatarColor: u.avatar_color,
+        role: u.role,
+        secondFactorType: u.second_factor_type,
+      }))
+      step.value = 0
     }
   } catch {
-    // Device check failure is non-fatal — fall through to normal step 1
+    // Non-fatal — fall through to step 1
   }
 })
 
@@ -307,6 +363,71 @@ async function onStep1Submit() {
     loading.value = false
   }
 }
+
+function onSelectUser(user: BoundUser) {
+  selectedUser.value = user
+}
+
+function switchToStep1() {
+  step.value = 1
+  selectedUser.value = null
+  boundUsers.value = []
+}
+
+async function onSelectAltchaComplete() {
+  if (!selectedUser.value || !deviceIdRef.value || !selectAltcha.value) return
+  loading.value = true
+  try {
+    const { data } = await selectDeviceUser(
+      deviceIdRef.value,
+      selectedUser.value.userId,
+      selectAltcha.value,
+    )
+    if (data.second_factor_required && data.temp_token) {
+      tempToken.value = data.temp_token
+      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
+      trustedUser.value = {
+        displayName: data.display_name ?? selectedUser.value.displayName,
+        avatarColor: data.avatar_color ?? selectedUser.value.avatarColor,
+      }
+      stepLoading.value = true
+      setTimeout(() => {
+        step.value = 2
+        stepLoading.value = false
+      }, 700)
+    } else {
+      await authStore.fetchMe()
+      showToast(t('toast.loginSuccess'))
+      authStore.showTrustPrompt = true
+      const user = authStore.user
+      if (user?.role === 'child') {
+        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+        window.location.href = `${baseUrl}/child/`
+        return
+      }
+      router.push('/')
+    }
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: { code?: string; message?: string }; status?: number } }
+    const code = axiosError.response?.data?.code
+    if (code) {
+      const i18nKey = `errors.${code}`
+      showToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
+    } else {
+      showToast(t('toast.loginFailedGeneric'))
+    }
+    selectAltchaRef.value?.reset()
+    selectAltcha.value = undefined
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(selectAltcha, (val) => {
+  if (val) {
+    onSelectAltchaComplete()
+  }
+})
 
 function onNumpadPress(key: number | string) {
   flashKey.value = key
@@ -1017,6 +1138,100 @@ async function submitEmojiPin() {
 .step-fade-leave-to {
   opacity: 0;
   transform: translateX(-20px);
+}
+
+/* Step 0: Account carousel */
+.account-select-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 60px;
+}
+
+.step0-subtitle {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.account-swipe {
+  width: 100%;
+  max-width: 340px;
+}
+
+.account-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  border: 2px solid rgba(189, 187, 255, 0.35);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-height: 160px;
+  justify-content: center;
+}
+
+.account-card.selected {
+  border-color: #bdbbff;
+  box-shadow: 0 0 20px rgba(189, 187, 255, 0.4);
+}
+
+.account-card--other {
+  opacity: 0.7;
+}
+
+.account-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.account-avatar--add {
+  background: rgba(189, 187, 255, 0.2);
+  font-size: 32px;
+  font-weight: 300;
+}
+
+.account-name {
+  color: var(--text-primary, #f5f5f5);
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.account-role {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.select-captcha-area {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.captcha-hint {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+}
+
+.account-swipe :deep(.van-swipe__indicator) {
+  background: rgba(189, 187, 255, 0.3);
+}
+
+.account-swipe :deep(.van-swipe__indicator--active) {
+  background: #bdbbff;
 }
 </style>
 
