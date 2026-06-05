@@ -314,7 +314,7 @@ class DeerFlowAdapter:
                             os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
                         try:
                             reload_app_config(str(self._config_path))
-                            message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
+                            message = self._build_prompt(skill_name, context)
                             for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
                                 _process_event(event)
                         finally:
@@ -329,7 +329,7 @@ class DeerFlowAdapter:
                                 os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
                 else:
                     # Global config mode - no serialization needed
-                    message = self._build_message(skill_name, context, enable_thinking=enable_thinking)
+                    message = self._build_prompt(skill_name, context)
                     for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
                         _process_event(event)
             except Exception as e:
@@ -361,7 +361,7 @@ class DeerFlowAdapter:
     def _sync_dispatch(self, skill_name: str, context: RedactedContext, thread_id: str) -> str:
         """Synchronous DeerFlow call — runs in thread pool executor."""
         try:
-            message = self._build_message(skill_name, context, enable_thinking=False)
+            message = self._build_prompt(skill_name, context)
             chunks = []
 
             if self._config_path:
@@ -414,19 +414,6 @@ class DeerFlowAdapter:
         """Build a skill-dispatch prompt from the redacted context."""
         ctx_dict = context.model_dump(exclude={"redaction_log"})
         return f"[SKILL:{skill_name}]\n{json.dumps(ctx_dict, ensure_ascii=False, indent=2)}"
-
-    def _build_message(self, skill_name: str, context: RedactedContext, enable_thinking: bool = False) -> str:
-        """Build the message to send to DeerFlow for stream_dispatch.
-
-        Encodes skill name, context, and thinking flag as JSON.
-        DeerFlow harness reads the 'thinking' field to enable extended thinking.
-        """
-        context_dict = context.model_dump()
-        return json.dumps({
-            "skill": skill_name,
-            "context": context_dict,
-            "thinking": enable_thinking,
-        })
 
 
 def _make_adapter() -> DeerFlowAdapter | None:
