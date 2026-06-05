@@ -251,6 +251,26 @@ def revoke_all_devices(
     return None
 
 
+@router.get("/device-ping", include_in_schema=False)
+def device_ping(request: Request, response: Response):
+    """ETag-based device identity persistence.
+
+    Browser sends If-None-Match with stored device_id.
+    Returns the device_id for JS-layer recovery when other storage is cleared.
+    """
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match:
+        device_id = if_none_match.strip('"')
+        response.headers["ETag"] = f'"{device_id}"'
+        response.headers["Cache-Control"] = (
+            f"private, max-age={settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600}"
+        )
+        return {"device_id": device_id}
+
+    response.headers["Cache-Control"] = "no-store"
+    return {"device_id": None}
+
+
 _DEVICE_CHECK_RATE_LIMIT_PER_MINUTE = 20
 
 
