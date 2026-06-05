@@ -15,10 +15,7 @@ import traceback
 from collections.abc import AsyncGenerator
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal
-
-from deerflow.config.app_config import reload_app_config
 
 from apps.agent.schemas.context import RedactedContext
 from apps.agent.services.deerflow_adapter.exceptions import (
@@ -27,7 +24,6 @@ from apps.agent.services.deerflow_adapter.exceptions import (
     DeerFlowTimeoutError,
 )
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
-    _init_lock,
     get_family_adapter,
     invalidate_family_adapter,
 )
@@ -51,7 +47,7 @@ class StreamChunk:
 # not at import time, to avoid circular imports and allow test overrides.
 _executor: ThreadPoolExecutor | None = None
 _semaphore: asyncio.Semaphore | None = None
-_init_lock = threading.Lock()  # noqa: F811 — intentional redefinition; module-level lock used by _produce()
+_executor_lock = threading.Lock()  # guards lazy _executor / _semaphore initialization only
 
 # Separate lock for SQLite checkpointer writes — prevents SQLITE_BUSY under concurrency.
 # The harness uses SqliteSaver (langgraph-checkpoint-sqlite) which does not handle
@@ -62,7 +58,7 @@ _CHECKPOINTER_LOCK = asyncio.Lock()
 def _get_executor() -> ThreadPoolExecutor:
     global _executor
     if _executor is None:
-        with _init_lock:
+        with _executor_lock:
             if _executor is None:
                 from apps.agent.app.config import settings
                 _executor = ThreadPoolExecutor(
@@ -75,7 +71,7 @@ def _get_executor() -> ThreadPoolExecutor:
 def _get_semaphore() -> asyncio.Semaphore:
     global _semaphore
     if _semaphore is None:
-        with _init_lock:
+        with _executor_lock:
             if _semaphore is None:
                 from apps.agent.app.config import settings
                 _semaphore = asyncio.Semaphore(settings.DEERFLOW_CONCURRENCY)
@@ -297,38 +293,26 @@ class DeerFlowAdapter:
         def _produce() -> None:
             """Run in thread pool — puts StreamChunk objects into queue, None signals end."""
             try:
-                # For family-mode adapters, hold _init_lock for the entire stream to prevent
-                # concurrent requests from corrupting the global DeerFlow config singleton.
-                # This serializes family requests but guarantees config correctness.
                 if self._config_path:
-                    with _init_lock:
-                        # Set DEER_FLOW_CONFIG_PATH env var so get_app_config() resolves to our temp config
-                        prev_config_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
-                        os.environ["DEER_FLOW_CONFIG_PATH"] = str(self._config_path)
-                        # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH so ExtensionsConfig.from_file()
-                        # reads our per-family extensions_config.json (contains MCP headers
-                        # including X-Caller-User-Id for caller-bound principal).
-                        extensions_path = Path(self._config_path).parent / "extensions_config.json"
-                        prev_extensions_path = os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
-                        if extensions_path.exists():
-                            os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
-                        try:
-                            reload_app_config(str(self._config_path))
-                            message = self._build_prompt(skill_name, context)
-                            for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
-                                _process_event(event)
-                        finally:
-                            # Restore previous value (or remove if it wasn't set)
-                            if prev_config_path is not None:
-                                os.environ["DEER_FLOW_CONFIG_PATH"] = prev_config_path
-                            else:
-                                os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
-                            if prev_extensions_path is not None:
-                                os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_path
-                            else:
-                                os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                    # Use DeerFlow's ContextVar API to inject per-family config into this
+                    # thread's context without touching global env vars or holding a lock.
+                    # ContextVars are isolated per ThreadPoolExecutor worker, so concurrent
+                    # family requests see their own config.
+                    from deerflow.config.app_config import (
+                        pop_current_app_config,
+                        push_current_app_config,
+                        reload_app_config,
+                    )
+                    family_config = reload_app_config(str(self._config_path))
+                    push_current_app_config(family_config)
+                    try:
+                        message = self._build_prompt(skill_name, context)
+                        for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                            _process_event(event)
+                    finally:
+                        pop_current_app_config()
                 else:
-                    # Global config mode - no serialization needed
+                    # Global config mode — no per-family override needed
                     message = self._build_prompt(skill_name, context)
                     for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
                         _process_event(event)
@@ -365,29 +349,29 @@ class DeerFlowAdapter:
             chunks = []
 
             if self._config_path:
-                with _init_lock:
-                    prev_config_path = os.environ.get("DEER_FLOW_CONFIG_PATH")
-                    os.environ["DEER_FLOW_CONFIG_PATH"] = str(self._config_path)
-                    try:
-                        reload_app_config(str(self._config_path))
-                        for event in self._client.stream(
-                            message=message,
-                            thread_id=thread_id,
+                from deerflow.config.app_config import (
+                    pop_current_app_config,
+                    push_current_app_config,
+                    reload_app_config,
+                )
+                family_config = reload_app_config(str(self._config_path))
+                push_current_app_config(family_config)
+                try:
+                    for event in self._client.stream(
+                        message=message,
+                        thread_id=thread_id,
+                    ):
+                        if (
+                            hasattr(event, "type")
+                            and event.type == "messages-tuple"
+                            and isinstance(event.data, dict)
+                            and event.data.get("type") == "ai"
                         ):
-                            if (
-                                hasattr(event, "type")
-                                and event.type == "messages-tuple"
-                                and isinstance(event.data, dict)
-                                and event.data.get("type") == "ai"
-                            ):
-                                content = event.data.get("content")
-                                if isinstance(content, str) and content:
-                                    chunks.append(content)
-                    finally:
-                        if prev_config_path is not None:
-                            os.environ["DEER_FLOW_CONFIG_PATH"] = prev_config_path
-                        else:
-                            os.environ.pop("DEER_FLOW_CONFIG_PATH", None)
+                            content = event.data.get("content")
+                            if isinstance(content, str) and content:
+                                chunks.append(content)
+                finally:
+                    pop_current_app_config()
             else:
                 for event in self._client.stream(
                     message=message,
