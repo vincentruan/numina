@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = _DEFAULT_SECRET
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    DEVICE_TRUST_EXPIRE_DAYS: int = 30  # Device trust expiry (days since last login)
     # WebAuthn settings
     WEBAUTHN_RP_ID: str = "localhost"  # Domain (no protocol, no port)
     WEBAUTHN_RP_NAME: str = "Numina"
