@@ -413,6 +413,7 @@ export interface AIReportSection {
   score?: number
   label?: string
   narrative?: string
+  suggestions?: string[]
   data?: Record<string, unknown>
 }
 

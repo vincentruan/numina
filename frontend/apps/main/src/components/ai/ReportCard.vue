@@ -8,6 +8,15 @@
       <ReportScoreBadge :score="score" :max="5" />
     </div>
     <div class="card-narrative" v-html="renderedNarrative" />
+    <div v-if="suggestions?.length" class="card-suggestions">
+      <div class="suggestions-header">
+        <van-icon name="bulb-o" class="suggestions-icon" aria-hidden="true" />
+        <span>{{ t('aiReport.suggestions') }}</span>
+      </div>
+      <ul class="suggestions-list">
+        <li v-for="(item, idx) in suggestions" :key="idx">{{ item }}</li>
+      </ul>
+    </div>
     <slot />
   </div>
 </template>
@@ -16,7 +25,10 @@
 import { computed } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { useI18n } from 'vue-i18n'
 import ReportScoreBadge from './ReportScoreBadge.vue'
+
+const { t } = useI18n()
 
 const ASSISTANT_PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
@@ -28,6 +40,7 @@ const props = defineProps<{
   title: string
   score: number
   narrative: string
+  suggestions?: string[]
 }>()
 
 const renderedNarrative = computed(() => {
@@ -70,7 +83,7 @@ const renderedNarrative = computed(() => {
   line-height: 1.6;
   margin: 0;
   :deep(p) {
-    margin: 0 0 4px;
+    margin: 0 0 8px;
     &:last-child { margin-bottom: 0; }
   }
   :deep(strong) {
@@ -99,6 +112,9 @@ const renderedNarrative = computed(() => {
     padding-left: 18px;
   }
   :deep(li) {
+    margin: 3px 0;
+  }
+  :deep(ol li) {
     margin: 2px 0;
   }
   :deep(code) {
@@ -107,5 +123,32 @@ const renderedNarrative = computed(() => {
     border-radius: 3px;
     font-size: 12px;
   }
+}
+.card-suggestions {
+  margin-top: 10px;
+  border-top: 1px solid var(--separator);
+  padding-top: 10px;
+}
+.suggestions-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--van-primary-color);
+  margin-bottom: 6px;
+}
+.suggestions-icon {
+  font-size: 16px;
+}
+.suggestions-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.suggestions-list li {
+  margin: 3px 0;
 }
 </style>

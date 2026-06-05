@@ -30,22 +30,26 @@ REPORT_PROMPT_TEMPLATE = """你是一位专业的家庭财务顾问。以下是�
 {{
   "net_worth_health": {{
     "score": <1-5整数>,
-    "narrative": "<50-100字的净资产健康状况分析>"
+    "narrative": "<150-350字净资产健康状况分析，使用markdown格式：用**加粗**突出关键结论，用换行分段>",
+    "suggestions": ["<建议1，15-40字>", "<建议2，15-40字>"]
   }},
   "allocation_analysis": {{
     "score": <1-5整数>,
-    "narrative": "<50-100字的资产配置分析>"
+    "narrative": "<150-350字资产配置分析，使用markdown格式：用**加粗**突出关键结论，用换行分段>",
+    "suggestions": ["<建议1，15-40字>", "<建议2，15-40字>", "<建议3，15-40字>"]
   }},
   "liability_pressure": {{
     "score": <1-5整数>,
-    "narrative": "<50-100字的负债压力分析，无负债时score给5>"
+    "narrative": "<150-350字负债压力分析，使用markdown格式：用**加粗**突出关键结论，用换行分段，无负债时score给5>",
+    "suggestions": ["<建议1，15-40字>"]
   }},
   "asset_efficiency": {{
     "score": <1-5整数>,
-    "narrative": "<50-100字的资产效率分析>"
+    "narrative": "<150-350字资产效率分析，使用markdown格式：用**加粗**突出关键结论，用换行分段>",
+    "suggestions": ["<建议1，15-40字>", "<建议2，15-40字>"]
   }},
   "overall_score": <20-100整数>,
-  "summary": "<100-150字的综合总结和核心建议>"
+  "summary": "<100-250字综合总结，使用markdown格式：用**加粗**突出核心问题，用有序列表列出核心建议>"
 }}
 
 评分标准：1=很差，2=较差，3=一般，4=良好，5=优秀
@@ -53,7 +57,13 @@ overall_score 计算方式（必须严格按此公式）：
   overall_score = round((net_worth_health.score * 0.30 + allocation_analysis.score * 0.25 + liability_pressure.score * 0.25 + asset_efficiency.score * 0.20) * 20)
   示例：各维度均为4分 → (4*0.30 + 4*0.25 + 4*0.25 + 4*0.20) * 20 = 4 * 20 = 80
   示例：各维度均为5分 → 5 * 20 = 100
-  overall_score 范围：20（全1分）到 100（全5分），不得输出 0"""
+  overall_score 范围：20（全1分）到 100（全5分），不得输出 0
+
+narrative 格式要求：
+- 用 **加粗** 突出关键结论
+- 用 \\n\\n 分段（结论段 + 展开段）
+- 禁止使用标题（#）和表格
+- 使用观察性语言：「观察到」「数据显示」，严禁提供投资建议"""
 
 
 def _build_data_summary(overview: dict, allocation: dict, trend: dict, low_usage: list, liabilities: list) -> str:
@@ -148,7 +158,7 @@ async def generate_health_report(
     prompt = REPORT_PROMPT_TEMPLATE.format(data_summary=data_summary)
 
     try:
-        raw = await llm.complete(prompt, max_tokens=800)
+        raw = await llm.complete(prompt, max_tokens=2000)
         # Strip markdown code fences if present, then fall back to brace extraction
         fence_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', raw)
         if fence_match:

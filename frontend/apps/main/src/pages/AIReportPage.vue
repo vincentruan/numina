@@ -50,7 +50,7 @@
           </div>
           <div class="overall-label">{{ t('aiReport.overallScore') }}</div>
         </div>
-        <p class="overall-summary">{{ currentReport.summary }}</p>
+        <p class="overall-summary" v-html="renderedSummary" />
         <div class="report-meta">
           <span>{{ t('aiReport.generatedAt', { time: formatDate(reportGeneratedAt) }) }}</span>
           <span v-if="currentReport.data_completeness_score != null">
@@ -66,6 +66,7 @@
           :title="t('aiReport.netWorthHealth')"
           :score="currentReport.net_worth_health?.score ?? 0"
           :narrative="currentReport.net_worth_health?.narrative ?? ''"
+          :suggestions="currentReport.net_worth_health?.suggestions"
         >
           <div v-if="currentReport.net_worth_health?.data?.net_worth != null" class="card-data">
             <div class="data-row">
@@ -86,6 +87,7 @@
           :title="t('aiReport.allocationAnalysis')"
           :score="currentReport.allocation_analysis?.score ?? 0"
           :narrative="currentReport.allocation_analysis?.narrative ?? ''"
+          :suggestions="currentReport.allocation_analysis?.suggestions"
         >
           <div v-if="currentReport.allocation_analysis?.data?.items?.length" class="alloc-bars">
             <div
@@ -107,6 +109,7 @@
           :title="t('aiReport.liabilityPressure')"
           :score="currentReport.liability_pressure?.score ?? 0"
           :narrative="currentReport.liability_pressure?.narrative ?? ''"
+          :suggestions="currentReport.liability_pressure?.suggestions"
         >
           <div v-if="currentReport.liability_pressure?.data" class="card-data">
             <div class="data-row">
@@ -121,6 +124,7 @@
           :title="t('aiReport.assetEfficiency')"
           :score="currentReport.asset_efficiency?.score ?? 0"
           :narrative="currentReport.asset_efficiency?.narrative ?? ''"
+          :suggestions="currentReport.asset_efficiency?.suggestions"
         >
           <div v-if="currentReport.asset_efficiency?.data" class="card-data">
             <div class="data-row">
@@ -149,6 +153,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
 import { getAIReport } from '@/api/ai'
 import type { AIReport } from '@/types'
@@ -156,6 +162,11 @@ import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
+
+const SUMMARY_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
 
 const { t } = useI18n()
 
@@ -197,6 +208,12 @@ const scoreProgress = computed(() => {
   const score = currentReport.value?.overall_score ?? 0
   // Circle circumference is 2πr = 2 * π * 54 ≈ 339, but we use 324 for smooth animation
   return (score / 100) * 324
+})
+
+const renderedSummary = computed(() => {
+  if (!currentReport.value?.summary) return ''
+  const raw = marked.parse(currentReport.value.summary, { async: false }) as string
+  return DOMPurify.sanitize(raw, SUMMARY_PURIFY_CONFIG)
 })
 
 function formatMoney(val: number | null | undefined): string {
@@ -324,6 +341,21 @@ onMounted(async () => {
   color: var(--text-primary);
   line-height: 1.6;
   margin: 0 0 10px;
+  :deep(p) {
+    margin: 0 0 6px;
+    &:last-child { margin-bottom: 0; }
+  }
+  :deep(strong) {
+    font-weight: 600;
+  }
+  :deep(ol),
+  :deep(ul) {
+    margin: 4px 0;
+    padding-left: 18px;
+  }
+  :deep(li) {
+    margin: 2px 0;
+  }
 }
 .report-meta {
   display: flex;

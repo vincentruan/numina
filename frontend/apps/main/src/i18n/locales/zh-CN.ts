@@ -2052,6 +2052,7 @@ export default {
     scoreGood: '良好',
     scoreFair: '一般',
     scoreNeedsImprovement: '待改善',
+    suggestions: '💡 优化建议',
   },
   aiAlerts: {
     title: '资产老化预警',

@@ -79,15 +79,23 @@ allowed-tools:
 报告正文结束后，你**必须**紧跟输出如下格式的数据块：
 
 <!-- STRUCTURED_DATA
-{"overall_score": 65, "data_completeness_score": 80, "net_worth_health": {"score": 4, "narrative": "净资产2800万，基础良好"}, "allocation_analysis": {"score": 2, "narrative": "房产占比95%过于集中"}, "liability_pressure": {"score": 3, "narrative": "资产负债率51%偏高"}, "asset_efficiency": {"score": 2, "narrative": "流动资产仅占2%"}, "summary": "家庭净资产较高但资产配置过于集中在房产，流动性严重不足，建议逐步优化配置"}
+{"overall_score": 65, "data_completeness_score": 80, "net_worth_health": {"score": 4, "narrative": "**净资产基础良好**，总资产2800万，月环比增长1.2%。\n\n资产规模在同类家庭中处于**中上水平**，但需关注增长趋势的持续性。", "suggestions": ["建议保持当前储蓄节奏，关注月环比变化", "可考虑将部分流动资金配置为低风险理财产品"]}, "allocation_analysis": {"score": 2, "narrative": "**房产占比95%过于集中**，流动资产仅占2%，金融资产占3%。\n\n资产流动性严重不足，一旦需要大额支出可能面临变现困难。", "suggestions": ["建议逐步将资产配置向金融资产倾斜，目标流动资产占比≥10%", "可设置每月定投计划分散房产风险", "关注定期存款到期时间，提前规划资金用途"]}, "liability_pressure": {"score": 3, "narrative": "**资产负债率51%偏高**，3笔贷款中2笔为房贷，月供占比约45%。\n\n虽然负债以房贷为主（相对良性），但月供占收入比例接近警戒线。", "suggestions": ["建议控制月供占收入比在40%以内", "如有提前还贷能力，优先偿还利率较高的贷款"]}, "asset_efficiency": {"score": 2, "narrative": "**低效资产5项**，日均持有成本约380元，主要集中在闲置电子产品和未使用家电。\n\n这些资产的使用频率低但折旧持续，拉低了整体资产效率。", "suggestions": ["建议对闲置超过6个月的资产考虑二手出售或捐赠", "未来购置大件前设置7天冷静期，减少冲动消费"]}, "summary": "家庭净资产较高但**资产配置过于集中在房产**，流动性严重不足。\n\n**核心建议：**\n1. 逐步优化配置，提升流动资产占比\n2. 控制月供比例，缓解负债压力\n3. 盘活低效资产，降低持有成本"}
 -->
 
 **字段说明：**
 - `overall_score`: 20-100 整数。公式：round((net_worth_health.score * 0.30 + allocation_analysis.score * 0.25 + liability_pressure.score * 0.25 + asset_efficiency.score * 0.20) * 20)
 - `data_completeness_score`: 0-100，数据录入完整度
 - 四个维度 score: 1-5 整数（1=很差 2=较差 3=一般 4=良好 5=优秀）
-- `narrative`: 每个维度 30-80 字中文说明
-- `summary`: 80-150 字综合总结
+- `narrative`: 每个维度 150-350 字中文说明，**必须使用 markdown 格式**：
+  - 用 `**加粗**` 突出关键结论
+  - 用 `\n\n` 分段（结论段 + 展开段）
+  - 可使用有序/无序列表展开细节
+  - 禁止使用标题（#），禁止使用表格
+- `suggestions`: 每个维度 2-3 条具体建议，每条 15-40 字，使用观察性语言
+- `summary`: 100-250 字综合总结，**必须使用 markdown 格式**：
+  - 用 `**加粗**` 突出核心问题
+  - 用有序列表列出核心建议（2-4条）
+  - 禁止使用标题（#），禁止使用表格
 
 ## 关键规则
 

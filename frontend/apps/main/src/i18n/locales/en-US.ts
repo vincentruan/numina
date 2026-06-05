@@ -1777,6 +1777,7 @@ export default {
     scoreGood: 'Good',
     scoreFair: 'Fair',
     scoreNeedsImprovement: 'Needs Improvement',
+    suggestions: '💡 Suggestions',
   },
   aiAlerts: {
     title: 'Asset Aging Alerts',
