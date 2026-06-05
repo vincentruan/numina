@@ -161,6 +161,21 @@ const { t } = useI18n()
 
 const aiStore = useAIStore()
 
+const currentReport = ref<AIReport | null>(null)
+const reportGeneratedAt = ref<string | null>(null)
+
+async function loadExistingReport() {
+  try {
+    const res = await getAIReport()
+    if (res.data.report) {
+      currentReport.value = res.data.report
+      reportGeneratedAt.value = res.data.generated_at ?? null
+    }
+  } catch {
+    // no report yet, that's fine
+  }
+}
+
 const {
   status: taskStatus,
   thinkContent: taskChunks,
@@ -168,10 +183,7 @@ const {
   isConsoleOpen,
   errorCode,
   startStream,
-} = useAITask('report', '/ai/report/generate/events')
-
-const currentReport = ref<AIReport | null>(null)
-const reportGeneratedAt = ref<string | null>(null)
+} = useAITask('report', '/ai/report/generate/events', loadExistingReport)
 
 const overallScoreClass = computed(() => {
   const s = currentReport.value?.overall_score ?? 0
@@ -195,18 +207,6 @@ function formatMoney(val: number | null | undefined): string {
 function formatDate(iso: string | null): string {
   if (!iso) return '-'
   return new Date(iso).toLocaleString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
-
-async function loadExistingReport() {
-  try {
-    const res = await getAIReport()
-    if (res.data.report) {
-      currentReport.value = res.data.report
-      reportGeneratedAt.value = res.data.generated_at ?? null
-    }
-  } catch {
-    // no report yet, that's fine
-  }
 }
 
 async function onGenerate() {

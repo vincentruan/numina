@@ -179,25 +179,41 @@ def test_generate_report_requires_owner(client, auth_headers, db):
     assert resp.headers["content-type"].startswith("application/x-ndjson")
 
 
-def test_generate_report_409_when_task_in_progress(client, auth_headers, db):
-    """POST /ai/report/generate/events returns 409 if a task is already running."""
+def test_generate_report_resumes_running_task(client, auth_headers, db):
+    """POST /ai/report/generate/events resumes an already running task instead of 409."""
     from datetime import datetime
 
+    from apps.backend.app.models.ai_chat_session import AIChatSession
     from apps.backend.app.models.ai_task import AITask
 
     family_id = _enable_ai(db, auth_headers, client)
+
+    # Create an existing session and running task (simulates a task started earlier)
+    session = AIChatSession(
+        family_id=family_id,
+        jsonl_path=f"{family_id}/test-session.jsonl",
+        status="active",
+    )
+    db.add(session)
+    db.commit()
+    db.refresh(session)
 
     task = AITask(
         family_id=family_id,
         capability="report",
         status="running",
+        session_id=session.id,
         started_at=datetime.utcnow(),
     )
     db.add(task)
     db.commit()
 
-    resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
-    assert resp.status_code == 409
+    with patch("httpx.AsyncClient", new=_make_streaming_mock()):
+        resp = client.post("/api/v1/ai/report/generate/events", headers=auth_headers)
+
+    # Should resume (200 + NDJSON stream) instead of 409
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/x-ndjson")
 
 
 def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
