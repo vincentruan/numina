@@ -115,11 +115,8 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent sections: 数鸣 featured card → My Agents → Analysis Apps -->
+    <!-- Agent sections: My Agents → Analysis Apps -->
     <div class="feature-section">
-      <!-- 数鸣 featured card (full width) -->
-      <NuminaAgentCard @consult="handleNuminaConsult" />
-
       <!-- 我的智能体 Section -->
       <div class="agent-section">
         <div class="agent-section__header" @click="toggleMyAgents">
@@ -199,26 +196,6 @@
         </div>
       </div>
 
-      <!-- Other system agents (excluding 数鸣) - shown separately if any -->
-      <div v-if="otherSystemAgents.length > 0" class="agent-section">
-        <div class="agent-section__header" @click="toggleSystemAgents">
-          <span class="agent-section__title">{{ t('ai.systemAgents') }}</span>
-          <span class="agent-section__count">{{ otherSystemAgents.length }}</span>
-          <van-icon :name="systemAgentsCollapsed ? 'arrow-down' : 'arrow-up'" class="agent-section__icon" />
-        </div>
-        <div class="agent-section__content" :class="{ collapsed: systemAgentsCollapsed }">
-          <div class="agent-grid">
-            <AgentCard
-              v-for="agent in otherSystemAgents"
-              :key="agent.id"
-              :agent="agent"
-              :show-actions="true"
-              @consult="handleAgentConsult"
-              @edit="handleAgentEdit"
-            />
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Chat input with integrated toolbar -->
@@ -272,7 +249,6 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUser } from '@/utils/storage'
 import { getAIReport } from '@/api/ai'
-import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
@@ -280,10 +256,8 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportWS } from '@/composables/useAIReportWS'
 import AgentCard from '@/components/agent/AgentCard.vue'
-import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import AIChatInput from '@/components/common/AIChatInput.vue'
-import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 
@@ -312,7 +286,6 @@ const photoInputRef = ref<HTMLInputElement | null>(null)
 // Collapsible section states (default collapsed)
 const myAgentsCollapsed = ref(true)
 const analysisAppsCollapsed = ref(true)
-const systemAgentsCollapsed = ref(true)
 
 // Analysis apps list (currently only Time Machine)
 const analysisApps = computed(() => [
@@ -326,19 +299,6 @@ function toggleMyAgents() {
 function toggleAnalysisApps() {
   analysisAppsCollapsed.value = !analysisAppsCollapsed.value
 }
-
-function toggleSystemAgents() {
-  systemAgentsCollapsed.value = !systemAgentsCollapsed.value
-}
-
-const numinaAgent = computed(() =>
-  agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) || null,
-)
-
-// Other system agents (excluding 数鸣) for the grid
-const otherSystemAgents = computed(() =>
-  agentStore.systemAgents.filter((a) => a.agent_name !== NUMINA_AGENT_NAME && a.is_enabled),
-)
 
 // Enabled custom agents for the grid
 const enabledCustomAgents = computed(() =>
@@ -357,13 +317,14 @@ const chatPlaceholder = computed(() => {
   return t('aiHub.chatPlaceholderWithAgent', { name: selectedAgent.value.display_name })
 })
 
-// Default selected agent to 数鸣 once loaded
+// Default selected agent to first enabled agent once loaded
 watch(
   () => agentStore.systemAgents,
   () => {
     if (selectedAgent.value) return
-    if (numinaAgent.value && numinaAgent.value.is_enabled) {
-      selectedAgent.value = numinaAgent.value
+    const numina = agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME && a.is_enabled)
+    if (numina) {
+      selectedAgent.value = numina
     } else {
       const fallback = agentChoices.value[0] || null
       selectedAgent.value = fallback
@@ -549,24 +510,6 @@ function handleAgentConsult(agent: Agent) {
   // dead routing (the builtin agents that those branches targeted were
   // deleted by migration b6745e8a2c14).
   router.push({ name: 'AIChat', query: { agentId: agent.id } })
-}
-
-function handleNuminaConsult() {
-  if (!numinaAgent.value) return
-  const agentId = numinaAgent.value.id
-  getSystemDefaultSession(SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS)
-    .then((res) => {
-      const cached = res.data.session
-      if (cached) {
-        router.push({ name: 'AIChat', query: { agentId, sessionId: cached.session_id } })
-      } else {
-        aiStore.draftQuery = SHUMING_DEFAULT_PROMPT
-        router.push({ name: 'AIChat', query: { agentId, newSession: '1', source: 'system_default' } })
-      }
-    })
-    .catch(() => {
-      router.push({ name: 'AIChat', query: { agentId } })
-    })
 }
 
 function handleAgentEdit(agent: Agent) {
