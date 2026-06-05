@@ -62,6 +62,7 @@ export function useAITask(
   const errorCode = ref<string | null>(null)
   const toolSteps = ref<ToolStep[]>([])
   const currentToolLabel = ref<string | null>(null)
+  const suggestions = ref<string[]>([])
 
   let abortController: AbortController | null = null
   let timer: ReturnType<typeof setInterval> | null = null
@@ -221,6 +222,9 @@ export function useAITask(
         break
       case 'capability.end':
         // summary may be in result.summary — already accumulated via token.stream
+        if (event.result?.suggestions?.length) {
+          suggestions.value = event.result.suggestions
+        }
         break
       case 'capability.error':
         // R6.1: 不清空 thinkContent / answerContent — 保留对话文本以便用户阅读
@@ -373,6 +377,7 @@ export function useAITask(
     completedFired = false
     toolSteps.value = []
     currentToolLabel.value = null
+    suggestions.value = []
     startTimer(0)
 
     try {
@@ -426,6 +431,7 @@ export function useAITask(
     completedFired = false
     toolSteps.value = []
     currentToolLabel.value = null
+    suggestions.value = []
 
     const elapsed = existingTask.started_at
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)
@@ -568,6 +574,7 @@ export function useAITask(
     errorCode,
     toolSteps,
     currentToolLabel,
+    suggestions,
     startStream,
     cancelTask,
   }

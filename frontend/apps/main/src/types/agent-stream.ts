@@ -61,6 +61,7 @@ export interface AgentEvent {
     summary?: string
     tokens_used?: number
     tools_used?: string[]
+    suggestions?: string[]
   }
   error?: {
     message: string

@@ -599,6 +599,8 @@ interface Message {
   planSource?: 'explicit' | 'inferred' | null
   // Process footnote toggle state (U5)
   processExpanded?: boolean
+  // LLM-generated follow-up suggestions from capability.end
+  suggestions?: string[]
 }
 
 interface ToolTimelineItem {
@@ -1382,6 +1384,12 @@ async function onSend() {
         messages.value[msgIdx].content = event.error?.message ?? t('toast.aiChatError')
         messages.value[msgIdx].renderedContent = renderMarkdown(messages.value[msgIdx].content)
       }
+      if (event.type === 'capability.end') {
+        if (event.result?.suggestions?.length) {
+          messages.value[msgIdx].suggestions = event.result.suggestions
+        }
+        return
+      }
     }
 
     while (true) {
@@ -1498,6 +1506,11 @@ async function onAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | '
 // (no flicker). Pool is i18n-driven; v1 = static template per plan §"Deferred
 // to Follow-Up Work" (LLM-generated chips deferred to v2).
 function suggestionChipsFor(msg: Message): string[] {
+  // Prefer LLM-generated suggestions if available
+  if (msg.suggestions?.length) {
+    return msg.suggestions.slice(0, 3)
+  }
+  // Fallback: template-based suggestions, stable hash rotation
   const pool = [
     t('aiChat.chipFollowupReason'),
     t('aiChat.chipFollowupAction'),
