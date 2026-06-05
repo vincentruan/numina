@@ -1,16 +1,37 @@
 import http from './index'
 
+export interface DeviceCheckUser {
+  user_id: string
+  display_name: string
+  avatar_color: string
+  role: string
+  second_factor_type: string | null
+  last_seen_at: string
+}
+
 export interface DeviceCheckResponse {
   trusted: boolean
-  temp_token?: string
-  display_name?: string
-  avatar_color?: string
-  second_factor_type?: string
-  user_id?: string
+  users: DeviceCheckUser[]
 }
 
 export function checkDevice(deviceId: string) {
   return http.post<DeviceCheckResponse>('/auth/device/check', { device_id: deviceId })
+}
+
+export interface DeviceSelectResponse {
+  second_factor_required: boolean
+  temp_token?: string
+  second_factor_type?: string
+  display_name?: string
+  avatar_color?: string
+}
+
+export function selectDeviceUser(deviceId: string, userId: string, altcha: string) {
+  return http.post<DeviceSelectResponse>('/auth/device/select', {
+    device_id: deviceId,
+    user_id: userId,
+    altcha,
+  })
 }
 
 export interface DeviceTrustResponse {
