@@ -217,7 +217,7 @@ def test_refresh_rotates_device_session_jti(client, auth_headers, db):
 
 
 def test_check_device_trusted(client, auth_headers):
-    """POST /auth/device/check with valid device_id returns trusted=true."""
+    """POST /auth/device/check with valid device_id returns trusted=true with users list."""
     trust_resp = client.post(
         "/api/v1/auth/device/trust",
         headers={"Authorization": auth_headers["Authorization"]},
@@ -232,8 +232,9 @@ def test_check_device_trusted(client, auth_headers):
     assert check_resp.status_code == 200
     data = check_resp.json()["data"]
     assert data["trusted"] is True
-    assert data["temp_token"] is not None
-    assert data["display_name"] is not None
+    assert len(data["users"]) >= 1
+    assert data["users"][0]["display_name"] is not None
+    assert data["users"][0]["user_id"] is not None
 
 
 def test_check_device_not_trusted(client):
