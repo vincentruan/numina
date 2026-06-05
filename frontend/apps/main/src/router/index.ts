@@ -4,6 +4,7 @@ import { useLoadingOverlay } from '@numina/auth'
 
 const router = createRouter({
   history: createWebHistory('/'),
+  scrollBehavior: () => ({ top: 0 }),
   routes: [
     {
       path: '/welcome',
