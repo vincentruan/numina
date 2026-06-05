@@ -140,7 +140,7 @@ def trust_device(
     response.set_cookie(
         key="numina_device_id",
         value=session.device_id,
-        max_age=30 * 24 * 3600,
+        max_age=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600,
         secure=settings.ENVIRONMENT == "production",
         samesite="lax",
         path="/",
@@ -150,7 +150,7 @@ def trust_device(
     response.set_cookie(
         key=cookie_name,
         value=new_refresh,
-        max_age=30 * 24 * 3600,
+        max_age=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600,
         httponly=True,
         secure=settings.ENVIRONMENT == "production",
         samesite="strict",
@@ -214,7 +214,7 @@ def revoke_device(
     session = device_service.revoke_device_session(
         db, device_id=int(session_id), user_id=user_id
     )
-    revoke_jti(session.refresh_jti, ttl_seconds=30 * 24 * 3600)
+    revoke_jti(session.refresh_jti, ttl_seconds=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600)
 
     current_jti = _get_refresh_jti_from_cookie(refresh_token_cookie, child_refresh_token_cookie)
     if current_jti == session.refresh_jti:
@@ -241,7 +241,7 @@ def revoke_all_devices(
 
     jtis = device_service.revoke_all_device_sessions(db, user_id=user_id)
     for jti in jtis:
-        revoke_jti(jti, ttl_seconds=30 * 24 * 3600)
+        revoke_jti(jti, ttl_seconds=settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600)
 
     if role == "child":
         clear_child_auth_cookies(response)

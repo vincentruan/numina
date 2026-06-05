@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.device_session import DeviceSession
 from apps.backend.app.models.user import User
+from packages.core.settings import settings
 
 
 def create_device_session(
@@ -30,7 +31,7 @@ def create_device_session(
         browser_fingerprint=browser_fingerprint,
         created_at=now,
         last_seen_at=now,
-        expires_at=now + timedelta(days=30),
+        expires_at=now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS),
         is_revoked=False,
     )
     db.add(session)
@@ -53,7 +54,7 @@ def trust_or_reuse_device(
     Returns (session, is_new). is_new=False means an existing session was reused.
     """
     now = datetime.utcnow()
-    expires_at = now + timedelta(days=30)
+    expires_at = now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS)
 
     if device_id:
         existing = (
