@@ -289,9 +289,22 @@ const selectedAgent = ref<Agent | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const photoInputRef = ref<HTMLInputElement | null>(null)
 
-// Collapsible section states (default collapsed)
+// Collapsible section states — my agents expands when content first loads
 const myAgentsCollapsed = ref(true)
 const analysisAppsCollapsed = ref(true)
+
+// Set initial collapse state once agents are loaded
+const myAgentsInitialized = ref(false)
+watch(
+  () => enabledCustomAgents.value.length,
+  (len) => {
+    if (!myAgentsInitialized.value) {
+      myAgentsCollapsed.value = len === 0
+      if (len > 0) myAgentsInitialized.value = true
+    }
+  },
+  { immediate: true },
+)
 
 // Analysis apps list (currently only Time Machine)
 const analysisApps = computed(() => [
