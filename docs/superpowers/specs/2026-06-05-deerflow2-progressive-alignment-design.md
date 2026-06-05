@@ -45,6 +45,17 @@ The agent module was built on the DeerFlow 2.0 harness but has drifted from its 
 
 ---
 
+## Dual Execution Paths
+
+The codebase has two execution paths for agent requests:
+
+1. **Orchestrator path** (`orchestrator._stream_dispatch_event_lines` → `adapter.stream_dispatch` → `DeerFlowClient.stream`) — used by most capabilities
+2. **Agent-dispatch path** (`agent_dispatch.stream_agent_dispatch` → `make_lead_agent` → LangGraph `astream`) — used by chat (and potentially other capabilities via the Gateway)
+
+Phase 2/3 units primarily target the orchestrator path. The agent-dispatch path already injects MCP servers (via `EffectiveConfigBuilder`) and emits structured events (`phase.thinking`, `tool.call`, `tool.result`). Changes to the orchestrator path should be validated against both paths to avoid divergence.
+
+---
+
 ## Phase 1: Corrections (Zero Risk)
 
 ### U1.1 — ~~Remove `thinking_enabled` from `stream()` calls~~ — NOT A BUG
@@ -172,6 +183,8 @@ This eliminates the need for monkey-patching or thread-local storage:
 
 **Impact on prompt/skill files:** Skill prompts need to be updated to instruct the agent to use MCP tools for data access rather than expecting pre-loaded context.
 
+**Quality risk:** MCP migration changes deterministic data delivery to probabilistic (the LLM decides which tools to call). Before migration, establish golden output tests for each capability. After migration, compare outputs against pre-migration baselines. If quality degrades beyond acceptable thresholds, revert to `_build_context()` for that capability.
+
 **Token savings estimate:** Current `_build_context()` injects ~2-4K tokens of context per request. MCP on-demand fetch reduces this to ~200-500 tokens for the skill prompt, with additional tokens only when tools are called.
 
 **Verification:** Non-chat capability (e.g., `alerts`) successfully calls MCP tools during execution. Token usage comparison before/after.
@@ -221,6 +234,8 @@ All require `X-Agent-Token` header. Path parameters validated against `_SAFE_ID_
 
 **Action:** No new code needed. Update SC6 success criteria to reference the actual paths (`/internal/gateway/*`). Verify existing tests cover these endpoints.
 
+**Security note:** The `DELETE /internal/threads/{id}` endpoint currently authenticates via `X-Agent-Token` only, with no family-scoping check. Before this endpoint is exposed to frontend consumers, add an `X-Family-Id` header and verify thread ownership, or document the trust assumption (backend is a trusted internal caller that always passes the correct thread_id).
+
 ---
 
 ### U3.2 — Suggestions API integration
@@ -233,7 +248,8 @@ All require `X-Agent-Token` header. Path parameters validated against `_SAFE_ID_
 - `frontend/apps/main/src/api/ai.ts`
 
 **Approach:**
-1. Backend: After stream ends, call DeerFlow `POST /api/threads/{id}/suggestions` to get LLM-generated follow-up suggestions
+1. **Verify endpoint exists first:** Before implementing, confirm `POST /api/threads/{id}/suggestions` is available in the installed DeerFlow version. If it does not exist, use a local `LLMClient` call (similar to `_generate_title()`) to produce follow-up suggestions instead of calling a DeerFlow API.
+2. Backend: After stream ends, generate suggestions via the verified method (DeerFlow suggestions API or local LLM call)
 2. Backend: Include suggestions in the `capability.end` NDJSON event (new `suggestions` field)
 3. Frontend: `SuggestionChips` component receives suggestions from event, falls back to template interpolation when absent
 4. Fire-and-forget: suggestions generation is non-blocking; if it fails, the `capability.end` event omits the field and frontend uses template fallback
