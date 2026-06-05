@@ -904,6 +904,16 @@ export default {
     hasAccountLogin: 'Have an account? Login',
     createNewFamily: 'Create New Family'
   },
+  login: {
+    otherAccount: 'Other Account',
+    selectAccount: 'Select Account',
+    verifyToContinue: 'Verify to continue',
+  },
+  role: {
+    owner: 'Owner',
+    admin: 'Adult',
+    child: 'Child',
+  },
   familyPromo: {
     ariaLabel: 'Family user introduction',
     privacyBanner: 'Data in Your Hands · Privacy First · Local Storage · No Cloud Upload',

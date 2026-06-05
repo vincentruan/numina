@@ -1111,6 +1111,16 @@ export default {
       passwordMismatch: '⚠️ 两次密码不一致',
     },
   },
+  login: {
+    otherAccount: '其他账户登录',
+    selectAccount: '选择账户',
+    verifyToContinue: '验证后继续',
+  },
+  role: {
+    owner: '管理员',
+    admin: '大人',
+    child: '儿童',
+  },
   familyPromo: {
     ariaLabel: '家庭用户介绍',
     privacyBanner: '数据在你手中 · 隐私优先 · 本地存储 · 无云端上传',
