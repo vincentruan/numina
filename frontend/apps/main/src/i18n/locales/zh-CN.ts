@@ -1426,10 +1426,10 @@ export default {
       cancelled: '已终止',
     },
     phase: {
-      connecting: '正在连接模型',
-      thinking: '思考中',
-      answering: '正在生成正文',
-      postProcessing: '正在落库',
+      connecting: '正在准备分析环境',
+      thinking: '正在深度思考',
+      answering: '正在生成报告',
+      postProcessing: '正在保存结果',
     },
     error: {
       generic: '⚠️ 分析失败，请稍后重试',

@@ -7,9 +7,12 @@
       <TaskConsole
         v-model="isConsoleOpen"
         :status="taskStatus"
+        :phase="taskPhase"
         :think-content="taskChunks"
         :elapsed-seconds="taskElapsed"
         :error-code="errorCode"
+        :tool-steps="toolSteps"
+        :current-tool-label="currentToolLabel"
       />
     </div>
 
@@ -193,6 +196,9 @@ const {
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   errorCode,
+  phase: taskPhase,
+  toolSteps,
+  currentToolLabel,
   startStream,
 } = useAITask('report', '/ai/report/generate/events', loadExistingReport)
 

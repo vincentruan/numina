@@ -29,6 +29,17 @@ const POLL_INTERVAL_MS = 3000
 
 export type AITaskPhase = 'connecting' | 'thinking' | 'answering' | null
 
+export interface ToolStep {
+  id: string
+  name: string
+  displayName: string
+  icon: string
+  toolType?: string
+  status: 'pending' | 'running' | 'done' | 'error'
+  progressMessage?: string
+  resultSummary?: string
+}
+
 export function useAITask(
   capability: string,
   triggerEndpoint: string,
@@ -49,6 +60,8 @@ export function useAITask(
   const isConsoleOpen = ref(false)
   const queuePosition = ref<number | null>(null)
   const errorCode = ref<string | null>(null)
+  const toolSteps = ref<ToolStep[]>([])
+  const currentToolLabel = ref<string | null>(null)
 
   let abortController: AbortController | null = null
   let timer: ReturnType<typeof setInterval> | null = null
@@ -160,6 +173,50 @@ export function useAITask(
           thinkContent.value += event.token ?? ''
         } else {
           answerContent.value += event.token ?? ''
+        }
+        break
+      case 'tool.call':
+        if (event.tool) {
+          const step: ToolStep = {
+            id: event.tool.id,
+            name: event.tool.name,
+            displayName: event.tool.display_name || event.tool.name,
+            icon: event.tool.icon || '⚙️',
+            toolType: event.tool.tool_type,
+            status: 'running',
+          }
+          toolSteps.value = [...toolSteps.value, step]
+          currentToolLabel.value = step.displayName
+        }
+        break
+      case 'tool.result':
+        if (event.tool_id) {
+          toolSteps.value = toolSteps.value.map((s) =>
+            s.id === event.tool_id
+              ? {
+                  ...s,
+                  status: (event.result?.success ?? true) ? 'done' : 'error',
+                  resultSummary: event.result?.summary,
+                }
+              : s,
+          )
+          // Update currentToolLabel to next running tool, or keep last
+          const running = toolSteps.value.find((s) => s.status === 'running')
+          if (running) {
+            currentToolLabel.value = running.displayName
+          }
+        }
+        break
+      case 'tool.progress':
+        if (event.tool_id) {
+          toolSteps.value = toolSteps.value.map((s) =>
+            s.id === event.tool_id && s.status === 'running'
+              ? { ...s, progressMessage: event.progress_message }
+              : s,
+          )
+          if (event.progress_message) {
+            currentToolLabel.value = event.progress_message
+          }
         }
         break
       case 'capability.end':
@@ -314,6 +371,8 @@ export function useAITask(
     status.value = 'running'
     isConsoleOpen.value = true
     completedFired = false
+    toolSteps.value = []
+    currentToolLabel.value = null
     startTimer(0)
 
     try {
@@ -365,6 +424,8 @@ export function useAITask(
     thinkSeconds.value = 0
     errorCode.value = null
     completedFired = false
+    toolSteps.value = []
+    currentToolLabel.value = null
 
     const elapsed = existingTask.started_at
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)
@@ -505,6 +566,8 @@ export function useAITask(
     isConsoleOpen,
     queuePosition,
     errorCode,
+    toolSteps,
+    currentToolLabel,
     startStream,
     cancelTask,
   }

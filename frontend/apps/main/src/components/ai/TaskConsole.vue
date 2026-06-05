@@ -41,6 +41,24 @@
         <span class="phase-label">{{ phaseLabel }}</span>
       </div>
 
+      <!-- Tool steps (show what the AI is actually doing) -->
+      <div v-if="visibleToolSteps.length" class="console-tools">
+        <div
+          v-for="step in visibleToolSteps"
+          :key="step.id"
+          class="tool-step"
+          :class="`tool-step--${step.status}`"
+        >
+          <span class="tool-icon">{{ step.icon }}</span>
+          <span class="tool-name">{{ step.displayName }}</span>
+          <span v-if="step.status === 'running'" class="tool-status tool-status--running">
+            <van-loading size="10" type="spinner" />
+          </span>
+          <span v-else-if="step.status === 'done'" class="tool-status tool-status--done">✓</span>
+          <span v-else-if="step.status === 'error'" class="tool-status tool-status--error">✗</span>
+        </div>
+      </div>
+
       <!-- Thinking block (collapsible, auto-collapses when answering starts) -->
       <div v-if="thinkContent" class="console-think-block">
         <button
@@ -89,6 +107,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import type { AITaskPhase } from '@/composables/useAITask'
+import type { ToolStep } from '@/composables/useAITask'
 
 const props = defineProps<{
   status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
@@ -100,6 +119,8 @@ const props = defineProps<{
   elapsedSeconds: number
   queuePosition?: number | null
   errorCode?: string | null
+  toolSteps?: ToolStep[]
+  currentToolLabel?: string | null
   modelValue?: boolean // isOpen
 }>()
 
@@ -184,6 +205,13 @@ const statusIcon = computed(() => {
 })
 
 const title = computed(() => {
+  // Show specific action label when running/post_processing
+  if (props.status === 'running' || props.status === 'post_processing') {
+    if (props.status === 'post_processing') return t('aiTask.phase.postProcessing')
+    if (props.currentToolLabel) return props.currentToolLabel
+    if (props.phase) return t(`aiTask.phase.${props.phase}`)
+    return t('aiTask.phase.connecting')
+  }
   const key = `aiTask.status.${props.status}`
   return t(key)
 })
@@ -191,6 +219,11 @@ const title = computed(() => {
 const phaseLabel = computed(() => {
   if (!props.phase) return ''
   return t(`aiTask.phase.${props.phase}`)
+})
+
+const visibleToolSteps = computed(() => {
+  if (!props.toolSteps?.length) return []
+  return props.toolSteps.slice(-5)
 })
 
 const formattedElapsed = computed(() => {
@@ -387,6 +420,65 @@ const failureMessage = computed(() => {
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
+}
+
+/* Tool steps */
+.console-tools {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.tool-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  padding: 3px 0;
+  transition: opacity 0.2s;
+}
+
+.tool-step--done {
+  opacity: 0.5;
+}
+
+.tool-step--error {
+  opacity: 0.6;
+  color: #dc2626;
+}
+
+.tool-icon {
+  font-size: 12px;
+  flex-shrink: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.tool-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-status {
+  flex-shrink: 0;
+  font-size: 11px;
+}
+
+.tool-status--running {
+  display: flex;
+  align-items: center;
+}
+
+.tool-status--done {
+  color: #22c55e;
+}
+
+.tool-status--error {
+  color: #dc2626;
 }
 
 /* Thinking block */

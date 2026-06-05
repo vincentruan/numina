@@ -1205,9 +1205,9 @@ export default {
       cancelled: 'Cancelled',
     },
     phase: {
-      connecting: 'Connecting to model',
-      thinking: 'Thinking',
-      answering: 'Generating response',
+      connecting: 'Preparing analysis',
+      thinking: 'Deep thinking',
+      answering: 'Generating report',
       postProcessing: 'Saving results',
     },
     error: {

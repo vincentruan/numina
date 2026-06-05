@@ -30,6 +30,8 @@
           :answer-content="taskAnswerContent"
           :queue-position="taskQueuePosition"
           :elapsed-seconds="taskElapsed"
+          :tool-steps="taskToolSteps"
+          :current-tool-label="taskCurrentToolLabel"
         />
         <van-button
           v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
@@ -82,6 +84,8 @@
           :answer-content="taskAnswerContent"
             :queue-position="taskQueuePosition"
             :elapsed-seconds="taskElapsed"
+            :tool-steps="taskToolSteps"
+            :current-tool-label="taskCurrentToolLabel"
           />
           <van-button
             v-if="taskStatus !== 'running' && taskStatus !== 'queued'"
@@ -198,6 +202,8 @@
           :answer-content="taskAnswerContent"
             :queue-position="taskQueuePosition"
             :elapsed-seconds="taskElapsed"
+            :tool-steps="taskToolSteps"
+            :current-tool-label="taskCurrentToolLabel"
           />
         </div>
       </template>
@@ -273,6 +279,8 @@ const {
   elapsedSeconds: taskElapsed,
   isConsoleOpen,
   queuePosition: taskQueuePosition,
+  toolSteps: taskToolSteps,
+  currentToolLabel: taskCurrentToolLabel,
   startStream,
   cancelTask,
 } = useAITask('liability', '/ai/liability-advice/events', onAnalyzeComplete)

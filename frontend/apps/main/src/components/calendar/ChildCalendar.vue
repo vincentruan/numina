@@ -230,7 +230,7 @@ onMounted(loadMonth)
 }
 
 /* ── Dark mode overrides — aligned with global midnight-blue palette ── */
-:global([data-theme='dark']) .child-calendar,
+[data-theme='dark'] .child-calendar,
 :global(.dark) .child-calendar {
   --cal-bg: #12122a;
   --cal-title-color: #f5f5f5;

@@ -37,6 +37,8 @@
           :elapsed-seconds="taskElapsed"
           :queue-position="taskQueuePosition"
           :error-code="taskErrorCode"
+          :tool-steps="taskToolSteps"
+          :current-tool-label="taskCurrentToolLabel"
           @retry="onRefresh"
         />
         <van-button
@@ -166,6 +168,8 @@ const {
   isConsoleOpen,
   queuePosition: taskQueuePosition,
   errorCode: taskErrorCode,
+  toolSteps: taskToolSteps,
+  currentToolLabel: taskCurrentToolLabel,
   startStream,
   cancelTask,
 } = useAITask('alerts', '/ai/asset-alerts/refresh/events', onScanComplete)
