@@ -92,23 +92,11 @@
             <div class="view-mode-toggle">
               <button
                 class="view-toggle-btn"
-                :class="{ active: viewMode === 'list' }"
-                :aria-label="t('dashboard.viewModeList')"
-                :aria-pressed="viewMode === 'list'"
+                :aria-label="viewMode === 'card' ? t('dashboard.viewModeList') : t('dashboard.viewModeCard')"
                 :disabled="updatingViewMode"
-                @click="setViewMode('list')"
+                @click="setViewMode(viewMode === 'card' ? 'list' : 'card')"
               >
-                <van-icon name="bars" size="18" />
-              </button>
-              <button
-                class="view-toggle-btn"
-                :class="{ active: viewMode === 'card' }"
-                :aria-label="t('dashboard.viewModeCard')"
-                :aria-pressed="viewMode === 'card'"
-                :disabled="updatingViewMode"
-                @click="setViewMode('card')"
-              >
-                <van-icon name="apps-o" size="18" />
+                <van-icon :name="viewMode === 'card' ? 'bars' : 'apps-o'" size="18" />
               </button>
             </div>
           </div>
@@ -795,7 +783,7 @@ onUnmounted(() => {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.view-toggle-btn.active {
+.view-toggle-btn:active {
   background: var(--van-primary-color);
   color: var(--color-on-primary);
   border-color: var(--van-primary-color);
@@ -803,7 +791,7 @@ onUnmounted(() => {
 [data-theme='dark'] .view-toggle-btn {
   border-color: rgba(255, 255, 255, 0.12);
 }
-[data-theme='dark'] .view-toggle-btn.active {
+[data-theme='dark'] .view-toggle-btn:active {
   background: var(--color-lavender);
   color: #010120;
   border-color: var(--color-lavender);
