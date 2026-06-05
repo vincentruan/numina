@@ -471,7 +471,15 @@ class Orchestrator:
                         ):
                             yield event_line
                     elapsed_ms = int(time.monotonic() * 1000) - start_ms
-                    yield builder.end("".join(answer_parts), execution_time_ms=elapsed_ms).to_ndjson()
+                    suggestions = await self._generate_suggestions(
+                        answer_text="".join(answer_parts),
+                        ai_config=selected_provider,
+                    )
+                    yield builder.end(
+                        "".join(answer_parts),
+                        execution_time_ms=elapsed_ms,
+                        suggestions=suggestions if suggestions else None,
+                    ).to_ndjson()
                     if config_id:
                         _fire_and_forget(client.reset_circuit_success(config_id))
                     return
@@ -821,6 +829,38 @@ class Orchestrator:
                 )
         except Exception as e:
             logger.warning("[orchestrator] title generation failed session=%s: %s", session_id, e)
+
+    async def _generate_suggestions(
+        self,
+        *,
+        answer_text: str,
+        ai_config: dict,
+        max_suggestions: int = 3,
+    ) -> list[str]:
+        """Generate follow-up suggestion chips via LLM.
+
+        Returns a list of short follow-up questions the user might ask next.
+        Returns empty list on any failure (fire-and-forget friendly).
+        """
+        try:
+            from apps.agent.core.llm import LLMClient
+            provider = ai_config.get("ai_provider", "")
+            api_key = ai_config.get("api_key", "")
+            model_id = ai_config.get("ai_model_id", "")
+            base_url = ai_config.get("ai_base_url", "") or None
+            if not (provider and api_key and model_id):
+                return []
+            llm = LLMClient(provider=provider, api_key=api_key, model_id=model_id, base_url=base_url)
+            prompt = (
+                f"基于以下AI回答，生成{max_suggestions}个用户可能想继续问的简短后续问题。"
+                f"每行一个问题，不超过15个字，不要编号：\n\n{answer_text[:500]}"
+            )
+            raw = await llm.complete(prompt, max_tokens=100)
+            lines = [line.strip() for line in raw.strip().splitlines() if line.strip()]
+            return lines[:max_suggestions]
+        except Exception as e:
+            logger.warning("[orchestrator] suggestions generation failed: %s", e)
+            return []
 
     async def _build_context(
         self,
