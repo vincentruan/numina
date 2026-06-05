@@ -26,14 +26,32 @@ class DeviceCheckRequest(BaseModel):
     device_id: str
 
 
+class DeviceCheckUserItem(BaseModel):
+    user_id: int
+    display_name: str
+    avatar_color: str
+    role: str
+    second_factor_type: str | None
+    last_seen_at: datetime
+
+
 class DeviceCheckResponse(BaseModel):
     trusted: bool
-    device_name: str | None = None
-    user_id: int | None = None
+    users: list[DeviceCheckUserItem] = []
+
+
+class DeviceSelectRequest(BaseModel):
+    device_id: str
+    user_id: str
+    altcha: str
+
+
+class DeviceSelectResponse(BaseModel):
+    second_factor_required: bool
     temp_token: str | None = None
+    second_factor_type: str | None = None
     display_name: str | None = None
     avatar_color: str | None = None
-    second_factor_type: str | None = None
 
 
 class DeviceTrustRequest(BaseModel):
