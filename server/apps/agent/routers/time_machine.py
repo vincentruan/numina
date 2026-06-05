@@ -61,7 +61,7 @@ async def interpret_time_machine_events(
         raise HTTPException(status_code=401, detail="invalid token")
 
     async def event_stream():
-        async for event_line in orchestrator.stream_dispatch_events(
+        async for event_line in orchestrator.stream_dispatch(
             capability="time_machine",
             family_id=x_family_id,
             task_id=x_task_id,

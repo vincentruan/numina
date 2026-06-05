@@ -46,7 +46,7 @@ async def generate_report_events(
         raise HTTPException(status_code=401, detail="invalid token")
 
     async def event_stream():
-        async for line in orchestrator.stream_dispatch_events(
+        async for line in orchestrator.stream_dispatch(
             capability="report",
             family_id=x_family_id,
             task_id=x_task_id,

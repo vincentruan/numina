@@ -54,7 +54,7 @@ async def analyze_spending_leaks_events(
     _validate_id(x_thread_id, "X-Thread-Id")
 
     async def event_stream():
-        async for line in orchestrator.stream_dispatch_events(
+        async for line in orchestrator.stream_dispatch(
             capability="spending_leak",
             family_id=x_family_id,
             task_id=x_task_id,

@@ -67,7 +67,7 @@ async def ask_stream(
         task_id = str(uuid.uuid4())
         event_builder = EventStreamBuilder(capability_id="chat", task_id=task_id)
         try:
-            async for event_line in orchestrator.stream_dispatch_events(
+            async for event_line in orchestrator.stream_dispatch(
                 capability="chat",
                 family_id=x_family_id,
                 task_id=task_id,
