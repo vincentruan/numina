@@ -489,7 +489,7 @@ class Orchestrator:
                     yield builder.error("AI 服务暂时不可用，请稍后重试。", code="deerflow_error").to_ndjson()
                     return
 
-            context = await self._build_context(client, family_id, free_text=free_text)
+            context = FamilyContext(family_id=family_id, free_text=free_text)
             redacted_context = pii_redactor.redact(context)
 
             # ── Journal: session start + user message ──────────────────────
@@ -528,7 +528,8 @@ class Orchestrator:
 
             # ── DeerFlow stream ────────────────────────────────────────────
             try:
-                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 240), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode)
+                mcp_servers = self._build_mcp_servers(family_id, user_id=user_id)
+                adapter = _create_family_adapter(family_id, selected_provider, timeout_seconds=max(selected_provider.get("timeout_seconds", 60), 240), subagent_enabled=skill_config.subagent_enabled, plan_mode=skill_config.plan_mode, mcp_servers=mcp_servers)
                 deerflow_tool_id_map: dict[str, str] = {}
                 async for chunk in adapter.stream_dispatch(
                     capability,
@@ -871,6 +872,30 @@ class Orchestrator:
             low_usage_assets=low_usage_assets,
             free_text=free_text,
         )
+
+    def _build_mcp_servers(
+        self,
+        family_id: str,
+        user_id: str | None = None,
+    ) -> list[dict]:
+        """Build MCP server config for DeerFlow adapter injection.
+
+        Same server as ChatAdapter uses — numina-family-data via SSE.
+        """
+        headers: dict[str, str] = {
+            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+            "X-Family-Id": family_id,
+        }
+        if user_id:
+            headers["X-Caller-User-Id"] = user_id
+        return [
+            {
+                "name": "numina-family-data",
+                "url": f"{settings.BACKEND_BASE_URL}/api/v1/internal/mcp/{family_id}/sse",
+                "transport": "sse",
+                "headers": headers,
+            }
+        ]
 
     @staticmethod
     def _error_response(
