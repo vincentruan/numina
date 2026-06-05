@@ -2,7 +2,13 @@
   <div v-if="status !== 'idle'" class="task-console">
     <!-- Header bar -->
     <div class="console-header" @click="toggleOpen">
-      <span class="console-status-icon" :class="{ 'icon-spin': status === 'running' || status === 'post_processing' }" aria-hidden="true">
+      <AIBrainIcon
+        v-if="status === 'running' || status === 'post_processing'"
+        :active="true"
+        class="console-brain-icon breathing-icon"
+        aria-hidden="true"
+      />
+      <span v-else class="console-status-icon" aria-hidden="true">
         {{ statusIcon }}
       </span>
       <span class="console-title">{{ title }}</span>
@@ -69,7 +75,7 @@
 
       <!-- Empty running state (no content yet) -->
       <div v-else-if="(status === 'running' || status === 'post_processing') && !thinkContent" class="console-empty-running">
-        <van-loading size="14" type="spinner" />
+        <AIBrainIcon :active="true" class="breathing-icon" aria-hidden="true" />
         <span>{{ status === 'post_processing' ? t('aiTask.phase.postProcessing') : t('aiTask.phase.connecting') }}</span>
       </div>
     </div>
@@ -81,6 +87,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import type { AITaskPhase } from '@/composables/useAITask'
 
 const props = defineProps<{
@@ -105,6 +112,11 @@ const { t } = useI18n()
 const answerRef = ref<HTMLElement | null>(null)
 const thinkOpen = ref(false)
 let scrollRAF: number | null = null
+
+const ASSISTANT_PURIFY_CONFIG = {
+  USE_PROFILES: { html: true },
+  ALLOW_DATA_ATTR: false,
+} as const
 
 // v-model contract: honor modelValue when provided, fall back to internal state
 const _internalOpen = ref(props.modelValue ?? (props.status === 'running' || props.status === 'queued'))
@@ -162,8 +174,6 @@ onUnmounted(() => {
 
 const statusIcon = computed(() => {
   const icons: Partial<Record<typeof props.status, string>> = {
-    running: '⏳',
-    post_processing: '⏳',
     queued: '🕐',
     completed: '✅',
     failed: '❌',
@@ -193,9 +203,9 @@ const renderedAnswer = computed(() => {
   if (!props.answerContent) return ''
   try {
     const html = marked.parse(props.answerContent, { async: false }) as string
-    return DOMPurify.sanitize(html)
+    return DOMPurify.sanitize(html, ASSISTANT_PURIFY_CONFIG)
   } catch {
-    return DOMPurify.sanitize(props.answerContent)
+    return DOMPurify.sanitize(props.answerContent, ASSISTANT_PURIFY_CONFIG)
   }
 })
 
@@ -274,14 +284,41 @@ const failureMessage = computed(() => {
   flex-shrink: 0;
 }
 
-.icon-spin {
-  display: inline-block;
-  animation: spin 2s linear infinite;
+/* AIBrainIcon in console header — smaller than the hub card */
+.console-brain-icon :deep(.ai-button-wrapper) {
+  transform: translateY(0);
 }
 
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+.console-brain-icon :deep(.ai-button-3d) {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+}
+
+.console-brain-icon :deep(.fg-icon) {
+  filter: none;
+}
+
+/* Breathing animation for AIBrainIcon during running/post_processing */
+.breathing-icon :deep(.ai-button-3d) {
+  animation: breathe 2.5s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathing-icon :deep(.ai-button-3d) {
+    animation: none;
+  }
 }
 
 .console-title {
@@ -444,10 +481,20 @@ const failureMessage = computed(() => {
 .console-empty-running {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   font-size: 13px;
   color: var(--text-secondary);
-  padding: 4px 0;
+  padding: 8px 0;
+}
+
+.console-empty-running :deep(.ai-button-wrapper) {
+  transform: translateY(0);
+}
+
+.console-empty-running :deep(.ai-button-3d) {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
 }
 
 /* Failure warning bar (R6.4) */

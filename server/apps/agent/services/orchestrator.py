@@ -1149,31 +1149,35 @@ class Orchestrator:
         free_text: str | None,
     ) -> FamilyContext:
         """Fetch all family data from backend and assemble FamilyContext."""
-        try:
-            liabilities = await client.get_liabilities()
-        except Exception as e:
-            logger.warning("[orchestrator] fetch liabilities failed family=%s: %s", family_id, e)
-            liabilities = []
-        try:
-            dashboard_overview = await client.get_dashboard_overview()
-        except Exception as e:
-            logger.warning("[orchestrator] fetch dashboard_overview failed family=%s: %s", family_id, e)
-            dashboard_overview = {}
-        try:
-            dashboard_allocation = await client.get_dashboard_allocation()
-        except Exception as e:
-            logger.warning("[orchestrator] fetch dashboard_allocation failed family=%s: %s", family_id, e)
-            dashboard_allocation = {}
-        try:
-            dashboard_trend = await client.get_dashboard_trend()
-        except Exception as e:
-            logger.warning("[orchestrator] fetch dashboard_trend failed family=%s: %s", family_id, e)
-            dashboard_trend = {}
-        try:
-            low_usage_assets = await client.get_dashboard_low_usage()
-        except Exception as e:
-            logger.warning("[orchestrator] fetch low_usage_assets failed family=%s: %s", family_id, e)
-            low_usage_assets = []
+        results = await asyncio.gather(
+            client.get_liabilities(),
+            client.get_dashboard_overview(),
+            client.get_dashboard_allocation(),
+            client.get_dashboard_trend(),
+            client.get_dashboard_low_usage(),
+            return_exceptions=True,
+        )
+
+        liabilities = results[0] if not isinstance(results[0], Exception) else []
+        if isinstance(results[0], Exception):
+            logger.warning("[orchestrator] fetch liabilities failed family=%s: %s", family_id, results[0])
+
+        dashboard_overview = results[1] if not isinstance(results[1], Exception) else {}
+        if isinstance(results[1], Exception):
+            logger.warning("[orchestrator] fetch dashboard_overview failed family=%s: %s", family_id, results[1])
+
+        dashboard_allocation = results[2] if not isinstance(results[2], Exception) else {}
+        if isinstance(results[2], Exception):
+            logger.warning("[orchestrator] fetch dashboard_allocation failed family=%s: %s", family_id, results[2])
+
+        dashboard_trend = results[3] if not isinstance(results[3], Exception) else {}
+        if isinstance(results[3], Exception):
+            logger.warning("[orchestrator] fetch dashboard_trend failed family=%s: %s", family_id, results[3])
+
+        low_usage_assets = results[4] if not isinstance(results[4], Exception) else []
+        if isinstance(results[4], Exception):
+            logger.warning("[orchestrator] fetch low_usage_assets failed family=%s: %s", family_id, results[4])
+
         assets: list[dict] = []   # no backend endpoint yet
         members: list[dict] = []  # no backend endpoint yet
 

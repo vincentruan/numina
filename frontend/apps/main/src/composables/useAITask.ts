@@ -15,6 +15,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
+import { useAIStore } from '@/stores/ai'
 import {
   getAITask,
   startAIEventStream,
@@ -34,6 +35,7 @@ export function useAITask(
   onComplete?: () => void,
 ) {
   const { t } = useI18n()
+  const aiStore = useAIStore()
 
   const status = ref<AITaskStatus['status']>('idle')
   const phase = ref<AITaskPhase>(null)
@@ -248,11 +250,18 @@ export function useAITask(
   // post_processing → completed/failed. Poll briefly until we see a terminal
   // state, with a hard ceiling of POST_PROCESSING_MAX_MS to avoid hanging UI.
 
-  const POST_PROCESSING_POLL_INTERVAL_MS = 200
-  const POST_PROCESSING_MAX_MS = 8000
+  // Post-processing timeout: based on provider's timeout_seconds × 3 (stream + fallback + write),
+  // with a floor of 120s. A report may involve multiple LLM calls (stream + structured extraction
+  // fallback), so the ceiling must be at least 2× the normal completion time.
+  // Evaluated lazily at call time so aiStore.config is populated after fetchConfig().
+  function getPostProcessingMaxMs(): number {
+    const providerTimeout = aiStore.config?.ai_timeout_seconds ?? 60
+    return Math.max(providerTimeout * 3, 120) * 1000
+  }
+  const POST_PROCESSING_POLL_INTERVAL_MS = 500
 
   async function waitForTerminalStatus() {
-    const deadline = Date.now() + POST_PROCESSING_MAX_MS
+    const deadline = Date.now() + getPostProcessingMaxMs()
     while (Date.now() < deadline) {
       try {
         const task = await getAITask(capability)

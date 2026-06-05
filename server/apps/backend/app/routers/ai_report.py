@@ -124,6 +124,7 @@ async def trigger_generate_events(
             db=db,
         ),
         media_type="application/x-ndjson",
+        headers={"X-Accel-Buffering": "no"},
     )
 
 
