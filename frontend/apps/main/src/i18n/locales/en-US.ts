@@ -1120,6 +1120,7 @@ export default {
     childForceLoggedOut: '✅ Forced out',
     childPinUnlocked: '✅ Unlocked',
     childPinReset: '✅ PIN reset',
+    childPasswordReset: '✅ Password reset',
     saveFailed: '❌ Save failed',
     deleteFailed: '❌ Delete failed',
     deleteFailed2: '❌ Delete failed, please try again',
@@ -1176,6 +1177,7 @@ export default {
     familyTitleUpdated: '✅ Family name updated',
     ownerOnlyWarning: '⚠️ Only the family owner can change the name',
     coinRateInvalid: '⚠️ Please enter an integer between 1 and 10',
+    confirmForceLogout: '⚠️ Force logout all devices for {name}?',
     // Settings
     themeChanged: '🎨 Theme color updated',
     // Dynamic messages
@@ -1249,6 +1251,8 @@ export default {
     channelSaved: '✅ Channel saved',
     channelDeleted: '🗑️ Channel deleted',
     configSaved: '✅ Config saved',
+    agentToggleEnabled: '✅ Agent enabled',
+    agentToggleDisabled: '⏸️ Agent disabled',
   },
   aiTask: {
     status: {
