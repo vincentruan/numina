@@ -390,6 +390,17 @@ async function onTestModel(configId: string, slot: number) {
 
 onMounted(async () => {
   await aiStore.fetchConfigs()
+  // Restore test-passed state from backend test_results
+  const passed = new Set<string>()
+  for (const cfg of aiStore.configs) {
+    const hasSuccess = cfg.test_results.some((r) => r.success)
+    if (hasSuccess) {
+      for (const slot of [1, 2, 3]) {
+        if (getModelId(cfg, slot)) passed.add(`${cfg.id}-${slot}`)
+      }
+    }
+  }
+  testPassedKeys.value = passed
 })
 </script>
 

@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.orm import sessionmaker
 
@@ -29,7 +29,7 @@ class _SQLiteBackend(_DatabaseBackend):
         return {"check_same_thread": False}
 
     def get_pool_config(self) -> dict:
-        return {}
+        return {"pool_pre_ping": True}
 
     def create_engine(self, url: str) -> Engine:
         # SQLite doesn't auto-create the parent directory. Ensure it exists
@@ -37,7 +37,16 @@ class _SQLiteBackend(_DatabaseBackend):
         parsed = make_url(url)
         if parsed.database and parsed.database != ":memory:":
             Path(parsed.database).parent.mkdir(parents=True, exist_ok=True)
-        return super().create_engine(url)
+        eng = super().create_engine(url)
+
+        @event.listens_for(eng, "connect")
+        def _set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.close()
+
+        return eng
 
 
 class _PostgreSQLBackend(_DatabaseBackend):
