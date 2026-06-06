@@ -31,11 +31,8 @@ export {
   getUser, setUser, removeUser, clearAuth,
 } from './utils/storage'
 
-// Device fingerprint
-export { getDeviceFingerprint } from './utils/fingerprint'
-
-// Device identity (replaces fingerprint-based device trust)
-export { readDeviceId, writeDeviceId, clearDeviceId, recoverFromEtag } from './utils/deviceIdentity'
+// Device identity (cookie-based device discovery)
+export { readDeviceId, writeDeviceId, clearDeviceId } from './utils/deviceIdentity'
 
 // Stores
 export { useAuthStore } from './stores/auth'

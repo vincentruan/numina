@@ -106,8 +106,8 @@ def test_check_device_returns_multiple_users(client, db):
     assert data["trusted"] is True
     assert len(data["users"]) == 2
     user_ids = {u["user_id"] for u in data["users"]}
-    assert user1.id in user_ids
-    assert user2.id in user_ids
+    assert str(user1.id) in user_ids
+    assert str(user2.id) in user_ids
 
 
 def test_check_device_unknown_returns_not_trusted(client, db):

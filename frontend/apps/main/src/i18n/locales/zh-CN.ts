@@ -1282,6 +1282,7 @@ export default {
     joinSuccess: '🎉 加入成功',
     verifyFailed: '❌ 验证失败，请重试',
     noPasskey: '⚠️ 未注册 passkey，请使用图形密码',
+    webauthnFailed: '⚠️ 生物识别验证失败，请使用验证码登录',
     // CRUD
     addSuccess: '✅ 添加成功',
     updateSuccess: '✅ 修改成功',

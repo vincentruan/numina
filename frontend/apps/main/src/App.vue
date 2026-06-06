@@ -10,7 +10,7 @@
     :confirm-button-text="t('device.trustConfirm')"
     :cancel-button-text="t('device.trustCancel')"
     show-cancel-button
-    @confirm="authStore.trustDevice({ onSuccess: () => showToast(t('toast.deviceTrustSuccess')) })"
+    @confirm="onTrustConfirm"
     @cancel="authStore.dismissTrustPrompt()"
   />
 
@@ -24,6 +24,8 @@ import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
 import { LoadingOverlay } from '@numina/auth'
+import { checkWebAuthnSupport, registerPasskey } from '@/utils/webauthn'
+import { getDeviceTrustWebAuthnOptions, registerDeviceTrustWebAuthn } from '@/api/device'
 
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
@@ -89,4 +91,21 @@ onUnmounted(() => {
 watch(() => familyStore.family?.custom_title, (newTitle) => {
   document.title = newTitle || 'Numina'
 }, { immediate: true })
+
+async function onTrustConfirm() {
+  await authStore.trustDevice({
+    onTrusted: async () => {
+      const { supported } = checkWebAuthnSupport()
+      if (!supported) return
+      try {
+        const { data: regOptions } = await getDeviceTrustWebAuthnOptions()
+        const credential = await registerPasskey(regOptions.options)
+        await registerDeviceTrustWebAuthn(credential, regOptions.challenge)
+      } catch {
+        // User declined biometric or device unavailable — non-fatal
+      }
+    },
+    onSuccess: () => showToast(t('toast.deviceTrustSuccess')),
+  })
+}
 </script>

@@ -6,6 +6,7 @@ export interface DeviceCheckUser {
   avatar_color: string
   role: string
   second_factor_type: string | null
+  has_passkey: boolean
   last_seen_at: string
 }
 
@@ -78,4 +79,53 @@ export interface FamilyDevice {
 export async function listFamilyDevices() {
   const { data } = await http.get<FamilyDevice[]>('/auth/devices/family')
   return data
+}
+
+// --- WebAuthn Device Authentication ---
+
+export interface WebAuthnAuthOptionsResponse {
+  options: Record<string, unknown>
+  challenge: string
+}
+
+export function getDeviceWebAuthnAuthOptions(deviceId: string, userId: string) {
+  return http.post<WebAuthnAuthOptionsResponse>('/auth/device/webauthn/auth-options', {
+    device_id: deviceId,
+    user_id: userId,
+  })
+}
+
+export function verifyDeviceWebAuthn(
+  deviceId: string,
+  userId: string,
+  credential: Record<string, unknown>,
+  challenge: string,
+) {
+  return http.post<DeviceSelectResponse>('/auth/device/webauthn/verify', {
+    device_id: deviceId,
+    user_id: userId,
+    credential,
+    challenge,
+  })
+}
+
+// --- WebAuthn Device Trust Registration ---
+
+export interface WebAuthnRegisterOptionsResponse {
+  options: Record<string, unknown>
+  challenge: string
+}
+
+export function getDeviceTrustWebAuthnOptions() {
+  return http.post<WebAuthnRegisterOptionsResponse>('/auth/device/trust/webauthn/register-options')
+}
+
+export function registerDeviceTrustWebAuthn(
+  credential: Record<string, unknown>,
+  challenge: string,
+) {
+  return http.post<{ registered: boolean }>('/auth/device/trust/webauthn/register', {
+    credential,
+    challenge,
+  })
 }

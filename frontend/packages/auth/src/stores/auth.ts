@@ -73,16 +73,14 @@ export const useAuthStore = defineStore('auth', () => {
     options?.onLogout?.()
   }
 
-  async function trustDevice(options?: { onSuccess?: () => void; onError?: () => void }) {
+  async function trustDevice(options?: { onSuccess?: () => void; onError?: () => void; onTrusted?: () => Promise<void> }) {
     try {
-      const deviceId = await readDeviceId()
+      const deviceId = readDeviceId()
       const { data } = await getHttp().post<{ device_id: string }>('/auth/device/trust', { device_id: deviceId })
-      await writeDeviceId(data.device_id)
-      // Establish ETag in browser HTTP cache so device_id survives cookie + localStorage clearing
-      fetch('/api/v1/auth/device-ping', {
-        credentials: 'same-origin',
-        headers: { 'If-None-Match': `"${data.device_id}"` },
-      })
+      writeDeviceId(data.device_id)
+      if (options?.onTrusted) {
+        await options.onTrusted()
+      }
       options?.onSuccess?.()
     } catch {
       options?.onError?.()

@@ -51,7 +51,7 @@
         </van-swipe>
 
         <Transition name="step-fade">
-          <div v-if="selectedUser" class="select-captcha-area">
+          <div v-if="selectedUser && !(selectedUser.hasPasskey && webauthnSupported)" class="select-captcha-area">
             <p class="captcha-hint">{{ t('login.verifyToContinue') }}</p>
             <AltchaWidget
               ref="selectAltchaRef"
@@ -213,9 +213,10 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
-import { TrustedDeviceCard, readDeviceId, recoverFromEtag, PixelLoading } from '@numina/auth'
-import { checkDevice, selectDeviceUser } from '@/api/device'
+import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'
+import { checkDevice, selectDeviceUser, getDeviceWebAuthnAuthOptions, verifyDeviceWebAuthn } from '@/api/device'
 import type { DeviceCheckUser } from '@/api/device'
+import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
 const { t } = useI18n()
@@ -257,12 +258,14 @@ interface BoundUser {
   avatarColor: string
   role: string
   secondFactorType: string | null
+  hasPasskey: boolean
 }
 const boundUsers = ref<BoundUser[]>([])
 const selectedUser = ref<BoundUser | null>(null)
 const deviceIdRef = ref<string | null>(null)
 const selectAltchaRef = ref()
 const selectAltcha = ref<string | undefined>(undefined)
+const webauthnSupported = ref(false)
 
 // User info from step1 response — shown in step2 header
 const step2User = ref<{ displayName: string; avatarColor: string } | null>(null)
@@ -274,12 +277,11 @@ const form = ref({
 })
 
 onMounted(async () => {
-  try {
-    let deviceId = await readDeviceId()
+  const { supported } = checkWebAuthnSupport()
+  webauthnSupported.value = supported
 
-    if (!deviceId) {
-      deviceId = await recoverFromEtag()
-    }
+  try {
+    const deviceId = readDeviceId()
 
     if (!deviceId) return
 
@@ -293,6 +295,7 @@ onMounted(async () => {
         avatarColor: u.avatar_color,
         role: u.role,
         secondFactorType: u.second_factor_type,
+        hasPasskey: u.has_passkey,
       }))
       step.value = 0
     }
@@ -366,6 +369,61 @@ async function onStep1Submit() {
 
 function onSelectUser(user: BoundUser) {
   selectedUser.value = user
+
+  if (user.hasPasskey && webauthnSupported.value) {
+    authenticateWithWebAuthn(user)
+  }
+}
+
+async function authenticateWithWebAuthn(user: BoundUser) {
+  if (!deviceIdRef.value) return
+  loading.value = true
+  try {
+    const { data: authOptions } = await getDeviceWebAuthnAuthOptions(
+      deviceIdRef.value,
+      user.userId,
+    )
+
+    const credential = await authenticatePasskey(authOptions.options)
+
+    const { data } = await verifyDeviceWebAuthn(
+      deviceIdRef.value,
+      user.userId,
+      credential,
+      authOptions.challenge,
+    )
+
+    if (data.second_factor_required && data.temp_token) {
+      tempToken.value = data.temp_token
+      secondFactorType.value = data.second_factor_type ?? 'numeric_pin'
+      trustedUser.value = {
+        displayName: data.display_name ?? user.displayName,
+        avatarColor: data.avatar_color ?? user.avatarColor,
+      }
+      stepLoading.value = true
+      setTimeout(() => {
+        step.value = 2
+        stepLoading.value = false
+      }, 700)
+    } else {
+      await authStore.fetchMe()
+      showToast(t('toast.loginSuccess'))
+      authStore.showTrustPrompt = true
+      const authUser = authStore.user
+      if (authUser?.role === 'child') {
+        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+        window.location.href = `${baseUrl}/child/`
+        return
+      }
+      router.push('/')
+    }
+  } catch {
+    showToast(t('toast.webauthnFailed'))
+    // Fall back — show ALTCHA by resetting hasPasskey so template condition reveals captcha
+    selectedUser.value = { ...user, hasPasskey: false }
+  } finally {
+    loading.value = false
+  }
 }
 
 function switchToStep1() {

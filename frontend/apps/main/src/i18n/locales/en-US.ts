@@ -1063,6 +1063,7 @@ export default {
     joinSuccess: '🎉 Joined successfully',
     verifyFailed: '❌ Verification failed, please try again',
     noPasskey: '⚠️ No passkey registered, please use PIN',
+    webauthnFailed: '⚠️ Biometric verification failed, please use captcha',
     // CRUD
     addSuccess: '✅ Added',
     updateSuccess: '✅ Updated',

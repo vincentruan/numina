@@ -30,6 +30,12 @@ from apps.backend.app.schemas.device import (
     DeviceSessionResponse,
     DeviceTrustRequest,
     DeviceTrustResponse,
+    DeviceTrustWebAuthnOptionsResponse,
+    DeviceTrustWebAuthnRegisterRequest,
+    DeviceWebAuthnAuthOptionsRequest,
+    DeviceWebAuthnAuthOptionsResponse,
+    DeviceWebAuthnVerifyRequest,
+    DeviceWebAuthnVerifyResponse,
     FamilyDeviceResponse,
 )
 from apps.backend.app.services import device as device_service
@@ -169,6 +175,75 @@ def trust_device(
     )
 
 
+@router.post("/device/trust/webauthn/register-options", response_model=DeviceTrustWebAuthnOptionsResponse)
+def device_trust_webauthn_register_options(
+    request: Request,
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """Generate WebAuthn registration options for the authenticated user."""
+    import json as json_module
+
+    from apps.backend.app.auth.webauthn import generate_registration_challenge
+    from apps.backend.app.models.user import User
+
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
+    user_id = int(payload["sub"])
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    existing = json_module.loads(user.webauthn_credentials or "[]")
+    options = generate_registration_challenge(
+        user_id=str(user.id),
+        display_name=user.display_name,
+        existing_credentials=existing,
+    )
+    challenge = options.get("challenge", "")
+    return DeviceTrustWebAuthnOptionsResponse(options=options, challenge=challenge)
+
+
+@router.post("/device/trust/webauthn/register")
+def device_trust_webauthn_register(
+    req: DeviceTrustWebAuthnRegisterRequest,
+    request: Request,
+    access_token_cookie: str | None = Cookie(None, alias=ACCESS_TOKEN_COOKIE),
+    child_access_token_cookie: str | None = Cookie(None, alias=CHILD_ACCESS_TOKEN_COOKIE),
+    db: Session = Depends(get_db),
+):
+    """Complete WebAuthn registration — store credential on user."""
+    import base64
+    import json as json_module
+
+    from apps.backend.app.auth.webauthn import verify_registration
+    from apps.backend.app.models.user import User
+
+    payload = _get_user_payload(access_token_cookie, child_access_token_cookie, request)
+    user_id = int(payload["sub"])
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    expected_challenge = base64.urlsafe_b64decode(req.challenge + "==")
+    try:
+        verified = verify_registration(
+            credential=req.credential,
+            expected_challenge=expected_challenge,
+        )
+    except Exception:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS) from None
+
+    existing = json_module.loads(user.webauthn_credentials or "[]")
+    existing.append(verified)
+    user.webauthn_credentials = json_module.dumps(existing)
+    db.commit()
+
+    return {"registered": True}
+
+
 @router.get("/devices")
 def list_devices(
     request: Request,
@@ -255,31 +330,14 @@ def revoke_all_devices(
     return None
 
 
-@router.get("/device-ping", include_in_schema=False)
-def device_ping(request: Request, response: Response):
-    """ETag-based device identity persistence.
-
-    Browser sends If-None-Match with stored device_id.
-    Returns the device_id for JS-layer recovery when other storage is cleared.
-    """
-    if_none_match = request.headers.get("if-none-match")
-    if if_none_match:
-        device_id = if_none_match.strip('"')
-        response.headers["ETag"] = f'"{device_id}"'
-        response.headers["Cache-Control"] = (
-            f"private, max-age={settings.DEVICE_TRUST_EXPIRE_DAYS * 24 * 3600}"
-        )
-        return {"device_id": device_id}
-
-    response.headers["Cache-Control"] = "no-store"
-    return {"device_id": None}
-
-
 _DEVICE_CHECK_RATE_LIMIT_PER_MINUTE = 20
 
 
 def _check_device_check_rate_limit(ip: str) -> None:
     """Limit /device/check to 20 requests per minute per IP."""
+    from packages.core.logging import get_logger
+
+    logger = get_logger(__name__)
     try:
         from apps.backend.app.services.cache.factory import get_rate_limit_cache
 
@@ -294,7 +352,8 @@ def _check_device_check_rate_limit(ip: str) -> None:
     except AppError:
         raise
     except Exception:
-        pass
+        logger.warning("device_check rate limit cache unavailable, failing closed")
+        raise AppError(ErrorCode.RATE_LIMITED) from None
 
 
 @router.post("/device/check", response_model=DeviceCheckResponse)
@@ -340,10 +399,14 @@ def check_device(
     user_map = {u.id: u for u in users}
 
     items: list[DeviceCheckUserItem] = []
+    seen_user_ids: set[int] = set()
     for s in sessions:
+        if s.user_id in seen_user_ids:
+            continue
         user = user_map.get(s.user_id)
         if not user:
             continue
+        seen_user_ids.add(s.user_id)
 
         if user.role == "child" and user.pin_hash:
             second_factor_type = "emoji_pin"
@@ -352,6 +415,11 @@ def check_device(
         else:
             second_factor_type = None
 
+        has_passkey = bool(
+            user.webauthn_credentials
+            and user.webauthn_credentials.strip() not in ("", "[]")
+        )
+
         items.append(
             DeviceCheckUserItem(
                 user_id=user.id,
@@ -359,6 +427,7 @@ def check_device(
                 avatar_color=user.avatar_color,
                 role=user.role,
                 second_factor_type=second_factor_type,
+                has_passkey=has_passkey,
                 last_seen_at=s.last_seen_at,
             )
         )
@@ -370,7 +439,7 @@ def check_device(
 
 
 @router.post("/device/select", response_model=DeviceSelectResponse)
-async def select_device(
+def select_device(
     req: DeviceSelectRequest,
     request: Request,
     response: Response,
@@ -446,6 +515,155 @@ async def select_device(
     set_auth_cookies(response, access_token, refresh_token)
 
     return DeviceSelectResponse(second_factor_required=False)
+
+
+@router.post("/device/webauthn/auth-options", response_model=DeviceWebAuthnAuthOptionsResponse)
+def device_webauthn_auth_options(
+    req: DeviceWebAuthnAuthOptionsRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Generate WebAuthn authentication challenge for device-bound user.
+
+    No auth required — used in Step 0 before login. Rate-limited by IP.
+    """
+    import json as json_module
+    from datetime import datetime
+
+    from apps.backend.app.auth.webauthn import generate_authentication_challenge
+    from apps.backend.app.models.device_session import DeviceSession
+    from apps.backend.app.models.user import User
+
+    client_ip = _get_real_client_ip(request)
+    _check_device_check_rate_limit(client_ip)
+
+    now = datetime.utcnow()
+    user_id = int(req.user_id)
+
+    session = (
+        db.query(DeviceSession)
+        .filter(
+            DeviceSession.device_id == req.device_id,
+            DeviceSession.user_id == user_id,
+            DeviceSession.is_revoked.is_(False),
+            DeviceSession.expires_at > now,
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
+
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+    if not user:
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
+
+    credentials = json_module.loads(user.webauthn_credentials or "[]")
+    if not credentials:
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
+
+    options = generate_authentication_challenge(credentials)
+    challenge = options.get("challenge", "")
+
+    return DeviceWebAuthnAuthOptionsResponse(options=options, challenge=challenge)
+
+
+@router.post("/device/webauthn/verify", response_model=DeviceWebAuthnVerifyResponse)
+def device_webauthn_verify(
+    req: DeviceWebAuthnVerifyRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db),
+):
+    """Verify WebAuthn authentication — replaces ALTCHA for passkey-enabled users.
+
+    On success: same behavior as /device/select (issue tokens or temp_token).
+    No ALTCHA required — biometric IS the proof of presence.
+    """
+    import base64
+    import json as json_module
+    from datetime import datetime, timedelta
+
+    from apps.backend.app.auth.cookies import set_auth_cookies
+    from apps.backend.app.auth.deps import (
+        create_access_token,
+        create_refresh_token,
+        create_temp_token,
+    )
+    from apps.backend.app.auth.webauthn import verify_authentication
+    from apps.backend.app.models.device_session import DeviceSession
+    from apps.backend.app.models.user import User
+
+    client_ip = _get_real_client_ip(request)
+    _check_device_check_rate_limit(client_ip)
+
+    now = datetime.utcnow()
+    user_id = int(req.user_id)
+
+    session = (
+        db.query(DeviceSession)
+        .filter(
+            DeviceSession.device_id == req.device_id,
+            DeviceSession.user_id == user_id,
+            DeviceSession.is_revoked.is_(False),
+            DeviceSession.expires_at > now,
+        )
+        .first()
+    )
+    if not session:
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
+
+    user = db.query(User).filter(User.id == user_id, User.is_active.is_(True)).first()
+    if not user:
+        raise AppError(ErrorCode.AUTH_DEVICE_NOT_FOUND)
+
+    credentials = json_module.loads(user.webauthn_credentials or "[]")
+    credential_id = req.credential.get("id", "")
+    matched = next((c for c in credentials if c["id"] == credential_id), None)
+    if not matched:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS)
+
+    expected_challenge = base64.urlsafe_b64decode(req.challenge + "==")
+    try:
+        result = verify_authentication(
+            credential=req.credential,
+            expected_challenge=expected_challenge,
+            credential_public_key=bytes.fromhex(matched["public_key"]),
+            credential_current_sign_count=matched["sign_count"],
+        )
+    except Exception:
+        raise AppError(ErrorCode.AUTH_INVALID_CREDENTIALS) from None
+
+    matched["sign_count"] = result["new_sign_count"]
+    user.webauthn_credentials = json_module.dumps(credentials)
+
+    session.last_seen_at = now
+    session.expires_at = now + timedelta(days=settings.DEVICE_TRUST_EXPIRE_DAYS)
+    db.commit()
+
+    if user.role == "child" and user.pin_hash:
+        second_factor_type = "emoji_pin"
+    elif user.second_factor_enabled and user.second_factor_type:
+        second_factor_type = user.second_factor_type
+    else:
+        second_factor_type = None
+
+    if second_factor_type:
+        temp_token = create_temp_token(user.id, user.role)
+        return DeviceWebAuthnVerifyResponse(
+            second_factor_required=True,
+            temp_token=temp_token,
+            second_factor_type=second_factor_type,
+            display_name=user.display_name,
+            avatar_color=user.avatar_color,
+        )
+
+    # No second factor — issue tokens directly
+    claims = {"sub": str(user.id), "fid": str(user.family_id), "role": user.role}
+    access_token = create_access_token(claims)
+    refresh_token = create_refresh_token(claims)
+    set_auth_cookies(response, access_token, refresh_token)
+
+    return DeviceWebAuthnVerifyResponse(second_factor_required=False)
 
 
 @router.get("/devices/family", response_model=list[FamilyDeviceResponse])
