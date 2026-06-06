@@ -202,4 +202,5 @@ tests/screenshot/screenshots/*-after-*.png
 .numina/data/
 # Test results (root level)
 test-results/
+.cc-connect/
 .ontology/
