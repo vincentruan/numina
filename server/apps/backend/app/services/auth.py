@@ -428,7 +428,8 @@ def login(db: Session, req: LoginRequest) -> TokenResponse:
 
 
 def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
-    from jose import JWTError, jwt
+    import jwt
+    from jwt.exceptions import PyJWTError
 
     from apps.backend.app.auth.deps import ALGORITHM, _verify_token
     from apps.backend.app.auth.revoke_jti import revoke_jti_atomic
@@ -444,7 +445,7 @@ def refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     try:
         payload = jwt.decode(refresh_tok, settings.SECRET_KEY, algorithms=[ALGORITHM])
         old_jti = payload.get("jti")
-    except JWTError:
+    except PyJWTError:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     user = db.query(User).filter(User.id == user_id, User.is_active == True).first()
@@ -692,7 +693,8 @@ def _record_child_pin_failure(db: Session, child: User) -> None:
 
 def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
     """Refresh child access token using child refresh token."""
-    from jose import JWTError, jwt
+    import jwt
+    from jwt.exceptions import PyJWTError
 
     from apps.backend.app.auth.deps import ALGORITHM, create_access_token
     from apps.backend.app.config import settings
@@ -703,7 +705,7 @@ def child_refresh_token(db: Session, refresh_tok: str) -> TokenResponse:
         token_type = payload.get("type")
         if user_id is None or token_type != "refresh":
             raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
-    except JWTError:
+    except PyJWTError:
         raise AppError(ErrorCode.AUTH_REFRESH_FAILED)
 
     child = db.query(User).filter(User.id == user_id, User.is_active == True).first()

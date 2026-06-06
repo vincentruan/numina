@@ -2,13 +2,20 @@
 
 from sqlalchemy.orm import Session
 
+from apps.backend.app.constants.system_ids import (
+    SKILL_FAMILY_ASSET_CHECKUP_ID,
+    SKILL_FAMILY_FINANCE_INSIGHT_PLANNER_ID,
+    SKILL_FAMILY_LIABILITY_REVIEW_ID,
+    SKILL_FIXED_ASSET_FOLLOWUP_ID,
+    SKILL_REPORT_ID,
+)
 from apps.backend.app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 _BUILTIN_SKILLS = [
     {
-        "id": 100000000000010,
+        "id": SKILL_FAMILY_ASSET_CHECKUP_ID,
         "skill_id": "family-asset-checkup",
         "name": "家庭资产体检",
         "description": "家庭资产体检分析。综合评估家庭资产健康度，输出评分卡、风险标记和建议。",
@@ -18,7 +25,7 @@ _BUILTIN_SKILLS = [
         "display_order": 10,
     },
     {
-        "id": 100000000000014,
+        "id": SKILL_REPORT_ID,
         "skill_id": "report",
         "name": "资产健康报告",
         "description": "家庭资产健康报告。综合分析家庭财务状况，输出评分、风险标记和建议。",
@@ -28,7 +35,7 @@ _BUILTIN_SKILLS = [
         "display_order": 5,
     },
     {
-        "id": 100000000000011,
+        "id": SKILL_FAMILY_FINANCE_INSIGHT_PLANNER_ID,
         "skill_id": "family-finance-insight-planner",
         "name": "财务深度研究",
         "description": "家庭财务深度研究规划器。处理需要多步骤推理的复杂财务问题，启用规划模式。",
@@ -38,7 +45,7 @@ _BUILTIN_SKILLS = [
         "display_order": 20,
     },
     {
-        "id": 100000000000012,
+        "id": SKILL_FAMILY_LIABILITY_REVIEW_ID,
         "skill_id": "family-liability-review",
         "name": "负债结构分析",
         "description": "家庭负债结构分析。评估还款压力、利率风险和期限结构。",
@@ -48,7 +55,7 @@ _BUILTIN_SKILLS = [
         "display_order": 30,
     },
     {
-        "id": 100000000000013,
+        "id": SKILL_FIXED_ASSET_FOLLOWUP_ID,
         "skill_id": "fixed-asset-followup",
         "name": "固定资产跟踪",
         "description": "固定资产跟踪与老化预警。识别老化风险、维护需求和闲置成本。",

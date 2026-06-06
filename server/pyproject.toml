@@ -24,7 +24,7 @@ dependencies = [
 [project.optional-dependencies]
 backend = [
     # Auth
-    "python-jose[cryptography]>=3.3.0",
+    "PyJWT[crypto]>=2.8.0",
     "bcrypt>=4.0.0",
     "python-multipart>=0.0.18",
     # WebAuthn
@@ -88,7 +88,7 @@ dev = [
 members = []
 
 [tool.uv.sources]
-deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness" }
+deerflow-harness = { git = "https://github.com/bytedance/deer-flow.git", subdirectory = "backend/packages/harness", rev = "4538c3229875aebebcdeac5c3ffb9904c2d7944d" }
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

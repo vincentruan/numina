@@ -2,8 +2,9 @@
 
 import hmac
 
+import jwt
 from fastapi import Depends, Header, HTTPException, Request, status
-from jose import JWTError, jwt
+from jwt.exceptions import PyJWTError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.deps import ALGORITHM, get_current_user
@@ -92,7 +93,7 @@ def verify_agent_token(
                 db=db,
             )
             return jwt_family_id
-    except JWTError:
+    except PyJWTError:
         pass  # Fall through to legacy HMAC check
 
     # Legacy: static HMAC token

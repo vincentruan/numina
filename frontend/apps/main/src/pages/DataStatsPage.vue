@@ -1,19 +1,19 @@
 <template>
   <div class="data-stats-page">
-    <PageHeader title="数据统计" />
+    <PageHeader :title="t('dataStats.title')" />
 
     <!-- Summary Cards -->
     <div class="summary-section">
       <div class="summary-card">
-        <div class="summary-label">总资产</div>
+        <div class="summary-label">{{ t('dataStats.totalAssets') }}</div>
         <div class="summary-value primary">{{ formatMoney(overview?.total_assets) }}</div>
       </div>
       <div class="summary-card">
-        <div class="summary-label">总负债</div>
+        <div class="summary-label">{{ t('dataStats.totalLiabilities') }}</div>
         <div class="summary-value danger">{{ formatMoney(overview?.total_liabilities) }}</div>
       </div>
       <div class="summary-card">
-        <div class="summary-label">净资产</div>
+        <div class="summary-label">{{ t('dataStats.netWorth') }}</div>
         <div class="summary-value success">{{ formatMoney(overview?.net_worth) }}</div>
       </div>
     </div>
@@ -21,35 +21,37 @@
     <!-- Charts -->
     <div class="charts-section">
       <div class="chart-card">
-        <div class="chart-title">资产趋势</div>
+        <div class="chart-title">{{ t('dataStats.assetTrend') }}</div>
         <TrendLineChart v-if="trend.length" :data="trend" />
-        <van-empty v-else description="暂无数据" />
+        <van-empty v-else :description="t('dataStats.noData')" />
       </div>
 
       <div class="chart-card">
-        <div class="chart-title">资产分布</div>
+        <div class="chart-title">{{ t('dataStats.assetAllocation') }}</div>
         <AllocationPieChart v-if="allocation.length" :data="allocation" />
-        <van-empty v-else description="暂无数据" />
+        <van-empty v-else :description="t('dataStats.noData')" />
       </div>
     </div>
 
     <!-- Quick Stats -->
-    <van-cell-group inset title="快速统计">
-      <van-cell title="资产数量" :value="`${overview?.asset_count ?? 0} 项`" />
-      <van-cell title="本月新增资产" :value="`${recentAssetsCount} 项`" />
-      <van-cell title="日均成本总计" :value="`${formatMoney(overview?.total_daily_cost)}/天`" />
+    <van-cell-group inset :title="t('dataStats.quickStats')">
+      <van-cell :title="t('dataStats.assetCount')" :value="`${overview?.asset_count ?? 0} 项`" />
+      <van-cell :title="t('dataStats.newAssetsThisMonth')" :value="`${recentAssetsCount} 项`" />
+      <van-cell :title="t('dataStats.totalDailyCost')" :value="`${formatMoney(overview?.total_daily_cost)}/天`" />
     </van-cell-group>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDashboardStore } from '@/stores/dashboard'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { formatCurrency } from '@/utils/format'
 
+const { t } = useI18n()
 const dashboardStore = useDashboardStore()
 
 const overview = computed(() => dashboardStore.overview)

@@ -13,11 +13,11 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
-      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
       - AGENT_BASE_URL=http://numina-agent:8001
     healthcheck:
@@ -41,7 +41,7 @@ services:
       - ENVIRONMENT=${ENVIRONMENT:-production}
       - BACKEND_BASE_URL=http://numina-backend:8000
       - AGENT_INTERNAL_TOKEN=${AGENT_INTERNAL_TOKEN:-}
-      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - AI_MODEL=${AI_MODEL:-placeholder}
       - AI_API_KEY=${AI_API_KEY:-placeholder}
@@ -70,8 +70,8 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
-      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
+      - SECRET_KEY=${SECRET_KEY:?SECRET_KEY must be set}
+      - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:?AI_ENCRYPTION_KEY must be set}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}
     depends_on:
@@ -107,7 +107,7 @@ services:
       start_period: 5s
 
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: numina-nginx
     restart: unless-stopped
     ports:

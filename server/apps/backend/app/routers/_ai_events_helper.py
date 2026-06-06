@@ -20,9 +20,6 @@ from apps.backend.app.utils.snowflake import next_id
 
 logger = logging.getLogger(__name__)
 
-# System agent IDs — must stay in sync with backend bootstrap/agents.py
-ASSET_REPORT_AGENT_ID = 100000000000006
-
 
 async def proxy_capability_events(
     agent_path: str,

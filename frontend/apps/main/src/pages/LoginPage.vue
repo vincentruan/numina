@@ -67,8 +67,8 @@
           <van-field
             v-model="form.username"
             name="username"
-            label="用户名"
-            placeholder="请输入用户名"
+            :label="t('login.username')"
+            :placeholder="t('login.usernamePlaceholder')"
             autocomplete="username"
           />
           <div class="password-field-wrapper">
@@ -76,8 +76,8 @@
               v-model="form.password"
               :type="showPassword ? 'text' : 'password'"
               name="password"
-              label="密码"
-              placeholder="请输入密码"
+              :label="t('login.password')"
+              :placeholder="t('login.passwordPlaceholder')"
               autocomplete="current-password"
               @keyup.enter="onStep1Submit"
             >
@@ -93,7 +93,7 @@
 
         <div class="form-actions">
           <van-button round block type="primary" :loading="loading" @click="onStep1Submit">
-            下一步
+            {{ t('common.next') }}
           </van-button>
         </div>
       </div>
@@ -180,7 +180,7 @@
           </div>
 
           <div class="emoji-actions">
-            <button class="emoji-action-btn" :disabled="loading" @click="clearEmojiPin">清空</button>
+            <button class="emoji-action-btn" :disabled="loading" @click="clearEmojiPin">{{ t('secondFactor.numpadClear') }}</button>
             <button class="emoji-action-btn emoji-action-btn--delete" :disabled="loading" @click="deleteEmoji">⌫</button>
           </div>
         </div>
@@ -193,11 +193,11 @@
           :disabled="secondFactorType === 'emoji_pin' ? emojiPin.length < 4 : pinInput.length < 6"
           class="pin-confirm-btn"
           @click="secondFactorType === 'emoji_pin' ? submitEmojiPin() : submitPin()"
-        >确认</van-button>
+        >{{ t('common.confirm') }}</van-button>
 
         <div class="form-actions back-actions">
           <van-button round block type="primary" class="back-btn-primary" :disabled="loading" @click="backToStep1">
-            返回重新登录
+            {{ t('login.backToLogin') }}
           </van-button>
         </div>
       </div>
