@@ -117,7 +117,7 @@ async function onDraw() {
   }
 }
 
-async function onUseBonusDraw(bonusId: number) {
+async function onUseBonusDraw(bonusId: string) {
   animating.value = true
   revealed.value = false
   store.clearLastDraw()

@@ -4,7 +4,7 @@ export interface Agent {
   agent_name: string
   display_name: string
   description: string | null
-  icon: string | null
+  icon: string | undefined
   color: string | null
   soul_md: string
   skills: string[] | null
@@ -28,6 +28,7 @@ export interface AgentListResponse {
 
 export interface AgentListGroupedResponse {
   system: Agent[]
+  builtin: Agent[]
   custom: Agent[]
   total: number
 }

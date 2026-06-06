@@ -62,7 +62,7 @@
         <CandleFlame
           v-if="chore.status === 'pending_approval' || candleStates[chore.id]"
           :state="candleStates[chore.id] ?? 'flickering'"
-          :aria-label="t('celebration.candleAriaLabel')"
+          :ariaLabel="t('celebration.candleAriaLabel')"
           @bloom-end="onCandleAnimationEnd(chore.id)"
           @gutter-end="onCandleAnimationEnd(chore.id)"
         />
@@ -214,6 +214,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'

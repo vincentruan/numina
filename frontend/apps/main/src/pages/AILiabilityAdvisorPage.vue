@@ -257,7 +257,7 @@ async function loadData(): Promise<boolean> {
     }
     return true
   } catch {
-    // no data yet, show empty state
+    showToast(t('toast.operationFailed'))
     return false
   } finally {
     loading.value = false

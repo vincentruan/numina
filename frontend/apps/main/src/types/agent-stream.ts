@@ -19,7 +19,7 @@ export interface Artifact {
   title: string
   url?: string
   path?: string
-  kind?: 'report' | 'file' | 'image' | 'link' | 'other'
+  kind?: 'report' | 'file' | 'image' | 'link' | 'data' | 'other'
   sourceStepId?: string
   generatedAt?: string
 }
@@ -152,7 +152,7 @@ export type ProcessStep =
       title: string
       url?: string
       path?: string
-      kind?: 'report' | 'file' | 'image' | 'link' | 'other'
+      kind?: 'report' | 'file' | 'image' | 'link' | 'data' | 'other'
     }
   | {
       type: 'progress'

@@ -47,7 +47,7 @@ async function onSubmit(data: Partial<Asset>) {
     // invalidateDashboard() already called by asset store methods
     router.back()
   } catch {
-    // Error handled by interceptor
+    showToast(t('toast.operationFailed'))
   } finally {
     submitting.value = false
   }

@@ -41,9 +41,11 @@ const wish = (id: string, name = id, progress = 0): ChildWish => ({
   priority: 'medium',
   status: 'active',
   has_cost_set: true,
+  star_coin_cost: null,
   progress,
   rejection_reason: null,
   realized_asset_id: null,
+  fulfilled_at: null,
   created_at: '',
   updated_at: '',
 })

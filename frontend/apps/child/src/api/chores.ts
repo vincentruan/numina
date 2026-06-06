@@ -55,7 +55,7 @@ export async function deleteChoreTemplate(id: string): Promise<void> {
 export interface ChoreInstance {
   id: string
   template_id: string
-  child_user_id?: string
+  child_user_id: string | null
   chore_name: string
   chore_emoji: string | null
   coin_reward: number
@@ -73,7 +73,6 @@ export interface ChoreInstance {
 
 /** Extends ChoreInstance with child identity fields present on pending-approval responses. */
 export interface PendingApprovalInstance extends ChoreInstance {
-  child_user_id: string | null
   child_display_name: string | null
   child_avatar_color: string | null
 }

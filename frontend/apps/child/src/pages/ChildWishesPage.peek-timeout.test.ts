@@ -85,9 +85,11 @@ const wishA = {
   priority: 'medium' as const,
   status: 'active' as const,
   has_cost_set: true,
+  star_coin_cost: null,
   progress: 0.5,
   rejection_reason: null,
   realized_asset_id: null,
+  fulfilled_at: null,
   created_at: '',
   updated_at: '',
 }

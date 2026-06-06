@@ -19,7 +19,7 @@
             <div class="isc-icon">🛍️</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.purchaseYoY') }}</div>
           </div>
-          <div class="isc-value" :class="smartDiscovery.purchase_yoy >= 0 ? 'up' : 'down'">
+          <div class="isc-value" :class="(smartDiscovery.purchase_yoy ?? 0) >= 0 ? 'up' : 'down'">
             {{ smartDiscovery.purchase_yoy !== null ? (smartDiscovery.purchase_yoy >= 0 ? '+' : '') + smartDiscovery.purchase_yoy + '%' : '--' }}
           </div>
           <div class="isc-sub" v-if="smartDiscovery.purchase_yoy !== null">
@@ -377,7 +377,8 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useCurrency } from '@/composables/useCurrency'
 import { formatCurrency, CURRENCY_SYMBOLS } from '@/utils/format'
-import { getInsights, type InsightsResponse, type DailyCostItem, type GoalProgressItem, type TypeDistributionItem, type DurationBucket, type RetentionItem } from '@/api/dashboard'
+import { getInsights, type InsightsResponse, type GoalProgressItem, type TypeDistributionItem, type DurationBucket, type RetentionItem } from '@/api/dashboard'
+import type { DailyCostItem } from '@/types'
 import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()

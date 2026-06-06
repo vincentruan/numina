@@ -11,6 +11,7 @@ import {
   type FamilyDevice,
 } from '@/api/device'
 import { useAuthStore } from '@/stores/auth'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { clearAuth } from '@numina/auth'
 import { useRouter } from 'vue-router'
 
@@ -188,7 +189,7 @@ onMounted(load)
     <van-loading v-if="familyLoading" style="display: flex; justify-content: center; padding: 32px" />
 
     <template v-else>
-      <van-empty v-if="familyGroups.length === 0" :description="t('device.noFamilyDevices')" />
+      <EmptyState v-if="familyGroups.length === 0" :description="t('device.noFamilyDevices')" />
 
       <template v-for="group in familyGroups" :key="group.display_name">
         <!-- Section header with avatar -->

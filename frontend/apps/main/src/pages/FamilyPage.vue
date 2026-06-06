@@ -351,7 +351,7 @@ function canShowActions(member: { id: string; role: string }): boolean {
   return canManage(member) || canChangeRole(member)
 }
 
-function getRoleTagType(member: { id: string; role: string }): string {
+function getRoleTagType(member: { id: string; role: string }): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
   if (member.id === familyStore.family?.created_by) return 'primary'
   if (member.role === 'owner') return 'success'
   return 'default'

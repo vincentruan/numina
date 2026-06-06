@@ -139,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'LiabilityList' })
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { showToast, showConfirmDialog } from 'vant'

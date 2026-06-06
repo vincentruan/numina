@@ -2,7 +2,7 @@
 /**
  * U6: Suggestion chips (NOT pills) for follow-up prompts.
  *
- * Per DESIGN.md: border-radius 4px for buttons/badges, NOT pill-shaped.
+ * Per Vant 4 guidelines: border-radius 4px for buttons/badges, NOT pill-shaped.
  * Templates like "查看{category}详情" with context-derived interpolation.
  */
 
@@ -85,7 +85,7 @@ const handleClick = (text: string) => {
   color: var(--text-primary, rgba(255, 255, 255, 0.85));
   background: var(--suggestion-bg, rgba(255, 255, 255, 0.08));
   border: 1px solid var(--suggestion-border, rgba(255, 255, 255, 0.12));
-  border-radius: 4px; /* DESIGN.md: sharp for buttons/badges, NOT pills */
+  border-radius: 4px; /* 4px sharp radius */
   cursor: pointer;
   transition: background 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;

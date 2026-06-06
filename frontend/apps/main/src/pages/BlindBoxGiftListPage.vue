@@ -12,7 +12,7 @@
     </van-nav-bar>
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-empty v-if="!loading && gifts.length === 0" :description="t('blindBox.giftPoolEmpty')" />
+      <EmptyState v-if="!loading && gifts.length === 0" :description="t('blindBox.giftPoolEmpty')" />
 
       <div v-else class="gift-list" role="list" :aria-label="t('blindBox.giftPoolTitle')">
         <div
@@ -71,6 +71,7 @@ import { onMounted, ref } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { storeToRefs } from 'pinia'
 import type { BlindBoxGift } from '@/types/blindBox'
 

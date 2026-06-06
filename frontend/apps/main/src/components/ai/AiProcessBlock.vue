@@ -32,7 +32,28 @@
         v-for="step in steps"
         :key="step.id"
         :ref="(el) => registerStepRef(step.id, el)"
-        v-bind="stepProps(step)"
+        :type="stepProps(step).type"
+        :id="stepProps(step).id"
+        :status="stepProps(step).status"
+        :content="stepProps(step).content"
+        :name="stepProps(step).name"
+        :display-name="stepProps(step).displayName"
+        :icon="stepProps(step).icon"
+        :tool-type="stepProps(step).toolType"
+        :args="stepProps(step).args"
+        :result-summary="stepProps(step).resultSummary"
+        :error="stepProps(step).error"
+        :result="stepProps(step).result"
+        :elapsed-ms="stepProps(step).elapsedMs"
+        :default-expanded="stepProps(step).defaultExpanded"
+        :compressed="stepProps(step).compressed"
+        :progress-message="stepProps(step).progressMessage"
+        :title="stepProps(step).title"
+        :description="stepProps(step).description"
+        :task-id="stepProps(step).taskId"
+        :url="stepProps(step).url"
+        :path="stepProps(step).path"
+        :kind="stepProps(step).kind"
         :auto-collapse-signal="reasoningAutoCollapse"
       />
 
@@ -214,12 +235,49 @@ function onStepTap(stepId: string) {
 }
 
 // Map ProcessStep union → AiStepBlock props
-function stepProps(step: ProcessStep) {
-  const base = {
+interface StepProps {
+  type: 'reasoning' | 'tool_call' | 'subagent' | 'artifact' | 'progress'
+  id: string
+  status: 'pending' | 'streaming' | 'running' | 'done' | 'error' | 'failed'
+  content?: string
+  name?: string
+  displayName?: string
+  icon?: string
+  toolType?: string
+  args?: Record<string, unknown>
+  resultSummary?: string
+  error?: string
+  result?: string
+  elapsedMs?: number
+  defaultExpanded?: boolean
+  compressed?: boolean
+  progressMessage?: string
+  title?: string
+  description?: string
+  taskId?: string
+  url?: string
+  path?: string
+  kind?: 'data' | 'link' | 'image' | 'file' | 'other' | 'report'
+}
+
+function stepProps(step: ProcessStep): StepProps {
+  // Extract status with proper union type mapping for AiStepBlock
+  const statusMap: Record<string, 'pending' | 'streaming' | 'running' | 'done' | 'error' | 'failed'> = {
+    'streaming': 'streaming',
+    'pending': 'pending',
+    'running': 'running',
+    'done': 'done',
+    'error': 'error',
+    'failed': 'failed',
+  }
+
+  // Artifact type doesn't have status - use 'done' as default
+  const stepStatus = step.type === 'artifact' ? 'done' : step.status
+  const base: StepProps = {
     type: step.type,
     id: step.id,
-    status: step.status,
-  } as Record<string, unknown>
+    status: statusMap[stepStatus] || stepStatus,
+  }
 
   switch (step.type) {
     case 'reasoning':

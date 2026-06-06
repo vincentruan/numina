@@ -6,7 +6,7 @@
  * - Streaming: "思考中..." with shimmer sweep
  * - Done: "思考了 Xs" → auto-collapse after 1s (once)
  *
- * Per DESIGN.md: uses CSS variables, respects prefers-reduced-motion.
+ * Per Vant 4 guidelines: uses CSS variables, respects prefers-reduced-motion.
  */
 
 import { computed, onUnmounted, ref, watch } from 'vue'
@@ -107,7 +107,7 @@ const prefersReducedMotion = computed(() => {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  border-radius: 4px; /* DESIGN.md: sharp for buttons/badges */
+  border-radius: 4px; /* 4px sharp radius */
   background: var(--think-bg, rgba(99, 102, 241, 0.08));
   border: 1px solid var(--think-border, rgba(99, 102, 241, 0.25));
   font-size: 13px;

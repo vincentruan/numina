@@ -204,6 +204,7 @@ onMounted(async () => {
       getDefaultCategories().forEach(c => { editTargets[c] = 0 })
     }
   } catch {
+    showToast(t('toast.operationFailed'))
     getDefaultCategories().forEach(c => { editTargets[c] = 0 })
   }
 })

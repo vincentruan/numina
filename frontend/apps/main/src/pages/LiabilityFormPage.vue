@@ -42,7 +42,7 @@ async function onSubmit(data: Partial<Liability>) {
     }
     router.back()
   } catch {
-    // Error handled by interceptor
+    showToast(t('toast.operationFailed'))
   } finally {
     submitting.value = false
   }

@@ -796,7 +796,7 @@ async function onTogglePinSession() {
     ]
     showToast(newPinned ? t('aiChat.pinSessionSuccess') : t('aiChat.unpinSessionSuccess'))
   } catch {
-    // silently ignore
+    showToast(t('toast.operationFailed'))
   }
 }
 
@@ -1039,7 +1039,7 @@ async function loadSessions() {
     }
     sessionsOffset.value = res.data.sessions.length
   } catch {
-    // silently ignore — list stays empty
+    showToast(t('toast.operationFailed'))
   } finally {
     sessionsLoading.value = false
   }
@@ -1060,7 +1060,7 @@ async function loadMoreSessions() {
       sessionsAllLoaded.value = true
     }
   } catch {
-    // silently ignore
+    showToast(t('toast.operationFailed'))
   } finally {
     sessionsLoadingMore.value = false
   }
@@ -1722,7 +1722,7 @@ onMounted(async () => {
       await markChatRead()
       await scrollToBottom()
     } catch {
-      // no history
+      showToast(t('toast.operationFailed'))
     }
   }
 

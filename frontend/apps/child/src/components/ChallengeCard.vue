@@ -45,7 +45,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { getActiveChildChallenges, type ChildChallenge } from '@/api/challengeGrant'
+import { getActiveChildChallenges } from '@/api/challengeGrant'
+import type { ChildChallenge } from '@/types/challengeGrant'
 
 const { t } = useI18n()
 

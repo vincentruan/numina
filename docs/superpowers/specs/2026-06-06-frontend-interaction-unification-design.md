@@ -179,6 +179,102 @@ Vue replaces `#app` innerHTML on mount — spinner disappears automatically.
 
 Delete any existing TikTok-style or conflicting splash animation.
 
+### 4. Emoji-to-Icon Mapping (Toast Iconification)
+
+Current toast convention uses emoji prefixes (✅❌⚠️🔒🗑️📡🤖🔑💰🎨🔥🎉). Vant 4 already has built-in toast types for common cases; use these first, then Iconify for specialized icons.
+
+#### Vant 4 Built-in Toast Types (Prefer These)
+
+| Emoji | Purpose | Vant API | Built-in Icon |
+|-------|---------|----------|---------------|
+| ✅ | Success | `showSuccessToast()` | Green checkmark circle |
+| ❌ | Error/Fail | `showFailToast()` | Red X circle |
+| ⏳ | Loading | `showLoadingToast()` | Circular/spinner loader |
+| ⚠️ | Warning | `showToast({ icon: 'warning-o' })` | Amber warning triangle |
+
+```ts
+// Vant built-in — no custom icon needed
+import { showSuccessToast, showFailToast, showLoadingToast, showToast } from 'vant'
+
+showSuccessToast('操作成功')        // ✅ built-in
+showFailToast('操作失败')           // ❌ built-in
+showLoadingToast({ forbidClick: true }) // ⏳ built-in
+showToast({ message: '注意', icon: 'warning-o' }) // ⚠️ via Vant icon name
+```
+
+#### Vant Icon Names for Other Toast Types
+
+| Emoji | Purpose | Vant Icon Name |
+|-------|---------|----------------|
+| ℹ️ | Information | `info-o` |
+| 🔒 | Security/Lock | `lock` |
+| 🗑️ | Delete/Trash | `delete-o` |
+| 🔑 | Authentication/Key | `key-o` (if available) or custom |
+| 📡 | Network | Custom (Vant lacks WiFi icon) |
+
+```ts
+showToast({ message: '提示信息', icon: 'info-o' })
+showToast({ message: '已锁定', icon: 'lock' })
+showToast({ message: '已删除', icon: 'delete-o' })
+```
+
+#### Iconify Icons (For Vant-Lacking Icons)
+
+Use `<IIcon>` for icons Vant doesn't provide:
+
+| Emoji | Purpose | Iconify Icon | Color Hint |
+|-------|---------|--------------|------------|
+| 📡 | Network/API | `mdi:wifi` | Primary color |
+| 🤖 | AI/Robot | `mdi:robot` | AI accent (#6366f1) |
+| 💰 | Money/Finance | `mdi:cash` | Success color |
+| 🎨 | Design/Style | `mdi:palette` | Accent color |
+| 🔥 | Hot/Trending | `mdi:fire` | Warm color |
+| 🎉 | Celebration | `mdi:celebration` | Success color |
+| 📥 | Download | `mdi:download` | Primary color |
+| 📤 | Upload | `mdi:upload` | Primary color |
+| 💾 | Save | `mdi:content-save` | Primary color |
+| 📋 | Copy | `mdi:content-copy` | Neutral |
+| 🔄 | Sync | `mdi:sync` | Primary color |
+
+#### Alternative Icons (Lucide — Lighter Weight)
+
+| Purpose | Lucide Icon |
+|---------|-------------|
+| Success | `lucide:circle-check` |
+| Error | `lucide:circle-x` |
+| Warning | `lucide:alert-triangle` |
+| Info | `lucide:info` |
+| Robot | `lucide:bot` |
+| Wifi | `lucide:wifi` |
+
+#### Usage Pattern
+
+```vue
+<!-- Vant built-in (preferred for success/error/loading/warning) -->
+showSuccessToast('操作成功')
+showFailToast('操作失败')
+
+<!-- Vant icon name (for info/lock/delete) -->
+showToast({ message: '提示', icon: 'info-o' })
+
+<!-- Custom IIcon (for Vant-lacking icons) -->
+<template>
+  <div class="toast-custom">
+    <IIcon icon="mdi:robot" size="20" color="#6366f1" />
+    <span>{{ t('ai.processing') }}</span>
+  </div>
+</template>
+```
+
+#### Migration Path
+
+1. **Phase 1 (Current)**: Keep emoji prefixes in toast messages — works everywhere
+2. **Phase 2 (Quick win)**: Replace ✅❌⏳⚠️ with Vant built-in types (`showSuccessToast`, `showFailToast`, etc.)
+3. **Phase 3 (Optional)**: Use `icon: 'warning-o'` etc. for Vant-provided icons
+4. **Phase 4 (Future)**: Create `<ToastIcon>` wrapping `<IIcon>` for specialized icons (🤖📡💰🎨🔥🎉)
+
+**Recommendation**: Phase 2 is quick and improves visual consistency with zero icon dependency.
+
 ## Files to Modify
 
 ### apps/main

@@ -8,6 +8,7 @@ import { getAgent } from '@/api/agent'
 import { getSkillsGrouped } from '@/api/ai'
 import type { AgentCreatePayload, AgentUpdatePayload } from '@/types/agent'
 import type { SkillDefinition } from '@/api/ai'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -200,7 +201,7 @@ function toggleSkill(skillId: string) {
          agents, render normal toggleable rows. -->
     <van-cell-group v-if="isSystemAgent || !isSystemAgent" inset :title="t('agents.form.skills')">
       <van-skeleton v-if="skillsLoading" :row="3" />
-      <van-empty
+      <EmptyState
         v-else-if="!availableSkills.length"
         :description="t('agents.form.noEnabledSkills')"
       />

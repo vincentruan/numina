@@ -3,11 +3,11 @@
  * iOS Safari 没有 navigator.vibrate → 静默 no-op；任何抛错也吞掉。
  */
 
-export function tryVibrate(pattern: number | number[]): boolean {
+export function tryVibrate(pattern: number | readonly number[]): boolean {
   if (typeof navigator === 'undefined') return false
   if (typeof navigator.vibrate !== 'function') return false
   try {
-    return navigator.vibrate(pattern)
+    return navigator.vibrate(pattern as number | number[])
   } catch {
     return false
   }

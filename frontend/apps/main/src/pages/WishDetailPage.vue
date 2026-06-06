@@ -52,7 +52,7 @@
 
         <div v-if="wish.realized_asset_id" class="hero-realized-info">
           <p v-if="wish.fulfilled_at" class="fulfilled-date">
-            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
           </p>
           <router-link :to="`/assets/${wish.realized_asset_id}`">
             {{ t('wish.realizedAsset') }} →
