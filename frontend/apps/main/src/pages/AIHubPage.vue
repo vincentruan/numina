@@ -185,9 +185,7 @@
               @keydown.space.prevent="router.push('/ai/time-machine')"
             >
               <div class="app-list-item__icon">
-                <svg class="icon-svg" aria-hidden="true">
-                  <use href="#icon-time-machine" />
-                </svg>
+                <SvgIcon name="time-machine" class="icon-svg" />
               </div>
               <div class="app-list-item__body">
                 <div class="app-list-item__name">{{ t('aiHub.timeMachineCardTitle') }}</div>

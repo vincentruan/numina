@@ -19,9 +19,7 @@
         class="category-chip"
         @click="onCategoryChipClick(chip.id)"
       >
-        <svg v-if="chip.icon && chip.icon.startsWith('icon-')" class="chip-icon" aria-hidden="true">
-          <use :href="`#${getIconId(chip.icon)}`" />
-        </svg>
+        <SvgIcon v-if="chip.icon && chip.icon.startsWith('icon-')" :name="getIconId(chip.icon)" class="chip-icon" />
         <span v-else-if="chip.icon" class="chip-emoji">{{ chip.icon }}</span>
         <span class="chip-name">{{ chip.name }}</span>
       </van-tag>

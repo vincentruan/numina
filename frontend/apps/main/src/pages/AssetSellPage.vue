@@ -67,8 +67,6 @@
       </div>
     </template>
 
-    <van-loading v-else class="page-loading" />
-
     <!-- Result Dialog -->
     <van-dialog
       v-model:show="showResult"
@@ -113,6 +111,7 @@ import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
 import type { AssetSellResponse } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t } = useI18n()
 
@@ -188,10 +187,15 @@ function onResultClose(action: string) {
   return true
 }
 
-onMounted(() => {
-  const id = route.params.id as string
-  if (!assetStore.currentAsset || assetStore.currentAsset.id !== id) {
-    assetStore.fetchAsset(id)
+onMounted(async () => {
+  showLoading()
+  try {
+    const id = route.params.id as string
+    if (!assetStore.currentAsset || assetStore.currentAsset.id !== id) {
+      await assetStore.fetchAsset(id)
+    }
+  } finally {
+    hideLoading()
   }
 })
 </script>
@@ -226,11 +230,6 @@ onMounted(() => {
 .highlight { color: var(--color-primary); font-weight: 600; }
 .positive { color: #07c160; font-weight: 600; }
 .negative { color: #ee0a24; font-weight: 600; }
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding-top: 40vh;
-}
 .result-dialog {
   padding: 16px;
 }

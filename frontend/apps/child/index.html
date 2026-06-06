@@ -7,7 +7,23 @@
     <title>✨ Numina 小管家</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+  <style>
+    html, body, #app { height: 100%; margin: 0; padding: 0; background: #fffaf0; }
+    .__spinner-container { height: 100%; display: flex; align-items: center; justify-content: center; }
+    .__spinner { width: 68px; height: 68px; background-color: #0a0a0a;
+      animation: cube-shadow-spinner 1.8s cubic-bezier(0.75, 0, 0.5, 1) infinite; }
+    @keyframes cube-shadow-spinner {
+      50% { border-radius: 50%; transform: scale(0.5) rotate(360deg); }
+      100% { transform: scale(1) rotate(720deg); }
+    }
+    @media (prefers-color-scheme: dark) {
+      html, body, #app { background: #0a1a1a; }
+      .__spinner { background-color: #e8b94a; }
+    }
+  </style>
+  <div class="__spinner-container"><div class="__spinner"></div></div>
+</div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

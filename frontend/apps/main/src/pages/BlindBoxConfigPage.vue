@@ -2,9 +2,7 @@
   <div class="blind-box-config-page">
     <van-nav-bar :title="t('blindBox.configTitle')" left-arrow @click-left="$router.back()" />
 
-    <van-loading v-if="loading" vertical class="page-loading">{{ t('common.loading') }}</van-loading>
-
-    <template v-else-if="config">
+    <template v-if="!loading && config">
       <van-cell-group inset :title="t('blindBox.basicSettings')">
         <van-cell :title="t('blindBox.enableFeature')" center>
           <template #right-icon>
@@ -105,6 +103,7 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()
@@ -122,8 +121,13 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  await store.fetchConfig()
-  if (config.value) Object.assign(form, config.value)
+  showLoading()
+  try {
+    await store.fetchConfig()
+    if (config.value) Object.assign(form, config.value)
+  } finally {
+    hideLoading()
+  }
 })
 
 watch(config, (val) => {
@@ -145,10 +149,5 @@ function onSave() {
 .blind-box-config-page {
   min-height: 100vh;
   background: var(--van-background);
-}
-.page-loading {
-  padding: 40px;
-  display: flex;
-  justify-content: center;
 }
 </style>

@@ -12,14 +12,12 @@
     </van-nav-bar>
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-loading v-if="loading && !templates.length" class="page-loading" />
-
       <van-empty
-        v-else-if="!loading && templates.length === 0"
+        v-if="!loading && templates.length === 0"
         :description="t('choreTemplate.listEmpty')"
       />
 
-      <div v-else class="template-list" role="list" :aria-label="t('choreTemplate.title')">
+      <div v-else-if="!loading" class="template-list" role="list" :aria-label="t('choreTemplate.title')">
         <div
           v-for="template in templates"
           :key="template.id"
@@ -104,6 +102,7 @@ import {
   deleteChoreTemplate,
   type ChoreTemplate,
 } from '@/api/chores'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
@@ -130,11 +129,13 @@ function getChildColor(childId: string): string {
 
 async function loadData() {
   loading.value = true
+  showLoading()
   try {
     templates.value = await listChoreTemplates()
   } catch {
     showToast(t('toast.loadFailed'))
   } finally {
+    hideLoading()
     loading.value = false
   }
 }
@@ -206,12 +207,6 @@ onMounted(async () => {
 .chore-templates-page {
   min-height: 100vh;
   background: var(--van-background);
-}
-
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
 }
 
 .template-list {

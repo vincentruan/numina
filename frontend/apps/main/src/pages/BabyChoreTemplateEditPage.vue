@@ -6,9 +6,7 @@
       @click-left="$router.back()"
     />
 
-    <van-loading v-if="loading" class="page-loading" />
-
-    <van-form v-else @submit="onSubmit">
+    <van-form v-if="!loading" @submit="onSubmit">
       <van-cell-group inset>
         <van-field
           v-model="form.name"
@@ -95,6 +93,7 @@ import {
   updateChoreTemplate,
   type ChoreTemplate,
 } from '@/api/chores'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -118,11 +117,13 @@ const childMembers = computed(() => familyStore.members.filter(m => m.role === '
 
 async function loadData() {
   loading.value = true
+  showLoading()
   try {
     await familyStore.fetchFamily()
   } catch {
     showToast(t('toast.loadFailed'))
     router.back()
+    hideLoading()
     loading.value = false
     return
   }
@@ -146,6 +147,7 @@ async function loadData() {
     showToast(t('toast.loadFailed'))
     router.back()
   } finally {
+    hideLoading()
     loading.value = false
   }
 }
@@ -181,12 +183,6 @@ onMounted(loadData)
 .chore-template-edit-page {
   background: var(--bg-secondary);
   min-height: 100vh;
-}
-
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding: 40px 0;
 }
 
 .immutable-field {

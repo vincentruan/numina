@@ -85,8 +85,6 @@
       </div>
     </template>
 
-    <van-loading v-else class="page-loading" />
-
     <!-- Payment Dialog -->
     <van-dialog
       v-model:show="showPayment"
@@ -120,6 +118,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t } = useI18n()
 
@@ -198,9 +197,14 @@ async function onDelete() {
   }
 }
 
-onMounted(() => {
-  const id = route.params.id as string
-  liabilityStore.fetchLiability(id)
+onMounted(async () => {
+  showLoading()
+  try {
+    const id = route.params.id as string
+    await liabilityStore.fetchLiability(id)
+  } finally {
+    hideLoading()
+  }
 })
 </script>
 
@@ -236,11 +240,6 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding-top: 40vh;
 }
 .payment-dialog {
   padding: 16px;

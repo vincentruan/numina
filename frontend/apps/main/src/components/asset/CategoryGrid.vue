@@ -10,9 +10,7 @@
           :class="{ selected: modelValue === cat.id }"
           @click="$emit('update:modelValue', cat.id)"
         >
-          <svg class="icon" aria-hidden="true">
-            <use :href="`#${getIconId(cat.icon)}`" />
-          </svg>
+          <SvgIcon :name="getIconId(cat.icon)" class="icon" />
           <span class="name">{{ cat.name }}</span>
         </div>
       </div>
@@ -27,9 +25,7 @@
           :class="{ selected: modelValue === cat.id }"
           @click="$emit('update:modelValue', cat.id)"
         >
-          <svg class="icon" aria-hidden="true">
-            <use :href="`#${getIconId(cat.icon)}`" />
-          </svg>
+          <SvgIcon :name="getIconId(cat.icon)" class="icon" />
           <span class="name">{{ cat.name }}</span>
         </div>
       </div>

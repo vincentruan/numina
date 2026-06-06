@@ -13,9 +13,7 @@
             <img :src="imageUrl" :alt="asset.name" @error="onImageError" />
           </div>
           <div v-else class="hero-icon" :style="{ background: 'rgba(255,255,255,0.15)' }">
-            <svg class="icon-svg-hero" aria-hidden="true">
-              <use :href="`#${getIconId(asset.category?.icon)}`" />
-            </svg>
+            <SvgIcon :name="getIconId(asset.category?.icon)" class="icon-svg-hero" />
           </div>
           <div class="hero-info">
             <div class="hero-name">{{ asset.name }}</div>
@@ -72,9 +70,7 @@
         <van-cell :title="t('assetDetail.fieldType')" :value="typeText" />
         <van-cell :title="t('assetDetail.fieldCategory')" :value="asset.category?.name || t('asset.uncategorized')">
           <template #icon>
-            <svg class="cat-icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(asset.category?.icon)}`" />
-            </svg>
+            <SvgIcon :name="getIconId(asset.category?.icon)" class="cat-icon-svg" />
           </template>
         </van-cell>
         <van-cell :title="t('assetDetail.fieldPurchasePrice')">
@@ -211,8 +207,7 @@
       </div>
     </template>
 
-    <van-loading v-else class="page-loading" />
-  </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -228,6 +223,8 @@ import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import DailyCostChart from '@/components/charts/DailyCostChart.vue'
 import BuyVsRentCalculator from '@/components/asset/BuyVsRentCalculator.vue'
 import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
+import { showLoading, hideLoading } from '@/utils/loading'
+import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 
@@ -315,20 +312,6 @@ const returnText = computed(() => {
   return `${sign}¥${diff.toLocaleString()} (${sign}${(asset.value.return_rate || 0).toFixed(2)}%)`
 })
 
-/**
- * Get the icon ID for a category icon.
- * If the icon is already an icon ID (starts with 'icon-'), use it directly.
- * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
- */
-function getIconId(icon: string | undefined): string {
-  if (!icon) return 'icon-other'
-  if (icon.startsWith('icon-')) {
-    return icon
-  }
-  // Fallback for emoji or unknown icons
-  return 'icon-other'
-}
-
 async function onRetire() {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmRetireAsset', { name: asset.value?.name }) })
@@ -367,13 +350,18 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  const id = route.params.id as string
-  await assetStore.fetchAsset(id)
+  showLoading()
   try {
-    const res = await assetApi.getValuations(id)
-    valuations.value = res.data
-  } catch {
-    // non-critical
+    const id = route.params.id as string
+    await assetStore.fetchAsset(id)
+    try {
+      const res = await assetApi.getValuations(id)
+      valuations.value = res.data
+    } catch {
+      // non-critical
+    }
+  } finally {
+    hideLoading()
   }
 })
 </script>
@@ -703,11 +691,5 @@ onMounted(async () => {
 
 .delete-btn {
   margin-top: 4px;
-}
-
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding-top: 40vh;
 }
 </style>

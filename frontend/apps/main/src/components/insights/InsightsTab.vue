@@ -42,9 +42,7 @@
             <span class="isc-cost-val">{{ format(smartDiscovery.highest_daily_cost.cost) }} <span class="isc-cost-unit">/ {{ t('analyticsPage.perDay').replace('/', '') }}</span></span>
           </div>
           <div class="isc-bg-icon" v-if="smartDiscovery.highest_daily_cost">
-            <svg v-if="smartDiscovery.highest_daily_cost.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
-              <use :href="`#${getIconId(smartDiscovery.highest_daily_cost.icon)}`" />
-            </svg>
+            <SvgIcon v-if="smartDiscovery.highest_daily_cost.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.highest_daily_cost.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.highest_daily_cost.icon }}</span>
           </div>
         </div>
@@ -60,9 +58,7 @@
             <span class="isc-cost-val green">{{ format(smartDiscovery.lowest_daily_cost.cost) }} <span class="isc-cost-unit">/ {{ t('analyticsPage.perDay').replace('/', '') }}</span></span>
           </div>
           <div class="isc-bg-icon" v-if="smartDiscovery.lowest_daily_cost">
-            <svg v-if="smartDiscovery.lowest_daily_cost.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
-              <use :href="`#${getIconId(smartDiscovery.lowest_daily_cost.icon)}`" />
-            </svg>
+            <SvgIcon v-if="smartDiscovery.lowest_daily_cost.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.lowest_daily_cost.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.lowest_daily_cost.icon }}</span>
           </div>
         </div>
@@ -78,9 +74,7 @@
             <span class="isc-days-val">{{ smartDiscovery.longest_held.days }} <span class="isc-days-unit">{{ t('insights.smartDiscovery.daysUnit') }}</span></span>
           </div>
           <div class="isc-bg-icon" v-if="smartDiscovery.longest_held">
-            <svg v-if="smartDiscovery.longest_held.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
-              <use :href="`#${getIconId(smartDiscovery.longest_held.icon)}`" />
-            </svg>
+            <SvgIcon v-if="smartDiscovery.longest_held.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.longest_held.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.longest_held.icon }}</span>
           </div>
         </div>
@@ -99,9 +93,7 @@
             <div class="isc-category-pct">{{ smartDiscovery.top_category.percentage }}%</div>
           </div>
           <div class="isc-bg-icon" v-if="smartDiscovery.top_category">
-            <svg v-if="smartDiscovery.top_category.icon?.startsWith('icon-')" class="icon-svg-bg" aria-hidden="true">
-              <use :href="`#${getIconId(smartDiscovery.top_category.icon)}`" />
-            </svg>
+            <SvgIcon v-if="smartDiscovery.top_category.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.top_category.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.top_category.icon }}</span>
           </div>
         </div>
@@ -122,9 +114,7 @@
       <div class="rank-list">
         <div class="rank-item" v-for="(item, idx) in dailyCostItems" :key="idx">
           <div class="rank-img">
-            <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(item.icon)}`" />
-            </svg>
+            <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
             <span v-else>{{ item.icon || '📦' }}</span>
           </div>
           <div class="rank-info">
@@ -154,9 +144,7 @@
       <div class="popup-rank-list">
         <div class="rank-item" v-for="(item, idx) in allCostRankItems" :key="idx">
           <div class="rank-img">
-            <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(item.icon)}`" />
-            </svg>
+            <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
             <span v-else>{{ item.icon || '📦' }}</span>
           </div>
           <div class="rank-info">
@@ -321,9 +309,7 @@
         <!-- 2nd -->
         <div class="podium-item rank2">
           <div class="podium-thumb">
-            <svg v-if="top3Items[1]?.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(top3Items[1]?.icon)}`" />
-            </svg>
+            <SvgIcon v-if="top3Items[1]?.icon?.startsWith('icon-')" :name="getIconId(top3Items[1]?.icon)" class="icon-svg" />
             <span v-else>{{ top3Items[1]?.icon || '📦' }}</span>
           </div>
           <div class="podium-name">{{ top3Items[1]?.name }}</div>
@@ -336,9 +322,7 @@
         <!-- 1st -->
         <div class="podium-item rank1">
           <div class="podium-thumb">
-            <svg v-if="top3Items[0]?.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(top3Items[0]?.icon)}`" />
-            </svg>
+            <SvgIcon v-if="top3Items[0]?.icon?.startsWith('icon-')" :name="getIconId(top3Items[0]?.icon)" class="icon-svg" />
             <span v-else>{{ top3Items[0]?.icon || '📦' }}</span>
           </div>
           <div class="podium-name">{{ top3Items[0]?.name }}</div>
@@ -351,9 +335,7 @@
         <!-- 3rd -->
         <div class="podium-item rank3">
           <div class="podium-thumb">
-            <svg v-if="top3Items[2]?.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(top3Items[2]?.icon)}`" />
-            </svg>
+            <SvgIcon v-if="top3Items[2]?.icon?.startsWith('icon-')" :name="getIconId(top3Items[2]?.icon)" class="icon-svg" />
             <span v-else>{{ top3Items[2]?.icon || '📦' }}</span>
           </div>
           <div class="podium-name">{{ top3Items[2]?.name }}</div>
@@ -368,9 +350,7 @@
         <div class="pres-list-item" v-for="(item, idx) in retentionItems" :key="idx">
           <div class="pres-rank">{{ item.rank }}</div>
           <div class="pres-thumb">
-            <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-              <use :href="`#${getIconId(item.icon)}`" />
-            </svg>
+            <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
             <span v-else>{{ item.icon }}</span>
           </div>
           <div class="pres-info">
