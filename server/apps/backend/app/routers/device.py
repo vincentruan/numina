@@ -1,7 +1,8 @@
 """Device trust management endpoints."""
 
+import jwt
 from fastapi import APIRouter, Cookie, Depends, Request, Response
-from jose import JWTError, jwt
+from jwt.exceptions import PyJWTError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.captcha import verify_captcha
@@ -64,7 +65,7 @@ def _get_jti_from_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
         return payload.get("jti")
-    except JWTError:
+    except PyJWTError:
         return None
 
 

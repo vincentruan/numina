@@ -140,12 +140,23 @@ class Settings(BaseSettings):
         return self
 
 
+def _is_weak_secret(value: str) -> bool:
+    """Return True if value is empty or contains a known-weak placeholder pattern."""
+    if not value:
+        return True
+    return "change-me" in value.lower() or "change_me" in value.lower()
+
+
 settings = Settings()
 
-# Auto-generate a random key for dev convenience, but warn in production
-if settings.SECRET_KEY == _DEFAULT_SECRET:
+
+# Auto-generate a random key for dev convenience, but hard-fail in production
+if _is_weak_secret(settings.SECRET_KEY):
     if settings.ENVIRONMENT == "production":
-        raise RuntimeError("SECRET_KEY 未配置！生产环境必须设置 SECRET_KEY 环境变量。")
+        raise RuntimeError(
+            "SECRET_KEY 未配置或使用了默认占位符！"
+            "生产环境必须设置强随机 SECRET_KEY 环境变量。"
+        )
     else:
         settings.SECRET_KEY = secrets.token_urlsafe(32)
         logger.warning("SECRET_KEY 未配置，已自动生成随机密钥（仅限开发环境）。")

@@ -14,7 +14,7 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      - SECRET_KEY=${SECRET_KEY:-}
       - ALTCHA_HMAC_KEY=${ALTCHA_HMAC_KEY}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:28080","http://localhost:80"]}
@@ -73,7 +73,7 @@ services:
       - TZ=Asia/Shanghai
       - DATA_ROOT=/app/.numina/data
       - DATABASE_URL=${DATABASE_URL:-sqlite:////app/.numina/data/db/numina.db}
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-use-a-long-random-string}
+      - SECRET_KEY=${SECRET_KEY:-}
       - AI_ENCRYPTION_KEY=${AI_ENCRYPTION_KEY:-}
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - FILE_SYNC_INTERVAL_MINUTES=${FILE_SYNC_INTERVAL_MINUTES:-30}

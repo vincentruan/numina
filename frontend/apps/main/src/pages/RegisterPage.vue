@@ -1,16 +1,16 @@
 <template>
   <div class="register-page">
     <div class="register-header">
-      <h1 class="app-title">创建家庭</h1>
-      <p class="app-subtitle">创建一个新的家庭账本</p>
+      <h1 class="app-title">{{ t('register.title') }}</h1>
+      <p class="app-subtitle">{{ t('register.subtitle') }}</p>
     </div>
 
     <van-form class="register-form" @submit="onSubmit">
       <van-cell-group inset>
         <van-field
           v-model="form.family_invitation_code"
-          label="家庭邀请码"
-          placeholder="请输入6位邀请码"
+          :label="t('register.inviteCodeLabel')"
+          :placeholder="t('register.inviteCodePlaceholder')"
           maxlength="6"
           :formatter="formatInvitationCode"
           format-trigger="onBlur"
@@ -18,30 +18,30 @@
         />
         <van-field
           v-model="form.family_name"
-          label="家庭名称"
-          placeholder="请输入家庭名称"
+          :label="t('register.familyNameLabel')"
+          :placeholder="t('register.familyNamePlaceholder')"
           :rules="[{ required: true, message: t('auth.form.familyNameRequired') }]"
           :error-message="getError('family_name')?.msg"
         />
         <van-field
           v-model="form.username"
-          label="用户名"
-          placeholder="请输入用户名"
+          :label="t('register.usernameLabel')"
+          :placeholder="t('register.usernamePlaceholder')"
           :rules="[{ required: true, message: t('auth.form.usernameRequired') }]"
           :error-message="getError('username')?.msg"
         />
         <van-field
           v-model="form.display_name"
-          label="显示名称"
-          placeholder="请输入显示名称"
+          :label="t('register.displayNameLabel')"
+          :placeholder="t('register.displayNamePlaceholder')"
           :rules="[{ required: true, message: t('auth.form.displayNameRequired') }]"
         />
         <div class="password-field-wrapper">
           <van-field
             v-model="form.password"
             :type="showPassword ? 'text' : 'password'"
-            label="密码"
-            placeholder="请输入密码(至少8位)"
+            :label="t('register.passwordLabel')"
+            :placeholder="t('register.passwordPlaceholder')"
             :rules="[
               { required: true, message: t('auth.form.passwordRequired') },
               { validator: validatePassword, message: t('auth.form.passwordMin8') }
@@ -58,8 +58,8 @@
           <van-field
             v-model="confirmPassword"
             :type="showConfirmPassword ? 'text' : 'password'"
-            label="确认密码"
-            placeholder="请再次输入密码"
+            :label="t('register.confirmPasswordLabel')"
+            :placeholder="t('register.confirmPasswordPlaceholder')"
             :rules="[
               { required: true, message: t('auth.form.confirmPasswordRequired') },
               { validator: validateConfirmPassword, message: t('auth.form.passwordMismatch') }
@@ -77,13 +77,13 @@
 
       <div class="form-actions">
         <van-button round block type="primary" native-type="submit" :loading="loading">
-          创建并注册
+          {{ t('register.submitBtn') }}
         </van-button>
       </div>
     </van-form>
 
     <div class="register-links">
-      <router-link to="/login">已有账号？去登录</router-link>
+      <router-link to="/login">{{ t('auth.hasAccountLogin') }}</router-link>
     </div>
   </div>
 </template>

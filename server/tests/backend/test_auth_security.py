@@ -19,7 +19,7 @@ def test_revoke_jti_blocks_token_use(client, auth_headers):
     resp = client.get("/api/v1/auth/me", headers=auth_headers)
     assert resp.status_code == 200
 
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -38,7 +38,7 @@ def test_revoke_all_user_tokens_blocks_access(client, auth_headers):
     resp = client.get("/api/v1/auth/me", headers=auth_headers)
     assert resp.status_code == 200
 
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -54,7 +54,7 @@ def test_revoke_all_user_tokens_blocks_access(client, auth_headers):
 
 def test_refresh_rotates_jti(client, auth_headers):
     """After refresh, the old refresh token JTI should be revoked."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -452,14 +452,14 @@ class TestChildPinAuth:
 
     def test_pin_login_succeeds_after_lockout_expires(self, client, db):
         """After lockout window passes, child can login again and fail count resets."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
         family_id = _get_family_id(client)
         child = _create_child_user(db, family_id)
 
         # Manually set locked-out state with an expired lockout time
         child.pin_fail_count = 3
-        child.pin_locked_until = datetime.utcnow() - timedelta(minutes=1)
+        child.pin_locked_until = datetime.now(timezone.utc) - timedelta(minutes=1)
         db.commit()
 
         # Login should succeed — lockout has expired
@@ -471,16 +471,16 @@ class TestChildPinAuth:
 
     def test_child_refresh_with_expired_token_returns_401(self, client):
         """Expired child refresh token is rejected."""
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
 
-        from jose import jwt
+        import jwt
 
         from apps.backend.app.auth.deps import ALGORITHM
         from apps.backend.app.config import settings
 
         expired_token = jwt.encode(
             {"sub": "fake-id", "type": "refresh", "token_version": 0,
-             "exp": datetime.utcnow() - timedelta(seconds=1)},
+             "exp": datetime.now(timezone.utc) - timedelta(seconds=1)},
             settings.SECRET_KEY,
             algorithm=ALGORITHM,
         )
@@ -615,7 +615,7 @@ class TestLoginErrorMessage:
 
 def test_refresh_rate_limit(client, auth_headers):
     """Exceeding 10 refresh calls per minute per user triggers 429."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -638,7 +638,7 @@ def test_refresh_rate_limit(client, auth_headers):
 
 def test_password_change_rate_limit(client, auth_headers):
     """Exceeding 3 password change attempts per hour triggers 429."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -662,7 +662,7 @@ def test_password_change_rate_limit(client, auth_headers):
 
 def test_password_change_rate_limit_includes_retry_after(client, auth_headers):
     """Password-change rate-limited response includes Retry-After header."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -689,7 +689,7 @@ def test_password_change_rate_limit_includes_retry_after(client, auth_headers):
 
 def test_rate_limit_retry_after_header(client, auth_headers):
     """Rate-limited responses include a Retry-After header with a positive value."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -723,3 +723,63 @@ def test_update_profile_valid_avatar_color(client, auth_headers):
     resp = client.put("/api/v1/auth/me", json={"avatar_color": "#FF5733"}, headers=auth_headers)
     assert resp.status_code == 200
     assert resp.json()["data"]["avatar_color"] == "#FF5733"
+
+
+# ---------------------------------------------------------------------------
+# Settings startup validation
+# ---------------------------------------------------------------------------
+
+
+class TestSettingsStartupValidation:
+    """Tests for production secret key validation at settings init time."""
+
+    def _make_settings(self, secret_key: str, environment: str = "production"):
+        """Instantiate Settings with overrides, then run the module-level guards inline."""
+        import secrets as _secrets
+
+        from packages.core.settings import Settings, _is_weak_secret
+
+        s = Settings(SECRET_KEY=secret_key, ENVIRONMENT=environment)
+
+        if _is_weak_secret(s.SECRET_KEY):
+            if s.ENVIRONMENT == "production":
+                raise RuntimeError(
+                    "SECRET_KEY 未配置或使用了默认占位符！"
+                    "生产环境必须设置强随机 SECRET_KEY 环境变量。"
+                )
+            else:
+                s.SECRET_KEY = _secrets.token_urlsafe(32)
+
+        return s
+
+    def test_production_change_me_raises(self):
+        """SECRET_KEY containing 'change-me' in production raises RuntimeError."""
+        import pytest
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            self._make_settings("change-me-anything", environment="production")
+
+    def test_production_change_me_uppercase_raises(self):
+        """SECRET_KEY containing 'CHANGE_ME' (uppercase) in production raises RuntimeError."""
+        import pytest
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            self._make_settings("CHANGE_ME_IN_PRODUCTION", environment="production")
+
+    def test_production_empty_secret_raises(self):
+        """Empty SECRET_KEY in production raises RuntimeError."""
+        import pytest
+        with pytest.raises(RuntimeError, match="SECRET_KEY"):
+            self._make_settings("", environment="production")
+
+    def test_production_valid_secret_succeeds(self):
+        """Strong random SECRET_KEY in production does not raise."""
+        import secrets
+        strong_key = secrets.token_urlsafe(32)
+        s = self._make_settings(strong_key, environment="production")
+        assert s.SECRET_KEY == strong_key
+
+    def test_development_empty_secret_autogenerates(self):
+        """Empty/default SECRET_KEY in development auto-generates a random key."""
+        s = self._make_settings("CHANGE_ME_IN_PRODUCTION", environment="development")
+        # Should have been replaced with a random value
+        assert s.SECRET_KEY != "CHANGE_ME_IN_PRODUCTION"
+        assert len(s.SECRET_KEY) > 20

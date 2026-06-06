@@ -2,12 +2,13 @@
 
 from sqlalchemy.orm import Session
 
+from apps.backend.app.constants.system_ids import ASSET_REPORT_AGENT_ID, NUMINA_AGENT_ID
 from apps.backend.app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 _NUMINA_AGENT = {
-    "id": 100000000000005,
+    "id": NUMINA_AGENT_ID,
     "family_id": 0,
     "agent_name": "numina",
     "display_name": "数鸣",
@@ -57,7 +58,7 @@ _NUMINA_AGENT = {
 # Unlike numina which holds all family skills, this agent is scoped to ["report"]
 # and has a specialized persona for comprehensive asset health analysis.
 _ASSET_REPORT_AGENT = {
-    "id": 100000000000006,
+    "id": ASSET_REPORT_AGENT_ID,
     "family_id": 0,
     "agent_name": "asset-report",
     "display_name": "资产报告",

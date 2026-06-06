@@ -149,8 +149,9 @@ def _db_seed_resources() -> list[Resource]:
         return None
 
     def _check_agents(db: Session) -> ResourceResult | None:
+        from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
         from apps.backend.app.models.ai_agent import AIAgent
-        existing = db.query(AIAgent).filter(AIAgent.id == 100000000000005).first()
+        existing = db.query(AIAgent).filter(AIAgent.id == NUMINA_AGENT_ID).first()
         if existing:
             return None
         return ResourceResult(

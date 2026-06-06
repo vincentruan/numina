@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createWsTicket } from '@/api/ai'
 
@@ -109,6 +109,8 @@ export function useAIReportWS() {
     progressMessage.value = ''
     errorMessage.value = ''
   }
+
+  onUnmounted(() => disconnect())
 
   return { status, progressMessage, report, generatedAt, errorMessage, connect, disconnect, reset }
 }

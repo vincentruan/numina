@@ -105,7 +105,7 @@ def test_regenerate_invite_code_non_owner_forbidden(client, auth_headers):
 
 def test_regenerate_invite_code_rate_limit(client, auth_headers):
     """POST /family/invite-code returns 429 after 5 attempts per hour."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings
@@ -125,7 +125,7 @@ def test_regenerate_invite_code_rate_limit(client, auth_headers):
 
 def test_regenerate_invite_code_rate_limit_includes_retry_after(client, auth_headers):
     """Invite-code rate-limited response includes Retry-After header."""
-    from jose import jwt
+    import jwt
 
     from apps.backend.app.auth.deps import ALGORITHM
     from apps.backend.app.config import settings

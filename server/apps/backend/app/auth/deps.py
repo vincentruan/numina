@@ -13,15 +13,17 @@ Cookie Configuration:
 from datetime import datetime, timedelta
 from uuid import uuid4
 
+import jwt
 from fastapi import Cookie, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+from jwt.exceptions import ExpiredSignatureError, PyJWTError
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.revoke_jti import (
     _is_jti_revoked,
     _is_token_revoked_for_user,
 )
+from apps.backend.app.core.logging_config import get_logger
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.models.user import User
@@ -36,6 +38,8 @@ CHILD_REFRESH_TOKEN_COOKIE = "child_refresh_token"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 ALGORITHM = "HS256"
+
+logger = get_logger(__name__)
 
 
 
@@ -112,7 +116,10 @@ def _verify_token(token: str, expected_type: str = "access") -> dict | None:
         fid: str | None = payload.get("fid")  # Present for all tokens after refactor
         role: str = payload.get("role", "member")  # Default for backward compat with old tokens
         return {"sub": user_id, "fid": fid, "role": role}
-    except JWTError:
+    except ExpiredSignatureError:
+        logger.debug("Token expired")
+        return None
+    except PyJWTError:
         return None
 
 
@@ -616,5 +623,5 @@ def verify_temp_token(temp_token: str) -> dict:
         if payload.get("type") != "temp":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="无效的临时令牌")
         return payload
-    except JWTError:
+    except PyJWTError:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="临时令牌已过期或无效")
