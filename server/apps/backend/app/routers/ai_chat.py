@@ -448,8 +448,7 @@ def list_all_sessions(
         try:
             q = q.filter(AIChatSession.agent_id == int(agent_id))
         except (ValueError, TypeError):
-            from fastapi import HTTPException
-            raise HTTPException(status_code=422, detail="agent_id 必须为数字") from None
+            raise AppError(ErrorCode.VALIDATION_ERROR, "agent_id 必须为数字") from None
     total = q.count()
     rows = (
         q.order_by(AIChatSession.is_pinned.desc(), AIChatSession.updated_at.desc())
