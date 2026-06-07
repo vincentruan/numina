@@ -1,11 +1,5 @@
 <template>
   <div class="ai-button-wrapper" :class="{ active: active }">
-    <!-- Active state tabbar integrated curve (Surrounding cutout) -->
-    <div class="ai-nav-curve">
-      <div class="ear-left"></div>
-      <div class="ear-right"></div>
-    </div>
-    
     <div class="ai-button-container">
       <div class="ai-button-3d">
         <svg class="ai-icon-svg fg-icon" viewBox="0 0 1045 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -45,46 +39,6 @@ defineProps<{
   align-items: center;
   justify-content: center;
   position: relative;
-}
-
-/* Active background curve (U-notch) */
-.ai-nav-curve {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 58px;
-  height: 58px;
-  background-color: var(--van-tabbar-background, #fff);
-  border-radius: 50%;
-  z-index: -1;
-  opacity: 0;
-  transition: opacity 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.04);
-}
-
-.ear-left, .ear-right {
-  content: '';
-  position: absolute;
-  top: 40%;
-  width: 20px;
-  height: 20px;
-  background: transparent;
-  border-radius: 50%;
-}
-
-.ear-left {
-  left: -19px;
-  box-shadow: 10px 10px 0 0 var(--van-tabbar-background, #fff);
-}
-
-.ear-right {
-  right: -19px;
-  box-shadow: -10px 10px 0 0 var(--van-tabbar-background, #fff);
-}
-
-.ai-button-wrapper.active .ai-nav-curve {
-  opacity: 1;
 }
 
 .ai-button-3d {
@@ -175,17 +129,6 @@ defineProps<{
 }
 
 /* Dark Mode Adaptation */
-[data-theme='dark'] .ai-nav-curve {
-  background-color: var(--bg-secondary);
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
-}
-[data-theme='dark'] .ear-left {
-  box-shadow: 10px 10px 0 0 var(--bg-secondary);
-}
-[data-theme='dark'] .ear-right {
-  box-shadow: -10px 10px 0 0 var(--bg-secondary);
-}
-
 [data-theme='dark'] .ai-button-3d {
   background: linear-gradient(135deg, #2f3340 0%, #20232b 100%);
   box-shadow:
