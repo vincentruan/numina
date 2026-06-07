@@ -148,6 +148,13 @@ export default {
     slashPaletteHint: 'Select a feature, press Esc to close',
     slashPaletteEmpty: 'No features available',
   },
+  ai: {
+    systemAgents: 'System Agents',
+    customAgents: 'Custom Agents',
+    systemAgentHint: 'Core functionality, always enabled',
+    customAgentHint: 'Fully editable, can be deleted',
+    createAgent: 'Create Agent',
+  },
   aiPlanProgress: {
     ariaLabel: 'Plan progress: {completed} of {total} steps complete',
     stepAria: 'Step {index}: {label}, {status}',
@@ -1729,6 +1736,7 @@ export default {
     editAgent: 'Edit Agent',
     noCustomAgents: 'No custom agents yet',
     noCustomAgentsSub: 'Tap below to create your first agent',
+    alwaysEnabled: 'Always Enabled',
     consult: 'Consult',
     chat: 'Chat',
     edit: 'Edit',

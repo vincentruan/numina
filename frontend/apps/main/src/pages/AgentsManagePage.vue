@@ -65,12 +65,10 @@ async function handleDelete(agent: Agent) {
           </span>
         </template>
         <template #value>
-          <van-switch
-            :model-value="agent.is_enabled"
-            size="20"
-            :disabled="!isOwner"
-            @update:model-value="(v: boolean) => handleToggle(agent, v)"
-          />
+          <!-- System agents are always enabled, tied to core functionality -->
+          <van-tag type="primary" size="medium" plain>
+            {{ t('agents.alwaysEnabled') }}
+          </van-tag>
         </template>
       </van-cell>
     </van-cell-group>

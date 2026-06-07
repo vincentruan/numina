@@ -98,7 +98,7 @@ export default {
   ai: {
     systemAgents: '系统智能体',
     customAgents: '自定义智能体',
-    systemAgentHint: '不可删除，仅可启用/禁用',
+    systemAgentHint: '核心功能依赖，始终启用',
     customAgentHint: '完全可编辑，可删除',
     createAgent: '创建新智能体',
   },
@@ -1875,6 +1875,7 @@ export default {
     editAgent: '编辑智能体',
     noCustomAgents: '还没有自定义智能体',
     noCustomAgentsSub: '点击下方按钮创建你的第一个智能体',
+    alwaysEnabled: '始终启用',
     consult: '立即咨询',
     chat: '对话',
     edit: '编辑',
