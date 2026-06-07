@@ -100,8 +100,10 @@
         v-if="authStore.user?.role === 'owner'"
         :title="t('settings.enableAI')"
         :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
-        icon="star-o"
       >
+        <template #icon>
+          <SvgIcon name="sparkles" :size="16" class="cell-icon" />
+        </template>
         <template #value>
           <van-switch
             :model-value="aiEnabled"
@@ -113,13 +115,29 @@
       </van-cell>
       <van-cell :title="t('settings.aiAssistant')" is-link to="/settings/ai">
         <template #icon>
-          <ButlerIcon :size="16" class="cell-icon" />
+          <SvgIcon name="brain-circuit" :size="16" class="cell-icon" />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.mcpManage')" icon="cluster-o" is-link to="/settings/ai/mcp" />
-      <van-cell :title="t('settings.webSearchManage')" icon="search" is-link to="/settings/ai/web-search" />
-      <van-cell :title="t('settings.skillsManage')" icon="gem-o" is-link to="/settings/ai/skills" />
-      <van-cell :title="t('settings.agentsManage')" icon="manager-o" is-link to="/settings/ai/agents" />
+      <van-cell :title="t('settings.mcpManage')" is-link to="/settings/ai/mcp">
+        <template #icon>
+          <SvgIcon name="plug" :size="16" class="cell-icon" />
+        </template>
+      </van-cell>
+      <van-cell :title="t('settings.webSearchManage')" is-link to="/settings/ai/web-search">
+        <template #icon>
+          <SvgIcon name="web-search" :size="16" class="cell-icon" />
+        </template>
+      </van-cell>
+      <van-cell :title="t('settings.skillsManage')" is-link to="/settings/ai/skills">
+        <template #icon>
+          <SvgIcon name="wand" :size="16" class="cell-icon" />
+        </template>
+      </van-cell>
+      <van-cell :title="t('settings.agentsManage')" is-link to="/settings/ai/agents">
+        <template #icon>
+          <SvgIcon name="robot" :size="16" class="cell-icon" />
+        </template>
+      </van-cell>
     </van-cell-group>
 
     <!-- 数据管理 -->
@@ -218,7 +236,7 @@ import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
-import ButlerIcon from '@/components/common/ButlerIcon.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 import UserIcon from '@/components/common/UserIcon.vue'
 import UsernameIcon from '@/components/common/UsernameIcon.vue'
 import ThemeIcon from '@/components/common/ThemeIcon.vue'
@@ -449,8 +467,11 @@ async function onLogout() {
   margin-right: 8px;
   color: var(--van-cell-icon-color);
   flex-shrink: 0;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  vertical-align: middle;
+  /* Match van-cell title line-height for proper alignment */
+  line-height: var(--van-cell-line-height, 24px);
 }
 </style>
