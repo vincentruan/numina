@@ -199,6 +199,9 @@ export default {
     filterTimeMachine: '财务时光机',
     slashPaletteHint: '选择功能，按 Esc 关闭',
     slashPaletteEmpty: '暂无可用功能',
+    agentInfoAria: '查看智能体信息',
+    agentInfoTitle: '智能体信息',
+    agentNoDescription: '暂无描述',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',
