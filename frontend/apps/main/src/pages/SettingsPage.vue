@@ -205,6 +205,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'Settings' })
 import { ref, computed, onMounted, watch } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'

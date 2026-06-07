@@ -139,6 +139,7 @@ const props = withDefaults(defineProps<{
   taskId?: string
   url?: string
   path?: string
+  kind?: 'data' | 'link' | 'image' | 'file' | 'other' | 'report'
 }>(), {
   defaultExpanded: true,
   compressed: false,

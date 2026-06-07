@@ -39,14 +39,14 @@ export const useBlindBoxStore = defineStore('blindBox', () => {
     return res.data
   }
 
-  async function updateGift(id: number, data: BlindBoxGiftUpdate) {
+  async function updateGift(id: string, data: BlindBoxGiftUpdate) {
     const res = await blindBoxApi.updateGift(id, data)
     const idx = gifts.value.findIndex((g) => g.id === id)
     if (idx !== -1) gifts.value[idx] = res.data
     return res.data
   }
 
-  async function deleteGift(id: number) {
+  async function deleteGift(id: string) {
     await blindBoxApi.deleteGift(id)
     gifts.value = gifts.value.filter((g) => g.id !== id)
   }
@@ -56,7 +56,7 @@ export const useBlindBoxStore = defineStore('blindBox', () => {
     draws.value = res.data
   }
 
-  async function fulfillDraw(id: number) {
+  async function fulfillDraw(id: string) {
     const res = await blindBoxApi.fulfillDraw(id)
     const idx = draws.value.findIndex((d) => d.id === id)
     if (idx !== -1) draws.value[idx] = res.data
@@ -72,7 +72,7 @@ export const useBlindBoxStore = defineStore('blindBox', () => {
     config.value = res.data
   }
 
-  async function createGiftFromWish(wishId: number) {
+  async function createGiftFromWish(wishId: string) {
     const res = await blindBoxApi.createGiftFromWish(wishId)
     gifts.value.unshift(res.data)
     return res.data
@@ -112,7 +112,7 @@ export const useBlindBoxStore = defineStore('blindBox', () => {
     }
   }
 
-  async function useBonusDraw(bonusId: number) {
+  async function useBonusDraw(bonusId: string) {
     loading.value = true
     try {
       const res = await childBlindBoxApi.useBonusDraw(bonusId)

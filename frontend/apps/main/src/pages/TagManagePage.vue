@@ -18,13 +18,11 @@
           <van-button square type="danger" :text="t('settings.tagDeleteBtn')" class="swipe-btn" @click="onDelete(tag)" />
         </template>
       </van-swipe-cell>
-      <van-empty v-if="!tags.length" :description="t('settings.tagEmptyDesc')">
-        <template #bottom>
-          <van-button type="primary" round size="small" @click="showAddDialog">
-            {{ t('settings.tagAddFirstBtn') }}
-          </van-button>
-        </template>
-      </van-empty>
+      <EmptyState v-if="!tags.length" :description="t('settings.tagEmptyDesc')">
+        <van-button type="primary" round size="small" @click="showAddDialog">
+          {{ t('settings.tagAddFirstBtn') }}
+        </van-button>
+      </EmptyState>
     </van-cell-group>
 
     <!-- Add/Edit Dialog -->
@@ -63,6 +61,7 @@ import { useI18n } from 'vue-i18n'
 import * as tagApi from '@/api/tags'
 import type { Tag } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
 
@@ -112,7 +111,7 @@ async function onDialogConfirm() {
     }
     await fetchTags()
   } catch {
-    // Error handled by interceptor
+    showToast(t('toast.operationFailed'))
   }
 }
 

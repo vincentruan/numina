@@ -56,9 +56,7 @@
         >
           <template #input>
             <div v-if="selectedCategory" class="category-display">
-              <svg class="cat-icon-sm" aria-hidden="true">
-                <use :href="`#${getIconId(selectedCategory.icon)}`" />
-              </svg>
+              <SvgIcon :name="getIconId(selectedCategory.icon)" class="cat-icon-sm" />
               <span>{{ selectedCategory.name }}</span>
             </div>
             <span v-else class="category-placeholder">{{ t('wish.form.categoryPlaceholder') }}</span>

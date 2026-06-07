@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'ChildLedger' })
 import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'

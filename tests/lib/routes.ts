@@ -67,9 +67,14 @@ export const PROTECTED_ROUTES: RouteEntry[] = [
   // Family — chore & wish management
   { name: 'ChildReset', path: '/family/children/1/reset' },
   { name: 'ChoreApprovals', path: '/family/chore-approvals' },
-  { name: 'WishReview', path: '/family/wish-review' },
   { name: 'AISpendingLeaks', path: '/ai/spending-leaks' },
   { name: 'BabyDayDetail', path: '/baby/calendar/day' },
+  { name: 'WebSearch', path: '/settings/ai/web-search' },
+  { name: 'WebSearchForm', path: '/settings/ai/web-search/form' },
+  { name: 'AgentsManage', path: '/settings/ai/agents' },
+  { name: 'AgentCreate', path: '/settings/ai/agents/new' },
+  { name: 'AgentEdit', path: '/settings/ai/agents/1/edit' },
+  { name: 'CoinRates', path: '/settings/family/coin-rates' },
 ]
 
 /**

@@ -827,7 +827,7 @@ async function submitEmojiPin() {
   padding: 20px 0 0;
 }
 
-/* Glass morphism button — background uses white glass token per DESIGN.md */
+/* Glass morphism button — background uses white glass token per Visual Standards */
 .form-actions :deep(.van-button--primary) {
   --van-button-primary-background: rgba(255, 255, 255, 0.12);
   --van-button-primary-border-color: rgba(189, 187, 255, 0.6);

@@ -55,7 +55,7 @@
       </section>
 
       <!-- Empty -->
-      <van-empty
+      <EmptyState
         v-if="detail.chores.length === 0 && detail.wishes.length === 0 && detail.milestones.length === 0"
         :description="t('baby.dayDetail.emptyState')"
         image-size="80"
@@ -67,8 +67,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
+import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } from '@/api/calendar'
 
 const { t } = useI18n()
@@ -116,6 +118,7 @@ onMounted(async () => {
       detail.value = await getChildDayDetail(date)
     }
   } catch {
+    showToast(t('toast.operationFailed'))
     detail.value = null
   } finally {
     loading.value = false

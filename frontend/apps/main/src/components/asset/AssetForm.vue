@@ -68,9 +68,7 @@
               :class="{ selected: form.category_id === cat.id }"
               @click="selectCategory(cat.id)"
             >
-              <svg class="cat-icon" aria-hidden="true">
-                <use :href="`#${getIconId(cat.icon)}`" />
-              </svg>
+              <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
               <span class="cat-name">{{ cat.name }}</span>
             </div>
           </div>

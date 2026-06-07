@@ -116,7 +116,7 @@ async function onDialogConfirm() {
       showToast(t('toast.addSuccess'))
     }
   } catch {
-    // Error handled by interceptor
+    showToast(t('toast.operationFailed'))
   }
 }
 

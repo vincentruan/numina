@@ -46,9 +46,7 @@
               <!-- Icon anchor -->
               <div class="wish-icon" aria-hidden="true">
                 <template v-if="wish.category">
-                  <svg class="icon-svg" aria-hidden="true">
-                    <use :href="`#${getIconId(wish.category.icon)}`" />
-                  </svg>
+                  <SvgIcon :name="getIconId(wish.category.icon)" class="icon-svg" />
                 </template>
                 <span v-else class="wish-emoji">✨</span>
               </div>

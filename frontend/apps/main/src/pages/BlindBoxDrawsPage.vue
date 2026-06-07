@@ -7,7 +7,7 @@
     />
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <van-empty v-if="!loading && draws.length === 0" :description="t('blindBoxDraw.historyEmpty')" />
+      <EmptyState v-if="!loading && draws.length === 0" :description="t('blindBoxDraw.historyEmpty')" />
 
       <div v-else class="draws-list">
         <DrawHistoryList :draws="draws" />
@@ -22,6 +22,7 @@ import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()

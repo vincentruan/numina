@@ -16,9 +16,7 @@
         @click="$emit('select-status', 'idle')"
       >
         <div class="card-icon">
-          <svg class="icon-svg" aria-hidden="true">
-            <use href="#icon-idle" />
-          </svg>
+          <SvgIcon name="idle" class="icon-svg" />
         </div>
         <div class="card-content">
           <div class="card-title">{{ t('alertCards.idleAssets') }}</div>
@@ -35,9 +33,7 @@
         @click="showExpiringSheet = true"
       >
         <div class="card-icon">
-          <svg class="icon-svg" aria-hidden="true">
-            <use :href="hasFinancialExpiring ? '#icon-warning' : '#icon-expiring'" />
-          </svg>
+          <SvgIcon :name="hasFinancialExpiring ? 'warning' : 'expiring'" class="icon-svg" />
         </div>
         <div class="card-content">
           <div class="card-title">{{ t('alertCards.expiringSoon') }}</div>
@@ -69,9 +65,7 @@
           @click="goToAsset(item.id)"
         >
           <div class="item-icon">
-            <svg class="icon-svg-small" aria-hidden="true">
-              <use :href="`#${getIconId(item.icon)}`" />
-            </svg>
+            <SvgIcon :name="getIconId(item.icon)" class="icon-svg-small" />
           </div>
           <div class="item-content">
             <div class="item-name">{{ item.name }}</div>
@@ -104,6 +98,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem } from '@/api/dashboard'
+import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
 
@@ -168,19 +163,6 @@ function goToAsset(id: string) {
   router.push(`/assets/${id}`)
 }
 
-/**
- * Get the icon ID for an asset category icon.
- * If the icon is already an icon ID (starts with 'icon-'), use it directly.
- * Otherwise, fall back to 'icon-other' for emojis or unknown icons.
- */
-function getIconId(icon: string | undefined): string {
-  if (!icon) return 'icon-other'
-  if (icon.startsWith('icon-')) {
-    return icon
-  }
-  // Fallback for emoji or unknown icons
-  return 'icon-other'
-}
 </script>
 
 <style scoped>

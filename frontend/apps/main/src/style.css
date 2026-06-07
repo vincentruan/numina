@@ -187,6 +187,10 @@
   --van-border-color: rgba(255, 255, 255, 0.08);
   --van-gray-6: #93939f;
   --van-field-right-icon-color: #c8c8d0;
+
+  /* Toast dark mode overrides — elevated surface with good contrast */
+  --van-toast-background: rgba(18, 18, 42, 0.95);
+  --van-toast-text-color: #f5f5f5;
 }
 
 /* ── Vant Toast / Notify theme ── */
@@ -200,13 +204,13 @@
   --van-notify-warning-background: var(--color-coral);
 }
 
-/* Force toast legibility */
+/* Force toast legibility — use CSS variables for theme responsiveness */
 .van-toast,
 .van-toast--text,
 .van-toast--loading,
 .van-toast--html {
-  color: #ffffff !important;
-  background: rgba(1, 1, 32, 0.92) !important;
+  color: var(--van-toast-text-color) !important;
+  background: var(--van-toast-background) !important;
   border-radius: var(--radius-sm) !important;
 }
 
@@ -220,8 +224,16 @@
 }
 
 .van-toast--success {
-  background: #1a7a4a !important;
+  background: var(--color-success) !important;
   color: #ffffff !important;
+}
+
+[data-theme='dark'] .van-toast--fail {
+  background: #c0392b !important;
+}
+
+[data-theme='dark'] .van-toast--success {
+  background: #27ae60 !important;
 }
 
 /* ── Base ── */

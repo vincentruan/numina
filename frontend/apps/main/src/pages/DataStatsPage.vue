@@ -23,13 +23,13 @@
       <div class="chart-card">
         <div class="chart-title">{{ t('dataStats.assetTrend') }}</div>
         <TrendLineChart v-if="trend.length" :data="trend" />
-        <van-empty v-else :description="t('dataStats.noData')" />
+        <EmptyState v-else :description="t('dataStats.noData')" />
       </div>
 
       <div class="chart-card">
         <div class="chart-title">{{ t('dataStats.assetAllocation') }}</div>
         <AllocationPieChart v-if="allocation.length" :data="allocation" />
-        <van-empty v-else :description="t('dataStats.noData')" />
+        <EmptyState v-else :description="t('dataStats.noData')" />
       </div>
     </div>
 
@@ -49,6 +49,7 @@ import { useDashboardStore } from '@/stores/dashboard'
 import TrendLineChart from '@/components/charts/TrendLineChart.vue'
 import AllocationPieChart from '@/components/charts/AllocationPieChart.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { formatCurrency } from '@/utils/format'
 
 const { t } = useI18n()

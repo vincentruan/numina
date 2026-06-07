@@ -6,6 +6,7 @@ import { showConfirmDialog, showToast } from 'vant'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import type { Agent } from '@/types/agent'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -116,7 +117,7 @@ async function handleDelete(agent: Agent) {
           </div>
         </template>
       </van-cell>
-      <van-empty
+      <EmptyState
         v-if="!agentStore.customAgents.length"
         :description="t('agents.noCustomAgents')"
       >
@@ -128,7 +129,7 @@ async function handleDelete(agent: Agent) {
         >
           {{ t('ai.createAgent') }}
         </van-button>
-      </van-empty>
+      </EmptyState>
     </van-cell-group>
 
     <div v-if="isOwner && agentStore.customAgents.length" class="bottom-bar">

@@ -204,3 +204,9 @@ tests/screenshot/screenshots/*-after-*.png
 test-results/
 .cc-connect/
 .ontology/
+
+# PageAgent E2E
+logs/page-agent-e2e/run.log
+reports/page-agent-e2e/*.json
+reports/page-agent-e2e/*.md
+scripts/page-agent-e2e/.env

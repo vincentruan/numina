@@ -182,6 +182,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'ChildHome' })
 import { ref, computed, onMounted } from 'vue'
 import ProgressRing from '@/components/ProgressRing.vue'
 import { useI18n } from 'vue-i18n'

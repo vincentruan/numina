@@ -162,6 +162,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'ChildWishes' })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'

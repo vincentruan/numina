@@ -1,0 +1,45 @@
+cases:
+  - id: login-smoke
+    app: main
+    route: /login
+    task: |
+      使用测试账号登录系统。账号来自环境变量 E2E_TEST_USER，密码来自环境变量 E2E_TEST_PASSWORD。
+      如果看到用户名输入框，输入测试账号。
+      如果看到密码输入框，输入测试密码。
+      点击登录按钮。登录成功后停在首页或仪表盘。
+    maxSteps: 12
+    fixtures:
+      user: E2E_TEST_USER
+    assertions:
+      - type: url_contains
+        value: /dashboard
+      - type: text_not_visible
+        value: 登录失败
+      - type: console_no_errors
+
+  - id: asset-list-smoke
+    app: main
+    route: /assets
+    task: |
+      确认资产列表页面已加载。检查页面是否显示资产相关内容。
+      如果有搜索框，尝试输入"测试"进行搜索。
+    maxSteps: 8
+    storageState: tests/e2e/page-agent/.auth/main-user.json
+    assertions:
+      - type: url_contains
+        value: /assets
+      - type: network_no_failures
+
+  - id: child-login-smoke
+    app: child
+    route: /
+    task: |
+      在儿童端输入 PIN 码登录。PIN 码来自环境变量 E2E_CHILD_PIN。
+      找到 PIN 输入区域，输入数字。确认进入儿童主页。
+    maxSteps: 10
+    fixtures:
+      user: E2E_CHILD_USER
+    assertions:
+      - type: url_contains
+        value: /home
+      - type: console_no_errors

@@ -14,7 +14,7 @@
           <van-tag
             v-if="server.mcp_type === 'websearch'"
             type="primary"
-            size="small"
+            size="medium"
             style="margin-left: 6px"
           >
             {{ t('webSearch.title') }}

@@ -14,6 +14,7 @@ export interface ChildWish {
   priority: 'high' | 'medium' | 'low'
   status: 'pending_review' | 'active' | 'rejected' | 'redemption_requested' | 'realized'
   has_cost_set: boolean
+  star_coin_cost: number | null
   progress: number | null
   rejection_reason: string | null
   realized_asset_id: string | null

@@ -100,9 +100,7 @@
               >
                 <div class="new-asset-left">
                   <span class="new-asset-icon">
-                    <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-                      <use :href="`#${getIconId(item.icon)}`" />
-                    </svg>
+                    <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
                     <span v-else>{{ item.icon?.trim() || '📦' }}</span>
                   </span>
                   <div class="new-asset-info">
@@ -135,9 +133,7 @@
                 <div class="cost-row-left">
                   <span class="rank-badge" :class="rankClass(index)">{{ index + 1 }}</span>
                   <span class="cost-icon">
-                    <svg v-if="item.icon?.startsWith('icon-')" class="icon-svg" aria-hidden="true">
-                      <use :href="`#${getIconId(item.icon)}`" />
-                    </svg>
+                    <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
                     <span v-else>{{ item.icon?.trim() || '📦' }}</span>
                   </span>
                   <span class="cost-name">{{ item.name }}</span>

@@ -185,9 +185,7 @@
               @keydown.space.prevent="router.push('/ai/time-machine')"
             >
               <div class="app-list-item__icon">
-                <svg class="icon-svg" aria-hidden="true">
-                  <use href="#icon-time-machine" />
-                </svg>
+                <SvgIcon name="time-machine" class="icon-svg" />
               </div>
               <div class="app-list-item__body">
                 <div class="app-list-item__name">{{ t('aiHub.timeMachineCardTitle') }}</div>
@@ -289,6 +287,11 @@ const selectedAgent = ref<Agent | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const photoInputRef = ref<HTMLInputElement | null>(null)
 
+// Enabled custom agents for the grid
+const enabledCustomAgents = computed(() =>
+  agentStore.customAgents.filter((a) => a.is_enabled),
+)
+
 // Collapsible section states — my agents expands when content first loads
 const myAgentsCollapsed = ref(true)
 const analysisAppsCollapsed = ref(true)
@@ -321,11 +324,6 @@ function toggleAnalysisApps() {
 
 const numinaAgent = computed(() =>
   agentStore.systemAgents.find((a) => a.agent_name === NUMINA_AGENT_NAME) || null,
-)
-
-// Enabled custom agents for the grid
-const enabledCustomAgents = computed(() =>
-  agentStore.customAgents.filter((a) => a.is_enabled),
 )
 
 // Agent choices for picker - only actual agents, not apps like Time Machine

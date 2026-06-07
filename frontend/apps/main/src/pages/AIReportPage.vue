@@ -18,7 +18,7 @@
 
     <!-- No report yet -->
     <div v-if="!currentReport" class="empty-state">
-      <van-empty image="search" :description="t('aiReport.noReport')" />
+      <EmptyState image="search" :description="t('aiReport.noReport')" />
       <div class="empty-actions">
         <van-button type="primary" block :loading="taskStatus === 'running'" @click="onGenerate">
           {{ t('aiTask.startBtn') }}
@@ -165,6 +165,7 @@ import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const SUMMARY_PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
@@ -186,7 +187,7 @@ async function loadExistingReport() {
       reportGeneratedAt.value = res.data.generated_at ?? null
     }
   } catch {
-    // no report yet, that's fine
+    showToast(t('toast.operationFailed'))
   }
 }
 

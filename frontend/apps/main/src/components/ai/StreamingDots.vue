@@ -5,7 +5,7 @@
  * Replaces flickering cursor with DeerFlow-style bouncing dots.
  * 0.2s stagger delay per dot.
  *
- * Per DESIGN.md: respects prefers-reduced-motion (static dots).
+ * Per Vant 4 guidelines: respects prefers-reduced-motion (static dots).
  */
 
 import { computed } from 'vue'

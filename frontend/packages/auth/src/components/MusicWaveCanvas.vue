@@ -127,7 +127,7 @@ function drawCore(
   pulseAmp: number,
   dismissScale: number,
   dismissAlpha: number,
-  palette: typeof PALETTE.dark,
+  palette: typeof PALETTE.dark | typeof PALETTE.light,
 ) {
   const pulse = Math.sin(globalTime * pulseFreq) * pulseAmp
   const scale = (1 + pulse) * dismissScale

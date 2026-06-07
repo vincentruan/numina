@@ -3,13 +3,19 @@
     <div v-if="!isOnline" class="offline-banner" role="alert" aria-live="assertive">
       {{ t('toast.networkError') }}
     </div>
-    <router-view />
+    <router-view v-slot="{ Component, route }">
+      <Transition name="page-fade" mode="out-in">
+        <KeepAlive :include="cachedTabs">
+          <component :is="Component" :key="route.path" />
+        </KeepAlive>
+      </Transition>
+    </router-view>
     <AppTabBar />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppTabBar from '@/components/common/AppTabBar.vue'
 import { useFamilyStore } from '@/stores/family'
@@ -18,6 +24,16 @@ import { useNetwork } from '@/composables/useNetwork'
 const { t } = useI18n()
 const familyStore = useFamilyStore()
 const { isOnline } = useNetwork()
+
+const cachedTabs = ref<string[]>([
+  'Dashboard',
+  'AssetList',
+  'WishList',
+  'LiabilityList',
+  'AIHub',
+  'Baby',
+  'Settings',
+])
 
 onMounted(() => {
   if (!familyStore.family) {
@@ -43,5 +59,15 @@ onMounted(() => {
   padding: 6px 16px;
   font-size: 13px;
   font-weight: 500;
+}
+
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.page-fade-enter-from,
+.page-fade-leave-to {
+  opacity: 0;
 }
 </style>

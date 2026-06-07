@@ -19,9 +19,7 @@
             <div class="hero-category">
               <template v-if="wish.category">
                 <template v-if="wish.category.icon && wish.category.icon.startsWith('icon-')">
-                  <svg class="icon-svg" aria-hidden="true" style="width:1em;height:1em;vertical-align:-0.15em">
-                    <use :href="`#${getIconId(wish.category.icon)}`" />
-                  </svg>
+                  <SvgIcon :name="getIconId(wish.category.icon)" style="width:1em;height:1em;vertical-align:-0.15em" />
                 </template>
                 <span v-else-if="wish.category.icon">{{ wish.category.icon }}</span>
                 {{ wish.category.name }}
@@ -54,7 +52,7 @@
 
         <div v-if="wish.realized_asset_id" class="hero-realized-info">
           <p v-if="wish.fulfilled_at" class="fulfilled-date">
-            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale.value, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
+            {{ t('wish.fulfilledAt', { date: new Date(wish.fulfilled_at).toLocaleDateString(locale, { year: 'numeric', month: '2-digit', day: '2-digit' }) }) }}
           </p>
           <router-link :to="`/assets/${wish.realized_asset_id}`">
             {{ t('wish.realizedAsset') }} →
@@ -187,9 +185,7 @@
               :class="{ selected: realizeForm.category_id === cat.id }"
               @click="selectCategory(cat.id)"
             >
-              <svg class="cat-icon" aria-hidden="true">
-                <use :href="`#${getIconId(cat.icon)}`" />
-              </svg>
+              <SvgIcon :name="getIconId(cat.icon)" class="cat-icon" />
               <span class="cat-name">{{ cat.name }}</span>
             </div>
           </div>
@@ -197,8 +193,7 @@
       </van-popup>
     </template>
 
-    <van-loading v-else class="page-loading" />
-  </div>
+    </div>
 </template>
 
 <script setup lang="ts">
@@ -212,6 +207,7 @@ import type { Category } from '@/types'
 import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getIconId } from '@/utils/icon'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t, locale } = useI18n()
 
@@ -219,7 +215,7 @@ const route = useRoute()
 const router = useRouter()
 const wishStore = useWishStore()
 const deleting = ref(false)
-const loading = ref(true)
+const acting = ref(false)
 
 // Realize dialog
 const showRealizeDialog = ref(false)
@@ -335,7 +331,7 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  loading.value = true
+  showLoading()
   try {
     const id = route.params.id as string
     await wishStore.fetchWish(id)
@@ -358,7 +354,7 @@ onMounted(async () => {
       if (cat) selectedAssetType.value = cat.asset_type as 'physical' | 'financial'
     }
   } finally {
-    loading.value = false
+    hideLoading()
   }
 })
 </script>
@@ -618,12 +614,6 @@ onMounted(async () => {
 
 .delete-btn {
   margin-top: 4px;
-}
-
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding-top: 40vh;
 }
 
 .realize-dialog {

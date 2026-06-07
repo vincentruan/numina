@@ -277,8 +277,7 @@
 
       </template>
 
-      <van-loading v-else class="page-loading" />
-    </van-pull-refresh>
+      </van-pull-refresh>
   </div>
 </template>
 
@@ -293,6 +292,7 @@ import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemb
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
+import { showLoading, hideLoading } from '@/utils/loading'
 
 const { t } = useI18n()
 
@@ -351,7 +351,7 @@ function canShowActions(member: { id: string; role: string }): boolean {
   return canManage(member) || canChangeRole(member)
 }
 
-function getRoleTagType(member: { id: string; role: string }): string {
+function getRoleTagType(member: { id: string; role: string }): 'default' | 'primary' | 'success' | 'warning' | 'danger' {
   if (member.id === familyStore.family?.created_by) return 'primary'
   if (member.role === 'owner') return 'success'
   return 'default'
@@ -621,9 +621,14 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
 }
 
 onMounted(async () => {
-  await familyStore.fetchFamily()
-  if (isOwner.value) {
-    await loadChildDashboard()
+  showLoading()
+  try {
+    await familyStore.fetchFamily()
+    if (isOwner.value) {
+      await loadChildDashboard()
+    }
+  } finally {
+    hideLoading()
   }
 })
 </script>
@@ -635,11 +640,6 @@ onMounted(async () => {
 }
 .section {
   margin-top: 12px;
-}
-.page-loading {
-  display: flex;
-  justify-content: center;
-  padding-top: 40vh;
 }
 
 .section-heading {

@@ -207,7 +207,7 @@ export function normalizeAgentEvent(
               type: 'progress',
               id: planStep.id,
               title: planStep.label,
-              status: planStep.status,
+              status: planStep.status === 'pending' || planStep.status === 'active' ? 'running' : planStep.status,
             }
             if (existingIdx >= 0) {
               state.steps[existingIdx] = progressStep
@@ -304,7 +304,7 @@ export function normalizeAgentEvent(
           title: event.artifact.title,
           url: event.artifact.url,
           path: event.artifact.path,
-          kind: event.artifact.kind,
+          kind: event.artifact.kind === 'data' ? 'other' : event.artifact.kind,
         }
         if (stepIdx >= 0) {
           state.steps[stepIdx] = artifactStep
@@ -317,7 +317,7 @@ export function normalizeAgentEvent(
           title: event.artifact.title,
           url: event.artifact.url,
           path: event.artifact.path,
-          kind: event.artifact.kind,
+          kind: event.artifact.kind === 'data' ? 'other' : event.artifact.kind,
         })
       }
       break

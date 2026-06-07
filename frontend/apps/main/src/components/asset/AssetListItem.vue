@@ -19,9 +19,7 @@
         class="item-icon"
         :style="{ background: asset.category?.color || 'var(--color-primary)' }"
       >
-        <svg class="icon-svg" aria-hidden="true">
-          <use :href="`#${getIconId(asset.category?.icon)}`" />
-        </svg>
+        <SvgIcon :name="getIconId(asset.category?.icon)" class="icon-svg" />
       </div>
       <div class="item-info">
         <div class="item-header">
@@ -53,9 +51,7 @@
                   background: asset.category?.color || 'var(--color-primary)',
                 }"
               >
-                <svg class="progress-marker-svg" aria-hidden="true">
-                  <use :href="`#${getIconId(asset.category?.icon)}`" />
-                </svg>
+                <SvgIcon :name="getIconId(asset.category?.icon)" class="progress-marker-svg" />
               </div>
             </div>
           </div>

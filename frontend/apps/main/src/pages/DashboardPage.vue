@@ -72,9 +72,7 @@
                   <template #title>
                     <span class="cat-tab-title">
                       <span class="cat-tab-icon" :style="{ background: cat.color || 'var(--color-primary)' }">
-                        <svg class="cat-tab-svg" aria-hidden="true">
-                          <use :href="`#${getIconId(cat.icon)}`" />
-                        </svg>
+                        <SvgIcon :name="getIconId(cat.icon)" class="cat-tab-svg" />
                       </span>
                       {{ cat.name }} ({{ cat.count }})
                     </span>
@@ -275,7 +273,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { showToast, showConfirmDialog, showLoadingToast, closeToast } from 'vant'
+import { showToast, showConfirmDialog } from 'vant'
+import { showLoading, hideLoading } from '@/utils/loading'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -487,17 +486,17 @@ async function handleBatchDelete() {
       title: t('dashboard.dialog.confirmDeleteTitle'),
       message: t('dashboard.dialog.confirmDeleteMessage', { count: selectedIds.value.length }),
     })
-    showLoadingToast({ message: t('dashboard.toast.deleting'), forbidClick: true, duration: 0 })
+    showLoading(t('dashboard.toast.deleting'))
     try {
       const res = await batchArchiveAssets(selectedIds.value)
-      closeToast()
+      hideLoading()
       showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
       selectionMode.value = false
       selectedIds.value = []
       selectAll.value = false
       await dashboardStore.fetchAll()
     } catch {
-      closeToast()
+      hideLoading()
       showToast(t('toast.deleteFailed'))
     }
   } catch {
@@ -511,24 +510,24 @@ async function onMoreActionSelect(action: { value: string }) {
     return
   }
 
-  showLoadingToast({ message: t('dashboard.toast.processing'), forbidClick: true, duration: 0 })
+  showLoading(t('dashboard.toast.processing'))
   try {
     switch (action.value) {
       case 'retire': {
         const res = await batchUpdateStatus(selectedIds.value, 'archived')
-        closeToast()
+        hideLoading()
         showToast(t('toast.assetRetireBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'activate': {
         const res = await batchUpdateStatus(selectedIds.value, 'active')
-        closeToast()
+        hideLoading()
         showToast(t('toast.assetActivateBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'export': {
         const res = await batchExportAssets(selectedIds.value)
-        closeToast()
+        hideLoading()
         // Create downloadable JSON
         const dataStr = JSON.stringify(res.data.data, null, 2)
         const blob = new Blob([dataStr], { type: 'application/json' })
@@ -547,7 +546,7 @@ async function onMoreActionSelect(action: { value: string }) {
     selectAll.value = false
     await dashboardStore.fetchAll()
   } catch {
-    closeToast()
+    hideLoading()
     showToast(t('toast.operationFailed'))
   }
 }

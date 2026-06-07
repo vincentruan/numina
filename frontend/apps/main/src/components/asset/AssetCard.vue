@@ -42,9 +42,7 @@
         class="card-icon"
         :style="{ background: asset.category?.color || 'var(--color-primary)' }"
       >
-        <svg class="icon-svg" aria-hidden="true">
-          <use :href="`#${getIconId(asset.category?.icon)}`" />
-        </svg>
+        <SvgIcon :name="getIconId(asset.category?.icon)" class="icon-svg" />
       </div>
     </div>
     <div class="card-right">

@@ -4,11 +4,11 @@
 
     <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <!-- No Children State -->
-      <van-empty v-if="childMembers.length === 0" :description="t('baby.noChildren')">
+      <EmptyState v-if="childMembers.length === 0" :description="t('baby.noChildren')">
         <van-button type="primary" size="small" @click="$router.push('/family/members')">
           {{ t('baby.addChildren') }}
         </van-button>
-      </van-empty>
+      </EmptyState>
 
       <!-- Child Selector + Content -->
       <template v-else>
@@ -192,7 +192,7 @@
                 </div>
               </template>
 
-              <van-empty v-if="filteredWishes.length === 0" :description="t('baby.noWishes')" image-size="60" />
+              <EmptyState v-if="filteredWishes.length === 0" :description="t('baby.noWishes')" image-size="60" />
             </div>
           </van-tab>
 
@@ -346,7 +346,7 @@
                 </div>
               </template>
 
-              <van-empty v-if="filteredChores.length === 0" :description="t('baby.noChores')" image-size="60" />
+              <EmptyState v-if="filteredChores.length === 0" :description="t('baby.noChores')" image-size="60" />
             </div>
 
             <!-- FAB: create new chore -->
@@ -529,6 +529,7 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'Baby' })
 import { ref, computed, onMounted } from 'vue'
 import { showToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -546,6 +547,7 @@ import { grantCoins } from '@/api/coins'
 import { getChildrenChores, assignChoreInstance, voidChoreInstance, approveChore, rejectChore, type ChoreInstance } from '@/api/chores'
 import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -935,7 +937,7 @@ async function doGrant() {
   try {
     const res = await getAllChildBalances()
     childBalances.value = res.data
-  } catch { /* non-critical */ }
+  } catch { showToast(t('toast.operationFailed')) }
 }
 
 function openAssignPicker(chore: ChoreInstance) {
@@ -1052,7 +1054,7 @@ async function loadData() {
     allWishes.value = wishes
     allChores.value = chores
   } catch {
-    // non-critical
+    showToast(t('toast.operationFailed'))
   }
 }
 
