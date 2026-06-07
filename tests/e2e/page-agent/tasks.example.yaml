@@ -1,0 +1,16 @@
+# Template for new PageAgent E2E test cases
+# Copy this file, rename, and fill in your cases.
+cases:
+  - id: example-case
+    app: main
+    route: /target-page
+    task: |
+      Describe what PageAgent should do in natural language.
+      Use business terms. PageAgent reads text DOM to understand the page.
+    maxSteps: 15
+    assertions:
+      - type: url_contains
+        value: /expected-path
+      - type: text_visible
+        value: 期望看到的文本
+      - type: console_no_errors

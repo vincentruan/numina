@@ -1,0 +1,27 @@
+{
+  "name": "page-agent-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e": "tsx page-agent-runner.ts 'tests/e2e/page-agent/**/*.yaml'",
+    "e2e:smoke": "tsx page-agent-runner.ts tests/e2e/page-agent/smoke.yaml",
+    "e2e:validate": "tsx task-schema.ts --validate 'tests/e2e/page-agent/**/*.yaml'",
+    "e2e:report": "tsx report.ts --last",
+    "e2e:verify": "tsx verify-smoke.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "dotenv": "^16.4.0",
+    "openai": "^4.0.0",
+    "page-agent": "latest"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.7.0",
+    "yaml": "^2.7.0",
+    "zod": "^3.23.0"
+  }
+}
