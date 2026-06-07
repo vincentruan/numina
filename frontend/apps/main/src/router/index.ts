@@ -52,7 +52,8 @@ const router = createRouter({
         {
           path: '',
           name: 'Dashboard',
-          component: () => import('@/pages/DashboardPage.vue')
+          component: () => import('@/pages/DashboardPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'dashboard/analytics',
@@ -62,7 +63,8 @@ const router = createRouter({
         {
           path: 'assets',
           name: 'AssetList',
-          component: () => import('@/pages/AssetListPage.vue')
+          component: () => import('@/pages/AssetListPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'assets/new',
@@ -87,7 +89,8 @@ const router = createRouter({
         {
           path: 'liabilities',
           name: 'LiabilityList',
-          component: () => import('@/pages/LiabilityListPage.vue')
+          component: () => import('@/pages/LiabilityListPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'liabilities/new',
@@ -107,7 +110,8 @@ const router = createRouter({
         {
           path: 'wishes',
           name: 'WishList',
-          component: () => import('@/pages/WishListPage.vue')
+          component: () => import('@/pages/WishListPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'wishes/new',
@@ -409,8 +413,14 @@ router.beforeEach((to, _from, next) => {
   next()
 })
 
-router.afterEach(() => {
-  NProgress.done()
+router.afterEach((to) => {
+  // Pages with skeleton: immediately complete NProgress
+  // Skeleton takes over visual feedback during data loading
+  if (to.meta.hasSkeleton) {
+    NProgress.done()
+  }
+  // Pages without skeleton: NProgress stays active
+  // Page's onMounted data loading will call NProgress.done() when complete
 })
 
 export default router
