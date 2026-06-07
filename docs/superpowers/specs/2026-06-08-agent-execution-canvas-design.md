@@ -149,7 +149,7 @@ AiStepDetail.vue
 ### Merge Strategy
 
 Consecutive steps of the same category are merged into one summary line:
-- `get_asset_allocation` → `calculate_trend` → `calculate_net_worth` (3 separate)
+- `calculate_trend` → `calculate_net_worth` → `compute_allocation_ratio` (3 separate)
 - Merged display: "计算分析 (3次)"
 
 User can expand to see individual calls with timestamps.
@@ -284,7 +284,7 @@ When interrupted session is detected:
 | `services/stream_events.py` | tool_call 增加 category 字段 | +10 行 |
 | `services/orchestrator.py` | `_chunk_to_event_lines` 增加 display_summary | +20 行 |
 
-### 7.4 不改动的关键文件
+### 7.4 不改动的关键文件（部分示例）
 
 | 文件 | 理由 |
 |------|------|
@@ -361,10 +361,10 @@ curl http://localhost:8001/api/v1/ai/sessions/{id}/events | jq 'select(.type=="t
 
 | 类型 | 文件数 | 新增行数 |
 |------|--------|----------|
-| 新增 | 6 | ~400 |
+| 新增 | 6 | ~490 |
 | 改造 | 4 | ~280 |
 | 后端可选 | 2 | ~30 |
-| **合计** | **12** | **~710** |
+| **合计** | **12** | **~800** |
 
 ---
 
@@ -372,7 +372,101 @@ curl http://localhost:8001/api/v1/ai/sessions/{id}/events | jq 'select(.type=="t
 
 设计完成。整体方案最小侵入，复用现有组件，不破坏 DeerFlow 编排逻辑，向后兼容旧会话。
 
-- **Minimal intrusion:** All new components are additive, no existing logic changes
+- **Minimal intrusion:** New components are additive; existing components receive minor prop additions and styling updates, no behavioral logic changes
 - **Reuse existing components:** Build on top of `AiProcessBlock` and `AiStepBlock`
 - **DeerFlow unchanged:** Orchestrator logic stays the same
 - **Backward compatible:** Old sessions degrade gracefully to text-only display
+
+---
+
+## 13. Document Review Findings (2026-06-08)
+
+**Reviewers:** coherence, feasibility, design-lens, security-lens
+
+**Applied fixes (4):**
+- Corrected line count totals: 新增 ~490 (not ~400), 合计 ~800 (not ~710)
+- Fixed merge strategy example to use same-category tools (calculation category)
+- Updated Design Principles to acknowledge existing component modifications
+- Added "（部分示例）" to §7.4 header to clarify non-exhaustive list
+
+---
+
+### 13.1 P1 — Must Fix Before Implementation
+
+| # | Section | Issue | Resolution Required |
+|---|---------|-------|---------------------|
+| 1 | §4 Sensitive Data Redaction | **Client-side redaction insufficient**: Sensitive data transmitted over HTTP and logged in backend JSONL before frontend redaction. Frontend masking is cosmetic, not real protection. | Add backend-side redaction in `stream_events.py` or `session_journal.py` before streaming. Frontend redaction becomes defense-in-depth, not primary protection. |
+| 2 | §2 Architecture, §5 | **Missing transition states**: Bubble→canvas transition timing undefined. What loading/transition state shows during first 1-2 steps before detection completes? | Define: (1) Does canvas appear from start or transition mid-stream? (2) Loading state during detection. (3) Transition animation (fade/slide/instant). |
+| 3 | §6 Interrupted Session Handling | **Resume flow incomplete**: "继续执行" button conditions undefined. Resume API, state restoration, and exit flow not specified. | Define: (1) When is resume button shown? (2) Resume API endpoint. (3) Does it start from last completed step or scratch? (4) Exit mechanism for unwanted resume. |
+| 4 | §4 Sensitive Keys | **Substring detection fragile**: `lowerKey.includes(k)` misses camelCase (`ServiceKey`), causes false positives (`keyboard`). Attackers can rename keys to bypass. | Use exact case-insensitive matching for critical keys + whitelist of known-safe field names. Consider redacting unknown fields by default. |
+| 5 | §2 Data Flow | **Auth/authz not documented**: No explicit authorization flow for viewing execution details. Backend has family_id check but not mapped to frontend rendering. | Document: "Backend validates current_user.family_id matches session.family_id before streaming events; frontend renders authorized data only." |
+| 6 | §2, §5 | **Mobile responsive undefined**: Canvas on 320-428px screens may be cramped. Touch targets not specified (WCAG requires ≥44×44px). | Define responsive behavior: (1) Same canvas behavior on mobile/tablet? (2) Step summary truncation. (3) AiStepDetail as modal/drawer on mobile. (4) Touch target sizing. |
+
+---
+
+### 13.2 P2 — Should Fix During Implementation
+
+| # | Section | Issue | Resolution Required |
+|---|---------|-------|---------------------|
+| 7 | §7.1 New Files | **Duplicate components**: `AiStepSummary.vue` and `AiStepDetail.vue` duplicate `AiStepBlock.vue` (688 lines) functionality — displayName, icon, status, collapsible detail. | Evaluate extending existing `AiStepBlock.vue` vs creating parallel components. If new components needed, document rationale. |
+| 8 | §3 Tool Category Mapping | **Backend already provides fields**: `stream_events.py` sends `display_name`, `icon`, `tool_type`. `aiStepSummary.ts` may duplicate backend mapping. | Clarify: `aiStepSummary.ts` provides Chinese UX transformation on top of backend `display_name`, not duplicating category mapping. |
+| 9 | §3 Merge Strategy | **Edge cases undefined**: No handling for: zero consecutive steps, single step, mixed category sequence, empty category field. | Define merge behavior for: (1) 0 steps, (2) 1 step (no merge), (3) category change mid-sequence, (4) tool with no category mapping. |
+| 10 | §2 Architecture | **Component hierarchy unclear**: How does `AgentRunCanvas` receive steps from `AIChatPage`? localStorage sync pattern undefined. | Document data flow: (1) Props vs events for step passing. (2) Parent-child state sync. (3) localStorage read/write timing. |
+| 11 | §2, §7.1 | **Empty states undefined**: What shows if 0 steps? If step has no args/result/timestamp? | Define empty states: `AiStepSummary` (0 steps), `AiStepDetail` (no args), `AgentRunCanvas` (before first step). |
+| 12 | §2, §7.1 | **Error states partially specified**: "Error message with suggested action" scope unclear — individual step vs entire canvas? | Clarify: (1) Step error vs canvas error handling. (2) Middle step failure behavior. (3) Retry action per failure type. |
+| 13 | §7.1 New Components | **Accessibility incomplete**: No ARIA roles for progress, no keyboard navigation for collapse/expand. | Add: (1) ARIA roles (status, progressbar). (2) ARIA-expanded for collapsible. (3) Keyboard handlers (Enter/Space). (4) Focus management for canvas transition. |
+| 14 | §2, §4 | **Sensitive data in browser memory**: `ProcessStep` objects store raw args before display-time redaction. XSS/DevTools can extract. | If backend redaction not feasible: redact immediately at `aiEventNormalizer.ts` entry point before storing in state. |
+| 15 | §3 External API | **Credential management undefined**: `external_api` tools receive credentials but no storage/rotation strategy. | Document: Backend-injected credentials (not user-provided), encrypted storage, admin rotation, never logged. |
+
+---
+
+### 13.3 P3 — Consider During Implementation
+
+| # | Section | Issue | Resolution |
+|---|---------|-------|------------|
+| 16 | §5 User Override | **localStorage cleanup**: No cleanup strategy on logout. | Document: "localStorage stores only non-sensitive UI preferences. Clear on logout." |
+
+---
+
+### 13.4 FYI Observations (No Decision Required)
+
+| # | Section | Observation |
+|---|---------|-------------|
+| 1 | §5 User Override | Preference scope unclear: global vs per-session vs per-task-type. Recommend: global preference, can override per-task if needed. |
+| 2 | §3 Merge Strategy | Merge timing undefined: real-time as steps arrive vs after completion. Recommend: real-time with debounce (100ms). |
+| 3 | §4 Redaction | No XSS sanitization for tool argument values. Recommend: Vue text rendering (`{{ }}`) not `v-html`. |
+| 4 | §7.2 i18n | i18n change only for main app; child app (`frontend/apps/child`) may need sync if it also uses AI chat. |
+
+---
+
+### 13.5 Deferred Questions for Implementation Phase
+
+| # | Question | Context |
+|---|---------|---------|
+| 1 | Should sensitive data redaction happen in backend? | If yes, modify `stream_events.py` to strip sensitive fields before transmission. |
+| 2 | Is `aiStepSummary.ts` providing Chinese UX summaries only? | Clarify role: Chinese transformation vs category mapping. Backend already provides `display_name`. |
+| 3 | Should `AgentRunCanvas` wrap or replace `AiProcessBlock`? | Wrap = reuse existing; Replace = new implementation. |
+| 4 | What happens for tool with no category mapping? | Define fallback display behavior. |
+
+---
+
+### 13.6 Residual Risks (Accept as Known)
+
+| Risk | Mitigation Already in Plan |
+|------|---------------------------|
+| Threshold misjudgment | User override + localStorage preference |
+| Old sessions without JSONL | Graceful degradation to text-only |
+| Interrupted session "continue" fails | User can abandon and start new session |
+| Browser extension access to memory | Client-side security inherently limited; backend redaction recommended |
+
+---
+
+### 13.7 Implementation Constraints
+
+Based on review findings, apply these constraints during implementation:
+
+1. **Security-first**: Backend must redact sensitive fields before streaming (P1 #1)
+2. **Mobile-first**: Define responsive behavior for 320-428px screens before component design (P1 #6)
+3. **Accessibility-required**: ARIA attributes and keyboard navigation are mandatory, not optional (P2 #13)
+4. **Reuse evaluation**: Before creating new components, evaluate extending existing `AiStepBlock.vue` (P2 #7)
+5. **State completeness**: Every component must have loading, empty, error states defined (P2 #11, #12)
