@@ -177,7 +177,7 @@ export default {
     backAria: '返回',
     moreActionsAria: '更多操作',
     copyAria: '复制',
-    editAria: '修改标题',
+    editAria: '编辑消息',
     regenerateAria: '重新生成',
     helpfulAria: '有帮助',
     notHelpfulAria: '没帮助',

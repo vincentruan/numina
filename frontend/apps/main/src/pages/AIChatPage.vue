@@ -286,8 +286,8 @@
                 </div>
                 <!-- eslint-enable vue/no-v-html -->
                 <AiUserBubble v-if="msg.role === 'user'" class="bubble-text" :content="msg.content" />
-                <span class="msg-time">{{ msg.displayTime }}</span>
-
+                <!-- Assistant message timestamp -->
+                <span v-if="msg.role === 'assistant'" class="msg-time">{{ msg.displayTime }}</span>
                 <!-- U6: Process footnote for historical assistant messages (R13, R14, R15) -->
                 <AiProcessFootnote
                   v-if="msg.role === 'assistant' && msg.phase === 'done' && msg.processSteps && msg.processSteps.length > 0"
@@ -299,7 +299,6 @@
                   :phase="msg.phase"
                   @toggle="(expanded) => { msg.processExpanded = expanded }"
                 />
-
                 <!-- User message send status indicator -->
                 <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
                   <span class="send-status-dot" aria-hidden="true" />
@@ -312,20 +311,23 @@
                   <span>{{ t('aiChat.sendFailed') }}</span>
                   <button class="send-retry-btn" :disabled="asking" @click="onRetrySend(idx)">{{ t('aiChat.resend') }}</button>
                 </div>
-                <!-- User message actions: copy + edit -->
-                <div v-if="msg.role === 'user'" class="msg-actions msg-actions--user">
-                  <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
-                  </button>
-                  <button class="msg-action-btn" :aria-label="t('aiChat.editAria')" :title="t('aiChat.editAria')" @click="onEditUserMessage(idx)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
-                  </button>
+                <!-- User message footer: actions (copy + edit) on left, time on right, same row -->
+                <div v-if="msg.role === 'user'" class="msg-footer msg-footer--user">
+                  <div class="msg-actions msg-actions--user">
+                    <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                    <button class="msg-action-btn" :aria-label="t('aiChat.editAria')" :title="t('aiChat.editAria')" @click="onEditUserMessage(idx)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <span class="msg-time">{{ msg.displayTime }}</span>
                 </div>
                 <!-- U7: bouncing 3-dot streaming indicator (replaces blinking block cursor) -->
                 <span
@@ -2734,12 +2736,6 @@ onUnmounted(() => {
   padding: 4px 4px 0;
 }
 
-.bubble.user .bubble-text {
-  background: var(--bubble-user-bg);
-  color: var(--bubble-user-color);
-  border-bottom-right-radius: 4px;
-}
-
 .bubble.assistant .bubble-text {
   background: var(--bubble-ai-bg);
   color: var(--bubble-ai-color);
@@ -2751,6 +2747,27 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   padding: 0 4px;
+}
+
+/* ── User message footer: actions + time in same row ── */
+.msg-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.msg-footer--user {
+  justify-content: flex-end;
+  flex-direction: row-reverse; /* time on right, actions on left */
+}
+
+/* User bubble: reduce vertical padding to match font height */
+.bubble.user .bubble-text {
+  background: var(--bubble-user-bg);
+  color: var(--bubble-user-color);
+  border-bottom-right-radius: 4px;
+  padding: 6px 12px; /* Reduced from 10px 14px */
 }
 
 /* ── User message send status ── */
