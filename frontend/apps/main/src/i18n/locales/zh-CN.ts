@@ -178,6 +178,8 @@ export default {
     moreActionsAria: '更多操作',
     copyAria: '复制',
     editAria: '编辑消息',
+    editPlaceholder: '编辑消息内容…',
+    sendEdit: '发送',
     regenerateAria: '重新生成',
     helpfulAria: '有帮助',
     notHelpfulAria: '没帮助',

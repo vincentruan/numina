@@ -293,3 +293,112 @@ class ChatSessionService:
                     continue
 
         return messages
+
+    @staticmethod
+    async def fork_session(
+        session: AIChatSession,
+        fork_from_message_id: str,
+        user: User,
+        db: Session,
+    ) -> AIChatSession:
+        """Fork a session from a specific message, creating a new branch.
+
+        Copies all messages up to (but not including) the specified message_id
+        into a new session. The new session inherits the original's agent_id
+        and other metadata.
+
+        Args:
+            session: Original AIChatSession to fork from
+            fork_from_message_id: The message_id to fork from (this message and
+                all following messages are excluded from the fork)
+            user: User creating the fork (for ownership and CachedFile.user_id)
+            db: Database session
+
+        Returns:
+            New AIChatSession with copied messages up to fork point
+
+        Raises:
+            ValueError: If path validation fails or message_id not found
+        """
+        # Read original messages
+        messages = await ChatSessionService.read_messages(session)
+
+        # Find the fork point - messages up to (not including) this message_id
+        fork_messages = []
+        found_fork_point = False
+        for msg in messages:
+            if msg.get("message_id") == fork_from_message_id:
+                found_fork_point = True
+                break
+            fork_messages.append(msg)
+
+        if not found_fork_point and fork_from_message_id:
+            raise ValueError(f"Message {fork_from_message_id} not found in session")
+
+        # Create new session
+        new_session_id = next_id()
+        jsonl_path_relative = f"{session.family_id}/{new_session_id}.jsonl"
+        file_path = _resolve_and_validate_path(session.family_id, new_session_id)
+
+        # Create directory and file
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.touch()
+
+        # Create new session record
+        new_session = AIChatSession(
+            id=new_session_id,
+            family_id=session.family_id,
+            user_id=user.id,
+            agent_id=session.agent_id,
+            jsonl_path=jsonl_path_relative,
+            message_count=len(fork_messages),
+            cached_file_id=None,
+            title=session.title,
+            source=session.source,
+        )
+        db.add(new_session)
+        db.flush()
+
+        # Copy forked messages to new JSONL file
+        if fork_messages:
+            lock_path = file_path.with_suffix(".lock")
+            with FileLock(str(lock_path), timeout=10), open(file_path, "w", encoding="utf-8") as f:
+                for msg in fork_messages:
+                    f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+
+            # Create CachedFile for the new session
+            sha256 = _compute_sha256(file_path)
+            size_bytes = file_path.stat().st_size
+            cached_file = CachedFile(
+                family_id=session.family_id,
+                user_id=user.id,
+                sha256=sha256,
+                local_path=str(file_path),
+                original_filename=f"{new_session_id}.jsonl",
+                mime_type="application/x-ndjson",
+                size_bytes=size_bytes,
+                date_dir=datetime.now().strftime("%Y%m%d"),
+            )
+            db.add(cached_file)
+            db.flush()
+            new_session.cached_file_id = cached_file.id
+
+            # Queue for remote sync if enabled
+            if settings.CHAT_ENABLE_REMOTE_SYNC:
+                default_backend = (
+                    db.query(StorageBackend)
+                    .filter_by(is_default=True, is_active=True)
+                    .first()
+                )
+                if default_backend:
+                    remote_loc = FileRemoteLocation(
+                        file_id=cached_file.id,
+                        backend_id=default_backend.id,
+                        remote_path=f"chat/{session.family_id}/{new_session_id}.jsonl",
+                        sync_status="pending",
+                    )
+                    db.add(remote_loc)
+
+        db.commit()
+        db.refresh(new_session)
+        return new_session

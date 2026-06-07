@@ -34,3 +34,14 @@ export function streamSessionEvents(
     return res.body.getReader()
   })
 }
+
+export interface ForkSessionResponse {
+  ok: boolean
+  session_id: string
+  message_count: number
+}
+
+export const forkSession = (sessionId: string, forkFromMessageId: string) =>
+  http.post<ForkSessionResponse>(`/ai/sessions/${encodeURIComponent(sessionId)}/fork`, {
+    fork_from_message_id: forkFromMessageId,
+  })

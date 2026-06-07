@@ -515,6 +515,51 @@ class SessionUpdateRequest(BaseModel):
     is_pinned: bool | None = None
 
 
+class SessionForkRequest(BaseModel):
+    fork_from_message_id: str  # The message_id to fork from (exclusive - this message and all after are excluded)
+
+
+@sessions_router.post("/sessions/{session_id}/fork")
+async def fork_session(
+    session_id: str,
+    body: SessionForkRequest,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """Fork a session from a specific message, creating a new branch.
+
+    This is used for the "edit and resend" feature - when a user edits a message,
+    we fork the session from that message's position, preserving all previous context,
+    and the edited message will be sent as a new message in the forked session.
+
+    Args:
+        session_id: The original session to fork
+        body: Contains fork_from_message_id - the message to fork from (exclusive)
+
+    Returns:
+        New session info with session_id for the frontend to use
+    """
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    try:
+        new_session = await ChatSessionService.fork_session(
+            session, body.fork_from_message_id, current_user, db
+        )
+    except ValueError as e:
+        logger.warning("fork_session failed: %s", str(e))
+        raise AppError(ErrorCode.NOT_FOUND) from e
+
+    return {
+        "ok": True,
+        "session_id": str(new_session.id),
+        "message_count": new_session.message_count,
+    }
+
+
 @sessions_router.patch("/sessions/{session_id}")
 def update_session(
     session_id: str,

@@ -285,7 +285,26 @@
                   </button>
                 </div>
                 <!-- eslint-enable vue/no-v-html -->
-                <AiUserBubble v-if="msg.role === 'user'" class="bubble-text" :content="msg.content" />
+                <AiUserBubble v-if="msg.role === 'user' && editingMessageIdx !== idx" class="bubble-text" :content="msg.content" />
+                <!-- Edit mode: replace user bubble with input field -->
+                <div v-if="msg.role === 'user' && editingMessageIdx === idx" class="edit-input-wrapper">
+                  <van-field
+                    v-model="editInputText"
+                    type="textarea"
+                    :rows="2"
+                    autosize
+                    :placeholder="t('aiChat.editPlaceholder')"
+                    class="edit-input-field"
+                  />
+                  <div class="edit-actions">
+                    <button class="edit-cancel-btn" :disabled="asking" @click="onCancelEdit">
+                      {{ t('common.cancel') }}
+                    </button>
+                    <button class="edit-send-btn" :disabled="asking || !editInputText.trim()" @click="onSendEdit(idx)">
+                      {{ t('aiChat.sendEdit') }}
+                    </button>
+                  </div>
+                </div>
                 <!-- Assistant message timestamp -->
                 <span v-if="msg.role === 'assistant'" class="msg-time">{{ msg.displayTime }}</span>
                 <!-- U6: Process footnote for historical assistant messages (R13, R14, R15) -->
@@ -311,8 +330,8 @@
                   <span>{{ t('aiChat.sendFailed') }}</span>
                   <button class="send-retry-btn" :disabled="asking" @click="onRetrySend(idx)">{{ t('aiChat.resend') }}</button>
                 </div>
-                <!-- User message footer: actions (copy + edit) on left, time on right, same row -->
-                <div v-if="msg.role === 'user'" class="msg-footer msg-footer--user">
+                <!-- User message footer: actions (copy + edit) on left, time on right, same row (hidden in edit mode) -->
+                <div v-if="msg.role === 'user' && editingMessageIdx !== idx" class="msg-footer msg-footer--user">
                   <div class="msg-actions msg-actions--user">
                     <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -481,7 +500,7 @@ import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
-import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi } from '@/api/sessions'
+import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi, forkSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
 import { getAgent } from '@/api/agent'
@@ -716,6 +735,9 @@ const sessionMenu = ref<{
 const showRenameDialog = ref(false)
 const renameInput = ref('')
 const showAgentInfo = ref(false)
+// Edit mode state: when editingMessageIdx is set, that user message becomes an input field
+const editingMessageIdx = ref<number | null>(null)
+const editInputText = ref('')
 
 // Group sessions by time bucket for display
 const groupedSessions = computed(() => {
@@ -1600,10 +1622,47 @@ async function onCopy(content: string) {
 function onEditUserMessage(idx: number) {
   const msg = messages.value[idx]
   if (!msg || msg.role !== 'user') return
-  // Remove all messages from this user message onwards
+  // Enter edit mode: show input field in place of the message
+  editingMessageIdx.value = idx
+  editInputText.value = msg.content
+}
+
+function onCancelEdit() {
+  editingMessageIdx.value = null
+  editInputText.value = ''
+}
+
+async function onSendEdit(idx: number) {
+  const msg = messages.value[idx]
+  if (!msg || msg.role !== 'user') return
+  const newContent = editInputText.value.trim()
+  if (!newContent || asking.value) return
+
+  // Clear edit mode
+  editingMessageIdx.value = null
+  editInputText.value = ''
+
+  // Fork session from this message's position if we have a session
+  if (currentSessionId.value) {
+    try {
+      const forkRes = await forkSession(currentSessionId.value, msg.id)
+      // Use the new forked session
+      currentSessionId.value = forkRes.session_id
+    } catch {
+      showToast(t('toast.operationFailed'))
+      return
+    }
+  }
+
+  // Remove all messages from this point onwards (visual cleanup)
   messages.value.splice(idx)
-  // Put the content back into input for editing
-  inputText.value = msg.content
+
+  // Reset scroll state
+  isUserScrolledUp.value = false
+
+  // Send the edited message as a new question
+  inputText.value = newContent
+  await onSend()
 }
 
 async function onRegenerate(idx: number) {
@@ -2822,6 +2881,70 @@ onUnmounted(() => {
   padding: 2px 4px;
   opacity: 0;
   transition: opacity 0.15s;
+}
+
+/* ── Edit mode: user message becomes input field ── */
+.edit-input-wrapper {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  background: var(--bubble-user-bg);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.edit-input-field {
+  background: transparent;
+  padding: 0;
+}
+
+.edit-input-field :deep(.van-field__control) {
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.edit-cancel-btn,
+.edit-send-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.edit-cancel-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.edit-cancel-btn:hover:not(:disabled) {
+  background: var(--btn-hover-bg);
+}
+
+.edit-send-btn {
+  background: var(--van-primary-color);
+  border: none;
+  color: #fff;
+}
+
+.edit-send-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.edit-cancel-btn:disabled,
+.edit-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* User message actions - positioned on right */
