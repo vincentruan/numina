@@ -28,6 +28,16 @@ if (!globalThis.importMetaHotMocked) {
   vi.stubGlobal('import.meta', globalThis.importMeta)
 }
 
+// Mock NProgress for router loading indicator
+vi.mock('nprogress', () => ({
+  default: {
+    start: vi.fn(),
+    done: vi.fn(),
+    configure: vi.fn(),
+  },
+}))
+vi.mock('nprogress/nprogress.css', () => ({ default: {} }))
+
 // Mock the loading composable to prevent import.meta.hot initialization issues
 vi.mock('../../packages/auth/src/composables/loading', () => ({
   useLoadingOverlay: () => ({

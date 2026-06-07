@@ -14,7 +14,7 @@ export default defineConfig({
     // Silent console in tests for machine-friendly output
     silent: true,
     deps: {
-      inline: [/packages\/auth/],
+      inline: [/packages\/auth/, 'nprogress'],
     },
     include: ['tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
     coverage: {
