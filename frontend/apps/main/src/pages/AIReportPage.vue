@@ -13,6 +13,8 @@
         :error-code="errorCode"
         :tool-steps="toolSteps"
         :current-tool-label="currentToolLabel"
+        :plan-steps="planSteps"
+        :current-step-index="currentStepIndex"
       />
     </div>
 
@@ -27,8 +29,13 @@
       </div>
     </div>
 
-    <!-- Report content -->
-    <template v-else-if="currentReport">
+    <!-- Generating placeholder (shown during regeneration when old report exists) -->
+    <div v-else-if="currentReport && (taskStatus === 'running' || taskStatus === 'post_processing')" class="generating-placeholder">
+      <p class="generating-text">{{ t('aiReport.generating') }}</p>
+    </div>
+
+    <!-- Report content (hidden during generation) -->
+    <template v-else-if="currentReport && taskStatus !== 'running' && taskStatus !== 'post_processing'">
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">
@@ -200,6 +207,8 @@ const {
   phase: taskPhase,
   toolSteps,
   currentToolLabel,
+  planSteps,
+  currentStepIndex,
   startStream,
 } = useAITask('report', '/ai/report/generate/events', loadExistingReport)
 
@@ -428,5 +437,14 @@ onMounted(async () => {
 }
 .regen-section {
   padding: 16px;
+}
+.generating-placeholder {
+  padding: 40px 16px;
+  text-align: center;
+}
+.generating-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0;
 }
 </style>

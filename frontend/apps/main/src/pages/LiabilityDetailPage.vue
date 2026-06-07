@@ -118,7 +118,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 
 const { t } = useI18n()
 
@@ -198,12 +198,12 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  showLoading()
+  NProgress.start()
   try {
     const id = route.params.id as string
     await liabilityStore.fetchLiability(id)
   } finally {
-    hideLoading()
+    NProgress.done()
   }
 })
 </script>

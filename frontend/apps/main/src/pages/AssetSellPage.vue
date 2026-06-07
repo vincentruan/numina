@@ -111,7 +111,7 @@ import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
 import type { AssetSellResponse } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 
 const { t } = useI18n()
 
@@ -188,14 +188,14 @@ function onResultClose(action: string) {
 }
 
 onMounted(async () => {
-  showLoading()
+  NProgress.start()
   try {
     const id = route.params.id as string
     if (!assetStore.currentAsset || assetStore.currentAsset.id !== id) {
       await assetStore.fetchAsset(id)
     }
   } finally {
-    hideLoading()
+    NProgress.done()
   }
 })
 </script>

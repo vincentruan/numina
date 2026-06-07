@@ -1,6 +1,6 @@
 <template>
   <div class="ai-chat-page" :class="{ 'theme-light': isLight }">
-    <!-- Fixed top bar: [back] [history/sidebar] [title] [new chat] -->
+    <!-- Fixed top bar: [back] [history] [agent-logo] [title+edit] [new chat] -->
     <div class="chat-header">
       <button class="header-btn" :aria-label="t('common.back')" @click="router.back()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -12,26 +12,20 @@
           <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
+      <!-- Agent logo button — shows popup with name + description on click -->
+      <button
+        v-if="activeAgent && !activeAgentLoading"
+        class="header-btn header-agent-logo-btn"
+        :aria-label="t('aiChat.agentInfoAria')"
+        @click="onToggleAgentInfo"
+      >
+        <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="20" />
+        <span v-else class="header-agent-logo-emoji">{{ activeAgent.icon || '🤖' }}</span>
+      </button>
+      <van-skeleton v-if="activeAgentLoading" :row="1" row-width="44px" class="header-agent-skeleton" />
+      <!-- Title wrap: title (truncated) + inline edit button -->
       <div class="header-title-wrap">
-        <!-- U12 (R4): agent identity badge — replaces what used to be just
-             the session title. Numina renders the cursive wordmark; other
-             agents fall back to their emoji + display_name. -->
-        <div v-if="activeAgent || activeAgentLoading" class="header-agent">
-          <van-skeleton v-if="activeAgentLoading && !activeAgent" :row="1" row-width="80px" />
-          <template v-else-if="activeAgent">
-            <span class="header-agent__icon" aria-hidden="true">
-              <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="48" />
-              <span v-else>{{ activeAgent.icon || '🤖' }}</span>
-            </span>
-            <span class="header-agent__name">{{ activeAgent.display_name }}</span>
-          </template>
-        </div>
-        <h1
-          class="header-title"
-          :class="{ 'header-title--subtitle': !!activeAgent }"
-        >
-          {{ displayedTitle }}
-        </h1>
+        <h1 class="header-title">{{ truncatedTitle }}</h1>
         <button
           v-if="sessionTitle && sessionTitle !== t('aiChat.newChat')"
           class="header-edit-btn"
@@ -43,6 +37,25 @@
             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
           </svg>
         </button>
+      </div>
+      <!-- Agent info popup — floating below agent button -->
+      <div
+        v-if="showAgentInfo && activeAgent"
+        class="agent-info-backdrop"
+        @click="showAgentInfo = false"
+      />
+      <div
+        v-if="showAgentInfo && activeAgent"
+        class="agent-info-popup"
+      >
+        <div class="agent-info-header">
+          <span class="agent-info-icon" aria-hidden="true">
+            <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="24" />
+            <span v-else>{{ activeAgent.icon || '🤖' }}</span>
+          </span>
+          <span class="agent-info-name">{{ activeAgent.display_name }}</span>
+        </div>
+        <p class="agent-info-description">{{ activeAgent.description || t('aiChat.agentNoDescription') }}</p>
       </div>
       <div class="header-actions">
         <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
@@ -273,8 +286,8 @@
                 </div>
                 <!-- eslint-enable vue/no-v-html -->
                 <AiUserBubble v-if="msg.role === 'user'" class="bubble-text" :content="msg.content" />
-                <span class="msg-time">{{ msg.displayTime }}</span>
-
+                <!-- Assistant message timestamp -->
+                <span v-if="msg.role === 'assistant'" class="msg-time">{{ msg.displayTime }}</span>
                 <!-- U6: Process footnote for historical assistant messages (R13, R14, R15) -->
                 <AiProcessFootnote
                   v-if="msg.role === 'assistant' && msg.phase === 'done' && msg.processSteps && msg.processSteps.length > 0"
@@ -286,7 +299,6 @@
                   :phase="msg.phase"
                   @toggle="(expanded) => { msg.processExpanded = expanded }"
                 />
-
                 <!-- User message send status indicator -->
                 <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
                   <span class="send-status-dot" aria-hidden="true" />
@@ -299,20 +311,23 @@
                   <span>{{ t('aiChat.sendFailed') }}</span>
                   <button class="send-retry-btn" :disabled="asking" @click="onRetrySend(idx)">{{ t('aiChat.resend') }}</button>
                 </div>
-                <!-- User message actions: copy + edit -->
-                <div v-if="msg.role === 'user'" class="msg-actions msg-actions--user">
-                  <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
-                  </button>
-                  <button class="msg-action-btn" :aria-label="t('aiChat.editAria')" :title="t('aiChat.editAria')" @click="onEditUserMessage(idx)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
-                  </button>
+                <!-- User message footer: actions (copy + edit) on left, time on right, same row -->
+                <div v-if="msg.role === 'user'" class="msg-footer msg-footer--user">
+                  <div class="msg-actions msg-actions--user">
+                    <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                    <button class="msg-action-btn" :aria-label="t('aiChat.editAria')" :title="t('aiChat.editAria')" @click="onEditUserMessage(idx)">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                      </svg>
+                    </button>
+                  </div>
+                  <span class="msg-time">{{ msg.displayTime }}</span>
                 </div>
                 <!-- U7: bouncing 3-dot streaming indicator (replaces blinking block cursor) -->
                 <span
@@ -700,6 +715,7 @@ const sessionMenu = ref<{
 }>({ visible: false, session: null, x: 0, y: 0 })
 const showRenameDialog = ref(false)
 const renameInput = ref('')
+const showAgentInfo = ref(false)
 
 // Group sessions by time bucket for display
 const groupedSessions = computed(() => {
@@ -886,6 +902,18 @@ const customTitle = ref<string | null>(null)
 const showEditTitleDialog = ref(false)
 const editTitleInput = ref('')
 let titleTimer: ReturnType<typeof setTimeout> | null = null
+
+// Truncated title for header display (max 12 chars)
+const truncatedTitle = computed(() => {
+  const title = customTitle.value ?? displayedTitle.value
+  if (!title || title === t('aiChat.newChat')) return title
+  return title.length > 12 ? title.slice(0, 12) + '…' : title
+})
+
+// Toggle agent info popup
+function onToggleAgentInfo() {
+  showAgentInfo.value = !showAgentInfo.value
+}
 
 watch(sessionTitle, (newTitle) => {
   if (customTitle.value !== null) return // user has set a custom title, don't overwrite
@@ -1836,69 +1864,29 @@ onUnmounted(() => {
 .header-title-wrap {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 0;
+  gap: 4px;
   min-width: 0;
   padding: 0 4px;
 }
 
-/* U12: agent identity badge — shown above the session title in chat header.
-   Numina renders the cursive wordmark; other agents use emoji + name. */
-.header-agent {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  max-width: 100%;
-  line-height: 1;
-}
-
-.header-agent__icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  height: 16px;
-}
-
-.header-agent__icon :deep(.numina-logo) {
-  height: 16px;
-}
-
-.header-agent__name {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
-  letter-spacing: -0.01em;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .header-title {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* When agent identity is shown above, the session title shrinks to a
-   secondary subtitle so both fit in the fixed-height header bar. */
-.header-title--subtitle {
-  font-size: 11px;
-  font-weight: 400;
-  color: var(--text-secondary);
-  letter-spacing: 0;
+  max-width: 120px;
 }
 
 .header-edit-btn {
   flex-shrink: 0;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1913,6 +1901,84 @@ onUnmounted(() => {
 .header-edit-btn:hover {
   background: var(--btn-hover-bg);
   color: var(--text-primary);
+}
+
+/* Agent logo button — same size as other header buttons */
+.header-agent-logo-btn {
+  position: relative;
+}
+
+.header-agent-logo-emoji {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.header-agent-skeleton {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Agent info popup — floating below agent button */
+.agent-info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.agent-info-popup {
+  position: fixed;
+  top: calc(50px + env(safe-area-inset-top) + 4px);
+  left: 108px; /* Position below agent button (back + history + agent = 44*3 + 4px gaps ≈ 108px from left) */
+  z-index: 101;
+  background: var(--bg-header);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
+  min-width: 160px;
+  max-width: 220px;
+  padding: 12px 14px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.agent-info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.agent-info-icon :deep(.numina-logo) {
+  height: 24px;
+}
+
+.agent-info-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-info-description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  word-break: break-word;
 }
 
 .header-actions {
@@ -2670,12 +2736,6 @@ onUnmounted(() => {
   padding: 4px 4px 0;
 }
 
-.bubble.user .bubble-text {
-  background: var(--bubble-user-bg);
-  color: var(--bubble-user-color);
-  border-bottom-right-radius: 4px;
-}
-
 .bubble.assistant .bubble-text {
   background: var(--bubble-ai-bg);
   color: var(--bubble-ai-color);
@@ -2687,6 +2747,27 @@ onUnmounted(() => {
   font-size: 11px;
   color: var(--text-muted);
   padding: 0 4px;
+}
+
+/* ── User message footer: actions + time in same row ── */
+.msg-footer {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.msg-footer--user {
+  justify-content: flex-end;
+  flex-direction: row-reverse; /* time on right, actions on left */
+}
+
+/* User bubble: reduce vertical padding to match font height */
+.bubble.user .bubble-text {
+  background: var(--bubble-user-bg);
+  color: var(--bubble-user-color);
+  border-bottom-right-radius: 4px;
+  padding: 6px 12px; /* Reduced from 10px 14px */
 }
 
 /* ── User message send status ── */

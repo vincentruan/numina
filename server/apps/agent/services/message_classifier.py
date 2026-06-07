@@ -29,16 +29,53 @@ _TOOL_REGISTRY: dict[str, tuple[str, str, str]] = {
     # Web search (smart mode tool)
     "web_search": ("web_search", "搜索网络", "search"),
     "tavily_search": ("web_search", "搜索网络", "search"),
+    # MCP tools (numina-family-data server)
+    "numina-family-data_get_family_overview": ("data_collect", "获取家庭概览", "📊"),
+    "numina-family-data_get_assets": ("data_collect", "查询资产数据", "💰"),
+    "numina-family-data_get_liabilities": ("data_collect", "查询负债数据", "📋"),
+    "numina-family-data_get_members": ("data_collect", "获取家庭成员", "👥"),
+    "numina-family-data_get_recent_alerts": ("data_collect", "获取近期预警", "🔔"),
+    # DeerFlow built-in tools
+    "execute_code": ("execution", "执行分析代码", "⚙️"),
+    "bash": ("execution", "执行命令", "⚙️"),
+    "write": ("execution", "写入结果", "📝"),
+    "read": ("execution", "读取数据", "📖"),
+    "search": ("web_search", "搜索信息", "🔍"),
+    "load_skill": ("internal", "加载分析能力", "🧩"),
+    "write_file": ("execution", "保存文件", "💾"),
+    "read_file": ("execution", "读取文件", "📂"),
 }
+
+# DeerFlow built-in tool suffixes that are safe to match on namespaced variants
+# These are specifically the DeerFlow sandbox tools where suffix matching is intentional
+_SUFFIX_MATCH_WHITELIST = frozenset({
+    "execute_code",
+    "bash",
+    "write",
+    "read",
+    "search",
+    "load_skill",
+    "write_file",
+    "read_file",
+})
 
 
 def resolve_tool_metadata(tool_name: str) -> tuple[str, str, str]:
     """Resolve (tool_type, display_name, icon) for a tool name.
 
     Unknown tools fall back to ("unknown", <name>, "tool") so the UI can
-    still render a generic step.
+    still render a generic step. Suffix matching is restricted to a whitelist
+    of DeerFlow built-in tools to prevent false positives from generic suffixes.
     """
-    return _TOOL_REGISTRY.get(tool_name, ("unknown", tool_name, "tool"))
+    if tool_name in _TOOL_REGISTRY:
+        return _TOOL_REGISTRY[tool_name]
+    # Suffix match only for whitelisted DeerFlow built-in tool names
+    # Prevents false positives like "audit_log_read" matching "read"
+    if "_" in tool_name:
+        suffix = tool_name.rsplit("_", 1)[-1]
+        if suffix in _SUFFIX_MATCH_WHITELIST:
+            return _TOOL_REGISTRY[suffix]
+    return ("unknown", tool_name, "tool")
 
 
 def classify_message(msg: Any) -> str:

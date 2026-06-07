@@ -223,7 +223,7 @@ import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import DailyCostChart from '@/components/charts/DailyCostChart.vue'
 import BuyVsRentCalculator from '@/components/asset/BuyVsRentCalculator.vue'
 import CostEquivalenceCard from '@/components/asset/CostEquivalenceCard.vue'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 import { getIconId } from '@/utils/icon'
 
 const { t } = useI18n()
@@ -350,7 +350,7 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  showLoading()
+  NProgress.start()
   try {
     const id = route.params.id as string
     await assetStore.fetchAsset(id)
@@ -361,7 +361,7 @@ onMounted(async () => {
       // non-critical
     }
   } finally {
-    hideLoading()
+    NProgress.done()
   }
 })
 </script>

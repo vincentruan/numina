@@ -177,7 +177,7 @@ export default {
     backAria: '返回',
     moreActionsAria: '更多操作',
     copyAria: '复制',
-    editAria: '修改标题',
+    editAria: '编辑消息',
     regenerateAria: '重新生成',
     helpfulAria: '有帮助',
     notHelpfulAria: '没帮助',
@@ -199,6 +199,9 @@ export default {
     filterTimeMachine: '财务时光机',
     slashPaletteHint: '选择功能，按 Esc 关闭',
     slashPaletteEmpty: '暂无可用功能',
+    agentInfoAria: '查看智能体信息',
+    agentInfoTitle: '智能体信息',
+    agentNoDescription: '暂无描述',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',
@@ -1515,6 +1518,9 @@ export default {
     leaksSummary: '共 {count} 条泄漏',
     queuePosition: '排队中 (#{n})',
     queueWaiting: '正在等待前置任务完成…',
+    stepProgress: '步骤 {current}/{total}',
+    toolDetail: '工具调用详情',
+    toolProcessing: '处理中',
   },
   admin: {
     extractionCircuit: {
@@ -2078,6 +2084,7 @@ export default {
     title: '家庭资产体检',
     noReport: '暂无体检报告',
     startAnalyze: 'AI 将综合分析您的资产配置、负债压力和资产效率',
+    generating: '🤖 正在生成新报告，完成后将展示最新结果',
     scoreUnit: '分',
     overallScore: '综合健康评分',
     generatedAt: '生成时间：{time}',
