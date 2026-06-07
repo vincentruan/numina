@@ -9,18 +9,23 @@ export interface PageAgentResult {
   usage: { promptTokens: number; completionTokens: number; totalTokens: number; cachedTokens: number };
 }
 
-function buildContentTransform(): string {
-  return `function(content) {
-    return content
-      .replace(/Bearer\\s+[A-Za-z0-9\\-._~+\\/]+=*/g, 'Bearer [REDACTED]')
-      .replace(/Authorization:\\s*.+/gi, 'Authorization: [REDACTED]')
-      .replace(/1[3-9]\\d{9}/g, '[PHONE_REDACTED]')
-      .replace(/\\w+@\\w+\\.\\w+/g, '[EMAIL_REDACTED]')
-      .replace(/\\d{6}(18|19|20)\\d{2}(0[1-9]|1[0-2])\\d{6}/g, '[ID_REDACTED]')
-      .replace(/access_token["\\s:=]+[^\\s"&]+/gi, 'access_token=[REDACTED]')
-      .replace(/refresh_token["\\s:=]+[^\\s"&]+/gi, 'refresh_token=[REDACTED]')
-      .replace(/password["\\s:=]+[^\\s"&]+/gi, 'password=[REDACTED]');
-  }`;
+const REDACTION_PATTERNS: Array<[RegExp, string]> = [
+  [/Bearer\s+[A-Za-z0-9\-._~+/]+=*/g, 'Bearer [REDACTED]'],
+  [/Authorization:\s*.+/gi, 'Authorization: [REDACTED]'],
+  [/1[3-9]\d{9}/g, '[PHONE_REDACTED]'],
+  [/\w+@\w+\.\w+/g, '[EMAIL_REDACTED]'],
+  [/\d{6}(18|19|20)\d{2}(0[1-9]|1[0-2])\d{6}/g, '[ID_REDACTED]'],
+  [/access_token["\s:=]+[^\s"&]+/gi, 'access_token=[REDACTED]'],
+  [/refresh_token["\s:=]+[^\s"&]+/gi, 'refresh_token=[REDACTED]'],
+  [/password["\s:=]+[^\s"&]+/gi, 'password=[REDACTED]'],
+];
+
+export function redactContent(content: string): string {
+  let result = content;
+  for (const [pattern, replacement] of REDACTION_PATTERNS) {
+    result = result.replace(pattern, replacement);
+  }
+  return result;
 }
 
 export async function injectPageAgent(
@@ -28,24 +33,23 @@ export async function injectPageAgent(
   config: PageAgentConfig,
   testCase: TaskCase
 ): Promise<void> {
-  await page.addInitScript({
-    content: `
-      window.__pageAgentE2EConfig = {
-        model: "${config.llm.model}",
-        baseURL: "${config.llm.baseURL}",
-        apiKey: "${config.llm.apiKey}",
-        language: "${config.language}",
-        maxSteps: ${testCase.maxSteps},
-        stepDelay: ${config.stepDelay},
-        enableMask: false,
-        experimentalScriptExecutionTool: false,
-        instructions: {
-          system: "你是 E2E 测试执行器。优先使用页面可见文本、表单标签、按钮文本和 DOM 语义完成操作。不要依赖截图。不要等待超过必要时间。任务完成后必须调用 done，并说明完成状态。自然语言完成说明不能替代确定性断言。"
-        },
-        transformPageContent: ${buildContentTransform()}
-      };
-    `,
-  });
+  // Inject only non-sensitive config into page context using JSON.stringify for safety.
+  // API key is NOT sent to the browser — PageAgent calls are made server-side.
+  const pageConfig = {
+    model: config.llm.model,
+    language: config.language,
+    maxSteps: testCase.maxSteps,
+    stepDelay: config.stepDelay,
+    enableMask: false,
+    experimentalScriptExecutionTool: false,
+    instructions: {
+      system: '你是 E2E 测试执行器。优先使用页面可见文本、表单标签、按钮文本和 DOM 语义完成操作。不要依赖截图。不要等待超过必要时间。任务完成后必须调用 done，并说明完成状态。自然语言完成说明不能替代确定性断言。',
+    },
+  };
+
+  await page.evaluate((cfg) => {
+    (window as any).__pageAgentE2EConfig = cfg;
+  }, pageConfig);
 }
 
 export async function runPageAgentTask(
@@ -95,5 +99,5 @@ export async function extractDomSummary(page: Page, maxChars: number = 20000): P
     if (!body) return '';
     return body.innerText || '';
   });
-  return text.slice(0, maxChars);
+  return redactContent(text.slice(0, maxChars));
 }

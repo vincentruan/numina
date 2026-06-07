@@ -19,20 +19,35 @@ export async function executeAssertion(
 
   switch (assertion.type) {
     case 'url_contains': {
+      if (!assertion.value) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: value' };
+      }
+      try {
+        await page.waitForURL(`**/*${assertion.value}*`, { timeout });
+      } catch { /* URL didn't match within timeout, check current state */ }
       const url = page.url();
-      const passed = url.includes(assertion.value!);
+      const passed = url.includes(assertion.value);
       return { type: assertion.type, passed, message: passed ? 'URL matches' : `URL "${url}" does not contain "${assertion.value}"`, expected: assertion.value, actual: url };
     }
 
     case 'url_equals': {
+      if (!assertion.value) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: value' };
+      }
+      try {
+        await page.waitForURL(assertion.value, { timeout });
+      } catch { /* URL didn't match within timeout */ }
       const url = page.url();
-      const passed = url === assertion.value!;
+      const passed = url === assertion.value;
       return { type: assertion.type, passed, message: passed ? 'URL matches exactly' : `URL "${url}" !== "${assertion.value}"`, expected: assertion.value, actual: url };
     }
 
     case 'text_visible': {
+      if (!assertion.value) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: value' };
+      }
       try {
-        await page.getByText(assertion.value!, { exact: false }).first().waitFor({ timeout, state: 'visible' });
+        await page.getByText(assertion.value, { exact: false }).first().waitFor({ timeout, state: 'visible' });
         return { type: assertion.type, passed: true, message: `Text "${assertion.value}" is visible` };
       } catch {
         return { type: assertion.type, passed: false, message: `Text "${assertion.value}" not found within ${timeout}ms`, expected: assertion.value };
@@ -40,8 +55,11 @@ export async function executeAssertion(
     }
 
     case 'text_not_visible': {
+      if (!assertion.value) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: value' };
+      }
       try {
-        await page.getByText(assertion.value!, { exact: false }).first().waitFor({ timeout: 2000, state: 'visible' });
+        await page.getByText(assertion.value, { exact: false }).first().waitFor({ timeout, state: 'visible' });
         return { type: assertion.type, passed: false, message: `Text "${assertion.value}" is visible but should not be`, expected: 'not visible', actual: 'visible' };
       } catch {
         return { type: assertion.type, passed: true, message: `Text "${assertion.value}" correctly not visible` };
@@ -49,8 +67,11 @@ export async function executeAssertion(
     }
 
     case 'locator_visible': {
+      if (!assertion.selector) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: selector' };
+      }
       try {
-        await page.locator(assertion.selector!).first().waitFor({ timeout, state: 'visible' });
+        await page.locator(assertion.selector).first().waitFor({ timeout, state: 'visible' });
         return { type: assertion.type, passed: true, message: `Locator "${assertion.selector}" is visible` };
       } catch {
         return { type: assertion.type, passed: false, message: `Locator "${assertion.selector}" not visible within ${timeout}ms`, expected: 'visible' };
@@ -58,8 +79,14 @@ export async function executeAssertion(
     }
 
     case 'locator_count': {
-      const count = await page.locator(assertion.selector!).count();
-      const passed = count === assertion.count!;
+      if (!assertion.selector) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: selector' };
+      }
+      if (assertion.count === undefined) {
+        return { type: assertion.type, passed: false, message: 'Missing required field: count' };
+      }
+      const count = await page.locator(assertion.selector).count();
+      const passed = count === assertion.count;
       return { type: assertion.type, passed, message: passed ? `Count matches (${count})` : `Expected ${assertion.count} elements, found ${count}`, expected: String(assertion.count), actual: String(count) };
     }
 
@@ -71,18 +98,6 @@ export async function executeAssertion(
     case 'network_no_failures': {
       const passed = networkFailures.length === 0;
       return { type: assertion.type, passed, message: passed ? 'No network failures' : `${networkFailures.length} failed request(s)`, actual: networkFailures.length > 0 ? networkFailures.slice(0, 5).join('\n') : undefined };
-    }
-
-    case 'api_response': {
-      return { type: assertion.type, passed: false, message: 'api_response assertion requires custom implementation per case' };
-    }
-
-    case 'db_query': {
-      return { type: assertion.type, passed: false, message: 'db_query assertion requires database connection configuration' };
-    }
-
-    case 'log_contains': {
-      return { type: assertion.type, passed: false, message: 'log_contains assertion not yet implemented' };
     }
 
     default:

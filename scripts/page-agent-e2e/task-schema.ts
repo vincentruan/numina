@@ -1,9 +1,8 @@
 import { z } from 'zod';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
-import { resolve, dirname } from 'path';
+import { resolve, dirname, join } from 'path';
 import { fileURLToPath } from 'url';
-import { globSync } from 'node:fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -15,9 +14,6 @@ const AssertionSchema = z.object({
     'text_not_visible',
     'locator_visible',
     'locator_count',
-    'api_response',
-    'db_query',
-    'log_contains',
     'console_no_errors',
     'network_no_failures',
   ]),
@@ -25,8 +21,18 @@ const AssertionSchema = z.object({
   selector: z.string().optional(),
   count: z.number().optional(),
   timeoutMs: z.number().optional(),
-  query: z.string().optional(),
-  expected: z.string().optional(),
+}).superRefine((data, ctx) => {
+  const needsValue = ['url_contains', 'url_equals', 'text_visible', 'text_not_visible'];
+  if (needsValue.includes(data.type) && !data.value) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `'value' is required for assertion type '${data.type}'`, path: ['value'] });
+  }
+  const needsSelector = ['locator_visible', 'locator_count'];
+  if (needsSelector.includes(data.type) && !data.selector) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `'selector' is required for assertion type '${data.type}'`, path: ['selector'] });
+  }
+  if (data.type === 'locator_count' && data.count === undefined) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: `'count' is required for assertion type 'locator_count'`, path: ['count'] });
+  }
 });
 
 const FixturesSchema = z.object({
@@ -60,7 +66,7 @@ export type Assertion = z.infer<typeof AssertionSchema>;
 
 export function validateTaskFile(filePath: string): TaskFile {
   const content = readFileSync(filePath, 'utf-8');
-  const parsed = parseYaml(content);
+  const parsed = parseYaml(content, { maxAliasCount: 100 });
   return TaskFileSchema.parse(parsed);
 }
 
@@ -92,7 +98,24 @@ if (process.argv.includes('--validate')) {
 
   for (const pattern of patterns) {
     const resolved = resolve(pattern);
-    const filePaths = resolved.includes('*') ? globSync(resolved) : [resolved];
+    let filePaths: string[];
+    if (resolved.includes('*')) {
+      // Simple glob: find .yaml files recursively in the parent directory
+      const baseDir = resolved.substring(0, resolved.indexOf('*'));
+      filePaths = [];
+      const walkDir = (dir: string) => {
+        try {
+          for (const entry of readdirSync(dir, { withFileTypes: true })) {
+            const full = join(dir, entry.name);
+            if (entry.isDirectory()) walkDir(full);
+            else if (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')) filePaths.push(full);
+          }
+        } catch { /* directory doesn't exist */ }
+      };
+      walkDir(baseDir);
+    } else {
+      filePaths = [resolved];
+    }
 
     for (const filePath of filePaths) {
       const relative = filePath.replace(projectRoot + '/', '');

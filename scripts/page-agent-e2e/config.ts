@@ -34,6 +34,16 @@ export function loadConfig(): PageAgentConfig {
     );
   }
 
+  const testPassword = process.env.E2E_TEST_PASSWORD;
+  if (!testPassword) {
+    throw new Error('E2E_TEST_PASSWORD is required. Set it in shell env or .env file.');
+  }
+
+  const childPin = process.env.E2E_CHILD_PIN;
+  if (!childPin) {
+    throw new Error('E2E_CHILD_PIN is required. Set it in shell env or .env file.');
+  }
+
   return {
     llm: {
       baseURL: process.env.PAGE_AGENT_LLM_BASE_URL || 'https://api.openai.com/v1',
@@ -48,8 +58,8 @@ export function loadConfig(): PageAgentConfig {
     childBaseUrl: process.env.PAGE_AGENT_CHILD_BASE_URL || 'http://localhost:5174',
     skipStart: process.env.PAGE_AGENT_E2E_SKIP_START === '1',
     testUser: process.env.E2E_TEST_USER || 'test_rich',
-    testPassword: process.env.E2E_TEST_PASSWORD || 'TestRich123!',
-    childPin: (process.env.E2E_CHILD_PIN || '🐱,🐶,🌟,🌈').split(','),
+    testPassword,
+    childPin: childPin.split(','),
     childUser: process.env.E2E_CHILD_USER || 'test_child',
   };
 }
