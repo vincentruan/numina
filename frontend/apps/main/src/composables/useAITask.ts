@@ -12,7 +12,7 @@
  *
  * resumeStream() 不调用触发端点（避免 409 循环）。
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAIStore } from '@/stores/ai'
@@ -23,7 +23,7 @@ import {
   type AITaskStatus,
 } from '@/api/ai'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
-import type { AgentEvent } from '@/types/agent-stream'
+import type { AgentEvent, PlanStep } from '@/types/agent-stream'
 
 const POLL_INTERVAL_MS = 3000
 
@@ -63,6 +63,19 @@ export function useAITask(
   const toolSteps = ref<ToolStep[]>([])
   const currentToolLabel = ref<string | null>(null)
   const suggestions = ref<string[]>([])
+  const planSteps = ref<PlanStep[]>([])
+
+  const currentStepIndex = computed(() => {
+    const activeIdx = planSteps.value.findIndex((s) => s.status === 'active')
+    if (activeIdx >= 0) return activeIdx
+    const pendingIdx = planSteps.value.findIndex((s) => s.status === 'pending')
+    if (pendingIdx >= 0) return pendingIdx
+    const doneCount = planSteps.value.filter((s) => s.status === 'done').length
+    if (doneCount === planSteps.value.length && doneCount > 0) return doneCount - 1
+    return 0
+  })
+
+  const totalSteps = computed(() => planSteps.value.length)
 
   let abortController: AbortController | null = null
   let timer: ReturnType<typeof setInterval> | null = null
@@ -178,16 +191,21 @@ export function useAITask(
         break
       case 'tool.call':
         if (event.tool) {
+          const rawName = event.tool.name || ''
+          const rawDisplay = event.tool.display_name || ''
+          const rawIcon = event.tool.icon || ''
+          const hasSpecificLabel = !!(rawDisplay || rawName)
           const step: ToolStep = {
             id: event.tool.id,
-            name: event.tool.name,
-            displayName: event.tool.display_name || event.tool.name,
-            icon: event.tool.icon || '⚙️',
+            name: rawName,
+            displayName: rawDisplay || rawName || t('aiTask.toolProcessing'),
+            icon: rawIcon === 'tool' || !rawIcon ? '⚙️' : rawIcon,
             toolType: event.tool.tool_type,
             status: 'running',
           }
           toolSteps.value = [...toolSteps.value, step]
-          currentToolLabel.value = step.displayName
+          // Only update header label for tools with a specific name
+          currentToolLabel.value = hasSpecificLabel ? step.displayName : null
         }
         break
       case 'tool.result':
@@ -224,6 +242,21 @@ export function useAITask(
         // summary may be in result.summary — already accumulated via token.stream
         if (event.result?.suggestions?.length) {
           suggestions.value = event.result.suggestions
+        }
+        // Mark all plan steps done on completion
+        if (planSteps.value.length) {
+          planSteps.value = planSteps.value.map((s) =>
+            s.status !== 'done' ? { ...s, status: 'done' as const } : s,
+          )
+        }
+        break
+      case 'plan.update':
+        if (event.todos?.length) {
+          planSteps.value = event.todos.map((todo) => ({
+            id: todo.id,
+            label: todo.content,
+            status: (todo.status === 'in_progress' ? 'active' : todo.status === 'done' || todo.status === 'completed' ? 'done' : 'pending') as PlanStep['status'],
+          }))
         }
         break
       case 'capability.error':
@@ -378,6 +411,7 @@ export function useAITask(
     toolSteps.value = []
     currentToolLabel.value = null
     suggestions.value = []
+    planSteps.value = []
     startTimer(0)
 
     try {
@@ -432,6 +466,7 @@ export function useAITask(
     toolSteps.value = []
     currentToolLabel.value = null
     suggestions.value = []
+    planSteps.value = []
 
     const elapsed = existingTask.started_at
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)
@@ -575,6 +610,9 @@ export function useAITask(
     toolSteps,
     currentToolLabel,
     suggestions,
+    planSteps,
+    currentStepIndex,
+    totalSteps,
     startStream,
     cancelTask,
   }

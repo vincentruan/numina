@@ -1,6 +1,6 @@
 <template>
   <div v-if="status !== 'idle'" class="task-console">
-    <!-- Header bar -->
+    <!-- Header bar (摘要层) -->
     <div class="console-header" @click="toggleOpen">
       <AIBrainIcon
         v-if="status === 'running' || status === 'post_processing'"
@@ -11,7 +11,22 @@
       <span v-else class="console-status-icon" aria-hidden="true">
         {{ statusIcon }}
       </span>
-      <span class="console-title">{{ title }}</span>
+
+      <div class="console-header-content">
+        <div class="console-title-row">
+          <span v-if="hasSteps && isRunning" class="console-step-badge">
+            {{ t('aiTask.stepProgress', { current: displayStepIndex + 1, total: planSteps.length }) }}
+          </span>
+          <span class="console-title">{{ title }}</span>
+        </div>
+        <!-- Progress bar -->
+        <div v-if="isRunning && hasSteps" class="console-progress-bar">
+          <div class="progress-track">
+            <div class="progress-fill" :style="{ width: `${progressPercent}%` }" />
+          </div>
+        </div>
+      </div>
+
       <span v-if="status === 'queued' && queuePosition" class="console-queue-badge">
         {{ t('aiTask.queuePosition', { n: queuePosition }) }}
       </span>
@@ -19,9 +34,9 @@
       <van-icon :name="isOpen ? 'arrow-up' : 'arrow-down'" class="console-toggle" />
     </div>
 
-    <!-- Body (collapsible) -->
+    <!-- Body (详情层，可折叠) -->
     <div v-show="isOpen" class="console-body">
-      <!-- Failed warning bar (R6.4) -->
+      <!-- Failed warning bar -->
       <div v-if="status === 'failed'" class="console-error-bar" role="alert">
         <span class="error-bar-text">{{ failureMessage }}</span>
         <button class="error-bar-retry" @click.stop="$emit('retry')">
@@ -35,14 +50,25 @@
         <span>{{ t('aiTask.queueWaiting') }}</span>
       </div>
 
-      <!-- Phase indicator -->
-      <div v-else-if="(status === 'running' || status === 'post_processing') && phase" class="console-phase">
-        <span class="phase-dot" :class="`phase-dot--${phase}`" aria-hidden="true"></span>
-        <span class="phase-label">{{ phaseLabel }}</span>
+      <!-- Step list (when plan steps available) -->
+      <div v-else-if="hasSteps" class="console-steps">
+        <div
+          v-for="(step, idx) in planSteps"
+          :key="step.id"
+          class="step-item"
+          :class="`step-item--${step.status}`"
+        >
+          <span class="step-icon" aria-hidden="true">
+            <span v-if="step.status === 'done'" class="step-icon-done">✓</span>
+            <van-loading v-else-if="step.status === 'active'" size="12" type="spinner" class="step-icon-active" />
+            <span v-else class="step-icon-pending">{{ idx + 1 }}</span>
+          </span>
+          <span class="step-label">{{ step.label }}</span>
+        </div>
       </div>
 
-      <!-- Tool steps (show what the AI is actually doing) -->
-      <div v-if="visibleToolSteps.length" class="console-tools">
+      <!-- Tool steps (fallback when no plan steps, or as sub-detail) -->
+      <div v-if="!hasSteps && visibleToolSteps.length" class="console-tools">
         <div
           v-for="step in visibleToolSteps"
           :key="step.id"
@@ -59,7 +85,31 @@
         </div>
       </div>
 
-      <!-- Thinking block (collapsible, auto-collapses when answering starts) -->
+      <!-- Tool detail (expandable, shown under steps when detail requested) -->
+      <details v-if="hasSteps && visibleToolSteps.length" class="console-tool-detail">
+        <summary class="tool-detail-summary">
+          {{ t('aiTask.toolDetail') }}
+          <span class="tool-detail-count">{{ toolSteps.length }}</span>
+        </summary>
+        <div class="tool-detail-list">
+          <div
+            v-for="step in visibleToolSteps"
+            :key="step.id"
+            class="tool-step"
+            :class="`tool-step--${step.status}`"
+          >
+            <span class="tool-icon">{{ step.icon }}</span>
+            <span class="tool-name">{{ step.displayName }}</span>
+            <span v-if="step.status === 'running'" class="tool-status tool-status--running">
+              <van-loading size="10" type="spinner" />
+            </span>
+            <span v-else-if="step.status === 'done'" class="tool-status tool-status--done">✓</span>
+            <span v-else-if="step.status === 'error'" class="tool-status tool-status--error">✗</span>
+          </div>
+        </div>
+      </details>
+
+      <!-- Thinking block (collapsible) -->
       <div v-if="thinkContent" class="console-think-block">
         <button
           class="think-toggle"
@@ -91,8 +141,8 @@
         <span v-if="status === 'running' && phase === 'answering'" class="answer-cursor" aria-hidden="true">▋</span>
       </div>
 
-      <!-- Empty running state (no content yet) -->
-      <div v-else-if="(status === 'running' || status === 'post_processing') && !thinkContent" class="console-empty-running">
+      <!-- Empty running state (no steps, no content) -->
+      <div v-else-if="isRunning && !thinkContent && !hasSteps && !visibleToolSteps.length" class="console-empty-running">
         <AIBrainIcon :active="true" class="breathing-icon" aria-hidden="true" />
         <span>{{ status === 'post_processing' ? t('aiTask.phase.postProcessing') : t('aiTask.phase.connecting') }}</span>
       </div>
@@ -108,6 +158,7 @@ import DOMPurify from 'dompurify'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import type { AITaskPhase } from '@/composables/useAITask'
 import type { ToolStep } from '@/composables/useAITask'
+import type { PlanStep } from '@/types/agent-stream'
 
 const props = defineProps<{
   status: 'idle' | 'running' | 'post_processing' | 'queued' | 'completed' | 'failed' | 'timeout' | 'cancelled'
@@ -121,6 +172,8 @@ const props = defineProps<{
   errorCode?: string | null
   toolSteps?: ToolStep[]
   currentToolLabel?: string | null
+  planSteps?: PlanStep[]
+  currentStepIndex?: number
   modelValue?: boolean // isOpen
 }>()
 
@@ -139,7 +192,6 @@ const ASSISTANT_PURIFY_CONFIG = {
   ALLOW_DATA_ATTR: false,
 } as const
 
-// v-model contract: honor modelValue when provided, fall back to internal state
 const _internalOpen = ref(props.modelValue ?? (props.status === 'running' || props.status === 'queued'))
 const isOpen = computed({
   get: () => (props.modelValue !== undefined ? props.modelValue : _internalOpen.value),
@@ -153,8 +205,19 @@ function toggleOpen() {
   isOpen.value = !isOpen.value
 }
 
-// Auto-open on running/queued edge, auto-close on completed.
-// R6.4: failed status keeps console open so user can read the natural-language text
+const isRunning = computed(() => props.status === 'running' || props.status === 'post_processing')
+const hasSteps = computed(() => (props.planSteps?.length ?? 0) > 0)
+
+const displayStepIndex = computed(() => props.currentStepIndex ?? 0)
+
+const progressPercent = computed(() => {
+  const total = props.planSteps?.length ?? 0
+  if (total === 0) return 0
+  const doneCount = props.planSteps?.filter((s) => s.status === 'done').length ?? 0
+  const activeCount = props.planSteps?.filter((s) => s.status === 'active').length ?? 0
+  return Math.min(Math.round(((doneCount + activeCount * 0.5) / total) * 100), 100)
+})
+
 watch(
   () => props.status,
   (val, prev) => {
@@ -163,7 +226,6 @@ watch(
   },
 )
 
-// Auto-collapse thinking when answering starts
 watch(
   () => props.phase,
   (val) => {
@@ -172,8 +234,6 @@ watch(
   },
 )
 
-// Auto-scroll answer area when content streams in — coalesced via RAF to avoid
-// thrashing on every token
 watch(
   () => props.answerContent,
   () => {
@@ -205,20 +265,19 @@ const statusIcon = computed(() => {
 })
 
 const title = computed(() => {
-  // Show specific action label when running/post_processing
-  if (props.status === 'running' || props.status === 'post_processing') {
+  if (isRunning.value) {
     if (props.status === 'post_processing') return t('aiTask.phase.postProcessing')
+    // When plan steps exist, show the active step label
+    if (hasSteps.value && props.planSteps) {
+      const active = props.planSteps.find((s) => s.status === 'active')
+      if (active) return active.label
+    }
+    // Show specific tool label when available
     if (props.currentToolLabel) return props.currentToolLabel
     if (props.phase) return t(`aiTask.phase.${props.phase}`)
     return t('aiTask.phase.connecting')
   }
-  const key = `aiTask.status.${props.status}`
-  return t(key)
-})
-
-const phaseLabel = computed(() => {
-  if (!props.phase) return ''
-  return t(`aiTask.phase.${props.phase}`)
+  return t(`aiTask.status.${props.status}`)
 })
 
 const visibleToolSteps = computed(() => {
@@ -317,7 +376,6 @@ const failureMessage = computed(() => {
   flex-shrink: 0;
 }
 
-/* AIBrainIcon in console header — smaller than the hub card */
 .console-brain-icon :deep(.ai-button-wrapper) {
   transform: translateY(0);
 }
@@ -332,7 +390,6 @@ const failureMessage = computed(() => {
   filter: none;
 }
 
-/* Breathing animation for AIBrainIcon during running/post_processing */
 .breathing-icon :deep(.ai-button-3d) {
   animation: breathe 2.5s ease-in-out infinite;
 }
@@ -354,20 +411,67 @@ const failureMessage = computed(() => {
   }
 }
 
-.console-title {
+.console-header-content {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.console-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.console-step-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--van-primary-color);
+  background: color-mix(in srgb, var(--van-primary-color) 10%, transparent);
+  padding: 1px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.console-title {
   font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.console-progress-bar {
+  width: 100%;
+}
+
+.progress-track {
+  height: 3px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--van-primary-color);
+  border-radius: 2px;
+  transition: width 0.4s ease;
 }
 
 .console-elapsed {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
 .console-queue-badge {
+  flex-shrink: 0;
   font-size: 11px;
   color: var(--color-warning, #ff9500);
   background: rgba(255, 149, 0, 0.12);
@@ -378,6 +482,7 @@ const failureMessage = computed(() => {
 .console-toggle {
   color: var(--text-tertiary);
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .console-body {
@@ -397,32 +502,89 @@ const failureMessage = computed(() => {
   padding: 4px 0;
 }
 
-/* Phase indicator */
-.console-phase {
+/* Step list */
+.console-steps {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--text-secondary);
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 0;
 }
 
-.phase-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.step-item--active {
+  background: color-mix(in srgb, var(--van-primary-color) 8%, transparent);
+}
+
+.step-item--done {
+  opacity: 0.6;
+}
+
+.step-item--pending {
+  opacity: 0.5;
+}
+
+.step-icon {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
-.phase-dot--connecting { background: var(--text-tertiary); animation: pulse 1.5s ease-in-out infinite; }
-.phase-dot--thinking   { background: #a78bfa; animation: pulse 1.2s ease-in-out infinite; }
-.phase-dot--answering  { background: var(--color-primary); animation: pulse 1s ease-in-out infinite; }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
+.step-icon-done {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
 }
 
-/* Tool steps */
+.step-icon-active {
+  color: var(--color-primary);
+}
+
+.step-icon-pending {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-tertiary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.step-label {
+  flex: 1;
+  color: var(--text-primary);
+}
+
+.step-item--done .step-label {
+  color: var(--text-secondary);
+}
+
+.step-item--pending .step-label {
+  color: var(--text-tertiary);
+}
+
+/* Tool steps (fallback) */
 .console-tools {
   display: flex;
   flex-direction: column;
@@ -479,6 +641,40 @@ const failureMessage = computed(() => {
 
 .tool-status--error {
   color: #dc2626;
+}
+
+/* Tool detail expandable */
+.console-tool-detail {
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  overflow: hidden;
+}
+
+.tool-detail-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-detail-count {
+  background: var(--bg-primary);
+  border-radius: 8px;
+  padding: 0 5px;
+  font-size: 10px;
+  min-width: 16px;
+  text-align: center;
+}
+
+.tool-detail-list {
+  padding: 0 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
 }
 
 /* Thinking block */
@@ -589,7 +785,7 @@ const failureMessage = computed(() => {
   padding: 4px;
 }
 
-/* Failure warning bar (R6.4) */
+/* Failure warning bar */
 .console-error-bar {
   display: flex;
   align-items: center;
