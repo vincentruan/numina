@@ -274,7 +274,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast, showConfirmDialog } from 'vant'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -486,17 +486,17 @@ async function handleBatchDelete() {
       title: t('dashboard.dialog.confirmDeleteTitle'),
       message: t('dashboard.dialog.confirmDeleteMessage', { count: selectedIds.value.length }),
     })
-    showLoading(t('dashboard.toast.deleting'))
+    NProgress.start()
     try {
       const res = await batchArchiveAssets(selectedIds.value)
-      hideLoading()
+      NProgress.done()
       showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
       selectionMode.value = false
       selectedIds.value = []
       selectAll.value = false
       await dashboardStore.fetchAll()
     } catch {
-      hideLoading()
+      NProgress.done()
       showToast(t('toast.deleteFailed'))
     }
   } catch {
@@ -510,24 +510,24 @@ async function onMoreActionSelect(action: { value: string }) {
     return
   }
 
-  showLoading(t('dashboard.toast.processing'))
+  NProgress.start()
   try {
     switch (action.value) {
       case 'retire': {
         const res = await batchUpdateStatus(selectedIds.value, 'archived')
-        hideLoading()
+        NProgress.done()
         showToast(t('toast.assetRetireBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'activate': {
         const res = await batchUpdateStatus(selectedIds.value, 'active')
-        hideLoading()
+        NProgress.done()
         showToast(t('toast.assetActivateBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'export': {
         const res = await batchExportAssets(selectedIds.value)
-        hideLoading()
+        NProgress.done()
         // Create downloadable JSON
         const dataStr = JSON.stringify(res.data.data, null, 2)
         const blob = new Blob([dataStr], { type: 'application/json' })
@@ -546,7 +546,7 @@ async function onMoreActionSelect(action: { value: string }) {
     selectAll.value = false
     await dashboardStore.fetchAll()
   } catch {
-    hideLoading()
+    NProgress.done()
     showToast(t('toast.operationFailed'))
   }
 }

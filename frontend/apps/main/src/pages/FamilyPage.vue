@@ -292,7 +292,7 @@ import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemb
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 
 const { t } = useI18n()
 
@@ -621,14 +621,14 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
 }
 
 onMounted(async () => {
-  showLoading()
+  NProgress.start()
   try {
     await familyStore.fetchFamily()
     if (isOwner.value) {
       await loadChildDashboard()
     }
   } finally {
-    hideLoading()
+    NProgress.done()
   }
 })
 </script>

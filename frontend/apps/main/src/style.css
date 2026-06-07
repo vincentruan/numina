@@ -328,3 +328,18 @@ a {
   font-weight: 600;
   color: var(--text-primary);
 }
+
+/* NProgress — top progress bar + spinner */
+#nprogress .bar {
+  background: var(--van-primary-color, #7c6bff) !important;
+  height: 3px !important;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px var(--van-primary-color, #7c6bff), 0 0 5px var(--van-primary-color, #7c6bff) !important;
+}
+
+#nprogress .spinner-icon {
+  border-top-color: var(--van-primary-color, #7c6bff) !important;
+  border-left-color: var(--van-primary-color, #7c6bff) !important;
+}

@@ -103,7 +103,7 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()
@@ -121,12 +121,12 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  showLoading()
+  NProgress.start()
   try {
     await store.fetchConfig()
     if (config.value) Object.assign(form, config.value)
   } finally {
-    hideLoading()
+    NProgress.done()
   }
 })
 

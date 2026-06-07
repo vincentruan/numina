@@ -207,7 +207,7 @@ import type { Category } from '@/types'
 import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getIconId } from '@/utils/icon'
-import { showLoading, hideLoading } from '@/utils/loading'
+import NProgress from 'nprogress'
 
 const { t, locale } = useI18n()
 
@@ -331,7 +331,7 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  showLoading()
+  NProgress.start()
   try {
     const id = route.params.id as string
     await wishStore.fetchWish(id)
@@ -354,7 +354,7 @@ onMounted(async () => {
       if (cat) selectedAssetType.value = cat.asset_type as 'physical' | 'financial'
     }
   } finally {
-    hideLoading()
+    NProgress.done()
   }
 })
 </script>

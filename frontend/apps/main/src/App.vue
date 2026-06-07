@@ -13,8 +13,6 @@
     @confirm="onTrustConfirm"
     @cancel="authStore.dismissTrustPrompt()"
   />
-
-  <LoadingOverlay />
 </template>
 
 <script setup lang="ts">
@@ -23,7 +21,6 @@ import { showToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
-import { LoadingOverlay } from '@numina/auth'
 import { checkWebAuthnSupport, registerPasskey } from '@/utils/webauthn'
 import { getDeviceTrustWebAuthnOptions, registerDeviceTrustWebAuthn } from '@/api/device'
 

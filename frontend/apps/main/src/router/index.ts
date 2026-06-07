@@ -1,6 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getUser } from '@/utils/storage'
-import { useLoadingOverlay } from '@numina/auth'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
+
+NProgress.configure({ showSpinner: true, parent: '#app' })
 
 const router = createRouter({
   history: createWebHistory('/'),
@@ -359,7 +362,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  useLoadingOverlay().show()
+  NProgress.start()
 
   // /child/* paths belong to the child SPA (nginx routes /child/* to frontend-child).
   // The /child route handler does window.location.replace('/child/') to bounce
@@ -407,7 +410,7 @@ router.beforeEach((to, _from, next) => {
 })
 
 router.afterEach(() => {
-  useLoadingOverlay().hide()
+  NProgress.done()
 })
 
 export default router
