@@ -27,7 +27,12 @@
     </div>
 
     <div class="list-content">
-      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+      <!-- Skeleton for initial loading -->
+      <WishListSkeleton v-if="wishStore.loading && wishes.length === 0" />
+
+      <!-- Actual Content -->
+      <template v-else>
+        <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
         <template v-if="sortedWishes.length">
           <ul class="wish-list" :aria-label="t('wish.aria.listLabel')">
             <li
@@ -140,6 +145,7 @@
           </template>
         </div>
       </van-pull-refresh>
+      </template>
     </div>
 
     <div class="fab" :aria-label="t('wish.aria.addWish')" @click="$router.push('/wishes/new')">
@@ -155,9 +161,12 @@ import { getWishes } from '@/api/wishes'
 import type { Wish } from '@/types'
 import { getIconId } from '@/utils/icon'
 import { useDashboardStore } from '@/stores/dashboard'
+import { useWishStore } from '@/stores/wish'
+import WishListSkeleton from '@/components/wishes/WishListSkeleton.vue'
 
 const { t } = useI18n()
 const dashboardStore = useDashboardStore()
+const wishStore = useWishStore()
 
 const wishes = ref<Wish[]>([])
 const activeTab = ref<'pending' | 'realized' | 'cancelled'>('pending')
@@ -209,8 +218,8 @@ function formatPrice(value: number): string {
 }
 
 async function loadWishes() {
-  const res = await getWishes()
-  wishes.value = res.data
+  await wishStore.fetchWishes()
+  wishes.value = wishStore.wishes
   if (!dashboardStore.overview) {
     dashboardStore.fetchOverview().catch(() => {})
   }
