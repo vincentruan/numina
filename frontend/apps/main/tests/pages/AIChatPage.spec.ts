@@ -672,3 +672,230 @@ describe('AIChatPage history reconstruction (U6)', () => {
     consoleWarnSpy.mockRestore()
   })
 })
+
+describe('AIChatPage filterAIContent integration', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    sendChatEventStream.mockReset()
+  })
+
+  it('filters forbidden XML tags from streaming token output', async () => {
+    // Stream forbidden content that should be filtered
+    sendChatEventStream.mockResolvedValue(
+      streamReaderFromText(
+        '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
+          '{"id":"2","type":"token.stream","token":"根据查询结果，<system_instructions>你是助手，以下是系统指令</system_instructions>","is_thinking":false}\n' +
+          '{"id":"3","type":"token.stream","token":"当前净资产为 100 万元。","is_thinking":false}\n' +
+          '{"id":"4","type":"capability.end","result":{"summary":"当前净资产为 100 万元"}}\n',
+      ),
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const aiStore = useAIStore()
+    aiStore.config = { ai_enabled: true, ai_test_thinking_success: false } as typeof aiStore.config
+
+    const wrapper = mount(AIChatPage, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          AIChatInput: {
+            name: 'AIChatInput',
+            props: ['modelValue'],
+            emits: ['update:modelValue', 'submit'],
+            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
+          },
+          VanPopup: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    await wrapper.find('.chat-input').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // The message content should NOT contain the forbidden XML tags
+    expect(wrapper.text()).not.toContain('<system_instructions>')
+    expect(wrapper.text()).not.toContain('你是助手')
+    expect(wrapper.text()).not.toContain('系统指令')
+    // But should contain the safe content
+    expect(wrapper.text()).toContain('根据查询结果')
+    expect(wrapper.text()).toContain('当前净资产为 100 万元')
+  })
+
+  it('filters User Context leakage from streaming output', async () => {
+    sendChatEventStream.mockResolvedValue(
+      streamReaderFromText(
+        '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
+          '{"id":"2","type":"token.stream","token":"User Context: {\\\"family_id\\\": \\\"123\\\", \\\"tenantId\\\": \\\"456\\\"}\\n","is_thinking":false}\n' +
+          '{"id":"3","type":"token.stream","token":"这是回答正文。","is_thinking":false}\n' +
+          '{"id":"4","type":"capability.end","result":{"summary":"这是回答正文"}}\n',
+      ),
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const aiStore = useAIStore()
+    aiStore.config = { ai_enabled: true, ai_test_thinking_success: false } as typeof aiStore.config
+
+    const wrapper = mount(AIChatPage, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          AIChatInput: {
+            name: 'AIChatInput',
+            props: ['modelValue'],
+            emits: ['update:modelValue', 'submit'],
+            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'test\'); $emit(\'submit\')">send</button>',
+          },
+          VanPopup: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    await wrapper.find('.chat-input').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // Should NOT leak User Context or identifiers
+    expect(wrapper.text()).not.toContain('User Context')
+    expect(wrapper.text()).not.toContain('family_id')
+    expect(wrapper.text()).not.toContain('tenantId')
+    expect(wrapper.text()).not.toContain('123')
+    // Should show safe content
+    expect(wrapper.text()).toContain('这是回答正文')
+  })
+
+  it('filters repeated user question pattern', async () => {
+    sendChatEventStream.mockResolvedValue(
+      streamReaderFromText(
+        '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
+          '{"id":"2","type":"token.stream","token":"你问的是：我们家净资产是多少？\\n","is_thinking":false}\n' +
+          '{"id":"3","type":"token.stream","token":"根据数据，当前净资产为 200 万元。","is_thinking":false}\n' +
+          '{"id":"4","type":"capability.end","result":{"summary":"根据数据"}}\n',
+      ),
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const aiStore = useAIStore()
+    aiStore.config = { ai_enabled: true, ai_test_thinking_success: false } as typeof aiStore.config
+
+    const wrapper = mount(AIChatPage, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          AIChatInput: {
+            name: 'AIChatInput',
+            props: ['modelValue'],
+            emits: ['update:modelValue', 'submit'],
+            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
+          },
+          VanPopup: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    await wrapper.find('.chat-input').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // Should NOT repeat the user question
+    expect(wrapper.text()).not.toContain('你问的是')
+    // Should show the actual answer
+    expect(wrapper.text()).toContain('根据数据')
+    expect(wrapper.text()).toContain('当前净资产为 200 万元')
+  })
+
+  it('handles multiple forbidden patterns in single stream', async () => {
+    sendChatEventStream.mockResolvedValue(
+      streamReaderFromText(
+        '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
+          '{"id":"2","type":"token.stream","token":"<user_question>原始问题</user_question>","is_thinking":false}\n' +
+          '{"id":"3","type":"token.stream","token":"System Prompt: 你是助手\\n","is_thinking":false}\n' +
+          '{"id":"4","type":"token.stream","token":"tenantId: 789\\n","is_thinking":false}\n' +
+          '{"id":"5","type":"token.stream","token":"安全回答内容。","is_thinking":false}\n' +
+          '{"id":"6","type":"capability.end","result":{"summary":"安全回答"}}\n',
+      ),
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const aiStore = useAIStore()
+    aiStore.config = { ai_enabled: true, ai_test_thinking_success: false } as typeof aiStore.config
+
+    const wrapper = mount(AIChatPage, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          AIChatInput: {
+            name: 'AIChatInput',
+            props: ['modelValue'],
+            emits: ['update:modelValue', 'submit'],
+            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'test\'); $emit(\'submit\')">send</button>',
+          },
+          VanPopup: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    await wrapper.find('.chat-input').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // All forbidden content should be filtered
+    expect(wrapper.text()).not.toContain('<user_question>')
+    expect(wrapper.text()).not.toContain('原始问题')
+    expect(wrapper.text()).not.toContain('System Prompt')
+    expect(wrapper.text()).not.toContain('tenantId')
+    expect(wrapper.text()).not.toContain('789')
+    // Only safe content remains
+    expect(wrapper.text()).toContain('安全回答内容')
+  })
+
+  it('preserves normal markdown content through filter', async () => {
+    const markdownContent = '# 标题\\n\\n**加粗** 和 `代码`\\n\\n- 列表项'
+    sendChatEventStream.mockResolvedValue(
+      streamReaderFromText(
+        '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
+          '{"id":"2","type":"token.stream","token":"' + markdownContent + '","is_thinking":false}\n' +
+          '{"id":"3","type":"capability.end","result":{"summary":"标题"}}\n',
+      ),
+    )
+
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const aiStore = useAIStore()
+    aiStore.config = { ai_enabled: true, ai_test_thinking_success: false } as typeof aiStore.config
+
+    const wrapper = mount(AIChatPage, {
+      global: {
+        plugins: [pinia],
+        stubs: {
+          AIChatInput: {
+            name: 'AIChatInput',
+            props: ['modelValue'],
+            emits: ['update:modelValue', 'submit'],
+            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'test\'); $emit(\'submit\')">send</button>',
+          },
+          VanPopup: { template: '<div><slot /></div>' },
+        },
+      },
+    })
+
+    await wrapper.find('.chat-input').trigger('click')
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // Markdown should be preserved and rendered
+    expect(wrapper.text()).toContain('标题')
+    expect(wrapper.text()).toContain('加粗')
+    expect(wrapper.text()).toContain('代码')
+    expect(wrapper.text()).toContain('列表项')
+  })
+})
