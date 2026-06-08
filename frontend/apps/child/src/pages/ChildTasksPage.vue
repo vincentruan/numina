@@ -1,5 +1,18 @@
 <template>
   <div class="chores-page">
+    <!-- Skeleton during initial load -->
+    <ChildTasksSkeleton v-if="loading && !refreshing && chores.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
+    <van-pull-refresh
+      v-model="refreshing"
+      :pulling-text="t('common.pullRefresh.pulling')"
+      :loosing-text="t('common.pullRefresh.loosing')"
+      :loading-text="t('common.pullRefresh.loading')"
+      :success-text="t('common.pullRefresh.success')"
+      @refresh="onRefresh"
+    >
     <!-- Date navigation — flat card -->
     <div class="date-nav-card">
       <button
@@ -196,6 +209,7 @@
         {{ t('blindBox.autoTriggeredClose') }}
       </button>
     </div>
+    </van-pull-refresh>
 
     <!-- Celebration animation -->
     <CelebrationAnimation
@@ -210,12 +224,15 @@
       @balance-react="onBalanceReact"
       @balance-react-end="onBalanceReactEnd"
     />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import NProgress from 'nprogress'
+import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { getUser } from '@numina/auth'
@@ -248,6 +265,7 @@ const familyStore = useFamilyStore()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
+const refreshing = ref(false)
 const error = ref('')
 const submittingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
@@ -475,6 +493,11 @@ async function load() {
   }
 }
 
+async function onRefresh() {
+  await load()
+  refreshing.value = false
+}
+
 function showCompleteConfirm(chore: ChoreInstance) {
   completeTarget.value = chore
   completeSheetVisible.value = true
@@ -562,6 +585,8 @@ async function doAbandon() {
 
 onMounted(async () => {
   await load()
+  // Complete NProgress - skeleton takes over visual feedback
+  NProgress.done()
   await checkNewMilestones()
   try {
     const wishData = await listChildWishes().catch(() => null)

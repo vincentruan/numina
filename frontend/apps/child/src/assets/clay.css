@@ -239,3 +239,29 @@
 *, *::before, *::after {
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
+
+/* ── NProgress styling (ochre gold for child app) ── */
+#nprogress .bar {
+  background: var(--color-brand-ochre) !important;
+  height: 3px !important;
+}
+
+#nprogress .peg {
+  box-shadow: 0 0 10px var(--color-brand-ochre), 0 0 5px var(--color-brand-ochre) !important;
+}
+
+#nprogress .spinner-icon {
+  border-top-color: var(--color-brand-ochre) !important;
+  border-left-color: var(--color-brand-ochre) !important;
+}
+
+/* ── Skeleton base styles ── */
+:root {
+  --skeleton-bg: rgba(0, 0, 0, 0.08);
+  --skeleton-card-bg: var(--color-surface-soft);
+}
+
+[data-theme="dark"] {
+  --skeleton-bg: rgba(255, 255, 255, 0.1);
+  --skeleton-card-bg: var(--color-surface-card);
+}

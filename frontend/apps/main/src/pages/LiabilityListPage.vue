@@ -6,135 +6,141 @@
       </template>
     </PageHeader>
 
-    <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
-      <van-tab :title="t('liability.tabActive')" name="active" />
-      <van-tab :title="t('liability.tabInactive')" name="inactive" />
-    </van-tabs>
+    <!-- Skeleton for initial loading -->
+    <LiabilityListSkeleton v-if="liabilityStore.loading && liabilityStore.liabilities.length === 0" />
 
-    <!-- Filter / Sort bar -->
-    <div class="filter-bar">
-      <div class="filter-chips">
-        <button
-          class="chip"
-          :class="{ active: filterCategory === '' }"
-          @click="filterCategory = ''"
-        >{{ t('liability.filterAll') }}</button>
-        <button
-          v-for="cat in categories"
-          :key="cat.value"
-          class="chip"
-          :class="{ active: filterCategory === cat.value }"
-          @click="filterCategory = cat.value"
-        >{{ cat.label }}</button>
-      </div>
-      <button class="sort-btn" @click="toggleSort">
-        <van-icon name="sort" size="16" />
-        <span>{{ sortLabel }}</span>
-      </button>
-    </div>
+    <!-- Actual Content -->
+    <template v-else>
+      <van-tabs v-model:active="activeTab" sticky @change="onTabChange">
+        <van-tab :title="t('liability.tabActive')" name="active" />
+        <van-tab :title="t('liability.tabInactive')" name="inactive" />
+      </van-tabs>
 
-    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-      <!-- Summary Banner -->
-      <div v-if="liabilityStore.liabilities.length" class="summary-banner">
-        <div class="summary-top">
-          <div class="summary-main">
-            <div class="summary-label">{{ activeTab === 'active' ? t('liability.summaryTotal') : t('liability.summarySettled') }}</div>
-            <div class="summary-amount">{{ formatAmountDisplay(totalAmount) }}</div>
-          </div>
-          <div class="summary-count">
-            <span class="count-num">{{ filteredLiabilities.length }}</span>
-            <span class="count-unit">{{ t('liability.countUnit') }}</span>
-          </div>
-        </div>
-        <template v-if="activeTab === 'active' && totalOriginal > 0">
-          <div class="summary-progress-bar">
-            <div class="summary-progress-fill" :style="{ width: repaidPercent + '%' }" />
-          </div>
-          <div class="summary-progress-text">
-            <span>{{ t('liability.summaryProgress') }}</span>
-            <span class="summary-percent">{{ repaidPercent }}%</span>
-          </div>
-        </template>
-      </div>
-
-      <div v-if="filteredLiabilities.length" class="liability-list">
-        <LiabilityCard
-          v-for="item in filteredLiabilities"
-          :key="item.id"
-          :liability="item"
-          :select-mode="selectMode"
-          :selected="selectedIds.has(item.id)"
-          @click="onCardClick(item)"
-          @longpress="onLongPress(item)"
-          @pay="openPayDialog"
-          @edit="goEdit"
-          @delete="confirmDelete"
-        />
-      </div>
-      <EmptyState v-else :description="activeTab === 'active' ? t('liability.noLiabilityDesc') : t('liability.noSettledLiability')">
-        <van-button v-if="activeTab === 'active'" size="small" type="primary" @click="$router.push('/liabilities/new')">
-          {{ t('liability.addLiability') }}
-        </van-button>
-      </EmptyState>
-    </van-pull-refresh>
-
-    <!-- Batch action bar -->
-    <Transition name="slide-up">
-      <div v-if="selectMode" class="batch-bar">
-        <span class="batch-count">{{ t('liability.batchCount', { count: selectedIds.size }) }}</span>
-        <div class="batch-actions">
-          <van-button size="small" plain @click="selectAll">{{ t('liability.batchSelectAll') }}</van-button>
-          <van-button
-            v-if="activeTab === 'active'"
-            size="small"
-            type="success"
-            :disabled="selectedIds.size === 0"
-            @click="batchSettle"
-          >{{ t('liability.batchSettle') }}</van-button>
-          <van-button
-            size="small"
-            type="danger"
-            :disabled="selectedIds.size === 0"
-            @click="batchDelete"
-          >{{ t('liability.batchDelete') }}</van-button>
-        </div>
-      </div>
-    </Transition>
-
-    <!-- FAB (hidden in select mode) -->
-    <div v-if="!selectMode" class="fab" @click="$router.push('/liabilities/new')">
-      <van-icon name="plus" size="22" />
-    </div>
-
-    <!-- Quick payment dialog -->
-    <van-dialog
-      v-model:show="payDialogVisible"
-      :title="t('liability.payDialogTitle', { name: payTarget?.name ?? '' })"
-      show-cancel-button
-      :confirm-button-text="t('liability.payConfirmBtn')"
-      confirm-button-color="#059669"
-      @confirm="submitPayment"
-    >
-      <div class="pay-dialog-body">
-        <div class="pay-hint">{{ t('liability.payRemainingHint', { amount: payTarget ? formatAmountDisplay(payTarget.remaining_amount) : '' }) }}</div>
-        <van-field
-          v-model="payAmount"
-          type="number"
-          :placeholder="t('liability.payPlaceholder')"
-          input-align="center"
-          autofocus
-          :formatter="(v: string) => v.replace(/[^0-9.]/g, '')"
-        />
-        <div class="pay-quick-btns">
+      <!-- Filter / Sort bar -->
+      <div class="filter-bar">
+        <div class="filter-chips">
           <button
-            v-for="pct in [25, 50, 100]"
-            :key="pct"
-            class="quick-pct-btn"
-            @click="setPayPercent(pct)"
-          >{{ pct === 100 ? t('liability.payFull') : pct + '%' }}</button>
+            class="chip"
+            :class="{ active: filterCategory === '' }"
+            @click="filterCategory = ''"
+          >{{ t('liability.filterAll') }}</button>
+          <button
+            v-for="cat in categories"
+            :key="cat.value"
+            class="chip"
+            :class="{ active: filterCategory === cat.value }"
+            @click="filterCategory = cat.value"
+          >{{ cat.label }}</button>
         </div>
+        <button class="sort-btn" @click="toggleSort">
+          <van-icon name="sort" size="16" />
+          <span>{{ sortLabel }}</span>
+        </button>
       </div>
-    </van-dialog>
+
+      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+        <!-- Summary Banner -->
+        <div v-if="liabilityStore.liabilities.length" class="summary-banner">
+          <div class="summary-top">
+            <div class="summary-main">
+              <div class="summary-label">{{ activeTab === 'active' ? t('liability.summaryTotal') : t('liability.summarySettled') }}</div>
+              <div class="summary-amount">{{ formatAmountDisplay(totalAmount) }}</div>
+            </div>
+            <div class="summary-count">
+              <span class="count-num">{{ filteredLiabilities.length }}</span>
+              <span class="count-unit">{{ t('liability.countUnit') }}</span>
+            </div>
+          </div>
+          <template v-if="activeTab === 'active' && totalOriginal > 0">
+            <div class="summary-progress-bar">
+              <div class="summary-progress-fill" :style="{ width: repaidPercent + '%' }" />
+            </div>
+            <div class="summary-progress-text">
+              <span>{{ t('liability.summaryProgress') }}</span>
+              <span class="summary-percent">{{ repaidPercent }}%</span>
+            </div>
+          </template>
+        </div>
+
+        <div v-if="filteredLiabilities.length" class="liability-list">
+          <LiabilityCard
+            v-for="item in filteredLiabilities"
+            :key="item.id"
+            :liability="item"
+            :select-mode="selectMode"
+            :selected="selectedIds.has(item.id)"
+            @click="onCardClick(item)"
+            @longpress="onLongPress(item)"
+            @pay="openPayDialog"
+            @edit="goEdit"
+            @delete="confirmDelete"
+          />
+        </div>
+        <EmptyState v-else :description="activeTab === 'active' ? t('liability.noLiabilityDesc') : t('liability.noSettledLiability')">
+          <van-button v-if="activeTab === 'active'" size="small" type="primary" @click="$router.push('/liabilities/new')">
+            {{ t('liability.addLiability') }}
+          </van-button>
+        </EmptyState>
+      </van-pull-refresh>
+
+      <!-- Batch action bar -->
+      <Transition name="slide-up">
+        <div v-if="selectMode" class="batch-bar">
+          <span class="batch-count">{{ t('liability.batchCount', { count: selectedIds.size }) }}</span>
+          <div class="batch-actions">
+            <van-button size="small" plain @click="selectAll">{{ t('liability.batchSelectAll') }}</van-button>
+            <van-button
+              v-if="activeTab === 'active'"
+              size="small"
+              type="success"
+              :disabled="selectedIds.size === 0"
+              @click="batchSettle"
+            >{{ t('liability.batchSettle') }}</van-button>
+            <van-button
+              size="small"
+              type="danger"
+              :disabled="selectedIds.size === 0"
+              @click="batchDelete"
+            >{{ t('liability.batchDelete') }}</van-button>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- FAB (hidden in select mode) -->
+      <div v-if="!selectMode" class="fab" @click="$router.push('/liabilities/new')">
+        <van-icon name="plus" size="22" />
+      </div>
+
+      <!-- Quick payment dialog -->
+      <van-dialog
+        v-model:show="payDialogVisible"
+        :title="t('liability.payDialogTitle', { name: payTarget?.name ?? '' })"
+        show-cancel-button
+        :confirm-button-text="t('liability.payConfirmBtn')"
+        confirm-button-color="#059669"
+        @confirm="submitPayment"
+      >
+        <div class="pay-dialog-body">
+          <div class="pay-hint">{{ t('liability.payRemainingHint', { amount: payTarget ? formatAmountDisplay(payTarget.remaining_amount) : '' }) }}</div>
+          <van-field
+            v-model="payAmount"
+            type="number"
+            :placeholder="t('liability.payPlaceholder')"
+            input-align="center"
+            autofocus
+            :formatter="(v: string) => v.replace(/[^0-9.]/g, '')"
+          />
+          <div class="pay-quick-btns">
+            <button
+              v-for="pct in [25, 50, 100]"
+              :key="pct"
+              class="quick-pct-btn"
+              @click="setPayPercent(pct)"
+            >{{ pct === 100 ? t('liability.payFull') : pct + '%' }}</button>
+          </div>
+        </div>
+      </van-dialog>
+    </template>
   </div>
 </template>
 
@@ -149,6 +155,7 @@ import type { Liability } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import LiabilityCard from '@/components/liability/LiabilityCard.vue'
+import LiabilityListSkeleton from '@/components/liability/LiabilityListSkeleton.vue'
 
 const { t } = useI18n()
 const router = useRouter()

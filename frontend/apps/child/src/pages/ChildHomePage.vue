@@ -1,19 +1,32 @@
 <template>
   <div class="home-page">
-    <!-- Balance hero — progress ring card -->
-    <div class="hero-card">
-      <p class="hero-label">{{ t('home.myStars') }}</p>
-      <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-      <ProgressRing
-        v-if="!loadingChores && todayChores.length > 0"
-        :completed="completedChores"
-        :pending="pendingChores"
-        :total="todayChores.length"
-        :total-coins="totalChoreCoins"
-        :loading="loadingChores"
-        class="hero-ring"
-      />
-    </div>
+    <!-- Skeleton during initial load -->
+    <ChildHomeSkeleton v-if="loadingChores && !refreshing && todayChores.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
+    <van-pull-refresh
+      v-model="refreshing"
+      :pulling-text="t('common.pullRefresh.pulling')"
+      :loosing-text="t('common.pullRefresh.loosing')"
+      :loading-text="t('common.pullRefresh.loading')"
+      :success-text="t('common.pullRefresh.success')"
+      @refresh="onRefresh"
+    >
+      <!-- Balance hero — progress ring card -->
+      <div class="hero-card">
+        <p class="hero-label">{{ t('home.myStars') }}</p>
+        <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+        <ProgressRing
+          v-if="!loadingChores && todayChores.length > 0"
+          :completed="completedChores"
+          :pending="pendingChores"
+          :total="todayChores.length"
+          :total-coins="totalChoreCoins"
+          :loading="loadingChores"
+          class="hero-ring"
+        />
+      </div>
 
     <!-- Today's chores -->
     <div class="section">
@@ -133,6 +146,7 @@
       <p class="section-title">{{ t('home.myCalendar') }}</p>
       <ChildCalendar :fetch-month="fetchChildMonth" day-route="/calendar/day" variant="child" />
     </div>
+    </van-pull-refresh>
 
     <!-- Settings section — collapsible -->
     <div class="settings-section">
@@ -178,13 +192,16 @@
       :stars-earned="celebrationStarsEarned"
       @dismiss="onCelebrationDismiss"
     />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildHome' })
 import { ref, computed, onMounted } from 'vue'
+import NProgress from 'nprogress'
 import ProgressRing from '@/components/ProgressRing.vue'
+import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
@@ -222,6 +239,7 @@ const { balance, refresh: refreshBalance } = useBalancePolling()
 const reducedMotion = useReducedMotion()
 const todayChores = ref<ChoreInstance[]>([])
 const loadingChores = ref(true)
+const refreshing = ref(false)
 
 // ProgressRing derived data
 const completedChores = computed(() => todayChores.value.filter(c => c.status === 'approved').length)
@@ -378,11 +396,8 @@ function todayDate(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
-function fetchChildMonth(year: number, month: number) {
-  return getChildCalendar(year, month)
-}
-
-onMounted(async () => {
+async function load() {
+  loadingChores.value = true
   const [bal, chores, wishData] = await Promise.all([
     getCoinBalance().catch(() => 0),
     getMyChores(todayDate()).catch(() => [] as ChoreInstance[]),
@@ -393,9 +408,23 @@ onMounted(async () => {
   loadingChores.value = false
   const active = wishData?.active ?? []
   topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
-
   // Check for pending celebrations after data loads
   checkAndTriggerCelebration(chores)
+}
+
+async function onRefresh() {
+  await load()
+  refreshing.value = false
+}
+
+function fetchChildMonth(year: number, month: number) {
+  return getChildCalendar(year, month)
+}
+
+onMounted(async () => {
+  await load()
+  // Complete NProgress - skeleton takes over visual feedback
+  NProgress.done()
 })
 </script>
 

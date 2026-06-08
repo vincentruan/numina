@@ -1,5 +1,18 @@
 <template>
   <div class="treasures-page">
+    <!-- Skeleton during initial load -->
+    <ChildTreasuresSkeleton v-if="loading && !refreshing && treasures.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
+    <van-pull-refresh
+      v-model="refreshing"
+      :pulling-text="t('common.pullRefresh.pulling')"
+      :loosing-text="t('common.pullRefresh.loosing')"
+      :loading-text="t('common.pullRefresh.loading')"
+      :success-text="t('common.pullRefresh.success')"
+      @refresh="onRefresh"
+    >
     <!-- Header summary — lavender feature card -->
     <div class="summary-card">
       <p class="summary-title">{{ t('treasures.title') }}</p>
@@ -40,12 +53,16 @@
         </div>
       </div>
     </div>
+    </van-pull-refresh>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildTreasures' })
 import { computed, onMounted, ref } from 'vue'
+import NProgress from 'nprogress'
+import ChildTreasuresSkeleton from '@/components/skeletons/ChildTreasuresSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
 import EmptyState from '@/components/EmptyState.vue'
@@ -56,6 +73,7 @@ const noTreasuresSvg = noTreasuresSvgRaw
 const { t, locale } = useI18n()
 const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
+const refreshing = ref(false)
 const error = ref<string>('')
 
 const totalCoins = computed(() =>
@@ -75,7 +93,14 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
+}
+
+async function onRefresh() {
+  await load()
+  refreshing.value = false
 }
 
 onMounted(load)

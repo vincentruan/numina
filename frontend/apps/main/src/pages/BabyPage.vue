@@ -2,7 +2,12 @@
   <div class="baby-page">
     <PageHeader :title="t('baby.title')" :show-back="false" />
 
-    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+    <!-- Skeleton for initial loading -->
+    <BabyPageSkeleton v-if="loading && childMembers.length === 0" />
+
+    <!-- Actual Content -->
+    <template v-else>
+      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
       <!-- No Children State -->
       <EmptyState v-if="childMembers.length === 0" :description="t('baby.noChildren')">
         <van-button type="primary" size="small" @click="$router.push('/family/members')">
@@ -525,6 +530,7 @@
         />
       </template>
     </van-pull-refresh>
+    </template>
   </div>
 </template>
 
@@ -548,6 +554,7 @@ import { getChildrenChores, assignChoreInstance, voidChoreInstance, approveChore
 import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -560,6 +567,7 @@ const pendingDrawCount = computed(
 )
 
 const refreshing = ref(false)
+const loading = ref(true)
 const activeChildIndex = ref(0)
 const activeContentTab = ref(0)
 
@@ -1071,12 +1079,14 @@ async function onRefresh() {
 }
 
 onMounted(async () => {
+  loading.value = true
   await familyStore.fetchFamily()
   if (authStore.user?.role === 'owner') {
     await choreStore.fetchPendingApprovals()
   }
   await loadData()
   await blindBoxStore.fetchDraws()
+  loading.value = false
 })
 </script>
 

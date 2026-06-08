@@ -1,5 +1,10 @@
 <template>
   <div class="wishes-page">
+    <!-- Skeleton during initial load -->
+    <ChildWishesSkeleton v-if="loading && !refreshing && wishList === null" />
+
+    <!-- Actual content -->
+    <template v-else>
     <van-pull-refresh
       v-model="refreshing"
       :pulling-text="t('common.pullRefresh.pulling')"
@@ -158,12 +163,15 @@
     <button v-if="totalWishes > 0" class="fab" :aria-label="t('wishes.createBtn')" @click="router.push({ name: 'ChildWishCreate' })">
       <van-icon name="plus" size="22" color="var(--color-on-primary)" />
     </button>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildWishes' })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import NProgress from 'nprogress'
+import ChildWishesSkeleton from '@/components/skeletons/ChildWishesSkeleton.vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -290,6 +298,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 }
 

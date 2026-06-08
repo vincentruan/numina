@@ -117,14 +117,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import NProgress from 'nprogress'
 import { createChildWish } from '@/api/childWishes'
 
 const { t } = useI18n()
 const router = useRouter()
+
+// Complete NProgress immediately since this is a form page with no async data loading
+onMounted(() => {
+  NProgress.done()
+})
 
 const EMOJI_LIST = [
   '🎮', '🚲', '📚', '🎨', '🎸', '⚽', '🏀', '🎯',

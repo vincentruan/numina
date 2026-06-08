@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getUser, useLoadingOverlay } from '@numina/auth'
+import { getUser } from '@numina/auth'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
+
+NProgress.configure({ showSpinner: true, parent: '#app' })
 
 // Child routes — all require authentication, redirect to unified login if not authenticated
 const GUEST_ROUTES: string[] = []
@@ -16,21 +20,25 @@ const router = createRouter({
           path: '',
           name: 'ChildHome',
           component: () => import('@/pages/ChildHomePage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'tasks',
           name: 'ChildTasks',
           component: () => import('@/pages/ChildTasksPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'ledger',
           name: 'ChildLedger',
           component: () => import('@/pages/ChildLedgerPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'wishes',
           name: 'ChildWishes',
           component: () => import('@/pages/ChildWishesPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'wishes/new',
@@ -41,16 +49,19 @@ const router = createRouter({
           path: 'wishes/:id',
           name: 'ChildWishDetail',
           component: () => import('@/pages/ChildWishDetailPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'assets/:id',
           name: 'ChildAssetDetail',
           component: () => import('@/pages/ChildAssetDetailPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'treasures',
           name: 'ChildTreasures',
           component: () => import('@/pages/ChildTreasuresPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'blind-box',
@@ -60,6 +71,7 @@ const router = createRouter({
           path: 'calendar/day',
           name: 'ChildDayDetail',
           component: () => import('@/pages/ChildDayDetailPage.vue'),
+          meta: { hasSkeleton: true }
         },
       ],
     },
@@ -75,13 +87,15 @@ const router = createRouter({
 })
 
 router.beforeEach((to, _from, next) => {
-  useLoadingOverlay().show()
+  NProgress.start()
   const user = getUser()
   const isChildSession = user?.role === 'child'
 
   // All routes in child app require authentication
   // Redirect unauthenticated users to unified login on main site
   if (!isChildSession) {
+    // Clean up NProgress before external redirect
+    NProgress.done()
     // Build redirect URL preserving the original path
     const redirectPath = to.path !== '/' ? `/child${to.path}` : '/child/'
     const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
@@ -93,8 +107,14 @@ router.beforeEach((to, _from, next) => {
   next()
 })
 
-router.afterEach(() => {
-  useLoadingOverlay().hide()
+router.afterEach((to) => {
+  // Pages with skeleton: immediately complete NProgress
+  // Skeleton takes over visual feedback during data loading
+  if (to.meta.hasSkeleton) {
+    NProgress.done()
+  }
+  // Pages without skeleton: NProgress stays active
+  // Page's onMounted data loading will call NProgress.done() when complete
 })
 
 export default router

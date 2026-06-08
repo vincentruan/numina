@@ -1,10 +1,13 @@
 <template>
   <div class="day-detail-page">
+    <!-- Skeleton during initial load -->
+    <ChildDayDetailSkeleton v-if="loading" />
+
+    <!-- Actual content -->
+    <template v-else>
     <PageHeader :title="pageTitle" :show-back="true" />
 
-    <div v-if="loading" class="hint">{{ t('common.loading') }}</div>
-
-    <template v-else-if="detail">
+    <template v-if="detail">
       <!-- Chores -->
       <section v-if="detail.chores.length > 0" class="section">
         <p class="section-title">{{ t('dayDetail.sectionChores') }}</p>
@@ -60,11 +63,14 @@
         image-size="80"
       />
     </template>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import NProgress from 'nprogress'
+import ChildDayDetailSkeleton from '@/components/skeletons/ChildDayDetailSkeleton.vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -101,7 +107,7 @@ function milestoneEmoji(type: string): string {
 }
 
 onMounted(async () => {
-  if (!date) { loading.value = false; return }
+  if (!date) { loading.value = false; NProgress.done(); return }
   try {
     if (isParentView.value && childId) {
       detail.value = await getFamilyChildDayDetail(childId, date)
@@ -112,6 +118,8 @@ onMounted(async () => {
     detail.value = null
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 })
 </script>
