@@ -66,8 +66,9 @@
             </Transition>
           </div>
 
-          <div v-if="!compressed || isExpanded" class="tool-args" :class="{ 'args-running': status === 'running' }">
-            <span class="args-label">{{ t('aiProcess.argsLabel') }}</span>
+          <!-- 参数显示：running 或展开时显示，done/error 默认隐藏 -->
+          <div v-if="status === 'running' || isExpanded" class="tool-args" :class="{ 'args-running': status === 'running' }">
+            <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
             <span class="args-value">{{ argsSummary }}</span>
           </div>
           <div v-if="status === 'done' || status === 'error'" class="tool-result" :class="resultClass">
@@ -112,7 +113,6 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStepCollapse } from '@/composables/useStepCollapse'
-import { useToolStatusText } from '@/composables/useToolStatusText'
 import { getToolDisplayInfo, formatArgsSummary } from '@/utils/toolDisplayMapping'
 
 const props = withDefaults(defineProps<{
@@ -220,16 +220,14 @@ const computedElapsedMs = computed(() => {
   return 0
 })
 
-// Live status text for running tool_call steps
-const toolTypeRef = computed(() => props.toolType)
-const liveElapsedMs = computed(() =>
-  isActive.value ? tickMs.value - activeStartMs : (props.elapsedMs ?? 0),
-)
-const progressMessageRef = computed(() => props.progressMessage)
-const { statusText } = useToolStatusText({
-  toolType: toolTypeRef,
-  elapsedMs: liveElapsedMs,
-  progressMessage: progressMessageRef,
+// Live status text for running tool_call steps - dynamic generation using displayName
+const statusText = computed(() => {
+  const baseName = props.displayName ?? props.name ?? '处理'
+  if (props.status === 'running') return `正在${baseName}`
+  if (props.status === 'done') return `已${baseName}`
+  if (props.status === 'error') return `${baseName}失败`
+  if (props.status === 'streaming') return `${baseName}中...`
+  return baseName
 })
 
 const formattedDuration = computed(() => {

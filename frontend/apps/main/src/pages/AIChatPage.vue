@@ -329,17 +329,6 @@
                 </div>
                 <!-- Assistant message timestamp -->
                 <span v-if="msg.role === 'assistant'" class="msg-time">{{ msg.displayTime }}</span>
-                <!-- U6: Process footnote for historical assistant messages (R13, R14, R15) -->
-                <AiProcessFootnote
-                  v-if="msg.role === 'assistant' && msg.phase === 'done' && msg.processSteps && msg.processSteps.length > 0"
-                  :step-count="msg.processSteps.length"
-                  :expanded="msg.processExpanded ?? false"
-                  :status="msg.processStatus || 'done'"
-                  :elapsed-ms="msg.processElapsedMs || 0"
-                  :steps="msg.processSteps"
-                  :phase="msg.phase"
-                  @toggle="(expanded) => { msg.processExpanded = expanded }"
-                />
                 <!-- User message send status indicator -->
                 <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
                   <span class="send-status-dot" aria-hidden="true" />
@@ -529,7 +518,6 @@ import { getAgent } from '@/api/agent'
 import type { Agent } from '@/types/agent'
 import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
-import AiProcessFootnote from '@/components/ai/AiProcessFootnote.vue'
 import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
 import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
@@ -538,6 +526,7 @@ import AgentRunCanvas from '@/components/ai/AgentRunCanvas.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
 import { isLongTask } from '@/utils/aiTaskDetection'
+import { filterAIContent } from '@/utils/contentFilter'
 import type { AgentEvent, ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
@@ -1479,9 +1468,11 @@ async function onSend() {
           }
         }
         textRaw += event.token ?? ''
-        messages.value[msgIdx].content = textRaw
+        // 应用内容过滤器，移除违规内容
+        const filteredContent = filterAIContent(textRaw)
+        messages.value[msgIdx].content = filteredContent
         // Use throttled rendering for smoother streaming
-        renderMarkdownThrottled(textRaw, messages.value[msgIdx])
+        renderMarkdownThrottled(filteredContent, messages.value[msgIdx])
         scrollToBottom()
         return
       }
