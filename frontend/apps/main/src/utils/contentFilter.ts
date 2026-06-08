@@ -18,8 +18,8 @@
 
 const ZERO_WIDTH_CHARS = /[​-‍﻿]/g
 
-// 性能告警阈值（毫秒）
-const PERFORMANCE_WARN_THRESHOLD_MS = 5
+// 性能告警阈值（毫秒）- 200ms 为合理的慢调用阈值
+const PERFORMANCE_WARN_THRESHOLD_MS = 200
 
 // 禁止输出的模式列表
 const FORBIDDEN_PATTERNS = [

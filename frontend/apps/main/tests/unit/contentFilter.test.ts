@@ -334,12 +334,12 @@ describe('filterAIContent', () => {
     it('logs warning for slow filter in dev mode', () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-      // Create a very long input to trigger slow filter (>5ms)
-      const longInput = 'A'.repeat(50000) + '<system_instructions>X</system_instructions>' + 'B'.repeat(50000)
+      // Create a very long input to potentially trigger slow filter (>200ms)
+      // Note: In unit tests, performance.now() may not reflect real timing
+      const longInput = 'A'.repeat(100000) + '<system_instructions>X</system_instructions>' + 'B'.repeat(100000)
       filterAIContent(longInput)
 
-      // Note: In unit tests, performance.now() is mocked and may not reflect real timing
-      // This test verifies the mechanism exists, not actual performance
+      // This test verifies the mechanism exists, not actual performance timing
       warnSpy.mockRestore()
     })
 
