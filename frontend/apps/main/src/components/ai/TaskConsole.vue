@@ -2,10 +2,10 @@
   <div v-if="status !== 'idle'" class="task-console">
     <!-- Header bar (摘要层) -->
     <div class="console-header" @click="toggleOpen">
-      <AIBrainIcon
+      <ProcessingIcon
         v-if="status === 'running' || status === 'post_processing'"
         :active="true"
-        class="console-brain-icon breathing-icon"
+        class="console-processing-icon"
         aria-hidden="true"
       />
       <span v-else class="console-status-icon" aria-hidden="true">
@@ -143,7 +143,7 @@
 
       <!-- Empty running state (no steps, no content) -->
       <div v-else-if="isRunning && !thinkContent && !hasSteps && !visibleToolSteps.length" class="console-empty-running">
-        <AIBrainIcon :active="true" class="breathing-icon" aria-hidden="true" />
+        <ProcessingIcon :active="true" aria-hidden="true" />
         <span>{{ status === 'post_processing' ? t('aiTask.phase.postProcessing') : t('aiTask.phase.connecting') }}</span>
       </div>
     </div>
@@ -155,7 +155,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
+import ProcessingIcon from '@/components/common/ProcessingIcon.vue'
 import type { AITaskPhase } from '@/composables/useAITask'
 import type { ToolStep } from '@/composables/useAITask'
 import type { PlanStep } from '@/types/agent-stream'
@@ -376,39 +376,8 @@ const failureMessage = computed(() => {
   flex-shrink: 0;
 }
 
-.console-brain-icon :deep(.ai-button-wrapper) {
-  transform: translateY(0);
-}
-
-.console-brain-icon :deep(.ai-button-3d) {
-  width: 28px;
-  height: 28px;
-  padding: 5px;
-}
-
-.console-brain-icon :deep(.fg-icon) {
-  filter: none;
-}
-
-.breathing-icon :deep(.ai-button-3d) {
-  animation: breathe 2.5s ease-in-out infinite;
-}
-
-@keyframes breathe {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.08);
-    opacity: 0.85;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .breathing-icon :deep(.ai-button-3d) {
-    animation: none;
-  }
+.console-processing-icon {
+  --icon-size: 20px;
 }
 
 .console-header-content {
@@ -775,14 +744,8 @@ const failureMessage = computed(() => {
   padding: 8px 0;
 }
 
-.console-empty-running :deep(.ai-button-wrapper) {
-  transform: translateY(0);
-}
-
-.console-empty-running :deep(.ai-button-3d) {
-  width: 24px;
-  height: 24px;
-  padding: 4px;
+.console-empty-running :deep(.processing-icon) {
+  --icon-size: 20px;
 }
 
 /* Failure warning bar */
