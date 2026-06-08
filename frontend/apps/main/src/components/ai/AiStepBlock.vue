@@ -140,10 +140,15 @@ const props = withDefaults(defineProps<{
   url?: string
   path?: string
   kind?: 'data' | 'link' | 'image' | 'file' | 'other' | 'report'
+  // U5: Chinese summary text (aiStepSummary.ts provides i18n key)
+  summaryText?: string
+  // U5: Show detail panel toggle (for redacted args display)
+  showDetail?: boolean
 }>(), {
   defaultExpanded: true,
   compressed: false,
   autoCollapseSignal: false,
+  showDetail: false,
 })
 
 const { t } = useI18n()
@@ -253,6 +258,11 @@ const statusIcon = computed(() => {
 const headerTitle = computed(() => {
   if (props.type === 'reasoning') return t('aiProcess.stepReasoning')
   if (props.type === 'tool_call') {
+    // U5: Use summaryText if provided (Chinese summary from aiStepSummary.ts)
+    if (props.summaryText) {
+      const info = getToolDisplayInfo(props.name || '', props.displayName, props.icon, props.toolType)
+      return `${info.icon} ${t(props.summaryText)}`
+    }
     const info = getToolDisplayInfo(props.name || '', props.displayName, props.icon, props.toolType)
     return `${info.icon} ${info.displayName}`
   }
@@ -684,6 +694,36 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   .tool-result {
     padding: 6px 8px;
     font-size: 11px;
+  }
+}
+
+/* U11: Mobile (≤428px) - tighter layout, truncated summaries */
+@media (max-width: 428px) {
+  .ai-step-block {
+    padding: 6px 8px;
+  }
+
+  .step-header {
+    gap: 6px;
+  }
+
+  /* Truncate long summaries on mobile */
+  .step-summary {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .step-title {
+    font-size: 11px;
+  }
+
+  .reasoning-content,
+  .tool-args,
+  .tool-result {
+    padding: 4px 6px;
+    font-size: 10px;
   }
 }
 </style>

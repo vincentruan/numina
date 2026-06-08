@@ -279,6 +279,65 @@ export default {
       },
     },
   },
+  aiCanvas: {
+    statusRunning: '执行中',
+    statusDone: '已完成',
+    statusError: '执行出错',
+    statusInterrupted: '执行中断',
+    runningInBackground: '正在后台运行...',
+    expand: '展开画布',
+    collapse: '收起画布',
+    progressSummary: '已完成 {done}/{total} 步骤',
+    resumeAction: '继续执行',
+    canvasAriaLabel: '执行画布',
+    elapsedTimeAriaLabel: '耗时',
+  },
+  aiStepSummary: {
+    // Data query tools
+    getAssetAllocation: '获取资产配置',
+    getLiabilitySummary: '获取负债摘要',
+    queryAssets: '查询资产数据',
+    queryFamilyMembers: '查询家庭成员',
+    getDashboardOverview: '获取概览数据',
+    getDashboardAllocation: '获取配置数据',
+    getDashboardTrend: '获取趋势数据',
+    getLowUsageAssets: '查询闲置资产',
+    // Calculation tools
+    calculateTrend: '计算趋势',
+    calculateNetWorth: '计算净资产',
+    computeAllocationRatio: '计算配置比例',
+    analyzeSpending: '分析支出',
+    // Report generation tools
+    generateReport: '生成报告',
+    createChart: '创建图表',
+    exportData: '导出数据',
+    // Web search tools
+    webSearch: '网络搜索',
+    fetchUrl: '获取网页',
+    scrapeContent: '提取内容',
+    // File operations
+    readFile: '读取文件',
+    writeFile: '写入文件',
+    uploadFile: '上传文件',
+    // External API calls
+    callExternalApi: '调用外部服务',
+    fetchExchangeRate: '获取汇率',
+    // Planning tools
+    writeTodos: '规划步骤',
+    // Unknown/fallback
+    unknownTool: '未知操作',
+    // Categories for merging
+    categoryDataQuery: '查询数据',
+    categoryCalculation: '计算分析',
+    categoryReportGen: '生成报告',
+    categoryWebSearch: '网络搜索',
+    categoryFileOps: '文件操作',
+    categoryExternalApi: '调用服务',
+    categoryInternal: '内部操作',
+    categoryUnknown: '其他',
+    // Merge format
+    mergedCount: '({count}次)',
+  },
   aiArtifact: {
     badgeLabel: '查看 {count} 个附件',
     sheetTitle: '附件 ({count})',
