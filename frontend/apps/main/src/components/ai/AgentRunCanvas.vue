@@ -35,12 +35,9 @@ const props = withDefaults(defineProps<{
   status: 'running' | 'done' | 'error' | 'interrupted'
   elapsedMs: number
   modelName?: string
-  stepsCount: number
-  hasDeepThink?: boolean
   showHeader?: boolean
 }>(), {
   showHeader: true,
-  hasDeepThink: false,
   modelName: '',
 })
 

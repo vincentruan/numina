@@ -177,13 +177,25 @@ class EventStreamBuilder:
         data: Any | None = None,
         error: str | None = None,
     ) -> StreamEvent:
+        # Redact sensitive fields from tool result data before streaming.
+        # This is the primary protection layer (spec R6) - tools may return
+        # data from external APIs/MCP servers that could contain credentials.
+        redacted_data: Any = data
+        if isinstance(data, dict) and data:
+            redacted_data = redact_sensitive_fields(data)
+        elif isinstance(data, list) and data:
+            redacted_data = [
+                redact_sensitive_fields(item) if isinstance(item, dict) else item
+                for item in data
+            ]
+
         return self._event(
             "tool.result",
             {
                 "tool_id": tool_id,
                 "result": {
                     "success": success,
-                    "data": data,
+                    "data": redacted_data,
                     "error": error,
                     "execution_time_ms": execution_time_ms,
                 },

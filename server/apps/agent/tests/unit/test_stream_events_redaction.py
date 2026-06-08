@@ -161,6 +161,107 @@ class TestToolCallRedaction:
         assert data["tool"]["arguments"]["api_key"] == "***REDACTED***"
 
 
+class TestToolResultRedaction:
+    """Tests for tool_result method integration with redaction."""
+
+    def test_tool_result_redacts_dict_data(self):
+        """tool_result event should redact sensitive fields in dict data."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=True,
+            execution_time_ms=100,
+            data={"api_key": "secret-key", "result": "query executed"},
+        )
+        data = event.to_dict()
+        assert data["result"]["data"]["api_key"] == "***REDACTED***"
+        assert data["result"]["data"]["result"] == "query executed"
+
+    def test_tool_result_redacts_nested_secret(self):
+        """tool_result event should redact nested secrets in data."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=True,
+            execution_time_ms=100,
+            data={
+                "response": {"token": "bearer-xyz", "status": "ok"},
+                "message": "success",
+            },
+        )
+        data = event.to_dict()
+        assert data["result"]["data"]["response"]["token"] == "***REDACTED***"
+        assert data["result"]["data"]["response"]["status"] == "ok"
+
+    def test_tool_result_redacts_list_of_dicts(self):
+        """tool_result event should redact sensitive fields in list of dicts."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=True,
+            execution_time_ms=100,
+            data=[
+                {"api_key": "key1", "name": "server1"},
+                {"password": "pass1", "name": "server2"},
+            ],
+        )
+        data = event.to_dict()
+        assert data["result"]["data"][0]["api_key"] == "***REDACTED***"
+        assert data["result"]["data"][0]["name"] == "server1"
+        assert data["result"]["data"][1]["password"] == "***REDACTED***"
+        assert data["result"]["data"][1]["name"] == "server2"
+
+    def test_tool_result_preserves_non_sensitive_data(self):
+        """tool_result event preserves all non-sensitive data."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        result_data = {"family_id": "f1", "count": 100, "items": ["a", "b"]}
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=True,
+            execution_time_ms=100,
+            data=result_data,
+        )
+        data = event.to_dict()
+        assert data["result"]["data"] == result_data
+
+    def test_tool_result_handles_string_data(self):
+        """tool_result event handles string data without redaction."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=True,
+            execution_time_ms=100,
+            data="Task completed successfully",
+        )
+        data = event.to_dict()
+        assert data["result"]["data"] == "Task completed successfully"
+
+    def test_tool_result_handles_none_data(self):
+        """tool_result event handles None data."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=True,
+            execution_time_ms=100,
+            data=None,
+        )
+        data = event.to_dict()
+        assert data["result"]["data"] is None
+
+    def test_tool_result_with_error(self):
+        """tool_result event with error preserves error message."""
+        builder = EventStreamBuilder(capability_id="chat", task_id="t1")
+        event = builder.tool_result(
+            tool_id="t1-tool-0001",
+            success=False,
+            execution_time_ms=50,
+            error="Connection timeout",
+        )
+        data = event.to_dict()
+        assert data["result"]["success"] is False
+        assert data["result"]["error"] == "Connection timeout"
+
+
 class TestSensitiveKeyConstants:
     """Tests for SENSITIVE_KEYS and SENSITIVE_KEY_WHITELIST constants."""
 
