@@ -11,9 +11,15 @@
  * 6. 内部标识符泄漏：tenantId、family_id 等
  *
  * 先规范化输入（移除零宽字符）再执行匹配，避免 Unicode 绕过。
+ *
+ * 错误边界：所有异常被捕获并返回原始输入，确保流式渲染不被中断。
+ * 性能监控：执行时间超过阈值时记录告警（dev 环境）。
  */
 
 const ZERO_WIDTH_CHARS = /[​-‍﻿]/g
+
+// 性能告警阈值（毫秒）
+const PERFORMANCE_WARN_THRESHOLD_MS = 5
 
 // 禁止输出的模式列表
 const FORBIDDEN_PATTERNS = [
@@ -50,11 +56,11 @@ const FORBIDDEN_PATTERNS = [
 ]
 
 /**
- * 过滤 AI 回答内容
- * @param raw 原始回答文本
- * @returns 过滤后的干净文本
+ * 内部核心过滤逻辑（无错误边界）
+ * 仅用于测试和性能基准
+ * @internal
  */
-export function filterAIContent(raw: string): string {
+export function filterAIContentCore(raw: string): string {
   if (!raw) return ''
 
   // 1. 规范化：移除零宽字符（防止 Unicode 绕过）
@@ -70,4 +76,35 @@ export function filterAIContent(raw: string): string {
 
   // 4. 清理开头和结尾的空白
   return filtered.trim()
+}
+
+/**
+ * 过滤 AI 回答内容（带错误边界和性能监控）
+ * @param raw 原始回答文本
+ * @returns 过滤后的干净文本；异常时返回原始输入
+ */
+export function filterAIContent(raw: string): string {
+  if (!raw) return ''
+
+  const startTime = performance.now()
+
+  try {
+    const result = filterAIContentCore(raw)
+
+    // 性能监控：dev 环境下记录慢调用
+    const elapsedMs = performance.now() - startTime
+    if (elapsedMs > PERFORMANCE_WARN_THRESHOLD_MS && import.meta.env.DEV) {
+      console.warn(
+        `[contentFilter] Slow filter: ${elapsedMs.toFixed(2)}ms for ${raw.length} chars`,
+      )
+    }
+
+    return result
+  } catch (err) {
+    // 错误边界：返回原始输入，确保流式渲染不被中断
+    if (import.meta.env.DEV) {
+      console.error('[contentFilter] Filter failed, returning raw input:', err)
+    }
+    return raw
+  }
 }
