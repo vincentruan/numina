@@ -166,7 +166,8 @@ const router = createRouter({
         {
           path: 'baby',
           name: 'Baby',
-          component: () => import('@/pages/BabyPage.vue')
+          component: () => import('@/pages/BabyPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'settings',
