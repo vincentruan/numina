@@ -35,13 +35,6 @@ const form = ref<AgentCreatePayload>({
 const agentType = ref<'system' | 'custom' | null>(null)
 const isSystemAgent = computed(() => agentType.value === 'system')
 
-// Strip emoji from display_name for NoticeBar (icon already shows emoji)
-const displayNameWithoutEmoji = computed(() => {
-  if (!form.value.display_name) return ''
-  // Remove emoji characters (Unicode ranges for emoji)
-  return form.value.display_name.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim()
-})
-
 const availableSkills = ref<SkillDefinition[]>([])
 const skillsLoading = ref(true)
 const submitting = ref(false)
@@ -132,25 +125,12 @@ function toggleSkill(skillId: string) {
       @click-left="router.back()"
     />
 
-    <!-- Agent header: icon + scrollable display_name for edit mode -->
-    <div v-if="isEdit && form.display_name" class="agent-header" :style="{ backgroundColor: form.color + '15' }">
-      <span class="agent-header__icon">{{ form.icon }}</span>
-      <van-notice-bar
-        class="agent-header__name"
-        :text="displayNameWithoutEmoji"
-        :scrollable="true"
-        :wrapable="false"
-        background="transparent"
-        color="var(--van-text-color)"
-      />
-    </div>
-
     <!-- U13: read-only banner — system agents (数鸣, AI问答) cannot be edited.
-         Owners can still navigate here to inspect the agent's configuration. -->
+         Owners can still navigate here to inspect the agent's configuration.
+         Text already has 🔒 emoji, so no left-icon needed. Scrollable for long text. -->
     <van-notice-bar
       v-if="isSystemAgent"
-      :scrollable="false"
-      :left-icon="'lock'"
+      :scrollable="true"
       :text="t('agents.form.systemAgentBanner')"
     />
 
@@ -275,31 +255,6 @@ function toggleSkill(skillId: string) {
 <style scoped>
 .page {
   padding-bottom: 80px;
-}
-
-.agent-header {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  gap: 12px;
-  border-bottom: 1px solid var(--van-border-color);
-}
-
-.agent-header__icon {
-  font-size: 28px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.agent-header__name {
-  flex: 1;
-  min-width: 0;
-  font-size: 16px;
-  font-weight: 500;
-}
-
-.agent-header__name :deep(.van-notice-bar__content) {
-  font-weight: 500;
 }
 
 .icon-grid {
