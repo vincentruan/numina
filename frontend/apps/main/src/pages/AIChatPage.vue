@@ -256,11 +256,13 @@
                 <!-- Long task: wrap in AgentRunCanvas for full-width display (U8) -->
                 <AgentRunCanvas
                   v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg) && shouldUseCanvas(msg)"
-                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
+                  :status="getProcessStatus(msg)"
                   :elapsed-ms="msg.processElapsedMs || 0"
+                  :done-step-count="getDoneStepCount(msg)"
+                  :total-step-count="getTotalStepCount(msg)"
                 >
                   <AiProcessBlock
-                    :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
+                    :status="getProcessStatus(msg)"
                     :elapsed-ms="msg.processElapsedMs || 0"
                     :steps="msg.processSteps || buildLegacySteps(msg)"
                     :default-expanded="!msg.thinkDone || msg.phase === 'error'"
@@ -275,7 +277,7 @@
                 <!-- Short task: render AiProcessBlock directly in bubble width -->
                 <AiProcessBlock
                   v-else-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg)"
-                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
+                  :status="getProcessStatus(msg)"
                   :elapsed-ms="msg.processElapsedMs || 0"
                   :steps="msg.processSteps || buildLegacySteps(msg)"
                   :default-expanded="!msg.thinkDone || msg.phase === 'error'"
@@ -627,6 +629,29 @@ function shouldUseCanvas(msg: Message): boolean {
   return isLongTask(steps, deepThink.value)
 }
 
+// U10: Calculate process status from phase, handling interrupted sessions.
+// Returns 'interrupted' for interrupted phase, otherwise falls back to processStatus or derived status.
+function getProcessStatus(msg: Message): 'running' | 'done' | 'error' | 'interrupted' {
+  if (msg.processStatus) return msg.processStatus
+  if (msg.phase === 'interrupted') return 'interrupted'
+  if (msg.phase === 'error') return 'error'
+  if (msg.phase === 'done') return 'done'
+  return 'running'
+}
+
+// U10: Calculate total step count for progress summary.
+function getTotalStepCount(msg: Message): number {
+  const steps = msg.processSteps || buildLegacySteps(msg)
+  return steps.length
+}
+
+// U10: Calculate done step count for progress summary.
+// Steps with status 'done' or 'error' are counted as completed.
+function getDoneStepCount(msg: Message): number {
+  const steps = msg.processSteps || buildLegacySteps(msg)
+  return steps.filter(s => s.status === 'done' || s.status === 'error').length
+}
+
 function parseToolArgs(argsText?: string): Record<string, unknown> {
   if (!argsText) return {}
   try {
@@ -655,7 +680,8 @@ interface Message {
   thinkManuallyToggled?: boolean
   toolTimeline?: ToolTimelineItem[]
   // New fields for AiProcessBlock — unified steps[] preserves event order (spec §3.3)
-  processStatus?: 'running' | 'done' | 'error'
+  // U10: processStatus extended to include 'interrupted' for proper status handling
+  processStatus?: 'running' | 'done' | 'error' | 'interrupted'
   processElapsedMs?: number
   processSteps?: ProcessStep[]
   // Plan progress bar state (U10)

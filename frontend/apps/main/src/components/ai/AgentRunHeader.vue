@@ -9,6 +9,8 @@
     >
       <span class="status-dot" aria-hidden="true" />
       <span class="status-label">{{ statusLabel }}</span>
+      <!-- U10: Progress summary for interrupted sessions -->
+      <span v-if="status === 'interrupted' && progressSummary" class="status-progress">{{ progressSummary }}</span>
     </span>
 
     <!-- Elapsed time -->
@@ -52,6 +54,8 @@ const props = defineProps<{
   elapsedMs: number
   modelName?: string
   isCollapsed: boolean
+  // U10: Progress summary for interrupted sessions (e.g., "已完成 3/5 步骤")
+  progressSummary?: string
 }>()
 
 const emit = defineEmits<{
@@ -167,8 +171,22 @@ function onToggle() {
   100% { opacity: 1; transform: scale(1); }
 }
 
+/* U12: Reduced motion - disable pulse animation */
+@media (prefers-reduced-motion: reduce) {
+  .status-badge.is-running .status-dot {
+    animation: none;
+  }
+}
+
 .status-label {
   line-height: 1.2;
+}
+
+/* U10: Progress summary for interrupted sessions */
+.status-progress {
+  margin-left: 6px;
+  font-size: 10px;
+  opacity: 0.7;
 }
 
 /* Elapsed time */

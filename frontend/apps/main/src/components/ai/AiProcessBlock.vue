@@ -657,4 +657,30 @@ const formattedElapsed = computed(() => {
     padding: 6px 10px;
   }
 }
+
+/* U11: Mobile (≤428px) - tighter layout */
+@media (max-width: 428px) {
+  .ai-process-block {
+    margin: 4px 0;
+  }
+
+  .process-header {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .process-body {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .process-title {
+    font-size: 11px;
+  }
+
+  .process-status,
+  .process-elapsed {
+    font-size: 10px;
+  }
+}
 </style>

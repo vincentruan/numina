@@ -696,4 +696,34 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
     font-size: 11px;
   }
 }
+
+/* U11: Mobile (≤428px) - tighter layout, truncated summaries */
+@media (max-width: 428px) {
+  .ai-step-block {
+    padding: 6px 8px;
+  }
+
+  .step-header {
+    gap: 6px;
+  }
+
+  /* Truncate long summaries on mobile */
+  .step-summary {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .step-title {
+    font-size: 11px;
+  }
+
+  .reasoning-content,
+  .tool-args,
+  .tool-result {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+}
 </style>

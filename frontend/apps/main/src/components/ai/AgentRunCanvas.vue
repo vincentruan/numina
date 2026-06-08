@@ -7,6 +7,7 @@
       :elapsed-ms="elapsedMs"
       :model-name="modelName"
       :is-collapsed="isCollapsed"
+      :progress-summary="progressSummaryText"
       @toggle-collapse="toggleCollapse"
     />
 
@@ -27,24 +28,36 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AgentRunHeader from './AgentRunHeader.vue'
+import { useCanvasPreference } from '@/utils/canvasPreference'
 
 const props = withDefaults(defineProps<{
   status: 'running' | 'done' | 'error' | 'interrupted'
   elapsedMs: number
   modelName?: string
   showHeader?: boolean
+  // U10: Step counts for progress summary in interrupted sessions
+  doneStepCount?: number
+  totalStepCount?: number
 }>(), {
   showHeader: true,
   modelName: '',
+  doneStepCount: 0,
+  totalStepCount: 0,
 })
 
 const { t } = useI18n()
 
-// Collapse state - stored in localStorage via canvasPreference (U9)
-const isCollapsed = ref(false)
+// Collapse state - persisted in localStorage via module-level singleton
+const { isCollapsed, toggleCollapse } = useCanvasPreference()
+
+// U10: Progress summary text for interrupted sessions
+const progressSummaryText = computed(() => {
+  if (props.status !== 'interrupted' || props.totalStepCount === 0) return undefined
+  return t('aiCanvas.progressSummary', { done: props.doneStepCount, total: props.totalStepCount })
+})
 
 // Computed classes for canvas styling
 const canvasClasses = computed(() => ({
@@ -55,11 +68,6 @@ const canvasClasses = computed(() => ({
   'is-interrupted': props.status === 'interrupted',
   'is-full-width': true, // Always full-width when canvas is active
 }))
-
-// Toggle collapse
-function toggleCollapse() {
-  isCollapsed.value = !isCollapsed.value
-}
 
 // Expose collapse state for parent components
 defineExpose({ isCollapsed, toggleCollapse })
@@ -94,6 +102,17 @@ defineExpose({ isCollapsed, toggleCollapse })
 /* Collapsed state */
 .agent-run-canvas.is-collapsed {
   opacity: 0.7;
+}
+
+/* U10: Interrupted state - subtle gray tint to indicate incomplete session */
+.agent-run-canvas.is-interrupted {
+  --canvas-bg: rgba(255, 255, 255, 0.05);
+  --canvas-border: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="light"] .agent-run-canvas.is-interrupted {
+  --canvas-bg: rgba(0, 0, 0, 0.05);
+  --canvas-border: rgba(0, 0, 0, 0.12);
 }
 
 /* Canvas body */
@@ -137,6 +156,18 @@ defineExpose({ isCollapsed, toggleCollapse })
   0% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.6; transform: scale(1.2); }
   100% { opacity: 1; transform: scale(1); }
+}
+
+/* U12: Reduced motion - disable animations */
+@media (prefers-reduced-motion: reduce) {
+  .hint-dot {
+    animation: none;
+  }
+
+  .canvas-body-enter-active,
+  .canvas-body-leave-active {
+    transition: opacity 0.15s ease;
+  }
 }
 
 /* Mobile responsive */
