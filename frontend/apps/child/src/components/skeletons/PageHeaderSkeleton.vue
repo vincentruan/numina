@@ -22,19 +22,11 @@
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .back-icon-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .title-skeleton :deep(.van-skeleton) {
   padding: 0;
 }
 
 .title-skeleton :deep(.van-skeleton__row) {
   background: var(--skeleton-bg);
-}
-
-[data-theme="dark"] .title-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
 }
 </style>

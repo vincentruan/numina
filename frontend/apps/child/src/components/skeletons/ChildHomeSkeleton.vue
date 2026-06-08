@@ -105,10 +105,6 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .section-title-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 /* Wish preview */
 .wish-preview-skeleton {
   display: flex;
@@ -125,10 +121,6 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .wish-preview-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .wish-preview-info-skeleton {
   flex: 1;
 }
@@ -142,10 +134,6 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
   margin-top: 4px;
   border-radius: 4px;
   background: var(--skeleton-bg);
-}
-
-[data-theme="dark"] .wish-preview-info-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .wish-preview-info-skeleton :deep(.van-skeleton__row:first-child) {

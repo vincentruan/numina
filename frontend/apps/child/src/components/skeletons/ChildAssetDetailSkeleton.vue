@@ -64,10 +64,6 @@ import PageHeaderSkeleton from './PageHeaderSkeleton.vue'
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .name-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .info-rows-skeleton :deep(.van-skeleton) {
   padding: 0;
 }
@@ -77,10 +73,6 @@ import PageHeaderSkeleton from './PageHeaderSkeleton.vue'
   margin-top: 10px;
   border-radius: 4px;
   background: var(--skeleton-bg);
-}
-
-[data-theme="dark"] .info-rows-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .info-rows-skeleton :deep(.van-skeleton__row:first-child) {

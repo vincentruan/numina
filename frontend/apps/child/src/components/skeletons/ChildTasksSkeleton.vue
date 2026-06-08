@@ -67,10 +67,6 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .date-text-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 /* Balance card — ochre/peach gradient */
 .balance-card-skeleton {
   background: linear-gradient(135deg, var(--color-brand-ochre), var(--color-brand-peach));

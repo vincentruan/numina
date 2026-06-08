@@ -28,10 +28,6 @@
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .tx-card-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .tx-info-skeleton {
   flex: 1;
 }
@@ -47,10 +43,6 @@
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .tx-info-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .tx-info-skeleton :deep(.van-skeleton__row:first-child) {
   margin-top: 0;
 }
@@ -59,9 +51,5 @@
   height: 18px;
   border-radius: 4px;
   background: var(--skeleton-bg);
-}
-
-[data-theme="dark"] .amount-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
 }
 </style>

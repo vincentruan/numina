@@ -31,10 +31,6 @@
   height: 100px;
 }
 
-[data-theme="dark"] .img-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.08);
-}
-
 .card-body-skeleton {
   padding: 10px 12px;
 }
@@ -48,10 +44,6 @@
   margin-top: 4px;
   border-radius: 4px;
   background: var(--skeleton-bg);
-}
-
-[data-theme="dark"] .card-body-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .card-body-skeleton :deep(.van-skeleton__row:first-child) {

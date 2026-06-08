@@ -28,10 +28,6 @@
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .chore-card-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .chore-info-skeleton {
   flex: 1;
 }
@@ -47,10 +43,6 @@
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .chore-info-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .chore-info-skeleton :deep(.van-skeleton__row:first-child) {
   margin-top: 0;
 }
@@ -59,9 +51,5 @@
   height: 36px;
   border-radius: var(--radius-md);
   background: var(--skeleton-bg);
-}
-
-[data-theme="dark"] .btn-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
 }
 </style>

@@ -106,10 +106,6 @@ import WishCardSkeleton from './WishCardSkeleton.vue'
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .section-title-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 /* Constellation placeholder */
 .constellation-skeleton {
   display: flex;
@@ -140,9 +136,5 @@ import WishCardSkeleton from './WishCardSkeleton.vue'
   background: var(--skeleton-bg);
   width: 52px;
   height: 52px;
-}
-
-[data-theme="dark"] .fab-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.1);
 }
 </style>

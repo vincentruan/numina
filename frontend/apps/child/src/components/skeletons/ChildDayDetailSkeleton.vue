@@ -44,8 +44,4 @@ import ChoreCardSkeleton from './ChoreCardSkeleton.vue'
   border-radius: 4px;
   background: var(--skeleton-bg);
 }
-
-[data-theme="dark"] .section-title-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
 </style>

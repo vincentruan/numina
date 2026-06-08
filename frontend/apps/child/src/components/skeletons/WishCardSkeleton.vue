@@ -36,10 +36,6 @@
   border-radius: var(--radius-lg);
 }
 
-[data-theme="dark"] .wish-header-skeleton :deep(.van-skeleton-avatar) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .wish-meta-skeleton {
   flex: 1;
 }
@@ -55,10 +51,6 @@
   background: var(--skeleton-bg);
 }
 
-[data-theme="dark"] .wish-meta-skeleton :deep(.van-skeleton__row) {
-  background: rgba(255, 255, 255, 0.1);
-}
-
 .wish-meta-skeleton :deep(.van-skeleton__row:first-child) {
   height: 16px;
   margin-top: 0;
@@ -67,10 +59,6 @@
 .progress-skeleton :deep(.van-skeleton__row) {
   height: 12px;
   border-radius: 6px;
-  background: var(--color-surface-strong);
-}
-
-[data-theme="dark"] .progress-skeleton :deep(.van-skeleton__row) {
   background: var(--color-surface-strong);
 }
 </style>
