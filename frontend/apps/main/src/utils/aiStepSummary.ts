@@ -6,8 +6,6 @@
  * on Chinese UX transformation only (not category mapping).
  */
 
-import { useI18n } from 'vue-i18n'
-
 /**
  * Get Chinese summary text for a tool name.
  *
@@ -103,3 +101,111 @@ export function getToolCategory(toolType?: string): string {
 }
 
 export { TOOL_SUMMARY_MAP }
+
+import type { ProcessStep } from '@/types/agent-stream'
+
+/**
+ * Merged summary item for display.
+ * Either a single step or a merged group of same-category steps.
+ */
+export interface MergedSummaryItem {
+  /** Unique ID for this merged item */
+  id: string
+  /** Whether this is a merged group or single step */
+  isMerged: boolean
+  /** Original steps in this group (1 for single, >1 for merged) */
+  steps: ProcessStep[]
+  /** Category key for merged display */
+  category?: string
+  /** Display text: "计算分析" or "计算分析 (3次)" */
+  displayText: string
+  /** i18n key for display text */
+  displayTextKey: string
+  /** Count of merged steps (undefined for single) */
+  count?: number
+}
+
+/**
+ * Merge consecutive same-category steps into summary items.
+ *
+ * @param steps - Process steps from normalizer
+ * @returns Array of MergedSummaryItem for display
+ */
+export function mergeConsecutiveSteps(steps: ProcessStep[]): MergedSummaryItem[] {
+  if (!steps || steps.length === 0) return []
+
+  // Only process tool_call steps; other types pass through unchanged
+  const result: MergedSummaryItem[] = []
+  let currentGroup: ProcessStep[] = []
+  let currentCategory: string | undefined
+
+  for (const step of steps) {
+    // Non-tool_call steps are not merged
+    if (step.type !== 'tool_call') {
+      // Flush any pending group first
+      if (currentGroup.length > 0) {
+        result.push(createMergedItem(currentGroup, currentCategory))
+        currentGroup = []
+        currentCategory = undefined
+      }
+      // Pass through non-tool steps unchanged
+      result.push(createSingleItem(step))
+      continue
+    }
+
+    const toolType = step.toolType || 'unknown'
+
+    // Check if this step continues the current category group
+    if (currentGroup.length === 0) {
+      // Start new group
+      currentGroup = [step]
+      currentCategory = toolType
+    } else if (toolType === currentCategory) {
+      // Continue current group
+      currentGroup.push(step)
+    } else {
+      // Category changed: flush previous group, start new one
+      result.push(createMergedItem(currentGroup, currentCategory))
+      currentGroup = [step]
+      currentCategory = toolType
+    }
+  }
+
+  // Flush final group
+  if (currentGroup.length > 0) {
+    result.push(createMergedItem(currentGroup, currentCategory))
+  }
+
+  return result
+}
+
+/**
+ * Create a merged item from a group of same-category steps.
+ */
+function createMergedItem(steps: ProcessStep[], category?: string): MergedSummaryItem {
+  const isMerged = steps.length > 1
+  const firstStep = steps[0]
+
+  return {
+    id: `merged-${firstStep.id}`,
+    isMerged,
+    steps,
+    category,
+    displayText: isMerged ? '' : (firstStep.displayName || firstStep.name), // Populated by i18n
+    displayTextKey: isMerged ? getToolCategory(category) : getChineseSummary(firstStep.name, firstStep.displayName),
+    count: isMerged ? steps.length : undefined,
+  }
+}
+
+/**
+ * Create a single item for non-tool_call steps.
+ */
+function createSingleItem(step: ProcessStep): MergedSummaryItem {
+  return {
+    id: step.id,
+    isMerged: false,
+    steps: [step],
+    displayText: '', // Populated by component
+    displayTextKey: '', // Non-tool steps use their own display logic
+  }
+}
