@@ -1,5 +1,10 @@
 <template>
   <div class="chores-page">
+    <!-- Skeleton during initial load -->
+    <ChildTasksSkeleton v-if="loading && chores.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
     <!-- Date navigation — flat card -->
     <div class="date-nav-card">
       <button
@@ -210,12 +215,15 @@
       @balance-react="onBalanceReact"
       @balance-react-end="onBalanceReactEnd"
     />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import NProgress from 'nprogress'
+import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { getUser } from '@numina/auth'
@@ -562,6 +570,8 @@ async function doAbandon() {
 
 onMounted(async () => {
   await load()
+  // Complete NProgress - skeleton takes over visual feedback
+  NProgress.done()
   await checkNewMilestones()
   try {
     const wishData = await listChildWishes().catch(() => null)

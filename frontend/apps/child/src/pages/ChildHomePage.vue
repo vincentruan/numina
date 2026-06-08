@@ -1,19 +1,24 @@
 <template>
   <div class="home-page">
-    <!-- Balance hero — progress ring card -->
-    <div class="hero-card">
-      <p class="hero-label">{{ t('home.myStars') }}</p>
-      <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
-      <ProgressRing
-        v-if="!loadingChores && todayChores.length > 0"
-        :completed="completedChores"
-        :pending="pendingChores"
-        :total="todayChores.length"
-        :total-coins="totalChoreCoins"
-        :loading="loadingChores"
-        class="hero-ring"
-      />
-    </div>
+    <!-- Skeleton during initial load -->
+    <ChildHomeSkeleton v-if="loadingChores && todayChores.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
+      <!-- Balance hero — progress ring card -->
+      <div class="hero-card">
+        <p class="hero-label">{{ t('home.myStars') }}</p>
+        <CoinDisplay :amount="balance" :icon-size="32" class="hero-balance" :copper-to-silver="familyStore.coinCopperToSilver" :silver-to-gold="familyStore.coinSilverToGold" />
+        <ProgressRing
+          v-if="!loadingChores && todayChores.length > 0"
+          :completed="completedChores"
+          :pending="pendingChores"
+          :total="todayChores.length"
+          :total-coins="totalChoreCoins"
+          :loading="loadingChores"
+          class="hero-ring"
+        />
+      </div>
 
     <!-- Today's chores -->
     <div class="section">
@@ -178,13 +183,16 @@
       :stars-earned="celebrationStarsEarned"
       @dismiss="onCelebrationDismiss"
     />
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildHome' })
 import { ref, computed, onMounted } from 'vue'
+import NProgress from 'nprogress'
 import ProgressRing from '@/components/ProgressRing.vue'
+import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
@@ -391,6 +399,8 @@ onMounted(async () => {
   balance.value = bal
   todayChores.value = chores
   loadingChores.value = false
+  // Complete NProgress - skeleton takes over visual feedback
+  NProgress.done()
   const active = wishData?.active ?? []
   topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
 

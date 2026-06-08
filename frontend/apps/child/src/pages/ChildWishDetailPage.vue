@@ -1,10 +1,13 @@
 <template>
   <div class="wish-detail-page">
+    <!-- Skeleton during initial load -->
+    <ChildWishDetailSkeleton v-if="loading" />
+
+    <!-- Actual content -->
+    <template v-else>
     <PageHeader :title="t('wishes.sectionActive')" />
 
-    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
-
-    <div v-else-if="!wish" class="empty-state">
+    <div v-if="!wish" class="empty-state">
       <p class="empty-icon">🌠</p>
       <p class="empty-text">{{ t('wishes.constellation.detailUnknown') }}</p>
       <button class="btn-back" @click="router.replace({ name: 'ChildWishes' })">{{ t('common.back') }}</button>
@@ -72,11 +75,14 @@
       </div>
       <span v-else-if="wish.status === 'rejected'" class="status-line">{{ t('wishes.rejected') }}</span>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import NProgress from 'nprogress'
+import ChildWishDetailSkeleton from '@/components/skeletons/ChildWishDetailSkeleton.vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -133,6 +139,8 @@ async function load() {
     ledger.value = l
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 }
 

@@ -1,5 +1,10 @@
 <template>
   <div class="ledger-page">
+    <!-- Skeleton during initial load -->
+    <ChildLedgerSkeleton v-if="loading && transactions.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
     <!-- Balance hero — teal feature card -->
     <div class="balance-card">
       <p class="balance-label">{{ t('ledger.myStars') }}</p>
@@ -68,12 +73,15 @@
         >{{ t('ledger.confirmGift') }}</van-button>
       </div>
     </van-popup>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildLedger' })
 import { ref, computed, onMounted } from 'vue'
+import NProgress from 'nprogress'
+import ChildLedgerSkeleton from '@/components/skeletons/ChildLedgerSkeleton.vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
@@ -111,6 +119,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 }
 

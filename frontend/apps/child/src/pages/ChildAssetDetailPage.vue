@@ -1,12 +1,15 @@
 <template>
   <div class="asset-detail-page">
+    <!-- Skeleton during initial load -->
+    <ChildAssetDetailSkeleton v-if="loading" />
+
+    <!-- Actual content -->
+    <template v-else>
     <PageHeader :title="t('assetDetail.title')" />
 
-    <div v-if="loading" class="loading">{{ t('common.loading') }}</div>
+    <div v-if="error" class="error-msg">{{ error }}</div>
 
-    <div v-else-if="error" class="error-msg">{{ error }}</div>
-
-    <div v-else-if="!asset" class="empty-state">
+    <div v-if="!asset" class="empty-state">
       <p class="empty-icon">🎁</p>
       <p class="empty-text">{{ t('errors.LOAD_FAILED') }}</p>
       <button class="btn-back" @click="router.replace('/wishes')">{{ t('common.back') }}</button>
@@ -43,11 +46,14 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import NProgress from 'nprogress'
+import ChildAssetDetailSkeleton from '@/components/skeletons/ChildAssetDetailSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { getChildAsset, type ChildAsset } from '@/api/treasures'
@@ -74,6 +80,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 }
 

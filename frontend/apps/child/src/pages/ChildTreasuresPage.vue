@@ -1,5 +1,10 @@
 <template>
   <div class="treasures-page">
+    <!-- Skeleton during initial load -->
+    <ChildTreasuresSkeleton v-if="loading && treasures.length === 0" />
+
+    <!-- Actual content -->
+    <template v-else>
     <!-- Header summary — lavender feature card -->
     <div class="summary-card">
       <p class="summary-title">{{ t('treasures.title') }}</p>
@@ -40,12 +45,15 @@
         </div>
       </div>
     </div>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
 defineOptions({ name: 'ChildTreasures' })
 import { computed, onMounted, ref } from 'vue'
+import NProgress from 'nprogress'
+import ChildTreasuresSkeleton from '@/components/skeletons/ChildTreasuresSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
 import EmptyState from '@/components/EmptyState.vue'
@@ -75,6 +83,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 }
 
