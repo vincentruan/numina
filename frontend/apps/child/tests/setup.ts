@@ -67,3 +67,16 @@ config.global.stubs = {
 vi.spyOn(console, 'log').mockImplementation(() => {})
 vi.spyOn(console, 'info').mockImplementation(() => {})
 vi.spyOn(console, 'debug').mockImplementation(() => {})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NProgress mock — router beforeEach/afterEach call NProgress.start/done
+// ─────────────────────────────────────────────────────────────────────────────
+vi.mock('nprogress', () => ({
+  default: {
+    start: vi.fn(),
+    done: vi.fn(),
+    remove: vi.fn(),
+    configure: vi.fn(),
+    set: vi.fn(),
+  },
+}))

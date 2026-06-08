@@ -94,6 +94,8 @@ router.beforeEach((to, _from, next) => {
   // All routes in child app require authentication
   // Redirect unauthenticated users to unified login on main site
   if (!isChildSession) {
+    // Clean up NProgress before external redirect
+    NProgress.done()
     // Build redirect URL preserving the original path
     const redirectPath = to.path !== '/' ? `/child${to.path}` : '/child/'
     const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
