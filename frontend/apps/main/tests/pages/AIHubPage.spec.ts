@@ -3,6 +3,8 @@ import { shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
+const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 import AIHubPage from '../../src/pages/AIHubPage.vue'
 import { useAIStore } from '../../src/stores/ai'
 import { useAgentStore } from '../../src/stores/agent'
@@ -54,10 +56,24 @@ vi.mock('../../src/composables/useAIReportWS', () => ({
   }),
 }))
 
+vi.mock('../../src/stores/ai', () => ({
+  useAIStore: vi.fn(() => ({
+    aiEnabled: true,
+    draftQuery: '',
+    deepThinkEnabled: false,
+    webSearchEnabled: false,
+    fetchConfig: vi.fn(() => Promise.resolve()),
+  })),
+}))
+
 vi.mock('../../src/stores/auth', () => ({
   useAuthStore: vi.fn(() => ({
     user: { role: 'owner', display_name: 'Demo User' },
   })),
+}))
+
+vi.mock('../../src/api/sessions', () => ({
+  getSystemDefaultSession: vi.fn(() => Promise.resolve({ data: { session: null } })),
 }))
 
 vi.mock('../../src/stores/agent', () => ({
@@ -109,18 +125,44 @@ describe('AIHubPage chat entry', () => {
             emits: ['update:modelValue', 'update:mode', 'update:webSearch', 'submit'],
             template: '<button class="chat-input" @click="$emit(\'submit\', modelValue)">send</button>',
           },
+          AIHubSkeleton: true,
           VanLoading: true,
+          VanIcon: true,
+          VanButton: true,
+          VanActionSheet: true,
+          VanCellGroup: true,
+          VanCell: true,
           AgentCard: true,
           NuminaAgentCard: true,
+          AIBrainIcon: true,
+          SvgIcon: true,
         },
       },
     })
 
+    // Wait for onMounted to complete and initialLoading to become false
+    // onMounted calls: fetchConfig(), loadAgents(), loadReport() -> then initialLoading = false
+    await flushPromises()
+    await nextTick()
+
+    // Manually set selectedAgent since the watch may not trigger in shallowMount
+    wrapper.vm.selectedAgent = {
+      id: 'numina-id',
+      agent_name: 'numina',
+      display_name: '数鸣',
+      description: '家庭财务大使',
+      is_enabled: true,
+    }
+    wrapper.vm.chatInput = '我们家净资产是多少？'
+    wrapper.vm.chatMode = 'smart'
+    wrapper.vm.webSearch = true
+    await nextTick()
+
     const input = wrapper.findComponent({ name: 'AIChatInput' })
-    await input.vm.$emit('update:modelValue', '我们家净资产是多少？')
-    await input.vm.$emit('update:mode', 'smart')
-    await input.vm.$emit('update:webSearch', true)
-    await input.vm.$emit('submit', '我们家净资产是多少？')
+
+    // Trigger submit which calls submitChatFromInput
+    input.vm.$emit('submit', '我们家净资产是多少？')
+    await flushPromises()
 
     const aiStore = useAIStore()
     expect(aiStore.draftQuery).toBe('我们家净资产是多少？')
@@ -143,9 +185,17 @@ describe('AIHubPage chat entry', () => {
       global: {
         stubs: {
           AIChatInput: true,
+          AIHubSkeleton: true,
           VanLoading: true,
+          VanIcon: true,
+          VanButton: true,
+          VanActionSheet: true,
+          VanCellGroup: true,
+          VanCell: true,
           AgentCard: true,
           NuminaAgentCard: true,
+          AIBrainIcon: true,
+          SvgIcon: true,
         },
       },
     })
