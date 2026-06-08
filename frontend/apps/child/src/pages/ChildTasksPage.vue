@@ -490,6 +490,8 @@ async function load() {
     error.value = t('toast.loadFailed')
   } finally {
     loading.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
   }
 }
 
@@ -585,8 +587,6 @@ async function doAbandon() {
 
 onMounted(async () => {
   await load()
-  // Complete NProgress - skeleton takes over visual feedback
-  NProgress.done()
   await checkNewMilestones()
   try {
     const wishData = await listChildWishes().catch(() => null)

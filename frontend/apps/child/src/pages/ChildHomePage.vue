@@ -398,18 +398,23 @@ function todayDate(): string {
 
 async function load() {
   loadingChores.value = true
-  const [bal, chores, wishData] = await Promise.all([
-    getCoinBalance().catch(() => 0),
-    getMyChores(todayDate()).catch(() => [] as ChoreInstance[]),
-    listChildWishes().catch(() => null),
-  ])
-  balance.value = bal
-  todayChores.value = chores
-  loadingChores.value = false
-  const active = wishData?.active ?? []
-  topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
-  // Check for pending celebrations after data loads
-  checkAndTriggerCelebration(chores)
+  try {
+    const [bal, chores, wishData] = await Promise.all([
+      getCoinBalance().catch(() => 0),
+      getMyChores(todayDate()).catch(() => [] as ChoreInstance[]),
+      listChildWishes().catch(() => null),
+    ])
+    balance.value = bal
+    todayChores.value = chores
+    const active = wishData?.active ?? []
+    topWish.value = active.find(w => w.priority === 'high') ?? active[0] ?? null
+    // Check for pending celebrations after data loads
+    checkAndTriggerCelebration(chores)
+  } finally {
+    loadingChores.value = false
+    // Complete NProgress - skeleton takes over visual feedback
+    NProgress.done()
+  }
 }
 
 async function onRefresh() {
@@ -421,11 +426,7 @@ function fetchChildMonth(year: number, month: number) {
   return getChildCalendar(year, month)
 }
 
-onMounted(async () => {
-  await load()
-  // Complete NProgress - skeleton takes over visual feedback
-  NProgress.done()
-})
+onMounted(load)
 </script>
 
 <style scoped>
