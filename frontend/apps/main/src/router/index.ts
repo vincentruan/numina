@@ -312,7 +312,8 @@ const router = createRouter({
         {
           path: 'ai',
           name: 'AIHub',
-          component: () => import('@/pages/AIHubPage.vue')
+          component: () => import('@/pages/AIHubPage.vue'),
+          meta: { hasSkeleton: true }
         },
         {
           path: 'stats',
@@ -419,9 +420,16 @@ router.afterEach((to) => {
   // Skeleton takes over visual feedback during data loading
   if (to.meta.hasSkeleton) {
     NProgress.done()
+    return
   }
-  // Pages without skeleton: NProgress stays active
-  // Page's onMounted data loading will call NProgress.done() when complete
+
+  // Pages without skeleton: complete NProgress after a short delay
+  // This allows the page component to mount and potentially restart NProgress
+  // for async data loading. Pages that don't need loading indicator will just
+  // have the progress bar complete naturally.
+  setTimeout(() => {
+    NProgress.done()
+  }, 100)
 })
 
 export default router

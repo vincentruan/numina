@@ -228,6 +228,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import NProgress from 'nprogress'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
@@ -251,19 +252,25 @@ const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const aiStore = useAIStore()
 
-onMounted(() => {
-  if (!familyStore.family) {
-    familyStore.fetchFamily()
+onMounted(async () => {
+  // Restart NProgress for async data loading (router will auto-complete after 100ms)
+  NProgress.start()
+  try {
+    if (!familyStore.family) {
+      await familyStore.fetchFamily()
+    }
+    await authStore.fetchMe()
+    if (authStore.user?.role === 'owner') {
+      await aiStore.fetchConfigs()
+    }
+  } finally {
+    NProgress.done()
   }
-  authStore.fetchMe()
-  // Initialize theme color from localStorage
+  // Initialize theme color from localStorage (sync, no need in try block)
   const savedColor = localStorage.getItem('theme-primary')
   if (savedColor) {
     document.documentElement.style.setProperty('--theme-primary', savedColor)
     document.documentElement.style.setProperty('--van-primary-color', savedColor)
-  }
-  if (authStore.user?.role === 'owner') {
-    aiStore.fetchConfigs()
   }
 })
 
