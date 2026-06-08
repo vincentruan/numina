@@ -1,10 +1,18 @@
 <template>
   <div class="chores-page">
     <!-- Skeleton during initial load -->
-    <ChildTasksSkeleton v-if="loading && chores.length === 0" />
+    <ChildTasksSkeleton v-if="loading && !refreshing && chores.length === 0" />
 
     <!-- Actual content -->
     <template v-else>
+    <van-pull-refresh
+      v-model="refreshing"
+      :pulling-text="t('common.pullRefresh.pulling')"
+      :loosing-text="t('common.pullRefresh.loosing')"
+      :loading-text="t('common.pullRefresh.loading')"
+      :success-text="t('common.pullRefresh.success')"
+      @refresh="onRefresh"
+    >
     <!-- Date navigation — flat card -->
     <div class="date-nav-card">
       <button
@@ -201,6 +209,7 @@
         {{ t('blindBox.autoTriggeredClose') }}
       </button>
     </div>
+    </van-pull-refresh>
 
     <!-- Celebration animation -->
     <CelebrationAnimation
@@ -256,6 +265,7 @@ const familyStore = useFamilyStore()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
+const refreshing = ref(false)
 const error = ref('')
 const submittingId = ref<string | null>(null)
 const claimingId = ref<string | null>(null)
@@ -481,6 +491,11 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function onRefresh() {
+  await load()
+  refreshing.value = false
 }
 
 function showCompleteConfirm(chore: ChoreInstance) {
