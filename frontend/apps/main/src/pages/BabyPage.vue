@@ -111,21 +111,21 @@
                   <p v-if="wish.description" class="wish-desc-text">{{ truncateDesc(wish.description) }}</p>
                   <div v-if="wish.status === 'pending_review'" class="card-actions">
                     <button class="action-btn action-btn--success" :disabled="actioningId === wish.id" @click.stop="openApprove(wish)">
-                      <van-icon name="passed" size="16" />
+                      <IIcon icon="mdi:check-circle" size="16" />
                       <span>{{ t('baby.wishApprove') }}</span>
                     </button>
                     <button class="action-btn action-btn--danger" :disabled="actioningId === wish.id" @click.stop="openReject(wish)">
-                      <van-icon name="close" size="16" />
+                      <IIcon icon="mdi:close-circle" size="16" />
                       <span>{{ t('baby.wishReject') }}</span>
                     </button>
                   </div>
                   <div v-else-if="wish.status === 'redemption_requested'" class="card-actions">
                     <button class="action-btn action-btn--success" :disabled="actioningId === wish.id" @click.stop="openRealize(wish)">
-                      <van-icon name="gift-o" size="16" />
+                      <IIcon icon="mdi:gift" size="16" />
                       <span>{{ t('baby.wishRealize') }}</span>
                     </button>
                     <button class="action-btn action-btn--muted" :disabled="actioningId === wish.id" @click.stop="doDefer(wish.id)">
-                      <van-icon name="clock-o" size="16" />
+                      <IIcon icon="mdi:clock-outline" size="16" />
                       <span>{{ t('baby.wishDefer') }}</span>
                     </button>
                   </div>
@@ -163,7 +163,7 @@
                   />
                   <div v-if="(wish.star_coin_cost ?? 0) > 0" class="card-actions">
                     <button class="action-btn action-btn--primary" @click.stop="openEditCost(wish)">
-                      <van-icon name="edit" size="16" />
+                      <IIcon icon="mdi:pencil" size="16" />
                       <span>{{ t('baby.wishEditCost') }}</span>
                     </button>
                   </div>
@@ -231,7 +231,7 @@
                       :disabled="actioningId === chore.id"
                       @click.stop="doApproveChore(chore)"
                     >
-                      <van-icon name="passed" size="16" />
+                      <IIcon icon="mdi:check-circle" size="16" />
                       <span>{{ t('baby.choreApprove') }}</span>
                     </button>
                     <button
@@ -239,7 +239,7 @@
                       :disabled="actioningId === chore.id"
                       @click.stop="doRejectChore(chore)"
                     >
-                      <van-icon name="close" size="16" />
+                      <IIcon icon="mdi:close-circle" size="16" />
                       <span>{{ t('baby.choreRedo') }}</span>
                     </button>
                   </div>
@@ -275,7 +275,7 @@
                         :disabled="assigningId === chore.id"
                         @click.stop="openAssignPicker(chore)"
                       >
-                        <van-icon name="friends" size="16" />
+                        <IIcon icon="mdi:account-group" size="16" />
                         <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
                         <span v-else>{{ t('baby.choreAssign') }}</span>
                       </button>
@@ -286,7 +286,7 @@
                         :disabled="assigningId === chore.id || voidingId === chore.id"
                         @click.stop="openAssignPicker(chore)"
                       >
-                        <van-icon name="exchange" size="16" />
+                        <IIcon icon="mdi:swap-horizontal" size="16" />
                         <span v-if="assigningId === chore.id">{{ t('baby.choreAssigning') }}</span>
                         <span v-else>{{ t('baby.choreReassign') }}</span>
                       </button>
@@ -295,7 +295,7 @@
                         :disabled="assigningId === chore.id || voidingId === chore.id"
                         @click.stop="doVoidChore(chore)"
                       >
-                        <van-icon name="close" size="16" />
+                        <IIcon icon="mdi:delete-circle" size="16" />
                         <span v-if="voidingId === chore.id">{{ t('baby.choreVoiding') }}</span>
                         <span v-else>{{ t('baby.choreVoid') }}</span>
                       </button>
@@ -356,7 +356,7 @@
 
             <!-- FAB: create new chore -->
             <div class="fab" :aria-label="t('baby.addChore')" @click="$router.push('/baby/chores/new')">
-              <van-icon name="plus" size="22" />
+              <IIcon icon="mdi:plus" size="22" />
             </div>
           </van-tab>
         </van-tabs>
@@ -469,7 +469,7 @@
         <!-- Approve dialog -->
         <van-popup v-model:show="showApproveDialog" position="bottom" round style="padding: 24px 16px 40px">
           <template v-if="approveTarget">
-            <h3 class="sheet-title"><van-icon name="passed" size="20" color="var(--color-success)" /> {{ t('baby.wishApproveTitle') }}</h3>
+            <h3 class="sheet-title"><IIcon icon="mdi:check-circle" size="20" color="var(--color-success)" /> {{ t('baby.wishApproveTitle') }}</h3>
             <p class="dialog-desc">{{ t('baby.wishApproveDesc', { name: approveTarget.name }) }}</p>
             <div class="cost-field">
               <span class="cost-label">{{ t('baby.wishCostLabel') }}</span>
@@ -496,7 +496,7 @@
         <!-- Reject dialog -->
         <van-popup v-model:show="showRejectDialog" position="bottom" round style="padding: 24px 16px 40px">
           <template v-if="rejectTarget">
-            <h3 class="sheet-title"><van-icon name="close" size="20" color="#dc3545" /> {{ t('baby.wishRejectTitle') }}</h3>
+            <h3 class="sheet-title"><IIcon icon="mdi:close-circle" size="20" color="#dc3545" /> {{ t('baby.wishRejectTitle') }}</h3>
             <p class="dialog-desc">{{ t('baby.wishRejectDesc', { name: rejectTarget.name }) }}</p>
             <input v-model="rejectReason" class="input" :placeholder="t('baby.wishRejectReasonPlaceholder')" maxlength="200" />
             <div v-if="wishDialogError" class="error-msg">{{ wishDialogError }}</div>
@@ -555,6 +555,7 @@ import WishCostEditDialog from '@/components/wishes/WishCostEditDialog.vue'
 import StarCoinSuggestion from '@/components/wishes/StarCoinSuggestion.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import BabyPageSkeleton from '@/components/baby/BabyPageSkeleton.vue'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -1373,7 +1374,7 @@ onMounted(async () => {
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: var(--color-success);
+  background: linear-gradient(135deg, #4CAF50, #2E7D32);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -1390,7 +1391,7 @@ onMounted(async () => {
   padding: 12px;
   border: none;
   border-radius: 10px;
-  background: #dc3545;
+  background: linear-gradient(135deg, #ff5252, #d32f2f);
   color: #fff;
   font-size: 15px;
   font-weight: 700;
@@ -1559,12 +1560,12 @@ onMounted(async () => {
 
 .wish-card .action-btn--success {
   color: #fff;
-  background: var(--color-success);
+  background: linear-gradient(135deg, #4CAF50, #2E7D32);
 }
 
 .wish-card .action-btn--danger {
   color: #fff;
-  background: var(--van-danger-color, #ee0a24);
+  background: linear-gradient(135deg, #ff5252, #d32f2f);
 }
 
 .wish-card .action-btn--muted {
@@ -1574,7 +1575,7 @@ onMounted(async () => {
 
 .wish-card .action-btn--primary {
   color: #fff;
-  background: var(--van-primary-color, #1989fa);
+  background: linear-gradient(135deg, #42A5F5, #1E88E5);
 }
 
 /* Chore card action buttons — pill style, matching wish cards */
@@ -1615,22 +1616,22 @@ onMounted(async () => {
 
 .chore-card .action-btn--primary {
   color: #fff;
-  background: var(--van-primary-color, #1989fa);
+  background: linear-gradient(135deg, #42A5F5, #1E88E5);
 }
 
 .chore-card .action-btn--warning {
   color: #fff;
-  background: var(--van-warning-color, #ff976a);
+  background: linear-gradient(135deg, #ffb74d, #f57c00);
 }
 
 .chore-card .action-btn--danger {
   color: #fff;
-  background: var(--van-danger-color, #ee0a24);
+  background: linear-gradient(135deg, #ff5252, #d32f2f);
 }
 
 .chore-card .action-btn--success {
   color: #fff;
-  background: var(--color-success);
+  background: linear-gradient(135deg, #4CAF50, #2E7D32);
 }
 
 .chore-card .action-btn--muted {
