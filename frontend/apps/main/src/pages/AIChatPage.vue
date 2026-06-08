@@ -253,8 +253,28 @@
                 </div>
                 <!-- Process block (replaces inline think-block) — unified steps[] preserves event order (spec §3.3) -->
                 <!-- Renders whenever the assistant has process steps OR is in error (so retry button is visible) -->
+                <!-- Long task: wrap in AgentRunCanvas for full-width display (U8) -->
+                <AgentRunCanvas
+                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg) && shouldUseCanvas(msg)"
+                  :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
+                  :elapsed-ms="msg.processElapsedMs || 0"
+                >
+                  <AiProcessBlock
+                    :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
+                    :elapsed-ms="msg.processElapsedMs || 0"
+                    :steps="msg.processSteps || buildLegacySteps(msg)"
+                    :default-expanded="!msg.thinkDone || msg.phase === 'error'"
+                    :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
+                    :phase="msg.phase === 'interrupted' ? undefined : msg.phase"
+                    :reasoning-start-time="msg.reasoningStartTime ?? null"
+                    :plan-steps="msg.planSteps"
+                    :plan-source="msg.planSource"
+                    @retry="onRetryError(idx)"
+                  />
+                </AgentRunCanvas>
+                <!-- Short task: render AiProcessBlock directly in bubble width -->
                 <AiProcessBlock
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg)"
+                  v-else-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg)"
                   :status="msg.processStatus || (msg.phase === 'error' ? 'error' : msg.phase === 'done' ? 'done' : 'running')"
                   :elapsed-ms="msg.processElapsedMs || 0"
                   :steps="msg.processSteps || buildLegacySteps(msg)"
@@ -512,8 +532,10 @@ import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
 import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
+import AgentRunCanvas from '@/components/ai/AgentRunCanvas.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
+import { isLongTask } from '@/utils/aiTaskDetection'
 import type { AgentEvent, ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
@@ -595,6 +617,14 @@ function shouldShowProcessBlock(msg: Message): boolean {
   if (msg.thinkContent) return true
   if (msg.toolTimeline && msg.toolTimeline.length > 0) return true
   return false
+}
+
+// Decide whether to use full-width AgentRunCanvas for long tasks (U8).
+// Canvas is shown when: deepThink mode OR ≥3 steps OR trigger tool (generate_report).
+function shouldUseCanvas(msg: Message): boolean {
+  // Get steps from either processSteps or legacy build
+  const steps = msg.processSteps || buildLegacySteps(msg)
+  return isLongTask(steps, deepThink.value)
 }
 
 function parseToolArgs(argsText?: string): Record<string, unknown> {
