@@ -279,6 +279,17 @@ export default {
       },
     },
   },
+  aiCanvas: {
+    statusRunning: '执行中',
+    statusDone: '已完成',
+    statusError: '执行出错',
+    statusInterrupted: '执行中断',
+    runningInBackground: '正在后台运行...',
+    expand: '展开画布',
+    collapse: '收起画布',
+    progressSummary: '已完成 {done}/{total} 步骤',
+    resumeAction: '继续执行',
+  },
   aiArtifact: {
     badgeLabel: '查看 {count} 个附件',
     sheetTitle: '附件 ({count})',
