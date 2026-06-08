@@ -28,6 +28,13 @@ SENSITIVE_KEYS: frozenset[str] = frozenset([
     "credentials",
     "private_key",
     "private",
+    # Prompt 相关字段
+    "system_prompt",
+    "user_context",
+    "internal_context",
+    "task_description",
+    "developer_prompt",
+    "original_prompt",
 ])
 
 # Known-safe field names that should NOT be redacted even if they contain sensitive substrings.
