@@ -289,6 +289,8 @@ export default {
     collapse: '收起画布',
     progressSummary: '已完成 {done}/{total} 步骤',
     resumeAction: '继续执行',
+    canvasAriaLabel: '执行画布',
+    elapsedTimeAriaLabel: '耗时',
   },
   aiStepSummary: {
     // Data query tools

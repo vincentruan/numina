@@ -261,7 +261,7 @@ const headerTitle = computed(() => {
     // U5: Use summaryText if provided (Chinese summary from aiStepSummary.ts)
     if (props.summaryText) {
       const info = getToolDisplayInfo(props.name || '', props.displayName, props.icon, props.toolType)
-      return `${info.icon} ${props.summaryText}`
+      return `${info.icon} ${t(props.summaryText)}`
     }
     const info = getToolDisplayInfo(props.name || '', props.displayName, props.icon, props.toolType)
     return `${info.icon} ${info.displayName}`

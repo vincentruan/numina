@@ -1,5 +1,5 @@
 <template>
-  <div class="agent-run-canvas" :class="canvasClasses" role="region" aria-label="执行画布">
+  <div class="agent-run-canvas" :class="canvasClasses" role="region" :aria-label="t('aiCanvas.canvasAriaLabel')">
     <!-- Header with status badge, elapsed time, model info, collapse toggle -->
     <AgentRunHeader
       v-if="showHeader"

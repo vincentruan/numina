@@ -79,6 +79,12 @@ def redact_sensitive_fields(obj: dict[str, Any], depth: int = 0) -> dict[str, An
         # Recursively redact nested dicts
         if isinstance(value, dict) and value:
             result[key] = redact_sensitive_fields(value, depth + 1)
+        # Recursively redact arrays of objects
+        elif isinstance(value, list) and value:
+            result[key] = [
+                redact_sensitive_fields(item, depth + 1) if isinstance(item, dict) else item
+                for item in value
+            ]
         else:
             result[key] = value
 

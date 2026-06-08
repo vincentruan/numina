@@ -12,7 +12,7 @@
     </span>
 
     <!-- Elapsed time -->
-    <span class="elapsed-time" aria-label="耗时">{{ formattedElapsed }}</span>
+    <span class="elapsed-time" :aria-label="t('aiCanvas.elapsedTimeAriaLabel')">{{ formattedElapsed }}</span>
 
     <!-- Model info (optional) -->
     <span v-if="modelName" class="model-info">{{ modelName }}</span>
@@ -60,8 +60,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// Unique ID for aria-controls
-const controlsId = `canvas-body-${Date.now()}`
+// Unique ID for aria-controls - stable across re-renders
+const controlsId = computed(() => `canvas-body-${props.status}-${props.elapsedMs}`)
 
 // Status class for styling
 const statusClass = computed(() => ({
