@@ -3,9 +3,86 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any
+
+logger = logging.getLogger(__name__)
+
+# Sensitive field keys that must be redacted before streaming to frontend.
+# Uses exact case-insensitive matching to avoid false positives (e.g., "keyboard").
+SENSITIVE_KEYS: frozenset[str] = frozenset([
+    "api_key",
+    "apikey",
+    "key",  # catch standalone "key" but not "keyboard" (exact match)
+    "password",
+    "pwd",
+    "pass",  # catch standalone "pass" but not "compass" (exact match)
+    "token",
+    "access_token",
+    "auth_token",
+    "secret",
+    "secret_key",
+    "credential",
+    "credentials",
+    "private_key",
+    "private",
+])
+
+# Known-safe field names that should NOT be redacted even if they contain sensitive substrings.
+# This whitelist prevents false positives like "keyboard", "keypress", "passenger".
+SENSITIVE_KEY_WHITELIST: frozenset[str] = frozenset([
+    "keyboard",
+    "keypress",
+    "keybinding",
+    "passenger",
+    "compass",
+    "passport",  # travel document, not auth
+    "bypass",
+    "gateway",
+])
+
+
+def redact_sensitive_fields(obj: dict[str, Any], depth: int = 0) -> dict[str, Any]:
+    """Redact sensitive fields from a dict before streaming to frontend.
+
+    Args:
+        obj: The dict to redact (tool arguments, config, etc.)
+        depth: Current recursion depth (limit 5 to prevent infinite loops)
+
+    Returns:
+        A new dict with sensitive values replaced by "***REDACTED***"
+
+    Security note: This is the primary protection layer. Frontend redaction
+    (aiEventRedactor.ts) is defense-in-depth only.
+    """
+    if depth > 5:
+        logger.warning("[stream_events] redaction depth limit reached at depth=%d", depth)
+        return {"_truncated": "..."}
+
+    result: dict[str, Any] = {}
+    for key, value in obj.items():
+        lower_key = key.lower()
+
+        # Check whitelist first (known-safe fields never redacted)
+        if lower_key in SENSITIVE_KEY_WHITELIST:
+            result[key] = value
+            continue
+
+        # Check exact match against sensitive keys
+        if lower_key in SENSITIVE_KEYS:
+            result[key] = "***REDACTED***"
+            logger.debug("[stream_events] redacted field: %s", key)
+            continue
+
+        # Recursively redact nested dicts
+        if isinstance(value, dict) and value:
+            result[key] = redact_sensitive_fields(value, depth + 1)
+        else:
+            result[key] = value
+
+    return result
 
 
 @dataclass(frozen=True)
@@ -70,6 +147,8 @@ class EventStreamBuilder:
         icon: str | None = None,
         tool_type: str | None = None,
     ) -> StreamEvent:
+        # Redact sensitive fields before streaming (primary protection layer)
+        redacted_args = redact_sensitive_fields(arguments)
         return self._event(
             "tool.call",
             {
@@ -79,7 +158,7 @@ class EventStreamBuilder:
                     "tool_type": tool_type or "unknown",
                     "display_name": display_name or tool_name,
                     "icon": icon or "tool",
-                    "arguments": arguments,
+                    "arguments": redacted_args,
                 }
             },
         )
