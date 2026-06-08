@@ -93,10 +93,6 @@
   </div>
 </template>
 
-<script setup lang="ts">
-// Skeleton component for AIHubPage loading state
-</script>
-
 <style scoped>
 .ai-hub-skeleton {
   background: var(--bg-secondary);

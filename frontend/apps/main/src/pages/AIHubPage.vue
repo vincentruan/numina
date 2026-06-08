@@ -1,5 +1,10 @@
 <template>
   <div class="ai-hub-page">
+    <!-- Skeleton for initial loading -->
+    <AIHubSkeleton v-if="initialLoading" />
+
+    <!-- Actual Content -->
+    <template v-else>
     <!-- Header -->
     <div class="hub-header">
       <div class="hub-header-blob" aria-hidden="true"></div>
@@ -242,6 +247,7 @@
         </van-cell>
       </van-cell-group>
     </van-action-sheet>
+    </template>
   </div>
 </template>
 
@@ -261,6 +267,7 @@ import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import AIChatInput from '@/components/common/AIChatInput.vue'
+import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
@@ -279,6 +286,7 @@ const isOwner = authStore.user?.role === 'owner'
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
+const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'normal' | 'smart'>('normal')
 const webSearch = ref(false)
@@ -558,6 +566,7 @@ onMounted(async () => {
   await aiStore.fetchConfig()
   await agentStore.loadAgents()
   await loadReport()
+  initialLoading.value = false
 })
 </script>
 
