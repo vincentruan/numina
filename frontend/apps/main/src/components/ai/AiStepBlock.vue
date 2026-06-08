@@ -222,7 +222,7 @@ const computedElapsedMs = computed(() => {
 
 // Live status text for running tool_call steps - dynamic generation using displayName
 const statusText = computed(() => {
-  const baseName = props.displayName || props.name || '处理'
+  const baseName = props.displayName ?? props.name ?? '处理'
   if (props.status === 'running') return `正在${baseName}`
   if (props.status === 'done') return `已${baseName}`
   if (props.status === 'error') return `${baseName}失败`

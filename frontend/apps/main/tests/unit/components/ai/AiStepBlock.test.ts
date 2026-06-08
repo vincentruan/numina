@@ -271,4 +271,163 @@ describe('AiStepBlock', () => {
     expect(wrapper.find('.ai-step-block--done').exists()).toBe(true)
     expect(wrapper.text()).toContain('生成报告')
   })
+
+  // statusText computed property tests
+  describe('tool_call statusText (dynamic from displayName)', () => {
+    it('running status shows "正在<displayName>"', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'st-1',
+        status: 'running',
+        name: 'get_assets',
+        displayName: '获取家庭概览',
+        args: {},
+      })
+
+      expect(wrapper.find('.tool-status-text').text()).toBe('正在获取家庭概览')
+    })
+
+    it('running status falls back to name when displayName missing', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'st-2',
+        status: 'running',
+        name: 'web_search',
+        args: {},
+      })
+
+      expect(wrapper.find('.tool-status-text').text()).toBe('正在web_search')
+    })
+
+    it('running status falls back to "处理" when both missing', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'st-3',
+        status: 'running',
+        args: {},
+      })
+
+      expect(wrapper.find('.tool-status-text').text()).toBe('正在处理')
+    })
+
+    it('done/error/streaming statuses do not render the running status text element', () => {
+      const states = ['done', 'error', 'streaming'] as const
+      for (const status of states) {
+        const wrapper = mountWith({
+          type: 'tool_call',
+          id: `st-${status}`,
+          status,
+          name: 'get_assets',
+          displayName: '获取家庭概览',
+          args: {},
+          resultSummary: 'ok',
+        })
+
+        expect(wrapper.find('.tool-status-text').exists()).toBe(false)
+      }
+    })
+  })
+
+  // args display condition tests
+  describe('tool_call args display condition', () => {
+    it('running status shows args even when compressed=true', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-1',
+        status: 'running',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        compressed: true,
+      })
+
+      expect(wrapper.find('.tool-args').exists()).toBe(true)
+    })
+
+    it('done status hides args by default (compressed=true, not expanded)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-2',
+        status: 'done',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        resultSummary: 'ok',
+        compressed: true,
+      })
+
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result').exists()).toBe(true)
+    })
+
+    it('done status hides args by default in compressed mode', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-3',
+        status: 'done',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        resultSummary: 'ok',
+        compressed: true,
+      })
+
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+    })
+
+    it('done status shows args when expanded (after user click)', async () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-4',
+        status: 'done',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        resultSummary: 'ok',
+        compressed: true,
+      })
+
+      // expand by clicking header
+      await wrapper.find('.step-header').trigger('click')
+      expect(wrapper.find('.tool-args').exists()).toBe(true)
+    })
+
+    it('error status hides args by default in compressed mode', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-5',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '失败',
+        compressed: true,
+      })
+
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+    })
+
+    it('args-label is hidden in compressed mode', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-6',
+        status: 'running',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        compressed: true,
+      })
+
+      expect(wrapper.find('.args-label').exists()).toBe(false)
+      expect(wrapper.find('.args-value').exists()).toBe(true)
+    })
+
+    it('args-label is shown in non-compressed mode', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-7',
+        status: 'running',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        compressed: false,
+      })
+
+      expect(wrapper.find('.args-label').exists()).toBe(true)
+    })
+  })
 })
