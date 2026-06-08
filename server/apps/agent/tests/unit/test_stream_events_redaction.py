@@ -290,3 +290,60 @@ class TestSensitiveKeyConstants:
         result = redact_sensitive_fields(args)
         assert result["key"] == "***REDACTED***"
         assert result["keyboard"] == "device"
+
+    def test_sensitive_keys_contains_prompt_fields(self):
+        """SENSITIVE_KEYS should contain prompt-related fields to prevent prompt leakage."""
+        expected_prompt_fields = [
+            "system_prompt",
+            "user_context",
+            "internal_context",
+            "task_description",
+            "developer_prompt",
+            "original_prompt",
+        ]
+        for key in expected_prompt_fields:
+            assert key in SENSITIVE_KEYS, f"{key} missing from SENSITIVE_KEYS"
+
+    def test_prompt_fields_are_redacted(self):
+        """Prompt-related fields in tool arguments must be redacted."""
+        args = {
+            "system_prompt": "You are an AI assistant...",
+            "user_context": "{'family_id': 123}",
+            "internal_context": "internal state",
+            "task_description": "Original task: ...",
+            "developer_prompt": "Developer notes...",
+            "original_prompt": "Raw input prompt",
+            "normal_field": "should remain",
+        }
+        result = redact_sensitive_fields(args)
+        assert result["system_prompt"] == "***REDACTED***"
+        assert result["user_context"] == "***REDACTED***"
+        assert result["internal_context"] == "***REDACTED***"
+        assert result["task_description"] == "***REDACTED***"
+        assert result["developer_prompt"] == "***REDACTED***"
+        assert result["original_prompt"] == "***REDACTED***"
+        assert result["normal_field"] == "should remain"
+
+    def test_prompt_field_redaction_case_insensitive(self):
+        """Prompt field redaction should be case-insensitive (matches existing behavior)."""
+        args = {
+            "System_Prompt": "secret",
+            "USER_CONTEXT": "secret",
+        }
+        result = redact_sensitive_fields(args)
+        assert result["System_Prompt"] == "***REDACTED***"
+        assert result["USER_CONTEXT"] == "***REDACTED***"
+
+    def test_prompt_fields_redacted_in_nested_dict(self):
+        """Prompt fields nested in tool result data must also be redacted."""
+        data = {
+            "result": {
+                "system_prompt": "leaked prompt",
+                "user_context": "leaked context",
+                "summary": "safe summary",
+            },
+        }
+        result = redact_sensitive_fields(data)
+        assert result["result"]["system_prompt"] == "***REDACTED***"
+        assert result["result"]["user_context"] == "***REDACTED***"
+        assert result["result"]["summary"] == "safe summary"
