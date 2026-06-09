@@ -240,7 +240,7 @@ class SessionJournalService:
         arguments: dict[str, Any],
     ) -> None:
         event = _make_event(
-            "tool.call_started",
+            "tool.call",
             session_id=session_id,
             family_id=family_id,
             actor="assistant",
@@ -260,7 +260,7 @@ class SessionJournalService:
         error: str | None = None,
     ) -> None:
         event = _make_event(
-            "tool.call_completed",
+            "tool.result",
             session_id=session_id,
             family_id=family_id,
             actor="tool",
