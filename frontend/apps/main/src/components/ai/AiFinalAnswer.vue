@@ -233,6 +233,32 @@ async function copyContent() {
 .answer-markdown :deep(pre) { background: var(--bg-secondary); padding: 10px; border-radius: 4px; overflow-x: auto; }
 .answer-markdown :deep(pre code) { background: none; padding: 0; }
 
+/* Markdown 表格样式 */
+.answer-markdown :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+  overflow-x: auto;
+  display: block;
+  overscroll-behavior-x: contain;  /* 防止水平滑动触发父级垂直滚动 */
+}
+
+.answer-markdown :deep(th),
+.answer-markdown :deep(td) {
+  border: 1px solid var(--separator);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.answer-markdown :deep(th) {
+  background: var(--bg-secondary);
+  font-weight: 500;
+}
+
+.answer-markdown :deep(tr:nth-child(even) td) {
+  background: var(--bg-secondary);
+}
+
 .answer-cursor {
   display: inline-block;
   animation: blink 1s step-end infinite;
