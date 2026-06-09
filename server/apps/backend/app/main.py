@@ -35,7 +35,6 @@ from apps.backend.app.models.ai_disposal_suggestion import (
 )
 from apps.backend.app.models.ai_report import AIReport  # noqa: F401
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
-from apps.backend.app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from apps.backend.app.models.asset import Asset  # noqa: F401
 from apps.backend.app.models.blind_box_config import BlindBoxConfig  # noqa: F401
 from apps.backend.app.models.blind_box_draw import BlindBoxDraw  # noqa: F401

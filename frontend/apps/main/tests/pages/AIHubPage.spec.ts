@@ -54,8 +54,8 @@ vi.mock('../../src/api/ai', () => ({
   getAITask: vi.fn(() => Promise.resolve({ status: 'idle' })),
 }))
 
-vi.mock('../../src/composables/useAIReportWS', () => ({
-  useAIReportWS: () => ({
+vi.mock('../../src/composables/useAIReportStream', () => ({
+  useAIReportStream: () => ({
     reset: vi.fn(),
     connect: vi.fn(),
     report: { value: null },

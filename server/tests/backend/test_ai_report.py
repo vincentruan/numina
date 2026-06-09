@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from apps.backend.app.models.ai_report import AIReport
-from apps.backend.app.models.ai_ws_ticket import AIWsTicket
 from apps.backend.app.models.family import Family
 
 
@@ -257,43 +256,6 @@ def test_generate_report_marks_error_on_agent_failure(client, auth_headers, db):
     assert task.status == "failed"
 
 
-# ── POST /ai/report/ws-ticket ───────────────────────────────────────────────────
-
-def test_ws_ticket_creates_one_time_ticket(client, auth_headers, db):
-    """POST /ai/report/ws-ticket creates a ticket with 30s expiry."""
-    _enable_ai(db, auth_headers, client)
-
-    resp = client.post("/api/v1/ai/report/ws-ticket", headers=auth_headers)
-    assert resp.status_code == 200
-    ticket_id = resp.json()["data"]["ticket_id"]
-
-    ticket = db.query(AIWsTicket).filter_by(id=int(ticket_id)).first()
-    assert ticket is not None
-    assert ticket.used is False
-    assert ticket.expires_at is not None
-
-
-def test_ws_ticket_requires_ai_enabled(client, auth_headers, db):
-    """POST /ai/report/ws-ticket returns 403 if AI not enabled."""
-    me = client.get("/api/v1/auth/me", headers=auth_headers).json()
-    family_id = me["data"]["family_id"]
-    family = db.query(Family).filter_by(id=family_id).first()
-    family.ai_enabled = False
-    db.commit()
-
-    resp = client.post("/api/v1/ai/report/ws-ticket", headers=auth_headers)
-    assert resp.status_code == 403
-
-
-def test_ws_ticket_requires_owner(client, auth_headers, db):
-    """POST /ai/report/ws-ticket requires owner role (embedded in JWT)."""
-    _enable_ai(db, auth_headers, client)
-
-    resp = client.post("/api/v1/ai/report/ws-ticket", headers=auth_headers)
-    assert resp.status_code == 200
-    assert resp.json()["data"]["ticket_id"] is not None
-
-
 # ── Cross-family isolation ──────────────────────────────────────────────────────
 
 def test_cross_family_report_isolation(client, auth_headers, second_user_headers, db):
@@ -335,10 +297,4 @@ def test_cross_family_report_isolation(client, auth_headers, second_user_headers
 def test_generate_requires_auth(client):
     """POST /ai/report/generate/events returns 401 without auth."""
     resp = client.post("/api/v1/ai/report/generate/events")
-    assert resp.status_code == 401
-
-
-def test_ws_ticket_requires_auth(client):
-    """POST /ai/report/ws-ticket returns 401 without auth."""
-    resp = client.post("/api/v1/ai/report/ws-ticket")
     assert resp.status_code == 401

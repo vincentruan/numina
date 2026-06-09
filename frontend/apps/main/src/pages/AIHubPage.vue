@@ -87,7 +87,7 @@
     <!-- Generating in progress -->
     <div v-else-if="reportLoading" class="report-generating-card" aria-live="polite" :aria-label="t('aiHub.reportGenerating')">
       <van-loading size="28" color="var(--color-primary)" />
-      <p class="report-generating-text">{{ ws.progressMessage || t('aiHub.reportGenerating') }}</p>
+      <p class="report-generating-text">{{ stream.progressMessage || t('aiHub.reportGenerating') }}</p>
       <p class="report-generating-sub">{{ t('aiHub.reportGeneratingSub') }}</p>
     </div>
 
@@ -262,7 +262,7 @@ import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { useAIReportWS } from '@/composables/useAIReportWS'
+import { useAIReportStream } from '@/composables/useAIReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
@@ -280,7 +280,7 @@ const router = useRouter()
 const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
-const ws = useAIReportWS()
+const stream = useAIReportStream()
 const isOwner = authStore.user?.role === 'owner'
 
 const currentReport = ref<AIReport | null>(null)
@@ -497,15 +497,15 @@ async function loadReport() {
 
 async function generateReport() {
   reportLoading.value = true
-  ws.reset()
+  stream.reset()
   try {
-    await ws.connect()
-    if (ws.report.value) {
-      currentReport.value = ws.report.value as unknown as AIReport
-      reportGeneratedAt.value = ws.generatedAt.value
+    await stream.connect()
+    if (stream.report.value) {
+      currentReport.value = stream.report.value as unknown as AIReport
+      reportGeneratedAt.value = stream.generatedAt.value
     }
   } catch {
-    showToast(ws.errorMessage.value || t('toast.aiGenerateFailed'))
+    showToast(stream.errorMessage.value || t('toast.aiGenerateFailed'))
   } finally {
     reportLoading.value = false
   }
@@ -515,12 +515,12 @@ async function refreshReport(silent?: boolean) {
   if (reportLoading.value) return // avoid duplicate with scheduler
   if (!aiStore.aiEnabled) return
   if (!silent) reportLoading.value = true
-  ws.reset()
+  stream.reset()
   try {
-    await ws.connect()
-    if (ws.report.value) {
-      currentReport.value = ws.report.value as unknown as AIReport
-      reportGeneratedAt.value = ws.generatedAt.value
+    await stream.connect()
+    if (stream.report.value) {
+      currentReport.value = stream.report.value as unknown as AIReport
+      reportGeneratedAt.value = stream.generatedAt.value
     }
   } catch {
     if (!silent) showToast(t('toast.refreshFailed'))

@@ -24,7 +24,6 @@ from apps.backend.app.models.ai_provider_config import (  # noqa: F401
 from apps.backend.app.models.ai_report import AIReport  # noqa: F401
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
 from apps.backend.app.models.ai_task import AITask  # noqa: F401
-from apps.backend.app.models.ai_ws_ticket import AIWsTicket  # noqa: F401
 from apps.backend.app.models.asset import Asset  # noqa: F401
 from apps.backend.app.models.asset_lifecycle_event import (
     AssetLifecycleEvent,  # noqa: F401
