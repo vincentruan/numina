@@ -219,7 +219,7 @@ Numina 即将部署到生产环境，安全审计发现多个防护隐患需要�
 ### 速率限制中间件配置
 
 ```python
-# backend/app/config.py
+# server/apps/backend/app/config.py
 class Settings(BaseSettings):
     # 速率限制配置
     LOGIN_RATE_LIMIT_MAX_ATTEMPTS: int = 5

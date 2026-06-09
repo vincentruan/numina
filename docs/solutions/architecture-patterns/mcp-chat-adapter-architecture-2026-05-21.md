@@ -2,7 +2,7 @@
 title: "MCP Chat Adapter Architecture — AI 问答、工程逻辑、Skill 能力分层设计"
 date: "2026-05-21"
 category: architecture-patterns
-module: agent/chat
+module: server/apps/agent/services
 problem_type: architecture_pattern
 component: assistant
 severity: high

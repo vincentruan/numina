@@ -1,5 +1,5 @@
 ---
-module: agent
+module: server/apps/agent
 date: "2026-04-12"
 problem_type: integration_issue
 component: assistant
@@ -16,9 +16,9 @@ related_components:
   - services.orchestrator
   - services.pii_redactor
   - services.fallback_engine
-  - frontend/src/components/common/AppTabBar.vue
-  - frontend/src/pages/AIConfigPage.vue
-  - frontend/src/pages/AIHubPage.vue
+  - frontend/apps/main/src/components/common/AppTabBar.vue
+  - frontend/apps/main/src/pages/AIConfigPage.vue
+  - frontend/apps/main/src/pages/AIHubPage.vue
 tags:
   - deerflow
   - adapter-singleton

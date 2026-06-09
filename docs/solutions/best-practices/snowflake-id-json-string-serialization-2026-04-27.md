@@ -24,7 +24,7 @@ This was discovered as a live bug during E2E testing: `source_wish_id` in `Blind
 
 Serialize all 64-bit integer ID fields as JSON strings at the API boundary. Keep Python internals as `int`. Keep TypeScript types as `string`.
 
-**Define a shared Pydantic base class** (`backend/app/schemas/base.py`):
+**Define a shared Pydantic base class** (`server/apps/backend/app/schemas/base.py`):
 
 ```python
 from pydantic import BaseModel, model_serializer

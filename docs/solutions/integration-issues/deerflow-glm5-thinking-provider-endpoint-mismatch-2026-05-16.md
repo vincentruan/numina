@@ -2,7 +2,7 @@
 title: GLM-5 Deep Thinking Not Working — Provider/Endpoint Mismatch in DeerFlow Adapter
 date: 2026-05-16
 category: docs/solutions/integration-issues
-module: agent/deerflow_adapter
+module: server/apps/agent/services/deerflow_adapter
 problem_type: integration_issue
 component: assistant
 symptoms:

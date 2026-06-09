@@ -108,5 +108,5 @@ The behavior is predictable and documented, not random and confusing.
 ## Related
 
 - [Security Protection Best Practices](./security-protection.md) - Rate limiting requirements and cache configuration
-- `backend/app/services/cache/factory.py` - Cache backend factory implementation
-- `backend/app/services/cache/redis.py` - Redis backend placeholder
+- `server/apps/backend/app/services/cache/factory.py` - Cache backend factory implementation
+- `server/apps/backend/app/services/cache/redis.py` - Redis backend placeholder

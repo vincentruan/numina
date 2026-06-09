@@ -87,5 +87,5 @@ In plain HTML `<input :value="x">` works because the DOM `value` attribute is di
 
 ## Related Issues
 
-- `frontend/src/components/asset/AssetForm.vue` — category picker implementation
-- `frontend/src/utils/icon.ts` — shared `getIconId()` utility extracted during this fix
+- `frontend/apps/main/src/components/asset/AssetForm.vue` — category picker implementation
+- `frontend/apps/main/src/utils/icon.ts` — shared `getIconId()` utility extracted during this fix
