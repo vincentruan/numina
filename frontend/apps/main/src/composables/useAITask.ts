@@ -376,6 +376,7 @@ export function useAITask(
             errorCode.value = 'extraction_failed'
           }
           phase.value = null
+          stopThinkTimer()
           return
         }
         // running / post_processing → keep polling
