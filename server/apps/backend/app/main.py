@@ -23,66 +23,66 @@ from apps.backend.app.errors.exceptions import AppError
 from apps.backend.app.middleware.family_context import FamilyContextMiddleware
 from apps.backend.app.middleware.rate_limit import RateLimitMiddleware
 from apps.backend.app.middleware.request_id import RequestIDMiddleware
-from apps.backend.app.models.activity import Activity  # noqa: F401
-from apps.backend.app.models.ai_allocation_target import (
-    AIAllocationTarget,  # noqa: F401
-)
-from apps.backend.app.models.ai_asset_alert import AIAssetAlert  # noqa: F401
-from apps.backend.app.models.ai_chat_message import AIChatMessage  # noqa: F401
-from apps.backend.app.models.ai_chat_session import AIChatSession  # noqa: F401
-from apps.backend.app.models.ai_disposal_suggestion import (
-    AIDisposalSuggestion,  # noqa: F401
-)
-from apps.backend.app.models.ai_report import AIReport  # noqa: F401
-from apps.backend.app.models.ai_spending_leak import AISpendingLeak  # noqa: F401
-from apps.backend.app.models.asset import Asset  # noqa: F401
-from apps.backend.app.models.blind_box_config import BlindBoxConfig  # noqa: F401
-from apps.backend.app.models.blind_box_draw import BlindBoxDraw  # noqa: F401
-from apps.backend.app.models.blind_box_gift import BlindBoxGift  # noqa: F401
-from apps.backend.app.models.bonus_draw import BonusDraw  # noqa: F401
-from apps.backend.app.models.cached_file import CachedFile  # noqa: F401
-from apps.backend.app.models.category import Category  # noqa: F401
-from apps.backend.app.models.category_financial_default import (
-    CategoryFinancialDefault,  # noqa: F401
-)
-from apps.backend.app.models.child_milestone import ChildMilestone  # noqa: F401
-from apps.backend.app.models.child_wish import ChildWish  # noqa: F401
-from apps.backend.app.models.chore import ChoreInstance, ChoreTemplate  # noqa: F401
-from apps.backend.app.models.coin_transaction import CoinTransaction  # noqa: F401
-from apps.backend.app.models.currency import Currency  # noqa: F401
-from apps.backend.app.models.exchange_rate import ExchangeRate  # noqa: F401
-from apps.backend.app.models.family import Family  # noqa: F401
-from apps.backend.app.models.file_remote_location import (
-    FileRemoteLocation,  # noqa: F401
-)
-from apps.backend.app.models.liability import Liability  # noqa: F401
-from apps.backend.app.models.notification_channel import (
-    NotificationChannel,  # noqa: F401
-)
-from apps.backend.app.models.notification_config import NotificationConfig  # noqa: F401
-from apps.backend.app.models.notification_subscription import (
-    NotificationSubscription,  # noqa: F401
-)
-from apps.backend.app.models.payment_record import PaymentRecord  # noqa: F401
-from apps.backend.app.models.reminder import Reminder  # noqa: F401
-from apps.backend.app.models.revoked_token import RevokedToken  # noqa: F401
-from apps.backend.app.models.security_audit_log import SecurityAuditLog  # noqa: F401
-from apps.backend.app.models.snapshot import AssetSnapshot  # noqa: F401
-from apps.backend.app.models.storage_backend import StorageBackend  # noqa: F401
-from apps.backend.app.models.sync_event import SyncEvent  # noqa: F401
-from apps.backend.app.models.tag import Tag  # noqa: F401
 
 # Import all models so Base.metadata knows about them
-from apps.backend.app.models.user import User  # noqa: F401
-from apps.backend.app.models.valuation import AssetValuation  # noqa: F401
-from apps.backend.app.models.wish import Wish  # noqa: F401
+from apps.backend.app.models.activity import Activity
+from apps.backend.app.models.ai_allocation_target import (
+    AIAllocationTarget,
+)
+from apps.backend.app.models.ai_asset_alert import AIAssetAlert
+from apps.backend.app.models.ai_chat_message import AIChatMessage
+from apps.backend.app.models.ai_chat_session import AIChatSession
+from apps.backend.app.models.ai_disposal_suggestion import (
+    AIDisposalSuggestion,
+)
+from apps.backend.app.models.ai_report import AIReport
+from apps.backend.app.models.ai_spending_leak import AISpendingLeak
+from apps.backend.app.models.ai_ws_ticket import AIWsTicket
+from apps.backend.app.models.asset import Asset
+from apps.backend.app.models.blind_box_config import BlindBoxConfig
+from apps.backend.app.models.blind_box_draw import BlindBoxDraw
+from apps.backend.app.models.blind_box_gift import BlindBoxGift
+from apps.backend.app.models.bonus_draw import BonusDraw
+from apps.backend.app.models.cached_file import CachedFile
+from apps.backend.app.models.category import Category
+from apps.backend.app.models.category_financial_default import (
+    CategoryFinancialDefault,
+)
+from apps.backend.app.models.child_milestone import ChildMilestone
+from apps.backend.app.models.child_wish import ChildWish
+from apps.backend.app.models.chore import ChoreInstance, ChoreTemplate
+from apps.backend.app.models.coin_transaction import CoinTransaction
+from apps.backend.app.models.currency import Currency
+from apps.backend.app.models.exchange_rate import ExchangeRate
+from apps.backend.app.models.family import Family
+from apps.backend.app.models.file_remote_location import (
+    FileRemoteLocation,
+)
+from apps.backend.app.models.liability import Liability
+from apps.backend.app.models.notification_channel import (
+    NotificationChannel,
+)
+from apps.backend.app.models.notification_config import NotificationConfig
+from apps.backend.app.models.notification_subscription import (
+    NotificationSubscription,
+)
+from apps.backend.app.models.payment_record import PaymentRecord
+from apps.backend.app.models.reminder import Reminder
+from apps.backend.app.models.revoked_token import RevokedToken
+from apps.backend.app.models.security_audit_log import SecurityAuditLog
+from apps.backend.app.models.snapshot import AssetSnapshot
+from apps.backend.app.models.storage_backend import StorageBackend
+from apps.backend.app.models.sync_event import SyncEvent
+from apps.backend.app.models.tag import Tag
+from apps.backend.app.models.user import User
+from apps.backend.app.models.valuation import AssetValuation
+from apps.backend.app.models.wish import Wish
 from apps.backend.app.responses import EnvelopeResponse
 from apps.backend.app.routers import activities as activities_router
 from apps.backend.app.routers import admin_ai_extraction as admin_ai_extraction_router
 from apps.backend.app.routers import admin_audit_logs as admin_audit_logs_router
 from apps.backend.app.routers import ai_agents as ai_agents_router
 from apps.backend.app.routers import ai_agents_internal as ai_agents_internal_router
-from apps.backend.app.routers import ai_web_search as ai_web_search_router
 from apps.backend.app.routers import ai_alerts as ai_alerts_router
 from apps.backend.app.routers import ai_allocation as ai_allocation_router
 from apps.backend.app.routers import ai_capabilities as ai_capabilities_router
@@ -98,6 +98,7 @@ from apps.backend.app.routers import ai_spending_leaks as ai_spending_leaks_rout
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
 from apps.backend.app.routers import ai_time_machine as ai_time_machine_router
+from apps.backend.app.routers import ai_web_search as ai_web_search_router
 from apps.backend.app.routers import (
     assets,
     auth,
