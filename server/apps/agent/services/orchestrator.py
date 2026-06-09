@@ -675,6 +675,17 @@ class Orchestrator:
             if tool_call_id:
                 tool_call_id_map[tool_call_id] = backend_id
             yield evt.to_ndjson()
+            # 新增：持久化到 journal
+            try:
+                session_journal.write_tool_call(
+                    family_id=family_id,
+                    session_id=session_id,
+                    tool_name=tool_name,
+                    tool_id=backend_id,
+                    arguments=args,
+                )
+            except Exception as e:
+                logger.warning("[orchestrator] journal write_tool_call failed: %s", e)
             return
 
         if chunk.type == "tool_result":
@@ -687,6 +698,17 @@ class Orchestrator:
                 execution_time_ms=0,
                 data=data.get("content"),
             ).to_ndjson()
+            # 新增：持久化到 journal
+            try:
+                session_journal.write_tool_result(
+                    family_id=family_id,
+                    session_id=session_id,
+                    tool_id=backend_id,
+                    success=True,
+                    execution_time_ms=0,  # streaming path lacks timing metadata
+                )
+            except Exception as e:
+                logger.warning("[orchestrator] journal write_tool_result failed: %s", e)
             return
 
         if chunk.type == "plan_update":
