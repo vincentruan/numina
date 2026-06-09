@@ -5,7 +5,7 @@
     </div>
     <template v-else>
     <!-- S0 智能发现 -->
-    <div class="section-card" v-if="smartDiscovery">
+    <div v-if="smartDiscovery" class="section-card">
       <div class="section-header">
         <div class="section-title gradient-title">
           <span class="gradient-icon">✦</span>
@@ -22,7 +22,7 @@
           <div class="isc-value" :class="(smartDiscovery.purchase_yoy ?? 0) >= 0 ? 'up' : 'down'">
             {{ smartDiscovery.purchase_yoy !== null ? (smartDiscovery.purchase_yoy >= 0 ? '+' : '') + smartDiscovery.purchase_yoy + '%' : '--' }}
           </div>
-          <div class="isc-sub" v-if="smartDiscovery.purchase_yoy !== null">
+          <div v-if="smartDiscovery.purchase_yoy !== null" class="isc-sub">
             <span class="isc-badge" :class="smartDiscovery.purchase_yoy >= 0 ? 'up' : 'down'">
               {{ smartDiscovery.purchase_yoy >= 0 ? '▲' : '▼' }} {{ Math.abs(smartDiscovery.purchase_yoy) }}%
             </span>
@@ -37,11 +37,11 @@
             <div class="isc-icon">📈</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.highestDailyCost') }}</div>
           </div>
-          <div class="isc-name" v-if="smartDiscovery.highest_daily_cost">{{ smartDiscovery.highest_daily_cost.name }}</div>
-          <div class="isc-sub" v-if="smartDiscovery.highest_daily_cost">
+          <div v-if="smartDiscovery.highest_daily_cost" class="isc-name">{{ smartDiscovery.highest_daily_cost.name }}</div>
+          <div v-if="smartDiscovery.highest_daily_cost" class="isc-sub">
             <span class="isc-cost-val">{{ format(smartDiscovery.highest_daily_cost.cost) }} <span class="isc-cost-unit">/ {{ t('analyticsPage.perDay').replace('/', '') }}</span></span>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.highest_daily_cost">
+          <div v-if="smartDiscovery.highest_daily_cost" class="isc-bg-icon">
             <SvgIcon v-if="smartDiscovery.highest_daily_cost.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.highest_daily_cost.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.highest_daily_cost.icon }}</span>
           </div>
@@ -53,11 +53,11 @@
             <div class="isc-icon">📉</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.lowestDailyCost') }}</div>
           </div>
-          <div class="isc-name" v-if="smartDiscovery.lowest_daily_cost">{{ smartDiscovery.lowest_daily_cost.name }}</div>
-          <div class="isc-sub" v-if="smartDiscovery.lowest_daily_cost">
+          <div v-if="smartDiscovery.lowest_daily_cost" class="isc-name">{{ smartDiscovery.lowest_daily_cost.name }}</div>
+          <div v-if="smartDiscovery.lowest_daily_cost" class="isc-sub">
             <span class="isc-cost-val green">{{ format(smartDiscovery.lowest_daily_cost.cost) }} <span class="isc-cost-unit">/ {{ t('analyticsPage.perDay').replace('/', '') }}</span></span>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.lowest_daily_cost">
+          <div v-if="smartDiscovery.lowest_daily_cost" class="isc-bg-icon">
             <SvgIcon v-if="smartDiscovery.lowest_daily_cost.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.lowest_daily_cost.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.lowest_daily_cost.icon }}</span>
           </div>
@@ -69,11 +69,11 @@
             <div class="isc-icon">⏳</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.longestHeld') }}</div>
           </div>
-          <div class="isc-name" v-if="smartDiscovery.longest_held">{{ smartDiscovery.longest_held.name }}</div>
-          <div class="isc-sub" v-if="smartDiscovery.longest_held">
+          <div v-if="smartDiscovery.longest_held" class="isc-name">{{ smartDiscovery.longest_held.name }}</div>
+          <div v-if="smartDiscovery.longest_held" class="isc-sub">
             <span class="isc-days-val">{{ smartDiscovery.longest_held.days }} <span class="isc-days-unit">{{ t('insights.smartDiscovery.daysUnit') }}</span></span>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.longest_held">
+          <div v-if="smartDiscovery.longest_held" class="isc-bg-icon">
             <SvgIcon v-if="smartDiscovery.longest_held.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.longest_held.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.longest_held.icon }}</span>
           </div>
@@ -85,14 +85,14 @@
             <div class="isc-icon">🏆</div>
             <div class="isc-label">{{ t('insights.smartDiscovery.topCategoryByValue') }}</div>
           </div>
-          <div class="isc-category-row" v-if="smartDiscovery.top_category">
+          <div v-if="smartDiscovery.top_category" class="isc-category-row">
             <div>
               <div class="isc-category-name">{{ smartDiscovery.top_category.name }}</div>
               <div class="isc-category-sub">{{ t('insights.smartDiscovery.byValue') }}</div>
             </div>
             <div class="isc-category-pct">{{ smartDiscovery.top_category.percentage }}%</div>
           </div>
-          <div class="isc-bg-icon" v-if="smartDiscovery.top_category">
+          <div v-if="smartDiscovery.top_category" class="isc-bg-icon">
             <SvgIcon v-if="smartDiscovery.top_category.icon?.startsWith('icon-')" :name="getIconId(smartDiscovery.top_category.icon)" class="icon-svg-bg" />
             <span v-else>{{ smartDiscovery.top_category.icon }}</span>
           </div>
@@ -101,7 +101,7 @@
     </div>
 
     <!-- S1 日均成本排行 -->
-    <div class="section-card" v-if="dailyCostItems.length > 0">
+    <div v-if="dailyCostItems.length > 0" class="section-card">
       <div class="section-header">
         <div class="section-title">
           <span class="title-icon">📉</span>{{ t('insights.dailyCostRank.title') }}
@@ -112,7 +112,7 @@
         </div>
       </div>
       <div class="rank-list">
-        <div class="rank-item" v-for="(item, idx) in dailyCostItems" :key="idx">
+        <div v-for="(item, idx) in dailyCostItems" :key="idx" class="rank-item">
           <div class="rank-img">
             <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
             <span v-else>{{ item.icon || '📦' }}</span>
@@ -142,7 +142,7 @@
         <div class="popup-close" @click="showAllCostRank = false">✕</div>
       </div>
       <div class="popup-rank-list">
-        <div class="rank-item" v-for="(item, idx) in allCostRankItems" :key="idx">
+        <div v-for="(item, idx) in allCostRankItems" :key="idx" class="rank-item">
           <div class="rank-img">
             <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />
             <span v-else>{{ item.icon || '📦' }}</span>
@@ -165,7 +165,7 @@
     </van-popup>
 
     <!-- S2 目标进度总览 -->
-    <div class="section-card" v-if="goalProgress">
+    <div v-if="goalProgress" class="section-card">
       <div class="section-header">
         <div class="section-title">
           <span class="title-icon">🎯</span>{{ t('insights.goalProgress.title') }}
@@ -186,7 +186,7 @@
         </div>
       </div>
       <div class="goal-list">
-        <div class="goal-item" v-for="(item, idx) in goalItems" :key="idx">
+        <div v-for="(item, idx) in goalItems" :key="idx" class="goal-item">
           <div class="goal-row">
             <div class="goal-name">
               <div class="cat-dot" :style="{ background: item.color }"></div>{{ item.name }}
@@ -208,7 +208,7 @@
     </div>
 
     <!-- S3 资产类型分布 -->
-    <div class="section-card" v-if="typeDistribution">
+    <div v-if="typeDistribution" class="section-card">
       <div class="section-header">
         <div class="section-title">
           <span class="title-icon">📊</span>{{ t('insights.typeDistribution.title') }}
@@ -224,14 +224,14 @@
       </div>
       <div class="stacked-bar-row">
         <div
-          class="stacked-segment"
           v-for="(cat, idx) in categories"
           :key="idx"
+          class="stacked-segment"
           :style="{ background: cat.color, width: cat.pct + '%' }"
         >{{ cat.pct >= 10 ? cat.pct + '%' : '' }}</div>
       </div>
       <div class="type-legend-grid">
-        <div class="type-legend-item" v-for="(cat, idx) in categories" :key="idx">
+        <div v-for="(cat, idx) in categories" :key="idx" class="type-legend-item">
           <div class="tl-bar" :style="{ background: cat.color }"></div>
           <div class="tl-info">
             <div class="tl-header">
@@ -245,7 +245,7 @@
     </div>
 
     <!-- S4 持有时长分布 -->
-    <div class="section-card" v-if="durationDistribution">
+    <div v-if="durationDistribution" class="section-card">
       <div class="section-header">
         <div class="section-title">
           <span class="title-icon">⏱️</span>{{ t('insights.durationDistribution.title') }}
@@ -262,7 +262,7 @@
         </div>
       </div>
       <div class="dur-chart">
-        <div class="dur-row" v-for="(bucket, idx) in durationBuckets" :key="idx">
+        <div v-for="(bucket, idx) in durationBuckets" :key="idx" class="dur-row">
           <div class="dur-label">{{ bucket.label }}</div>
           <div class="dur-track">
             <div class="dur-bar" :style="{ width: bucket.pct + '%' }">
@@ -275,7 +275,7 @@
     </div>
 
     <!-- S5 资产保值率 -->
-    <div class="section-card" v-if="retentionRate">
+    <div v-if="retentionRate" class="section-card">
       <div class="section-header">
         <div class="section-title">
           <span class="title-icon">📈</span>{{ t('insights.retentionRate.title') }}
@@ -305,7 +305,7 @@
         </div>
       </div>
       <div class="podium-label">{{ t('insights.retentionRate.top3') }}</div>
-      <div class="top3-row" v-if="top3Items.length >= 3">
+      <div v-if="top3Items.length >= 3" class="top3-row">
         <!-- 2nd -->
         <div class="podium-item rank2">
           <div class="podium-thumb">
@@ -347,7 +347,7 @@
         </div>
       </div>
       <div class="pres-list">
-        <div class="pres-list-item" v-for="(item, idx) in retentionItems" :key="idx">
+        <div v-for="(item, idx) in retentionItems" :key="idx" class="pres-list-item">
           <div class="pres-rank">{{ item.rank }}</div>
           <div class="pres-thumb">
             <SvgIcon v-if="item.icon?.startsWith('icon-')" :name="getIconId(item.icon)" class="icon-svg" />

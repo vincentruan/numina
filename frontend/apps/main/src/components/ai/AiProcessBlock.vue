@@ -30,10 +30,10 @@
       <div v-show="isExpanded" class="process-body" role="list">
       <AiStepBlock
         v-for="step in steps"
+        :id="stepProps(step).id"
         :key="step.id"
         :ref="(el) => registerStepRef(step.id, el)"
         :type="stepProps(step).type"
-        :id="stepProps(step).id"
         :status="stepProps(step).status"
         :content="stepProps(step).content"
         :name="stepProps(step).name"
