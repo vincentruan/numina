@@ -143,7 +143,7 @@ Numina 生产环境需要完善的安全审计能力，包括：
 ### 安全日志配置
 
 ```python
-# backend/app/config.py
+# server/apps/backend/app/config.py
 class Settings(BaseSettings):
     ENABLE_SECURITY_LOGGING: bool = True
 ```

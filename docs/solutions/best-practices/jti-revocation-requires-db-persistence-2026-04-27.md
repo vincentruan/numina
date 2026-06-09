@@ -17,7 +17,7 @@ related_components: [database, background_job]
 
 ## Context
 
-The original auth implementation stored revoked JTIs in in-memory dicts (`_revoked_jtis`, `_user_revocation_times`) in `backend/app/auth/deps.py`. This works perfectly in development and single-process testing. The failure mode only appears in production: after any server restart or redeploy, the in-memory state is lost and previously revoked tokens become valid again.
+The original auth implementation stored revoked JTIs in in-memory dicts (`_revoked_jtis`, `_user_revocation_times`) in `server/apps/backend/app/auth/deps.py`. This works perfectly in development and single-process testing. The failure mode only appears in production: after any server restart or redeploy, the in-memory state is lost and previously revoked tokens become valid again.
 
 A user who logs out (revoking their JTI) can have their token reused by an attacker who captured it — after the next server restart, the revocation is gone. This is a security boundary failure, not a data consistency issue.
 
@@ -25,7 +25,7 @@ A user who logs out (revoking their JTI) can have their token reused by an attac
 
 Persist revoked JTIs to a database table with an `expires_at` column for automatic cleanup. The existing `RevokedToken` table handles both single-JTI revocation and user-level revocation.
 
-**Model** (`backend/app/models/revoked_token.py`):
+**Model** (`server/packages/db/models/revoked_token.py`):
 
 ```python
 class RevokedToken(Base):
@@ -42,7 +42,7 @@ class RevokedToken(Base):
     )
 ```
 
-**Revocation functions** (`backend/app/auth/deps.py`):
+**Revocation functions** (`server/apps/backend/app/auth/deps.py`):
 
 ```python
 # Before — lost on restart
@@ -75,7 +75,7 @@ def is_token_revoked(jti: str, user_id: str, issued_at: float, db: Session) -> b
     ).first() is not None
 ```
 
-**Cleanup** — APScheduler hourly task in `backend/app/scheduler.py`:
+**Cleanup** — APScheduler hourly task in `server/apps/scheduler_worker/scheduler.py`:
 
 ```python
 def cleanup_expired_revoked_tokens(db: Session) -> None:

@@ -40,7 +40,7 @@ Implement a three-layer validation error pipeline: backend code map → locale m
 
 ### 1. Backend: Expand the validation code map
 
-In `backend/app/error_handlers.py`, maintain a comprehensive `_VALIDATION_CODE_MAP` covering all Pydantic v2 error types your application encounters.
+In `server/apps/backend/app/error_handlers.py`, maintain a comprehensive `_VALIDATION_CODE_MAP` covering all Pydantic v2 error types your application encounters.
 
 **Critical discovery:** Pydantic v2 uses `int_parsing` (not `int_parsing_error`) for string-to-int coercion failures. Verify actual type names by running:
 
@@ -128,7 +128,7 @@ else:
 
 ### 4. Frontend: Create a `useValidationErrors` composable
 
-`frontend/src/composables/useValidationErrors.ts`:
+`frontend/apps/main/src/composables/useValidationErrors.ts`:
 
 ```typescript
 import { ref, type InjectionKey, type Ref } from 'vue'

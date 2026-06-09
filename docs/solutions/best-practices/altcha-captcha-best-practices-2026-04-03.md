@@ -41,7 +41,7 @@ Implement ALTCHA CAPTCHA with these core practices:
 Store a SHA-256 hash of verified payloads in a cache with TTL matching the challenge expiry window. Reject any payload whose hash already exists in the registry.
 
 ```python
-# backend/app/auth/captcha.py
+# server/apps/backend/app/auth/captcha.py
 import hashlib
 from app.services.cache import get_captcha_payload_cache
 
@@ -74,7 +74,7 @@ except Exception as e:
 Configure different PoW difficulty levels based on endpoint risk profile and usage frequency:
 
 ```python
-# backend/app/routers/captcha.py
+# server/apps/backend/app/routers/captcha.py
 DIFFICULTY_MAP = {
     "login": 30000,        # Lower: high-frequency, returning users
     "register": 100000,    # Higher: abuse prevention for anonymous flow
@@ -107,7 +107,7 @@ The frontend passes the endpoint parameter when requesting a challenge:
 Separate the CAPTCHA payload cache from other caches (rate limiting, session) for isolation and testing:
 
 ```python
-# backend/app/services/cache/factory.py
+# server/apps/backend/app/services/cache/factory.py
 _captcha_payload_cache: CacheBackend | None = None
 
 def get_captcha_payload_cache() -> CacheBackend:
@@ -132,7 +132,7 @@ def reset_captcha_payload_cache() -> None:
 Define a dedicated security event type for replay attacks to enable monitoring and alerting:
 
 ```python
-# backend/app/services/security_log.py
+# server/apps/backend/app/services/security_log.py
 class SecurityEventType:
     CAPTCHA_VERIFICATION_FAILED = "captcha_verification_failed"
     CAPTCHA_REPLAY_ATTACK = "captcha_replay_attack"  # New type

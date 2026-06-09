@@ -53,6 +53,7 @@ server/
     ├── storage/              # Storage backend abstractions
     └── domain/               # Business services
         ├── audit/
+        ├── device/
         ├── exchange_rate/
         ├── notification/
         └── snapshot/
@@ -79,7 +80,7 @@ Each package extraction follows the same 5-step cycle:
 
 4. **Verify with tests — all must pass before committing**
    ```bash
-   pytest backend/tests/ -v
+   pytest server/tests/backend/ -v
    ```
 
 5. **Commit with conventional message**

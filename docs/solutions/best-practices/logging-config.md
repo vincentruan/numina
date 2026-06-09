@@ -25,7 +25,7 @@ Numina 后端需要统一、可配置的日志基础设施，涵盖：
 
 ### 1. 统一日志配置模块
 
-日志配置的实际实现位于 `server/packages/core/logging.py`，后端通过 `app/core/logging_config.py` 作为再导出（re-export）入口对外暴露。
+日志配置的实际实现位于 `server/packages/core/logging.py`，后端通过 `server/apps/backend/app/core/logging_config.py` 作为再导出（re-export）入口对外暴露。
 
 对外公开的两个入口函数：
 
