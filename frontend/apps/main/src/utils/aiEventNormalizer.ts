@@ -102,7 +102,17 @@ export function normalizeAgentEvent(
       break
 
     case 'tool.call':
-      if (event.tool) {
+    case 'tool.call_started': // 兼容旧格式
+      if (event.tool || event.toolName) {
+        // 统一处理：提取 tool 信息，映射旧格式字段
+        const toolInfo = event.tool || {
+          id: event.toolId ?? event.tool_id,
+          name: event.toolName ?? event.tool_name,
+          display_name: event.toolName ?? event.tool_name,
+          icon: event.icon ?? 'tool',
+          arguments: event.arguments ?? event.args ?? {},
+        }
+
         // If no explicit plan arrived and the 3s timer has already expired
         // (planWaitTimer === null means it fired or was never started), activate
         // inference mode so the UI can show inferred plan steps.
@@ -111,33 +121,35 @@ export function normalizeAgentEvent(
         }
         const toolStep: ProcessStep = {
           type: 'tool_call',
-          id: event.tool.id,
-          name: event.tool.name,
-          displayName: event.tool.display_name || event.tool.name,
-          icon: event.tool.icon || '⚙️',
-          toolType: event.tool.tool_type,
-          args: event.tool.arguments || {},
+          id: toolInfo.id,
+          name: toolInfo.name,
+          displayName: toolInfo.display_name || toolInfo.name,
+          icon: toolInfo.icon || '⚙️',
+          toolType: toolInfo.tool_type,
+          args: toolInfo.arguments || {},
           status: 'running',
         }
         state.steps.push(toolStep)
         events.push({
           type: 'tool_call',
-          toolCallId: event.tool.id,
-          name: event.tool.name,
-          displayName: event.tool.display_name || event.tool.name,
-          icon: event.tool.icon || '⚙️',
-          toolType: event.tool.tool_type,
-          args: event.tool.arguments || {},
+          toolCallId: toolInfo.id,
+          name: toolInfo.name,
+          displayName: toolInfo.display_name || toolInfo.name,
+          icon: toolInfo.icon || '⚙️',
+          toolType: toolInfo.tool_type,
+          args: toolInfo.arguments || {},
         })
-        events.push({ type: 'tool_running', toolCallId: event.tool.id })
+        events.push({ type: 'tool_running', toolCallId: toolInfo.id })
       }
       break
 
     case 'tool.result':
-      if (event.tool_id) {
+    case 'tool.call_completed': // 兼容旧格式
+      const toolId = event.tool_id ?? event.toolId
+      if (toolId) {
         const target = state.steps.find(
           (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>
-            s.type === 'tool_call' && s.id === event.tool_id,
+            s.type === 'tool_call' && s.id === toolId,
         )
         if (target) {
           target.status = event.result?.success ? 'done' : 'error'
@@ -147,7 +159,7 @@ export function normalizeAgentEvent(
           target.elapsedMs = event.result?.execution_time_ms
           events.push({
             type: 'tool_result',
-            toolCallId: event.tool_id,
+            toolCallId: toolId,
             success: event.result?.success ?? false,
             summary: event.result?.summary,
             error: event.result?.error,
