@@ -1,17 +1,26 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { shallowMount } from '@vue/test-utils'
+import { mount, shallowMount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 
-const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0))
+// Increased timeout to allow Vue watchers and async callbacks to settle in tests
+// 0ms was insufficient for watcher propagation in shallowMount scenarios
+const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 50))
 
 import AIHubPage from '../../src/pages/AIHubPage.vue'
 import { useAIStore } from '../../src/stores/ai'
 import { useAgentStore } from '../../src/stores/agent'
 
-const { push, loadAgents } = vi.hoisted(() => ({
+const { push, loadAgents, aiStoreMock } = vi.hoisted(() => ({
   push: vi.fn(),
   loadAgents: vi.fn(() => Promise.resolve()),
+  aiStoreMock: {
+    aiEnabled: true,
+    draftQuery: '',
+    deepThinkEnabled: false,
+    webSearchEnabled: false,
+    fetchConfig: vi.fn(() => Promise.resolve()),
+  },
 }))
 
 vi.mock('vue-router', async (importOriginal) => {
@@ -57,13 +66,7 @@ vi.mock('../../src/composables/useAIReportWS', () => ({
 }))
 
 vi.mock('../../src/stores/ai', () => ({
-  useAIStore: vi.fn(() => ({
-    aiEnabled: true,
-    draftQuery: '',
-    deepThinkEnabled: false,
-    webSearchEnabled: false,
-    fetchConfig: vi.fn(() => Promise.resolve()),
-  })),
+  useAIStore: vi.fn(() => aiStoreMock),
 }))
 
 vi.mock('../../src/stores/auth', () => ({
@@ -116,7 +119,7 @@ describe('AIHubPage chat entry', () => {
   })
 
   it('passes draft text and input mode selections to AI chat page', async () => {
-    const wrapper = shallowMount(AIHubPage, {
+    const wrapper = mount(AIHubPage, {
       global: {
         stubs: {
           AIChatInput: {
@@ -145,14 +148,14 @@ describe('AIHubPage chat entry', () => {
     await flushPromises()
     await nextTick()
 
-    // Manually set selectedAgent since the watch may not trigger in shallowMount
-    wrapper.vm.selectedAgent = {
+    // Manually select agent since the watcher may not trigger properly with mocked store
+    wrapper.vm.selectAgent({
       id: 'numina-id',
       agent_name: 'numina',
       display_name: '数鸣',
       description: '家庭财务大使',
       is_enabled: true,
-    }
+    })
     wrapper.vm.chatInput = '我们家净资产是多少？'
     wrapper.vm.chatMode = 'smart'
     wrapper.vm.webSearch = true

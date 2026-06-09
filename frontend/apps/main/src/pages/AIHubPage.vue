@@ -568,6 +568,16 @@ onMounted(async () => {
   await loadReport()
   initialLoading.value = false
 })
+
+// Expose refs and functions for testing purposes
+defineExpose({
+  chatInput,
+  chatMode,
+  webSearch,
+  selectedAgent,
+  initialLoading,
+  selectAgent,
+})
 </script>
 
 <style scoped>
