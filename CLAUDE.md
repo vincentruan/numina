@@ -146,3 +146,5 @@ docker-compose up -d --build  # Rebuild after code changes
 docker-compose down           # Stop all
 # Access at http://localhost:8080
 ```
+
+**⚠️ 重建前端后必须重载 nginx**：容器重建后 IP 变化，nginx worker 缓存旧 IP 会导致 502。详见 [`DEPLOYMENT.md`](./DEPLOYMENT.md) §重建单个服务。

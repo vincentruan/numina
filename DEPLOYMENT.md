@@ -146,7 +146,22 @@ docker-compose build agent && docker-compose up -d agent
 
 # 重建前端
 docker-compose build frontend frontend-child && docker-compose up -d frontend frontend-child
+
+# ⚠️ 重要：重建前端后必须重载 nginx，否则可能 502
+docker exec numina-nginx nginx -s reload
 ```
+
+**为什么需要 nginx reload？**
+
+Docker 容器重建后，IP 地址可能变化。nginx worker 进程缓存了旧的 upstream DNS 解析结果，导致请求转发到失效的旧 IP，返回 502 Bad Gateway。
+
+| 操作 | 是否需要 nginx reload |
+|------|----------------------|
+| `docker-compose up -d`（首次启动） | ❌ 不需要 |
+| `docker-compose up -d --build`（全部重建） | ✅ 需要 |
+| `docker-compose build frontend && up -d frontend` | ✅ 需要 |
+| `docker-compose build backend && up -d backend` | ❌ 不需要（backend 不经 nginx proxy） |
+| `docker-compose restart frontend` | ✅ 可能需要（IP 可能变化） |
 
 ### Agent 依赖管理
 
@@ -527,6 +542,19 @@ docker-compose build agent && docker-compose up -d agent
 **原因**: 脚本中 `$BASE_URL/family/` 带尾斜杠，nginx 返回 307 重定向，curl 跟随后 FastAPI 返回 404，导致 jq 解析 null。
 
 **解决**: 已修复脚本，将 `family/` 改为 `family`（无尾斜杠）。如遇类似问题，检查 API 调用是否有多余的尾斜杠。
+
+### Q: 前端重建后 502 Bad Gateway
+
+**原因**: nginx worker 缓存了旧的容器 IP。前端容器重建后 IP 变化，nginx 仍转发到旧 IP。
+
+**解决**:
+```bash
+# 重建前端后立即重载 nginx
+docker-compose build frontend frontend-child && docker-compose up -d frontend frontend-child
+docker exec numina-nginx nginx -s reload
+```
+
+**预防**: 任何涉及前端容器的重建操作，都要执行 `nginx -s reload`。
 
 ### Q: nginx 重启后 `/` 返回儿童端页面
 
