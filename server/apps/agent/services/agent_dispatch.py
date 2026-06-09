@@ -585,6 +585,17 @@ async def stream_agent_dispatch(
                                 if call["id"]:
                                     tool_call_id_map[str(call["id"])] = backend_id
                                 yield evt.to_ndjson()
+                                # 新增：持久化到 journal
+                                try:
+                                    session_journal.write_tool_call(
+                                        family_id=family_id,
+                                        session_id=thread_id,
+                                        tool_name=tname,
+                                        tool_id=backend_id,
+                                        arguments=call["args"],
+                                    )
+                                except Exception as e:
+                                    logger.warning("[agent_dispatch] journal write_tool_call failed: %s", e)
                             continue
 
                         if kind == "tool_result":
@@ -599,6 +610,17 @@ async def stream_agent_dispatch(
                                 execution_time_ms=0,
                                 data=content,
                             ).to_ndjson()
+                            # 新增：持久化到 journal
+                            try:
+                                session_journal.write_tool_result(
+                                    family_id=family_id,
+                                    session_id=thread_id,
+                                    tool_id=backend_id,
+                                    success=True,
+                                    execution_time_ms=0,  # streaming path lacks timing metadata
+                                )
+                            except Exception as e:
+                                logger.warning("[agent_dispatch] journal write_tool_result failed: %s", e)
                             continue
 
                         if kind == "text":
