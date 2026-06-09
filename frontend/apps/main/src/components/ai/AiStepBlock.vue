@@ -68,7 +68,7 @@
 
           <!-- 参数显示：running 或展开时显示，done/error 默认隐藏 -->
           <Transition name="args-fade" mode="out-in">
-            <div v-if="status === 'running' || status === 'streaming' || (isExpanded && status !== 'done' && status !== 'error' && status !== 'failed')" class="tool-args" :class="{ 'args-running': status === 'running' }">
+            <div v-if="status === 'running' || (isExpanded && status !== 'done' && status !== 'error' && status !== 'failed')" class="tool-args" :class="{ 'args-running': status === 'running' }">
               <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
               <span class="args-value">{{ argsSummary }}</span>
             </div>

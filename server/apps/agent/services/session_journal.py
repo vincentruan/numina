@@ -245,7 +245,7 @@ class SessionJournalService:
             family_id=family_id,
             actor="assistant",
             visibility="public",
-            payload={"toolName": tool_name, "toolId": tool_id, "arguments": arguments},
+            payload={"tool": {"id": tool_id, "name": tool_name, "display_name": tool_name, "icon": "tool", "arguments": arguments}},
         )
         self.append_event(family_id, session_id, event)
 
@@ -266,10 +266,12 @@ class SessionJournalService:
             actor="tool",
             visibility="public",
             payload={
-                "toolId": tool_id,
-                "success": success,
-                "executionTimeMs": execution_time_ms,
-                "error": error,
+                "tool_id": tool_id,
+                "result": {
+                    "success": success,
+                    "execution_time_ms": execution_time_ms,
+                    "error": error,
+                },
             },
         )
         self.append_event(family_id, session_id, event)

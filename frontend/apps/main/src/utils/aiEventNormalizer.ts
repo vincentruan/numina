@@ -152,11 +152,12 @@ export function normalizeAgentEvent(
             s.type === 'tool_call' && s.id === toolId,
         )
         if (target) {
-          target.status = event.result?.success ? 'done' : 'error'
-          target.resultSummary = event.result?.summary
-          target.data = event.result?.data
-          target.error = event.result?.error
-          target.elapsedMs = event.result?.execution_time_ms
+          // Handle both nested (streaming) and flat (journal) formats
+          target.status = (event.result?.success ?? event.success ?? false) ? 'done' : 'error'
+          target.resultSummary = event.result?.summary ?? event.summary
+          target.data = event.result?.data ?? event.data
+          target.error = event.result?.error ?? event.error
+          target.elapsedMs = event.result?.execution_time_ms ?? event.executionTimeMs
           events.push({
             type: 'tool_result',
             toolCallId: toolId,
