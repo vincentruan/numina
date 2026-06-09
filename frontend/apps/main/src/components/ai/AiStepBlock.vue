@@ -67,14 +67,18 @@
           </div>
 
           <!-- 参数显示：running 或展开时显示，done/error 默认隐藏 -->
-          <div v-if="status === 'running' || isExpanded" class="tool-args" :class="{ 'args-running': status === 'running' }">
-            <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
-            <span class="args-value">{{ argsSummary }}</span>
-          </div>
-          <div v-if="status === 'done' || status === 'error'" class="tool-result" :class="resultClass">
-            <span class="result-icon">{{ resultStatusIcon }}</span>
-            <span class="result-text">{{ resultText }}</span>
-          </div>
+          <Transition name="args-fade" mode="out-in">
+            <div v-if="status === 'running' || status === 'streaming' || (isExpanded && status !== 'done' && status !== 'error' && status !== 'failed')" class="tool-args" :class="{ 'args-running': status === 'running' }">
+              <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
+              <span class="args-value">{{ argsSummary }}</span>
+            </div>
+          </Transition>
+          <Transition name="result-fade">
+            <div v-if="status === 'done' || status === 'error' || status === 'failed'" class="tool-result" :class="resultClass">
+              <span class="result-icon">{{ resultStatusIcon }}</span>
+              <span class="result-text">{{ resultText }}</span>
+            </div>
+          </Transition>
         </template>
 
         <!-- Subagent content -->
@@ -571,6 +575,38 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   opacity: 1;
 }
 
+/* Args fade transition */
+.args-fade-enter-active,
+.args-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.args-fade-enter-from,
+.args-fade-leave-to {
+  opacity: 0;
+}
+
+.args-fade-enter-to,
+.args-fade-leave-from {
+  opacity: 1;
+}
+
+/* Result fade transition */
+.result-fade-enter-active,
+.result-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.result-fade-enter-from,
+.result-fade-leave-to {
+  opacity: 0;
+}
+
+.result-fade-enter-to,
+.result-fade-leave-from {
+  opacity: 1;
+}
+
 /* Content transition */
 .step-content-enter-active,
 .step-content-leave-active {
@@ -656,6 +692,13 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   .tool-args.args-running {
     animation: none;
     background: var(--bg-secondary);
+  }
+
+  .args-fade-enter-active,
+  .args-fade-leave-active,
+  .result-fade-enter-active,
+  .result-fade-leave-active {
+    transition: none;
   }
 
   .step-content-enter-active,
