@@ -2432,6 +2432,17 @@ onUnmounted(() => {
   max-width: 86%;
 }
 
+.bubble.assistant {
+  max-width: 95%;  /* Wider than user bubbles for better readability */
+}
+
+/* Mobile: slightly narrower to avoid table overflow conflicts */
+@media (max-width: 428px) {
+  .bubble.assistant {
+    max-width: 90%;
+  }
+}
+
 .bubble-body {
   display: flex;
   flex-direction: column;
