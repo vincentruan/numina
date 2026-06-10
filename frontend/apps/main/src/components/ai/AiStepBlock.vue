@@ -50,33 +50,29 @@
       <div v-show="!canCollapse || isExpanded" :id="contentId" class="step-body">
         <!-- Reasoning content -->
         <div v-if="type === 'reasoning'" class="reasoning-content" :class="{ 'body-streaming': status === 'streaming' }">
-          {{ content }}
+          {{ filteredContent }}
         </div>
 
         <!-- Tool call content -->
         <template v-else-if="type === 'tool_call'">
-          <!-- Live status text (running only) -->
-          <div
-            v-if="status === 'running'"
-            class="tool-status-text"
-            aria-live="polite"
-          >
-            <Transition name="status-fade" mode="out-in">
-              <span :key="statusText" class="tool-status-inner">{{ statusText }}</span>
-            </Transition>
-          </div>
-
-          <!-- 参数显示：running 或展开时显示，done/error 默认隐藏 -->
-          <Transition name="args-fade" mode="out-in">
-            <div v-if="status === 'running' || (isExpanded && status !== 'done' && status !== 'error' && status !== 'failed')" class="tool-args" :class="{ 'args-running': status === 'running' }">
-              <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
-              <span class="args-value">{{ argsSummary }}</span>
-            </div>
-          </Transition>
-          <Transition name="result-fade">
-            <div v-if="status === 'done' || status === 'error' || status === 'failed'" class="tool-result" :class="resultClass">
-              <span class="result-icon">{{ resultStatusIcon }}</span>
-              <span class="result-text">{{ resultText }}</span>
+          <!-- 统一状态容器：使用 key 强制 Vue 执行 out-in 过渡，避免 running/done 重叠显示 -->
+          <Transition name="tool-state" mode="out-in">
+            <div :key="status" class="tool-state-container">
+              <!-- Running 状态：参数 + 进度文本 -->
+              <div v-if="status === 'running'" class="tool-running-state">
+                <div class="tool-status-text" aria-live="polite">
+                  <span class="tool-status-inner">{{ statusText }}</span>
+                </div>
+                <div class="tool-args args-running">
+                  <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
+                  <span class="args-value">{{ argsSummary }}</span>
+                </div>
+              </div>
+              <!-- Done/Error 状态：结果 -->
+              <div v-else-if="status === 'done' || status === 'error' || status === 'failed'" class="tool-result" :class="resultClass">
+                <span class="result-icon">{{ resultStatusIcon }}</span>
+                <span class="result-text">{{ resultText }}</span>
+              </div>
             </div>
           </Transition>
         </template>
@@ -118,6 +114,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useStepCollapse } from '@/composables/useStepCollapse'
 import { getToolDisplayInfo, formatArgsSummary } from '@/utils/toolDisplayMapping'
+import { filterAIContent } from '@/utils/contentFilter'
 
 const props = withDefaults(defineProps<{
   type: 'reasoning' | 'tool_call' | 'subagent' | 'artifact' | 'progress'
@@ -178,6 +175,12 @@ const { isExpanded, toggle } = useStepCollapse({
 
 // Active state (streaming or running)
 const isActive = computed(() => props.status === 'streaming' || props.status === 'running')
+
+// Filtered reasoning content — prevent prompt leakage in thinking output
+const filteredContent = computed(() => {
+  if (props.type !== 'reasoning' || !props.content) return ''
+  return filterAIContent(props.content)
+})
 
 // Duration ticker for active steps
 const tickMs = ref(0)
@@ -546,6 +549,34 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   word-break: break-word;
 }
 
+/* Tool state transition — unified out-in to prevent overlap */
+.tool-state-enter-active,
+.tool-state-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.tool-state-enter-from,
+.tool-state-leave-to {
+  opacity: 0;
+}
+
+.tool-state-enter-to,
+.tool-state-leave-from {
+  opacity: 1;
+}
+
+.tool-state-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tool-running-state {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 /* Tool status text */
 .tool-status-text {
   height: 20px;
@@ -557,54 +588,6 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
 
 .tool-status-inner {
   display: block;
-}
-
-/* Status text fade transition */
-.status-fade-enter-active,
-.status-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.status-fade-enter-from,
-.status-fade-leave-to {
-  opacity: 0;
-}
-
-.status-fade-enter-to,
-.status-fade-leave-from {
-  opacity: 1;
-}
-
-/* Args fade transition */
-.args-fade-enter-active,
-.args-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.args-fade-enter-from,
-.args-fade-leave-to {
-  opacity: 0;
-}
-
-.args-fade-enter-to,
-.args-fade-leave-from {
-  opacity: 1;
-}
-
-/* Result fade transition */
-.result-fade-enter-active,
-.result-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.result-fade-enter-from,
-.result-fade-leave-to {
-  opacity: 0;
-}
-
-.result-fade-enter-to,
-.result-fade-leave-from {
-  opacity: 1;
 }
 
 /* Content transition */
@@ -694,10 +677,8 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
     background: var(--bg-secondary);
   }
 
-  .args-fade-enter-active,
-  .args-fade-leave-active,
-  .result-fade-enter-active,
-  .result-fade-leave-active {
+  .tool-state-enter-active,
+  .tool-state-leave-active {
     transition: none;
   }
 
