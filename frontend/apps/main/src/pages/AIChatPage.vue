@@ -2470,13 +2470,15 @@ onUnmounted(() => {
 }
 
 .bubble.assistant {
-  max-width: 95%;  /* Wider than user bubbles for better readability */
+  max-width: 98%;  /* U4: Wider for Agent content (1.5x user bubble target) */
 }
 
-/* Mobile: slightly narrower to avoid table overflow conflicts */
+/* U4: Mobile (≤428px) — full-width with safe-area padding */
 @media (max-width: 428px) {
   .bubble.assistant {
-    max-width: 90%;
+    max-width: 100%;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }
 

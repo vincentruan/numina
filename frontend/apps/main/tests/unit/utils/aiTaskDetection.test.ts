@@ -57,40 +57,35 @@ describe('isLongTask', () => {
     })
   })
 
-  describe('step count threshold', () => {
+  describe('U4: tool_call threshold', () => {
+    // U4: threshold lowered — any tool_call triggers canvas
     it('returns false for 0 steps without deepThink', () => {
       expect(isLongTask([], false)).toBe(false)
     })
 
-    it('returns false for 1 step without deepThink', () => {
+    it('returns false for reasoning-only steps without deepThink', () => {
+      const steps = [createReasoningStep('r1'), createReasoningStep('r2')]
+      expect(isLongTask(steps, false)).toBe(false)
+    })
+
+    it('returns true for 1 tool_call step without deepThink', () => {
       const steps = [createToolCallStep('t1', 'get_assets')]
-      expect(isLongTask(steps, false)).toBe(false)
+      expect(isLongTask(steps, false)).toBe(true)
     })
 
-    it('returns false for 2 steps without deepThink', () => {
+    it('returns true for 2 tool_call steps without deepThink', () => {
       const steps = [
         createToolCallStep('t1', 'get_assets'),
         createToolCallStep('t2', 'get_liabilities'),
-      ]
-      expect(isLongTask(steps, false)).toBe(false)
-    })
-
-    it('returns true for 3 steps without deepThink', () => {
-      const steps = [
-        createToolCallStep('t1', 'get_assets'),
-        createToolCallStep('t2', 'get_liabilities'),
-        createToolCallStep('t3', 'get_members'),
       ]
       expect(isLongTask(steps, false)).toBe(true)
     })
 
-    it('returns true for 5 steps without deepThink', () => {
+    it('returns true for 3 tool_call steps without deepThink', () => {
       const steps = [
         createToolCallStep('t1', 'get_assets'),
         createToolCallStep('t2', 'get_liabilities'),
         createToolCallStep('t3', 'get_members'),
-        createToolCallStep('t4', 'calc_ratio'),
-        createToolCallStep('t5', 'calc_trend'),
       ]
       expect(isLongTask(steps, false)).toBe(true)
     })
@@ -117,17 +112,16 @@ describe('isLongTask', () => {
       expect(isLongTask(steps, false)).toBe(true)
     })
 
-    it('returns false for non-trigger tool with 2 steps', () => {
-      const steps = [
-        createToolCallStep('t1', 'get_assets'),
-        createToolCallStep('t2', 'get_liabilities'),
-      ]
-      expect(isLongTask(steps, false)).toBe(false)
+    // U4: Any tool_call triggers canvas, not just trigger tools
+    it('returns true for non-trigger tool with 1 step', () => {
+      const steps = [createToolCallStep('t1', 'get_assets')]
+      expect(isLongTask(steps, false)).toBe(true)
     })
   })
 
   describe('mixed step types', () => {
-    it('counts reasoning steps towards threshold', () => {
+    // U4: Any tool_call triggers canvas
+    it('returns true when tool_call present among reasoning steps', () => {
       const steps = [
         createReasoningStep('r1'),
         createToolCallStep('t1', 'get_assets'),
@@ -136,7 +130,12 @@ describe('isLongTask', () => {
       expect(isLongTask(steps, false)).toBe(true)
     })
 
-    it('counts artifact steps towards threshold', () => {
+    it('returns false for reasoning-only steps', () => {
+      const steps = [createReasoningStep('r1'), createReasoningStep('r2')]
+      expect(isLongTask(steps, false)).toBe(false)
+    })
+
+    it('returns true when tool_call present with artifact step', () => {
       const artifactStep: ProcessStep = {
         type: 'artifact',
         id: 'a1',
@@ -145,7 +144,6 @@ describe('isLongTask', () => {
       }
       const steps = [
         createToolCallStep('t1', 'get_assets'),
-        createToolCallStep('t2', 'get_liabilities'),
         artifactStep,
       ]
       expect(isLongTask(steps, false)).toBe(true)

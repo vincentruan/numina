@@ -18,10 +18,10 @@ export const DETECTION_THRESHOLDS = {
 }
 
 /**
- * Detection criteria for long task:
+ * Detection criteria for long task (U4: threshold lowered):
  * - hasDeepThink: Deep thinking mode enabled
- * - steps.length >= MIN_STEPS: At least 3 steps
- * - triggerToolNames: Special tools like generate_report
+ * - any tool_call step: At least one tool call triggers canvas
+ * - triggerToolNames: Special tools like generate_report (legacy, kept for compatibility)
  *
  * @param steps - Process steps from normalizer
  * @param hasDeepThink - Whether deep thinking mode is enabled
@@ -34,10 +34,10 @@ export function isLongTask(
   // Deep think always triggers canvas (immediate, no delay)
   if (hasDeepThink) return true
 
-  // Check step count threshold
-  if (steps.length >= DETECTION_THRESHOLDS.MIN_STEPS) return true
+  // U4: Any tool_call step triggers canvas (threshold lowered from >=3 steps)
+  if (steps.some(s => s.type === 'tool_call')) return true
 
-  // Check for trigger tool names (e.g., generate_report)
+  // Check for trigger tool names (e.g., generate_report) — legacy fallback
   for (const step of steps) {
     if (step.type === 'tool_call') {
       const name = step.name.toLowerCase()

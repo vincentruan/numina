@@ -62,8 +62,9 @@
               <div class="tool-status-text" aria-live="polite">
                 <span class="tool-status-inner">{{ statusText }}</span>
               </div>
-              <div class="tool-args args-running">
-                <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
+              <!-- U1: Args hidden by default in compressed mode, shown when user expands -->
+              <div v-if="!compressed || isExpanded" class="tool-args args-running">
+                <span class="args-label">{{ t('aiProcess.argsLabel') }}</span>
                 <span class="args-value">{{ argsSummary }}</span>
               </div>
             </div>
@@ -360,7 +361,22 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
+  /* U1: Interaction states for compressed tool_call cards */
+  transition: background 0.15s ease, transform 0.1s ease;
 }
+
+/* U1: Hover state — subtle background highlight */
+.ai-step-block--compressed .step-header[role='button']:hover {
+  background: rgba(var(--color-action-blue-rgb), 0.08);
+  border-radius: 4px;
+}
+
+/* U1: Press state — scale 0.98 effect */
+.ai-step-block--compressed .step-header[role='button']:active {
+  transform: scale(0.98);
+}
+
+/* U1: Focus state — use system default focus ring (already defined for focus-visible) */
 
 .ai-step-block--compressed .step-info {
   flex: 1;
