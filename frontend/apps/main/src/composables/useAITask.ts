@@ -274,6 +274,17 @@ export function useAITask(
         stopTimer()
         stopThinkTimer()
         // R6.4: do not collapse the console on failure
+        // Clear running state so UI shows failure cleanly (no stale "处理中" badges)
+        toolSteps.value = toolSteps.value.map((s) =>
+          s.status === 'running' ? { ...s, status: 'error' as const } : s,
+        )
+        currentToolLabel.value = null
+        // Mark all pending/active plan steps as done so progress bar stops
+        if (planSteps.value.length) {
+          planSteps.value = planSteps.value.map((s) =>
+            s.status === 'active' || s.status === 'pending' ? { ...s, status: 'done' as const } : s,
+          )
+        }
         // do NOT call onComplete() — task did not actually finish
         break
     }

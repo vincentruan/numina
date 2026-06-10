@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1
 LLM_FALLBACK_TIMEOUT_SECONDS = 30.0
+LLM_FALLBACK_MAX_RETRIES = 3  # Maximum retries for LLM fallback extraction
 
 # Regex patterns for structured data extraction (priority order)
 # 1. HTML comment: <!-- STRUCTURED_DATA ... -->
@@ -289,19 +290,57 @@ async def parse_capability_result(
     return None, "failed"
 
 
-def _build_extraction_prompt(capability: str, answer_text: str) -> str:
+def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int = 0) -> str:
+    """Build extraction prompt for LLM fallback.
+
+    For report capability, includes special handling for markdown tables.
+    """
     schema = CAPABILITY_SCHEMAS.get(capability, {})
     schema_str = json.dumps(schema, ensure_ascii=False, indent=2)
+
+    # Truncate long text to avoid token limits
     if capability == "report" and len(answer_text) > 3000:
         truncated = answer_text[:1500] + "\n...\n" + answer_text[-2000:]
     else:
         truncated = answer_text[:3000]
-    return (
+
+    # Base prompt
+    base_prompt = (
         f"以下是 {capability} 分析文本，请提取其中的结构化信息为 JSON。\n"
         f"Schema：\n{schema_str}\n\n"
         f"分析文本：\n{truncated}\n\n"
         f"仅输出 JSON，不输出任何解释。"
     )
+
+    # Enhanced prompt for report capability - handle markdown tables
+    if capability == "report":
+        retry_hint = ""
+        if retry_count > 0:
+            retry_hint = f"\n\n【注意：这是第{retry_count + 1}次尝试，前次提取失败，请务必仔细检查格式。】"
+
+        enhanced_prompt = (
+            f"请从以下分析文本中提取结构化的家庭资产报告 JSON。\n\n"
+            f"【输出要求】\n"
+            f"1. 仅输出 JSON，不要有任何解释或额外内容\n"
+            f"2. JSON 必须合法：无尾逗号、无注释、字符串正确转义\n"
+            f"3. overall_score 必须是 0-100 的整数\n\n"
+            f"【narrative 字段格式要求 - 必须遵守】\n"
+            f"narrative 字段必须使用**无序列表**格式，禁止使用 markdown 表格。\n\n"
+            f"正确格式示例（使用无序列表）：\n"
+            f'"narrative": "**活期存款占比过高**\\n\\n- 活期存款约¥870,000，仅覆盖约1.2个月支出\\n- 建议配置部分资金为低风险理财产品"\n\n'
+            f"错误格式（禁止）：\n"
+            f'"narrative": "| 活期存款 | ¥870,000 | ⚠️ 仅覆盖1.2个月支出 |"  ← 这是表格格式，禁止使用！\n\n'
+            f"【如果原文包含 markdown 表格，必须转换为列表】\n"
+            f"原文表格：| 活期存款 | ¥870,000 | ⚠️ 仅覆盖1.2个月支出 |\n"
+            f"转换为：- 活期存款约¥870,000，仅覆盖约1.2个月支出\n\n"
+            f"Schema：\n{schema_str}\n\n"
+            f"分析文本：\n{truncated}\n"
+            f"{retry_hint}\n\n"
+            f"仅输出 JSON。"
+        )
+        return enhanced_prompt
+
+    return base_prompt
 
 
 async def _llm_fallback_extract(
@@ -313,7 +352,9 @@ async def _llm_fallback_extract(
     """Use lightweight LLM to extract structured data from answer text.
 
     Picks family's cheapest active provider (by display_order ASC NULLS LAST),
-    calls LLM with extraction prompt under a 5s timeout, parses and validates.
+    calls LLM with extraction prompt under a 30s timeout, parses and validates.
+    Retries up to LLM_FALLBACK_MAX_RETRIES times on validation failure.
+
     Returns None on any failure.
     """
     configs = (
@@ -337,48 +378,85 @@ async def _llm_fallback_extract(
         logger.warning(f"[{capability}] LLM fallback: could not decrypt API key")
         return None
 
-    prompt = _build_extraction_prompt(capability, answer_text)
+    # Retry loop: attempt extraction up to LLM_FALLBACK_MAX_RETRIES times
+    for retry in range(LLM_FALLBACK_MAX_RETRIES):
+        prompt = _build_extraction_prompt(capability, answer_text, retry_count=retry)
 
-    try:
-        raw = await asyncio.wait_for(
-            _call_llm(
-                provider=config.provider,
-                api_key=api_key,
-                model_id=config.model_id or "gpt-4o-mini",
-                base_url=config.base_url,
-                prompt=prompt,
-            ),
-            timeout=LLM_FALLBACK_TIMEOUT_SECONDS,
-        )
-    except TimeoutError:
-        logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s")
-        return None
-    except Exception as e:
-        logger.warning(f"[{capability}] LLM fallback call failed: {e}")
-        return None
+        try:
+            raw = await asyncio.wait_for(
+                _call_llm(
+                    provider=config.provider,
+                    api_key=api_key,
+                    model_id=config.model_id or "gpt-4o-mini",
+                    base_url=config.base_url,
+                    prompt=prompt,
+                ),
+                timeout=LLM_FALLBACK_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})")
+            continue  # Retry on timeout
+        except Exception as e:
+            logger.warning(f"[{capability}] LLM fallback call failed: {e} (retry {retry + 1})")
+            continue  # Retry on error
 
-    if not raw:
-        return None
+        if not raw:
+            logger.warning(f"[{capability}] LLM fallback returned empty response (retry {retry + 1})")
+            continue
 
-    cleaned = _strip_markdown_fence(raw)
+        cleaned = _strip_markdown_fence(raw)
 
-    try:
-        # Use json_repair for robust parsing
-        data = repair_json(cleaned, return_objects=True)
-        # Type guard: repair_json may return str on partial failure
-        if not isinstance(data, (dict, list)):
-            logger.warning(f"[{capability}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list")
-            return None
-    except (ValueError, TypeError) as e:
-        logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e}")
-        return None
+        try:
+            # Use json_repair for robust parsing
+            data = repair_json(cleaned, return_objects=True)
+            # Type guard: repair_json may return str on partial failure
+            if not isinstance(data, (dict, list)):
+                logger.warning(f"[{capability}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list (retry {retry + 1})")
+                continue
+        except (ValueError, TypeError) as e:
+            logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e} (retry {retry + 1})")
+            continue
 
-    if _validate_json(data, capability):
-        logger.info(f"[{capability}] LLM fallback extraction succeeded")
-        return data
+        # Additional validation for report: check narrative fields don't contain markdown tables
+        if capability == "report" and isinstance(data, dict) and _contains_markdown_table(data):
+            logger.warning(f"[{capability}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})")
+            continue
 
-    logger.warning(f"[{capability}] LLM fallback JSON validation failed")
+        if _validate_json(data, capability):
+            logger.info(f"[{capability}] LLM fallback extraction succeeded on retry {retry + 1}")
+            return data
+
+        logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
+
+    logger.warning(f"[{capability}] LLM fallback exhausted {LLM_FALLBACK_MAX_RETRIES} retries, giving up")
     return None
+
+
+def _contains_markdown_table(data: dict) -> bool:
+    """Check if narrative fields contain markdown table patterns.
+
+    Returns True if any narrative field contains table-like patterns:
+    - Pipe-separated content: | cell1 | cell2 | cell3 |
+    - Multiple pipe chars in a single line
+    """
+    table_pattern = re.compile(r'\|[^\n]+\|')
+
+    # Check all narrative fields in report structure
+    sections = ["net_worth_health", "allocation_analysis", "liability_pressure", "asset_efficiency"]
+    for section in sections:
+        if section in data and isinstance(data[section], dict):
+            narrative = data[section].get("narrative", "")
+            if narrative and table_pattern.search(narrative):
+                logger.debug(f"Found markdown table in {section}.narrative")
+                return True
+
+    # Also check summary field
+    summary = data.get("summary", "")
+    if summary and table_pattern.search(summary):
+        logger.debug("Found markdown table in summary")
+        return True
+
+    return False
 
 
 def _strip_markdown_fence(text: str) -> str:

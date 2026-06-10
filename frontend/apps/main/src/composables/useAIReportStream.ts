@@ -1,6 +1,6 @@
 import { ref, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { refreshTokenIfNeeded } from '@numina/auth'
+import { refreshTokenIfNeeded } from '@/api'
 
 export type StreamStatus = 'idle' | 'connecting' | 'analyzing' | 'completed' | 'error'
 
