@@ -2145,7 +2145,7 @@ export default {
     title: '家庭资产体检',
     noReport: '暂无体检报告',
     startAnalyze: 'AI 将综合分析您的资产配置、负债压力和资产效率',
-    generating: '🤖 正在生成新报告，完成后将展示最新结果',
+    generating: '正在生成新报告，完成后将展示最新结果',
     scoreUnit: '分',
     overallScore: '综合健康评分',
     generatedAt: '生成时间：{time}',

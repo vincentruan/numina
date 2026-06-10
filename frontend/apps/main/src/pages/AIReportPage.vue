@@ -31,6 +31,7 @@
 
     <!-- Generating placeholder (shown during regeneration when old report exists) -->
     <div v-else-if="currentReport && (taskStatus === 'running' || taskStatus === 'post_processing')" class="generating-placeholder">
+      <ProcessingIcon :active="true" class="generating-icon" />
       <p class="generating-text">{{ t('aiReport.generating') }}</p>
     </div>
 
@@ -173,6 +174,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import ProcessingIcon from '@/components/common/ProcessingIcon.vue'
 
 const SUMMARY_PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
@@ -441,10 +443,51 @@ onMounted(async () => {
 .generating-placeholder {
   padding: 40px 16px;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.generating-icon {
+  --icon-size: 32px;
 }
 .generating-text {
-  font-size: 13px;
-  color: var(--text-secondary);
+  font-size: 14px;
   margin: 0;
+  color: transparent;
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--van-primary-color) 50%,
+    var(--text-secondary) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  50% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 100% 0;
+  }
+}
+
+[data-theme='dark'] .generating-text {
+  background: linear-gradient(
+    90deg,
+    var(--text-secondary) 0%,
+    var(--color-coral) 50%,
+    var(--text-secondary) 100%
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  background-size: 200% 100%;
 }
 </style>

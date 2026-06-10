@@ -404,6 +404,7 @@ export function useAITask(
     answerContent.value = ''
     thinkDone.value = false
     thinkSeconds.value = 0
+    elapsedSeconds.value = 0 // Explicit reset before startTimer
     errorCode.value = null
     phase.value = 'connecting'
     status.value = 'running'
