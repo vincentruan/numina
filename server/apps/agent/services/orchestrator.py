@@ -19,7 +19,7 @@ import uuid
 from collections.abc import AsyncGenerator
 
 from apps.agent.app.config import settings
-from apps.agent.core.backend_client import BackendClient, classify_error_type
+from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.schemas.policy import CapabilityPolicy
 from apps.agent.schemas.response import AgentResponse
@@ -654,7 +654,9 @@ class Orchestrator:
             data = chunk.data or {}
             tool_name = data.get("tool_name", "")
             args = data.get("args") or {}
-            tool_call_id = str(data.get("tool_call_id") or "")
+            raw_tool_call_id = data.get("tool_call_id")
+            # Generate UUID if tool_call_id missing to prevent empty-string collision
+            tool_call_id = str(raw_tool_call_id) if raw_tool_call_id else str(uuid.uuid4())
             if data.get("internal"):
                 evt = builder.tool_call(
                     tool_name=tool_name,
@@ -672,10 +674,9 @@ class Orchestrator:
                     tool_type=data.get("tool_type") or "unknown",
                 )
             backend_id = evt.payload["tool"]["id"]
-            if tool_call_id:
-                tool_call_id_map[tool_call_id] = backend_id
-            yield evt.to_ndjson()
-            # 新增：持久化到 journal
+            # Always map tool_call_id (now always a valid UUID) to backend_id
+            tool_call_id_map[tool_call_id] = backend_id
+            # Journal write BEFORE yield to ensure persistence on disconnect
             try:
                 session_journal.write_tool_call(
                     family_id=family_id,
@@ -686,19 +687,16 @@ class Orchestrator:
                 )
             except Exception as e:
                 logger.warning("[orchestrator] journal write_tool_call failed: %s", e)
+            yield evt.to_ndjson()
             return
 
         if chunk.type == "tool_result":
             data = chunk.data or {}
-            provider_id = str(data.get("tool_call_id") or "")
+            raw_provider_id = data.get("tool_call_id")
+            # Generate UUID if tool_call_id missing to match tool_call behavior
+            provider_id = str(raw_provider_id) if raw_provider_id else str(uuid.uuid4())
             backend_id = tool_call_id_map.get(provider_id, provider_id)
-            yield builder.tool_result(
-                tool_id=backend_id,
-                success=True,
-                execution_time_ms=0,
-                data=data.get("content"),
-            ).to_ndjson()
-            # 新增：持久化到 journal
+            # Journal write BEFORE yield to ensure persistence on disconnect
             try:
                 session_journal.write_tool_result(
                     family_id=family_id,
@@ -709,6 +707,12 @@ class Orchestrator:
                 )
             except Exception as e:
                 logger.warning("[orchestrator] journal write_tool_result failed: %s", e)
+            yield builder.tool_result(
+                tool_id=backend_id,
+                success=True,
+                execution_time_ms=0,
+                data=data.get("content"),
+            ).to_ndjson()
             return
 
         if chunk.type == "plan_update":

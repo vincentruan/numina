@@ -580,12 +580,12 @@ async def stream_agent_dispatch(
                                     icon=ticon,
                                     tool_type=ttype,
                                 )
-                                # Remember the mapping so .result can target this step.
+                                # Generate UUID if call["id"] missing to prevent empty-string collision
+                                call_id = str(call["id"]) if call["id"] else str(uuid.uuid4())
                                 backend_id = evt.payload["tool"]["id"]
-                                if call["id"]:
-                                    tool_call_id_map[str(call["id"])] = backend_id
-                                yield evt.to_ndjson()
-                                # 新增：持久化到 journal
+                                # Always map call_id (now always a valid UUID) to backend_id
+                                tool_call_id_map[call_id] = backend_id
+                                # Journal write BEFORE yield to ensure persistence on disconnect
                                 try:
                                     session_journal.write_tool_call(
                                         family_id=family_id,
@@ -596,21 +596,16 @@ async def stream_agent_dispatch(
                                     )
                                 except Exception as e:
                                     logger.warning("[agent_dispatch] journal write_tool_call failed: %s", e)
+                                yield evt.to_ndjson()
                             continue
 
                         if kind == "tool_result":
                             provider_id, content = _extract_tool_result(msg)
+                            # Generate UUID if provider_id missing to match tool_call behavior
+                            if not provider_id:
+                                provider_id = str(uuid.uuid4())
                             backend_id = tool_call_id_map.get(provider_id, provider_id)
-                            # Tool messages from langchain don't carry success/timing —
-                            # we report success when content is present, no exception
-                            # bubbled up; failures arrive via the surrounding except.
-                            yield builder_events.tool_result(
-                                tool_id=backend_id,
-                                success=True,
-                                execution_time_ms=0,
-                                data=content,
-                            ).to_ndjson()
-                            # 新增：持久化到 journal
+                            # Journal write BEFORE yield to ensure persistence on disconnect
                             try:
                                 session_journal.write_tool_result(
                                     family_id=family_id,
@@ -621,6 +616,15 @@ async def stream_agent_dispatch(
                                 )
                             except Exception as e:
                                 logger.warning("[agent_dispatch] journal write_tool_result failed: %s", e)
+                            # Tool messages from langchain don't carry success/timing —
+                            # we report success when content is present, no exception
+                            # bubbled up; failures arrive via the surrounding except.
+                            yield builder_events.tool_result(
+                                tool_id=backend_id,
+                                success=True,
+                                execution_time_ms=0,
+                                data=content,
+                            ).to_ndjson()
                             continue
 
                         if kind == "text":
