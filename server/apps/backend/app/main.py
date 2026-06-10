@@ -37,7 +37,6 @@ from apps.backend.app.models.ai_disposal_suggestion import (
 )
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak
-from apps.backend.app.models.ai_ws_ticket import AIWsTicket
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.blind_box_config import BlindBoxConfig
 from apps.backend.app.models.blind_box_draw import BlindBoxDraw

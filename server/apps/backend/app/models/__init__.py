@@ -25,7 +25,6 @@ from apps.backend.app.models.ai_provider_config import (
 from apps.backend.app.models.ai_report import AIReport
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak
 from apps.backend.app.models.ai_task import AITask
-from apps.backend.app.models.ai_ws_ticket import AIWsTicket
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.asset_lifecycle_event import (
     AssetLifecycleEvent,
