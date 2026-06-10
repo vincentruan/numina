@@ -276,6 +276,80 @@ class SessionJournalService:
         )
         self.append_event(family_id, session_id, event)
 
+    def write_plan_update(
+        self,
+        *,
+        family_id: str,
+        session_id: str,
+        todos: list[dict[str, Any]],
+    ) -> None:
+        """Write plan.update event for DeerFlow todo/plan progress.
+
+        Called when DeerFlow's write_todos tool updates ThreadState.todos.
+        Each todo has: id, content, status (pending/active/done/error).
+
+        Args:
+            family_id: Family identifier
+            session_id: Session identifier
+            todos: List of todo items from DeerFlow ThreadState.todos
+        """
+        event = _make_event(
+            "plan.update",
+            session_id=session_id,
+            family_id=family_id,
+            actor="assistant",
+            visibility="public",
+            payload={"todos": todos},
+        )
+        self.append_event(family_id, session_id, event)
+
+    def write_subagent_update(
+        self,
+        *,
+        family_id: str,
+        session_id: str,
+        task_id: str,
+        status: str,
+        title: str | None = None,
+        description: str | None = None,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Write subagent.update event for DeerFlow task delegation progress.
+
+        Mirrors DeerFlow's StreamWriter custom events (task_started, task_running,
+        task_completed, task_failed, task_cancelled, task_timed_out) consolidated
+        into a single event type for JSONL replay simplicity.
+
+        Args:
+            family_id: Family identifier
+            session_id: Session identifier
+            task_id: Unique task identifier from DeerFlow task delegation
+            status: "running" | "done" | "failed" | "cancelled" | "timed_out"
+            title: Human-readable task title
+            description: Progress description (shown during running state)
+            result: Final result text (shown when status=done)
+            error: Error message (shown when status=failed/cancelled/timed_out)
+        """
+        event = _make_event(
+            "subagent.update",
+            session_id=session_id,
+            family_id=family_id,
+            actor="assistant",
+            visibility="public",
+            payload={
+                "subagent": {
+                    "taskId": task_id,
+                    "status": status,
+                    "title": title,
+                    "description": description,
+                    "result": result,
+                    "error": error,
+                },
+            },
+        )
+        self.append_event(family_id, session_id, event)
+
     def write_session_end(
         self,
         *,

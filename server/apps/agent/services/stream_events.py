@@ -238,6 +238,43 @@ class EventStreamBuilder:
         ]
         return self._event("plan.update", {"todos": normalized})
 
+    def subagent_update(
+        self,
+        task_id: str,
+        status: str,
+        title: str | None = None,
+        description: str | None = None,
+        result: str | None = None,
+        error: str | None = None,
+    ) -> StreamEvent:
+        """Emit subagent.update event for DeerFlow task delegation progress.
+
+        Mirrors DeerFlow's StreamWriter custom events (task_started, task_running,
+        task_completed, task_failed) but consolidated into a single subagent.update
+        type for frontend normalization simplicity.
+
+        Args:
+            task_id: Unique task identifier from DeerFlow task delegation
+            status: "running" | "done" | "failed"
+            title: Human-readable task title
+            description: Progress description (shown during running state)
+            result: Final result text (shown when status=done)
+            error: Error message (shown when status=failed)
+        """
+        return self._event(
+            "subagent.update",
+            {
+                "subagent": {
+                    "taskId": task_id,
+                    "status": status,
+                    "title": title,
+                    "description": description,
+                    "result": result,
+                    "error": error,
+                }
+            },
+        )
+
     def tool_progress(self, tool_id: str, message: str) -> StreamEvent:
         return self._event("tool.progress", {"tool_id": tool_id, "message": message})
 
