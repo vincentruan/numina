@@ -66,6 +66,19 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
 - **Past solutions** — `docs/solutions/` contains documented fixes for recurring problems. Check before debugging known issue categories. Subdirectories: `architecture-patterns/` (e.g. MCP chat adapter, tenant isolation, three-state circuit breaker), `best-practices/` (e.g. Redis fail-fast strategy, cache key granularity, Pydantic validation), `workflow-issues/` (e.g. backend module extraction workflow), `integration-issues/` (e.g. DeerFlow silent fallback), `test-failures/`, `ui-bugs/`, `developer-experience/`.
 
+## CodeGraph
+
+Prefer CodeGraph MCP (`codegraph_*` tools) over grep/read for structural code queries. See [`codegraph-structural-code-search-2026-06-10.md`](./docs/solutions/developer-experience/codegraph-structural-code-search-2026-06-10.md) for setup and edge cases.
+
+| Query | Tool | Example |
+|-------|------|---------|
+| "Where is X defined?" | `codegraph_search` | Find symbol by name |
+| "What calls Y?" | `codegraph_callers` | Trace upstream deps |
+| "How does X reach Y?" | `codegraph_trace` | Full call path in one call |
+| "What breaks if Z changes?" | `codegraph_impact` | Change impact analysis |
+| "Context for a task" | `codegraph_context` | Search + callers + callees |
+| "Multiple symbols' source" | `codegraph_explore` | Batch retrieval |
+
 ## Module Documentation
 
 For module-specific dev commands, conventions, and patterns:
@@ -147,4 +160,3 @@ docker-compose down           # Stop all
 # Access at http://localhost:8080
 ```
 
-**⚠️ 重建前端后必须重载 nginx**：容器重建后 IP 变化，nginx worker 缓存旧 IP 会导致 502。详见 [`DEPLOYMENT.md`](./DEPLOYMENT.md) §重建单个服务。
