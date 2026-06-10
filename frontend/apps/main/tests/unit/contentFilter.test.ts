@@ -374,4 +374,40 @@ describe('filterAIContent', () => {
       expect(() => filterAIContentCore(input)).not.toThrow()
     })
   })
+
+  describe('Date marker patterns', () => {
+    it('removes date marker line "YYYY-MM-DD, Weekday"', () => {
+      const input = '问题内容\n2026-06-10, Wednesday\n回答内容'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('2026-06-10')
+      expect(output).not.toContain('Wednesday')
+      expect(output).toContain('问题内容')
+      expect(output).toContain('回答内容')
+    })
+
+    it('removes date marker without surrounding content', () => {
+      const input = '2026-06-10, Wednesday'
+      const output = filterAIContent(input)
+      expect(output).toBe('')
+    })
+
+    it('removes date marker in various weekday formats', () => {
+      const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+      for (const day of weekdays) {
+        const input = `2025-01-15, ${day}\n正文`
+        const output = filterAIContent(input)
+        expect(output).not.toContain(day)
+        expect(output).toBe('正文')
+      }
+    })
+
+    it('handles date marker embedded in text', () => {
+      const input = '开头 2026-06-10, Wednesday 结尾'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('2026-06-10')
+      expect(output).not.toContain('Wednesday')
+      expect(output).toContain('开头')
+      expect(output).toContain('结尾')
+    })
+  })
 })

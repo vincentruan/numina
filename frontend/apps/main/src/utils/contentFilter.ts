@@ -61,7 +61,7 @@ const FORBIDDEN_PATTERNS = [
   /^Agent.*执行.*$/gm,
   /^智能体.*执行.*$/gm,
 
-  // 新增：Prompt/System 内容泄漏模式
+  // Prompt/System 内容泄漏模式
   /^Prompt[：:].*$/gm,
   /^System[：:].*$/gm,
   /^提示词[：:].*$/gm,
@@ -69,16 +69,35 @@ const FORBIDDEN_PATTERNS = [
   /^用户输入[：:].*$/gm,
   /^当前对话[：:].*$/gm,
 
-  // 新增：工具调用内部标识
+  // 工具调用内部标识
   /^调用工具[：:].*$/gm,
   /^正在调用[：:].*$/gm,
   /^工具返回[：:].*$/gm,
 
-  // 新增：MCP 内部信息
+  // MCP 内部信息
   /^MCP.*$/gm,
   /^正在获取.*$/gm,
   /^获取家庭.*$/gm,
   /^查询家庭.*$/gm,
+
+  // DeerFlow Memory 系统内容泄漏（英文格式）
+  /^Personal[：:][\s\S]*?(?=^Current Focus|^History|^Facts|$)/gim,
+  /^Current Focus[：:][\s\S]*?(?=^History|^Facts|$)/gim,
+  /^History[：:][\s\S]*?(?=^Facts|$)/gim,
+  /^Facts[：:][\s\S]*?(?=^[^\[]|$)/gim,
+
+  // DeerFlow Memory 事实条目格式
+  /^\[context\s*\|[^\]]*\][^\n]*$/gm,
+  /^\[goal\s*\|[^\]]*\][^\n]*$/gm,
+  /^\[correction\s*\|[^\]]*\][^\n]*$/gm,
+  /^\[preference\s*\|[^\]]*\][^\n]*$/gm,
+
+  // 联网搜索启用提示（整块过滤）
+  /联网搜索\n\n用户已启用联网搜索[\s\S]*?你可以调用搜索工具获取[^\n]*\n/gm,
+  /联网搜索\n\n用户已启用联网搜索[\s\S]*?\n\n/gm,
+
+  // 日期标记行（内部时间戳，宽松匹配）
+  /20\d{2}-\d{2}-\d{2},\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/gi,
 
   // 内部标识符泄漏（行首或前导空白，大小写不敏感）
   /^(?:\s*)tenantId\s*[:=].*$/gim,
