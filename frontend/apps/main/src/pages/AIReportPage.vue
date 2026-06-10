@@ -35,8 +35,25 @@
       <p class="generating-text">{{ t('aiReport.generating') }}</p>
     </div>
 
-    <!-- Report content (hidden during generation) -->
-    <template v-else-if="currentReport && taskStatus !== 'running' && taskStatus !== 'post_processing'">
+    <!-- Failed state -->
+    <div v-else-if="taskStatus === 'failed'" class="failed-placeholder">
+      <van-icon name="warning-o" size="48" class="failed-icon" />
+      <p class="failed-text">
+        {{ errorCode === 'extraction_failed'
+          ? t('aiReport.extractionFailed')
+          : errorCode === 'structured_write_failed'
+          ? t('aiReport.writeFailed')
+          : errorCode === 'post_processing_timeout'
+          ? t('aiReport.timeoutFailed')
+          : t('toast.aiGenerateFailed') }}
+      </p>
+      <van-button type="primary" size="small" :loading="taskStatus === 'running'" @click="onGenerate">
+        {{ t('aiTask.retryBtn') }}
+      </van-button>
+    </div>
+
+    <!-- Report content (hidden during generation and failure) -->
+    <template v-else-if="currentReport && taskStatus !== 'running' && taskStatus !== 'post_processing' && taskStatus !== 'failed'">
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">

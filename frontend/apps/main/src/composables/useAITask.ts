@@ -388,6 +388,11 @@ export function useAITask(
           }
           phase.value = null
           stopThinkTimer()
+          // Clear running state so UI shows failure cleanly
+          currentToolLabel.value = null
+          toolSteps.value = toolSteps.value.map((s) =>
+            s.status === 'running' || s.status === 'pending' ? { ...s, status: 'error' as const } : s,
+          )
           return
         }
         // running / post_processing → keep polling
@@ -402,6 +407,11 @@ export function useAITask(
     status.value = 'failed'
     errorCode.value = errorCode.value ?? 'post_processing_timeout'
     phase.value = null
+    // Clear running state so UI shows failure cleanly
+    currentToolLabel.value = null
+    toolSteps.value = toolSteps.value.map((s) =>
+      s.status === 'running' || s.status === 'pending' ? { ...s, status: 'error' as const } : s,
+    )
   }
 
   // ── Start stream ───────────────────────────────────────────────────────────

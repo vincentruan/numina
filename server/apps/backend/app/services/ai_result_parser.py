@@ -316,7 +316,7 @@ def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int
     if capability == "report":
         retry_hint = ""
         if retry_count > 0:
-            retry_hint = f"\n\n【注意：这是第{retry_count + 1}次尝试，前次提取失败，请务必仔细检查格式。】"
+            retry_hint = f"\n\n【注意：这是第{retry_count + 1}次尝试，前次提取失败。如果之前因为表格格式失败，这次必须将表格转换为列表格式。】"
 
         enhanced_prompt = (
             f"请从以下分析文本中提取结构化的家庭资产报告 JSON。\n\n"
@@ -324,15 +324,32 @@ def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int
             f"1. 仅输出 JSON，不要有任何解释或额外内容\n"
             f"2. JSON 必须合法：无尾逗号、无注释、字符串正确转义\n"
             f"3. overall_score 必须是 0-100 的整数\n\n"
-            f"【narrative 字段格式要求 - 必须遵守】\n"
-            f"narrative 字段必须使用**无序列表**格式，禁止使用 markdown 表格。\n\n"
-            f"正确格式示例（使用无序列表）：\n"
-            f'"narrative": "**活期存款占比过高**\\n\\n- 活期存款约¥870,000，仅覆盖约1.2个月支出\\n- 建议配置部分资金为低风险理财产品"\n\n'
-            f"错误格式（禁止）：\n"
-            f'"narrative": "| 活期存款 | ¥870,000 | ⚠️ 仅覆盖1.2个月支出 |"  ← 这是表格格式，禁止使用！\n\n'
-            f"【如果原文包含 markdown 表格，必须转换为列表】\n"
+            f"## ⚠️⚠️⚠️ 禁止使用 Markdown 表格 ⚠️⚠️⚠️\n\n"
+            f"narrative 字段**绝对禁止**使用 markdown 表格格式。表格格式会导致 JSON 解析失败。\n"
+            f"必须使用**无序列表**格式。以下是多个表格 → 列表转换示例：\n\n"
+            f"【示例1：单行表格转换】\n"
             f"原文表格：| 活期存款 | ¥870,000 | ⚠️ 仅覆盖1.2个月支出 |\n"
             f"转换为：- 活期存款约¥870,000，仅覆盖约1.2个月支出\n\n"
+            f"【示例2：多行表格转换】\n"
+            f"原文表格：\n"
+            f"| 资产类型 | 金额 | 风险等级 |\n"
+            f"| 活期存款 | ¥500,000 | 低 |\n"
+            f"| 定期存款 | ¥300,000 | 低 |\n"
+            f"转换为：\n"
+            f"- 活期存款¥500,000，风险等级低\n"
+            f"- 定期存款¥300,000，风险等级低\n\n"
+            f"【示例3：复杂表格转换】\n"
+            f"原文表格：\n"
+            f"| 项目 | 当前值 | 建议值 | 状态 |\n"
+            f"| 流动性覆盖率 | 1.2个月 | 3-6个月 | ⚠️ 不足 |\n"
+            f"| 负债收入比 | 45% | <40% | ⚠️ 偏高 |\n"
+            f"转换为：\n"
+            f"- 流动性覆盖率1.2个月，建议3-6个月，状态不足\n"
+            f"- 负债收入比45%，建议值小于40%，状态偏高\n\n"
+            f"【正确格式示例（使用无序列表）】\n"
+            f'"narrative": "**活期存款占比过高**\\n\\n- 活期存款约¥870,000，仅覆盖约1.2个月支出\\n- 建议配置部分资金为低风险理财产品"\n\n'
+            f"【错误格式（绝对禁止）】\n"
+            f'"narrative": "| 活期存款 | ¥870,000 | ⚠️ 仅覆盖1.2个月支出 |"  ← ⚠️⚠️⚠️ 这是表格格式，会导致解析失败！\n\n'
             f"Schema：\n{schema_str}\n\n"
             f"分析文本：\n{truncated}\n"
             f"{retry_hint}\n\n"
@@ -341,6 +358,76 @@ def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int
         return enhanced_prompt
 
     return base_prompt
+
+
+def _build_extraction_prompt_with_feedback(
+    capability: str,
+    answer_text: str,
+    retry_count: int = 0,
+    failure_reasons: list[str] | None = None,
+) -> str:
+    """Build extraction prompt with progressive failure feedback.
+
+    Enhances the base prompt with failure history to help the LLM avoid
+    repeating the same mistakes on retries.
+    """
+    # Build the base prompt first
+    base_prompt = _build_extraction_prompt(capability, answer_text, retry_count=retry_count)
+
+    # If no failures or first attempt, return base prompt
+    if retry_count == 0 or not failure_reasons:
+        return base_prompt
+
+    # Build failure history section
+    failure_history = "\n\n【历史失败记录 - 请避免重复错误】\n"
+    for i, reason in enumerate(failure_reasons, 1):
+        failure_history += f"第{i}次失败：{_format_failure_reason(reason)}\n"
+
+    # Add special warning for markdown table failures
+    if "markdown_table_in_narrative" in failure_reasons:
+        failure_history += (
+            "\n⚠️ 特别注意：如果之前因为 markdown 表格失败，这次必须将表格转换为列表！\n"
+            "表格格式示例（禁止）：| 项目 | 金额 |\n"
+            "列表格式示例（正确）：- 项目：金额"
+        )
+
+    # Insert failure history before the final "仅输出 JSON" instruction
+    if capability == "report":
+        # For report, insert before the retry hint section
+        if "【注意：这是第" in base_prompt:
+            # Insert after retry hint
+            parts = base_prompt.split("仅输出 JSON。")
+            return parts[0] + failure_history + "\n\n仅输出 JSON。"
+        else:
+            # Insert before final instruction
+            parts = base_prompt.split("仅输出 JSON。")
+            return parts[0] + failure_history + "\n\n仅输出 JSON。"
+    else:
+        # For other capabilities, append failure history
+        return base_prompt + failure_history
+
+
+def _format_failure_reason(reason: str) -> str:
+    """Convert internal failure reason codes to user-friendly Chinese messages."""
+    if reason == "timeout":
+        return "LLM 调用超时"
+    elif reason.startswith("call_failed:"):
+        error_type = reason.split(": ", 1)[1] if ": " in reason else reason
+        return f"LLM 调用失败（{error_type}）"
+    elif reason == "empty_response":
+        return "LLM 返回空响应"
+    elif reason.startswith("repair_json_returned_"):
+        type_name = reason.replace("repair_json_returned_", "")
+        return f"JSON 解析返回了错误类型（{type_name}），期望对象或数组"
+    elif reason.startswith("json_repair_failed:"):
+        error_msg = reason.split(": ", 1)[1] if ": " in reason else reason
+        return f"JSON 解析失败：{error_msg}"
+    elif reason == "markdown_table_in_narrative":
+        return "narrative 字段包含了 markdown 表格格式，这是禁止的！必须使用无序列表格式"
+    elif reason == "schema_validation_failed":
+        return "JSON 结构验证失败，缺少必需字段或字段类型错误"
+    else:
+        return f"未知错误：{reason}"
 
 
 async def _llm_fallback_extract(
@@ -378,9 +465,14 @@ async def _llm_fallback_extract(
         logger.warning(f"[{capability}] LLM fallback: could not decrypt API key")
         return None
 
+    # Track failure reasons for feedback in retries
+    failure_reasons: list[str] = []
+
     # Retry loop: attempt extraction up to LLM_FALLBACK_MAX_RETRIES times
     for retry in range(LLM_FALLBACK_MAX_RETRIES):
-        prompt = _build_extraction_prompt(capability, answer_text, retry_count=retry)
+        prompt = _build_extraction_prompt_with_feedback(
+            capability, answer_text, retry_count=retry, failure_reasons=failure_reasons
+        )
 
         try:
             raw = await asyncio.wait_for(
@@ -394,13 +486,16 @@ async def _llm_fallback_extract(
                 timeout=LLM_FALLBACK_TIMEOUT_SECONDS,
             )
         except TimeoutError:
+            failure_reasons.append("timeout")
             logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})")
             continue  # Retry on timeout
         except Exception as e:
+            failure_reasons.append(f"call_failed: {type(e).__name__}")
             logger.warning(f"[{capability}] LLM fallback call failed: {e} (retry {retry + 1})")
             continue  # Retry on error
 
         if not raw:
+            failure_reasons.append("empty_response")
             logger.warning(f"[{capability}] LLM fallback returned empty response (retry {retry + 1})")
             continue
 
@@ -411,14 +506,17 @@ async def _llm_fallback_extract(
             data = repair_json(cleaned, return_objects=True)
             # Type guard: repair_json may return str on partial failure
             if not isinstance(data, (dict, list)):
+                failure_reasons.append(f"repair_json_returned_{type(data).__name__}")
                 logger.warning(f"[{capability}] LLM fallback repair_json returned {type(data).__name__}, expected dict/list (retry {retry + 1})")
                 continue
         except (ValueError, TypeError) as e:
+            failure_reasons.append(f"json_repair_failed: {e}")
             logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e} (retry {retry + 1})")
             continue
 
         # Additional validation for report: check narrative fields don't contain markdown tables
         if capability == "report" and isinstance(data, dict) and _contains_markdown_table(data):
+            failure_reasons.append("markdown_table_in_narrative")
             logger.warning(f"[{capability}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})")
             continue
 
@@ -426,6 +524,7 @@ async def _llm_fallback_extract(
             logger.info(f"[{capability}] LLM fallback extraction succeeded on retry {retry + 1}")
             return data
 
+        failure_reasons.append("schema_validation_failed")
         logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
 
     logger.warning(f"[{capability}] LLM fallback exhausted {LLM_FALLBACK_MAX_RETRIES} retries, giving up")
@@ -436,25 +535,35 @@ def _contains_markdown_table(data: dict) -> bool:
     """Check if narrative fields contain markdown table patterns.
 
     Returns True if any narrative field contains table-like patterns:
-    - Pipe-separated content: | cell1 | cell2 | cell3 |
-    - Multiple pipe chars in a single line
+    - Full table rows: | cell1 | cell2 | cell3 |
+    - Partial tables without trailing pipe: | cell1 | cell2
+    - Tables without leading pipe: cell1 | cell2 | cell3
     """
-    table_pattern = re.compile(r'\|[^\n]+\|')
+    # Multiple patterns to catch various table formats
+    table_patterns = [
+        re.compile(r'\|[^\n]+\|[^\n]*\|'),  # Full table row (at least 2 columns)
+        re.compile(r'\|[^\|]+\|[^\|]+'),    # Partial table without trailing |
+        re.compile(r'[^\|]*\|[^\|]+\|[^\|]*'),  # Table without leading |
+    ]
 
     # Check all narrative fields in report structure
     sections = ["net_worth_health", "allocation_analysis", "liability_pressure", "asset_efficiency"]
     for section in sections:
         if section in data and isinstance(data[section], dict):
             narrative = data[section].get("narrative", "")
-            if narrative and table_pattern.search(narrative):
-                logger.debug(f"Found markdown table in {section}.narrative")
-                return True
+            if narrative:
+                for pattern in table_patterns:
+                    if pattern.search(narrative):
+                        logger.debug(f"Found markdown table in {section}.narrative (pattern: {pattern.pattern})")
+                        return True
 
     # Also check summary field
     summary = data.get("summary", "")
-    if summary and table_pattern.search(summary):
-        logger.debug("Found markdown table in summary")
-        return True
+    if summary:
+        for pattern in table_patterns:
+            if pattern.search(summary):
+                logger.debug(f"Found markdown table in summary (pattern: {pattern.pattern})")
+                return True
 
     return False
 

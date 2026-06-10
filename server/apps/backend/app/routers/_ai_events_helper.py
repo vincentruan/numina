@@ -151,9 +151,21 @@ def _promote_next(family_id: int, db: Session) -> None:
         AITaskService.promote_queued_task(next_task.id, db)
 
 
-def _error_event(code: str) -> bytes:
+def _error_event(code: str, message: str | None = None) -> bytes:
+    """Create a capability.error NDJSON event with specific message."""
+    message_map = {
+        "extraction_failed": "分析已完成，但结构化数据提取失败",
+        "structured_write_failed": "分析已完成，但结果保存失败",
+        "agent_stream_error": "智能体响应中断",
+        "post_processing_timeout": "处理超时，请稍后重试",
+    }
+    final_message = message or message_map.get(code, code)
     return (
-        json.dumps({"type": "capability.error", "code": code, "message": code}) + "\n"
+        json.dumps({
+            "type": "capability.error",
+            "code": code,
+            "message": final_message,
+        }) + "\n"
     ).encode("utf-8")
 
 
@@ -195,7 +207,7 @@ def check_circuit_blocked(family_id: int, capability: str, db: Session) -> Strea
         return None
 
     async def _blocked_stream():
-        yield _error_event(f"circuit_blocked:{reason}")
+        yield _error_event(f"circuit_blocked:{reason}", message="服务暂时不可用，请稍后重试")
 
     return StreamingResponse(
         _blocked_stream(),
