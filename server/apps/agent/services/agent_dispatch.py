@@ -504,12 +504,17 @@ async def stream_agent_dispatch(
 
         # 9. Stream events — dispatch by message kind so the UI can render
         # phase.thinking, tool.call/result, and answer tokens distinctly.
+        # Dedup tracking: LangGraph may emit duplicate messages from different nodes.
         thinking_started = False
         answering_started = False
         tools_used: list[str] = []
         # Map provider tool_call_id → backend-issued tool_id so the .result event
         # references the same step the .call event opened.
         tool_call_id_map: dict[str, str] = {}
+        # Track seen tool_call_ids to skip duplicates (root cause of stuck 'running' status)
+        seen_tool_call_ids: set[str] = set()
+        # Track last answer content hash to skip duplicate tokens
+        last_answer_hash: str = ""
 
         # Inject web_search behavioural guidance as a system message prefix so the
         # LLM knows whether it may rely on its tools / pretend to search. Mirrors
@@ -571,6 +576,16 @@ async def stream_agent_dispatch(
                         if kind == "tool_call":
                             for call in _extract_tool_calls(msg):
                                 tname = call["name"]
+                                # Skip duplicate tool calls (same call_id already processed)
+                                call_id = str(call["id"]) if call["id"] else str(uuid.uuid4())
+                                if call_id in seen_tool_call_ids:
+                                    logger.debug(
+                                        "[agent_dispatch] Skipping duplicate tool.call id=%s name=%s",
+                                        call_id, tname
+                                    )
+                                    continue
+                                seen_tool_call_ids.add(call_id)
+
                                 ttype, tdisplay, ticon = _resolve_tool_metadata(tname)
                                 tools_used.append(tname)
                                 evt = builder_events.tool_call(
@@ -580,10 +595,8 @@ async def stream_agent_dispatch(
                                     icon=ticon,
                                     tool_type=ttype,
                                 )
-                                # Generate UUID if call["id"] missing to prevent empty-string collision
-                                call_id = str(call["id"]) if call["id"] else str(uuid.uuid4())
                                 backend_id = evt.payload["tool"]["id"]
-                                # Always map call_id (now always a valid UUID) to backend_id
+                                # Map call_id to backend_id for tool_result matching
                                 tool_call_id_map[call_id] = backend_id
                                 # Journal write BEFORE yield to ensure persistence on disconnect
                                 try:
@@ -631,6 +644,18 @@ async def stream_agent_dispatch(
                             content = _extract_content(msg)
                             if not content:
                                 continue
+                            # Skip duplicate answer content (same hash as previous)
+                            # This prevents the UI from showing duplicated text blocks
+                            import hashlib
+                            content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
+                            if content_hash == last_answer_hash and len(content) > 20:
+                                logger.debug(
+                                    "[agent_dispatch] Skipping duplicate answer content hash=%s len=%s",
+                                    content_hash, len(content)
+                                )
+                                continue
+                            last_answer_hash = content_hash
+
                             if not answering_started:
                                 yield builder_events.phase("answering").to_ndjson()
                                 answering_started = True

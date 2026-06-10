@@ -48,6 +48,9 @@ const FORBIDDEN_PATTERNS = [
   /^您的问题是[：:].*$/gm,
   /^关于您问的[：:].*$/gm,
 
+  // 问答复述模式：AI 先复述用户问题，再回答
+  // 使用 TRANSFORM_PATTERNS 处理（需要保留回答部分）
+
   // 联网搜索、思考过程等提示词
   /^联网搜索[：:].*$/gm,
   /^正在搜索[：:].*$/gm,
@@ -80,17 +83,31 @@ const FORBIDDEN_PATTERNS = [
   /^获取家庭.*$/gm,
   /^查询家庭.*$/gm,
 
-  // DeerFlow Memory 系统内容泄漏（英文格式）
-  /^Personal[：:][\s\S]*?(?=^Current Focus|^History|^Facts|$)/gim,
-  /^Current Focus[：:][\s\S]*?(?=^History|^Facts|$)/gim,
-  /^History[：:][\s\S]*?(?=^Facts|$)/gim,
-  /^Facts[：:][\s\S]*?(?=^[^\[]|$)/gim,
+  // DeerFlow Memory 系统内容泄漏
+  // 格式 1：完整 <system-reminder><memory> XML 块（最常见）
+  /<system-reminder\b[^>]*>[\s\S]*?<\/system-reminder>/gi,
 
-  // DeerFlow Memory 事实条目格式
-  /^\[context\s*\|[^\]]*\][^\n]*$/gm,
-  /^\[goal\s*\|[^\]]*\][^\n]*$/gm,
-  /^\[correction\s*\|[^\]]*\][^\n]*$/gm,
-  /^\[preference\s*\|[^\]]*\][^\n]*$/gm,
+  // 格式 2：未闭合的 memory 相关标签残留
+  /<\/?memory\b[^>]*>/gi,
+  /<\/?current_date\b[^>]*>/gi,
+
+  // 格式 3：DeerFlow Memory 节标题（支持 dash 前缀格式）
+  // "- Personal:" 或 "Personal:" 都匹配
+  /^[-\s]*Personal[：:][\s\S]*?(?=^[-\s]*Current Focus|^[-\s]*Recent|^History|^Facts|<\/memory|$)/gim,
+  /^[-\s]*Current Focus[：:][\s\S]*?(?=^[-\s]*Recent|^History|^Facts|<\/memory|$)/gim,
+  /^[-\s]*Recent[：:][\s\S]*?(?=^History|^Facts|<\/memory|$)/gim,
+  /^History[：:][\s\S]*?(?=^Facts|<\/memory|$)/gim,
+  /^Facts[：:][\s\S]*?(?=<\/memory|^[^\[]|$)/gim,
+
+  // 格式 4：User Context 整块（包含所有子节）
+  /^User Context[：:][\s\S]*?(?=^History|^Facts|<\/memory|$)/gim,
+
+  // DeerFlow Memory 事实条目格式（支持空格变体）
+  /^[-\s]*\[context\s*\|[^\]]*\][^\n]*$/gm,
+  /^[-\s]*\[goal\s*\|[^\]]*\][^\n]*$/gm,
+  /^[-\s]*\[correction\s*\|[^\]]*\][^\n]*$/gm,
+  /^[-\s]*\[preference\s*\|[^\]]*\][^\n]*$/gm,
+  /^[-\s]*\[insight\s*\|[^\]]*\][^\n]*$/gm,
 
   // 联网搜索启用提示（整块过滤）
   /联网搜索\n\n用户已启用联网搜索[\s\S]*?你可以调用搜索工具获取[^\n]*\n/gm,
@@ -107,6 +124,34 @@ const FORBIDDEN_PATTERNS = [
 ]
 
 /**
+ * 转换模式列表：需要保留部分内容的模式（使用捕获组）
+ * 每个元素包含 pattern 和 replacement，用于 .replace(pattern, replacement)
+ */
+const TRANSFORM_PATTERNS = [
+  // 问答复述模式 1：问题？根据...，答案 → 移除问题和整个 preamble（无换行）
+  // 例如："问题？根据最新的家庭财务数据，您家的净资产为" → "您家的净资产为"
+  { pattern: /^([^？]*？)根据[^，]*，[\s]*/gm, replacement: '' },
+
+  // 问答复述模式 2：问题？[换行]根据...，答案 → 移除问题和整个 preamble（有换行）
+  // 例如："问题？\n根据最新的家庭财务数据，您家的净资产为" → "您家的净资产为"
+  // 注意：此模式必须在模式3之前，避免模式3先移除问题行导致此模式失效
+  { pattern: /^([^？]*？)[\s\n]+根据[^，]*，[\s]*/gm, replacement: '' },
+
+  // 问答复述模式 3：问题？直接接答案开头（无换行，无 preamble）
+  // 包括：您家、截至...等开头 → 移除问题保留答案开头
+  // 例如："问题？您家的净资产为" → "您家的净资产为"
+  // 例如："问题？截至2024年底" → "截至2024年底"
+  { pattern: /^([^？]*？)(您家|截至)/gm, replacement: '$2' },
+
+  // 问答复述模式 4：独立的问题行（后跟换行）→ 移除
+  // 匹配：以？结尾的行 + 换行 + 任意下一行（非根据开头，已被模式2处理）
+  // 例如："问题？\n答案" → "答案"
+  // 注意：(?=. 确保下一行存在才移除，避免误删最后一个问题行
+  // 注意：此模式在模式2之后，因为模式2专门处理根据 preamble
+  { pattern: /^([^？]*？)[\s\n]+(?=.)/gm, replacement: '' },
+]
+
+/**
  * 内部核心过滤逻辑（无错误边界）
  * 仅用于测试和性能基准
  * @internal
@@ -117,30 +162,41 @@ export function filterAIContentCore(raw: string): string {
   // 1. 规范化：移除零宽字符（防止 Unicode 绕过）
   let filtered = raw.replace(ZERO_WIDTH_CHARS, '')
 
-  // 2. 依次应用所有禁止模式
+  // 2. 依次应用所有禁止模式（替换为空字符串）
   for (const pattern of FORBIDDEN_PATTERNS) {
     filtered = filtered.replace(pattern, '')
   }
 
-  // 3. 清理多余空行（过滤后可能留下连续空行）
+  // 3. 应用转换模式（保留部分内容的捕获组替换）
+  for (const { pattern, replacement } of TRANSFORM_PATTERNS) {
+    filtered = filtered.replace(pattern, replacement)
+  }
+
+  // 4. 清理多余空行（过滤后可能留下连续空行）
   filtered = filtered.replace(/\n{3,}/g, '\n\n')
 
-  // 4. 清理开头和结尾的空白
+  // 5. 清理开头和结尾的空白
   return filtered.trim()
 }
 
 /**
  * 过滤 AI 回答内容（带错误边界和性能监控）
  * @param raw 原始回答文本
+ * @param userQuestion 可选的用户问题文本，用于移除开头的逐字复述
  * @returns 过滤后的干净文本；异常时返回原始输入
  */
-export function filterAIContent(raw: string): string {
+export function filterAIContent(raw: string, userQuestion?: string): string {
   if (!raw) return ''
 
   const startTime = performance.now()
 
   try {
-    const result = filterAIContentCore(raw)
+    let result = filterAIContentCore(raw)
+
+    // Remove question echo: if assistant content starts with the user's question verbatim
+    if (userQuestion && result) {
+      result = removeQuestionEcho(result, userQuestion)
+    }
 
     // 性能监控：dev 环境下记录慢调用
     const elapsedMs = performance.now() - startTime
@@ -158,4 +214,137 @@ export function filterAIContent(raw: string): string {
     }
     return raw
   }
+}
+
+/**
+ * Minimum overlap ratio to consider as a question echo.
+ * If less than this ratio of the user question matches, we don't treat it as echo.
+ */
+const ECHO_MIN_RATIO = 0.6
+
+/**
+ * Remove question echo from the beginning of assistant content.
+ *
+ * DeerFlow agent often outputs the user's question verbatim at the start of the
+ * response (sometimes twice — before and after the memory block). After the
+ * memory block is filtered out, we may see:
+ *   "用户问题\n\n用户问题\n\n实际回答内容"
+ * or just:
+ *   "用户问题\n\n实际回答内容"
+ *
+ * This function detects if the assistant content starts with the user question
+ * and removes the echo prefix, keeping only the actual answer.
+ *
+ * @param content - Filtered assistant content (after pattern-based filters)
+ * @param userQuestion - The user's original question text
+ * @returns Content with question echo removed
+ */
+export function removeQuestionEcho(content: string, userQuestion: string): string {
+  if (!content || !userQuestion) return content
+
+  // Normalize both texts for comparison: collapse whitespace, trim
+  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const normQuestion = normalize(userQuestion)
+
+  // If the question is empty after normalization, nothing to remove
+  if (!normQuestion) return content
+
+  // Loop to remove ALL consecutive question echoes
+  // DeerFlow agent may output the question multiple times (before and after memory block)
+  let result = content
+  let maxIterations = 5 // Safety limit to prevent infinite loops
+
+  while (maxIterations > 0) {
+    const normResult = normalize(result)
+
+    // If the question is longer than the remaining content, no more echoes possible
+    if (normQuestion.length > normResult.length) break
+
+    // Check if remaining content starts with the full question
+    if (normResult.startsWith(normQuestion)) {
+      const echoEnd = findEchoEndPosition(result, userQuestion)
+      if (echoEnd > 0) {
+        result = result.slice(echoEnd).trim()
+        maxIterations--
+        continue // Check for another consecutive echo
+      }
+    }
+
+    // Partial match: check if a significant prefix of the question matches
+    // (handles cases where the echo is slightly truncated)
+    const minLen = Math.ceil(normQuestion.length * ECHO_MIN_RATIO)
+    let foundPartial = false
+    for (let len = normQuestion.length - 1; len >= minLen && !foundPartial; len--) {
+      const partialQuestion = normQuestion.slice(0, len)
+      if (normResult.startsWith(partialQuestion)) {
+        const echoEnd = findEchoEndPosition(result, userQuestion)
+        if (echoEnd > 0) {
+          result = result.slice(echoEnd).trim()
+          foundPartial = true
+          maxIterations--
+        }
+      }
+    }
+
+    // No echo found at start, stop looping
+    if (!foundPartial) break
+  }
+
+  return result || content // Return result, fallback to original if empty
+}
+
+/**
+ * Find the position in the original content where the question echo ends.
+ * Uses fuzzy matching to handle whitespace differences between the echo and the
+ * actual user question.
+ */
+function findEchoEndPosition(content: string, userQuestion: string): number {
+  // Strategy: walk through both strings character by character, skipping
+  // whitespace differences, to find where the echo ends in the content
+  let ci = 0 // content index
+  let qi = 0 // question index
+
+  while (ci < content.length && qi < userQuestion.length) {
+    const cChar = content[ci]
+    const qChar = userQuestion[qi]
+
+    if (cChar === qChar) {
+      ci++
+      qi++
+    } else if (isWhitespace(cChar) && isWhitespace(qChar)) {
+      // Both are whitespace (may differ), skip both
+      ci = skipWhitespace(content, ci)
+      qi = skipWhitespace(userQuestion, qi)
+    } else if (isWhitespace(cChar)) {
+      // Extra whitespace in content
+      ci = skipWhitespace(content, ci)
+    } else if (isWhitespace(qChar)) {
+      // Extra whitespace in question
+      qi = skipWhitespace(userQuestion, qi)
+    } else {
+      // Mismatch - not an echo
+      return -1
+    }
+  }
+
+  // If we consumed the entire question, the echo ends at current content position
+  if (qi >= userQuestion.length) {
+    // Skip trailing whitespace/newlines after the echo
+    let end = ci
+    while (end < content.length && /\s/.test(content[end])) {
+      end++
+    }
+    return end
+  }
+
+  return -1
+}
+
+function isWhitespace(c: string): boolean {
+  return /\s/.test(c)
+}
+
+function skipWhitespace(s: string, i: number): number {
+  while (i < s.length && /\s/.test(s[i])) i++
+  return i
 }

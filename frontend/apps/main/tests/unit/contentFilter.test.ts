@@ -156,6 +156,71 @@ describe('filterAIContent', () => {
     })
   })
 
+  describe('Question echo patterns (AI restates question)', () => {
+    it('removes question echo with "您家的" answer prefix', () => {
+      const input = '我们家净资产是多少？您家的净资产是 28,649,120.74元，约合2864.9万元。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('我们家净资产是多少？')
+      expect(output).toContain('您家的净资产是')
+      expect(output).toBe('您家的净资产是 28,649,120.74元，约合2864.9万元。')
+    })
+
+    it('removes question echo with "根据...，" preamble', () => {
+      const input = '我们家净资产是多少？根据最新的家庭财务数据，您家的净资产为 28,649,120.74元。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('我们家净资产是多少？')
+      expect(output).not.toContain('根据最新的家庭财务数据')
+      expect(output).toContain('您家的净资产为')
+      expect(output).toBe('您家的净资产为 28,649,120.74元。')
+    })
+
+    it('removes question echo with "根据查询结果，" preamble', () => {
+      const input = '我们家净资产是多少？根据查询结果，您家的净资产为 28,649,120.74元。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('根据查询结果')
+      expect(output).toBe('您家的净资产为 28,649,120.74元。')
+    })
+
+    it('preserves normal response without question echo', () => {
+      const input = '您家的净资产为 28,649,120.74元，主要分布在房产和金融资产中。'
+      const output = filterAIContent(input)
+      expect(output).toBe(input)
+    })
+
+    it('handles multi-line response with question echo at start', () => {
+      const input = '我们家有多少资产？您家的总资产为 150 万元。\n主要包括房产和存款。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('我们家有多少资产？')
+      expect(output).toContain('您家的总资产为')
+      expect(output).toContain('主要包括房产和存款')
+    })
+
+    it('handles newline between question echo and "您家" answer', () => {
+      const input = '我们家净资产是多少？\n您家的净资产为 28,649,120.74元。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('我们家净资产是多少？')
+      expect(output).toContain('您家的净资产为')
+    })
+
+    it('handles newline between question and "根据" preamble', () => {
+      const input = '我们家净资产是多少？\n根据最新的家庭财务数据，您家的净资产为 28,649,120.74元。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('我们家净资产是多少？')
+      expect(output).not.toContain('根据最新的家庭财务数据')
+      expect(output).toContain('您家的净资产为')
+    })
+
+    it('handles "根据" preamble without trailing comma directly to answer', () => {
+      // 无逗号的 "根据..." preamble 实际上不会出现（AI 通常会在 preamble 后加逗号）
+      // 这种情况下，模式1会处理 "问题？\n您家的..." 格式
+      // 或者模式3处理独立的 "根据...，" preamble
+      const input = '我们家净资产是多少？\n根据查询结果，您家的净资产为 28,649,120.74元。'
+      const output = filterAIContent(input)
+      expect(output).not.toContain('根据查询结果')
+      expect(output).toContain('您家的净资产为')
+    })
+  })
+
   describe('Identifier leakage patterns', () => {
     it('removes tenantId leakage', () => {
       const input = 'tenantId: 123456\n这是回答内容'

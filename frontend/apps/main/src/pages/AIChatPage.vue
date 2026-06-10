@@ -1216,12 +1216,30 @@ async function loadSessionMessages(session: SessionSummary) {
             })
           } else if (event.type === 'assistant.message') {
             // U6: Assign reconstructed processSteps to historical message
+            // Apply content filter to remove question echo and DeerFlow leakage
+            // Get the preceding user message for question echo removal
+            const lastUserMsg = messages.value.filter(m => m.role === 'user').pop()
+            const userQuestion = lastUserMsg?.content ?? ''
+            const rawContent = event.content ?? ''
+            const filteredContent = filterAIContent(rawContent, userQuestion)
+            // Debug: log if filter changed content (dev only)
+            if (import.meta.env.DEV && rawContent !== filteredContent) {
+              console.log('[loadSessionMessages] filterAIContent applied:', {
+                rawLen: rawContent.length,
+                filteredLen: filteredContent.length,
+                diff: rawContent.length - filteredContent.length,
+                hasUserQuestion: !!userQuestion,
+                userQuestionLen: userQuestion.length,
+                rawPreview: rawContent.slice(0, 200),
+                filteredPreview: filteredContent.slice(0, 200),
+              })
+            }
             const assistantMsg: Message = {
               id: event.eventId ?? Date.now().toString(),
               role: 'assistant',
               phase: 'done',
-              content: event.content ?? '',
-              renderedContent: renderMarkdown(event.content ?? ''),
+              content: filteredContent,
+              renderedContent: renderMarkdown(filteredContent),
               created_at: event.timestamp ?? new Date().toISOString(),
               displayTime: formatTime(event.timestamp ?? new Date().toISOString()),
               // R12: processSteps populated from normalizer
@@ -1468,8 +1486,12 @@ async function onSend() {
           }
         }
         textRaw += event.token ?? ''
-        // 应用内容过滤器，移除违规内容
-        const filteredContent = filterAIContent(textRaw)
+        // 应用内容过滤器，移除违规内容和问题回声
+        const filteredContent = filterAIContent(textRaw, q)
+        // DEBUG: Log filter application (dev only)
+        if (import.meta.env.DEV && textRaw !== filteredContent) {
+          console.log('[filterAIContent] Applied:', { rawLen: textRaw.length, filteredLen: filteredContent.length, diff: textRaw.length - filteredContent.length, questionLen: q?.length })
+        }
         messages.value[msgIdx].content = filteredContent
         // Use throttled rendering for smoother streaming
         renderMarkdownThrottled(filteredContent, messages.value[msgIdx])
@@ -1482,9 +1504,16 @@ async function onSend() {
         messages.value[msgIdx].renderedContent = renderMarkdown(messages.value[msgIdx].content)
       }
       if (event.type === 'capability.end') {
+        // ✅ Sync normState phase to message before returning (fixes stuck "执行中" state)
+        syncStepsToMessage(normState, messages.value[msgIdx])
+        messages.value[msgIdx].phase = normState.phase
+        messages.value[msgIdx].processStatus = normState.phase === 'done' ? 'done' : 'running'
+        messages.value[msgIdx].isComplete = true
         if (event.result?.suggestions?.length) {
           messages.value[msgIdx].suggestions = event.result.suggestions
         }
+        // Terminate stream rendering
+        renderThrottleTimers.delete(msgId)
         return
       }
     }
@@ -1848,11 +1877,19 @@ onMounted(async () => {
       if (res.data.session_id) {
         currentSessionId.value = res.data.session_id
       }
-      messages.value = res.data.messages.map((m) => ({
-        ...m,
-        displayTime: formatTime(m.created_at),
-        renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,
-      }))
+      messages.value = res.data.messages.map((m, idx) => {
+        // Find preceding user message for question echo removal
+        const prevMessages = res.data.messages.slice(0, idx)
+        const prevUserMsg = prevMessages.filter(pm => pm.role === 'user').pop()
+        const userQuestion = prevUserMsg?.content ?? ''
+        return {
+          ...m,
+          // Filter AI content on load to remove question echo and DeerFlow leakage
+          content: m.role === 'assistant' ? filterAIContent(m.content, userQuestion) : m.content,
+          displayTime: formatTime(m.created_at),
+          renderedContent: m.role === 'assistant' ? renderMarkdown(filterAIContent(m.content, userQuestion)) : undefined,
+        }
+      })
       await markChatRead()
       await scrollToBottom()
     } catch {
