@@ -195,3 +195,59 @@ describe('hasTriggerTool', () => {
     expect(hasTriggerTool(steps)).toBe(false)
   })
 })
+
+// U5: Regression tests for integration verification
+describe('U5: Regression tests', () => {
+  describe('DeepThink mode priority', () => {
+    // AC-6 regression: DeepThink mode still triggers full-width display
+    it('DeepThink=true triggers canvas regardless of step count (regression)', () => {
+      // Even with 0 steps and no tool calls, DeepThink should trigger canvas
+      expect(isLongTask([], true)).toBe(true)
+    })
+
+    it('DeepThink=true takes precedence over tool_call threshold (regression)', () => {
+      // Both conditions true - DeepThink should be the trigger
+      const steps = [createToolCallStep('t1', 'get_assets')]
+      expect(isLongTask(steps, true)).toBe(true)
+    })
+
+    it('DeepThink=true with reasoning-only steps still triggers canvas (regression)', () => {
+      // No tool calls, but DeepThink enabled - should still use canvas
+      const steps = [createReasoningStep('r1'), createReasoningStep('r2')]
+      expect(isLongTask(steps, true)).toBe(true)
+    })
+  })
+
+  describe('Error handling integration', () => {
+    // AC-6 regression: Error states don't affect detection logic
+    it('error status tool_call still triggers canvas', () => {
+      const errorStep: ProcessStep = {
+        type: 'tool_call',
+        id: 't-err',
+        name: 'failed_tool',
+        displayName: 'Failed Tool',
+        icon: '❌',
+        args: {},
+        status: 'error',
+        error: 'Tool execution failed',
+      }
+      expect(isLongTask([errorStep], false)).toBe(true)
+    })
+
+    it('failed subagent step still triggers canvas via tool_call presence', () => {
+      const subagentStep: ProcessStep = {
+        type: 'subagent',
+        id: 'sa-failed',
+        taskId: 'task-failed',
+        status: 'failed',
+        title: 'Failed Subagent',
+        error: 'Subagent execution failed',
+      }
+      // subagent alone doesn't trigger canvas (no tool_call)
+      expect(isLongTask([subagentStep], false)).toBe(false)
+      // but combined with tool_call it does
+      const steps = [createToolCallStep('t1', 'get_assets'), subagentStep]
+      expect(isLongTask(steps, false)).toBe(true)
+    })
+  })
+})

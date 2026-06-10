@@ -449,4 +449,76 @@ describe('AiStepBlock', () => {
       expect(wrapper.find('.args-label').exists()).toBe(true)
     })
   })
+
+  // U5: Regression tests for error handling
+  describe('U5: Error handling regression tests', () => {
+    it('compressed+error state shows error message correctly (regression)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-1',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '查询超时',
+        compressed: true,
+      })
+
+      // Error card should be rendered
+      expect(wrapper.find('.ai-step-block--error').exists()).toBe(true)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+      expect(wrapper.text()).toContain('查询超时')
+    })
+
+    it('compressed+error state always shows error, never args (by design)', async () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-2',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '查询失败',
+        compressed: true,
+      })
+
+      // Error state: only error result shown, args not rendered (transition shows result container)
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+
+      // Expanding in error state still shows error result, not args
+      await wrapper.find('.step-header').trigger('click')
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+    })
+
+    it('non-compressed error state shows error only (regression)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-3',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '网络错误',
+        compressed: false,
+      })
+
+      // Non-compressed error: shows error result, not args (args only in running state)
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+      expect(wrapper.text()).toContain('网络错误')
+    })
+
+    it('error icon displays ✗ (regression)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-4',
+        status: 'error',
+        name: 'get_assets',
+        args: {},
+        error: '失败',
+        compressed: true,
+      })
+
+      expect(wrapper.find('.result-icon').text()).toBe('✗')
+    })
+  })
 })
