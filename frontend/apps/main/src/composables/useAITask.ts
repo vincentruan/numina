@@ -456,13 +456,10 @@ export function useAITask(
       if (err instanceof Error && err.name === 'AbortError') return
       const errorMsg = err instanceof Error ? err.message : ''
       if (errorMsg.includes('409')) {
-        showToast(t('aiTask.inProgress'))
-        status.value = 'idle'
-        phase.value = null
-        stopTimer()
-        stopThinkTimer()
-        stopPolling()
-        await checkAndResume()
+        // User explicitly triggered start — cancel stale task first, then retry fresh
+        await cancelAITask(capability)
+        // Retry starting stream (non-recursive via flag)
+        retryAfterCancel = true
       } else {
         status.value = 'failed'
         phase.value = null
@@ -470,6 +467,18 @@ export function useAITask(
         stopThinkTimer()
         stopPolling()
       }
+    }
+  }
+
+  // Retry flag for 409 handling — avoids recursive call stack
+  let retryAfterCancel = false
+
+  async function startStreamWrapper() {
+    retryAfterCancel = false
+    await startStream()
+    if (retryAfterCancel) {
+      // Task was cancelled due to 409, now start fresh
+      await startStream()
     }
   }
 
@@ -636,7 +645,7 @@ export function useAITask(
     planSteps,
     currentStepIndex,
     totalSteps,
-    startStream,
+    startStream: startStreamWrapper,
     cancelTask,
   }
 }

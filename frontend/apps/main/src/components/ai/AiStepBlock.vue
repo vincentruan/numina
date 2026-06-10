@@ -55,21 +55,21 @@
 
         <!-- Tool call content -->
         <template v-else-if="type === 'tool_call'">
-          <!-- 统一状态容器：使用 key 强制 Vue 执行 out-in 过渡，避免 running/done 重叠显示 -->
+          <!-- 状态过渡：使用绝对定位 + 独立 key 确保离开元素完全隐藏后进入元素才显示 -->
           <Transition name="tool-state" mode="out-in">
-            <div :key="status" class="tool-state-container">
-              <!-- Running 状态：参数 + 进度文本 -->
-              <div v-if="status === 'running'" class="tool-running-state">
-                <div class="tool-status-text" aria-live="polite">
-                  <span class="tool-status-inner">{{ statusText }}</span>
-                </div>
-                <div class="tool-args args-running">
-                  <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
-                  <span class="args-value">{{ argsSummary }}</span>
-                </div>
+            <!-- Running 状态：参数 + 进度文本 -->
+            <div v-if="status === 'running'" key="running" class="tool-state-container tool-state-running">
+              <div class="tool-status-text" aria-live="polite">
+                <span class="tool-status-inner">{{ statusText }}</span>
               </div>
-              <!-- Done/Error 状态：结果 -->
-              <div v-else-if="status === 'done' || status === 'error' || status === 'failed'" class="tool-result" :class="resultClass">
+              <div class="tool-args args-running">
+                <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
+                <span class="args-value">{{ argsSummary }}</span>
+              </div>
+            </div>
+            <!-- Done/Error 状态：结果 -->
+            <div v-else-if="status === 'done' || status === 'error' || status === 'failed'" :key="status" class="tool-state-container tool-state-result">
+              <div class="tool-result" :class="resultClass">
                 <span class="result-icon">{{ resultStatusIcon }}</span>
                 <span class="result-text">{{ resultText }}</span>
               </div>
@@ -549,10 +549,12 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   word-break: break-word;
 }
 
-/* Tool state transition — unified out-in to prevent overlap */
+/* Tool state transition — out-in with absolute positioning to prevent overlap */
 .tool-state-enter-active,
 .tool-state-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity 0.15s ease;
+  position: absolute;
+  width: 100%;
 }
 
 .tool-state-enter-from,
@@ -569,12 +571,15 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
 }
 
-.tool-running-state {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.tool-state-running {
+  width: 100%;
+}
+
+.tool-state-result {
+  width: 100%;
 }
 
 /* Tool status text */

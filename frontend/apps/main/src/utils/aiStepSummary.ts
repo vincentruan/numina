@@ -186,13 +186,18 @@ function createMergedItem(steps: ProcessStep[], category?: string): MergedSummar
   const isMerged = steps.length > 1
   const firstStep = steps[0]
 
+  // displayName/name only exist on tool_call type
+  const isToolCall = firstStep.type === 'tool_call'
+  const displayName = isToolCall ? firstStep.displayName : undefined
+  const name = isToolCall ? firstStep.name : undefined
+
   return {
     id: `merged-${firstStep.id}`,
     isMerged,
     steps,
     category,
-    displayText: isMerged ? '' : (firstStep.displayName || firstStep.name), // Populated by i18n
-    displayTextKey: isMerged ? getToolCategory(category) : getChineseSummary(firstStep.name, firstStep.displayName),
+    displayText: isMerged ? '' : (displayName || name), // Populated by i18n
+    displayTextKey: isMerged ? getToolCategory(category) : getChineseSummary(name, displayName),
     count: isMerged ? steps.length : undefined,
   }
 }

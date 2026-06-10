@@ -4,7 +4,9 @@ export type AgentEventType =
   | 'phase.thinking'
   | 'phase.answering'
   | 'tool.call'
+  | 'tool.call_started' // 兼容旧格式
   | 'tool.result'
+  | 'tool.call_completed' // 兼容旧格式
   | 'token.stream'
   | 'capability.end'
   | 'capability.error'
@@ -52,7 +54,15 @@ export interface AgentEvent {
     icon: string
     arguments: Record<string, unknown>
   }
+  // 兼容旧格式：扁平字段（tool.call_started / tool.call_completed）
+  toolId?: string
   tool_id?: string
+  toolName?: string
+  tool_name?: string
+  icon?: string
+  arguments?: Record<string, unknown>
+  args?: Record<string, unknown>
+  tool_type?: string
   result?: {
     success?: boolean
     data?: unknown
@@ -63,6 +73,11 @@ export interface AgentEvent {
     tools_used?: string[]
     suggestions?: string[]
   }
+  // 兼容旧格式：扁平结果字段（tool.call_completed）
+  success?: boolean
+  summary?: string
+  data?: unknown
+  executionTimeMs?: number
   error?: {
     message: string
     code: string
