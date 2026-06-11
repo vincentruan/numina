@@ -587,7 +587,7 @@ async def stream_agent_dispatch(
                                     continue
                                 seen_tool_call_ids.add(call_id)
 
-                                ttype, tdisplay, ticon = _resolve_tool_metadata(tname)
+                                ttype, tdisplay, ticon, tkey = _resolve_tool_metadata(tname)
                                 tools_used.append(tname)
                                 evt = builder_events.tool_call(
                                     tool_name=tname,
@@ -595,6 +595,7 @@ async def stream_agent_dispatch(
                                     display_name=tdisplay,
                                     icon=ticon,
                                     tool_type=ttype,
+                                    display_key=tkey,
                                 )
                                 backend_id = evt.payload["tool"]["id"]
                                 # Map call_id to backend_id for tool_result matching

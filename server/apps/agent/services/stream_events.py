@@ -159,22 +159,22 @@ class EventStreamBuilder:
         display_name: str | None = None,
         icon: str | None = None,
         tool_type: str | None = None,
+        display_key: str | None = None,
     ) -> StreamEvent:
         # Redact sensitive fields before streaming (primary protection layer)
         redacted_args = redact_sensitive_fields(arguments)
-        return self._event(
-            "tool.call",
-            {
-                "tool": {
-                    "id": self._next_tool_id(),
-                    "name": tool_name,
-                    "tool_type": tool_type or "unknown",
-                    "display_name": display_name or tool_name,
-                    "icon": icon or "tool",
-                    "arguments": redacted_args,
-                }
-            },
-        )
+        tool_payload = {
+            "id": self._next_tool_id(),
+            "name": tool_name,
+            "tool_type": tool_type or "unknown",
+            "display_name": display_name or tool_name,
+            "icon": icon or "tool",
+            "arguments": redacted_args,
+        }
+        # Include i18n key for frontend translation when available
+        if display_key:
+            tool_payload["display_key"] = display_key
+        return self._event("tool.call", {"tool": tool_payload})
 
     def tool_result(
         self,

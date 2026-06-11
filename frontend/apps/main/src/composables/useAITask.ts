@@ -194,11 +194,16 @@ export function useAITask(
           const rawName = event.tool.name || ''
           const rawDisplay = event.tool.display_name || ''
           const rawIcon = event.tool.icon || ''
+          const displayKey = event.tool.display_key || ''
           const hasSpecificLabel = !!(rawDisplay || rawName)
+          // Use i18n key if available, otherwise fall back to display_name
+          const resolvedDisplay = displayKey
+            ? t(`toolName.${displayKey.replace('toolName.', '')}`)
+            : rawDisplay || rawName || t('aiTask.toolProcessing')
           const step: ToolStep = {
             id: event.tool.id,
             name: rawName,
-            displayName: rawDisplay || rawName || t('aiTask.toolProcessing'),
+            displayName: resolvedDisplay,
             icon: rawIcon === 'tool' || !rawIcon ? '⚙️' : rawIcon,
             toolType: event.tool.tool_type,
             status: 'running',

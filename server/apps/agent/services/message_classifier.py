@@ -9,41 +9,43 @@ that flexibility is intentional and must be preserved.
 
 from typing import Any
 
-# ── Tool registry: tool_name → (tool_type, display_name, icon) ──────────────
+# ── Tool registry: tool_name → (tool_type, display_name, icon, i18n_key) ──────────
 # Backend is the source of truth for these mappings; the frontend only owns
 # summary template text. Add new entries here when introducing a tool.
-_TOOL_REGISTRY: dict[str, tuple[str, str, str]] = {
+# i18n_key is used by frontend for translation; display_name is fallback for
+# legacy clients or when i18n is unavailable.
+_TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     # Asset queries
-    "get_assets": ("asset_query", "查询资产", "wallet"),
-    "get_dashboard_overview": ("asset_query", "读取资产概览", "wallet"),
-    "get_dashboard_allocation": ("asset_query", "读取资产配置", "wallet"),
-    "get_dashboard_trend": ("trend_calc", "计算资产趋势", "trending-up"),
-    "get_low_usage_assets": ("asset_query", "扫描闲置资产", "wallet"),
-    "get_liabilities": ("asset_query", "查询负债", "wallet"),
+    "get_assets": ("asset_query", "查询资产", "wallet", "toolName.getAssets"),
+    "get_dashboard_overview": ("asset_query", "读取资产概览", "wallet", "toolName.getDashboardOverview"),
+    "get_dashboard_allocation": ("asset_query", "读取资产配置", "wallet", "toolName.getDashboardAllocation"),
+    "get_dashboard_trend": ("trend_calc", "计算资产趋势", "trending-up", "toolName.getDashboardTrend"),
+    "get_low_usage_assets": ("asset_query", "扫描闲置资产", "wallet", "toolName.getLowUsageAssets"),
+    "get_liabilities": ("asset_query", "查询负债", "wallet", "toolName.getLiabilities"),
     # Reports
-    "generate_report": ("report_gen", "生成家庭报告", "file-text"),
-    "compose_summary": ("report_gen", "生成摘要", "file-text"),
+    "generate_report": ("report_gen", "生成家庭报告", "file-text", "toolName.generateReport"),
+    "compose_summary": ("report_gen", "生成摘要", "file-text", "toolName.composeSummary"),
     # Wish / spending analysis
-    "analyze_wishes": ("wish_analysis", "分析心愿计划", "heart"),
-    "analyze_spending_leaks": ("wish_analysis", "分析支出漏洞", "heart"),
+    "analyze_wishes": ("wish_analysis", "分析心愿计划", "heart", "toolName.analyzeWishes"),
+    "analyze_spending_leaks": ("wish_analysis", "分析支出漏洞", "heart", "toolName.analyzeSpendingLeaks"),
     # Web search (smart mode tool)
-    "web_search": ("web_search", "搜索网络", "search"),
-    "tavily_search": ("web_search", "搜索网络", "search"),
+    "web_search": ("web_search", "搜索网络", "search", "toolName.webSearch"),
+    "tavily_search": ("web_search", "搜索网络", "search", "toolName.webSearch"),
     # MCP tools (numina-family-data server)
-    "numina-family-data_get_family_overview": ("data_collect", "获取家庭概览", "📊"),
-    "numina-family-data_get_assets": ("data_collect", "查询资产数据", "💰"),
-    "numina-family-data_get_liabilities": ("data_collect", "查询负债数据", "📋"),
-    "numina-family-data_get_members": ("data_collect", "获取家庭成员", "👥"),
-    "numina-family-data_get_recent_alerts": ("data_collect", "获取近期预警", "🔔"),
+    "numina-family-data_get_family_overview": ("data_collect", "获取家庭概览", "📊", "toolName.getFamilyOverview"),
+    "numina-family-data_get_assets": ("data_collect", "查询资产数据", "💰", "toolName.getAssetsData"),
+    "numina-family-data_get_liabilities": ("data_collect", "查询负债数据", "📋", "toolName.getLiabilitiesData"),
+    "numina-family-data_get_members": ("data_collect", "获取家庭成员", "👥", "toolName.getMembers"),
+    "numina-family-data_get_recent_alerts": ("data_collect", "获取近期预警", "🔔", "toolName.getRecentAlerts"),
     # DeerFlow built-in tools
-    "execute_code": ("execution", "执行分析代码", "⚙️"),
-    "bash": ("execution", "执行命令", "⚙️"),
-    "write": ("execution", "写入结果", "📝"),
-    "read": ("execution", "读取数据", "📖"),
-    "search": ("web_search", "搜索信息", "🔍"),
-    "load_skill": ("internal", "加载分析能力", "🧩"),
-    "write_file": ("execution", "保存文件", "💾"),
-    "read_file": ("execution", "读取文件", "📂"),
+    "execute_code": ("execution", "执行分析代码", "⚙️", "toolName.executeCode"),
+    "bash": ("execution", "执行命令", "⚙️", "toolName.bash"),
+    "write": ("execution", "写入结果", "📝", "toolName.write"),
+    "read": ("execution", "读取数据", "📖", "toolName.read"),
+    "search": ("web_search", "搜索信息", "🔍", "toolName.search"),
+    "load_skill": ("internal", "加载分析能力", "🧩", "toolName.loadSkill"),
+    "write_file": ("execution", "保存文件", "💾", "toolName.writeFile"),
+    "read_file": ("execution", "读取文件", "📂", "toolName.readFile"),
 }
 
 # DeerFlow built-in tool suffixes that are safe to match on namespaced variants
@@ -60,10 +62,10 @@ _SUFFIX_MATCH_WHITELIST = frozenset({
 })
 
 
-def resolve_tool_metadata(tool_name: str) -> tuple[str, str, str]:
-    """Resolve (tool_type, display_name, icon) for a tool name.
+def resolve_tool_metadata(tool_name: str) -> tuple[str, str, str, str]:
+    """Resolve (tool_type, display_name, icon, i18n_key) for a tool name.
 
-    Unknown tools fall back to ("unknown", <name>, "tool") so the UI can
+    Unknown tools fall back to ("unknown", <name>, "tool", "") so the UI can
     still render a generic step. Suffix matching is restricted to a whitelist
     of DeerFlow built-in tools to prevent false positives from generic suffixes.
     """
@@ -75,7 +77,7 @@ def resolve_tool_metadata(tool_name: str) -> tuple[str, str, str]:
         suffix = tool_name.rsplit("_", 1)[-1]
         if suffix in _SUFFIX_MATCH_WHITELIST:
             return _TOOL_REGISTRY[suffix]
-    return ("unknown", tool_name, "tool")
+    return ("unknown", tool_name, "tool", "")
 
 
 def classify_message(msg: Any) -> str:

@@ -43,7 +43,7 @@ def get_task_status(
             "status": task.status,
             "task_id": task.id,
             "session_id": task.session_id,
-            "started_at": task.started_at.isoformat(),
+            "started_at": task.started_at.isoformat() + "+00:00",
             "queue_position": None,
         }
 
@@ -54,7 +54,7 @@ def get_task_status(
             "status": "queued",
             "task_id": queued.id,
             "session_id": queued.session_id,
-            "started_at": queued.started_at.isoformat(),
+            "started_at": queued.started_at.isoformat() + "+00:00",
             "queue_position": queued.queue_position,
         }
 

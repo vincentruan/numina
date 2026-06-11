@@ -254,23 +254,22 @@ class DeerFlowAdapter:
             if tool_calls_raw:
                 calls = extract_tool_calls(event.data)
                 for call in calls:
-                    tool_type, display_name, icon = resolve_tool_metadata(call["name"])
+                    tool_type, display_name, icon, display_key = resolve_tool_metadata(call["name"])
                     is_internal = call["name"] == "write_todos"
+                    chunk_data = {
+                        "tool_call_id": call["id"],
+                        "tool_name": call["name"],
+                        "tool_type": tool_type,
+                        "display_name": display_name,
+                        "icon": icon,
+                        "args": call["args"],
+                        "internal": is_internal,
+                    }
+                    if display_key:
+                        chunk_data["display_key"] = display_key
                     loop.call_soon_threadsafe(
                         queue.put_nowait,
-                        StreamChunk(
-                            "tool_call",
-                            content="",
-                            data={
-                                "tool_call_id": call["id"],
-                                "tool_name": call["name"],
-                                "tool_type": tool_type,
-                                "display_name": display_name,
-                                "icon": icon,
-                                "args": call["args"],
-                                "internal": is_internal,
-                            },
-                        ),
+                        StreamChunk("tool_call", content="", data=chunk_data),
                     )
                 return
 
