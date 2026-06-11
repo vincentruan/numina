@@ -144,11 +144,12 @@ const TRANSFORM_PATTERNS = [
   { pattern: /^([^？]*？)(您家|截至)/gm, replacement: '$2' },
 
   // 问答复述模式 4：独立的问题行（后跟换行）→ 移除
-  // 匹配：以？结尾的行 + 换行 + 任意下一行（非根据开头，已被模式2处理）
+  // 匹配：以？结尾的短行（<50字符，排除长 rhetorical questions）+ 换行 + 任意下一行
   // 例如："问题？\n答案" → "答案"
   // 注意：(?=. 确保下一行存在才移除，避免误删最后一个问题行
+  // 注意：长度限制 50 字符避免误删 AI 的 rhetorical questions（如 "为什么会这样？")
   // 注意：此模式在模式2之后，因为模式2专门处理根据 preamble
-  { pattern: /^([^？]*？)[\s\n]+(?=.)/gm, replacement: '' },
+  { pattern: /^([^？]{0,45}？)[\s\n]+(?=.)/gm, replacement: '' },
 ]
 
 /**
@@ -277,7 +278,8 @@ export function removeQuestionEcho(content: string, userQuestion: string): strin
     for (let len = normQuestion.length - 1; len >= minLen && !foundPartial; len--) {
       const partialQuestion = normQuestion.slice(0, len)
       if (normResult.startsWith(partialQuestion)) {
-        const echoEnd = findEchoEndPosition(result, userQuestion)
+        // Pass partialQuestion (not full userQuestion) to find where THIS partial prefix ends
+        const echoEnd = findEchoEndPosition(result, partialQuestion)
         if (echoEnd > 0) {
           result = result.slice(echoEnd).trim()
           foundPartial = true

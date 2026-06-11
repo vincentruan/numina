@@ -1504,16 +1504,12 @@ async function onSend() {
         messages.value[msgIdx].renderedContent = renderMarkdown(messages.value[msgIdx].content)
       }
       if (event.type === 'capability.end') {
-        // ✅ Sync normState phase to message before returning (fixes stuck "执行中" state)
-        syncStepsToMessage(normState, messages.value[msgIdx])
+        // syncStepsToMessage already ran at line 1452; just sync phase/processStatus
         messages.value[msgIdx].phase = normState.phase
         messages.value[msgIdx].processStatus = normState.phase === 'done' ? 'done' : 'running'
-        messages.value[msgIdx].isComplete = true
         if (event.result?.suggestions?.length) {
           messages.value[msgIdx].suggestions = event.result.suggestions
         }
-        // Terminate stream rendering
-        renderThrottleTimers.delete(msgId)
         return
       }
     }
@@ -1882,12 +1878,13 @@ onMounted(async () => {
         const prevMessages = res.data.messages.slice(0, idx)
         const prevUserMsg = prevMessages.filter(pm => pm.role === 'user').pop()
         const userQuestion = prevUserMsg?.content ?? ''
+        // Filter AI content once and reuse for both content and renderedContent
+        const filteredContent = m.role === 'assistant' ? filterAIContent(m.content, userQuestion) : m.content
         return {
           ...m,
-          // Filter AI content on load to remove question echo and DeerFlow leakage
-          content: m.role === 'assistant' ? filterAIContent(m.content, userQuestion) : m.content,
+          content: filteredContent,
           displayTime: formatTime(m.created_at),
-          renderedContent: m.role === 'assistant' ? renderMarkdown(filterAIContent(m.content, userQuestion)) : undefined,
+          renderedContent: m.role === 'assistant' ? renderMarkdown(filteredContent) : undefined,
         }
       })
       await markChatRead()

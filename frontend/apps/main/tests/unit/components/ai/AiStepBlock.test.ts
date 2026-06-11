@@ -12,6 +12,13 @@ const i18n = createI18n({
         stepReasoning: '思考',
         argsLabel: '参数：',
         statusDone: '已完成',
+        statusRunning: '正在执行',
+        // CR-4: Dynamic status with action interpolation
+        defaultAction: '处理',
+        statusRunningAction: '正在{action}',
+        statusDoneAction: '已{action}',
+        statusFailedAction: '{action}失败',
+        statusStreamingAction: '{action}中...',
         reasoningDuration: '思考 {seconds}s',
         thinkingLabel: '思考中...',
       },

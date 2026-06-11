@@ -229,12 +229,13 @@ const computedElapsedMs = computed(() => {
 })
 
 // Live status text for running tool_call steps - dynamic generation using displayName
+// CR-4 fix: Use i18n with action interpolation instead of hardcoded Chinese
 const statusText = computed(() => {
-  const baseName = props.displayName ?? props.name ?? '处理'
-  if (props.status === 'running') return `正在${baseName}`
-  if (props.status === 'done') return `已${baseName}`
-  if (props.status === 'error') return `${baseName}失败`
-  if (props.status === 'streaming') return `${baseName}中...`
+  const baseName = props.displayName ?? props.name ?? t('aiProcess.defaultAction')
+  if (props.status === 'running') return t('aiProcess.statusRunningAction', { action: baseName })
+  if (props.status === 'done') return t('aiProcess.statusDoneAction', { action: baseName })
+  if (props.status === 'error') return t('aiProcess.statusFailedAction', { action: baseName })
+  if (props.status === 'streaming') return t('aiProcess.statusStreamingAction', { action: baseName })
   return baseName
 })
 
@@ -588,6 +589,8 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   flex-direction: column;
   gap: 6px;
   position: relative;
+  /* Prevent height collapse during out-in transition with absolute children */
+  min-height: 20px;
 }
 
 .tool-state-running {

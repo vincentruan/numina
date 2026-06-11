@@ -227,6 +227,12 @@ export default {
     statusRunning: '正在执行',
     statusDone: '已完成',
     statusError: '执行出错',
+    // Dynamic status with action name interpolation (CR-4 fix)
+    defaultAction: '处理',
+    statusRunningAction: '正在{action}',
+    statusDoneAction: '已{action}',
+    statusFailedAction: '{action}失败',
+    statusStreamingAction: '{action}中...',
     connecting: '正在连接...',
     stepReasoning: '思考',
     argsLabel: '参数：',

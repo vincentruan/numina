@@ -473,11 +473,13 @@ async def _llm_fallback_extract(
 
     # Track failure reasons for feedback in retries
     failure_reasons: list[str] = []
-    # Track quota/throttling errors for specific user messaging
-    quota_error_detected = False
+    # Track if the LAST iteration hit a quota error (not cumulative across retries)
+    last_iteration_quota_error = False
 
     # Retry loop: attempt extraction up to LLM_FALLBACK_MAX_RETRIES times
     for retry in range(LLM_FALLBACK_MAX_RETRIES):
+        # Reset quota tracking for this iteration
+        last_iteration_quota_error = False
         prompt = _build_extraction_prompt_with_feedback(
             capability, answer_text, retry_count=retry, failure_reasons=failure_reasons
         )
@@ -501,7 +503,7 @@ async def _llm_fallback_extract(
             error_str = str(e)
             # Detect quota/throttling errors for specific user messaging
             if _is_quota_error(error_str):
-                quota_error_detected = True
+                last_iteration_quota_error = True
                 logger.warning(f"[{capability}] LLM fallback quota error: {e} (retry {retry + 1})")
             failure_reasons.append(f"call_failed: {type(e).__name__}")
             logger.warning(f"[{capability}] LLM fallback call failed: {e} (retry {retry + 1})")
@@ -541,8 +543,8 @@ async def _llm_fallback_extract(
         logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
 
     logger.warning(f"[{capability}] LLM fallback exhausted {LLM_FALLBACK_MAX_RETRIES} retries, giving up")
-    # Return specific error type if quota was the primary issue
-    if quota_error_detected:
+    # Return specific error type if the LAST iteration was a quota error
+    if last_iteration_quota_error:
         return None, "quota_exceeded"
     return None, "llm_fallback_failed"
 
@@ -550,26 +552,33 @@ async def _llm_fallback_extract(
 def _is_quota_error(error_str: str) -> bool:
     """Detect quota/throttling errors from LLM API responses.
 
-    Patterns to detect:
-    - HTTP 429 status codes
-    - "quota" keyword
-    - "throttling" keyword
-    - "rate_limit" keyword
-    - "billing" unavailable
-    - "allocated quota exceeded"
+    Patterns are specific to avoid false positives from unrelated error messages.
     """
+    error_lower = error_str.lower()
+
+    # HTTP 429 status - match as standalone status code, not part of other numbers
+    # Matches: "429", "status 429", "429 Too Many Requests", "HTTP 429"
+    if re.search(r"(?:^|\D)429(?:\D|$)", error_str) or "too many requests" in error_lower:
+        return True
+
+    # Quota-specific patterns - must be quota context, not general billing
     quota_patterns = [
-        "429",
         "quota",
         "throttling",
         "rate_limit",
         "rate limit",
-        "billing",
         "allocated quota exceeded",
         "concurrency allocated quota exceeded",
         "account is out of quota",
+        "quota exceeded",
+        "insufficient_quota",
+        "billing limit",
+        "billing exceeded",
+        "billing unavailable",
+        "usage limit",
+        "usage_cap",
+        "capacity exceeded",
     ]
-    error_lower = error_str.lower()
     return any(pattern in error_lower for pattern in quota_patterns)
 
 

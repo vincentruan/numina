@@ -8,6 +8,7 @@ No global singleton mutation. No ContextVar. No reload_app_config().
 """
 
 import contextlib
+import hashlib
 import os
 import re
 import time
@@ -646,7 +647,6 @@ async def stream_agent_dispatch(
                                 continue
                             # Skip duplicate answer content (same hash as previous)
                             # This prevents the UI from showing duplicated text blocks
-                            import hashlib
                             content_hash = hashlib.md5(content.encode()).hexdigest()[:8]
                             if content_hash == last_answer_hash and len(content) > 20:
                                 logger.debug(

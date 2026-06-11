@@ -457,7 +457,12 @@ export function useAITask(
       const errorMsg = err instanceof Error ? err.message : ''
       if (errorMsg.includes('409')) {
         // User explicitly triggered start — cancel stale task first, then retry fresh
-        await cancelAITask(capability)
+        try {
+          await cancelAITask(capability)
+        } catch (cancelErr) {
+          // Log but don't block retry — the stale task may already be completed/cancelled
+          console.warn('[useAITask] cancelAITask failed on 409:', cancelErr)
+        }
         // Retry starting stream (non-recursive via flag)
         retryAfterCancel = true
       } else {
@@ -476,9 +481,20 @@ export function useAITask(
   async function startStreamWrapper() {
     retryAfterCancel = false
     await startStream()
-    if (retryAfterCancel) {
-      // Task was cancelled due to 409, now start fresh
+    // Handle 409 retry with bounded attempts (max 2 retries to avoid infinite loops)
+    let retryCount = 0
+    while (retryAfterCancel && retryCount < 2) {
+      retryAfterCancel = false // Reset flag before retry
       await startStream()
+      retryCount++
+    }
+    // If still flagged after max retries, set failed status
+    if (retryAfterCancel) {
+      status.value = 'failed'
+      phase.value = null
+      stopTimer()
+      stopThinkTimer()
+      stopPolling()
     }
   }
 
