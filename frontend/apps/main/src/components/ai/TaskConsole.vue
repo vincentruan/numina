@@ -39,9 +39,6 @@
       <!-- Failed warning bar -->
       <div v-if="status === 'failed'" class="console-error-bar" role="alert">
         <span class="error-bar-text">{{ failureMessage }}</span>
-        <button class="error-bar-retry" @click.stop="$emit('retry')">
-          {{ t('aiTask.retry') }}
-        </button>
       </div>
 
       <!-- Queued state -->

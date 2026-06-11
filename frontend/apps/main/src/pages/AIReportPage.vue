@@ -87,85 +87,103 @@
         </div>
       </div>
 
-      <!-- Report cards -->
-      <div class="cards-section">
-        <ReportCard
-          icon="balance-o"
-          :title="t('aiReport.netWorthHealth')"
-          :score="currentReport.net_worth_health?.score ?? 0"
-          :narrative="currentReport.net_worth_health?.narrative ?? ''"
-          :suggestions="currentReport.net_worth_health?.suggestions"
-        >
-          <div v-if="currentReport.net_worth_health?.data?.net_worth != null" class="card-data">
-            <div class="data-row">
-              <span>{{ t('aiReport.netWorthLabel') }}</span>
-              <span>{{ formatMoney(currentReport.net_worth_health.data.net_worth) }}</span>
-            </div>
-            <div v-if="currentReport.net_worth_health.data.mom_change_pct != null" class="data-row">
-              <span>{{ t('aiReport.momChange') }}</span>
-              <span :class="currentReport.net_worth_health.data.mom_change_pct >= 0 ? 'positive' : 'negative'">
-                {{ currentReport.net_worth_health.data.mom_change_pct >= 0 ? '+' : '' }}{{ currentReport.net_worth_health.data.mom_change_pct.toFixed(1) }}%
-              </span>
-            </div>
-          </div>
-        </ReportCard>
+      <!-- New format: Narrative + Sections -->
+      <template v-if="isNarrativeFormat">
+        <!-- Full narrative markdown content -->
+        <div v-if="currentReport.narrative" class="narrative-section">
+          <div class="narrative-content" v-html="renderedNarrative" />
+        </div>
 
-        <ReportCard
-          icon="bar-chart-o"
-          :title="t('aiReport.allocationAnalysis')"
-          :score="currentReport.allocation_analysis?.score ?? 0"
-          :narrative="currentReport.allocation_analysis?.narrative ?? ''"
-          :suggestions="currentReport.allocation_analysis?.suggestions"
-        >
-          <div v-if="currentReport.allocation_analysis?.data?.items?.length" class="alloc-bars">
-            <div
-              v-for="item in currentReport.allocation_analysis.data.items"
-              :key="item.category_id"
-              class="alloc-bar-row"
-            >
-              <span class="alloc-name">{{ item.category_name }}</span>
-              <div class="alloc-bar-bg">
-                <div class="alloc-bar-fill" :style="{ width: `${item.percentage}%` }" />
+        <!-- Structured sections -->
+        <div v-if="renderedSections.length > 0" class="sections-container">
+          <div v-for="section in renderedSections" :key="section.key" class="section-card">
+            <div class="section-header">{{ section.label }}</div>
+            <div class="section-content" v-html="section.html" />
+          </div>
+        </div>
+      </template>
+
+      <!-- Legacy format: ReportCards -->
+      <template v-else-if="isLegacyFormat">
+        <div class="cards-section">
+          <ReportCard
+            icon="balance-o"
+            :title="t('aiReport.netWorthHealth')"
+            :score="currentReport.net_worth_health?.score ?? 0"
+            :narrative="currentReport.net_worth_health?.narrative ?? ''"
+            :suggestions="currentReport.net_worth_health?.suggestions"
+          >
+            <div v-if="currentReport.net_worth_health?.data?.net_worth != null" class="card-data">
+              <div class="data-row">
+                <span>{{ t('aiReport.netWorthLabel') }}</span>
+                <span>{{ formatMoney(currentReport.net_worth_health.data.net_worth) }}</span>
               </div>
-              <span class="alloc-pct">{{ item.percentage.toFixed(1) }}%</span>
+              <div v-if="currentReport.net_worth_health.data.mom_change_pct != null" class="data-row">
+                <span>{{ t('aiReport.momChange') }}</span>
+                <span :class="currentReport.net_worth_health.data.mom_change_pct >= 0 ? 'positive' : 'negative'">
+                  {{ currentReport.net_worth_health.data.mom_change_pct >= 0 ? '+' : '' }}{{ currentReport.net_worth_health.data.mom_change_pct.toFixed(1) }}%
+                </span>
+              </div>
             </div>
-          </div>
-        </ReportCard>
+          </ReportCard>
 
-        <ReportCard
-          icon="bill-o"
-          :title="t('aiReport.liabilityPressure')"
-          :score="currentReport.liability_pressure?.score ?? 0"
-          :narrative="currentReport.liability_pressure?.narrative ?? ''"
-          :suggestions="currentReport.liability_pressure?.suggestions"
-        >
-          <div v-if="currentReport.liability_pressure?.data" class="card-data">
-            <div class="data-row">
-              <span>{{ t('aiReport.activeLiabilities') }}</span>
-              <span>{{ t('aiReport.liabilityCount', { count: currentReport.liability_pressure.data.count }) }}</span>
+          <ReportCard
+            icon="bar-chart-o"
+            :title="t('aiReport.allocationAnalysis')"
+            :score="currentReport.allocation_analysis?.score ?? 0"
+            :narrative="currentReport.allocation_analysis?.narrative ?? ''"
+            :suggestions="currentReport.allocation_analysis?.suggestions"
+          >
+            <div v-if="currentReport.allocation_analysis?.data?.items?.length" class="alloc-bars">
+              <div
+                v-for="item in currentReport.allocation_analysis.data.items"
+                :key="item.category_id"
+                class="alloc-bar-row"
+              >
+                <span class="alloc-name">{{ item.category_name }}</span>
+                <div class="alloc-bar-bg">
+                  <div class="alloc-bar-fill" :style="{ width: `${item.percentage}%` }" />
+                </div>
+                <span class="alloc-pct">{{ item.percentage.toFixed(1) }}%</span>
+              </div>
             </div>
-          </div>
-        </ReportCard>
+          </ReportCard>
 
-        <ReportCard
-          icon="chart-trending-o"
-          :title="t('aiReport.assetEfficiency')"
-          :score="currentReport.asset_efficiency?.score ?? 0"
-          :narrative="currentReport.asset_efficiency?.narrative ?? ''"
-          :suggestions="currentReport.asset_efficiency?.suggestions"
-        >
-          <div v-if="currentReport.asset_efficiency?.data" class="card-data">
-            <div class="data-row">
-              <span>{{ t('aiReport.lowUsageAssets') }}</span>
-              <span>{{ t('aiReport.assetCountUnit', { count: currentReport.asset_efficiency.data.low_usage_count }) }}</span>
+          <ReportCard
+            icon="bill-o"
+            :title="t('aiReport.liabilityPressure')"
+            :score="currentReport.liability_pressure?.score ?? 0"
+            :narrative="currentReport.liability_pressure?.narrative ?? ''"
+            :suggestions="currentReport.liability_pressure?.suggestions"
+          >
+            <div v-if="currentReport.liability_pressure?.data" class="card-data">
+              <div class="data-row">
+                <span>{{ t('aiReport.activeLiabilities') }}</span>
+                <span>{{ t('aiReport.liabilityCount', { count: currentReport.liability_pressure.data.count }) }}</span>
+              </div>
             </div>
-            <div class="data-row">
-              <span>{{ t('aiReport.dailyCostLabel') }}</span>
-              <span>{{ formatMoney(currentReport.asset_efficiency.data.total_daily_cost) }}</span>
+          </ReportCard>
+
+          <ReportCard
+            icon="chart-trending-o"
+            :title="t('aiReport.assetEfficiency')"
+            :score="currentReport.asset_efficiency?.score ?? 0"
+            :narrative="currentReport.asset_efficiency?.narrative ?? ''"
+            :suggestions="currentReport.asset_efficiency?.suggestions"
+          >
+            <div v-if="currentReport.asset_efficiency?.data" class="card-data">
+              <div class="data-row">
+                <span>{{ t('aiReport.lowUsageAssets') }}</span>
+                <span>{{ t('aiReport.assetCountUnit', { count: currentReport.asset_efficiency.data.low_usage_count }) }}</span>
+              </div>
+              <div class="data-row">
+                <span>{{ t('aiReport.dailyCostLabel') }}</span>
+                <span>{{ formatMoney(currentReport.asset_efficiency.data.total_daily_cost) }}</span>
+              </div>
             </div>
-          </div>
-        </ReportCard>
-      </div>
+          </ReportCard>
+        </div>
+      </template>
 
       <!-- Regenerate -->
       <div class="regen-section">
@@ -231,6 +249,35 @@ const {
   startStream,
 } = useAITask('report', '/ai/report/generate/events', loadExistingReport)
 
+// Detect which format the report uses
+const isLegacyFormat = computed(() => {
+  if (!currentReport.value) return false
+  // Legacy format has structured sections with scores
+  return (
+    currentReport.value.net_worth_health?.score != null ||
+    currentReport.value.allocation_analysis?.score != null ||
+    currentReport.value.liability_pressure?.score != null ||
+    currentReport.value.asset_efficiency?.score != null
+  )
+})
+
+const isNarrativeFormat = computed(() => {
+  if (!currentReport.value) return false
+  // New format has flat narrative and sections dict
+  return currentReport.value.narrative != null || currentReport.value.sections != null
+})
+
+// Section labels for new format (Chinese keys → display labels)
+const SECTION_LABELS: Record<string, string> = {
+  executive_summary: '执行摘要',
+  balance_sheet: '资产负债表',
+  liquidity_crisis: '流动性危机',
+  action_plan: '行动计划',
+  risk_warning: '风险提示',
+  asset_structure: '资产结构',
+  liability_structure: '负债结构',
+}
+
 const overallScoreClass = computed(() => {
   const s = currentReport.value?.overall_score ?? 0
   if (s >= 80) return 'score-excellent'
@@ -249,6 +296,24 @@ const renderedSummary = computed(() => {
   if (!currentReport.value?.summary) return ''
   const raw = marked.parse(currentReport.value.summary, { async: false }) as string
   return DOMPurify.sanitize(raw, SUMMARY_PURIFY_CONFIG)
+})
+
+const renderedNarrative = computed(() => {
+  if (!currentReport.value?.narrative) return ''
+  const raw = marked.parse(currentReport.value.narrative, { async: false }) as string
+  return DOMPurify.sanitize(raw, SUMMARY_PURIFY_CONFIG)
+})
+
+// Render sections as markdown content with labels
+const renderedSections = computed(() => {
+  if (!currentReport.value?.sections) return []
+  return Object.entries(currentReport.value.sections)
+    .filter(([_, content]) => content && content.trim())
+    .map(([key, content]) => ({
+      key,
+      label: SECTION_LABELS[key] || key,
+      html: DOMPurify.sanitize(marked.parse(content, { async: false }) as string, SUMMARY_PURIFY_CONFIG),
+    }))
 })
 
 function formatMoney(val: number | null | undefined): string {
@@ -457,7 +522,8 @@ onMounted(async () => {
 .regen-section {
   padding: 16px;
 }
-.generating-placeholder {
+.generating-placeholder,
+.failed-placeholder {
   padding: 40px 16px;
   text-align: center;
   display: flex;
@@ -465,8 +531,15 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
 }
-.generating-icon {
+.generating-icon,
+.failed-icon {
   --icon-size: 32px;
+}
+.failed-icon {
+  color: #dc2626;
+}
+[data-theme='dark'] .failed-icon {
+  color: #f87171;
 }
 .generating-text {
   font-size: 14px;
@@ -482,6 +555,15 @@ onMounted(async () => {
   -webkit-background-clip: text;
   background-size: 200% 100%;
   animation: shimmer 2s ease-in-out infinite;
+}
+.failed-text {
+  font-size: 14px;
+  margin: 0;
+  color: #dc2626;
+  line-height: 1.5;
+}
+[data-theme='dark'] .failed-text {
+  color: #f87171;
 }
 
 @keyframes shimmer {
@@ -506,5 +588,79 @@ onMounted(async () => {
   background-clip: text;
   -webkit-background-clip: text;
   background-size: 200% 100%;
+}
+.narrative-section {
+  background: var(--bg-primary);
+  margin: 12px 16px;
+  border-radius: 16px;
+  padding: 20px;
+}
+.narrative-content {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.7;
+  :deep(p) {
+    margin: 0 0 10px;
+    &:last-child { margin-bottom: 0; }
+  }
+  :deep(strong) {
+    font-weight: 600;
+  }
+  :deep(h1), :deep(h2), :deep(h3) {
+    margin: 16px 0 8px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  :deep(h1) { font-size: 18px; }
+  :deep(h2) { font-size: 16px; }
+  :deep(h3) { font-size: 15px; }
+  :deep(ol), :deep(ul) {
+    margin: 8px 0;
+    padding-left: 20px;
+  }
+  :deep(li) {
+    margin: 4px 0;
+  }
+  :deep(code) {
+    background: var(--bg-secondary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+  }
+}
+.sections-container {
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.section-card {
+  background: var(--bg-primary);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.section-header {
+  padding: 12px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+}
+.section-content {
+  padding: 16px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  :deep(p) {
+    margin: 0 0 6px;
+    &:last-child { margin-bottom: 0; }
+  }
+  :deep(ol), :deep(ul) {
+    margin: 4px 0;
+    padding-left: 18px;
+  }
+  :deep(li) {
+    margin: 2px 0;
+  }
 }
 </style>

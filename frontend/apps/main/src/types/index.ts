@@ -421,6 +421,10 @@ export interface AIReport {
   overall_score: number | null
   summary: string
   data_completeness_score: number
+  // New flexible format (LLM may output these)
+  narrative?: string
+  sections?: Record<string, string>
+  // Legacy structured format (skill-defined schema)
   net_worth_health?: AIReportSection & {
     data?: { net_worth?: number; total_assets?: number; total_liabilities?: number; mom_change_pct?: number }
   }
