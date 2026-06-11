@@ -1,6 +1,7 @@
 <template>
   <van-popup
-    v-model:show="visible"
+    :show="visible"
+    @update:show="onUpdateShow"
     position="bottom"
     :style="{ height: '80%', borderRadius: '16px 16px 0 0' }"
     closeable
@@ -57,6 +58,10 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+function onUpdateShow(value: boolean) {
+  emit('update:visible', value)
 }
 
 function onDownload() {
