@@ -2181,6 +2181,8 @@ export default {
     extractionFailed: '⚠️ 分析已完成，但结构化结果提取失败，可参考上方文本',
     writeFailed: '⚠️ 分析已完成，但结构化结果保存失败，可参考上方文本',
     timeoutFailed: '⚠️ 处理超时，请稍后重试',
+    markdownFailed: '⚠️ 报告文件生成失败，请稍后重试',
+    conversionFailed: '⚠️ 报告解析失败，请稍后重试',
     scoreUnit: '分',
     overallScore: '综合健康评分',
     generatedAt: '生成时间：{time}',
@@ -2201,6 +2203,9 @@ export default {
     scoreFair: '一般',
     scoreNeedsImprovement: '待改善',
     suggestions: '💡 优化建议',
+    markdownPreview: '完整报告',
+    downloadReport: '下载报告',
+    viewMarkdown: '查看完整报告',
   },
   aiAlerts: {
     title: '资产老化预警',

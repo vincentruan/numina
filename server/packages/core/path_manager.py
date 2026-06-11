@@ -178,6 +178,39 @@ class PathManager:
             / "tmp" / uid / request_id
         )
 
+    # Report storage (agent-generated markdown reports)
+    _REPORT_FILENAME_PATTERN = re.compile(r'^report_[a-zA-Z0-9_-]+\.md$')
+
+    def tenant_report_dir(self, family_id: int) -> Path:
+        """Get tenant's report storage directory.
+
+        Creates the directory if it doesn't exist.
+        """
+        fid = self._validate_numeric_id(family_id, "family_id")
+        path = self._data_root / "workspaces" / "tenants" / fid / "reports"
+        path.mkdir(parents=True, exist_ok=True)
+        return path
+
+    def tenant_report_file(self, family_id: int, filename: str) -> Path:
+        """Get full path for a report file with validation.
+
+        Args:
+            family_id: Tenant family ID
+            filename: Report filename (must match pattern: report_*.md)
+
+        Returns:
+            Full validated path under tenant's reports directory
+
+        Raises:
+            PathSecurityError: If filename doesn't match expected pattern
+        """
+        if not self._REPORT_FILENAME_PATTERN.match(filename):
+            raise PathSecurityError(
+                f"Invalid report filename: {filename!r}. "
+                f"Expected pattern: report_[alphanumeric_-].md"
+            )
+        return self.tenant_report_dir(family_id) / filename
+
     # Runtime effective (generated, deletable)
     def effective_dir(self, family_id: int) -> Path:
         fid = self._validate_numeric_id(family_id, "family_id")

@@ -417,11 +417,23 @@ export interface AIReportSection {
   data?: Record<string, unknown>
 }
 
+export interface AIReportIndicator {
+  key: string
+  label: string
+  score: number  // 1-5 scale
+  narrative: string
+  suggestions: string[]
+  data?: Record<string, unknown>
+}
+
 export interface AIReport {
   overall_score: number | null
   summary: string
   data_completeness_score: number
-  // New flexible format (LLM may output these)
+  // New flexible format with indicators array
+  indicators?: AIReportIndicator[]
+  markdown_file_path?: string  // Path to markdown report file for preview
+  // New narrative format (LLM may output these)
   narrative?: string
   sections?: Record<string, string>
   // Legacy structured format (skill-defined schema)

@@ -27,6 +27,7 @@ LLM_FALLBACK_MAX_TOKENS = 800
 LLM_FALLBACK_TEMPERATURE = 0.1
 LLM_FALLBACK_TIMEOUT_SECONDS = 30.0
 LLM_FALLBACK_MAX_RETRIES = 3  # Maximum retries for LLM fallback extraction
+LLM_FALLBACK_MAX_RETRIES_REPORT = 5  # Maximum retries for report capability (Phase 2 retry loop)
 
 # Regex patterns for structured data extraction (priority order)
 # 1. HTML comment: <!-- STRUCTURED_DATA ... -->
@@ -92,12 +93,33 @@ CAPABILITY_SCHEMAS = {
     },
     "report": {
         "type": "object",
-        "required": ["overall_score"],
+        "required": ["overall_score", "indicators"],
         "properties": {
             "overall_score": {"type": "integer", "minimum": 0, "maximum": 100},
             "data_completeness_score": {"type": "number"},
-            "narrative": {"type": "string"},
             "summary": {"type": "string"},
+            "indicators": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 8,
+                "items": {
+                    "type": "object",
+                    "required": ["key", "label", "score", "narrative"],
+                    "properties": {
+                        "key": {"type": "string"},
+                        "label": {"type": "string"},
+                        "score": {"type": "integer", "minimum": 1, "maximum": 5},
+                        "narrative": {"type": "string"},
+                        "suggestions": {
+                            "type": "array",
+                            "items": {"type": "string"}
+                        },
+                        "data": {"type": "object"},
+                    },
+                },
+            },
+            # Legacy fields for backward compatibility
+            "narrative": {"type": "string"},
             "sections": {"type": "object"},
             "net_worth_health": {"type": "object"},
             "allocation_analysis": {"type": "object"},
@@ -444,6 +466,7 @@ async def _llm_fallback_extract(
     Picks family's cheapest active provider (by display_order ASC NULLS LAST),
     calls LLM with extraction prompt under a 30s timeout, parses and validates.
     Retries up to LLM_FALLBACK_MAX_RETRIES times on validation failure.
+    For report capability, uses LLM_FALLBACK_MAX_RETRIES_REPORT (5 retries).
 
     Returns:
         (data, error_type) where:
@@ -471,13 +494,16 @@ async def _llm_fallback_extract(
         logger.warning(f"[{capability}] LLM fallback: could not decrypt API key")
         return None, "api_key_error"
 
+    # Use higher retry count for report capability (Phase 2 retry loop)
+    max_retries = LLM_FALLBACK_MAX_RETRIES_REPORT if capability == "report" else LLM_FALLBACK_MAX_RETRIES
+
     # Track failure reasons for feedback in retries
     failure_reasons: list[str] = []
     # Track if the LAST iteration hit a quota error (not cumulative across retries)
     last_iteration_quota_error = False
 
-    # Retry loop: attempt extraction up to LLM_FALLBACK_MAX_RETRIES times
-    for retry in range(LLM_FALLBACK_MAX_RETRIES):
+    # Retry loop: attempt extraction up to max_retries times
+    for retry in range(max_retries):
         # Reset quota tracking for this iteration
         last_iteration_quota_error = False
         prompt = _build_extraction_prompt_with_feedback(
@@ -542,7 +568,7 @@ async def _llm_fallback_extract(
         failure_reasons.append("schema_validation_failed")
         logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
 
-    logger.warning(f"[{capability}] LLM fallback exhausted {LLM_FALLBACK_MAX_RETRIES} retries, giving up")
+    logger.warning(f"[{capability}] LLM fallback exhausted {max_retries} retries, giving up")
     # Return specific error type if the LAST iteration was a quota error
     if last_iteration_quota_error:
         return None, "quota_exceeded"
@@ -597,7 +623,19 @@ def _contains_markdown_table(data: dict) -> bool:
         re.compile(r'[^\|]*\|[^\|]+\|[^\|]*'),  # Table without leading |
     ]
 
-    # Check all narrative fields in report structure
+    # Check indicators array (new format)
+    indicators = data.get("indicators", [])
+    if isinstance(indicators, list):
+        for indicator in indicators:
+            if isinstance(indicator, dict):
+                narrative = indicator.get("narrative", "")
+                if narrative:
+                    for pattern in table_patterns:
+                        if pattern.search(narrative):
+                            logger.debug(f"Found markdown table in indicator[{indicator.get('key', '?')}].narrative")
+                            return True
+
+    # Check legacy sections (old format)
     sections = ["net_worth_health", "allocation_analysis", "liability_pressure", "asset_efficiency"]
     for section in sections:
         if section in data and isinstance(data[section], dict):

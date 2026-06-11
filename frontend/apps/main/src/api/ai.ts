@@ -379,6 +379,16 @@ export interface AIReportResponse {
 export const getAIReport = () =>
   http.get<AIReportResponse>('/ai/report')
 
+export interface AIMarkdownResponse {
+  content: string
+  filename: string
+  generated_at: string
+  file_size: number
+}
+
+export const getAIReportMarkdown = () =>
+  http.get<AIMarkdownResponse>('/ai/report/markdown')
+
 
 export interface AssetSuggestRequest {
   name: string

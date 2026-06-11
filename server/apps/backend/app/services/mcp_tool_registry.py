@@ -89,6 +89,45 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=False,
     ),
+    # File tools for report generation (Phase 1/2)
+    "write_file": MCPToolMeta(
+        name="write_file",
+        description="将内容写入租户报告目录的文件。仅支持 markdown 报告文件。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": "文件名，必须符合 report_*.md 格式",
+                    "pattern": "^report_[a-zA-Z0-9_-]+\\.md$",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "文件内容（markdown 格式）",
+                },
+            },
+            "required": ["filename", "content"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=True,
+    ),
+    "read_file": MCPToolMeta(
+        name="read_file",
+        description="读取租户报告目录中的文件内容。仅支持 markdown 报告文件。",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": "文件名，必须符合 report_*.md 格式",
+                    "pattern": "^report_[a-zA-Z0-9_-]+\\.md$",
+                },
+            },
+            "required": ["filename"],
+        },
+        allowed_roles=frozenset({"owner", "member"}),
+        requires_write=False,
+    ),
 }
 
 

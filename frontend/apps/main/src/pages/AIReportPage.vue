@@ -18,8 +18,29 @@
       />
     </div>
 
-    <!-- No report yet -->
-    <div v-if="!currentReport" class="empty-state">
+    <!-- Failed state (show regardless of whether there's an existing report) -->
+    <div v-if="taskStatus === 'failed'" class="failed-placeholder">
+      <van-icon name="warning-o" size="48" class="failed-icon" />
+      <p class="failed-text">
+        {{ errorCode === 'extraction_failed'
+          ? t('aiReport.extractionFailed')
+          : errorCode === 'structured_write_failed'
+          ? t('aiReport.writeFailed')
+          : errorCode === 'post_processing_timeout'
+          ? t('aiReport.timeoutFailed')
+          : errorCode === 'markdown_generation_failed'
+          ? t('aiReport.markdownFailed')
+          : errorCode === 'structured_conversion_failed'
+          ? t('aiReport.conversionFailed')
+          : t('toast.aiGenerateFailed') }}
+      </p>
+      <van-button type="primary" size="small" :loading="taskStatus === 'running'" @click="onGenerate">
+        {{ t('aiTask.retryBtn') }}
+      </van-button>
+    </div>
+
+    <!-- No report yet (only show when not failed) -->
+    <div v-else-if="!currentReport" class="empty-state">
       <EmptyState image="search" :description="t('aiReport.noReport')" />
       <div class="empty-actions">
         <van-button type="primary" block :loading="taskStatus === 'running'" @click="onGenerate">
@@ -35,25 +56,8 @@
       <p class="generating-text">{{ t('aiReport.generating') }}</p>
     </div>
 
-    <!-- Failed state -->
-    <div v-else-if="taskStatus === 'failed'" class="failed-placeholder">
-      <van-icon name="warning-o" size="48" class="failed-icon" />
-      <p class="failed-text">
-        {{ errorCode === 'extraction_failed'
-          ? t('aiReport.extractionFailed')
-          : errorCode === 'structured_write_failed'
-          ? t('aiReport.writeFailed')
-          : errorCode === 'post_processing_timeout'
-          ? t('aiReport.timeoutFailed')
-          : t('toast.aiGenerateFailed') }}
-      </p>
-      <van-button type="primary" size="small" :loading="taskStatus === 'running'" @click="onGenerate">
-        {{ t('aiTask.retryBtn') }}
-      </van-button>
-    </div>
-
-    <!-- Report content (hidden during generation and failure) -->
-    <template v-else-if="currentReport && taskStatus !== 'running' && taskStatus !== 'post_processing' && taskStatus !== 'failed'">
+    <!-- Report content (show when report exists and not generating/failed) -->
+    <template v-else-if="currentReport">
       <!-- Overall score -->
       <div class="overall-section">
         <div class="overall-score-wrap">
@@ -81,14 +85,63 @@
         <p class="overall-summary" v-html="renderedSummary" />
         <div class="report-meta">
           <span>{{ t('aiReport.generatedAt', { time: formatDate(reportGeneratedAt) }) }}</span>
+          <span v-if="hasMarkdownPreview" class="markdown-link" @click="loadMarkdownPreview">
+            <van-icon name="description" /> {{ t('aiReport.viewMarkdown') }}
+          </span>
           <span v-if="currentReport.data_completeness_score != null">
             {{ t('aiReport.dataCompleteness', { score: currentReport.data_completeness_score.toFixed(0) }) }}
           </span>
         </div>
       </div>
 
+      <!-- New format: Indicators array (dynamic rendering) -->
+      <template v-if="hasIndicatorsFormat">
+        <div class="indicators-section">
+          <div v-for="indicator in renderedIndicators" :key="indicator.key" class="indicator-card">
+            <!-- Header with icon + label + score -->
+            <div class="indicator-header">
+              <van-icon :name="indicator.icon" class="indicator-icon" />
+              <span class="indicator-label">{{ indicator.label }}</span>
+              <div class="indicator-score">
+                <span :class="indicator.scoreClass">{{ indicator.score }}/5</span>
+              </div>
+            </div>
+            <!-- Narrative markdown -->
+            <div class="indicator-narrative" v-html="indicator.narrativeHtml" />
+            <!-- Suggestions list -->
+            <div v-if="indicator.suggestions?.length" class="indicator-suggestions">
+              <div class="suggestions-title">{{ t('aiReport.suggestions') }}</div>
+              <div v-for="(s, idx) in indicator.suggestions" :key="idx" class="suggestion-item">
+                <van-icon name="info-o" /> {{ s }}
+              </div>
+            </div>
+            <!-- Dynamic data visualization -->
+            <div v-if="indicator.data && Object.keys(indicator.data).length > 0" class="indicator-data">
+              <!-- Allocation items -->
+              <div v-if="indicator.data.items && Array.isArray(indicator.data.items)" class="alloc-bars">
+                <div v-for="item in indicator.data.items" :key="item.category_name" class="alloc-bar-row">
+                  <span class="alloc-name">{{ item.category_name }}</span>
+                  <div class="alloc-bar-bg">
+                    <div class="alloc-bar-fill" :style="{ width: `${item.percentage}%` }" />
+                  </div>
+                  <span class="alloc-pct">{{ item.percentage.toFixed(1) }}%</span>
+                </div>
+              </div>
+              <!-- Generic data rows -->
+              <template v-else>
+                <div v-for="(value, key) in indicator.data" :key="key" class="data-row">
+                  <span>{{ key }}</span>
+                  <span v-if="typeof value === 'number'">{{ formatValue(key, value) }}</span>
+                  <span v-else>{{ value }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <!-- New format: Narrative + Sections -->
-      <template v-if="isNarrativeFormat">
+      <template v-else-if="isNarrativeFormat">
         <!-- Full narrative markdown content -->
         <div v-if="currentReport.narrative" class="narrative-section">
           <div class="narrative-content" v-html="renderedNarrative" />
@@ -192,6 +245,14 @@
         </van-button>
       </div>
     </template>
+
+    <!-- Markdown preview popup -->
+    <ReportMarkdownPreview
+      v-model:visible="markdownVisible"
+      :content="markdownContent"
+      :filename="markdownFilename"
+      :file-size="markdownFileSize"
+    />
   </div>
 </template>
 
@@ -202,14 +263,15 @@ import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { useAIStore } from '@/stores/ai'
-import { getAIReport } from '@/api/ai'
-import type { AIReport } from '@/types'
+import { getAIReport, getAIReportMarkdown } from '@/api/ai'
+import type { AIReport, AIReportIndicator } from '@/types'
 import { useAITask } from '@/composables/useAITask'
 import PageHeader from '@/components/common/PageHeader.vue'
 import ReportCard from '@/components/ai/ReportCard.vue'
 import TaskConsole from '@/components/ai/TaskConsole.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ProcessingIcon from '@/components/common/ProcessingIcon.vue'
+import ReportMarkdownPreview from '@/components/ai/ReportMarkdownPreview.vue'
 
 const SUMMARY_PURIFY_CONFIG = {
   USE_PROFILES: { html: true },
@@ -223,6 +285,37 @@ const aiStore = useAIStore()
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
 
+// Markdown preview state
+const markdownVisible = ref(false)
+const markdownContent = ref('')
+const markdownFilename = ref('')
+const markdownFileSize = ref(0)
+
+// Indicator icon mapping
+const INDICATOR_ICON_MAP: Record<string, string> = {
+  net_worth_health: 'balance-o',
+  allocation_analysis: 'bar-chart-o',
+  liability_pressure: 'bill-o',
+  asset_efficiency: 'chart-trending-o',
+  liquidity_analysis: 'gold-coin-o',
+  risk_assessment: 'warning-o',
+  growth_potential: 'arrow-up',
+  _default: 'records-o',
+}
+
+// Score class mapping (1-5 scale)
+function getIndicatorIcon(key: string): string {
+  return INDICATOR_ICON_MAP[key] || INDICATOR_ICON_MAP._default
+}
+
+function getScoreClass(score: number): string {
+  if (score >= 5) return 'score-excellent'
+  if (score >= 4) return 'score-good'
+  if (score >= 3) return 'score-fair'
+  if (score >= 2) return 'score-poor'
+  return 'score-critical'
+}
+
 async function loadExistingReport() {
   try {
     const res = await getAIReport()
@@ -230,6 +323,22 @@ async function loadExistingReport() {
       currentReport.value = res.data.report
       reportGeneratedAt.value = res.data.generated_at ?? null
     }
+  } catch {
+    showToast(t('toast.operationFailed'))
+  }
+}
+
+async function loadMarkdownPreview() {
+  if (!currentReport.value?.markdown_file_path) {
+    showToast(t('toast.operationFailed'))
+    return
+  }
+  try {
+    const res = await getAIReportMarkdown()
+    markdownContent.value = res.data.content
+    markdownFilename.value = res.data.filename
+    markdownFileSize.value = res.data.file_size
+    markdownVisible.value = true
   } catch {
     showToast(t('toast.operationFailed'))
   }
@@ -250,6 +359,12 @@ const {
 } = useAITask('report', '/ai/report/generate/events', loadExistingReport)
 
 // Detect which format the report uses
+const hasIndicatorsFormat = computed(() => {
+  if (!currentReport.value) return false
+  // New format has indicators array
+  return currentReport.value.indicators != null && currentReport.value.indicators.length > 0
+})
+
 const isLegacyFormat = computed(() => {
   if (!currentReport.value) return false
   // Legacy format has structured sections with scores
@@ -263,8 +378,24 @@ const isLegacyFormat = computed(() => {
 
 const isNarrativeFormat = computed(() => {
   if (!currentReport.value) return false
-  // New format has flat narrative and sections dict
+  // Old narrative format has flat narrative and sections dict
   return currentReport.value.narrative != null || currentReport.value.sections != null
+})
+
+// Render indicators with markdown narrative
+const renderedIndicators = computed(() => {
+  if (!currentReport.value?.indicators) return []
+  return currentReport.value.indicators.map((indicator: AIReportIndicator) => ({
+    ...indicator,
+    icon: getIndicatorIcon(indicator.key),
+    scoreClass: getScoreClass(indicator.score),
+    narrativeHtml: DOMPurify.sanitize(marked.parse(indicator.narrative, { async: false }) as string, SUMMARY_PURIFY_CONFIG),
+  }))
+})
+
+// Check if markdown preview is available
+const hasMarkdownPreview = computed(() => {
+  return currentReport.value?.markdown_file_path != null
 })
 
 // Section labels for new format (Chinese keys → display labels)
@@ -319,6 +450,21 @@ const renderedSections = computed(() => {
 function formatMoney(val: number | null | undefined): string {
   if (val == null) return '-'
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', maximumFractionDigits: 0 }).format(val)
+}
+
+function formatValue(key: string, val: number): string {
+  // Format based on key hints
+  if (key.includes('pct') || key.includes('ratio') || key.includes('percent')) {
+    return `${val.toFixed(1)}%`
+  }
+  if (key.includes('count') || key.includes('number')) {
+    return String(val)
+  }
+  if (key.includes('amount') || key.includes('cost') || key.includes('worth')) {
+    return formatMoney(val)
+  }
+  // Default: format with reasonable precision
+  return val >= 1000 ? val.toFixed(0) : val.toFixed(2)
 }
 
 function formatDate(iso: string | null): string {
@@ -531,8 +677,7 @@ onMounted(async () => {
   align-items: center;
   gap: 12px;
 }
-.generating-icon,
-.failed-icon {
+.generating-icon {
   --icon-size: 32px;
 }
 .failed-icon {
@@ -662,5 +807,102 @@ onMounted(async () => {
   :deep(li) {
     margin: 2px 0;
   }
+}
+/* Markdown preview link */
+.markdown-link {
+  color: var(--color-primary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+[data-theme='dark'] .markdown-link {
+  color: var(--color-coral);
+}
+/* Indicators section */
+.indicators-section {
+  padding: 0 16px;
+}
+.indicator-card {
+  background: var(--bg-primary);
+  margin-bottom: 12px;
+  border-radius: 16px;
+  padding: 16px;
+}
+.indicator-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.indicator-icon {
+  font-size: 20px;
+  color: var(--color-primary);
+}
+[data-theme='dark'] .indicator-icon {
+  color: var(--color-coral);
+}
+.indicator-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.indicator-score {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+.indicator-score .score-excellent { color: #2e7d32; }
+.indicator-score .score-good      { color: var(--color-primary); }
+.indicator-score .score-fair      { color: #f57f17; }
+.indicator-score .score-poor      { color: #d32f2f; }
+.indicator-score .score-critical  { color: #b71c1c; }
+[data-theme='dark'] .indicator-score .score-excellent { color: #81c784; }
+[data-theme='dark'] .indicator-score .score-good      { color: var(--color-coral); }
+[data-theme='dark'] .indicator-score .score-fair      { color: #ffd54f; }
+[data-theme='dark'] .indicator-score .score-poor      { color: #f87171; }
+[data-theme='dark'] .indicator-score .score-critical  { color: #ef5350; }
+.indicator-narrative {
+  font-size: 14px;
+  color: var(--text-primary);
+  line-height: 1.6;
+  :deep(p) {
+    margin: 0 0 6px;
+    &:last-child { margin-bottom: 0; }
+  }
+  :deep(strong) {
+    font-weight: 600;
+  }
+  :deep(ol), :deep(ul) {
+    margin: 6px 0;
+    padding-left: 18px;
+  }
+  :deep(li) {
+    margin: 3px 0;
+  }
+}
+.indicator-suggestions {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
+}
+.suggestions-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.indicator-data {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
 }
 </style>

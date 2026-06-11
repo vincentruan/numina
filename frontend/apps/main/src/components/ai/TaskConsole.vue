@@ -176,7 +176,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
-  retry: []
 }>()
 
 const { t } = useI18n()
@@ -761,22 +760,5 @@ const failureMessage = computed(() => {
 .error-bar-text {
   flex: 1;
   line-height: 1.5;
-}
-
-.error-bar-retry {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  border-radius: 6px;
-  border: none;
-  background: #dc2626;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.error-bar-retry:hover {
-  background: #b91c1c;
 }
 </style>
