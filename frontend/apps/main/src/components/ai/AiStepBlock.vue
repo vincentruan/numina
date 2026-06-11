@@ -55,21 +55,22 @@
 
         <!-- Tool call content -->
         <template v-else-if="type === 'tool_call'">
-          <!-- 统一状态容器：使用 key 强制 Vue 执行 out-in 过渡，避免 running/done 重叠显示 -->
+          <!-- 状态过渡：使用绝对定位 + 独立 key 确保离开元素完全隐藏后进入元素才显示 -->
           <Transition name="tool-state" mode="out-in">
-            <div :key="status" class="tool-state-container">
-              <!-- Running 状态：参数 + 进度文本 -->
-              <div v-if="status === 'running'" class="tool-running-state">
-                <div class="tool-status-text" aria-live="polite">
-                  <span class="tool-status-inner">{{ statusText }}</span>
-                </div>
-                <div class="tool-args args-running">
-                  <span v-if="!compressed" class="args-label">{{ t('aiProcess.argsLabel') }}</span>
-                  <span class="args-value">{{ argsSummary }}</span>
-                </div>
+            <!-- Running 状态：参数 + 进度文本 -->
+            <div v-if="status === 'running'" key="running" class="tool-state-container tool-state-running">
+              <div class="tool-status-text" aria-live="polite">
+                <span class="tool-status-inner">{{ statusText }}</span>
               </div>
-              <!-- Done/Error 状态：结果 -->
-              <div v-else-if="status === 'done' || status === 'error' || status === 'failed'" class="tool-result" :class="resultClass">
+              <!-- U1: Args hidden by default in compressed mode, shown when user expands -->
+              <div v-if="!compressed || isExpanded" class="tool-args args-running">
+                <span class="args-label">{{ t('aiProcess.argsLabel') }}</span>
+                <span class="args-value">{{ argsSummary }}</span>
+              </div>
+            </div>
+            <!-- Done/Error 状态：结果 -->
+            <div v-else-if="status === 'done' || status === 'error' || status === 'failed'" :key="status" class="tool-state-container tool-state-result">
+              <div class="tool-result" :class="resultClass">
                 <span class="result-icon">{{ resultStatusIcon }}</span>
                 <span class="result-text">{{ resultText }}</span>
               </div>
@@ -228,12 +229,13 @@ const computedElapsedMs = computed(() => {
 })
 
 // Live status text for running tool_call steps - dynamic generation using displayName
+// CR-4 fix: Use i18n with action interpolation instead of hardcoded Chinese
 const statusText = computed(() => {
-  const baseName = props.displayName ?? props.name ?? '处理'
-  if (props.status === 'running') return `正在${baseName}`
-  if (props.status === 'done') return `已${baseName}`
-  if (props.status === 'error') return `${baseName}失败`
-  if (props.status === 'streaming') return `${baseName}中...`
+  const baseName = props.displayName ?? props.name ?? t('aiProcess.defaultAction')
+  if (props.status === 'running') return t('aiProcess.statusRunningAction', { action: baseName })
+  if (props.status === 'done') return t('aiProcess.statusDoneAction', { action: baseName })
+  if (props.status === 'error') return t('aiProcess.statusFailedAction', { action: baseName })
+  if (props.status === 'streaming') return t('aiProcess.statusStreamingAction', { action: baseName })
   return baseName
 })
 
@@ -360,7 +362,22 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
+  /* U1: Interaction states for compressed tool_call cards */
+  transition: background 0.15s ease, transform 0.1s ease;
 }
+
+/* U1: Hover state — subtle background highlight */
+.ai-step-block--compressed .step-header[role='button']:hover {
+  background: rgba(var(--color-action-blue-rgb), 0.08);
+  border-radius: 4px;
+}
+
+/* U1: Press state — scale 0.98 effect */
+.ai-step-block--compressed .step-header[role='button']:active {
+  transform: scale(0.98);
+}
+
+/* U1: Focus state — use system default focus ring (already defined for focus-visible) */
 
 .ai-step-block--compressed .step-info {
   flex: 1;
@@ -549,10 +566,12 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   word-break: break-word;
 }
 
-/* Tool state transition — unified out-in to prevent overlap */
+/* Tool state transition — out-in with absolute positioning to prevent overlap */
 .tool-state-enter-active,
 .tool-state-leave-active {
-  transition: opacity 0.25s ease;
+  transition: opacity 0.15s ease;
+  position: absolute;
+  width: 100%;
 }
 
 .tool-state-enter-from,
@@ -569,12 +588,17 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   display: flex;
   flex-direction: column;
   gap: 6px;
+  position: relative;
+  /* Prevent height collapse during out-in transition with absolute children */
+  min-height: 20px;
 }
 
-.tool-running-state {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.tool-state-running {
+  width: 100%;
+}
+
+.tool-state-result {
+  width: 100%;
 }
 
 /* Tool status text */

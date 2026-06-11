@@ -248,7 +248,7 @@ async def parse_capability_result(
     answer_text: str,
     family_id: int,
     db: Session,
-) -> tuple[list[dict] | dict | None, str]:
+) -> tuple[list[dict] | dict | None, str, str | None]:
     """Parse structured results from LLM answer text.
 
     Args:
@@ -258,9 +258,10 @@ async def parse_capability_result(
         db: Database session
 
     Returns:
-        (data, method) where:
+        (data, method, error_type) where:
         - data: parsed structured data or None if extraction fails
         - method: extraction method label for audit
+        - error_type: specific error type for user messaging (e.g., "quota_exceeded", "timeout")
     """
     # Step 1: Regex extraction (three carriers)
     block, method = _extract_structured_block(answer_text)
@@ -275,19 +276,21 @@ async def parse_capability_result(
                 data = None
             if data is not None and _validate_json(data, capability):
                 logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(data) if isinstance(data, list) else 1} items")
-                return data, method
+                return data, method, None
             else:
                 logger.warning(f"[{capability}] regex extracted JSON via {method} but validation failed")
         except (ValueError, TypeError) as e:
             logger.warning(f"[{capability}] regex found block via {method} but JSON repair failed: {e}")
 
     # Step 2: LLM fallback (convert answer text to structured JSON)
-    fallback_data = await _llm_fallback_extract(capability, answer_text, family_id, db)
+    fallback_data, fallback_error_type = await _llm_fallback_extract(capability, answer_text, family_id, db)
     if fallback_data is not None:
-        return fallback_data, "llm_fallback_hit"
+        return fallback_data, "llm_fallback_hit", None
 
-    logger.warning(f"[{capability}] structured data extraction failed, no results persisted")
-    return None, "failed"
+    # Return specific error type for user messaging
+    error_type = fallback_error_type or "extraction_failed"
+    logger.warning(f"[{capability}] structured data extraction failed (error_type={error_type}), no results persisted")
+    return None, "failed", error_type
 
 
 def _build_extraction_prompt(capability: str, answer_text: str, retry_count: int = 0) -> str:
@@ -435,14 +438,17 @@ async def _llm_fallback_extract(
     answer_text: str,
     family_id: int,
     db: Session,
-) -> list[dict] | dict | None:
+) -> tuple[list[dict] | dict | None, str | None]:
     """Use lightweight LLM to extract structured data from answer text.
 
     Picks family's cheapest active provider (by display_order ASC NULLS LAST),
     calls LLM with extraction prompt under a 30s timeout, parses and validates.
     Retries up to LLM_FALLBACK_MAX_RETRIES times on validation failure.
 
-    Returns None on any failure.
+    Returns:
+        (data, error_type) where:
+        - data: extracted structured data or None on failure
+        - error_type: specific error type for user messaging (e.g., "quota_exceeded")
     """
     configs = (
         db.query(AIProviderConfig)
@@ -457,19 +463,23 @@ async def _llm_fallback_extract(
 
     if not configs:
         logger.warning(f"[{capability}] LLM fallback: no active provider for family {family_id}")
-        return None
+        return None, "no_provider"
 
     config = configs[0]
     api_key = decrypt_api_key(config.api_key_encrypted)
     if not api_key:
         logger.warning(f"[{capability}] LLM fallback: could not decrypt API key")
-        return None
+        return None, "api_key_error"
 
     # Track failure reasons for feedback in retries
     failure_reasons: list[str] = []
+    # Track if the LAST iteration hit a quota error (not cumulative across retries)
+    last_iteration_quota_error = False
 
     # Retry loop: attempt extraction up to LLM_FALLBACK_MAX_RETRIES times
     for retry in range(LLM_FALLBACK_MAX_RETRIES):
+        # Reset quota tracking for this iteration
+        last_iteration_quota_error = False
         prompt = _build_extraction_prompt_with_feedback(
             capability, answer_text, retry_count=retry, failure_reasons=failure_reasons
         )
@@ -490,6 +500,11 @@ async def _llm_fallback_extract(
             logger.warning(f"[{capability}] LLM fallback timed out after {LLM_FALLBACK_TIMEOUT_SECONDS}s (retry {retry + 1})")
             continue  # Retry on timeout
         except Exception as e:
+            error_str = str(e)
+            # Detect quota/throttling errors for specific user messaging
+            if _is_quota_error(error_str):
+                last_iteration_quota_error = True
+                logger.warning(f"[{capability}] LLM fallback quota error: {e} (retry {retry + 1})")
             failure_reasons.append(f"call_failed: {type(e).__name__}")
             logger.warning(f"[{capability}] LLM fallback call failed: {e} (retry {retry + 1})")
             continue  # Retry on error
@@ -522,13 +537,49 @@ async def _llm_fallback_extract(
 
         if _validate_json(data, capability):
             logger.info(f"[{capability}] LLM fallback extraction succeeded on retry {retry + 1}")
-            return data
+            return data, None
 
         failure_reasons.append("schema_validation_failed")
         logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
 
     logger.warning(f"[{capability}] LLM fallback exhausted {LLM_FALLBACK_MAX_RETRIES} retries, giving up")
-    return None
+    # Return specific error type if the LAST iteration was a quota error
+    if last_iteration_quota_error:
+        return None, "quota_exceeded"
+    return None, "llm_fallback_failed"
+
+
+def _is_quota_error(error_str: str) -> bool:
+    """Detect quota/throttling errors from LLM API responses.
+
+    Patterns are specific to avoid false positives from unrelated error messages.
+    """
+    error_lower = error_str.lower()
+
+    # HTTP 429 status - match as standalone status code, not part of other numbers
+    # Matches: "429", "status 429", "429 Too Many Requests", "HTTP 429"
+    if re.search(r"(?:^|\D)429(?:\D|$)", error_str) or "too many requests" in error_lower:
+        return True
+
+    # Quota-specific patterns - must be quota context, not general billing
+    quota_patterns = [
+        "quota",
+        "throttling",
+        "rate_limit",
+        "rate limit",
+        "allocated quota exceeded",
+        "concurrency allocated quota exceeded",
+        "account is out of quota",
+        "quota exceeded",
+        "insufficient_quota",
+        "billing limit",
+        "billing exceeded",
+        "billing unavailable",
+        "usage limit",
+        "usage_cap",
+        "capacity exceeded",
+    ]
+    return any(pattern in error_lower for pattern in quota_patterns)
 
 
 def _contains_markdown_table(data: dict) -> bool:

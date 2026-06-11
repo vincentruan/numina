@@ -1216,12 +1216,30 @@ async function loadSessionMessages(session: SessionSummary) {
             })
           } else if (event.type === 'assistant.message') {
             // U6: Assign reconstructed processSteps to historical message
+            // Apply content filter to remove question echo and DeerFlow leakage
+            // Get the preceding user message for question echo removal
+            const lastUserMsg = messages.value.filter(m => m.role === 'user').pop()
+            const userQuestion = lastUserMsg?.content ?? ''
+            const rawContent = event.content ?? ''
+            const filteredContent = filterAIContent(rawContent, userQuestion)
+            // Debug: log if filter changed content (dev only)
+            if (import.meta.env.DEV && rawContent !== filteredContent) {
+              console.log('[loadSessionMessages] filterAIContent applied:', {
+                rawLen: rawContent.length,
+                filteredLen: filteredContent.length,
+                diff: rawContent.length - filteredContent.length,
+                hasUserQuestion: !!userQuestion,
+                userQuestionLen: userQuestion.length,
+                rawPreview: rawContent.slice(0, 200),
+                filteredPreview: filteredContent.slice(0, 200),
+              })
+            }
             const assistantMsg: Message = {
               id: event.eventId ?? Date.now().toString(),
               role: 'assistant',
               phase: 'done',
-              content: event.content ?? '',
-              renderedContent: renderMarkdown(event.content ?? ''),
+              content: filteredContent,
+              renderedContent: renderMarkdown(filteredContent),
               created_at: event.timestamp ?? new Date().toISOString(),
               displayTime: formatTime(event.timestamp ?? new Date().toISOString()),
               // R12: processSteps populated from normalizer
@@ -1468,8 +1486,12 @@ async function onSend() {
           }
         }
         textRaw += event.token ?? ''
-        // 应用内容过滤器，移除违规内容
-        const filteredContent = filterAIContent(textRaw)
+        // 应用内容过滤器，移除违规内容和问题回声
+        const filteredContent = filterAIContent(textRaw, q)
+        // DEBUG: Log filter application (dev only)
+        if (import.meta.env.DEV && textRaw !== filteredContent) {
+          console.log('[filterAIContent] Applied:', { rawLen: textRaw.length, filteredLen: filteredContent.length, diff: textRaw.length - filteredContent.length, questionLen: q?.length })
+        }
         messages.value[msgIdx].content = filteredContent
         // Use throttled rendering for smoother streaming
         renderMarkdownThrottled(filteredContent, messages.value[msgIdx])
@@ -1482,6 +1504,9 @@ async function onSend() {
         messages.value[msgIdx].renderedContent = renderMarkdown(messages.value[msgIdx].content)
       }
       if (event.type === 'capability.end') {
+        // syncStepsToMessage already ran at line 1452; just sync phase/processStatus
+        messages.value[msgIdx].phase = normState.phase
+        messages.value[msgIdx].processStatus = normState.phase === 'done' ? 'done' : 'running'
         if (event.result?.suggestions?.length) {
           messages.value[msgIdx].suggestions = event.result.suggestions
         }
@@ -1848,11 +1873,20 @@ onMounted(async () => {
       if (res.data.session_id) {
         currentSessionId.value = res.data.session_id
       }
-      messages.value = res.data.messages.map((m) => ({
-        ...m,
-        displayTime: formatTime(m.created_at),
-        renderedContent: m.role === 'assistant' ? renderMarkdown(m.content) : undefined,
-      }))
+      messages.value = res.data.messages.map((m, idx) => {
+        // Find preceding user message for question echo removal
+        const prevMessages = res.data.messages.slice(0, idx)
+        const prevUserMsg = prevMessages.filter(pm => pm.role === 'user').pop()
+        const userQuestion = prevUserMsg?.content ?? ''
+        // Filter AI content once and reuse for both content and renderedContent
+        const filteredContent = m.role === 'assistant' ? filterAIContent(m.content, userQuestion) : m.content
+        return {
+          ...m,
+          content: filteredContent,
+          displayTime: formatTime(m.created_at),
+          renderedContent: m.role === 'assistant' ? renderMarkdown(filteredContent) : undefined,
+        }
+      })
       await markChatRead()
       await scrollToBottom()
     } catch {
@@ -2433,13 +2467,15 @@ onUnmounted(() => {
 }
 
 .bubble.assistant {
-  max-width: 95%;  /* Wider than user bubbles for better readability */
+  max-width: 98%;  /* U4: Wider for Agent content (1.5x user bubble target) */
 }
 
-/* Mobile: slightly narrower to avoid table overflow conflicts */
+/* U4: Mobile (≤428px) — full-width with safe-area padding */
 @media (max-width: 428px) {
   .bubble.assistant {
-    max-width: 90%;
+    max-width: 100%;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 }
 

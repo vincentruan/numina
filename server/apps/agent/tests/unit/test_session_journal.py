@@ -199,3 +199,197 @@ class TestSessionJournalToolEvents:
         assert stream_payload["tool"]["id"] == journal_evt["tool"]["id"]
         assert stream_payload["tool"]["name"] == journal_evt["tool"]["name"]
         assert stream_payload["tool"]["arguments"] == journal_evt["tool"]["arguments"]
+
+
+class TestSessionJournalPlanUpdate:
+    """Tests for write_plan_update method (CR-9)."""
+
+    def test_write_plan_update_creates_event(self, tmp_path: Path) -> None:
+        """write_plan_update creates plan.update event with todos array."""
+        journal = SessionJournalService(str(tmp_path))
+        todos = [
+            {"id": "todo-1", "content": "Query asset data", "status": "active"},
+            {"id": "todo-2", "content": "Analyze results", "status": "pending"},
+            {"id": "todo-3", "content": "Generate report", "status": "pending"},
+        ]
+        journal.write_plan_update(
+            family_id="family123",
+            session_id="session456",
+            todos=todos,
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        assert jsonl_path.exists()
+
+        event = json.loads(jsonl_path.read_text().strip())
+        assert event["type"] == "plan.update"
+        assert event["sessionId"] == "session456"
+        assert event["familyId"] == "family123"
+        assert event["actor"] == "assistant"
+        assert event["visibility"] == "public"
+        assert "todos" in event
+        assert len(event["todos"]) == 3
+        assert event["todos"][0]["status"] == "active"
+
+    def test_write_plan_update_empty_todos(self, tmp_path: Path) -> None:
+        """write_plan_update with empty todos list still creates event."""
+        journal = SessionJournalService(str(tmp_path))
+        journal.write_plan_update(
+            family_id="family123",
+            session_id="session456",
+            todos=[],
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        event = json.loads(jsonl_path.read_text().strip())
+        assert event["type"] == "plan.update"
+        assert event["todos"] == []
+
+    def test_write_plan_update_status_progression(self, tmp_path: Path) -> None:
+        """write_plan_update can track status progression over time."""
+        journal = SessionJournalService(str(tmp_path))
+
+        # Initial plan
+        todos_initial = [
+            {"id": "todo-1", "content": "Step 1", "status": "active"},
+            {"id": "todo-2", "content": "Step 2", "status": "pending"},
+        ]
+        journal.write_plan_update(
+            family_id="family123",
+            session_id="session456",
+            todos=todos_initial,
+        )
+
+        # Progress update
+        todos_progress = [
+            {"id": "todo-1", "content": "Step 1", "status": "done"},
+            {"id": "todo-2", "content": "Step 2", "status": "active"},
+        ]
+        journal.write_plan_update(
+            family_id="family123",
+            session_id="session456",
+            todos=todos_progress,
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        lines = jsonl_path.read_text().strip().split("\n")
+        assert len(lines) == 2
+
+        events = [json.loads(line) for line in lines]
+        assert events[0]["todos"][0]["status"] == "active"
+        assert events[1]["todos"][0]["status"] == "done"
+
+
+class TestSessionJournalSubagentUpdate:
+    """Tests for write_subagent_update method (CR-10)."""
+
+    def test_write_subagent_update_running(self, tmp_path: Path) -> None:
+        """write_subagent_update creates subagent.update event for running status."""
+        journal = SessionJournalService(str(tmp_path))
+        journal.write_subagent_update(
+            family_id="family123",
+            session_id="session456",
+            task_id="task-001",
+            status="running",
+            title="Asset analysis",
+            description="Processing asset data...",
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        assert jsonl_path.exists()
+
+        event = json.loads(jsonl_path.read_text().strip())
+        assert event["type"] == "subagent.update"
+        assert event["sessionId"] == "session456"
+        assert event["familyId"] == "family123"
+        assert event["actor"] == "assistant"
+        assert event["visibility"] == "public"
+        assert "subagent" in event
+        assert event["subagent"]["taskId"] == "task-001"
+        assert event["subagent"]["status"] == "running"
+        assert event["subagent"]["title"] == "Asset analysis"
+        assert event["subagent"]["description"] == "Processing asset data..."
+
+    def test_write_subagent_update_done(self, tmp_path: Path) -> None:
+        """write_subagent_update creates event for done status with result."""
+        journal = SessionJournalService(str(tmp_path))
+        journal.write_subagent_update(
+            family_id="family123",
+            session_id="session456",
+            task_id="task-001",
+            status="done",
+            title="Asset analysis",
+            result="Analysis complete: 5 assets found",
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        event = json.loads(jsonl_path.read_text().strip())
+        assert event["subagent"]["status"] == "done"
+        assert event["subagent"]["result"] == "Analysis complete: 5 assets found"
+        assert event["subagent"]["description"] is None
+
+    def test_write_subagent_update_failed(self, tmp_path: Path) -> None:
+        """write_subagent_update creates event for failed status with error."""
+        journal = SessionJournalService(str(tmp_path))
+        journal.write_subagent_update(
+            family_id="family123",
+            session_id="session456",
+            task_id="task-001",
+            status="failed",
+            title="Asset analysis",
+            error="Connection timeout",
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        event = json.loads(jsonl_path.read_text().strip())
+        assert event["subagent"]["status"] == "failed"
+        assert event["subagent"]["error"] == "Connection timeout"
+
+    def test_write_subagent_update_partial_fields(self, tmp_path: Path) -> None:
+        """write_subagent_update accepts partial field updates."""
+        journal = SessionJournalService(str(tmp_path))
+        # Only status update
+        journal.write_subagent_update(
+            family_id="family123",
+            session_id="session456",
+            task_id="task-001",
+            status="running",
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        event = json.loads(jsonl_path.read_text().strip())
+        assert event["subagent"]["taskId"] == "task-001"
+        assert event["subagent"]["status"] == "running"
+        assert event["subagent"]["title"] is None
+        assert event["subagent"]["description"] is None
+
+    def test_write_subagent_update_status_progression(self, tmp_path: Path) -> None:
+        """write_subagent_update can track task status progression."""
+        journal = SessionJournalService(str(tmp_path))
+
+        # Start task
+        journal.write_subagent_update(
+            family_id="family123",
+            session_id="session456",
+            task_id="task-001",
+            status="running",
+            title="Analysis",
+            description="Starting...",
+        )
+
+        # Complete task
+        journal.write_subagent_update(
+            family_id="family123",
+            session_id="session456",
+            task_id="task-001",
+            status="done",
+            result="Complete",
+        )
+
+        jsonl_path = tmp_path / "family123" / "agent" / "_default" / "_shared" / "session456.jsonl"
+        lines = jsonl_path.read_text().strip().split("\n")
+        assert len(lines) == 2
+
+        events = [json.loads(line) for line in lines]
+        assert events[0]["subagent"]["status"] == "running"
+        assert events[1]["subagent"]["status"] == "done"

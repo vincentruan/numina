@@ -12,6 +12,13 @@ const i18n = createI18n({
         stepReasoning: '思考',
         argsLabel: '参数：',
         statusDone: '已完成',
+        statusRunning: '正在执行',
+        // CR-4: Dynamic status with action interpolation
+        defaultAction: '处理',
+        statusRunningAction: '正在{action}',
+        statusDoneAction: '已{action}',
+        statusFailedAction: '{action}失败',
+        statusStreamingAction: '{action}中...',
         reasoningDuration: '思考 {seconds}s',
         thinkingLabel: '思考中...',
       },
@@ -330,7 +337,8 @@ describe('AiStepBlock', () => {
 
   // args display condition tests
   describe('tool_call args display condition', () => {
-    it('running status shows args even when compressed=true', () => {
+    // U1: running status hides args by default when compressed=true
+    it('running status hides args by default when compressed=true', () => {
       const wrapper = mountWith({
         type: 'tool_call',
         id: 'ar-1',
@@ -340,7 +348,7 @@ describe('AiStepBlock', () => {
         compressed: true,
       })
 
-      expect(wrapper.find('.tool-args').exists()).toBe(true)
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
     })
 
     it('done status hides args by default (compressed=true, not expanded)', () => {
@@ -372,7 +380,7 @@ describe('AiStepBlock', () => {
       expect(wrapper.find('.tool-args').exists()).toBe(false)
     })
 
-    it('done status shows args when expanded (after user click)', async () => {
+    it('done status shows result when expanded (after user click)', async () => {
       const wrapper = mountWith({
         type: 'tool_call',
         id: 'ar-4',
@@ -385,7 +393,8 @@ describe('AiStepBlock', () => {
 
       // expand by clicking header
       await wrapper.find('.step-header').trigger('click')
-      expect(wrapper.find('.tool-args').exists()).toBe(true)
+      // U1: done state shows result, not args
+      expect(wrapper.find('.tool-result').exists()).toBe(true)
     })
 
     it('error status hides args by default in compressed mode', () => {
@@ -403,7 +412,8 @@ describe('AiStepBlock', () => {
       expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
     })
 
-    it('args-label is hidden in compressed mode', () => {
+    // U1: In compressed+running mode, args hidden by default; shown when expanded
+    it('args hidden by default in compressed+running mode', () => {
       const wrapper = mountWith({
         type: 'tool_call',
         id: 'ar-6',
@@ -413,8 +423,24 @@ describe('AiStepBlock', () => {
         compressed: true,
       })
 
-      expect(wrapper.find('.args-label').exists()).toBe(false)
-      expect(wrapper.find('.args-value').exists()).toBe(true)
+      // U1: Args hidden by default, only tool name + status shown
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+    })
+
+    it('args shown in compressed+running mode when expanded', async () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'ar-6b',
+        status: 'running',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        compressed: true,
+      })
+
+      // Expand by clicking header
+      await wrapper.find('.step-header').trigger('click')
+      // U1: Args now visible when expanded
+      expect(wrapper.find('.tool-args').exists()).toBe(true)
     })
 
     it('args-label is shown in non-compressed mode', () => {
@@ -428,6 +454,78 @@ describe('AiStepBlock', () => {
       })
 
       expect(wrapper.find('.args-label').exists()).toBe(true)
+    })
+  })
+
+  // U5: Regression tests for error handling
+  describe('U5: Error handling regression tests', () => {
+    it('compressed+error state shows error message correctly (regression)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-1',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '查询超时',
+        compressed: true,
+      })
+
+      // Error card should be rendered
+      expect(wrapper.find('.ai-step-block--error').exists()).toBe(true)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+      expect(wrapper.text()).toContain('查询超时')
+    })
+
+    it('compressed+error state always shows error, never args (by design)', async () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-2',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '查询失败',
+        compressed: true,
+      })
+
+      // Error state: only error result shown, args not rendered (transition shows result container)
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+
+      // Expanding in error state still shows error result, not args
+      await wrapper.find('.step-header').trigger('click')
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+    })
+
+    it('non-compressed error state shows error only (regression)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-3',
+        status: 'error',
+        name: 'get_assets',
+        args: { filter: 'all' },
+        error: '网络错误',
+        compressed: false,
+      })
+
+      // Non-compressed error: shows error result, not args (args only in running state)
+      expect(wrapper.find('.tool-args').exists()).toBe(false)
+      expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
+      expect(wrapper.text()).toContain('网络错误')
+    })
+
+    it('error icon displays ✗ (regression)', () => {
+      const wrapper = mountWith({
+        type: 'tool_call',
+        id: 'err-4',
+        status: 'error',
+        name: 'get_assets',
+        args: {},
+        error: '失败',
+        compressed: true,
+      })
+
+      expect(wrapper.find('.result-icon').text()).toBe('✗')
     })
   })
 })

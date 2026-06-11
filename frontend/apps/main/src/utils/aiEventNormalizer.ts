@@ -111,6 +111,7 @@ export function normalizeAgentEvent(
           display_name: event.toolName ?? event.tool_name,
           icon: event.icon ?? 'tool',
           arguments: event.arguments ?? event.args ?? {},
+          tool_type: event.tool_type,
         }
 
         // If no explicit plan arrived and the 3s timer has already expired
@@ -147,24 +148,40 @@ export function normalizeAgentEvent(
     case 'tool.call_completed': // 兼容旧格式
       const toolId = event.tool_id ?? event.toolId
       if (toolId) {
-        const target = state.steps.find(
+        // Update ALL matching tool_call steps (not just first)
+        // This fixes the case where duplicate tool.call events created multiple steps
+        // but only one tool.result arrives - all matching steps should be marked done
+        const matchingSteps = state.steps.filter(
           (s): s is Extract<ProcessStep, { type: 'tool_call' }> =>
             s.type === 'tool_call' && s.id === toolId,
         )
-        if (target) {
+
+        // Only emit event and update steps if we found matching steps
+        // (Unknown tool_ids are silently dropped per original behavior)
+        if (matchingSteps.length > 0) {
           // Handle both nested (streaming) and flat (journal) formats
-          target.status = (event.result?.success ?? event.success ?? false) ? 'done' : 'error'
-          target.resultSummary = event.result?.summary ?? event.summary
-          target.data = event.result?.data ?? event.data
-          target.error = event.result?.error ?? event.error
-          target.elapsedMs = event.result?.execution_time_ms ?? event.executionTimeMs
+          const success = event.result?.success ?? event.success ?? false
+          const summary = event.result?.summary ?? event.summary
+          const data = event.result?.data ?? event.data
+          const errorObj = event.result?.error ?? event.error
+          const error = typeof errorObj === 'string' ? errorObj : errorObj?.message
+          const elapsedMs = event.result?.execution_time_ms ?? event.executionTimeMs
+
+          matchingSteps.forEach(target => {
+            target.status = success ? 'done' : 'error'
+            target.resultSummary = summary
+            target.data = data
+            target.error = error
+            target.elapsedMs = elapsedMs
+          })
+
           events.push({
             type: 'tool_result',
             toolCallId: toolId,
-            success: event.result?.success ?? false,
-            summary: event.result?.summary,
-            error: event.result?.error,
-            elapsedMs: event.result?.execution_time_ms,
+            success,
+            summary,
+            error,
+            elapsedMs,
           })
         }
       }

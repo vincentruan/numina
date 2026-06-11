@@ -293,7 +293,7 @@ function stepProps(step: ProcessStep): StepProps {
       base.resultSummary = step.resultSummary
       base.error = step.error
       base.elapsedMs = step.elapsedMs
-      base.compressed = step.status === 'done'
+      base.compressed = step.status === 'done' || step.status === 'running'
       break
     case 'subagent':
       base.taskId = step.taskId

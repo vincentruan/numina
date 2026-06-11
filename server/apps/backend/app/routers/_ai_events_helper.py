@@ -95,7 +95,7 @@ async def proxy_capability_events(
         from apps.backend.app.services.ai_result_parser import parse_capability_result
         from apps.backend.app.services.ai_result_writer import write_capability_results
 
-        data, method = await parse_capability_result(capability, answer, family_id, gen_db)
+        data, method, extraction_error_type = await parse_capability_result(capability, answer, family_id, gen_db)
 
         # Write audit record (R2.4 / R5.1)
         _write_audit(
@@ -104,7 +104,7 @@ async def proxy_capability_events(
             capability=capability,
             task_id=task_id,
             method=method,
-            error_msg=None if data is not None else "extraction_failed",
+            error_msg=None if data is not None else extraction_error_type or "extraction_failed",
             answer_excerpt=answer[:500] if answer else None,
         )
 
@@ -128,12 +128,12 @@ async def proxy_capability_events(
             # Extraction failed (regex + fallback both missed)
             logger.error(
                 f"[{capability}] structured extraction failed for family {family_id}, "
-                f"method={method}, answer[:200]={answer[:200] if answer else ''}"
+                f"method={method}, error_type={extraction_error_type}, answer[:200]={answer[:200] if answer else ''}"
             )
-            AITaskService.fail_task(task_id, "structured_extraction_failed", gen_db)
+            AITaskService.fail_task(task_id, extraction_error_type or "structured_extraction_failed", gen_db)
             # Evaluate circuit breaker (may transition to rate_limited/circuit_open)
             AIExtractionCircuitService.evaluate(family_id, capability, gen_db)
-            yield _error_event("extraction_failed")
+            yield _error_event(extraction_error_type or "extraction_failed")
 
         _promote_next(family_id, gen_db)
     except Exception as e:
@@ -158,6 +158,8 @@ def _error_event(code: str, message: str | None = None) -> bytes:
         "structured_write_failed": "分析已完成，但结果保存失败",
         "agent_stream_error": "智能体响应中断",
         "post_processing_timeout": "处理超时，请稍后重试",
+        "quota_exceeded": "AI服务配额已耗尽，请检查API额度或稍后重试",
+        "llm_fallback_failed": "分析已完成，但结构化数据提取失败",
     }
     final_message = message or message_map.get(code, code)
     return (
@@ -303,7 +305,7 @@ async def proxy_agent_first_events(
         from apps.backend.app.services.ai_result_parser import parse_capability_result
         from apps.backend.app.services.ai_result_writer import write_capability_results
 
-        data, method = await parse_capability_result(capability, answer, family_id, gen_db)
+        data, method, extraction_error_type = await parse_capability_result(capability, answer, family_id, gen_db)
 
         # Write audit record (R2.4 / R5.1)
         _write_audit(
@@ -312,7 +314,7 @@ async def proxy_agent_first_events(
             capability=capability,
             task_id=task_id,
             method=method,
-            error_msg=None if data is not None else "extraction_failed",
+            error_msg=None if data is not None else extraction_error_type or "extraction_failed",
             answer_excerpt=answer[:500] if answer else None,
         )
 
@@ -335,11 +337,11 @@ async def proxy_agent_first_events(
             # Extraction failed (regex + fallback both missed)
             logger.error(
                 f"[{capability}] structured extraction failed for family {family_id}, "
-                f"method={method}, answer[:200]={answer[:200] if answer else ''}"
+                f"method={method}, error_type={extraction_error_type}, answer[:200]={answer[:200] if answer else ''}"
             )
-            AITaskService.fail_task(task_id, "structured_extraction_failed", gen_db)
+            AITaskService.fail_task(task_id, extraction_error_type or "structured_extraction_failed", gen_db)
             AIExtractionCircuitService.evaluate(family_id, capability, gen_db)
-            yield _error_event("extraction_failed")
+            yield _error_event(extraction_error_type or "extraction_failed")
 
         _promote_next(family_id, gen_db)
     except Exception as e:

@@ -52,6 +52,8 @@ def _draw_to_response(draw: BlindBoxDraw) -> BlindBoxDrawResponse:
         fulfilled_at=draw.fulfilled_at,
         gift_name=gift.name if gift else "",
         gift_emoji=gift.emoji if gift else None,
+        is_auto_triggered=draw.is_auto_triggered,
+        shown_to_child=draw.shown_to_child,
     )
 
 
