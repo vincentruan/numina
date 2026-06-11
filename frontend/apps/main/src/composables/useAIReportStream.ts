@@ -4,6 +4,8 @@ import { refreshTokenIfNeeded } from '@/api'
 
 export type StreamStatus = 'idle' | 'connecting' | 'analyzing' | 'completed' | 'error'
 
+const COOKIE_REFRESH_INTERVAL_MS = 10 * 60 * 1000 // 10 minutes (< 15 min token TTL)
+
 export function useAIReportStream() {
   const { t } = useI18n()
   const status = ref<StreamStatus>('idle')
@@ -13,6 +15,26 @@ export function useAIReportStream() {
   const errorMessage = ref('')
 
   let abortController: AbortController | null = null
+  let cookieRefreshTimer: ReturnType<typeof setInterval> | null = null
+
+  // Proactive cookie refresh during long SSE
+  function startCookieRefresh() {
+    if (cookieRefreshTimer) clearInterval(cookieRefreshTimer)
+    cookieRefreshTimer = setInterval(async () => {
+      try {
+        await refreshTokenIfNeeded()
+      } catch {
+        // Silently ignore - next API call will handle 401 if truly expired
+      }
+    }, COOKIE_REFRESH_INTERVAL_MS)
+  }
+
+  function stopCookieRefresh() {
+    if (cookieRefreshTimer) {
+      clearInterval(cookieRefreshTimer)
+      cookieRefreshTimer = null
+    }
+  }
 
   async function connect(): Promise<void> {
     abortController = new AbortController()
@@ -66,6 +88,7 @@ export function useAIReportStream() {
 
     status.value = 'analyzing'
     progressMessage.value = t('aiHub.reportGenerating')
+    startCookieRefresh() // Keep auth fresh during long SSE operations
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
@@ -114,7 +137,10 @@ export function useAIReportStream() {
           }
         }
       }
+      // Stream ended normally - stop refresh timer
+      stopCookieRefresh()
     } catch (err) {
+      stopCookieRefresh()
       status.value = 'error'
       if (err instanceof Error && err.name === 'AbortError') {
         errorMessage.value = t('wsErrors.connectionInterrupted')
@@ -130,6 +156,7 @@ export function useAIReportStream() {
   function disconnect() {
     abortController?.abort()
     abortController = null
+    stopCookieRefresh()
   }
 
   function reset() {
@@ -141,7 +168,10 @@ export function useAIReportStream() {
     generatedAt.value = null
   }
 
-  onUnmounted(() => disconnect())
+  onUnmounted(() => {
+    disconnect()
+    stopCookieRefresh()
+  })
 
   return { status, progressMessage, report, generatedAt, errorMessage, connect, disconnect, reset }
 }

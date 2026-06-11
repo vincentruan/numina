@@ -16,6 +16,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useAIStore } from '@/stores/ai'
+import { refreshTokenIfNeeded } from '@/api'
 import {
   getAITask,
   startAIEventStream,
@@ -26,6 +27,7 @@ import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import type { AgentEvent, PlanStep } from '@/types/agent-stream'
 
 const POLL_INTERVAL_MS = 3000
+const COOKIE_REFRESH_INTERVAL_MS = 10 * 60 * 1000 // 10 minutes (< 15 min token TTL)
 
 export type AITaskPhase = 'connecting' | 'thinking' | 'answering' | null
 
@@ -81,6 +83,7 @@ export function useAITask(
   let timer: ReturnType<typeof setInterval> | null = null
   let pollTimer: ReturnType<typeof setInterval> | null = null
   let thinkTimer: ReturnType<typeof setInterval> | null = null
+  let cookieRefreshTimer: ReturnType<typeof setInterval> | null = null
   let startTime: number | null = null
   let thinkStartTime: number | null = null
   let completedFired = false
@@ -117,6 +120,28 @@ export function useAITask(
     if (thinkTimer) {
       clearInterval(thinkTimer)
       thinkTimer = null
+    }
+  }
+
+  // ── Proactive cookie refresh during long SSE ────────────────────────────────
+  // Access tokens expire in 15 minutes. Long-running SSE operations may exceed this.
+  // Proactive refresh every 10 minutes keeps cookies fresh for post-stream API calls.
+
+  function startCookieRefresh() {
+    if (cookieRefreshTimer) clearInterval(cookieRefreshTimer)
+    cookieRefreshTimer = setInterval(async () => {
+      try {
+        await refreshTokenIfNeeded()
+      } catch {
+        // Silently ignore - next API call will handle 401 if truly expired
+      }
+    }, COOKIE_REFRESH_INTERVAL_MS)
+  }
+
+  function stopCookieRefresh() {
+    if (cookieRefreshTimer) {
+      clearInterval(cookieRefreshTimer)
+      cookieRefreshTimer = null
     }
   }
 
@@ -330,6 +355,7 @@ export function useAITask(
       stopTimer()
       stopThinkTimer()
       stopPolling()
+      stopCookieRefresh()
     } catch (err: unknown) {
       // Cancel reader on abort to signal backend
       if (err instanceof Error && err.name === 'AbortError') {
@@ -352,6 +378,7 @@ export function useAITask(
       stopTimer()
       stopThinkTimer()
       stopPolling()
+      stopCookieRefresh()
     }
   }
 
@@ -441,6 +468,7 @@ export function useAITask(
     suggestions.value = []
     planSteps.value = []
     startTimer(0)
+    startCookieRefresh() // Keep auth fresh during long SSE operations
 
     try {
       const result = await startAIEventStream(triggerEndpoint, abortController.signal)
@@ -476,6 +504,7 @@ export function useAITask(
         stopTimer()
         stopThinkTimer()
         stopPolling()
+        stopCookieRefresh()
       }
     }
   }
@@ -500,6 +529,7 @@ export function useAITask(
       stopTimer()
       stopThinkTimer()
       stopPolling()
+      stopCookieRefresh()
     }
   }
 
@@ -525,6 +555,7 @@ export function useAITask(
       ? Math.floor((Date.now() - new Date(existingTask.started_at).getTime()) / 1000)
       : 0
     startTimer(elapsed)
+    startCookieRefresh() // Keep auth fresh during resumed SSE operations
 
     if (abortController) abortController.abort()
     abortController = new AbortController()
@@ -554,6 +585,7 @@ export function useAITask(
         stopTimer()
         stopThinkTimer()
         stopPolling()
+        stopCookieRefresh()
       }
     }
   }
@@ -585,6 +617,7 @@ export function useAITask(
     stopTimer()
     stopThinkTimer()
     stopPolling()
+    stopCookieRefresh()
     try {
       const res = await cancelAITask(capability)
       if (res.ok) {
@@ -624,6 +657,7 @@ export function useAITask(
       stopPolling()
       stopTimer()
       stopThinkTimer()
+      stopCookieRefresh()
     } else if (status.value === 'running' || status.value === 'queued' || status.value === 'post_processing') {
       // Resume when tab becomes visible again
       checkAndResume()
@@ -640,6 +674,7 @@ export function useAITask(
     stopTimer()
     stopThinkTimer()
     stopPolling()
+    stopCookieRefresh()
     if (postProcessingPollTimer) {
       clearTimeout(postProcessingPollTimer)
       postProcessingPollTimer = null
