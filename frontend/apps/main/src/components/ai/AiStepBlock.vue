@@ -1,60 +1,65 @@
 <template>
+  <!-- DeerFlow pattern: flat step with icon + connector + content -->
+  <!-- 参考：deer-flow-reference/frontend/src/components/ai-elements/chain-of-thought.tsx -->
   <div
     class="ai-step-block"
     :class="[
       `ai-step-block--${status}`,
-      { 'ai-step-block--active': isActive, 'ai-step-block--compressed': compressed },
+      { 'ai-step-block--active': isActive, 'ai-step-block--compressed': compressed, 'ai-step-block--last': isLast },
     ]"
     role="listitem"
     :aria-expanded="canCollapse ? isExpanded : undefined"
     :aria-controls="canCollapse ? contentId : undefined"
   >
-    <!-- Header -->
-    <div
-      class="step-header"
-      :role="canCollapse ? 'button' : undefined"
-      :tabindex="canCollapse ? 0 : undefined"
-      :aria-expanded="canCollapse ? isExpanded : undefined"
-      :aria-label="canCollapse && compressed && type === 'tool_call'
-        ? (isExpanded ? t('aiProcess.collapseToolCall') : t('aiProcess.expandToolCall'))
-        : undefined"
-      @click="canCollapse && toggle()"
-      @keydown.enter="canCollapse && toggle()"
-      @keydown.space.prevent="canCollapse && toggle()"
-    >
-      <span class="step-icon" aria-hidden="true">{{ statusIcon }}</span>
-      <div class="step-info">
-        <span class="step-title">
-          {{ headerTitle }}
-          <span v-if="showSummary && summary" class="step-summary">{{ summary }}</span>
-        </span>
+    <!-- Icon wrapper with connector line (deerflow pattern) -->
+    <div class="step-icon-wrapper">
+      <span class="step-icon" aria-hidden="true">{{ displayIcon }}</span>
+      <!-- Vertical connector line to next step -->
+      <div class="step-connector" aria-hidden="true" />
+    </div>
+
+    <!-- Content area -->
+    <div class="step-content">
+      <!-- Label row (deerflow: icon + label) -->
+      <div
+        class="step-label"
+        :role="canCollapse ? 'button' : undefined"
+        :tabindex="canCollapse ? 0 : undefined"
+        :aria-expanded="canCollapse ? isExpanded : undefined"
+        :aria-label="canCollapse && compressed && type === 'tool_call'
+          ? (isExpanded ? t('aiProcess.collapseToolCall') : t('aiProcess.expandToolCall'))
+          : undefined"
+        @click="canCollapse && toggle()"
+        @keydown.enter="canCollapse && toggle()"
+        @keydown.space.prevent="canCollapse && toggle()"
+      >
+        <span class="step-title">{{ headerTitle }}</span>
         <span
+          v-if="formattedDuration"
           class="step-time"
-          :class="{ 'step-time--compressed': compressed }"
           :aria-live="status === 'streaming' || status === 'running' ? 'polite' : undefined"
         >
           {{ formattedDuration }}
         </span>
+        <van-icon
+          v-if="canCollapse"
+          name="arrow-down"
+          class="step-toggle"
+          :class="{ 'step-toggle--expanded': isExpanded }"
+          aria-hidden="true"
+        />
       </div>
-      <van-icon
-        v-if="canCollapse"
-        name="arrow-down"
-        class="step-toggle"
-        :class="{ 'step-toggle--expanded': isExpanded }"
-        aria-hidden="true"
-      />
-    </div>
 
-    <!-- Content (collapsible) -->
-    <Transition name="step-content">
-      <div v-show="!canCollapse || isExpanded" :id="contentId" class="step-body">
-        <!-- Reasoning content -->
-        <div v-if="type === 'reasoning'" class="reasoning-content" :class="{ 'body-streaming': status === 'streaming' }">
-          {{ filteredContent }}
-        </div>
+      <!-- Expandable content (collapsible) -->
+      <Transition name="step-content">
+        <div v-show="!canCollapse || isExpanded" :id="contentId" class="step-body">
+          <!-- Reasoning content -->
+          <div v-if="type === 'reasoning'" class="reasoning-content" :class="{ 'body-streaming': status === 'streaming' }">
+            {{ filteredContent }}
+          </div>
 
-        <!-- Tool call content -->
-        <template v-else-if="type === 'tool_call'">
+          <!-- Tool call content -->
+          <template v-else-if="type === 'tool_call'">
           <!-- 状态过渡：使用绝对定位 + 独立 key 确保离开元素完全隐藏后进入元素才显示 -->
           <Transition name="tool-state" mode="out-in">
             <!-- Running 状态：参数 + 进度文本 -->
@@ -107,7 +112,8 @@
         </template>
       </div>
     </Transition>
-  </div>
+    </div><!-- /.step-content -->
+  </div><!-- /.ai-step-block -->
 </template>
 
 <script setup lang="ts">
@@ -135,6 +141,8 @@ const props = withDefaults(defineProps<{
   defaultExpanded?: boolean
   compressed?: boolean
   progressMessage?: string
+  // DeerFlow pattern: isLast step (no connector line)
+  isLast?: boolean
   // subagent / progress / artifact props
   title?: string
   description?: string
@@ -151,6 +159,7 @@ const props = withDefaults(defineProps<{
   compressed: false,
   autoCollapseSignal: false,
   showDetail: false,
+  isLast: false,
 })
 
 const { t } = useI18n()
@@ -162,6 +171,24 @@ const canCollapse = computed(
 )
 const autoCollapseSignalRef = computed(() => props.autoCollapseSignal)
 const statusRef = computed(() => props.status)
+
+// DeerFlow pattern: display icon based on status and type
+// 参考：deer-flow-reference/frontend/src/components/ai-elements/chain-of-thought.tsx
+const displayIcon = computed(() => {
+  // Status-based icons
+  if (props.status === 'pending') return '○'
+  if (props.status === 'streaming') return '💭'
+  if (props.status === 'running') return props.icon || '⚙'
+  if (props.status === 'error' || props.status === 'failed') return '✗'
+  if (props.status === 'done') return props.icon || '✓'
+
+  // Type-based icons
+  if (props.type === 'reasoning') return '💭'
+  if (props.type === 'artifact') return '📎'
+  if (props.type === 'progress') return '▶'
+
+  return props.icon || '○'
+})
 
 // Compressed tool_call starts collapsed (user must tap to expand)
 const effectiveDefaultExpanded = props.compressed && props.type === 'tool_call'
@@ -309,33 +336,61 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
 </script>
 
 <style scoped>
+/* DeerFlow pattern: flat step with vertical connector line */
+/* 参考：deer-flow-reference/frontend/src/components/ai-elements/chain-of-thought.tsx */
 .ai-step-block {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--card-bg);
-  border-radius: 8px;
-  border: 1px solid var(--color-card-border);
+  gap: 8px;
+  padding: 6px 0; /* Reduced padding - connector spans between steps */
   transition: opacity 0.2s ease;
 }
 
-/* Status states */
-.ai-step-block--pending { opacity: 0.55; }
+/* DeerFlow connector line: 1px vertical line from icon to next step */
+.step-icon-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+/* Vertical connector line - deerflow pattern */
+.step-connector {
+  position: absolute;
+  top: 24px; /* Below the icon */
+  bottom: -6px; /* Extend to next step */
+  left: 50%;
+  width: 1px;
+  background: var(--separator);
+  transform: translateX(-50%);
+}
+
+/* Hide connector for last step or pending/error steps */
+.ai-step-block--last .step-connector,
+.ai-step-block--error .step-connector,
+.ai-step-block--failed .step-connector {
+  display: none;
+}
+
+/* Active connector - highlighted */
+.ai-step-block--active .step-connector {
+  background: var(--van-primary-color);
+}
+
+/* Status states - deerflow pattern */
+.ai-step-block--pending { opacity: 0.5; }
 .ai-step-block--streaming,
 .ai-step-block--running { opacity: 1; }
 .ai-step-block--done { opacity: 0.75; }
 .ai-step-block--error,
-.ai-step-block--failed { opacity: 1; border-color: var(--color-error); }
+.ai-step-block--failed { opacity: 1; }
 
-/* Active gradient border via ::before */
-.ai-step-block--active::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 8px;
-  padding: 1px;
+/* Active step: gradient border effect */
+.ai-step-block--active .step-icon-wrapper {
+  border-radius: 4px;
   background: linear-gradient(
     90deg,
     var(--van-primary-color) 0%,
@@ -344,11 +399,6 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   );
   background-size: 200% 100%;
   animation: gradient-sweep 2s linear infinite;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
 }
 
 @keyframes gradient-sweep {
@@ -356,77 +406,66 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   to { background-position: 200% center; }
 }
 
-/* Compressed mode: single-line layout */
+/* Compressed mode: inline layout for completed tool calls */
 .ai-step-block--compressed {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  /* U1: Interaction states for compressed tool_call cards */
-  transition: background 0.15s ease, transform 0.1s ease;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--bg-secondary);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-/* U1: Hover state — subtle background highlight */
-.ai-step-block--compressed .step-header[role='button']:hover {
+.ai-step-block--compressed:hover {
   background: rgba(var(--color-action-blue-rgb), 0.08);
-  border-radius: 4px;
 }
 
-/* U1: Press state — scale 0.98 effect */
-.ai-step-block--compressed .step-header[role='button']:active {
-  transform: scale(0.98);
+.ai-step-block--compressed .step-icon-wrapper {
+  width: 16px;
+  height: 16px;
 }
 
-/* U1: Focus state — use system default focus ring (already defined for focus-visible) */
+.ai-step-block--compressed .step-connector {
+  display: none;
+}
 
-.ai-step-block--compressed .step-info {
+/* Icon styling */
+.step-icon {
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Content area */
+.step-content {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* Label row (deerflow: icon + label inline) */
+.step-label {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-/* step-body visibility for compressed mode is handled entirely by v-show (canCollapse=true for tool_call) */
-
-.ai-step-block--compressed .step-toggle {
-  display: block;
-}
-
-/* Header */
-.step-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   cursor: default;
 }
 
-.step-header[role='button'] {
+.step-label[role='button'] {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
 }
 
-.step-header[role='button']:focus-visible {
+.step-label[role='button']:focus-visible {
   outline: 2px solid var(--van-primary-color);
   outline-offset: 2px;
   border-radius: 4px;
-}
-
-.ai-step-block--reasoning .step-header {
-  cursor: pointer;
-}
-
-.step-icon {
-  font-size: 14px;
-  flex-shrink: 0;
-}
-
-.step-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .step-title {
@@ -436,6 +475,7 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
 }
 
 .step-summary {
@@ -449,12 +489,7 @@ const resultText = computed(() => props.error || props.resultSummary || t('aiPro
   font-size: 11px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-}
-
-.step-time--compressed {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .step-toggle {

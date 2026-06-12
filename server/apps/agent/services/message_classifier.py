@@ -14,23 +14,24 @@ from typing import Any
 # summary template text. Add new entries here when introducing a tool.
 # i18n_key is used by frontend for translation; display_name is fallback for
 # legacy clients or when i18n is unavailable.
+# Icons use emojis following deerflow pattern (ChainOfThoughtStep icon style).
 _TOOL_REGISTRY: dict[str, tuple[str, str, str, str]] = {
     # Asset queries
-    "get_assets": ("asset_query", "查询资产", "wallet", "toolName.getAssets"),
-    "get_dashboard_overview": ("asset_query", "读取资产概览", "wallet", "toolName.getDashboardOverview"),
-    "get_dashboard_allocation": ("asset_query", "读取资产配置", "wallet", "toolName.getDashboardAllocation"),
-    "get_dashboard_trend": ("trend_calc", "计算资产趋势", "trending-up", "toolName.getDashboardTrend"),
-    "get_low_usage_assets": ("asset_query", "扫描闲置资产", "wallet", "toolName.getLowUsageAssets"),
-    "get_liabilities": ("asset_query", "查询负债", "wallet", "toolName.getLiabilities"),
+    "get_assets": ("asset_query", "查询资产", "💰", "toolName.getAssets"),
+    "get_dashboard_overview": ("asset_query", "读取资产概览", "📊", "toolName.getDashboardOverview"),
+    "get_dashboard_allocation": ("asset_query", "读取资产配置", "📈", "toolName.getDashboardAllocation"),
+    "get_dashboard_trend": ("trend_calc", "计算资产趋势", "📈", "toolName.getDashboardTrend"),
+    "get_low_usage_assets": ("asset_query", "扫描闲置资产", "🔍", "toolName.getLowUsageAssets"),
+    "get_liabilities": ("asset_query", "查询负债", "📋", "toolName.getLiabilities"),
     # Reports
-    "generate_report": ("report_gen", "生成家庭报告", "file-text", "toolName.generateReport"),
-    "compose_summary": ("report_gen", "生成摘要", "file-text", "toolName.composeSummary"),
+    "generate_report": ("report_gen", "生成家庭报告", "📄", "toolName.generateReport"),
+    "compose_summary": ("report_gen", "生成摘要", "📝", "toolName.composeSummary"),
     # Wish / spending analysis
-    "analyze_wishes": ("wish_analysis", "分析心愿计划", "heart", "toolName.analyzeWishes"),
-    "analyze_spending_leaks": ("wish_analysis", "分析支出漏洞", "heart", "toolName.analyzeSpendingLeaks"),
+    "analyze_wishes": ("wish_analysis", "分析心愿计划", "💭", "toolName.analyzeWishes"),
+    "analyze_spending_leaks": ("wish_analysis", "分析支出漏洞", "💸", "toolName.analyzeSpendingLeaks"),
     # Web search (smart mode tool)
-    "web_search": ("web_search", "搜索网络", "search", "toolName.webSearch"),
-    "tavily_search": ("web_search", "搜索网络", "search", "toolName.webSearch"),
+    "web_search": ("web_search", "搜索网络", "🔍", "toolName.webSearch"),
+    "tavily_search": ("web_search", "搜索网络", "🔍", "toolName.webSearch"),
     # MCP tools (numina-family-data server)
     "numina-family-data_get_family_overview": ("data_collect", "获取家庭概览", "📊", "toolName.getFamilyOverview"),
     "numina-family-data_get_assets": ("data_collect", "查询资产数据", "💰", "toolName.getAssetsData"),
@@ -77,7 +78,7 @@ def resolve_tool_metadata(tool_name: str) -> tuple[str, str, str, str]:
         suffix = tool_name.rsplit("_", 1)[-1]
         if suffix in _SUFFIX_MATCH_WHITELIST:
             return _TOOL_REGISTRY[suffix]
-    return ("unknown", tool_name, "tool", "")
+    return ("unknown", tool_name, "tool", None)
 
 
 def classify_message(msg: Any) -> str:

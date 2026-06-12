@@ -2,13 +2,15 @@
  * 防御性内容过滤器
  * 识别并移除模型可能输出的违规内容（XML 标签、上下文块、重复问题等）
  *
- * 防御策略：
- * 1. 完整 XML 标签（含闭合）：捕获并移除整块
- * 2. 未闭合 XML 标签：单独移除遗留的开标签/闭标签
- * 3. HTML 实体编码变体：`&lt;tag&gt;` 形式
- * 4. 上下文块标记：行首和行中均匹配
- * 5. 重复问题开场白：中文常见模式
- * 6. 内部标识符泄漏：tenantId、family_id 等
+ * 防御策略（采用 deerflow 的 INTERNAL_MARKER_TAGS 模式）：
+ * 1. DeerFlow 内部标记标签：uploaded_files, system-reminder, memory, current_date
+ * 2. 完整 XML 标签（含闭合）：捕获并移除整块
+ * 3. 未闭合 XML 标签：单独移除遗留的开标签/闭标签
+ * 4. HTML 实体编码变体：`&lt;tag&gt;` 形式
+ * 5. 上下文块标记：行首和行中均匹配
+ * 6. 重复问题开场白：中文常见模式
+ * 7. 内部标识符泄漏：tenantId、family_id 等
+ * 8. 工具调用内部标识：调用工具、MCP 内部消息等
  *
  * 先规范化输入（移除零宽字符）再执行匹配，避免 Unicode 绕过。
  *
@@ -16,10 +18,35 @@
  * 性能监控：执行时间超过阈值时记录告警（dev 环境）。
  */
 
-const ZERO_WIDTH_CHARS = /[​-‍﻿]/g
+// Zero-width characters: U+200B (ZWSP), U+200C-U+200D (ZWNJ/ZWJ), U+FEFF (ZWNBSP)
+// Using Unicode escape sequences to avoid ESLint irregular-whitespace error
+const ZERO_WIDTH_CHARS = /[\u200B-\u200D\uFEFF]/gu
 
 // 性能告警阈值（毫秒）- 200ms 为合理的慢调用阈值
 const PERFORMANCE_WARN_THRESHOLD_MS = 200
+
+// DeerFlow 内部标记标签（直接采用 deerflow 的 INTERNAL_MARKER_TAGS 模式）
+// 参考：deer-flow-reference/frontend/src/core/messages/utils.ts
+const INTERNAL_MARKER_TAGS = [
+  'uploaded_files',
+  'system-reminder',
+  'memory',
+  'current_date',
+  'context',
+  'user_context',
+] as const
+
+// 构建内部标记标签的正则表达式（匹配完整标签块）
+const INTERNAL_MARKER_RE = new RegExp(
+  `<(${INTERNAL_MARKER_TAGS.join('|')})\\b[^>]*>[\\s\\S]*?<\\/\\1>`,
+  'gi',
+)
+
+// 未闭合的内部标记标签（单独的开/闭标签残留）
+const UNCLOSED_MARKER_RE = new RegExp(
+  `<\\/?(?:${INTERNAL_MARKER_TAGS.join('|')})\\b[^>]*>`,
+  'gi',
+)
 
 // 禁止输出的模式列表
 const FORBIDDEN_PATTERNS = [
@@ -163,20 +190,25 @@ export function filterAIContentCore(raw: string): string {
   // 1. 规范化：移除零宽字符（防止 Unicode 绕过）
   let filtered = raw.replace(ZERO_WIDTH_CHARS, '')
 
-  // 2. 依次应用所有禁止模式（替换为空字符串）
+  // 2. 采用 deerflow 的 stripInternalMarkers 模式（移除内部标记标签）
+  // 参考：deer-flow-reference/frontend/src/core/messages/utils.ts
+  filtered = filtered.replace(INTERNAL_MARKER_RE, '')
+  filtered = filtered.replace(UNCLOSED_MARKER_RE, '')
+
+  // 3. 依次应用所有禁止模式（替换为空字符串）
   for (const pattern of FORBIDDEN_PATTERNS) {
     filtered = filtered.replace(pattern, '')
   }
 
-  // 3. 应用转换模式（保留部分内容的捕获组替换）
+  // 4. 应用转换模式（保留部分内容的捕获组替换）
   for (const { pattern, replacement } of TRANSFORM_PATTERNS) {
     filtered = filtered.replace(pattern, replacement)
   }
 
-  // 4. 清理多余空行（过滤后可能留下连续空行）
+  // 5. 清理多余空行（过滤后可能留下连续空行）
   filtered = filtered.replace(/\n{3,}/g, '\n\n')
 
-  // 5. 清理开头和结尾的空白
+  // 6. 清理开头和结尾的空白
   return filtered.trim()
 }
 
@@ -350,3 +382,27 @@ function skipWhitespace(s: string, i: number): number {
   while (i < s.length && /\s/.test(s[i])) i++
   return i
 }
+
+/**
+ * 采用 deerflow 的 stripInternalMarkers 函数
+ * 移除所有已知后端注入的标记标签
+ *
+ * 参考：deer-flow-reference/frontend/src/core/messages/utils.ts
+ *
+ * 用于导出路径等场景，确保内部标记不会泄漏到用户可见的内容中。
+ *
+ * @param content - 原始内容字符串
+ * @returns 清理后的内容
+ */
+export function stripInternalMarkers(content: string): string {
+  if (!content) return ''
+  let result = content.replace(INTERNAL_MARKER_RE, '')
+  result = result.replace(UNCLOSED_MARKER_RE, '')
+  return result.trim()
+}
+
+/**
+ * Export the internal marker tags for use in other modules
+ * (e.g., message classification, event normalizer)
+ */
+export { INTERNAL_MARKER_TAGS }

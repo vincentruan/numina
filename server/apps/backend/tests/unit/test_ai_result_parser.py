@@ -1,6 +1,155 @@
-"""Unit tests for ai_result_parser table detection."""
+"""Unit tests for ai_result_parser table detection and envelope unwrapping."""
 
-from apps.backend.app.services.ai_result_parser import _contains_markdown_table
+from apps.backend.app.services.ai_result_parser import (
+    _contains_markdown_table,
+    _unwrap_agent_envelope,
+    _validate_json,
+)
+
+
+class TestUnwrapAgentEnvelope:
+    """Test suite for _unwrap_agent_envelope function."""
+
+    def test_unwrap_backend_style_envelope_report(self):
+        """Unwrap {'code': 'OK', 'data': {'report': {...}}} format for report capability."""
+        wrapped = {
+            "code": "OK",
+            "message": "",
+            "data": {
+                "report": {
+                    "overall_score": 65,
+                    "data_completeness_score": 80,
+                    "summary": "Test summary",
+                    "indicators": [
+                        {"key": "net_worth_health", "label": "净资产健康度", "score": 4, "narrative": "Test"}
+                    ],
+                }
+            },
+        }
+        result = _unwrap_agent_envelope(wrapped, "report")
+        assert result is not None
+        assert result["overall_score"] == 65
+        assert "indicators" in result
+        assert result["indicators"][0]["key"] == "net_worth_health"
+
+    def test_unwrap_envelope_nested_in_data(self):
+        """Unwrap envelope where data directly contains required fields."""
+        wrapped = {
+            "code": "OK",
+            "data": {
+                "overall_score": 70,
+                "indicators": [
+                    {"key": "test", "label": "Test", "score": 3, "narrative": "Test narrative"}
+                ],
+            },
+        }
+        result = _unwrap_agent_envelope(wrapped, "report")
+        assert result is not None
+        assert result["overall_score"] == 70
+
+    def test_no_unwrap_for_direct_format(self):
+        """Direct format (no envelope) is returned unchanged."""
+        direct = {
+            "overall_score": 55,
+            "indicators": [
+                {"key": "test", "label": "Test", "score": 2, "narrative": "Test"}
+            ],
+        }
+        result = _unwrap_agent_envelope(direct, "report")
+        assert result == direct
+
+    def test_no_unwrap_for_non_report_capability(self):
+        """Non-report capability without envelope is returned unchanged."""
+        alerts_data = [
+            {"asset_name": "Test Asset", "alert_type": "aging", "severity": "high"}
+        ]
+        result = _unwrap_agent_envelope({"alerts": alerts_data}, "alerts")
+        # Should return original since no envelope detected
+        assert result == {"alerts": alerts_data}
+
+    def test_unwrap_preserves_nested_data(self):
+        """Unwrapping preserves all nested fields correctly."""
+        wrapped = {
+            "code": "OK",
+            "message": "",
+            "data": {
+                "report": {
+                    "overall_score": 35,
+                    "data_completeness_score": 0.85,
+                    "summary": "Test summary",
+                    "narrative": "Test narrative",
+                    "sections": {"executive_summary": "Test"},
+                    "indicators": [
+                        {
+                            "key": "net_worth_health",
+                            "label": "净资产健康度",
+                            "score": 3,
+                            "narrative": "Test narrative",
+                            "suggestions": ["建议1", "建议2"],
+                            "data": {"net_worth": 1000000},
+                        }
+                    ],
+                }
+            },
+        }
+        result = _unwrap_agent_envelope(wrapped, "report")
+        assert result["overall_score"] == 35
+        assert result["data_completeness_score"] == 0.85
+        assert len(result["indicators"]) == 1
+        assert result["indicators"][0]["suggestions"] == ["建议1", "建议2"]
+
+    def test_validate_json_with_envelope(self):
+        """Validation works with envelope-wrapped data."""
+        wrapped = {
+            "code": "OK",
+            "data": {
+                "report": {
+                    "overall_score": 60,
+                    "indicators": [
+                        {"key": "test", "label": "Test", "score": 3, "narrative": "Test"}
+                    ],
+                }
+            },
+        }
+        # _validate_json should unwrap internally and pass validation
+        assert _validate_json(wrapped, "report") is True
+
+    def test_validate_json_direct_format(self):
+        """Validation works with direct format data."""
+        direct = {
+            "overall_score": 50,
+            "indicators": [
+                {"key": "test", "label": "Test", "score": 2, "narrative": "Test"}
+            ],
+        }
+        assert _validate_json(direct, "report") is True
+
+    def test_validate_json_missing_required_field(self):
+        """Validation fails when required fields are missing."""
+        data = {"overall_score": 50}  # Missing 'indicators'
+        assert _validate_json(data, "report") is False
+
+    def test_unwrap_invalid_envelope_structure(self):
+        """Invalid envelope structure returns original data."""
+        invalid = {"code": "OK", "data": "not a dict"}
+        result = _unwrap_agent_envelope(invalid, "report")
+        assert result == invalid
+
+    def test_unwrap_missing_report_key_for_report_capability(self):
+        """Envelope without 'report' key for report capability checks direct data."""
+        wrapped = {
+            "code": "OK",
+            "data": {
+                "overall_score": 65,
+                "indicators": [
+                    {"key": "test", "label": "Test", "score": 4, "narrative": "Test"}
+                ],
+            },
+        }
+        result = _unwrap_agent_envelope(wrapped, "report")
+        # Should unwrap to data directly since it has required fields
+        assert result is not None
+        assert result["overall_score"] == 65
 
 
 class TestContainsMarkdownTable:

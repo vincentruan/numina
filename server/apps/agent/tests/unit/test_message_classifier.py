@@ -47,7 +47,7 @@ class TestResolveToolMetadata:
         assert tool_type == "unknown"
         assert display_name == "audit_log_get_assets"
         assert icon == "tool"
-        assert display_key == ""
+        assert display_key is None
 
     def test_suffix_match_blocked_for_non_whitelisted_suffix(self) -> None:
         """Suffixes NOT in whitelist should NOT match even if derived from registry tool."""
@@ -57,7 +57,7 @@ class TestResolveToolMetadata:
         assert tool_type == "unknown"
         assert display_name == "audit_log_compose_summary"
         assert icon == "tool"
-        assert display_key == ""
+        assert display_key is None
 
     def test_unknown_tool_returns_fallback(self) -> None:
         """Unknown tools should return unknown tuple with raw name."""
@@ -65,7 +65,7 @@ class TestResolveToolMetadata:
         assert tool_type == "unknown"
         assert display_name == "unknown_tool_xyz"
         assert icon == "tool"
-        assert display_key == ""
+        assert display_key is None
 
     def test_no_underscore_skips_suffix_match(self) -> None:
         """Tools without underscore skip suffix matching entirely."""
@@ -73,7 +73,7 @@ class TestResolveToolMetadata:
         assert tool_type == "unknown"
         assert display_name == "unknownsingleword"
         assert icon == "tool"
-        assert display_key == ""
+        assert display_key is None
 
     def test_multiple_underscores_matches_last_segment(self) -> None:
         """Suffix match should use last underscore segment."""

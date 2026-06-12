@@ -183,6 +183,7 @@ class EventStreamBuilder:
         execution_time_ms: int,
         data: Any | None = None,
         error: str | None = None,
+        result_summary: str | None = None,
     ) -> StreamEvent:
         # Redact sensitive fields from tool result data before streaming.
         # This is the primary protection layer (spec R6) - tools may return
@@ -196,16 +197,21 @@ class EventStreamBuilder:
                 for item in data
             ]
 
+        result_payload = {
+            "success": success,
+            "data": redacted_data,
+            "error": error,
+            "execution_time_ms": execution_time_ms,
+        }
+        # Add result_summary for frontend display (deerflow pattern)
+        if result_summary:
+            result_payload["summary"] = result_summary
+
         return self._event(
             "tool.result",
             {
                 "tool_id": tool_id,
-                "result": {
-                    "success": success,
-                    "data": redacted_data,
-                    "error": error,
-                    "execution_time_ms": execution_time_ms,
-                },
+                "result": result_payload,
             },
         )
 

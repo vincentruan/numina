@@ -112,6 +112,42 @@ _extract_content = extract_content
 _resolve_tool_metadata = resolve_tool_metadata
 
 
+def _generate_tool_result_summary(content: Any) -> str | None:
+    """Generate a brief summary of tool result for frontend display.
+
+    DeerFlow pattern: show concise result summary instead of raw output.
+    Truncates long content, handles dict/list results with key counts.
+    """
+    if content is None:
+        return None
+    if isinstance(content, str):
+        # Truncate to 50 chars for display (deerflow pattern)
+        if len(content) > 50:
+            return content[:50] + "…"
+        return content if content.strip() else None
+    if isinstance(content, dict):
+        # Show key count for dict results
+        keys = list(content.keys())
+        if not keys:
+            return "空结果"
+        # Filter out internal/technical keys
+        display_keys = [k for k in keys if not k.startswith("_") and k not in ("raw", "data")]
+        if not display_keys:
+            return f"{len(keys)} 项数据"
+        if len(display_keys) <= 3:
+            return f"返回: {', '.join(display_keys)}"
+        return f"{len(keys)} 项数据"
+    if isinstance(content, list):
+        count = len(content)
+        if count == 0:
+            return "无数据"
+        if count <= 5:
+            return f"返回 {count} 项"
+        return f"返回 {count} 项数据"
+    # Fallback for other types
+    return "执行完成"
+
+
 def _resolve_skills(
     agent_skills: list[str] | str | None,
     family_enabled_skills: list[dict],
@@ -566,7 +602,12 @@ async def stream_agent_dispatch(
                         if kind == "thinking":
                             reasoning = _extract_reasoning(msg) or ""
                             if not thinking_started:
-                                yield builder_events.phase("thinking").to_ndjson()
+                                # Include timestamp metadata for frontend duration calculation
+                                # and shimmer animation activation (deerflow pattern)
+                                yield builder_events.phase(
+                                    "thinking",
+                                    {"timestamp": time.time()}
+                                ).to_ndjson()
                                 thinking_started = True
                             if reasoning:
                                 yield builder_events.token(
@@ -620,6 +661,8 @@ async def stream_agent_dispatch(
                             if not provider_id:
                                 provider_id = str(uuid.uuid4())
                             backend_id = tool_call_id_map.get(provider_id, provider_id)
+                            # Generate result_summary for frontend display (deerflow pattern)
+                            result_summary = _generate_tool_result_summary(content)
                             # Journal write BEFORE yield to ensure persistence on disconnect
                             try:
                                 session_journal.write_tool_result(
@@ -639,6 +682,7 @@ async def stream_agent_dispatch(
                                 success=True,
                                 execution_time_ms=0,
                                 data=content,
+                                result_summary=result_summary,
                             ).to_ndjson()
                             continue
 

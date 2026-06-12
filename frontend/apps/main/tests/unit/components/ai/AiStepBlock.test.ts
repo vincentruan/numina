@@ -73,7 +73,8 @@ describe('AiStepBlock', () => {
 
     expect(wrapper.find('.ai-step-block--done').exists()).toBe(true)
     expect(wrapper.find('.ai-step-block--active').exists()).toBe(false)
-    expect(wrapper.find('.step-summary').exists()).toBe(true)
+    // DeerFlow pattern: reasoning content in .reasoning-content, collapsed by default when done
+    expect(wrapper.find('.reasoning-content').exists()).toBe(true)
   })
 
   it('renders tool_call type running: shows gradient border', () => {
@@ -148,24 +149,25 @@ describe('AiStepBlock', () => {
 
     expect(wrapper.find('.ai-step-block').attributes('aria-expanded')).toBe('true')
 
-    await wrapper.find('.step-header').trigger('click')
+    await wrapper.find('.step-label').trigger('click')
     expect(wrapper.find('.ai-step-block').attributes('aria-expanded')).toBe('false')
   })
 
-  it('summary truncation: Chinese content ≤40 chars + …', () => {
-    const longContent = '这是一段非常长的中文内容，用来测试摘要截断功能是否正常工作，应该在四十个字符左右截断然后加省略号'
+  // DeerFlow pattern: reasoning content shown in collapsible section, no separate summary truncation
+  // Full content is displayed when expanded
+  it('reasoning content preserved fully when done', () => {
+    const longContent = '这是一段非常长的中文内容，用来测试内容保留功能是否正常工作'
     const wrapper = mountWith({
       type: 'reasoning',
       id: 'r-4',
       status: 'done',
       content: longContent,
+      defaultExpanded: true,
     })
 
-    const summaryEl = wrapper.find('.step-summary')
-    expect(summaryEl.exists()).toBe(true)
-    const summaryText = summaryEl.text()
-    expect(summaryText.length).toBeLessThanOrEqual(41) // 40 chars + …
-    expect(summaryText.endsWith('…')).toBe(true)
+    // Content should be present (may be collapsed by default, but text exists in DOM)
+    expect(wrapper.find('.reasoning-content').exists()).toBe(true)
+    expect(wrapper.text()).toContain(longContent)
   })
 
   it('tool_call type without aria-expanded (not collapsible)', () => {
@@ -178,6 +180,34 @@ describe('AiStepBlock', () => {
     })
 
     expect(wrapper.find('.ai-step-block').attributes('aria-expanded')).toBeUndefined()
+  })
+
+  // DeerFlow pattern: isLast prop hides connector line for last step in chain
+  it('isLast=true adds ai-step-block--last class (connector hidden via CSS)', () => {
+    const wrapper = mountWith({
+      type: 'tool_call',
+      id: 'tc-last',
+      status: 'done',
+      name: 'get_assets',
+      displayName: '查询资产',
+      isLast: true,
+    })
+
+    // Class should be applied for CSS selector: .ai-step-block--last .step-connector { display: none }
+    expect(wrapper.find('.ai-step-block--last').exists()).toBe(true)
+  })
+
+  it('isLast=false (default) does NOT add ai-step-block--last class', () => {
+    const wrapper = mountWith({
+      type: 'tool_call',
+      id: 'tc-mid',
+      status: 'done',
+      name: 'get_assets',
+      displayName: '查询资产',
+      // isLast not passed — defaults to false
+    })
+
+    expect(wrapper.find('.ai-step-block--last').exists()).toBe(false)
   })
 
   it('no inline style attributes for color/background in rendered output', () => {
@@ -392,7 +422,7 @@ describe('AiStepBlock', () => {
       })
 
       // expand by clicking header
-      await wrapper.find('.step-header').trigger('click')
+      await wrapper.find('.step-label').trigger('click')
       // U1: done state shows result, not args
       expect(wrapper.find('.tool-result').exists()).toBe(true)
     })
@@ -438,7 +468,7 @@ describe('AiStepBlock', () => {
       })
 
       // Expand by clicking header
-      await wrapper.find('.step-header').trigger('click')
+      await wrapper.find('.step-label').trigger('click')
       // U1: Args now visible when expanded
       expect(wrapper.find('.tool-args').exists()).toBe(true)
     })
@@ -492,7 +522,7 @@ describe('AiStepBlock', () => {
       expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
 
       // Expanding in error state still shows error result, not args
-      await wrapper.find('.step-header').trigger('click')
+      await wrapper.find('.step-label').trigger('click')
       expect(wrapper.find('.tool-args').exists()).toBe(false)
       expect(wrapper.find('.tool-result.result-error').exists()).toBe(true)
     })

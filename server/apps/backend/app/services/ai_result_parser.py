@@ -29,6 +29,11 @@ LLM_FALLBACK_TIMEOUT_SECONDS = 30.0
 LLM_FALLBACK_MAX_RETRIES = 3  # Maximum retries for LLM fallback extraction
 LLM_FALLBACK_MAX_RETRIES_REPORT = 5  # Maximum retries for report capability (Phase 2 retry loop)
 
+# Pre-compiled regex patterns for markdown table detection (performance optimization)
+_MARKDOWN_TABLE_PATTERN_FULL = re.compile(r'\|[^\n]+\|[^\n]*\|')  # Full table row (at least 2 columns)
+_MARKDOWN_TABLE_PATTERN_PARTIAL = re.compile(r'\|[^\|]+\|[^\|]+')  # Partial table without trailing |
+_MARKDOWN_TABLE_PATTERN_NO_LEADING = re.compile(r'[^\|]*\|[^\|]+\|[^\|]*')  # Table without leading |
+
 # Regex patterns for structured data extraction (priority order)
 # 1. HTML comment: <!-- STRUCTURED_DATA ... -->
 STRUCTURED_DATA_PATTERN = re.compile(
@@ -241,11 +246,53 @@ def _extract_structured_block(answer_text: str) -> tuple[str | None, str]:
     return None, "regex_failed"
 
 
+def _unwrap_agent_envelope(data: dict[str, Any], capability: str) -> dict[str, Any] | None:
+    """Unwrap agent envelope formats before schema validation.
+
+    Some LLMs output JSON wrapped in backend-style envelope:
+    {"code": "OK", "message": "", "data": {"report": {...}}}
+
+    This function unwraps such formats to extract the actual capability data.
+
+    Args:
+        data: Parsed JSON data (may be wrapped or direct)
+        capability: The capability name (e.g., "report")
+
+    Returns:
+        Unwrapped data dict if envelope detected and inner structure valid.
+        Returns original data if envelope not detected or inner structure invalid.
+        Never returns None — callers use `or data` fallback for safety.
+    """
+    # Check for backend-style envelope: {"code": "OK", "data": {...}}
+    if isinstance(data, dict) and "code" in data and "data" in data:
+        inner = data.get("data")
+        if isinstance(inner, dict):
+            # For report capability, data may be nested as {"report": {...}}
+            if capability == "report" and "report" in inner:
+                report_data = inner.get("report")
+                if isinstance(report_data, dict):
+                    logger.info(f"[{capability}] unwrapped agent envelope: code={data.get('code')}, data.report")
+                    return report_data
+            # For other capabilities, data might be directly the result
+            # Check if inner has the required fields for the capability
+            schema = CAPABILITY_SCHEMAS.get(capability)
+            if schema and schema.get("type") == "object":
+                required = schema.get("required", [])
+                if all(k in inner for k in required):
+                    logger.info(f"[{capability}] unwrapped agent envelope: code={data.get('code')}, data direct")
+                    return inner
+    return data
+
+
 def _validate_json(data: Any, capability: str) -> bool:
     """Validate parsed JSON against expected schema (basic check)."""
     schema = CAPABILITY_SCHEMAS.get(capability)
     if not schema:
         return True  # Unknown capability, skip validation
+
+    # Unwrap envelope format before validation
+    if isinstance(data, dict):
+        data = _unwrap_agent_envelope(data, capability) or data
 
     if schema["type"] == "array":
         if not isinstance(data, list):
@@ -296,8 +343,15 @@ async def parse_capability_result(
             if not isinstance(data, (dict, list)):
                 logger.warning(f"[{capability}] repair_json returned {type(data).__name__}, expected dict/list")
                 data = None
-            if data is not None and _validate_json(data, capability):
-                logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(data) if isinstance(data, list) else 1} items")
+            # Unwrap envelope format before returning
+            unwrapped_data = _unwrap_agent_envelope(data, capability) if isinstance(data, dict) else data
+            if unwrapped_data is not None and _validate_json(unwrapped_data, capability):
+                logger.info(f"[{capability}] regex extraction succeeded via {method}, got {len(unwrapped_data) if isinstance(unwrapped_data, list) else 1} items")
+                return unwrapped_data, method, None
+            elif data is not None and _validate_json(data, capability):
+                # Fallback: _validate_json already unwrapped internally, return data directly
+                # This path handles cases where envelope was detected but inner structure validates
+                logger.info(f"[{capability}] regex extraction succeeded via {method} (fallback), got {len(data) if isinstance(data, list) else 1} items")
                 return data, method, None
             else:
                 logger.warning(f"[{capability}] regex extracted JSON via {method} but validation failed")
@@ -555,15 +609,20 @@ async def _llm_fallback_extract(
             logger.warning(f"[{capability}] LLM fallback JSON repair failed: {e} (retry {retry + 1})")
             continue
 
+        # Unwrap envelope format before validation and return
+        unwrapped_data = _unwrap_agent_envelope(data, capability) if isinstance(data, dict) else data
         # Additional validation for report: check narrative fields don't contain markdown tables
-        if capability == "report" and isinstance(data, dict) and _contains_markdown_table(data):
+        # Apply to unwrapped data if envelope was present
+        data_to_check = unwrapped_data if isinstance(unwrapped_data, dict) else data
+        if capability == "report" and isinstance(data_to_check, dict) and _contains_markdown_table(data_to_check):
             failure_reasons.append("markdown_table_in_narrative")
             logger.warning(f"[{capability}] LLM fallback JSON contains markdown tables in narrative (retry {retry + 1})")
             continue
 
         if _validate_json(data, capability):
             logger.info(f"[{capability}] LLM fallback extraction succeeded on retry {retry + 1}")
-            return data, None
+            # Return unwrapped data if envelope was present
+            return unwrapped_data if isinstance(unwrapped_data, dict) else data, None
 
         failure_reasons.append("schema_validation_failed")
         logger.warning(f"[{capability}] LLM fallback JSON validation failed (retry {retry + 1})")
@@ -616,11 +675,11 @@ def _contains_markdown_table(data: dict) -> bool:
     - Partial tables without trailing pipe: | cell1 | cell2
     - Tables without leading pipe: cell1 | cell2 | cell3
     """
-    # Multiple patterns to catch various table formats
+    # Use pre-compiled module-level patterns (performance optimization)
     table_patterns = [
-        re.compile(r'\|[^\n]+\|[^\n]*\|'),  # Full table row (at least 2 columns)
-        re.compile(r'\|[^\|]+\|[^\|]+'),    # Partial table without trailing |
-        re.compile(r'[^\|]*\|[^\|]+\|[^\|]*'),  # Table without leading |
+        _MARKDOWN_TABLE_PATTERN_FULL,
+        _MARKDOWN_TABLE_PATTERN_PARTIAL,
+        _MARKDOWN_TABLE_PATTERN_NO_LEADING,
     ]
 
     # Check indicators array (new format)

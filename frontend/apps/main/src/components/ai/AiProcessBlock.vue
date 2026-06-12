@@ -29,10 +29,11 @@
     <Transition name="process-body">
       <div v-show="isExpanded" class="process-body" role="list">
       <AiStepBlock
-        v-for="step in steps"
+        v-for="(step, index) in steps"
         :id="stepProps(step).id"
         :key="step.id"
         :ref="(el) => registerStepRef(step.id, el)"
+        :is-last="index === steps.length - 1"
         :type="stepProps(step).type"
         :status="stepProps(step).status"
         :content="stepProps(step).content"

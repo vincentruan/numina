@@ -1,5 +1,6 @@
 import type { AgentEvent, NormalizedAiEvent, NormalizationState, ProcessStep } from '@/types/agent-stream'
 import { hashTodos, mapTodosToPlanSteps } from '@/utils/planDiff'
+import { stripInternalMarkers } from '@/utils/contentFilter'
 
 export function createNormalizationState(): NormalizationState {
   return {
@@ -87,8 +88,10 @@ export function normalizeAgentEvent(
           }
           state.steps.push(tail)
         }
-        tail.content += event.token
-        events.push({ type: 'reasoning_delta', content: event.token })
+        // DeerFlow pattern: strip markers once, reuse result (avoid double regex call)
+        const cleanedToken = stripInternalMarkers(event.token)
+        tail.content += cleanedToken
+        events.push({ type: 'reasoning_delta', content: cleanedToken })
       } else if (event.token) {
         if (state.phase === 'thinking' && import.meta.env.DEV) {
           console.warn(
@@ -96,8 +99,10 @@ export function normalizeAgentEvent(
             { token: event.token },
           )
         }
-        state.answerContent += event.token
-        events.push({ type: 'answer_delta', content: event.token })
+        // DeerFlow pattern: strip markers once, reuse result (avoid double regex call)
+        const cleanedToken = stripInternalMarkers(event.token)
+        state.answerContent += cleanedToken
+        events.push({ type: 'answer_delta', content: cleanedToken })
       }
       break
 
