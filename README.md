@@ -35,8 +35,8 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 | 层级 | 技术 |
 |------|------|
 | 前端 | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
-| 后端 | Python 3.11+ + FastAPI + SQLAlchemy + Alembic |
-| Agent | Python 3.11+ + FastAPI + DeerFlow/LangChain |
+| 后端 | Python 3.12+ + FastAPI + SQLAlchemy + Alembic |
+| Agent | Python 3.12+ + FastAPI + DeerFlow/LangChain |
 | 数据库 | SQLite |
 | 认证 | JWT (access token + refresh token) |
 | 部署 | Docker + docker-compose + Nginx |
@@ -46,7 +46,7 @@ Numina 是一个完全自托管的家庭资产可视化管理系统，帮助家�
 ### 前置要求
 
 - Docker 和 Docker Compose
-- （可选）Python 3.11+ 和 Node.js 18+ 以及 [uv](https://docs.astral.sh/uv/) 用于本地开发
+- （可选）Python 3.12+ 和 Node.js 18+ 以及 [uv](https://docs.astral.sh/uv/) 用于本地开发
 
 ### 使用 Docker 部署（推荐）
 
@@ -141,19 +141,29 @@ SNOWFLAKE_MACHINE_ID=1                       # Snowflake ID 机器编号（0-102
 
 ```
 numina/
-├── server/                     # 统一后端 monorepo
+├── server/                     # Python 服务端 monorepo (uv)
 │   ├── apps/
 │   │   ├── backend/            # FastAPI 核心后端
 │   │   ├── agent/              # AI 分析微服务
 │   │   └── scheduler_worker/   # 定时任务执行器
 │   ├── packages/               # 共享 Python 包
+│   │   ├── core/               # 核心工具和配置
+│   │   ├── db/                 # 数据库连接和模型基类
+│   │   ├── domain/             # 领域模型和业务逻辑
+│   │   ├── security/           # 认证和安全工具
+│   │   └── storage/            # 文件存储抽象
 │   ├── tests/                  # 统一测试集
-│   └── pyproject.toml          # 统一依赖管理 (uv)
-├── frontend/                   # Vue 3 前端 monorepo
-│   ├── apps/                   # 前端应用 (main, child)
+│   └── pyproject.toml          # 统一依赖管理
+├── frontend/                   # Vue 3 前端 monorepo (pnpm)
+│   ├── apps/                   # 前端应用
+│   │   ├── main/               # 成人端应用
+│   │   └── child/              # 儿童端应用
 │   └── packages/               # 共享前端包
+│       ├── auth/               # 认证共享逻辑
+│       └── math/               # 数学计算工具
 ├── docker-compose.yml          # Docker Compose 配置
 ├── nginx.conf                  # Nginx 反向代理配置
+├── site/                       # 静态站点资源
 └── docs/                       # 项目文档
 ```
 
@@ -163,10 +173,12 @@ numina/
 
 | 模块 | README | 说明 |
 |------|--------|------|
-| 后端 | [backend/README.md](./server/apps/backend/README.md) | FastAPI API 开发、数据库、测试 |
-| Agent | [agent/README.md](./server/apps/agent/README.md) | AI 微服务、DeerFlow 集成、技能 |
-| 前端 | [frontend/README.md](./frontend/README.md) | Vue 3 UI 开发、组件、测试 |
-| 测试 | [tests/README.md](./tests/README.md) | E2E 测试、数据生成、截图 |
+| 后端 | [server/apps/backend/README.md](./server/apps/backend/README.md) | FastAPI API 开发、数据库、测试 |
+| Agent | [server/apps/agent/README.md](./server/apps/agent/README.md) | AI 微服务、DeerFlow 集成、技能 |
+| Scheduler Worker | [server/apps/scheduler_worker/README.md](./server/apps/scheduler_worker/README.md) | 定时任务、调度逻辑 |
+| 前端（成人端） | [frontend/README.md](./frontend/README.md) | Vue 3 UI 开发、组件、测试 |
+| 前端（儿童端） | [frontend/apps/child/CLAUDE.md](./frontend/apps/child/CLAUDE.md) | 儿童端专属 UI |
+| E2E 测试 | [tests/README.md](./tests/README.md) | E2E 测试、数据生成、截图 |
 
 ## 🔐 安全特性
 
@@ -187,11 +199,9 @@ numina/
 
 ## 🧪 测试
 
-后端包含 566 个自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
+后端包含自动化测试，覆盖认证、资产、负债、仪表盘、儿童星星币系统等核心功能。
 
 详见各模块 README：[后端测试](./server/apps/backend/README.md#测试) · [Agent 测试](./server/apps/agent/README.md#测试) · [E2E 测试](./tests/README.md)
-
-**测试结果**：✅ 566 passed
 
 ## 🚢 部署指南
 
@@ -255,7 +265,7 @@ docker-compose restart backend
 - [x] 日耗计算与智能分析
 - [x] Token 自动刷新
 - [x] 负债还款记录
-- [x] 566 个自动化测试
+- [x] 自动化测试
 
 ### ✅ 儿童星星币系统（已完成）
 

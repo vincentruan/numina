@@ -33,8 +33,8 @@ Numina is a fully self-hosted family asset visualization and management system. 
 | Layer | Technology |
 |-------|-----------|
 | Frontend | Vue 3 + TypeScript + Vite + Vant 4 + ECharts |
-| Backend | Python 3.11+ + FastAPI + SQLAlchemy + Alembic |
-| Agent | Python 3.11+ + FastAPI + DeerFlow/LangChain |
+| Backend | Python 3.12+ + FastAPI + SQLAlchemy + Alembic |
+| Agent | Python 3.12+ + FastAPI + DeerFlow/LangChain |
 | Database | SQLite |
 | Auth | JWT (access token + refresh token) |
 | Deploy | Docker + docker-compose + Nginx |
@@ -44,7 +44,7 @@ Numina is a fully self-hosted family asset visualization and management system. 
 ### Prerequisites
 
 - Docker and Docker Compose
-- (Optional) Python 3.11+, Node.js 18+, and [uv](https://docs.astral.sh/uv/) for local development
+- (Optional) Python 3.12+, Node.js 18+, and [uv](https://docs.astral.sh/uv/) for local development
 
 ### Deploy with Docker (Recommended)
 
@@ -111,39 +111,29 @@ For module-specific development setup, see the module READMEs: [Backend](./backe
 
 ```
 numina/
-├── backend/                    # FastAPI backend
-│   ├── app/
-│   │   ├── models/            # SQLAlchemy ORM models
-│   │   ├── schemas/           # Pydantic request/response schemas
-│   │   ├── routers/           # API route handlers
-│   │   ├── services/          # Business logic layer
-│   │   ├── auth/              # JWT authentication
-│   │   └── seed/              # Database seed data
-│   ├── tests/                 # pytest tests (532 tests, all passing)
-│   ├── alembic/               # Database migrations
-│   └── Dockerfile
-├── agent/                    # AI analysis microservice
-│   ├── app/                  # Entry point package
-│   │   ├── main.py           # FastAPI entry
-│   │   ├── config.py         # Configuration
-│   │   ├── scheduler.py      # Scheduled tasks
-│   │   ├── routers/          # API routes
-│   │   ├── services/         # Business logic
-│   │   ├── schemas/          # Data models
-│   │   └── core/             # Core components
-│   ├── tests/                # pytest tests
-│   └── Dockerfile
-├── frontend/                   # Vue 3 frontend
-│   ├── src/
-│   │   ├── api/               # Axios API client
-│   │   ├── stores/            # Pinia state management
-│   │   ├── pages/             # Page components
-│   │   ├── components/        # Reusable components
-│   │   ├── router/            # Vue Router configuration
-│   │   └── types/             # TypeScript type definitions
-│   └── Dockerfile
+├── server/                     # Python server monorepo (uv)
+│   ├── apps/
+│   │   ├── backend/            # FastAPI core backend
+│   │   ├── agent/              # AI analysis microservice
+│   │   └── scheduler_worker/   # Scheduled task executor
+│   ├── packages/               # Shared Python packages
+│   │   ├── core/               # Core utilities and config
+│   │   ├── db/                 # Database connection and model base
+│   │   ├── domain/             # Domain models and business logic
+│   │   ├── security/           # Auth and security utilities
+│   │   └── storage/            # File storage abstraction
+│   ├── tests/                  # Unified test suite
+│   └── pyproject.toml          # Unified dependency management
+├── frontend/                   # Vue 3 frontend monorepo (pnpm)
+│   ├── apps/                   # Frontend applications
+│   │   ├── main/               # Adult-facing app
+│   │   └── child/              # Child-facing app
+│   └── packages/               # Shared frontend packages
+│       ├── auth/               # Shared auth logic
+│       └── math/               # Math calculation utilities
 ├── docker-compose.yml          # Docker Compose configuration
 ├── nginx.conf                  # Nginx reverse proxy configuration
+├── site/                       # Static site resources
 └── docs/                       # Project documentation
 ```
 
@@ -153,10 +143,12 @@ Developer docs for each module (quick start, environment variables, architecture
 
 | Module | README | Description |
 |--------|--------|-------------|
-| Backend | [backend/README.md](./backend/README.md) | FastAPI API development, database, testing |
-| Agent | [agent/README.md](./agent/README.md) | AI microservice, DeerFlow integration, skills |
-| Frontend | [frontend/README.md](./frontend/README.md) | Vue 3 UI development, components, testing |
-| Tests | [tests/README.md](./tests/README.md) | E2E tests, data seeding, screenshots |
+| Backend | [server/apps/backend/README.md](./server/apps/backend/README.md) | FastAPI API development, database, testing |
+| Agent | [server/apps/agent/README.md](./server/apps/agent/README.md) | AI microservice, DeerFlow integration, skills |
+| Scheduler Worker | [server/apps/scheduler_worker/README.md](./server/apps/scheduler_worker/README.md) | Scheduled tasks, dispatch logic |
+| Frontend (Main) | [frontend/README.md](./frontend/README.md) | Vue 3 UI development, components, testing |
+| Frontend (Child) | [frontend/apps/child/CLAUDE.md](./frontend/apps/child/CLAUDE.md) | Child-specific UI |
+| E2E Tests | [tests/README.md](./tests/README.md) | E2E tests, data seeding, screenshots |
 
 ## Security
 
@@ -177,13 +169,9 @@ For the full endpoint list, see [backend/README.md](./backend/README.md) and [ag
 
 ## Testing
 
-The backend includes 532 automated tests covering authentication, assets, liabilities, and dashboard features.
+The backend includes automated tests covering authentication, assets, liabilities, and dashboard features.
 
-**Test Results**: ✅ 532 passed, 0 failed
-
-Agent includes unit and integration tests.
-
-See module READMEs for details: [Backend Tests](./backend/README.md#testing) · [Agent Tests](./agent/README.md#testing) · [E2E Tests](./tests/README.md)
+See module READMEs for details: [Backend Tests](./server/apps/backend/README.md#testing) · [Agent Tests](./server/apps/agent/README.md#testing) · [E2E Tests](./tests/README.md)
 
 ## Deployment
 
@@ -230,7 +218,7 @@ cp ./.numina/data/db/numina.db ./backups/numina-$(date +%Y%m%d).db
 - [x] Daily cost calculation & smart analytics
 - [x] Token auto-refresh
 - [x] Liability payment tracking
-- [x] 532 automated tests
+- [x] Automated tests
 
 ### 🔜 Phase 2: Smart Analysis
 
