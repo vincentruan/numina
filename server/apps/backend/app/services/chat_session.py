@@ -42,7 +42,7 @@ def _validate_id(value: str | int, name: str) -> str:
 
 
 def _resolve_and_validate_path(family_id: str | int, session_id: str | int) -> Path:
-    """Construct and validate JSONL file path (path traversal protection).
+    """Construct and validate JSONL file path under workspaces/tenants/{fid}/chat/.
 
     Returns the absolute resolved path if valid.
     Raises ValueError if path is invalid or outside CHAT_DIR.
@@ -51,7 +51,8 @@ def _resolve_and_validate_path(family_id: str | int, session_id: str | int) -> P
     session_id = _validate_id(session_id, "session_id")
 
     chat_dir_resolved = Path(settings.CHAT_DIR).resolve()
-    target_path = chat_dir_resolved / family_id / f"{session_id}.jsonl"
+    # New path structure: workspaces/tenants/{family_id}/chat/{session_id}.jsonl
+    target_path = chat_dir_resolved / "tenants" / family_id / "chat" / f"{session_id}.jsonl"
     target_resolved = target_path.resolve()
 
     # Verify the resolved path is under CHAT_DIR
@@ -124,7 +125,7 @@ class ChatSessionService:
         _validate_id(family_id, "family_id")
 
         session_id = next_id()
-        jsonl_path_relative = f"{family_id}/{session_id}.jsonl"
+        jsonl_path_relative = f"tenants/{family_id}/chat/{session_id}.jsonl"
 
         # Validate and create file path
         file_path = _resolve_and_validate_path(family_id, session_id)
@@ -337,7 +338,7 @@ class ChatSessionService:
 
         # Create new session
         new_session_id = next_id()
-        jsonl_path_relative = f"{session.family_id}/{new_session_id}.jsonl"
+        jsonl_path_relative = f"tenants/{session.family_id}/chat/{new_session_id}.jsonl"
         file_path = _resolve_and_validate_path(session.family_id, new_session_id)
 
         # Create directory and file

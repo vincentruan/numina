@@ -43,8 +43,8 @@ def _directory_resources() -> list[Resource]:
             critical=True,
         ),
         DirectoryResource(
-            name="data_workspace",
-            path=root / "workspace",
+            name="data_workspaces",
+            path=root / "workspaces",
             critical=True,
         ),
         DirectoryResource(

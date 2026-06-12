@@ -14,8 +14,8 @@ from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
 _OLD_DEFAULTS = {
-    "SESSIONS_DATA_DIR": "data/sessions",
-    "AGENT_DATA_DIR": "data/workspace",
+    "SESSIONS_DATA_DIR": "data/workspaces",
+    "AGENT_DATA_DIR": "data/workspaces",
 }
 
 
@@ -37,10 +37,10 @@ class AgentSettings(BaseSettings):
     LOG_DIR: str = ""
 
     # 会话 JSONL 文件存储目录（按 family_id 隔离）
-    SESSIONS_DATA_DIR: str = "data/sessions"
+    SESSIONS_DATA_DIR: str = "data/workspaces"
 
     # Agent 数据根目录（memory、session JSONL 等按家庭隔离的文件均存放于此）
-    AGENT_DATA_DIR: str = "data/workspace"
+    AGENT_DATA_DIR: str = "data/workspaces"
 
     # DeerFlow checkpointer DB 路径
     DEERFLOW_DB_PATH: str = ""
@@ -60,10 +60,10 @@ class AgentSettings(BaseSettings):
         self.DATA_ROOT = root
 
         if _OLD_DEFAULTS["SESSIONS_DATA_DIR"] == self.SESSIONS_DATA_DIR or not self.SESSIONS_DATA_DIR:
-            self.SESSIONS_DATA_DIR = str(Path(root) / "workspace")
+            self.SESSIONS_DATA_DIR = str(Path(root) / "workspaces")
 
         if _OLD_DEFAULTS["AGENT_DATA_DIR"] == self.AGENT_DATA_DIR or not self.AGENT_DATA_DIR:
-            self.AGENT_DATA_DIR = str(Path(root) / "workspace")
+            self.AGENT_DATA_DIR = str(Path(root) / "workspaces")
 
         if not self.LOG_DIR:
             self.LOG_DIR = str(Path(root) / "logs")

@@ -13,8 +13,8 @@ _DEFAULT_SECRET = "CHANGE_ME_IN_PRODUCTION"
 _OLD_DEFAULTS = {
     "DATABASE_URL": "sqlite:///./data/numina.db",
     "UPLOAD_DIR": "./data/uploads",
-    "WORKSPACE_ROOT": "./data/workspace",
-    "CHAT_DIR": "./data/chat",
+    "WORKSPACE_ROOT": "./data/workspaces",
+    "CHAT_DIR": "./data/workspaces",
     "LOG_DIR": "logs",
 }
 
@@ -71,7 +71,7 @@ class Settings(BaseSettings):
 
     # File storage configuration
     UPLOAD_DIR: str = "./data/uploads"
-    WORKSPACE_ROOT: str = "./data/workspace"
+    WORKSPACE_ROOT: str = "./data/workspaces"
     FILE_SYNC_INTERVAL_MINUTES: int = 15
     STORAGE_ENCRYPTION_KEY: str = ""
 
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     STORAGE_WEBDAV_PASSWORD: str = ""
 
     # Chat session storage configuration
-    CHAT_DIR: str = "./data/chat"
+    CHAT_DIR: str = "./data/workspaces"  # Base dir; sessions stored under tenants/{fid}/chat/
     CHAT_ENABLE_REMOTE_SYNC: bool = False
 
     # AI Agent 配置
@@ -114,7 +114,7 @@ class Settings(BaseSettings):
     LOG_ROTATION_MODE: str = "size"  # "size" or "time"
     LOG_FORMAT: str | None = None  # Uses default format if None
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
 
     @model_validator(mode="after")
     def _resolve_data_root(self) -> "Settings":
@@ -126,13 +126,13 @@ class Settings(BaseSettings):
             self.DATABASE_URL = f"sqlite:///{db_path}"
 
         if _OLD_DEFAULTS["UPLOAD_DIR"] == self.UPLOAD_DIR or not self.UPLOAD_DIR:
-            self.UPLOAD_DIR = str(Path(root) / "workspace")
+            self.UPLOAD_DIR = str(Path(root) / "workspaces")
 
         if _OLD_DEFAULTS["WORKSPACE_ROOT"] == self.WORKSPACE_ROOT or not self.WORKSPACE_ROOT:
-            self.WORKSPACE_ROOT = str(Path(root) / "workspace")
+            self.WORKSPACE_ROOT = str(Path(root) / "workspaces")
 
         if _OLD_DEFAULTS["CHAT_DIR"] == self.CHAT_DIR or not self.CHAT_DIR:
-            self.CHAT_DIR = str(Path(root) / "workspace")
+            self.CHAT_DIR = str(Path(root) / "workspaces")
 
         if _OLD_DEFAULTS["LOG_DIR"] == self.LOG_DIR or not self.LOG_DIR:
             self.LOG_DIR = str(Path(root) / "logs")

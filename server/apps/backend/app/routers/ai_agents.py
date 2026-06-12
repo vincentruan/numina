@@ -1,3 +1,5 @@
+import json
+
 from fastapi import APIRouter, Depends
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -17,9 +19,27 @@ from apps.backend.app.schemas.ai_agent import (
 router = APIRouter(prefix="/ai/agents", tags=["ai-agents"])
 
 
+def _parse_json_field(value):
+    """Parse JSON field that may be stored as string in SQLite."""
+    if value is None:
+        return None
+    if isinstance(value, list):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+            return parsed if isinstance(parsed, list) else value
+        except (json.JSONDecodeError, TypeError):
+            return value
+    return value
+
+
 def _to_response(agent: AIAgent, user: User) -> AgentResponse:
     is_owner = user.role == "owner"
     data = {col.name: getattr(agent, col.name) for col in agent.__table__.columns}
+    # Parse JSON fields that may be stored as strings in SQLite
+    data["skills"] = _parse_json_field(data.get("skills"))
+    data["tool_groups"] = _parse_json_field(data.get("tool_groups"))
     # Calculate permissions based on agent_type.
     #
     # system agents (ai-assistant, numina): owners can navigate to a read-only
