@@ -12,10 +12,16 @@
       />
       <van-cell
         :title="t('aiConfig.aiProvider')"
-        :value="providerLabel(form.provider)"
         is-link
         @click="showProviderPicker = true"
-      />
+      >
+        <template #value>
+          <div class="provider-value">
+            <SvgIcon :name="providerIcon(form.provider)" :size="16" class="provider-icon" />
+            <span>{{ t(providerI18nKey(form.provider)) }}</span>
+          </div>
+        </template>
+      </van-cell>
       <van-field
         v-if="!isEdit"
         v-model="form.api_key"
@@ -173,6 +179,7 @@ import { useAIStore } from '@/stores/ai'
 import * as aiApi from '@/api/ai'
 import type { ProviderConfig } from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
+import SvgIcon from '@/components/SvgIcon.vue'
 import CapabilityPickerSheet from '@/components/ai/CapabilityPickerSheet.vue'
 
 const { t } = useI18n()
@@ -260,16 +267,27 @@ const formModels = reactive<ModelSlot[]>([
 const activeSlotCaps = computed(() => formModels[activeSlotIndex.value].capabilities)
 
 const providerOptions = [
-  { text: `💬 ${t('aiConfig.providerAnthropic')}`, value: 'anthropic' },
-  { text: `🤖 ${t('aiConfig.providerOpenAI')}`, value: 'openai' },
-  { text: `🔌 ${t('aiConfig.providerOpenAICompatible')}`, value: 'openai_compatible' },
+  { text: t('aiConfig.providerAnthropic'), value: 'anthropic' },
+  { text: t('aiConfig.providerOpenAI'), value: 'openai' },
+  { text: t('aiConfig.providerOpenAICompatible'), value: 'openai_compatible' },
 ]
 
+function providerIcon(provider: string): string {
+  if (provider === 'anthropic') return 'message-circle'
+  if (provider === 'openai') return 'sparkles'
+  if (provider === 'openai_compatible') return 'plug'
+  return 'sparkles'
+}
+
+function providerI18nKey(provider: string): string {
+  if (provider === 'anthropic') return 'aiConfig.providerAnthropic'
+  if (provider === 'openai') return 'aiConfig.providerOpenAI'
+  if (provider === 'openai_compatible') return 'aiConfig.providerOpenAICompatible'
+  return 'aiConfig.providerOpenAI'
+}
+
 function providerLabel(provider: string): string {
-  if (provider === 'anthropic') return `💬 ${t('aiConfig.providerAnthropic')}`
-  if (provider === 'openai') return `🤖 ${t('aiConfig.providerOpenAI')}`
-  if (provider === 'openai_compatible') return `🔌 ${t('aiConfig.providerOpenAICompatible')}`
-  return provider
+  return t(providerI18nKey(provider))
 }
 
 function capLabel(cap: string): string {
@@ -426,6 +444,16 @@ onMounted(async () => {
 
 .section {
   margin-top: 12px;
+}
+
+.provider-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.provider-icon {
+  color: var(--text-primary);
 }
 
 .model-section {
