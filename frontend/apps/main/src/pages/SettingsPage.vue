@@ -224,7 +224,7 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Settings' })
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, h } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
@@ -263,6 +263,10 @@ onMounted(async () => {
     if (authStore.user?.role === 'owner') {
       await aiStore.fetchConfigs()
     }
+  } catch (err) {
+    // API error (e.g., AUTH_TOKEN_EXPIRED) — axios interceptor handles redirect to /login
+    // but this catch prevents the page from crashing with a blank screen
+    console.error('[SettingsPage] Failed to load data:', err)
   } finally {
     NProgress.done()
   }
@@ -294,7 +298,10 @@ async function onToggleAI(val: boolean) {
   try {
     await aiApi.updateProviderConfig(target.id, { is_active: val })
     await aiStore.fetchConfigs()
-    showToast(val ? t('toast.aiEnabled') : t('toast.aiDisabled'))
+    showToast({
+      message: val ? t('toast.aiEnabled') : t('toast.aiDisabled'),
+      icon: () => h(SvgIcon, { name: 'robot', size: 20 }),
+    })
   } catch {
     showToast(t('toast.operationFailed2'))
   } finally {
