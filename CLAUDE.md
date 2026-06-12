@@ -107,15 +107,15 @@ This is a `pnpm` workspace (`pnpm-workspace.yaml`) for the frontend, and a `uv` 
 ```bash
 # Main app (adult-facing) — http://localhost:5173
 cd frontend/apps/main
-pnpm dev          # Vite dev server, hot reload
-pnpm typecheck    # vue-tsc --noEmit
-pnpm test:run     # vitest run (no watch)
-pnpm lint         # ESLint
-pnpm build        # Production build
+pnpm dev --host 0.0.0.0  # Vite dev server, 支持局域网访问
+pnpm typecheck           # vue-tsc --noEmit
+pnpm test:run            # vitest run (no watch)
+pnpm lint                # ESLint
+pnpm build               # Production build
 
 # Child app — http://localhost:5174
 cd frontend/apps/child
-pnpm dev
+pnpm dev --host 0.0.0.0
 pnpm typecheck
 pnpm test:run
 
@@ -129,14 +129,14 @@ pnpm -r test:run   # run vitest in every workspace
 Run from `server/`:
 
 ```bash
-# Backend API
-uv run uvicorn apps.backend.app.main:app --reload --port 8000
+# Backend API (监听 0.0.0.0 支持局域网访问)
+uv run uvicorn apps.backend.app.main:app --host 0.0.0.0 --reload --port 8000
 
 # AI agent
-uv run uvicorn apps.agent.app.main:app --reload --port 8001
+uv run uvicorn apps.agent.app.main:app --host 0.0.0.0 --reload --port 8001
 
 # Scheduler worker
-uv run uvicorn apps.scheduler_worker.main:app --reload --port 8002
+uv run uvicorn apps.scheduler_worker.main:app --host 0.0.0.0 --reload --port 8002
 
 # Tests + lint + typecheck (scope to a path)
 uv run pytest apps/backend/tests/ -v
