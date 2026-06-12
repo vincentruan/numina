@@ -331,7 +331,19 @@ async def stream_agent_dispatch(
 
     try:
         mcp_servers = await client.get_enabled_mcp_servers()
-    except Exception:
+        logger.info(
+            "[agent_dispatch] fetched MCP servers for family=%s count=%s servers=%s",
+            family_id,
+            len(mcp_servers),
+            [s.get("name") for s in mcp_servers],
+        )
+    except Exception as e:
+        logger.warning(
+            "[agent_dispatch] get_enabled_mcp_servers failed family=%s err_type=%s err=%s",
+            family_id,
+            type(e).__name__,
+            e,
+        )
         mcp_servers = []
 
     # 3a. Inject auth headers into MCP servers (required for SSE handshake)
@@ -456,7 +468,27 @@ async def stream_agent_dispatch(
 
     # 8a. Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading
     # DeerFlow reads MCP server configs from this file. Must be set before make_lead_agent.
+    # CRITICAL: Reset MCP tools cache because the cache tracks mtime of a SINGLE file path.
+    # In multi-family architecture, each family gets a DIFFERENT temp config file path.
+    # Without reset, the cache would keep using stale tools from a previous family's config.
     if extensions_config_path:
+        try:
+            from deerflow.config.extensions_config import reset_extensions_config
+            from deerflow.mcp.cache import reset_mcp_tools_cache
+
+            # Reset both caches: MCP tools cache and ExtensionsConfig singleton.
+            # Without this, DeerFlow would reuse stale config from a previous family.
+            reset_mcp_tools_cache()
+            reset_extensions_config()
+            logger.debug(
+                "[agent_dispatch] reset MCP tools cache for new family=%s config_path=%s",
+                family_id,
+                extensions_config_path,
+            )
+        except ImportError:
+            logger.warning(
+                "[agent_dispatch] deerflow cache reset functions not available"
+            )
         prev_extensions_env = os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
         os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = extensions_config_path
 

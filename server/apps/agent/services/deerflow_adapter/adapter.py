@@ -304,11 +304,38 @@ class DeerFlowAdapter:
                     )
                     family_config = reload_app_config(str(self._config_path))
                     push_current_app_config(family_config)
+
+                    # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading.
+                    # DeerFlow's ExtensionsConfig.from_file() reads MCP server configs from
+                    # this file. The extensions_config.json is generated alongside config.yaml
+                    # in family_adapter_cache._generate_temp_config() when mcp_servers is provided.
+                    import os as _os
+                    from pathlib import Path as _Path
+                    extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+                    prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
+                    if extensions_path.exists():
+                        _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                        # Reset MCP cache so DeerFlow picks up the new config
+                        try:
+                            from deerflow.config.extensions_config import (
+                                reset_extensions_config,
+                            )
+                            from deerflow.mcp.cache import reset_mcp_tools_cache
+                            reset_mcp_tools_cache()
+                            reset_extensions_config()
+                        except ImportError:
+                            pass
+
                     try:
                         message = self._build_prompt(skill_name, context)
                         for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
                             _process_event(event)
                     finally:
+                        # Restore previous extensions config path env var
+                        if prev_extensions_env is not None:
+                            _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
+                        elif extensions_path.exists():
+                            _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
                         pop_current_app_config()
                 else:
                     # Global config mode — no per-family override needed
@@ -355,6 +382,26 @@ class DeerFlowAdapter:
                 )
                 family_config = reload_app_config(str(self._config_path))
                 push_current_app_config(family_config)
+
+                # Set DEER_FLOW_EXTENSIONS_CONFIG_PATH for MCP tool loading.
+                import os as _os
+                from pathlib import Path as _Path
+                extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+                prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
+                if extensions_path.exists():
+                    _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                    # Reset MCP cache so DeerFlow picks up the new config
+                    try:
+                        from deerflow.config.extensions_config import (
+                            reset_extensions_config,
+                        )
+                        from deerflow.mcp.cache import reset_mcp_tools_cache
+
+                        reset_mcp_tools_cache()
+                        reset_extensions_config()
+                    except ImportError:
+                        pass
+
                 try:
                     for event in self._client.stream(
                         message=message,
@@ -370,6 +417,11 @@ class DeerFlowAdapter:
                             if isinstance(content, str) and content:
                                 chunks.append(content)
                 finally:
+                    # Restore previous extensions config path env var
+                    if prev_extensions_env is not None:
+                        _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
+                    elif extensions_path.exists():
+                        _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
                     pop_current_app_config()
             else:
                 for event in self._client.stream(
