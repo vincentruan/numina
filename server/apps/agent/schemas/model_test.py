@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 
 class ModelTestRequest(BaseModel):
-    provider: Literal["anthropic", "openai"]
+    provider: Literal["anthropic", "openai", "openai_compatible"]
     api_key: str                        # plaintext, decrypted by backend before sending
     model_id: str
     base_url: str | None = None

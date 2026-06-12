@@ -141,7 +141,7 @@ class LLMClient:
             if base_url:
                 kwargs["base_url"] = base_url
             self._anthropic_client = anthropic.AsyncAnthropic(**kwargs)
-        elif provider == "openai":
+        elif provider in ("openai", "openai_compatible"):
             from openai import AsyncOpenAI
 
             kwargs = {"api_key": api_key, "timeout": timeout}
@@ -155,7 +155,7 @@ class LLMClient:
         """发送单次补全请求，返回文本响应。"""
         if self.provider == "anthropic":
             return await self._complete_anthropic(prompt, max_tokens, system)
-        elif self.provider == "openai":
+        elif self.provider in ("openai", "openai_compatible"):
             return await self._complete_openai(prompt, max_tokens, system)
         else:
             raise ValueError(f"不支持的 LLM Provider: {self.provider}")
@@ -167,7 +167,7 @@ class LLMClient:
         if self.provider == "anthropic":
             async for chunk in self._stream_anthropic_text(prompt, max_tokens, system):
                 yield chunk
-        elif self.provider == "openai":
+        elif self.provider in ("openai", "openai_compatible"):
             async for _, chunk in self._stream_openai_thinking(
                 prompt, max_tokens, system, enable_thinking=False
             ):
@@ -307,7 +307,7 @@ class LLMClient:
             return await self._complete_anthropic_vision(
                 prompt, image_data, max_tokens, system
             )
-        elif self.provider == "openai":
+        elif self.provider in ("openai", "openai_compatible"):
             return await self._complete_openai_vision(
                 prompt, image_data, max_tokens, system
             )
