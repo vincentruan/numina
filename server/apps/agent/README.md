@@ -46,6 +46,7 @@ uv run pytest tests/ -v
 | `BACKEND_BASE_URL` | `http://localhost:8000` | Backend 服务地址 |
 | `USE_DEERFLOW` | `false` | 是否启用 DeerFlow harness 路径 |
 | `DEERFLOW_CONFIG_ENV` | `dev` | DeerFlow 配置环境（`dev`/`prod`） |
+| `DEER_FLOW_CONFIG_PATH` | — | **必填**。DeerFlow 配置文件路径（相对于 `server/` 目录，如 `apps/agent/deerflow_config/base/config.yaml`） |
 
 ## API 端点
 

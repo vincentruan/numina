@@ -170,6 +170,7 @@ agent/
 | `AGENT_INTERNAL_TOKEN` | — | **Required.** Shared service-to-service token; startup fails without it |
 | `BACKEND_BASE_URL` | `http://backend:8000` | Backend service address |
 | `AI_ENCRYPTION_KEY` | — | Fernet key shared with backend for decrypting per-family stored API keys |
+| `DEER_FLOW_CONFIG_PATH` | — | **Required.** Path to DeerFlow config.yaml (relative to `server/`, e.g. `apps/agent/deerflow_config/base/config.yaml`) |
 | `DEERFLOW_DB_URL` | — | Postgres URL for DeerFlow checkpointer; SQLite used if absent |
 | `DEERFLOW_ENV` | `base` | Which `deerflow_config/` overlay to use (`base`/`dev`/`prod`) |
 | `ENVIRONMENT` | `development` | Controls whether `/docs` is exposed (hidden in `production`) |
