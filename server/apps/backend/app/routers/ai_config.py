@@ -57,7 +57,9 @@ def _serialize_capabilities(cap_list: list[str] | None) -> str | None:
     return json.dumps(cap_list)
 
 
-def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: str | None) -> AIConfigResponse:
+def _cfg_to_response(
+    cfg: AIProviderConfig, test_results: list, api_key_masked: str | None
+) -> AIConfigResponse:
     return AIConfigResponse(
         id=cfg.id,
         name=cfg.name,
@@ -86,7 +88,9 @@ def _cfg_to_response(cfg: AIProviderConfig, test_results: list, api_key_masked: 
         circuit_open=cfg.circuit_open,
         circuit_open_until=cfg.circuit_open_until,
         failure_count=cfg.failure_count,
-        test_results=[AIProviderTestResultResponse.model_validate(r) for r in test_results],
+        test_results=[
+            AIProviderTestResultResponse.model_validate(r) for r in test_results
+        ],
     )
 
 
@@ -149,7 +153,9 @@ def create_ai_config(
         base_url=payload.base_url,
         model_id=payload.model_id,
         vision_model_id=payload.vision_model_id,
-        timeout_seconds=payload.timeout_seconds if payload.timeout_seconds is not None else 60,
+        timeout_seconds=payload.timeout_seconds
+        if payload.timeout_seconds is not None
+        else 60,
         is_active=payload.is_active,
         max_tokens=payload.max_tokens,
         provider_name=payload.provider_name or payload.provider.capitalize(),
@@ -348,7 +354,7 @@ def reset_circuit_breaker(
 
 
 class _ReorderPayload(BaseModel):
-    order: list[int]
+    order: list[str]  # IDs serialized as strings (Snowflake)
 
 
 @router.put("/config/reorder", response_model=dict)
@@ -358,7 +364,8 @@ def reorder_ai_configs(
     db: Session = Depends(get_db),
 ) -> dict:
     """按给定顺序更新供应商 display_order（仅 owner）。"""
-    for idx, config_id in enumerate(payload.order):
+    for idx, config_id_str in enumerate(payload.order):
+        config_id = int(config_id_str)  # Snowflake ID (serialized as string)
         db.query(AIProviderConfig).filter(
             AIProviderConfig.id == config_id,
             AIProviderConfig.family_id == current_user.family_id,
@@ -390,7 +397,9 @@ async def test_ai_config(
 
     api_key = decrypt_api_key(cfg.api_key_encrypted)
     if not api_key:
-        return AIConfigTestResult(connected=False, message="API Key 解密失败，请重新配置")
+        return AIConfigTestResult(
+            connected=False, message="API Key 解密失败，请重新配置"
+        )
 
     api_key = api_key.strip()
     if not cfg.model_id:
@@ -422,31 +431,61 @@ async def test_ai_config(
             )
         except Exception:
             logger.exception("agent model-test call failed")
-            return AIConfigTestResult(connected=False, message="无法连接 Agent 服务，请检查 Agent 服务状态")
+            return AIConfigTestResult(
+                connected=False, message="无法连接 Agent 服务，请检查 Agent 服务状态"
+            )
 
-    def _upsert_test(test_type: str, success: bool | None, message: str, latency_ms: int | None) -> None:
-        existing = db.query(AIProviderTestResult).filter_by(config_id=cfg.id, test_type=test_type).first()
+    def _upsert_test(
+        test_type: str, success: bool | None, message: str, latency_ms: int | None
+    ) -> None:
+        existing = (
+            db.query(AIProviderTestResult)
+            .filter_by(config_id=cfg.id, test_type=test_type)
+            .first()
+        )
         if existing:
             existing.success = success
             existing.message = message
             existing.latency_ms = latency_ms
             existing.tested_at = datetime.now(UTC).replace(tzinfo=None)
         else:
-            db.add(AIProviderTestResult(
-                config_id=cfg.id,
-                test_type=test_type,
-                success=success,
-                message=message,
-                latency_ms=latency_ms,
-            ))
+            db.add(
+                AIProviderTestResult(
+                    config_id=cfg.id,
+                    test_type=test_type,
+                    success=success,
+                    message=message,
+                    latency_ms=latency_ms,
+                )
+            )
 
-    _upsert_test("main", data.get("connected", False), data.get("message", ""), data.get("latency_ms"))
+    _upsert_test(
+        "main",
+        data.get("connected", False),
+        data.get("message", ""),
+        data.get("latency_ms"),
+    )
     if data.get("thinking_success") is not None:
-        _upsert_test("thinking", data["thinking_success"], data.get("thinking_message", ""), data.get("thinking_latency_ms"))
+        _upsert_test(
+            "thinking",
+            data["thinking_success"],
+            data.get("thinking_message", ""),
+            data.get("thinking_latency_ms"),
+        )
     if data.get("vision_success") is not None:
-        _upsert_test("vision", data["vision_success"], data.get("vision_message", ""), data.get("vision_latency_ms"))
+        _upsert_test(
+            "vision",
+            data["vision_success"],
+            data.get("vision_message", ""),
+            data.get("vision_latency_ms"),
+        )
     if data.get("vision_text_success") is not None:
-        _upsert_test("vision_text", data["vision_text_success"], data.get("vision_text_message", ""), data.get("vision_text_latency_ms"))
+        _upsert_test(
+            "vision_text",
+            data["vision_text_success"],
+            data.get("vision_text_message", ""),
+            data.get("vision_text_latency_ms"),
+        )
     db.commit()
 
     return AIConfigTestResult(
