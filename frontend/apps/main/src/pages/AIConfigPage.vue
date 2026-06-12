@@ -48,7 +48,7 @@
               <div class="card-title-row">
                 <span class="card-index">{{ t('aiConfig.providerIndex', { n: index + 1 }) }}</span>
                 <span class="card-name">{{ cfg.name }}</span>
-                <span class="card-provider-fmt">({{ cfg.provider }})</span>
+                <span class="card-provider-fmt">{{ providerLabel(cfg.provider) }}</span>
               </div>
               <div class="card-status-row">
                 <span
@@ -251,6 +251,15 @@ function capShortLabel(cap: string): string {
   if (cap === 'text_generation') return t('aiConfig.capabilityText')
   if (cap === 'deep_thinking') return t('aiConfig.capabilityThinking')
   return t('aiConfig.capabilityVision')
+}
+
+// ── Provider label helper ───────────────────────────────────────────────────────
+
+function providerLabel(provider: string): string {
+  if (provider === 'anthropic') return t('aiConfig.providerAnthropic')
+  if (provider === 'openai') return t('aiConfig.providerOpenAI')
+  if (provider === 'openai_compatible') return t('aiConfig.providerOpenAICompatible')
+  return provider
 }
 
 // ── Circuit state helpers ───────────────────────────────────────────────────────
