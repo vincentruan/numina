@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getUser } from '@numina/auth'
+import { useAuthStore, setUser } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
@@ -87,13 +87,61 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, _from, next) => {
-  NProgress.start()
-  const user = getUser()
-  const isChildSession = user?.role === 'child'
+// Cache the child session verification result to avoid repeated API calls
+let childSessionVerified = false
+let verificationInProgress = false
 
-  // All routes in child app require authentication
-  // Redirect unauthenticated users to unified login on main site
+/**
+ * Verify child session via API (cookie-based, works across ports in dev mode).
+ * Returns true if user is authenticated with role='child'.
+ */
+async function verifyChildSession(): Promise<boolean> {
+  // Return cached result if already verified
+  if (childSessionVerified) {
+    return true
+  }
+
+  // Avoid concurrent verification calls
+  if (verificationInProgress) {
+    return false
+  }
+
+  verificationInProgress = true
+  try {
+    const authStore = useAuthStore()
+    await authStore.fetchMe()
+    const user = authStore.user
+    if (user?.role === 'child') {
+      // Cache user in child app's localStorage for subsequent checks
+      setUser(user)
+      childSessionVerified = true
+      return true
+    }
+    return false
+  } catch {
+    // API call failed - user not authenticated
+    return false
+  } finally {
+    verificationInProgress = false
+  }
+}
+
+router.beforeEach(async (to, _from, next) => {
+  NProgress.start()
+
+  // Check cached localStorage first (fast path)
+  const authStore = useAuthStore()
+  const cachedUser = authStore.user
+
+  // If we already have a cached child user, proceed without API call
+  if (cachedUser?.role === 'child') {
+    next()
+    return
+  }
+
+  // Need to verify session via API (first entry or localStorage empty)
+  const isChildSession = await verifyChildSession()
+
   if (!isChildSession) {
     // Clean up NProgress before external redirect
     NProgress.done()
