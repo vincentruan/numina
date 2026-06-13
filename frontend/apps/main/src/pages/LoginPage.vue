@@ -333,13 +333,13 @@ async function onStep1Submit() {
       authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
-        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
-        const redirect = route.query.redirect as string
-        if (redirect && redirect.startsWith('/child/')) {
-          window.location.href = `${baseUrl}${redirect}`
-        } else {
-          window.location.href = `${baseUrl}/child/`
-        }
+        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+      const redirect = route.query.redirect as string
+      if (redirect && redirect.startsWith('/child/')) {
+        window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
+      } else {
+        window.location.href = childBaseUrl
+      }
         return
       }
       router.push('/')
@@ -411,8 +411,8 @@ async function authenticateWithWebAuthn(user: BoundUser) {
       authStore.showTrustPrompt = true
       const authUser = authStore.user
       if (authUser?.role === 'child') {
-        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
-        window.location.href = `${baseUrl}/child/`
+        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+        window.location.href = childBaseUrl
         return
       }
       router.push('/')
@@ -459,8 +459,8 @@ async function onSelectAltchaComplete() {
       authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
-        const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
-        window.location.href = `${baseUrl}/child/`
+        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+        window.location.href = childBaseUrl
         return
       }
       router.push('/')
@@ -522,12 +522,12 @@ async function submitPin() {
     // Redirect based on user role
     const user = authStore.user
     if (user?.role === 'child') {
-      const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+      const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `${baseUrl}${redirect}`
+        window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
       } else {
-        window.location.href = `${baseUrl}/child/`
+        window.location.href = childBaseUrl
       }
       return
     }
@@ -603,12 +603,12 @@ async function submitEmojiPin() {
     showToast(t('toast.loginSuccess'))
     const user = authStore.user
     if (user?.role === 'child') {
-      const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+      const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
-        window.location.href = `${baseUrl}${redirect}`
+        window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
       } else {
-        window.location.href = `${baseUrl}/child/`
+        window.location.href = childBaseUrl
       }
       return
     }
