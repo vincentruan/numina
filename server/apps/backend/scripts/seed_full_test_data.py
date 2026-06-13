@@ -2,26 +2,27 @@
 
 Run from server/ directory: uv run python apps/backend/scripts/seed_full_test_data.py
 """
-import sys
-from pathlib import Path
 import random
-from datetime import date, datetime, timedelta
+import sys
+from datetime import date
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
 
 import apps.backend.app.models  # noqa: F401 — registers all ORM models
 from apps.backend.app.database import SessionLocal
+from apps.backend.app.models.ai_provider_config import AIProviderConfig
+from apps.backend.app.models.asset import Asset
+from apps.backend.app.models.category import Category
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
-from apps.backend.app.models.user import User
-from apps.backend.app.models.asset import Asset
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.tag import Tag
+from apps.backend.app.models.user import User
 from apps.backend.app.models.wish import Wish
-from apps.backend.app.models.category import Category
-from apps.backend.app.models.ai_provider_config import AIProviderConfig
-from apps.backend.app.services.auth import hash_password
 from apps.backend.app.services.ai_crypto import encrypt_api_key
+from apps.backend.app.services.auth import hash_password
 from packages.core.snowflake import next_id
 
 
@@ -35,7 +36,7 @@ def seed_test_users(db):
         ("DEMO-SPOUSE", "demouser spouse"),
     ]
 
-    for code, description in codes_data:
+    for code, _description in codes_data:
         existing = db.query(FamilyInvitationCode).filter_by(code=code).first()
         if not existing:
             db.add(FamilyInvitationCode(code=code))
@@ -772,6 +773,40 @@ def seed_ai_config(db, user: User):
     return config
 
 
+def seed_mcp_servers(db, user: User):
+    """Create MCP server for backend internal tool calls."""
+    import os
+
+    # Backend URL: use BACKEND_BASE_URL env var if set, otherwise default for local dev
+    backend_url = os.environ.get("BACKEND_BASE_URL", "http://localhost:8000")
+
+    # MCP SSE endpoint URL format: {backend_url}/api/v1/internal/mcp/{family_id}/sse
+    mcp_url = f"{backend_url}/api/v1/internal/mcp/{user.family_id}/sse"
+
+    existing_server = db.query(FamilyMCPServer).filter_by(
+        family_id=user.family_id,
+        name="Numina Backend MCP"
+    ).first()
+    if existing_server:
+        print(f"MCP server already exists for family {user.family_id}: url={existing_server.url}")
+        return existing_server
+
+    server = FamilyMCPServer(
+        id=next_id(),
+        family_id=user.family_id,
+        name="Numina Backend MCP",
+        url=mcp_url,
+        transport="sse",
+        is_enabled=True,
+        mcp_type="backend",
+    )
+    db.add(server)
+    db.commit()
+
+    print(f"Created MCP server for family {user.family_id}: url={mcp_url}")
+    return server
+
+
 def main():
     """Run full seeding."""
     print("=" * 60)
@@ -810,6 +845,10 @@ def main():
         print("\n[6] Creating AI config...")
         seed_ai_config(db, demouser)
 
+        # Step 7: Create MCP server for backend tool calls
+        print("\n[7] Creating MCP server...")
+        mcp_server = seed_mcp_servers(db, demouser)
+
         print("\n" + "=" * 60)
         print("Seeding complete!")
         print("=" * 60)
@@ -821,6 +860,7 @@ def main():
         print(f"  Liabilities: {len(liabilities)}")
         print(f"  Tags: {len(tags)}")
         print(f"  Wishes: {len(wishes)}")
+        print(f"  MCP Servers: {1 if mcp_server else 0}")
 
     finally:
         db.close()

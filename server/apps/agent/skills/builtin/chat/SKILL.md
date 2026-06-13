@@ -6,7 +6,12 @@ description: |
 
 trigger_phrases: []
 
-allowed-tools: []
+mcp_tools:
+  - get_family_overview
+  - get_assets
+  - get_liabilities
+  - get_members
+  - get_recent_alerts
 
 thinking: true
 ---
@@ -21,3 +26,15 @@ thinking: true
 - 不要尝试联网搜索
 - 涉及具体金额时使用用户配置的货币单位
 - 不提供具体投资建议，仅做信息整理和分析
+
+## 数据获取
+
+当用户询问家庭资产、负债、净资产、配置情况等问题时，**必须先调用 MCP 工具获取数据**：
+
+- 家庭财务总览 → `get_family_overview`
+- 资产列表 → `get_assets`
+- 负债列表 → `get_liabilities`
+- 家庭成员 → `get_members`
+- 资产预警 → `get_recent_alerts`
+
+不要猜测或编造数据。如果没有数据，如实告知用户。
