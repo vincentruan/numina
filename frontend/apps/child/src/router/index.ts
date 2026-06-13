@@ -3,7 +3,7 @@ import { useAuthStore, setUser } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
-import { globalLoadingCount, completeGlobalLoading } from '@/composables/usePageLoading'
+import { globalLoadingCount, completeGlobalLoading, registerRouterTimeout, clearRouterTimeout } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 
@@ -158,19 +158,22 @@ router.beforeEach(async (to, _from, next) => {
 })
 
 router.afterEach((to) => {
-  // Pages with skeleton: complete immediately
+  // Pages with skeleton: complete immediately, clear any pending timeout
   if (to.meta.hasSkeleton) {
+    clearRouterTimeout()
     NProgress.done()
     return
   }
 
   // Pages without skeleton: defer to page's usePageLoading
-  setTimeout(() => {
-    if (globalLoadingCount.value === 0) {
-      // Page didn't start any loading, complete the progress bar
-      completeGlobalLoading()
-    }
+  // Safety timeout: force-complete after 5s (handles both idle and stuck cases)
+  // - If page never called increment(): completes idle NProgress
+  // - If page called increment() but hung: force-completes stuck loading
+  // - If page called increment() within 5s: timeout cleared by increment(), page controls
+  const timeoutId = setTimeout(() => {
+    completeGlobalLoading()
   }, 5000)
+  registerRouterTimeout(timeoutId)
 })
 
 export default router

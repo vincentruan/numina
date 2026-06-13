@@ -7,8 +7,12 @@ const loadingCount = ref(0)
 // Track if NProgress was started by this system (module-level singleton)
 let nprogressStarted: boolean = false
 
-// Track which instances have pending increments
-const pendingInstances = new Set<symbol>()
+// Track router's safety timeout ID so increment() can clear it (prevents TOCTOU race)
+let routerTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+// Track which instances have pending increments with count and active status
+// Key: instanceId symbol, Value: { count: number of pending increments, active: boolean }
+const pendingInstances = new Map<symbol, { count: number; active: boolean }>()
 
 /**
  * Page-level loading coordinator.
@@ -23,9 +27,27 @@ export function usePageLoading() {
   // Create unique ID for this instance
   const instanceId = Symbol('pageLoading')
 
+  // Mark instance as active on creation
+  pendingInstances.set(instanceId, { count: 0, active: true })
+
   function increment() {
+    // Clear router's safety timeout to prevent TOCTOU race
+    if (routerTimeoutId !== null) {
+      clearTimeout(routerTimeoutId)
+      routerTimeoutId = null
+    }
+
+    const instance = pendingInstances.get(instanceId)
+    if (!instance || !instance.active) {
+      if (import.meta.env.DEV) {
+        console.warn('[usePageLoading] increment() called on inactive instance')
+      }
+      return
+    }
+
     loadingCount.value++
-    pendingInstances.add(instanceId)
+    instance.count++
+
     if (loadingCount.value === 1 && !nprogressStarted) {
       NProgress.start()
       nprogressStarted = true
@@ -33,14 +55,31 @@ export function usePageLoading() {
   }
 
   function decrement() {
-    if (loadingCount.value > 0) {
-      loadingCount.value--
-      pendingInstances.delete(instanceId)
-    } else {
+    const instance = pendingInstances.get(instanceId)
+
+    // Guard: instance must exist, be active, and have pending increments
+    if (!instance || !instance.active || instance.count === 0) {
       if (import.meta.env.DEV) {
-        console.warn('[usePageLoading] decrement() called without matching increment()')
+        if (!instance) {
+          console.warn('[usePageLoading] decrement() called on unknown instance')
+        } else if (!instance.active) {
+          console.warn('[usePageLoading] decrement() called on inactive (unmounted) instance')
+        } else {
+          console.warn('[usePageLoading] decrement() called without matching increment()')
+        }
       }
+      return
     }
+
+    loadingCount.value--
+    instance.count--
+
+    // Remove from map when count reaches zero (no pending ops)
+    if (instance.count === 0) {
+      pendingInstances.delete(instanceId)
+    }
+
+    // Complete NProgress when all loading is done
     if (loadingCount.value === 0 && nprogressStarted) {
       NProgress.done()
       nprogressStarted = false
@@ -62,14 +101,23 @@ export function usePageLoading() {
     }
   }
 
-  // Safety net: only clear this instance's contributions on unmount
+  // Safety net: mark instance inactive and clear its pending contributions on unmount
   onUnmounted(() => {
-    if (pendingInstances.has(instanceId)) {
-      // This instance had pending increments - clean them up
-      pendingInstances.delete(instanceId)
-      if (loadingCount.value > 0) {
-        loadingCount.value--
+    const instance = pendingInstances.get(instanceId)
+    if (instance && instance.active) {
+      // Mark inactive to prevent stale decrement() calls
+      instance.active = false
+
+      // Subtract this instance's remaining count from global counter
+      if (instance.count > 0 && loadingCount.value >= instance.count) {
+        loadingCount.value -= instance.count
+        instance.count = 0
       }
+
+      // Remove from map
+      pendingInstances.delete(instanceId)
+
+      // Complete NProgress if all loading is now done
       if (loadingCount.value === 0 && nprogressStarted) {
         NProgress.done()
         nprogressStarted = false
@@ -87,13 +135,33 @@ export function usePageLoading() {
   }
 }
 
-// Export global state for router guard access (without lifecycle hooks)
+// --- Router-facing exports (no lifecycle hooks) ---
+
 export const globalLoadingCount: Ref<number> = loadingCount
+
 export function completeGlobalLoading(): void {
   loadingCount.value = 0
   pendingInstances.clear()
   if (nprogressStarted) {
     NProgress.done()
     nprogressStarted = false
+  }
+}
+
+/**
+ * Register router's safety timeout ID so increment() can clear it.
+ * Call this from router afterEach when scheduling the timeout.
+ */
+export function registerRouterTimeout(timeoutId: ReturnType<typeof setTimeout>): void {
+  routerTimeoutId = timeoutId
+}
+
+/**
+ * Clear router's safety timeout manually (e.g., for hasSkeleton pages).
+ */
+export function clearRouterTimeout(): void {
+  if (routerTimeoutId !== null) {
+    clearTimeout(routerTimeoutId)
+    routerTimeoutId = null
   }
 }
