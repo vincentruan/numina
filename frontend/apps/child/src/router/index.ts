@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getUser } from '@numina/auth'
+import { getMainBaseUrl } from '@/utils/mainApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 
@@ -98,7 +99,7 @@ router.beforeEach((to, _from, next) => {
     NProgress.done()
     // Build redirect URL preserving the original path
     const redirectPath = to.path !== '/' ? `/child${to.path}` : '/child/'
-    const baseUrl = import.meta.env.VITE_MAIN_APP_URL || ''
+    const baseUrl = getMainBaseUrl()
     window.location.href = `${baseUrl}/login?redirect=${encodeURIComponent(redirectPath)}`
     next(false)
     return
