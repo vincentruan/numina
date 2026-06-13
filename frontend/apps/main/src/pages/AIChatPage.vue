@@ -222,217 +222,37 @@
       <!-- Messages -->
       <template v-else>
         <transition-group name="msg" tag="div" class="msg-list">
-          <div
+          <ChatMessage
             v-for="(msg, idx) in messages"
+            :id="msg.id"
             :key="msg.id"
-            class="message-row"
-            :class="msg.role"
-          >
-            <div class="bubble" :class="[msg.role, { 'assistant--thinking': msg.role === 'assistant' && msg.phase && msg.phase !== 'done' && msg.phase !== 'error' }]">
-              <div class="bubble-body">
-                <!-- Connecting state region: shown while phase === 'connecting' -->
-                <div
-                  v-if="msg.role === 'assistant' && msg.phase === 'connecting'"
-                  class="connecting-region shimmer-active"
-                  aria-live="polite"
-                >
-                  <span class="connecting-dot" aria-hidden="true" />
-                  <span class="connecting-label">{{ t('aiChat.connectingAI') }}</span>
-                  <span class="connecting-sep" aria-hidden="true">·</span>
-                  <span class="connecting-time">{{ connectingSeconds }}s</span>
-                </div>
-                <!-- Unified phase indicator: shown during thinking/answering when NOT deep think mode -->
-                <div
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && msg.phase !== 'done' && msg.phase !== 'error' && !deepThink && msg.content"
-                  class="phase-strip standalone"
-                  :class="`phase-strip--${msg.phase}`"
-                  aria-live="polite"
-                >
-                  <span class="phase-pulse" aria-hidden="true" />
-                  <span class="phase-label">{{ phaseLabel(msg.phase) }}</span>
-                </div>
-                <!-- Process block (replaces inline think-block) — unified steps[] preserves event order (spec §3.3) -->
-                <!-- Renders whenever the assistant has process steps OR is in error (so retry button is visible) -->
-                <!-- Long task: wrap in AgentRunCanvas for full-width display (U8) -->
-                <AgentRunCanvas
-                  v-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg) && shouldUseCanvas(msg)"
-                  :status="getProcessStatus(msg)"
-                  :elapsed-ms="msg.processElapsedMs || 0"
-                  :done-step-count="getDoneStepCount(msg)"
-                  :total-step-count="getTotalStepCount(msg)"
-                >
-                  <AiProcessBlock
-                    :status="getProcessStatus(msg)"
-                    :elapsed-ms="msg.processElapsedMs || 0"
-                    :steps="msg.processSteps || buildLegacySteps(msg)"
-                    :default-expanded="!msg.thinkDone || msg.phase === 'error'"
-                    :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
-                    :phase="msg.phase === 'interrupted' ? undefined : msg.phase"
-                    :reasoning-start-time="msg.reasoningStartTime ?? null"
-                    :plan-steps="msg.planSteps"
-                    :plan-source="msg.planSource"
-                    @retry="onRetryError(idx)"
-                  />
-                </AgentRunCanvas>
-                <!-- Short task: render AiProcessBlock directly in bubble width -->
-                <AiProcessBlock
-                  v-else-if="msg.role === 'assistant' && msg.phase && msg.phase !== 'connecting' && shouldShowProcessBlock(msg)"
-                  :status="getProcessStatus(msg)"
-                  :elapsed-ms="msg.processElapsedMs || 0"
-                  :steps="msg.processSteps || buildLegacySteps(msg)"
-                  :default-expanded="!msg.thinkDone || msg.phase === 'error'"
-                  :error-message="msg.phase === 'error' ? (msg.content || t('aiChat.errorRetry')) : undefined"
-                  :phase="msg.phase === 'interrupted' ? undefined : msg.phase"
-                  :reasoning-start-time="msg.reasoningStartTime ?? null"
-                  :plan-steps="msg.planSteps"
-                  :plan-source="msg.planSource"
-                  @retry="onRetryError(idx)"
-                />
-                <!-- eslint-disable vue/no-v-html -- server-rendered markdown, not user-controlled HTML -->
-                <div
-                  v-if="msg.role === 'assistant' && msg.phase !== 'error'"
-                  class="bubble-text"
-                  :class="{ 'bubble-text--appearing': msg.content && msg.phase === 'answering' && !msg.renderedContent }"
-                  v-html="msg.renderedContent ?? ''"
-                />
-                <!-- Inline error state — fallback when deepThink is off (AiProcessBlock not rendered) -->
-                <div v-if="msg.role === 'assistant' && msg.phase === 'error' && !deepThink" class="error-state">
-                  <p class="error-msg">{{ t('aiChat.errorRetry') }}</p>
-                  <button class="error-retry-btn" :disabled="asking" @click="onRetryError(idx)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="1 4 1 10 7 10"/>
-                      <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
-                    </svg>
-                    <span>{{ t('aiChat.retry') }}</span>
-                  </button>
-                </div>
-                <!-- eslint-enable vue/no-v-html -->
-                <AiUserBubble v-if="msg.role === 'user' && editingMessageIdx !== idx" class="bubble-text" :content="msg.content" />
-                <!-- Edit mode: replace user bubble with input field -->
-                <div v-if="msg.role === 'user' && editingMessageIdx === idx" class="edit-input-wrapper">
-                  <van-field
-                    v-model="editInputText"
-                    type="textarea"
-                    :rows="2"
-                    autosize
-                    :placeholder="t('aiChat.editPlaceholder')"
-                    class="edit-input-field"
-                  />
-                  <div class="edit-actions">
-                    <button class="edit-cancel-btn" :disabled="asking" @click="onCancelEdit">
-                      {{ t('common.cancel') }}
-                    </button>
-                    <button class="edit-send-btn" :disabled="asking || !editInputText.trim()" @click="onSendEdit(idx)">
-                      {{ t('aiChat.sendEdit') }}
-                    </button>
-                  </div>
-                </div>
-                <!-- Assistant message timestamp -->
-                <span v-if="msg.role === 'assistant'" class="msg-time">{{ msg.displayTime }}</span>
-                <!-- User message send status indicator -->
-                <div v-if="msg.role === 'user' && msg.sendStatus === 'sending'" class="send-status send-status--sending" aria-live="polite">
-                  <span class="send-status-dot" aria-hidden="true" />
-                  <span>{{ t('aiChat.sendingMessage') }}</span>
-                </div>
-                <div v-if="msg.role === 'user' && msg.sendStatus === 'failed'" class="send-status send-status--failed" aria-live="polite">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                  </svg>
-                  <span>{{ t('aiChat.sendFailed') }}</span>
-                  <button class="send-retry-btn" :disabled="asking" @click="onRetrySend(idx)">{{ t('aiChat.resend') }}</button>
-                </div>
-                <!-- User message footer: actions (copy + edit) on left, time on right, same row (hidden in edit mode) -->
-                <div v-if="msg.role === 'user' && editingMessageIdx !== idx" class="msg-footer msg-footer--user">
-                  <div class="msg-actions msg-actions--user">
-                    <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                      </svg>
-                    </button>
-                    <button class="msg-action-btn" :aria-label="t('aiChat.editAria')" :title="t('aiChat.editAria')" @click="onEditUserMessage(idx)">
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                      </svg>
-                    </button>
-                  </div>
-                  <span class="msg-time">{{ msg.displayTime }}</span>
-                </div>
-                <!-- U7: bouncing 3-dot streaming indicator (replaces blinking block cursor) -->
-                <span
-                  v-if="msg.role === 'assistant' && msg.phase === 'answering'"
-                  class="stream-dots"
-                  :aria-label="t('aiChat.streaming')"
-                >
-                  <span class="stream-dot"></span>
-                  <span class="stream-dot"></span>
-                  <span class="stream-dot"></span>
-                </span>
-                <!-- Interrupted hint -->
-                <div v-if="msg.role === 'assistant' && msg.phase === 'interrupted'" class="interrupted-hint" aria-live="polite">
-                  {{ t('aiChat.generationStopped') }}
-                </div>
-                <!-- Assistant message actions: only shown after generation completes/stops/fails -->
-                <div v-if="msg.role === 'assistant' && (msg.phase === 'done' || msg.phase === 'interrupted' || msg.phase === 'error')" class="msg-actions">
-                  <button class="msg-action-btn" :aria-label="t('aiChat.copyAria')" :title="t('aiChat.copyAria')" @click="onCopy(msg.content)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                    </svg>
-                  </button>
-                  <button class="msg-action-btn" :aria-label="t('aiChat.regenerateAria')" :title="t('aiChat.regenerateAria')" :disabled="asking" @click="onRegenerate(idx)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="1 4 1 10 7 10"/>
-                      <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
-                    </svg>
-                  </button>
-                  <button
-                    class="msg-action-btn"
-                    :class="{ 'msg-action-btn--active': msg.feedback === 1 }"
-                    :aria-label="t('aiChat.helpfulAria')"
-                    :title="t('aiChat.helpfulAria')"
-                    @click="onFeedback(msg.id, 1)"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/>
-                      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/>
-                    </svg>
-                  </button>
-                  <button
-                    class="msg-action-btn"
-                    :class="{ 'msg-action-btn--active': msg.feedback === -1 }"
-                    :aria-label="t('aiChat.notHelpfulAria')"
-                    :title="t('aiChat.notHelpfulAria')"
-                    @click="onFeedback(msg.id, -1)"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/>
-                      <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/>
-                    </svg>
-                  </button>
-                </div>
-                <!-- U8: templated suggestion chips — shown after answer completes (≥30 chars) -->
-                <div
-                  v-if="msg.role === 'assistant' && msg.phase === 'done' && msg.content && msg.content.length >= 30"
-                  class="suggestion-chips"
-                  :aria-label="t('aiChat.suggestionsAria')"
-                >
-                  <button
-                    v-for="chip in suggestionChipsFor(msg)"
-                    :key="chip"
-                    class="suggestion-chip"
-                    type="button"
-                    @click="onSuggestionChipClick(chip)"
-                  >
-                    {{ chip }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
+            :role="msg.role"
+            :content="msg.content"
+            :phase="msg.phase"
+            :process-steps="msg.processSteps"
+            :plan-steps="msg.planSteps"
+            :plan-source="msg.planSource"
+            :process-elapsed-ms="msg.processElapsedMs"
+            :reasoning-start-time="msg.reasoningStartTime"
+            :rendered-content="msg.renderedContent"
+            :suggestions="msg.phase === 'done' && msg.content && msg.content.length >= 30 ? suggestionChipsFor(msg) : undefined"
+            :feedback="msg.feedback"
+            :display-time="msg.displayTime"
+            :send-status="msg.sendStatus"
+            :artifacts="sessionArtifacts"
+            :is-editing="editingMessageIdx === idx"
+            :edit-input="editInputText"
+            @retry="onRetryError(idx)"
+            @copy="onCopy"
+            @edit="onEditUserMessage(idx)"
+            @feedback="onFeedback"
+            @suggestion-click="onSuggestionChipClick"
+            @artifact-tap="onArtifactTap"
+            @send-edit="onSendEdit(idx)"
+            @cancel-edit="onCancelEdit"
+            @update:edit-input="editInputText = $event"
+          />
         </transition-group>
-
       </template>
     </div>
 
@@ -517,12 +337,11 @@ import { useAgentStore } from '@/stores/agent'
 import { getAgent } from '@/api/agent'
 import type { Agent } from '@/types/agent'
 import AIChatInput from '@/components/common/AIChatInput.vue'
-import AiProcessBlock from '@/components/ai/AiProcessBlock.vue'
-import AiUserBubble from '@/components/ai/AiUserBubble.vue'
 import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
 import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
-import AgentRunCanvas from '@/components/ai/AgentRunCanvas.vue'
+// DeerFlow-aligned chat components
+import ChatMessage from '@/components/chat/ChatMessage.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
 import { isLongTask } from '@/utils/aiTaskDetection'
@@ -584,7 +403,7 @@ function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ProcessStep[] {
 // Used as a fallback when the message did not flow through aiEventNormalizer (e.g. older history
 // records or messages saved before the steps[] refactor). Reasoning is emitted as the leading
 // step; tool calls follow in timeline order.
-function buildLegacySteps(msg: Message): ProcessStep[] {
+function _buildLegacySteps(msg: Message): ProcessStep[] {
   const steps: ProcessStep[] = []
   if (msg.thinkContent) {
     steps.push({
@@ -602,7 +421,7 @@ function buildLegacySteps(msg: Message): ProcessStep[] {
 // Decide whether AiProcessBlock should render for an assistant message.
 // Show whenever there is process content (live steps, legacy think/tool data) or
 // when the message is in error so the inline retry button is visible.
-function shouldShowProcessBlock(msg: Message): boolean {
+function _shouldShowProcessBlock(msg: Message): boolean {
   if (msg.phase === 'error') return true
   if (msg.processSteps && msg.processSteps.length > 0) return true
   if (msg.thinkContent) return true
@@ -612,15 +431,15 @@ function shouldShowProcessBlock(msg: Message): boolean {
 
 // Decide whether to use full-width AgentRunCanvas for long tasks (U8).
 // Canvas is shown when: deepThink mode OR ≥3 steps OR trigger tool (generate_report).
-function shouldUseCanvas(msg: Message): boolean {
+function _shouldUseCanvas(msg: Message): boolean {
   // Get steps from either processSteps or legacy build
-  const steps = msg.processSteps || buildLegacySteps(msg)
+  const steps = msg.processSteps || _buildLegacySteps(msg)
   return isLongTask(steps, deepThink.value)
 }
 
 // U10: Calculate process status from phase, handling interrupted sessions.
 // Returns 'interrupted' for interrupted phase, otherwise falls back to processStatus or derived status.
-function getProcessStatus(msg: Message): 'running' | 'done' | 'error' | 'interrupted' {
+function _getProcessStatus(msg: Message): 'running' | 'done' | 'error' | 'interrupted' {
   if (msg.processStatus) return msg.processStatus
   if (msg.phase === 'interrupted') return 'interrupted'
   if (msg.phase === 'error') return 'error'
@@ -629,16 +448,19 @@ function getProcessStatus(msg: Message): 'running' | 'done' | 'error' | 'interru
 }
 
 // U10: Calculate total step count for progress summary.
-function getTotalStepCount(msg: Message): number {
-  const steps = msg.processSteps || buildLegacySteps(msg)
+function _getTotalStepCount(msg: Message): number {
+  const steps = msg.processSteps || _buildLegacySteps(msg)
   return steps.length
 }
 
 // U10: Calculate done step count for progress summary.
 // Steps with status 'done' or 'error' are counted as completed.
-function getDoneStepCount(msg: Message): number {
-  const steps = msg.processSteps || buildLegacySteps(msg)
-  return steps.filter(s => s.status === 'done' || s.status === 'error').length
+// Only tool_call, reasoning, subagent, and progress steps have status.
+function _getDoneStepCount(msg: Message): number {
+  const steps = msg.processSteps || _buildLegacySteps(msg)
+  return steps.filter(s =>
+    s.type !== 'artifact' && (s.status === 'done' || s.status === 'error')
+  ).length
 }
 
 function parseToolArgs(argsText?: string): Record<string, unknown> {
@@ -1089,7 +911,7 @@ function onChipClick(text: string) {
   inputText.value = text
 }
 
-function phaseLabel(phase: NonNullable<Message['phase']>) {
+function _phaseLabel(phase: NonNullable<Message['phase']>) {
   if (phase === 'connecting') return t('aiChat.connecting')
   if (phase === 'thinking') return t('aiChat.thinking')
   if (phase === 'answering') return t('aiChat.answering')
@@ -1718,8 +1540,8 @@ async function onSendEdit(idx: number) {
   if (currentSessionId.value) {
     try {
       const forkRes = await forkSession(currentSessionId.value, msg.id)
-      // Use the new forked session
-      currentSessionId.value = forkRes.session_id
+      // Use the new forked session (forkRes.data contains ForkSessionResponse)
+      currentSessionId.value = forkRes.data.session_id
     } catch {
       showToast(t('toast.operationFailed'))
       return
@@ -1737,7 +1559,7 @@ async function onSendEdit(idx: number) {
   await onSend()
 }
 
-async function onRegenerate(idx: number) {
+async function _onRegenerate(idx: number) {
   const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
   if (!prevUser || asking.value) return
 
@@ -1767,7 +1589,7 @@ async function onRetryError(idx: number) {
   await onSend()
 }
 
-async function onRetrySend(idx: number) {
+async function _onRetrySend(idx: number) {
   if (asking.value) return
   const msg = messages.value[idx]
   if (!msg || msg.role !== 'user') return

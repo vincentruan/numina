@@ -15,7 +15,7 @@
       <div class="console-header-content">
         <div class="console-title-row">
           <span v-if="hasSteps && isRunning" class="console-step-badge">
-            {{ t('aiTask.stepProgress', { current: displayStepIndex + 1, total: planSteps.length }) }}
+            {{ t('aiTask.stepProgress', { current: displayStepIndex + 1, total: planSteps?.length ?? 0 }) }}
           </span>
           <span class="console-title">{{ title }}</span>
         </div>
@@ -86,7 +86,7 @@
       <details v-if="hasSteps && visibleToolSteps.length" class="console-tool-detail">
         <summary class="tool-detail-summary">
           {{ t('aiTask.toolDetail') }}
-          <span class="tool-detail-count">{{ toolSteps.length }}</span>
+          <span class="tool-detail-count">{{ toolSteps?.length ?? 0 }}</span>
         </summary>
         <div class="tool-detail-list">
           <div

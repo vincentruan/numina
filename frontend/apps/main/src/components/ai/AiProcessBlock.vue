@@ -87,7 +87,7 @@ import { usePlanInference } from '@/composables/usePlanInference'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 
 const props = defineProps<{
-  status: 'running' | 'done' | 'error'
+  status: 'running' | 'done' | 'error' | 'interrupted'
   elapsedMs: number
   steps: ProcessStep[]
   defaultExpanded?: boolean
@@ -369,6 +369,7 @@ const statusClass = computed(() => {
     case 'running': return 'status-running'
     case 'done': return 'status-done'
     case 'error': return 'status-error'
+    case 'interrupted': return 'status-interrupted'
     default: return ''
   }
 })
