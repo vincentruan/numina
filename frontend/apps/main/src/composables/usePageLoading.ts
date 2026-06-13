@@ -1,11 +1,11 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, type Ref } from 'vue'
 import NProgress from 'nprogress'
 
 // Global loading counter (shared across all components in the page)
 const loadingCount = ref(0)
 
-// Track if NProgress was started by this system
-let nprogressStarted = false
+// Track if NProgress was started by this system (module-level singleton)
+let nprogressStarted: boolean = false
 
 // Track which instances have pending increments
 const pendingInstances = new Set<symbol>()
@@ -88,8 +88,8 @@ export function usePageLoading() {
 }
 
 // Export global state for router guard access (without lifecycle hooks)
-export const globalLoadingCount = loadingCount
-export function completeGlobalLoading() {
+export const globalLoadingCount: Ref<number> = loadingCount
+export function completeGlobalLoading(): void {
   loadingCount.value = 0
   pendingInstances.clear()
   if (nprogressStarted) {
