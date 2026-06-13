@@ -356,9 +356,10 @@ const router = createRouter({
       // Component is a no-op placeholder; beforeEnter does the hand-off.
       component: { template: '<div />' },
       beforeEnter: () => {
-        // Nginx routes /child/* to frontend/apps/child container.
-        // window.location.replace forces a full reload, bypassing the SPA router.
-        window.location.replace('/child/')
+        // In dev mode, VITE_CHILD_APP_URL points to localhost:5174.
+        // In production, nginx routes /child/* to frontend-child container.
+        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+        window.location.replace(childBaseUrl)
         // Return false to abort the in-SPA navigation so the URL doesn't briefly
         // change to /child before the full reload lands.
         return false
@@ -401,7 +402,8 @@ router.beforeEach((to, _from, next) => {
 
   // Stale child session accessing protected route — redirect to child app
   if (isChild) {
-    window.location.replace('/child/')
+    const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+    window.location.replace(childBaseUrl)
     return
   }
 
