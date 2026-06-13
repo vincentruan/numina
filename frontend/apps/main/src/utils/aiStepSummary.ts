@@ -196,8 +196,8 @@ function createMergedItem(steps: ProcessStep[], category?: string): MergedSummar
     isMerged,
     steps,
     category,
-    displayText: isMerged ? '' : (displayName || name), // Populated by i18n
-    displayTextKey: isMerged ? getToolCategory(category) : getChineseSummary(name, displayName),
+    displayText: isMerged ? '' : (displayName ?? name ?? ''),
+    displayTextKey: isMerged ? getToolCategory(category) : getChineseSummary(name ?? '', displayName),
     count: isMerged ? steps.length : undefined,
   }
 }

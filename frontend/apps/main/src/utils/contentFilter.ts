@@ -124,7 +124,7 @@ const FORBIDDEN_PATTERNS = [
   /^[-\s]*Current Focus[：:][\s\S]*?(?=^[-\s]*Recent|^History|^Facts|<\/memory|$)/gim,
   /^[-\s]*Recent[：:][\s\S]*?(?=^History|^Facts|<\/memory|$)/gim,
   /^History[：:][\s\S]*?(?=^Facts|<\/memory|$)/gim,
-  /^Facts[：:][\s\S]*?(?=<\/memory|^[^\[]|$)/gim,
+  /^Facts[：:][\s\S]*?(?=<\/memory|^[^[]|$)/gim,
 
   // 格式 4：User Context 整块（包含所有子节）
   /^User Context[：:][\s\S]*?(?=^History|^Facts|<\/memory|$)/gim,
@@ -256,41 +256,80 @@ export function filterAIContent(raw: string, userQuestion?: string): string {
 const ECHO_MIN_RATIO = 0.6
 
 /**
- * Remove question echo from the beginning of assistant content.
+ * Remove question echo from assistant content (any position, not just start).
  *
- * DeerFlow agent often outputs the user's question verbatim at the start of the
- * response (sometimes twice — before and after the memory block). After the
- * memory block is filtered out, we may see:
- *   "用户问题\n\n用户问题\n\n实际回答内容"
- * or just:
- *   "用户问题\n\n实际回答内容"
+ * DeerFlow agent often outputs the user's question in multiple positions:
+ * - Before memory block (stripped by INTERNAL_MARKER_RE)
+ * - After memory block (remains after tag stripping)
+ * - Embedded in answer preamble ("问题是：...")
  *
- * This function detects if the assistant content starts with the user question
- * and removes the echo prefix, keeping only the actual answer.
+ * This enhanced version removes question echo from ANY position, handling:
+ * - Multiple consecutive echoes
+ * - Echoes preceded by preamble text
+ * - Partial echoes (truncated or slightly modified)
  *
  * @param content - Filtered assistant content (after pattern-based filters)
  * @param userQuestion - The user's original question text
- * @returns Content with question echo removed
+ * @returns Content with question echoes removed
  */
 export function removeQuestionEcho(content: string, userQuestion: string): string {
   if (!content || !userQuestion) return content
 
   // Normalize both texts for comparison: collapse whitespace, trim
-  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim()
+  const normalize = (s: string) => s.replace(/\s+/g, ' ').trim().toLowerCase()
   const normQuestion = normalize(userQuestion)
+  const normQuestionUpper = userQuestion.replace(/\s+/g, ' ').trim()
 
   // If the question is empty after normalization, nothing to remove
   if (!normQuestion) return content
 
-  // Loop to remove ALL consecutive question echoes
-  // DeerFlow agent may output the question multiple times (before and after memory block)
   let result = content
-  let maxIterations = 5 // Safety limit to prevent infinite loops
 
+  // Strategy 1: Remove exact question echo (any position, case-insensitive)
+  // DeerFlow pattern: question often appears as standalone line(s)
+  const exactEchoPattern = new RegExp(
+    `^\\s*${escapeRegExp(normQuestionUpper)}\\s*(?:\\n+|$)`,
+    'gim'
+  )
+  result = result.replace(exactEchoPattern, '')
+
+  // Strategy 2: Remove question echo with preamble patterns
+  // Chinese pattern: "问题是：用户问题" or "你问的是：用户问题"
+  const preamblePatterns = [
+    /^你问的是[：:]\s*[^\n]+\n+/gm,
+    /^问题是[：:]\s*[^\n]+\n+/gm,
+    /^您的问题是[：:]\s*[^\n]+\n+/gm,
+    /^关于您问的[：:]\s*[^\n]+\n+/gm,
+  ]
+  for (const pattern of preamblePatterns) {
+    result = result.replace(pattern, '')
+  }
+
+  // Strategy 3: Remove fuzzy match (question with minor variations)
+  // Handles whitespace differences, partial truncation
+  const minMatchLen = Math.ceil(normQuestion.length * ECHO_MIN_RATIO)
+  const questionWords = normQuestionUpper.split(/\s+/).filter(w => w.length > 2)
+
+  // If question has meaningful words, try word-based removal
+  if (questionWords.length >= 2) {
+    // Match lines containing most question words
+    const wordPattern = new RegExp(
+      `^\\s*(?:${questionWords.map(escapeRegExp).join('|')}).*\\n+`,
+      'gim'
+    )
+    // Only apply if the match is at the beginning and looks like question echo
+    const firstLine = result.split('\n')[0]
+    if (firstLine && normalize(firstLine).includes(normQuestion.slice(0, minMatchLen))) {
+      result = result.replace(wordPattern, '')
+    }
+  }
+
+  // Strategy 4: Loop removal for multiple echoes (original algorithm)
+  let maxIterations = 3
   while (maxIterations > 0) {
     const normResult = normalize(result)
 
-    // If the question is longer than the remaining content, no more echoes possible
+    // If the question is longer than the remaining content, stop
     if (normQuestion.length > normResult.length) break
 
     // Check if remaining content starts with the full question
@@ -299,32 +338,24 @@ export function removeQuestionEcho(content: string, userQuestion: string): strin
       if (echoEnd > 0) {
         result = result.slice(echoEnd).trim()
         maxIterations--
-        continue // Check for another consecutive echo
+        continue
       }
     }
 
-    // Partial match: check if a significant prefix of the question matches
-    // (handles cases where the echo is slightly truncated)
-    const minLen = Math.ceil(normQuestion.length * ECHO_MIN_RATIO)
-    let foundPartial = false
-    for (let len = normQuestion.length - 1; len >= minLen && !foundPartial; len--) {
-      const partialQuestion = normQuestion.slice(0, len)
-      if (normResult.startsWith(partialQuestion)) {
-        // Pass partialQuestion (not full userQuestion) to find where THIS partial prefix ends
-        const echoEnd = findEchoEndPosition(result, partialQuestion)
-        if (echoEnd > 0) {
-          result = result.slice(echoEnd).trim()
-          foundPartial = true
-          maxIterations--
-        }
-      }
-    }
-
-    // No echo found at start, stop looping
-    if (!foundPartial) break
+    break
   }
 
-  return result || content // Return result, fallback to original if empty
+  // Clean up: remove leading empty lines
+  result = result.replace(/^\s*\n+/, '')
+
+  return result || content
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 /**
