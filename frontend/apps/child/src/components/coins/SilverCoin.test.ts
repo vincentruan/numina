@@ -25,21 +25,29 @@ describe('SilverCoin reduced-motion gating', () => {
     })
   })
 
-  it('renders the breathing animate element when motion is allowed', async () => {
+  it('renders specular highlight when motion is allowed', async () => {
     mqMatches = false
     const { default: SilverCoin } = await import('./SilverCoin.vue')
     const wrapper = mount(SilverCoin)
-    expect(wrapper.find('[data-test="silver-arc"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="silver-arc-animate"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="silver-specular"]').exists()).toBe(true)
   })
 
-  it('omits the animate element but keeps the static arc when prefers-reduced-motion is set', async () => {
+  it('omits specular highlight when prefers-reduced-motion is set', async () => {
     mqMatches = true
     const { default: SilverCoin } = await import('./SilverCoin.vue')
     const wrapper = mount(SilverCoin)
-    const arc = wrapper.find('[data-test="silver-arc"]')
-    expect(arc.exists()).toBe(true)
-    expect(arc.attributes('opacity')).toBe('0.55')
-    expect(wrapper.find('[data-test="silver-arc-animate"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="silver-specular"]').exists()).toBe(false)
+  })
+
+  it('always renders the static star coin structure regardless of motion preference', async () => {
+    mqMatches = true
+    const { default: SilverCoin } = await import('./SilverCoin.vue')
+    const wrapper = mount(SilverCoin)
+    const html = wrapper.html()
+    // New xingxing.svg-based structure
+    expect(html).toContain('class="coin-ring-shadow"')
+    expect(html).toContain('class="coin-face"')
+    expect(html).toContain('class="star-main"')
+    expect(html).toContain('class="star-highlight"')
   })
 })

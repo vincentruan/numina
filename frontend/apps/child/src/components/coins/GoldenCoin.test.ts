@@ -25,29 +25,31 @@ describe('GoldenCoin reduced-motion gating', () => {
     })
   })
 
-  it('renders sheen and sparkles when motion is allowed', async () => {
+  it('renders specular highlight and sparkles when motion is allowed', async () => {
     mqMatches = false
     const { default: GoldenCoin } = await import('./GoldenCoin.vue')
     const wrapper = mount(GoldenCoin)
-    expect(wrapper.find('[data-test="gold-sheen"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="gold-specular"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="gold-sparkles"]').exists()).toBe(true)
   })
 
-  it('omits sheen and sparkles when prefers-reduced-motion is set', async () => {
+  it('omits specular highlight and sparkles when prefers-reduced-motion is set', async () => {
     mqMatches = true
     const { default: GoldenCoin } = await import('./GoldenCoin.vue')
     const wrapper = mount(GoldenCoin)
-    expect(wrapper.find('[data-test="gold-sheen"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="gold-specular"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="gold-sparkles"]').exists()).toBe(false)
   })
 
-  it('always renders the static decoration regardless of motion preference', async () => {
+  it('always renders the static star coin structure regardless of motion preference', async () => {
     mqMatches = true
     const { default: GoldenCoin } = await import('./GoldenCoin.vue')
     const wrapper = mount(GoldenCoin)
     const html = wrapper.html()
-    expect(html).toContain('class="rim-dots"')
-    expect(html).toContain('class="highlight-blob"')
-    expect(html).toContain('class="inner-ring"')
+    // New xingxing.svg-based structure
+    expect(html).toContain('class="coin-ring-shadow"')
+    expect(html).toContain('class="coin-face"')
+    expect(html).toContain('class="star-main"')
+    expect(html).toContain('class="star-highlight"')
   })
 })

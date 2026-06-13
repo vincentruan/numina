@@ -29,21 +29,28 @@
   --color-warning: #f59e0b;
   --color-error:   #ef4444;
 
-  /* ── Coin colors ── */
-  --color-coin-gold-hi:  #FFE566;
-  --color-coin-gold-mid: #FFD700;
-  --color-coin-gold-lo:  #B8860B;
-  --color-coin-gold-text: #b8860b;
-  --color-coin-silver-hi:  #E8E8E8;
-  --color-coin-silver-mid: #C0C0C0;
-  --color-coin-silver-lo:  #808080;
-  --color-coin-silver-text: #808080;
-  --color-coin-copper-hi:  #E8A060;
-  --color-coin-copper-mid: #CD7F32;
-  --color-coin-copper-lo:  #8B4513;
-  --color-coin-copper-text: #8b4513;
-  --color-coin-gold-glow:  #FFF6C7;
-  --color-coin-gold-deep:  #A87208;
+  /* ── Coin colors — Metallic palette ── */
+  /* Gold: warm saturated yellow, highlights warm-white, shadows orange-brown */
+  --color-coin-gold-glow:  #FFF5C3;  /* 高光：带暖白的亮黄 */
+  --color-coin-gold-hi:    #FFF5C3;  /* 高光 (same as glow for gold) */
+  --color-coin-gold-mid:   #D4AF37;  /* 主色：经典金属金 */
+  --color-coin-gold-lo:    #996515;  /* 暗部：深金棕色 */
+  --color-coin-gold-deep:  #4A2E00;  /* 边缘阴影：极暗的褐红色 */
+  --color-coin-gold-text:  #B8860B;
+
+  /* Silver: high-contrast cool gray, highlights pure white, shadows blue-gray */
+  --color-coin-silver-hi:    #FFFFFF;  /* 高光：纯白 */
+  --color-coin-silver-mid:   #A9B0C0;  /* 主色：冷灰蓝调，避免塑料感 */
+  --color-coin-silver-lo:    #5D6775;  /* 暗部：深灰蓝 */
+  --color-coin-silver-deep:  #2C3540;  /* 边缘阴影：极暗的蓝黑 */
+  --color-coin-silver-text:  #6B7280;
+
+  /* Copper: warm low-brightness, highlights sand orange, shadows deep red-brown */
+  --color-coin-copper-hi:    #F4A460;  /* 高光：亮沙橙色 */
+  --color-coin-copper-mid:   #B87333;  /* 主色：经典红铜色 */
+  --color-coin-copper-lo:    #6E3311;  /* 暗部：深红棕色 */
+  --color-coin-copper-deep:  #2E1100;  /* 边缘阴影：极暗的焦褐色 */
+  --color-coin-copper-text:  #8B4513;
 
   /* ── GiftCard badge colors ── */
   --color-badge-surprise-bg:   #ffeef0;
@@ -151,21 +158,25 @@
   --color-brand-mint:    #8abcad;
   --color-brand-pink:    #a82960;
 
-  /* Coin colors — slightly brightened for dark backgrounds */
-  --color-coin-gold-hi:  #FFE566;
-  --color-coin-gold-mid: #FFD700;
-  --color-coin-gold-lo:  #c8960b;
-  --color-coin-gold-text: #d4a83a;
-  --color-coin-silver-hi:  #f0f0f0;
-  --color-coin-silver-mid: #d0d0d0;
-  --color-coin-silver-lo:  #909090;
-  --color-coin-silver-text: #a0a0a0;
-  --color-coin-copper-hi:  #f0b070;
-  --color-coin-copper-mid: #dd8f42;
-  --color-coin-copper-lo:  #9b5523;
-  --color-coin-copper-text: #c07840;
-  --color-coin-gold-glow:  #FFF6C7;
-  --color-coin-gold-deep:  #b07a10;
+  /* Coin colors — Metallic palette adjusted for dark backgrounds */
+  --color-coin-gold-glow:  #FFF8D0;  /* brighter glow for contrast */
+  --color-coin-gold-hi:    #FFF8D0;
+  --color-coin-gold-mid:   #E0B840;  /* slightly brighter gold */
+  --color-coin-gold-lo:    #A87518;  /* brighter shadow for visibility */
+  --color-coin-gold-deep:  #5A3800;  /* edge shadow visible on dark */
+  --color-coin-gold-text:  #D4A83A;
+
+  --color-coin-silver-hi:    #FFFFFF;
+  --color-coin-silver-mid:   #B8C0D0;  /* brighter cool gray */
+  --color-coin-silver-lo:    #707890;  /* brighter shadow */
+  --color-coin-silver-deep:  #3A4550;  /* edge shadow */
+  --color-coin-silver-text:  #A0A8B8;
+
+  --color-coin-copper-hi:    #F8B070;  /* brighter sand orange */
+  --color-coin-copper-mid:   #C88040;  /* brighter copper */
+  --color-coin-copper-lo:    #804018;  /* brighter shadow */
+  --color-coin-copper-deep:  #401800;  /* edge shadow */
+  --color-coin-copper-text:  #C07840;
 
   /* GiftCard badge colors — muted for dark backgrounds */
   --color-badge-surprise-bg:   #2a1a1c;
