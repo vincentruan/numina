@@ -94,6 +94,26 @@ http.interceptors.response.use(
       !url.includes('/auth/login/step1') &&
       !url.includes('/auth/login/step2')
 
+    // Check for auth errors in response body (HTTP 200 with code like AUTH_TOKEN_EXPIRED)
+    // Backend sometimes returns 200 with error code instead of 401 for certain auth failures
+    if (
+      response.data &&
+      typeof response.data === 'object' &&
+      'code' in response.data
+    ) {
+      const code = (response.data as ApiEnvelope).code
+      if (
+        code === 'AUTH_TOKEN_EXPIRED' ||
+        code === 'AUTH_INVALID_TOKEN' ||
+        code === 'AUTH_SESSION_NOT_FOUND'
+      ) {
+        clearAuth()
+        router.push('/login')
+        showToast(resolveErrorMsg(code, (response.data as ApiEnvelope).message || t('errors.AUTH_TOKEN_EXPIRED')))
+        return Promise.reject(new Error(code))
+      }
+    }
+
     // If response has envelope format, unwrap for non-auth endpoints (and /auth/me)
     if (
       !isAuthEndpoint &&
