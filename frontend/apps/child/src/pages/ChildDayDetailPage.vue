@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildDayDetailSkeleton from '@/components/skeletons/ChildDayDetailSkeleton.vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
@@ -78,6 +78,7 @@ import { getChildDayDetail, getFamilyChildDayDetail, type CalendarDayDetail } fr
 
 const { t } = useI18n()
 const route = useRoute()
+const { complete } = usePageLoading()
 const rawDate = route.query.date
 const rawChildId = route.query.child_id
 const date = typeof rawDate === 'string' ? rawDate : ''
@@ -107,7 +108,7 @@ function milestoneEmoji(type: string): string {
 }
 
 onMounted(async () => {
-  if (!date) { loading.value = false; NProgress.done(); return }
+  if (!date) { loading.value = false; complete(); return }
   try {
     if (isParentView.value && childId) {
       detail.value = await getFamilyChildDayDetail(childId, date)
@@ -118,8 +119,8 @@ onMounted(async () => {
     detail.value = null
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 })
 </script>

@@ -80,3 +80,17 @@ vi.mock('nprogress', () => ({
     set: vi.fn(),
   },
 }))
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Page loading composable mock
+// ─────────────────────────────────────────────────────────────────────────────
+vi.mock('@/composables/usePageLoading', () => ({
+  usePageLoading: () => ({
+    increment: vi.fn(),
+    decrement: vi.fn(),
+    complete: vi.fn(),
+    isGlobalLoading: { value: false },
+  }),
+  globalLoadingCount: { value: 0 },
+  completeGlobalLoading: vi.fn(),
+}))

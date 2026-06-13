@@ -3,6 +3,7 @@ import { useAuthStore, setUser } from '@numina/auth'
 import { getMainBaseUrl } from '@/utils/mainApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import { globalLoadingCount, completeGlobalLoading } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 
@@ -157,20 +158,19 @@ router.beforeEach(async (to, _from, next) => {
 })
 
 router.afterEach((to) => {
-  // Pages with skeleton: immediately complete NProgress
-  // Skeleton takes over visual feedback during data loading
+  // Pages with skeleton: complete immediately
   if (to.meta.hasSkeleton) {
     NProgress.done()
     return
   }
 
-  // Pages without skeleton: complete NProgress after a short delay
-  // This allows the page component to mount and potentially restart NProgress
-  // for async data loading. Pages that don't need loading indicator will just
-  // have the progress bar complete naturally.
+  // Pages without skeleton: defer to page's usePageLoading
   setTimeout(() => {
-    NProgress.done()
-  }, 100)
+    if (globalLoadingCount.value === 0) {
+      // Page didn't start any loading, complete the progress bar
+      completeGlobalLoading()
+    }
+  }, 5000)
 })
 
 export default router

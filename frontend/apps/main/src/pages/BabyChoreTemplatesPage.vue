@@ -102,10 +102,11 @@ import {
   deleteChoreTemplate,
   type ChoreTemplate,
 } from '@/api/chores'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 const familyStore = useFamilyStore()
+const { increment, decrement } = usePageLoading()
 
 const templates = ref<ChoreTemplate[]>([])
 const loading = ref(false)
@@ -129,13 +130,13 @@ function getChildColor(childId: string): string {
 
 async function loadData() {
   loading.value = true
-  NProgress.start()
+  increment()
   try {
     templates.value = await listChoreTemplates()
   } catch {
     showToast(t('toast.loadFailed'))
   } finally {
-    NProgress.done()
+    decrement()
     loading.value = false
   }
 }

@@ -52,7 +52,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildAssetDetailSkeleton from '@/components/skeletons/ChildAssetDetailSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
@@ -62,6 +62,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const { complete } = usePageLoading()
 
 const asset = ref<ChildAsset | null>(null)
 const loading = ref(true)
@@ -80,8 +81,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

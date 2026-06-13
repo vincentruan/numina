@@ -170,7 +170,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChildWishes' })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildWishesSkeleton from '@/components/skeletons/ChildWishesSkeleton.vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -191,6 +191,7 @@ const noWishesSvg = noWishesSvgRaw
 
 const { t } = useI18n()
 const router = useRouter()
+const { complete } = usePageLoading()
 
 // Balance polling via composable (separate from wish stats)
 const { balance: polledBalance } = useBalancePolling()
@@ -298,8 +299,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

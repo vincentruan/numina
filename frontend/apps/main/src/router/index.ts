@@ -3,6 +3,7 @@ import { getUser } from '@/utils/storage'
 import { getChildBaseUrl } from '@/utils/childApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import { globalLoadingCount, completeGlobalLoading } from '@/composables/usePageLoading'
 
 NProgress.configure({ showSpinner: true, parent: '#app' })
 
@@ -422,13 +423,14 @@ router.afterEach((to) => {
     return
   }
 
-  // Pages without skeleton: complete NProgress after a short delay
-  // This allows the page component to mount and potentially restart NProgress
-  // for async data loading. Pages that don't need loading indicator will just
-  // have the progress bar complete naturally.
+  // Pages without skeleton: defer to page's usePageLoading
+  // Safety timeout: if page doesn't signal within 5s, check and complete if idle
   setTimeout(() => {
-    NProgress.done()
-  }, 100)
+    if (globalLoadingCount.value === 0) {
+      // Page didn't start any loading, complete the progress bar
+      completeGlobalLoading()
+    }
+  }, 5000)
 })
 
 export default router

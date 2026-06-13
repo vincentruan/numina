@@ -199,7 +199,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChildHome' })
 import { ref, computed, onMounted } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ProgressRing from '@/components/ProgressRing.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
@@ -230,6 +230,7 @@ import { useChildAuthStore } from '@numina/auth'
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
+const { complete } = usePageLoading()
 const { themeMode, setMode } = useDarkMode()
 const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
@@ -412,8 +413,8 @@ async function load() {
     checkAndTriggerCelebration(chores)
   } finally {
     loadingChores.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

@@ -121,15 +121,16 @@ import { ref, computed, onMounted } from 'vue'
 import { showToast } from 'vant'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { createChildWish } from '@/api/childWishes'
 
 const { t } = useI18n()
 const router = useRouter()
+const { complete } = usePageLoading()
 
-// Complete NProgress immediately since this is a form page with no async data loading
+// Complete page loading immediately since this is a form page with no async data loading
 onMounted(() => {
-  NProgress.done()
+  complete()
 })
 
 const EMOJI_LIST = [

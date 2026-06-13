@@ -81,7 +81,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildWishDetailSkeleton from '@/components/skeletons/ChildWishDetailSkeleton.vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -97,6 +97,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const { complete } = usePageLoading()
 
 const allWishes = ref<ChildWish[]>([])
 const stats = ref<ChildWishStats | null>(null)
@@ -139,8 +140,8 @@ async function load() {
     ledger.value = l
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

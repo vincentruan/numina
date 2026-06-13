@@ -274,9 +274,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast, showConfirmDialog } from 'vant'
-import NProgress from 'nprogress'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { useDashboardStore } from '@/stores/dashboard'
 import { useAuthStore } from '@/stores/auth'
 import { useChoreStore } from '@/stores/chore'
@@ -296,6 +296,7 @@ import OnboardingOverlay from '@/components/common/OnboardingOverlay.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const { increment, decrement } = usePageLoading()
 
 const dashboardStore = useDashboardStore()
 const authStore = useAuthStore()
@@ -486,17 +487,17 @@ async function handleBatchDelete() {
       title: t('dashboard.dialog.confirmDeleteTitle'),
       message: t('dashboard.dialog.confirmDeleteMessage', { count: selectedIds.value.length }),
     })
-    NProgress.start()
+    increment()
     try {
       const res = await batchArchiveAssets(selectedIds.value)
-      NProgress.done()
+      decrement()
       showToast(t('toast.assetDeleteBatchSuccess', { count: res.data.success_count }))
       selectionMode.value = false
       selectedIds.value = []
       selectAll.value = false
       await dashboardStore.fetchAll()
     } catch {
-      NProgress.done()
+      decrement()
       showToast(t('toast.deleteFailed'))
     }
   } catch {
@@ -510,24 +511,24 @@ async function onMoreActionSelect(action: { value: string }) {
     return
   }
 
-  NProgress.start()
+  increment()
   try {
     switch (action.value) {
       case 'retire': {
         const res = await batchUpdateStatus(selectedIds.value, 'archived')
-        NProgress.done()
+        decrement()
         showToast(t('toast.assetRetireBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'activate': {
         const res = await batchUpdateStatus(selectedIds.value, 'active')
-        NProgress.done()
+        decrement()
         showToast(t('toast.assetActivateBatchSuccess', { count: res.data.success_count }))
         break
       }
       case 'export': {
         const res = await batchExportAssets(selectedIds.value)
-        NProgress.done()
+        decrement()
         // Create downloadable JSON
         const dataStr = JSON.stringify(res.data.data, null, 2)
         const blob = new Blob([dataStr], { type: 'application/json' })
@@ -546,7 +547,7 @@ async function onMoreActionSelect(action: { value: string }) {
     selectAll.value = false
     await dashboardStore.fetchAll()
   } catch {
-    NProgress.done()
+    decrement()
     showToast(t('toast.operationFailed'))
   }
 }

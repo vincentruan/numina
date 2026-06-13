@@ -50,6 +50,18 @@ vi.mock('../../packages/auth/src/composables/loading', () => ({
   }),
 }))
 
+// Mock the page loading composable
+vi.mock('@/composables/usePageLoading', () => ({
+  usePageLoading: () => ({
+    increment: vi.fn(),
+    decrement: vi.fn(),
+    complete: vi.fn(),
+    isGlobalLoading: { value: false },
+  }),
+  globalLoadingCount: { value: 0 },
+  completeGlobalLoading: vi.fn(),
+}))
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Global Vant component stubs — eliminates Vue warnings in tests
 // ─────────────────────────────────────────────────────────────────────────────

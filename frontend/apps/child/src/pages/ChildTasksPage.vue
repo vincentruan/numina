@@ -231,7 +231,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChildTasks' })
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
@@ -262,6 +262,7 @@ const allDoneSvg = allDoneSvgRaw
 
 const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
+const { complete } = usePageLoading()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -490,8 +491,8 @@ async function load() {
     error.value = t('toast.loadFailed')
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

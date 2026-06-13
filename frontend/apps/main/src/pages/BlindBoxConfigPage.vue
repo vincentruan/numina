@@ -103,11 +103,12 @@ import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()
 const { config, loading } = storeToRefs(store)
+const { increment, decrement } = usePageLoading()
 
 const form = reactive({
   enabled: true,
@@ -121,12 +122,12 @@ const form = reactive({
 })
 
 onMounted(async () => {
-  NProgress.start()
+  increment()
   try {
     await store.fetchConfig()
     if (config.value) Object.assign(form, config.value)
   } finally {
-    NProgress.done()
+    decrement()
   }
 })
 

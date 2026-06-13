@@ -89,7 +89,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChildLedger' })
 import { ref, computed, onMounted } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildLedgerSkeleton from '@/components/skeletons/ChildLedgerSkeleton.vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
@@ -105,6 +105,7 @@ import { useBalancePolling } from '@/composables/useBalancePolling'
 const { t } = useI18n()
 
 const familyStore = useFamilyStore()
+const { complete } = usePageLoading()
 // Balance polling via composable
 const { balance, refresh: refreshBalance } = useBalancePolling()
 const transactions = ref<CoinTransaction[]>([])
@@ -129,8 +130,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

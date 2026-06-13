@@ -61,7 +61,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'ChildTreasures' })
 import { computed, onMounted, ref } from 'vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTreasuresSkeleton from '@/components/skeletons/ChildTreasuresSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { listTreasures, type TreasureItem } from '@/api/treasures'
@@ -71,6 +71,7 @@ import noTreasuresSvgRaw from '@/assets/empty-states/no-treasures.svg?raw'
 const noTreasuresSvg = noTreasuresSvgRaw
 
 const { t, locale } = useI18n()
+const { complete } = usePageLoading()
 const treasures = ref<TreasureItem[]>([])
 const loading = ref(true)
 const refreshing = ref(false)
@@ -93,8 +94,8 @@ async function load() {
     error.value = t('errors.LOAD_FAILED')
   } finally {
     loading.value = false
-    // Complete NProgress - skeleton takes over visual feedback
-    NProgress.done()
+    // Complete page loading - skeleton takes over visual feedback
+    complete()
   }
 }
 

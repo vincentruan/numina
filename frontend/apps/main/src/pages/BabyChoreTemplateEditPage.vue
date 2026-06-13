@@ -93,12 +93,13 @@ import {
   updateChoreTemplate,
   type ChoreTemplate,
 } from '@/api/chores'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const familyStore = useFamilyStore()
+const { increment, decrement } = usePageLoading()
 
 const templateId = computed(() => route.params.id as string)
 
@@ -117,13 +118,13 @@ const childMembers = computed(() => familyStore.members.filter(m => m.role === '
 
 async function loadData() {
   loading.value = true
-  NProgress.start()
+  increment()
   try {
     await familyStore.fetchFamily()
   } catch {
     showToast(t('toast.loadFailed'))
     router.back()
-    NProgress.done()
+    decrement()
     loading.value = false
     return
   }
@@ -147,7 +148,7 @@ async function loadData() {
     showToast(t('toast.loadFailed'))
     router.back()
   } finally {
-    NProgress.done()
+    decrement()
     loading.value = false
   }
 }

@@ -228,7 +228,7 @@ import { ref, computed, onMounted, watch, h } from 'vue'
 import { showConfirmDialog, showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useAIStore } from '@/stores/ai'
@@ -251,10 +251,11 @@ const router = useRouter()
 const authStore = useAuthStore()
 const familyStore = useFamilyStore()
 const aiStore = useAIStore()
+const { increment, decrement } = usePageLoading()
 
 onMounted(async () => {
-  // Restart NProgress for async data loading (router will auto-complete after 100ms)
-  NProgress.start()
+  // Restart loading indicator for async data loading (router will auto-complete after 100ms)
+  increment()
   try {
     if (!familyStore.family) {
       await familyStore.fetchFamily()
@@ -268,7 +269,7 @@ onMounted(async () => {
     // but this catch prevents the page from crashing with a blank screen
     console.error('[SettingsPage] Failed to load data:', err)
   } finally {
-    NProgress.done()
+    decrement()
   }
   // Initialize theme color from localStorage (sync, no need in try block)
   const savedColor = localStorage.getItem('theme-primary')

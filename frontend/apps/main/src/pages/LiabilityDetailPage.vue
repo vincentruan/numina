@@ -118,7 +118,7 @@ import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'
 import MoneyDisplay from '@/components/common/MoneyDisplay.vue'
 import PaymentCountdown from '@/components/liability/PaymentCountdown.vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 
@@ -128,6 +128,7 @@ const liabilityStore = useLiabilityStore()
 const deleting = ref(false)
 const showPayment = ref(false)
 const paymentAmount = ref('')
+const { increment, decrement } = usePageLoading()
 
 const liability = computed(() => liabilityStore.currentLiability)
 
@@ -198,12 +199,12 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  NProgress.start()
+  increment()
   try {
     const id = route.params.id as string
     await liabilityStore.fetchLiability(id)
   } finally {
-    NProgress.done()
+    decrement()
   }
 })
 </script>

@@ -292,12 +292,13 @@ import { getAllChildBalances, getChildrenChoreStats, updateMemberInfo, resetMemb
 import { getPendingApprovals } from '@/api/chores'
 import { listParentChildWishes } from '@/api/childWishes'
 import { createChild, forceLogoutChild, unlockChildPin } from '@/api/children'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 
 const familyStore = useFamilyStore()
 const authStore = useAuthStore()
+const { increment, decrement } = usePageLoading()
 const refreshing = ref(false)
 
 // Child dashboard data
@@ -621,14 +622,14 @@ async function onUnlockPin(child: { id: string; display_name: string }) {
 }
 
 onMounted(async () => {
-  NProgress.start()
+  increment()
   try {
     await familyStore.fetchFamily()
     if (isOwner.value) {
       await loadChildDashboard()
     }
   } finally {
-    NProgress.done()
+    decrement()
   }
 })
 </script>

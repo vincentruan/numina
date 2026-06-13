@@ -111,7 +111,7 @@ import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
 import type { AssetSellResponse } from '@/types'
 import PageHeader from '@/components/common/PageHeader.vue'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 
@@ -119,6 +119,7 @@ const route = useRoute()
 const router = useRouter()
 const assetStore = useAssetStore()
 const dashboardStore = useDashboardStore()
+const { increment, decrement } = usePageLoading()
 const submitting = ref(false)
 const showResult = ref(false)
 const sellResult = ref<AssetSellResponse | null>(null)
@@ -188,14 +189,14 @@ function onResultClose(action: string) {
 }
 
 onMounted(async () => {
-  NProgress.start()
+  increment()
   try {
     const id = route.params.id as string
     if (!assetStore.currentAsset || assetStore.currentAsset.id !== id) {
       await assetStore.fetchAsset(id)
     }
   } finally {
-    NProgress.done()
+    decrement()
   }
 })
 </script>

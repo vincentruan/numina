@@ -207,7 +207,7 @@ import type { Category } from '@/types'
 import { realizeWish } from '@/api/wishes'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getIconId } from '@/utils/icon'
-import NProgress from 'nprogress'
+import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t, locale } = useI18n()
 
@@ -216,6 +216,7 @@ const router = useRouter()
 const wishStore = useWishStore()
 const deleting = ref(false)
 const acting = ref(false)
+const { increment, decrement } = usePageLoading()
 
 // Realize dialog
 const showRealizeDialog = ref(false)
@@ -331,7 +332,7 @@ async function onDelete() {
 }
 
 onMounted(async () => {
-  NProgress.start()
+  increment()
   try {
     const id = route.params.id as string
     await wishStore.fetchWish(id)
@@ -354,7 +355,7 @@ onMounted(async () => {
       if (cat) selectedAssetType.value = cat.asset_type as 'physical' | 'financial'
     }
   } finally {
-    NProgress.done()
+    decrement()
   }
 })
 </script>
