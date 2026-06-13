@@ -425,11 +425,12 @@ async def proxy_report_events(
             _promote_next(family_id, gen_db)
             return
 
-        # Emit phase transition event
+        # Emit phase transition event with markdown file path (for frontend elastic fallback)
         yield json.dumps({
             "type": "phase.transition",
             "phase": 2,
             "message": "正在解析报告内容...",
+            "metadata": {"markdown_file_path": markdown_file_path},
         }).encode("utf-8") + b"\n"
 
         # === Phase 2: Convert markdown to JSON (with retry) ===

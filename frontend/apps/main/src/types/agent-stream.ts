@@ -51,6 +51,7 @@ export interface AgentEvent {
     name: string
     tool_type?: string
     display_name: string
+    display_key?: string
     icon: string
     arguments: Record<string, unknown>
   }
@@ -168,6 +169,7 @@ export type ProcessStep =
       url?: string
       path?: string
       kind?: 'report' | 'file' | 'image' | 'link' | 'data' | 'other'
+      status?: 'pending' | 'running' | 'done' | 'error'
     }
   | {
       type: 'progress'

@@ -35,6 +35,7 @@ vi.mock('../../src/api/ai', () => ({
   getChatHistory: vi.fn(() => Promise.resolve({ data: [] })),
   clearChatHistory: vi.fn(() => Promise.resolve()),
   markChatRead: vi.fn(() => Promise.resolve()),
+  getAITask: vi.fn(() => Promise.resolve({ status: 'completed' } as const)),
 }))
 
 vi.mock('../../src/api/sessions', () => ({
@@ -163,9 +164,10 @@ describe('AIChatPage tool events', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
 
+    // After stream completes, phase should be 'done' (no phase-strip for connecting/thinking)
     expect(wrapper.find('.phase-strip').exists()).toBe(false)
-    // AiProcessBlock auto-collapses when reasoning finishes (status=done → is-collapsed class)
-    expect(wrapper.find('.ai-process-block.is-collapsed').exists()).toBe(true)
+    // AssistantMessage shows content when phase='done', with message-footer visible
+    expect(wrapper.find('.message-footer').exists()).toBe(true)
     expect(wrapper.text()).toContain('最终答案')
   })
 })

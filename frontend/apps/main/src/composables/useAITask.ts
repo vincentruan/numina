@@ -8,7 +8,9 @@
  * - 思考内容单独累积，答案内容单独累积
  * - 任务完成后自动折叠思考内容
  * - 支持排队状态（queued）：轮询直到前置任务完成后自动启动
+ * - 支持后台执行（background）：任务开始后立即返回，不阻塞 UI
  * - visibilitychange：切走时断开，回来时接续
+ * - 弹性输出：Phase 1 成功时记录 markdown_file_path，Phase 2 失败时可回退
  *
  * resumeStream() 不调用触发端点（避免 409 循环）。
  */
@@ -42,6 +44,13 @@ export interface ToolStep {
   resultSummary?: string
 }
 
+export interface StartStreamOptions {
+  /** Background mode: start task and return immediately without blocking UI */
+  background?: boolean
+  /** Callback when Phase 1 succeeds with markdown file path (for elastic fallback) */
+  onMarkdownGenerated?: (path: string) => void
+}
+
 export function useAITask(
   capability: string,
   triggerEndpoint: string,
@@ -66,6 +75,8 @@ export function useAITask(
   const currentToolLabel = ref<string | null>(null)
   const suggestions = ref<string[]>([])
   const planSteps = ref<PlanStep[]>([])
+  const markdownFilePath = ref<string | null>(null)  // Phase 1 success marker for elastic fallback
+  const isBackground = ref(false)  // Track if running in background mode
 
   const currentStepIndex = computed(() => {
     const activeIdx = planSteps.value.findIndex((s) => s.status === 'active')
@@ -192,7 +203,7 @@ export function useAITask(
 
   // ── NDJSON event handling ──────────────────────────────────────────────────
 
-  function handleEvent(event: AgentEvent) {
+  function handleEvent(event: AgentEvent, options?: StartStreamOptions) {
     switch (event.type) {
       case 'phase.connecting':
         phase.value = 'connecting'
@@ -268,8 +279,20 @@ export function useAITask(
           }
         }
         break
-      case 'capability.end':
-        // summary may be in result.summary — already accumulated via token.stream
+      case 'capability.end': {
+        // Capture markdown file path from result (for elastic fallback)
+        const resultPath = event.result?.path
+        if (resultPath) {
+          markdownFilePath.value = resultPath
+          // Update background task registry
+          if (isBackground.value && taskId.value) {
+            aiStore.updateBackgroundTask(capability, { markdownFilePath: resultPath })
+          }
+          // Notify callback for immediate use
+          if (options?.onMarkdownGenerated) {
+            options.onMarkdownGenerated(resultPath)
+          }
+        }
         if (event.result?.suggestions?.length) {
           suggestions.value = event.result.suggestions
         }
@@ -280,6 +303,23 @@ export function useAITask(
           )
         }
         break
+      }
+      case 'phase.transition': {
+        // Backend emits this when transitioning from Phase 1 to Phase 2
+        // Captures markdown_file_path for elastic fallback
+        if (event.metadata?.markdown_file_path) {
+          markdownFilePath.value = event.metadata.markdown_file_path as string
+          if (isBackground.value && taskId.value) {
+            aiStore.updateBackgroundTask(capability, {
+              markdownFilePath: event.metadata.markdown_file_path as string,
+            })
+          }
+          if (options?.onMarkdownGenerated) {
+            options.onMarkdownGenerated(event.metadata.markdown_file_path as string)
+          }
+        }
+        break
+      }
       case 'plan.update':
         if (event.todos?.length) {
           planSteps.value = event.todos.map((todo) => ({
@@ -315,6 +355,10 @@ export function useAITask(
             s.status === 'active' || s.status === 'pending' ? { ...s, status: 'done' as const } : s,
           )
         }
+        // Update background task registry
+        if (isBackground.value && taskId.value) {
+          aiStore.updateBackgroundTask(capability, { status: 'failed' })
+        }
         // do NOT call onComplete() — task did not actually finish
         break
     }
@@ -322,9 +366,12 @@ export function useAITask(
 
   // ── Stream consumption ─────────────────────────────────────────────────────
 
-  async function consumeEventStream(reader: ReadableStreamDefaultReader<Uint8Array>) {
+  async function consumeEventStream(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    options?: StartStreamOptions,
+  ) {
     const decoder = new TextDecoder()
-    const parser = createAgentEventParser(handleEvent)
+    const parser = createAgentEventParser((event) => handleEvent(event, options))
     const TIMEOUT_MS = 300000 // 5 minutes max wait for next chunk
 
     try {
@@ -379,6 +426,10 @@ export function useAITask(
       stopThinkTimer()
       stopPolling()
       stopCookieRefresh()
+      // Update background task registry
+      if (isBackground.value && taskId.value) {
+        aiStore.updateBackgroundTask(capability, { status: 'failed' })
+      }
     }
   }
 
@@ -407,6 +458,10 @@ export function useAITask(
           phase.value = null
           thinkDone.value = true
           isConsoleOpen.value = false
+          // Update background task registry
+          if (isBackground.value && taskId.value) {
+            aiStore.updateBackgroundTask(capability, { status: 'completed' })
+          }
           if (!completedFired) {
             completedFired = true
             onComplete?.()
@@ -425,9 +480,17 @@ export function useAITask(
           toolSteps.value = toolSteps.value.map((s) =>
             s.status === 'running' || s.status === 'pending' ? { ...s, status: 'error' as const } : s,
           )
+          // Update background task registry
+          if (isBackground.value && taskId.value) {
+            aiStore.updateBackgroundTask(capability, { status: task.status })
+          }
           return
         }
         // running / post_processing → keep polling
+        // Update background task registry with current status
+        if (isBackground.value && taskId.value) {
+          aiStore.updateBackgroundTask(capability, { status: task.status })
+        }
       } catch {
         // transient — keep polling
       }
@@ -444,13 +507,20 @@ export function useAITask(
     toolSteps.value = toolSteps.value.map((s) =>
       s.status === 'running' || s.status === 'pending' ? { ...s, status: 'error' as const } : s,
     )
+    // Update background task registry
+    if (isBackground.value && taskId.value) {
+      aiStore.updateBackgroundTask(capability, { status: 'failed' })
+    }
   }
 
   // ── Start stream ───────────────────────────────────────────────────────────
 
-  async function startStream() {
+  async function startStream(options?: StartStreamOptions) {
     if (abortController) abortController.abort()
     abortController = new AbortController()
+
+    const backgroundMode = options?.background ?? false
+    isBackground.value = backgroundMode
 
     // Reset state
     thinkContent.value = ''
@@ -461,7 +531,7 @@ export function useAITask(
     errorCode.value = null
     phase.value = 'connecting'
     status.value = 'running'
-    isConsoleOpen.value = true
+    markdownFilePath.value = null
     completedFired = false
     toolSteps.value = []
     currentToolLabel.value = null
@@ -469,6 +539,11 @@ export function useAITask(
     planSteps.value = []
     startTimer(0)
     startCookieRefresh() // Keep auth fresh during long SSE operations
+
+    // Background mode: don't force console open, let user navigate away
+    if (!backgroundMode) {
+      isConsoleOpen.value = true
+    }
 
     try {
       const result = await startAIEventStream(triggerEndpoint, abortController.signal)
@@ -481,10 +556,36 @@ export function useAITask(
         queuePosition.value = result.queuePosition
         stopTimer()
         startPolling()
+        // Register background task
+        aiStore.registerBackgroundTask({
+          capability,
+          taskId: result.taskId,
+          sessionId: '', // Will be updated when task starts
+          startedAt: new Date().toISOString(),
+          status: 'queued',
+        })
+        if (backgroundMode) {
+          showToast(t('aiReport.taskQueued'))
+        }
         return
       }
 
-      await consumeEventStream(result.reader)
+      // Register background task immediately after stream starts
+      taskId.value = result.taskId ?? null
+      if (backgroundMode && taskId.value) {
+        aiStore.registerBackgroundTask({
+          capability,
+          taskId: taskId.value,
+          sessionId: sessionId.value ?? '',
+          startedAt: new Date().toISOString(),
+          status: 'running',
+        })
+        showToast(t('aiReport.taskStarted'))
+        // In background mode, we still consume the stream but allow navigation
+        // The stream will be aborted on visibilitychange or unmount
+      }
+
+      await consumeEventStream(result.reader, options)
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return
       const errorMsg = err instanceof Error ? err.message : ''
@@ -505,6 +606,9 @@ export function useAITask(
         stopThinkTimer()
         stopPolling()
         stopCookieRefresh()
+        if (isBackground.value && taskId.value) {
+          aiStore.updateBackgroundTask(capability, { status: 'failed' })
+        }
       }
     }
   }
@@ -512,14 +616,14 @@ export function useAITask(
   // Retry flag for 409 handling — avoids recursive call stack
   let retryAfterCancel = false
 
-  async function startStreamWrapper() {
+  async function startStreamWrapper(options?: StartStreamOptions) {
     retryAfterCancel = false
-    await startStream()
+    await startStream(options)
     // Handle 409 retry with bounded attempts (max 2 retries to avoid infinite loops)
     let retryCount = 0
     while (retryAfterCancel && retryCount < 2) {
       retryAfterCancel = false // Reset flag before retry
-      await startStream()
+      await startStream(options)
       retryCount++
     }
     // If still flagged after max retries, set failed status
@@ -530,6 +634,9 @@ export function useAITask(
       stopThinkTimer()
       stopPolling()
       stopCookieRefresh()
+      if (isBackground.value && taskId.value) {
+        aiStore.updateBackgroundTask(capability, { status: 'failed' })
+      }
     }
   }
 
@@ -701,6 +808,8 @@ export function useAITask(
     planSteps,
     currentStepIndex,
     totalSteps,
+    markdownFilePath,
+    isBackground,
     startStream: startStreamWrapper,
     cancelTask,
   }

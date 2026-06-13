@@ -1,7 +1,17 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as aiApi from '@/api/ai'
-import type { AIConfig, ProviderConfig } from '@/api/ai'
+import type { AIConfig, ProviderConfig, AITaskStatus } from '@/api/ai'
+
+/** Background task registry entry for tracking tasks across navigation. */
+export interface BackgroundTask {
+  capability: string
+  taskId: string
+  sessionId: string
+  startedAt: string
+  status: AITaskStatus['status']
+  markdownFilePath?: string  // For report: Phase 1 success path
+}
 
 export const useAIStore = defineStore('ai', () => {
   const config = ref<AIConfig | null>(null)
@@ -10,12 +20,44 @@ export const useAIStore = defineStore('ai', () => {
   const draftQuery = ref('')
   const deepThinkEnabled = ref(false)
   const webSearchEnabled = ref(false)
+  const backgroundTasks = ref<Map<string, BackgroundTask>>(new Map())
 
   const aiEnabled = computed(() => config.value?.ai_enabled ?? false)
   const aiProvider = computed(() => config.value?.ai_provider ?? null)
   const activeConfigs = computed(() =>
     configs.value.filter((c) => !c.circuit_open),
   )
+  const runningBackgroundTasks = computed(() =>
+    Array.from(backgroundTasks.value.values()).filter(
+      (t) => t.status === 'running' || t.status === 'post_processing' || t.status === 'queued',
+    ),
+  )
+  const hasRunningBackgroundTasks = computed(() => runningBackgroundTasks.value.length > 0)
+
+  // ── Background task registry ────────────────────────────────────────────────
+
+  function registerBackgroundTask(task: BackgroundTask) {
+    backgroundTasks.value.set(task.capability, task)
+  }
+
+  function updateBackgroundTask(capability: string, updates: Partial<BackgroundTask>) {
+    const existing = backgroundTasks.value.get(capability)
+    if (existing) {
+      backgroundTasks.value.set(capability, { ...existing, ...updates })
+    }
+  }
+
+  function getBackgroundTask(capability: string): BackgroundTask | undefined {
+    return backgroundTasks.value.get(capability)
+  }
+
+  function clearBackgroundTask(capability: string) {
+    backgroundTasks.value.delete(capability)
+  }
+
+  function clearAllBackgroundTasks() {
+    backgroundTasks.value.clear()
+  }
 
   async function fetchConfig() {
     loading.value = true
@@ -96,6 +138,14 @@ export const useAIStore = defineStore('ai', () => {
     aiEnabled,
     aiProvider,
     activeConfigs,
+    backgroundTasks,
+    runningBackgroundTasks,
+    hasRunningBackgroundTasks,
+    registerBackgroundTask,
+    updateBackgroundTask,
+    getBackgroundTask,
+    clearBackgroundTask,
+    clearAllBackgroundTasks,
     fetchConfig,
     fetchConfigs,
     updateConfig,

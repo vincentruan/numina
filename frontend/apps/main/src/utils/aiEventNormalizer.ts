@@ -111,9 +111,9 @@ export function normalizeAgentEvent(
       if (event.tool || event.toolName) {
         // 统一处理：提取 tool 信息，映射旧格式字段
         const toolInfo = event.tool || {
-          id: event.toolId ?? event.tool_id,
-          name: event.toolName ?? event.tool_name,
-          display_name: event.toolName ?? event.tool_name,
+          id: event.toolId ?? event.tool_id ?? '',
+          name: event.toolName ?? event.tool_name ?? '',
+          display_name: event.toolName ?? event.tool_name ?? '',
           icon: event.icon ?? 'tool',
           arguments: event.arguments ?? event.args ?? {},
           tool_type: event.tool_type,
@@ -150,7 +150,7 @@ export function normalizeAgentEvent(
       break
 
     case 'tool.result':
-    case 'tool.call_completed': // 兼容旧格式
+    case 'tool.call_completed': { // 兼容旧格式
       const toolId = event.tool_id ?? event.toolId
       if (toolId) {
         // Update ALL matching tool_call steps (not just first)
@@ -191,6 +191,7 @@ export function normalizeAgentEvent(
         }
       }
       break
+    }
 
     case 'tool.progress':
       if (event.tool_id && event.progress_message) {

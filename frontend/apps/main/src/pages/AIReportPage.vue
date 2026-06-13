@@ -21,20 +21,29 @@
     <!-- Failed state (show regardless of whether there's an existing report) -->
     <div v-if="taskStatus === 'failed'" class="failed-placeholder">
       <van-icon name="warning-o" size="48" class="failed-icon" />
-      <p class="failed-text">
-        {{ errorCode === 'extraction_failed'
-          ? t('aiReport.extractionFailed')
-          : errorCode === 'structured_write_failed'
-          ? t('aiReport.writeFailed')
-          : errorCode === 'post_processing_timeout'
-          ? t('aiReport.timeoutFailed')
-          : errorCode === 'markdown_generation_failed'
-          ? t('aiReport.markdownFailed')
-          : errorCode === 'structured_conversion_failed'
-          ? t('aiReport.conversionFailed')
-          : t('toast.aiGenerateFailed') }}
-      </p>
-      <van-button type="primary" size="small" :loading="taskStatus === 'running'" @click="onGenerate">
+      <!-- Elastic fallback: show markdown preview if Phase 1 succeeded but Phase 2 failed -->
+      <template v-if="hasMarkdownFallback && errorCode === 'structured_conversion_failed'">
+        <p class="failed-text">{{ t('aiReport.conversionFailedButMarkdown') }}</p>
+        <van-button type="primary" size="small" @click="loadFallbackMarkdown">
+          {{ t('aiReport.viewMarkdownFallback') }}
+        </van-button>
+      </template>
+      <template v-else>
+        <p class="failed-text">
+          {{ errorCode === 'extraction_failed'
+            ? t('aiReport.extractionFailed')
+            : errorCode === 'structured_write_failed'
+            ? t('aiReport.writeFailed')
+            : errorCode === 'post_processing_timeout'
+            ? t('aiReport.timeoutFailed')
+            : errorCode === 'markdown_generation_failed'
+            ? t('aiReport.markdownFailed')
+            : errorCode === 'structured_conversion_failed'
+            ? t('aiReport.conversionFailed')
+            : t('toast.aiGenerateFailed') }}
+        </p>
+      </template>
+      <van-button plain size="small" :loading="false" @click="onGenerate" style="margin-top: 8px">
         {{ t('aiTask.retryBtn') }}
       </van-button>
     </div>
@@ -257,7 +266,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
@@ -284,12 +293,14 @@ const aiStore = useAIStore()
 
 const currentReport = ref<AIReport | null>(null)
 const reportGeneratedAt = ref<string | null>(null)
+const hasMarkdownFallback = ref(false)  // Track if we have markdown but no structured data
 
 // Markdown preview state
 const markdownVisible = ref(false)
 const markdownContent = ref('')
 const markdownFilename = ref('')
 const markdownFileSize = ref(0)
+const fallbackMarkdownPath = ref<string | null>(null)  // Phase 1 success path for elastic fallback
 
 // Indicator icon mapping
 const INDICATOR_ICON_MAP: Record<string, string> = {
@@ -322,7 +333,25 @@ async function loadExistingReport() {
     if (res.data.report) {
       currentReport.value = res.data.report
       reportGeneratedAt.value = res.data.generated_at ?? null
+      hasMarkdownFallback.value = false  // We have structured data, no need for fallback
     }
+  } catch {
+    showToast(t('toast.operationFailed'))
+  }
+}
+
+// Load markdown for elastic fallback when structured conversion failed
+async function loadFallbackMarkdown() {
+  if (!fallbackMarkdownPath.value) {
+    showToast(t('toast.operationFailed'))
+    return
+  }
+  try {
+    const res = await getAIReportMarkdown()
+    markdownContent.value = res.data.content
+    markdownFilename.value = res.data.filename
+    markdownFileSize.value = res.data.file_size
+    markdownVisible.value = true
   } catch {
     showToast(t('toast.operationFailed'))
   }
@@ -355,8 +384,21 @@ const {
   currentToolLabel,
   planSteps,
   currentStepIndex,
+  markdownFilePath,
+  isBackground,
   startStream,
-} = useAITask('report', '/ai/report/generate/events', loadExistingReport)
+} = useAITask('report', '/ai/report/generate/events', async () => {
+  // onComplete callback: load report after task finishes
+  await loadExistingReport()
+  // Clear background task from registry
+  aiStore.clearBackgroundTask('report')
+})
+
+// Handler for markdown generated (Phase 1 success) - for elastic fallback
+function onMarkdownGenerated(path: string) {
+  fallbackMarkdownPath.value = path
+  hasMarkdownFallback.value = true
+}
 
 // Detect which format the report uses
 const hasIndicatorsFormat = computed(() => {
@@ -477,14 +519,36 @@ async function onGenerate() {
     showToast(t('toast.aiNotEnabled'))
     return
   }
-  await startStream()
-  // Reload report data after streaming completes
-  await loadExistingReport()
+  // Reset fallback state
+  hasMarkdownFallback.value = false
+  fallbackMarkdownPath.value = null
+  // Start stream with background mode enabled for non-blocking execution
+  await startStream({ background: true, onMarkdownGenerated })
+  // For foreground mode, load report data after streaming completes
+  if (!isBackground.value) {
+    await loadExistingReport()
+  }
 }
 
 onMounted(async () => {
   await aiStore.fetchConfig()
   await loadExistingReport()
+
+  // Check for running background task and reconnect if needed
+  const bgTask = aiStore.getBackgroundTask('report')
+  if (bgTask && (bgTask.status === 'running' || bgTask.status === 'post_processing' || bgTask.status === 'queued')) {
+    // Task is running in background - the useAITask composable's checkAndResume will handle reconnection
+    // Just ensure the console shows the status
+    if (bgTask.markdownFilePath) {
+      fallbackMarkdownPath.value = bgTask.markdownFilePath
+      hasMarkdownFallback.value = true
+    }
+  }
+})
+
+onUnmounted(() => {
+  // If task is still running, keep it registered for background execution
+  // The useAITask composable will handle visibility change and cleanup
 })
 </script>
 
