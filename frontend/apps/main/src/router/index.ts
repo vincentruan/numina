@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getUser } from '@/utils/storage'
+import { getChildBaseUrl } from '@/utils/childApp'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 
@@ -356,10 +357,7 @@ const router = createRouter({
       // Component is a no-op placeholder; beforeEnter does the hand-off.
       component: { template: '<div />' },
       beforeEnter: () => {
-        // In dev mode, VITE_CHILD_APP_URL points to localhost:5174.
-        // In production, nginx routes /child/* to frontend-child container.
-        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
-        window.location.replace(childBaseUrl)
+        window.location.replace(getChildBaseUrl())
         // Return false to abort the in-SPA navigation so the URL doesn't briefly
         // change to /child before the full reload lands.
         return false
@@ -402,8 +400,7 @@ router.beforeEach((to, _from, next) => {
 
   // Stale child session accessing protected route — redirect to child app
   if (isChild) {
-    const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
-    window.location.replace(childBaseUrl)
+    window.location.replace(getChildBaseUrl())
     return
   }
 

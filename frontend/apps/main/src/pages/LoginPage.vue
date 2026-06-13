@@ -217,6 +217,7 @@ import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'
 import { checkDevice, selectDeviceUser, getDeviceWebAuthnAuthOptions, verifyDeviceWebAuthn } from '@/api/device'
 import type { DeviceCheckUser } from '@/api/device'
 import { checkWebAuthnSupport, authenticatePasskey } from '@/utils/webauthn'
+import { getChildBaseUrl } from '@/utils/childApp'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 
 const { t } = useI18n()
@@ -333,7 +334,7 @@ async function onStep1Submit() {
       authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
-        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+        const childBaseUrl = getChildBaseUrl()
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
         window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
@@ -411,7 +412,7 @@ async function authenticateWithWebAuthn(user: BoundUser) {
       authStore.showTrustPrompt = true
       const authUser = authStore.user
       if (authUser?.role === 'child') {
-        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+        const childBaseUrl = getChildBaseUrl()
         window.location.href = childBaseUrl
         return
       }
@@ -459,7 +460,7 @@ async function onSelectAltchaComplete() {
       authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
-        const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+        const childBaseUrl = getChildBaseUrl()
         window.location.href = childBaseUrl
         return
       }
@@ -522,7 +523,7 @@ async function submitPin() {
     // Redirect based on user role
     const user = authStore.user
     if (user?.role === 'child') {
-      const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+      const childBaseUrl = getChildBaseUrl()
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
         window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
@@ -603,7 +604,7 @@ async function submitEmojiPin() {
     showToast(t('toast.loginSuccess'))
     const user = authStore.user
     if (user?.role === 'child') {
-      const childBaseUrl = import.meta.env.VITE_CHILD_APP_URL || '/child/'
+      const childBaseUrl = getChildBaseUrl()
       const redirect = route.query.redirect as string
       if (redirect && redirect.startsWith('/child/')) {
         window.location.href = `${childBaseUrl}${redirect.replace('/child/', '')}`
