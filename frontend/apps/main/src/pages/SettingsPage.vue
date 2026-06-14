@@ -482,11 +482,10 @@ async function onLogout() {
   margin-right: 8px;
   color: var(--van-cell-icon-color);
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  /* Override van-cell's align-items: normal which causes top alignment */
+  align-self: center;
+  /* Use inline-block for fallback vertical-align (works in non-flex contexts) */
+  display: inline-block;
   vertical-align: middle;
-  /* Match van-cell title line-height for proper alignment */
-  line-height: var(--van-cell-line-height, 24px);
 }
 </style>
