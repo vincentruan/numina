@@ -95,10 +95,11 @@ export function usePageLoading() {
   function complete() {
     loadingCount.value = 0
     pendingInstances.clear()
-    if (nprogressStarted) {
-      NProgress.done()
-      nprogressStarted = false
-    }
+    // Always call NProgress.done() - this is a cleanup function
+    // Router beforeEach may have called NProgress.start() directly,
+    // so we must complete NProgress unconditionally
+    NProgress.done()
+    nprogressStarted = false
   }
 
   // Safety net: mark instance inactive and clear its pending contributions on unmount
@@ -118,7 +119,8 @@ export function usePageLoading() {
       pendingInstances.delete(instanceId)
 
       // Complete NProgress if all loading is now done
-      if (loadingCount.value === 0 && nprogressStarted) {
+      // Always call done() when loadingCount reaches 0 - router may have started NProgress directly
+      if (loadingCount.value === 0) {
         NProgress.done()
         nprogressStarted = false
       }
@@ -142,10 +144,11 @@ export const globalLoadingCount: Ref<number> = loadingCount
 export function completeGlobalLoading(): void {
   loadingCount.value = 0
   pendingInstances.clear()
-  if (nprogressStarted) {
-    NProgress.done()
-    nprogressStarted = false
-  }
+  // Always call NProgress.done() - this is the emergency cleanup function
+  // Router beforeEach may have called NProgress.start() directly without setting nprogressStarted,
+  // so we must complete NProgress unconditionally to prevent stuck progress bar
+  NProgress.done()
+  nprogressStarted = false
 }
 
 /**
