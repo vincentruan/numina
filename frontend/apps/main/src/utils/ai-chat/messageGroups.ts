@@ -1,0 +1,266 @@
+/**
+ * DeerFlow getMessageGroups 算法
+ *
+ * 参考: frontend/src/core/messages/utils.ts getMessageGroups()
+ *
+ * 核心逻辑:
+ * 1. 过滤 hide_from_ui 消息
+ * 2. human → 新建 HumanMessageGroup
+ * 3. tool → 合并入上一个 open processing group
+ *    - clarification tool → 合入 + 新建 clarification group
+ * 4. ai → 根据内容判断:
+ *    - hasPresentFiles → present-files group
+ *    - hasSubagent → subagent group
+ *    - hasReasoning/hasToolCalls → processing group（合并连续的）
+ *    - hasContent + !hasToolCalls → assistant group（正文气泡）
+ */
+
+import type {
+  MessageGroup,
+  AssistantPresentFilesGroup,
+  AssistantSubagentGroup,
+  ChatMessage,
+  ToolCallSummary,
+} from '@/types/ai-chat/message-group'
+import { isHiddenFromUIMessage } from '@/types/ai-chat/message-group'
+import {
+  hasReasoning,
+  hasContent,
+} from './reasoning-filter'
+
+/**
+ * 检查是否有工具调用
+ */
+export function hasToolCalls(message: ChatMessage): boolean {
+  return message.type === 'ai' && message.tool_calls?.length > 0
+}
+
+/**
+ * 检查是否为 present_files 工具
+ */
+export function hasPresentFiles(message: ChatMessage): boolean {
+  return message.type === 'ai' && message.tool_calls?.some(tc => tc.name === 'present_files')
+}
+
+/**
+ * 检查是否为 subagent (task tool)
+ */
+export function hasSubagent(message: ChatMessage): boolean {
+  return (
+    message.type === 'ai' &&
+    (message.tool_calls?.some(tc => tc.name === 'task') || message.subagent !== undefined)
+  )
+}
+
+/**
+ * 检查是否为 clarification tool message
+ */
+export function isClarificationToolMessage(message: ChatMessage): boolean {
+  return message.type === 'tool' && message.name === 'ask_clarification'
+}
+
+/**
+ * 从消息提取工具调用列表
+ */
+export function extractToolCalls(message: ChatMessage): ToolCallSummary[] {
+  if (message.type !== 'ai' || !message.tool_calls) {
+    return []
+  }
+
+  return message.tool_calls.map(tc => ({
+    id: tc.id,
+    name: tc.name,
+    displayName: tc.displayName || tc.name,
+    args: tc.args,
+    result: tc.result,
+    status: tc.status || 'pending',
+    elapsedMs: tc.elapsedMs,
+  }))
+}
+
+/**
+ * 查找 tool call 的结果
+ *
+ * @param toolCallId - 工具调用 ID
+ * @param messages - 消息列表（需包含 tool messages）
+ * @returns 结果字符串或 undefined
+ */
+export function findToolCallResult(toolCallId: string, messages: ChatMessage[]): string | undefined {
+  for (const message of messages) {
+    if (message.type === 'tool' && message.tool_call_id === toolCallId) {
+      return message.content
+    }
+  }
+  return undefined
+}
+
+/**
+ * DeerFlow getMessageGroups 算法实现
+ *
+ * 将扁平消息列表转换为 DeerFlow 6-type 分组结构
+ *
+ * @param messages - 扁平消息列表
+ * @returns MessageGroup 分组列表
+ */
+export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
+  if (messages.length === 0) return []
+
+  const groups: MessageGroup[] = []
+
+  /**
+   * 返回最后一个可接收 tool message 的 group
+   * (即非 human/assistant/clarification 的 processing group)
+   */
+  function lastOpenGroup(): MessageGroup | null {
+    const last = groups[groups.length - 1]
+    if (
+      last &&
+      last.type !== 'human' &&
+      last.type !== 'assistant' &&
+      last.type !== 'assistant:clarification'
+    ) {
+      return last
+    }
+    return null
+  }
+
+  for (const message of messages) {
+    // Step 1: 过滤隐藏消息
+    if (isHiddenFromUIMessage(message)) continue
+
+    // Step 2: human → 新建 group
+    if (message.type === 'human' || message.role === 'user') {
+      groups.push({
+        type: 'human',
+        id: message.id,
+        messages: [message],
+      })
+      continue
+    }
+
+    // Step 3: tool message 处理
+    if (message.type === 'tool') {
+      if (isClarificationToolMessage(message)) {
+        // 合入前一个 processing group（保持 tool-call 关联）
+        const open = lastOpenGroup()
+        if (open) {
+          open.messages.push(message)
+        }
+        // 同时新建 clarification group 用于醒目展示
+        groups.push({
+          type: 'assistant:clarification',
+          id: message.id,
+          messages: [message],
+        })
+      } else {
+        // 普通 tool → 合入前一个 processing group
+        const open = lastOpenGroup()
+        if (open) {
+          open.messages.push(message)
+        } else {
+          // 异常：tool message 没有前序 processing group
+          // 创建一个新的 processing group
+          groups.push({
+            type: 'assistant:processing',
+            id: message.id,
+            messages: [message],
+          })
+        }
+      }
+      continue
+    }
+
+    // Step 4: ai message 处理
+    if (message.type === 'ai' || message.role === 'assistant') {
+      // 4a: present_files → 独立 group
+      if (hasPresentFiles(message)) {
+        groups.push({
+          type: 'assistant:present-files',
+          id: message.id,
+          messages: [message],
+        })
+      }
+      // 4b: subagent (task tool) → 独立 group
+      else if (hasSubagent(message)) {
+        groups.push({
+          type: 'assistant:subagent',
+          id: message.id,
+          messages: [message],
+        })
+      }
+      // 4c: reasoning 或 tool_calls → processing group
+      else if (hasReasoning(message) || hasToolCalls(message)) {
+        const lastGroup = groups[groups.length - 1]
+        // 合并连续的 processing messages
+        if (lastGroup?.type !== 'assistant:processing') {
+          groups.push({
+            type: 'assistant:processing',
+            id: message.id,
+            messages: [message],
+          })
+        } else {
+          lastGroup.messages.push(message)
+        }
+      }
+
+      // 4d: 有正文内容 → assistant group（正文气泡）
+      // 注意：不是 else-if，一个 message 可能同时进入 processing + assistant
+      // （有 reasoning + content 但无 tool_calls 的情况）
+      if (hasContent(message) && !hasToolCalls(message)) {
+        groups.push({
+          type: 'assistant',
+          id: message.id,
+          messages: [message],
+        })
+      }
+    }
+  }
+
+  return groups
+}
+
+/**
+ * 从 present-files group 提取文件列表
+ */
+export function extractPresentFilesFromGroup(group: AssistantPresentFilesGroup): ChatMessage['artifacts'] {
+  const message = group.messages[0]
+  if (!message) return []
+
+  // 从 tool_calls 提取 present_files 的参数
+  const presentFilesCall = message.tool_calls?.find(tc => tc.name === 'present_files')
+  if (presentFilesCall?.args?.files) {
+    return presentFilesCall.args.files as ChatMessage['artifacts']
+  }
+
+  // fallback: 从 artifacts 提取
+  return message.artifacts || []
+}
+
+/**
+ * 从 subagent group 提取子任务数量
+ */
+export function getSubagentCount(group: AssistantSubagentGroup): number {
+  return group.messages.filter(m => m.subagent || m.tool_calls?.some(tc => tc.name === 'task')).length
+}
+
+/**
+ * 从 subagent group 提取任务 ID 列表
+ */
+export function getSubagentTaskIds(group: AssistantSubagentGroup): string[] {
+  const taskIds: string[] = []
+
+  for (const message of group.messages) {
+    // 从 subagent 字段提取
+    if (message.subagent?.taskId) {
+      taskIds.push(message.subagent.taskId)
+    }
+    // 从 task tool_calls 提取
+    for (const tc of message.tool_calls || []) {
+      if (tc.name === 'task' && tc.id) {
+        taskIds.push(tc.id)
+      }
+    }
+  }
+
+  return taskIds
+}

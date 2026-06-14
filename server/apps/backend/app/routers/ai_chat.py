@@ -4,6 +4,7 @@ import json
 import logging
 import re
 import time
+import urllib.parse
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -11,7 +12,7 @@ from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
@@ -647,3 +648,192 @@ async def stream_session_events(
             logger.error("session events proxy failed session=%s: %s", session_id, type(e).__name__)
 
     return StreamingResponse(proxy_events(), media_type="application/x-ndjson; charset=utf-8")
+
+
+# ── Suggestions endpoint (Phase 7: DeerFlow follow-up suggestions) ─────────────
+
+class SuggestionMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class SuggestionsRequest(BaseModel):
+    messages: list[SuggestionMessage]
+    n: int = 3
+    model_name: str | None = None
+
+
+class SuggestionsResponse(BaseModel):
+    suggestions: list[str]
+
+
+@sessions_router.post("/sessions/{session_id}/suggestions", response_model=SuggestionsResponse)
+async def generate_suggestions(
+    session_id: str,
+    body: SuggestionsRequest,
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """生成追问建议（DeerFlow Phase 7）。
+
+    安全校验:
+    1. session_id 必须属于当前 family
+    2. 使用租户配置的模型调用 LLM
+
+    返回:
+    - suggestions: 3 条追问建议字符串
+    """
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    if not body.messages:
+        return SuggestionsResponse(suggestions=[])
+
+    n = body.n
+
+    # Format conversation for LLM
+    conversation_parts: list[str] = []
+    for m in body.messages:
+        role = m.role.strip().lower()
+        if role in ("user", "human"):
+            conversation_parts.append(f"用户: {m.content.strip()}")
+        elif role in ("assistant", "ai"):
+            conversation_parts.append(f"助手: {m.content.strip()}")
+        else:
+            conversation_parts.append(f"{m.role}: {m.content.strip()}")
+    conversation = "\n".join(conversation_parts).strip()
+
+    if not conversation:
+        return SuggestionsResponse(suggestions=[])
+
+    # Call agent for suggestions
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.AGENT_BASE_URL}/suggestions/generate",
+                json={
+                    "conversation": conversation,
+                    "n": n,
+                    "model_name": body.model_name,
+                },
+                headers={
+                    "X-Family-Id": str(current_user.family_id),
+                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                    "X-User-Id": str(current_user.id),
+                },
+            )
+            resp.raise_for_status()
+            resp_data = resp.json()
+            suggestions = resp_data.get("suggestions", [])
+    except httpx.TimeoutException:
+        logger.warning("suggestions request timed out session=%s", session_id)
+        return SuggestionsResponse(suggestions=[])
+    except Exception as e:
+        logger.error("suggestions request failed session=%s: %s", session_id, type(e).__name__)
+        return SuggestionsResponse(suggestions=[])
+
+    # Clean suggestions
+    cleaned = [s.replace("\n", " ").strip() for s in suggestions if s.strip()]
+    cleaned = cleaned[:n]
+    return SuggestionsResponse(suggestions=cleaned)
+
+
+# ── Artifacts endpoint (Phase 5: DeerFlow artifact preview) ───────────────────
+
+
+@sessions_router.get("/sessions/{session_id}/artifacts/{filepath:path}")
+async def get_artifact(
+    session_id: str,
+    filepath: str,
+    download: bool = Query(default=False),
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+):
+    """获取 Artifact 内容（DeerFlow Phase 5）。
+
+    安全校验:
+    1. session_id 必须属于当前 family
+    2. filepath 必须是该 session 产生的 artifact
+
+    返回:
+    - 文件内容（Content-Type 根据扩展名自动设置）
+    """
+    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    session = _get_session_for_family(session_id, current_user.family_id, db)
+    if session is None:
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    # Decode filepath (was encoded by frontend)
+    decoded_filepath = filepath
+    # Try to find artifact in session's artifact directory
+    # For now, artifacts are stored in the chat directory alongside JSONL
+    artifact_dir = Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts"
+    artifact_path = artifact_dir / decoded_filepath
+
+    # Security: prevent path traversal
+    try:
+        artifact_path.resolve().relative_to(artifact_dir.resolve())
+    except ValueError:
+        raise AppError(ErrorCode.NOT_FOUND) from None
+
+    if not artifact_path.exists():
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    # Read file content
+    try:
+        content = artifact_path.read_text()
+    except UnicodeDecodeError:
+        # Binary file - read as bytes
+        content = artifact_path.read_bytes()
+        media_type = "application/octet-stream"
+    except OSError as e:
+        logger.warning("artifact read failed session=%s path=%s: %s", session_id, filepath, type(e).__name__)
+        raise AppError(ErrorCode.NOT_FOUND) from None
+
+    # Determine media type from extension
+    ext = artifact_path.suffix.lower()
+    MEDIA_TYPES: dict[str, str] = {
+        ".json": "application/json",
+        ".yaml": "application/yaml",
+        ".yml": "application/yaml",
+        ".md": "text/markdown",
+        ".markdown": "text/markdown",
+        ".html": "text/html",
+        ".htm": "text/html",
+        ".css": "text/css",
+        ".js": "application/javascript",
+        ".ts": "application/javascript",
+        ".vue": "text/x-vue",
+        ".py": "text/x-python",
+        ".go": "text/x-go",
+        ".rs": "text/x-rust",
+        ".txt": "text/plain",
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".svg": "image/svg+xml",
+    }
+    media_type = MEDIA_TYPES.get(ext, "text/plain")
+
+    # Set headers
+    headers = {}
+    if download:
+        filename = artifact_path.name
+        # Security: sanitize filename to prevent CRLF injection in Content-Disposition
+        # Replace any CR/LF characters and quote the filename per RFC 6266
+        safe_filename = filename.replace("\r", "").replace("\n", "")
+        quoted_filename = urllib.parse.quote(safe_filename)
+        headers["Content-Disposition"] = f"attachment; filename=\"{quoted_filename}\""
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers=headers,
+    )

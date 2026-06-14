@@ -139,3 +139,27 @@ class AIConfigTestResult(BaseModel):
     vision_text_success: bool | None = None
     vision_text_message: str | None = None
     vision_text_latency_ms: int | None = None
+
+
+# DeerFlow-aligned model info for frontend execution mode selection
+class ModelInfo(BaseModel):
+    """Model metadata for DeerFlow-style execution mode selection.
+
+    Returned by /ai/models endpoint for tenant-filtered model list.
+    """
+    name: str  # Model ID (e.g., "claude-sonnet-4-20250514")
+    display_name: str  # User-friendly name (e.g., "Claude Sonnet 4")
+    provider: str  # Provider type: "anthropic" | "openai" | "openai_compatible"
+    provider_name: str = ""  # Provider display name (e.g., "Anthropic", "OpenAI")
+    supports_thinking: bool = False  # Extended thinking / reasoning capability
+    supports_vision: bool = False  # Image input capability
+    supports_tool_calling: bool = True  # Tool/function calling (default True)
+    is_default: bool = False  # Primary model for the family
+    config_id: str  # Link to source config (for circuit state lookup)
+
+
+class ModelListResponse(BaseModel):
+    """Response for /ai/models endpoint."""
+    models: list[ModelInfo] = []
+    subagent_enabled: bool = False  # Family has subagent capability enabled
+    websearch_enabled: bool = False  # Family has web search enabled

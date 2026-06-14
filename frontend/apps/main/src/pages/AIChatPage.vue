@@ -183,18 +183,17 @@
     <!-- Chat body -->
     <div ref="scrollRef" class="chat-body">
 
-      <!-- Empty state: hero + suggestion cards -->
+      <!-- Empty state: hero + suggestion cards — DeerFlow-aligned -->
       <div v-if="!messages.length" class="chat-empty">
         <div class="empty-hero" aria-hidden="true">
-          <div class="hero-glow" />
-          <svg class="hero-icon" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-            <path d="M810.161862 222.967283a13.594179 13.594179 0 0 0-13.594179-13.594179H696.289285a13.594179 13.594179 0 0 0-13.594179 13.594179v71.21302h127.523635V222.967283zM810.161862 337.693051H682.638227v146.180081l127.523635 220.862745V337.693051zM417.864578 71.156141c76.218408 11.887796 155.565184 49.883242 229.337777 109.947897a13.651058 13.651058 0 0 0 19.168361-1.990779 13.651058 13.651058 0 0 0-1.9339-19.168361C586.853302 96.865634 503.126812 56.879409 422.130534 44.25218a13.651058 13.651058 0 0 0-4.265956 26.903961z"/>
-            <path d="M856.063545 396.165084a13.651058 13.651058 0 0 0-24.05999 12.740987c117.512859 222.057213 100.733433 458.334278-39.019275 549.739488-74.341388 48.575015-173.1978 50.736433-278.367827 6.029217-86.513581-36.800978-168.590568-101.643504-236.504583-185.768149l18.087652-31.454313h241.168694a6.029217 6.029217 0 0 0 5.232906-9.100706l-45.27601-78.322946a14.959285 14.959285 0 0 0-12.911625-7.394323H351.031273l109.037827-188.839638 221.488418 383.651614a13.992335 13.992335 0 0 0 12.172194 7.053046h114.441371c10.807088 0 17.632617-11.717158 12.172193-21.045381l-10.067655-17.518858-127.523635-220.862745L472.184414 230.475365a14.049214 14.049214 0 0 0-24.344387 0l-248.392379 430.23585C97.007832 470.847748 89.49975 262.78287 186.251625 148.625896a13.651058 13.651058 0 0 0-20.817864-17.632617c-106.364495 125.419097-97.150031 353.789924 18.087652 557.19069l-83.783369 145.156252a14.049214 14.049214 0 0 0 12.172193 21.102261h114.441371c5.005388 0 9.6695-2.673332 12.172194-7.053047l25.02694-43.34211c69.392879 83.669611 152.664334 148.284619 240.486141 185.597512 53.694162 22.865522 106.193857 34.241404 155.223907 34.241404 54.774871 0 105.283786-14.219852 148.682775-42.545798 74.853302-48.916292 120.470588-136.226185 128.376826-245.662167 7.7356-106.648892-20.817864-227.233239-80.256846-339.570072z"/>
-            <path d="M280.842082 142.539799l14.39049 40.896295 14.390491-40.896295c5.972338-17.063823 19.338999-30.373604 36.402822-36.402822L386.8653 91.746487l-40.953174-14.390491c-17.006943-5.972338-30.373604-19.338999-36.402822-36.402822L295.289452 0.056879l-14.390491 40.953175c-6.029217 17.006943-19.338999 30.373604-36.402821 36.345942l-40.953175 14.390491 40.953175 14.39049c16.950064 6.029217 30.373604 19.395878 36.402821 36.402822z"/>
-          </svg>
+          <!-- Wave animation emoji (DeerFlow pattern) -->
+          <span class="hero-emoji animate-wave">👋</span>
+          <!-- AuroraText gradient greeting -->
+          <h2 class="hero-title">
+            <AuroraText>{{ t('aiChat.greetingTitle') }}</AuroraText>
+          </h2>
+          <p class="hero-subtitle">{{ t('aiChat.greetingSubtitle') }}</p>
         </div>
-        <p class="empty-title">{{ t('aiChat.greetingTitle') }}</p>
-        <p class="empty-subtitle">{{ t('aiChat.greetingSubtitle') }}</p>
 
         <!-- Suggestion cards -->
         <div class="suggestion-grid">
@@ -221,7 +220,24 @@
 
       <!-- Messages -->
       <template v-else>
-        <transition-group name="msg" tag="div" class="msg-list">
+        <!-- DeerFlow MessageGroup-based rendering (experimental, Phase 1 integration) -->
+        <transition-group v-if="USE_MESSAGE_GROUP_RENDERING" name="msg" tag="div" class="msg-list">
+          <MessageGroup
+            v-for="group in messageGroups"
+            :key="group.id || `group-${group.type}-${group.messages[0]?.id}`"
+            :group="group"
+            :is-loading="asking || connecting"
+            :thread-id="currentSessionId"
+            @retry="onRetryError(messages.findIndex(m => m.id === group.messages[0]?.id))"
+            @copy="onCopy"
+            @feedback="(mid, v) => onFeedback(mid, v)"
+            @suggestion-click="onSuggestionChipClick"
+            @artifact-tap="onArtifactTap"
+          />
+        </transition-group>
+
+        <!-- Legacy ChatMessage rendering (default for Phase 1 stability) -->
+        <transition-group v-else name="msg" tag="div" class="msg-list">
           <ChatMessage
             v-for="(msg, idx) in messages"
             :id="msg.id"
@@ -285,6 +301,26 @@
       </button>
     </transition>
 
+    <!-- Suggestions for follow-up (Phase 7) — DeerFlow-aligned -->
+    <Suggestions
+      v-if="USE_MESSAGE_GROUP_RENDERING && messages.length > 0"
+      :suggestions="followups"
+      :loading="followupsLoading"
+      :hidden="followupsHidden"
+      @select="handleSuggestionClick"
+      @hide="hideSuggestions"
+    />
+
+    <!-- Suggestion confirm dialog for non-empty input — DeerFlow-aligned -->
+    <SuggestionConfirmDialog
+      :show="confirmOpen"
+      :current-input="inputText"
+      :suggestion="pendingSuggestion || ''"
+      @update:show="confirmOpen = $event"
+      @append="confirmAppendAndSend(); onSend()"
+      @replace="confirmReplaceAndSend(); onSend()"
+    />
+
     <!-- Input bar -->
     <div class="input-bar">
       <AIChatInput
@@ -320,6 +356,13 @@
         />
       </div>
     </van-dialog>
+
+    <!-- Artifact preview popup (Phase 5) — full-screen file preview -->
+    <ArtifactPreviewPopup
+      v-model:show="showArtifactPreview"
+      :artifact="selectedArtifactForPreview"
+      :thread-id="currentSessionId || ''"
+    />
   </div>
 </template>
 
@@ -342,7 +385,15 @@ import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 // DeerFlow-aligned chat components
 import ChatMessage from '@/components/chat/ChatMessage.vue'
+import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
+import Suggestions from '@/components/ai-chat/Suggestions.vue'
+import SuggestionConfirmDialog from '@/components/ai-chat/SuggestionConfirmDialog.vue'
+import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
+import AuroraText from '@/components/ai-chat/AuroraText.vue'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
+import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
+import { useSuggestions } from '@/composables/ai-chat/useSuggestions'
+import { toDeerFlowChatMessages } from '@/utils/ai-chat/messageAdapter'
 import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
 import { isLongTask } from '@/utils/aiTaskDetection'
 import { filterAIContent } from '@/utils/contentFilter'
@@ -559,6 +610,19 @@ async function loadActiveAgent() {
   }
 }
 const messages = ref<Message[]>([])
+
+// Feature flag: Enable DeerFlow MessageGroup rendering
+// Set to true for DeerFlow-aligned 6-type message grouping
+// Set to false to use existing ChatMessage rendering (legacy)
+const USE_MESSAGE_GROUP_RENDERING = true
+
+// DeerFlow message grouping
+// Convert legacy Message[] to DeerFlow ChatMessage[] for grouping
+const deerFlowMessages = computed(() => toDeerFlowChatMessages(messages.value))
+// Apply getMessageGroups() algorithm for 6-type grouping
+// Note: messageGroups is used for MessageGroup-based rendering when USE_MESSAGE_GROUP_RENDERING=true
+const messageGroups = useMessageGroups(deerFlowMessages)
+
 const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
@@ -566,6 +630,10 @@ const connectingSeconds = ref(0)
 // Artifact registry state (U5)
 const sessionArtifacts = ref<Artifact[]>([])
 const showArtifactSheet = ref(false)
+// Artifact preview popup state (Phase 5)
+const showArtifactPreview = ref(false)
+const selectedArtifactForPreview = ref<Artifact | null>(null)
+
 // 2-state deep-think + independent web-search toggle.
 // "normal"  → no extended thinking; reasoning_effort=low.
 // "smart"   → deep_think=true; reasoning_effort=high.
@@ -575,6 +643,33 @@ const chatMode = ref<ChatMode>('normal')
 const webSearch = ref<boolean>(false)
 const deepThink = computed(() => chatMode.value === 'smart')
 const reasoningEffort = computed<'low' | 'high'>(() => (deepThink.value ? 'high' : 'low'))
+const currentSessionId = ref<string | null>(null)
+
+// Follow-up suggestions state (Phase 7)
+const {
+  followups,
+  followupsHidden,
+  followupsLoading,
+  handleSuggestionClick,
+  hideSuggestions,
+  resetSuggestions,
+  // Confirm dialog state for non-empty input handling
+  confirmOpen,
+  pendingSuggestion,
+  confirmAppendAndSend,
+  confirmReplaceAndSend,
+} = useSuggestions(
+  deerFlowMessages,
+  computed(() => {
+    // Derive phase from asking/connecting state
+    if (connecting.value) return 'connecting'
+    if (asking.value) return 'answering'
+    return 'done'
+  }),
+  currentSessionId,
+  computed(() => chatMode.value === 'smart' ? 'pro' : 'flash'), // mode placeholder
+  inputText,
+)
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
 let programmaticScroll = false
@@ -586,7 +681,6 @@ const sessionsLoaded = ref(false)
 const sessionsAllLoaded = ref(false)
 const sessionsOffset = ref(0)
 const SESSIONS_PAGE_SIZE = 20
-const currentSessionId = ref<string | null>(null)
 const sessionSource = ref<string | null>(null)
 const historyScrollRef = ref<HTMLElement | null>(null)
 const paginationSentinelRef = ref<HTMLElement | null>(null)
@@ -1151,6 +1245,9 @@ async function onSend() {
   // isUserScrolledUp from earlier in the conversation.
   isUserScrolledUp.value = false
 
+  // Reset suggestions when user sends a new question (Phase 7)
+  resetSuggestions()
+
   const userMsgId = Date.now().toString()
   messages.value.push({
     id: userMsgId,
@@ -1609,10 +1706,9 @@ function onArtifactTap(artifact: Artifact) {
       window.open(artifact.url, '_blank', 'noopener,noreferrer')
     }
   } else if (artifact.kind === 'file') {
-    // Copy path to clipboard
-    if (artifact.path) {
-      onCopy(artifact.path)
-    }
+    // Open full-screen preview popup for file artifacts (Phase 5)
+    selectedArtifactForPreview.value = artifact
+    showArtifactPreview.value = true
   } else if (artifact.kind === 'report') {
     // Navigate to report page or open URL if available
     if (artifact.url) {
@@ -2177,40 +2273,42 @@ onUnmounted(() => {
 }
 
 .empty-hero {
-  position: relative;
-  width: 72px;
-  height: 72px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.hero-glow {
-  position: absolute;
-  inset: -8px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99, 102, 241, 0.4) 0%, transparent 70%);
-  animation: pulse-glow 3s ease-in-out infinite;
+/* DeerFlow wave animation for emoji */
+.hero-emoji {
+  font-size: 40px;
+  display: inline-block;
 }
 
-@keyframes pulse-glow {
-  0%, 100% { opacity: 0.7; transform: scale(1); }
-  50% { opacity: 1; transform: scale(1.15); }
+.animate-wave {
+  animation: wave 0.6s ease-in-out 2;
+  transform-origin: 70% 70%;
 }
 
-.hero-icon {
-  width: 48px;
-  height: 48px;
-  color: #818cf8;
-  position: relative;
-  z-index: 1;
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(20deg); }
+  50% { transform: rotate(0deg); }
+  75% { transform: rotate(20deg); }
 }
 
-.empty-title {
-  font-size: 18px;
+.hero-title {
+  font-size: 20px;
   font-weight: 600;
   color: var(--text-primary);
+  margin: 0;
+}
+
+.hero-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
   margin: 0;
 }
 

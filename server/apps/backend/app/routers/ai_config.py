@@ -18,6 +18,8 @@ from apps.backend.app.models.ai_provider_config import (
     AIProviderConfig,
     AIProviderTestResult,
 )
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer
+from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_config import (
     AICircuitResetResponse,
@@ -27,6 +29,8 @@ from apps.backend.app.schemas.ai_config import (
     AIConfigTestResult,
     AIConfigUpdate,
     AIProviderTestResultResponse,
+    ModelInfo,
+    ModelListResponse,
 )
 from apps.backend.app.services.ai_crypto import (
     decrypt_api_key,
@@ -521,3 +525,152 @@ def get_provider_defaults(
     from packages.core.system_config import get_max_tokens_default
 
     return {"max_tokens": get_max_tokens_default(model_id)}
+
+
+@router.get("/models", response_model=ModelListResponse)
+def get_tenant_models(
+    current_user: User = Depends(require_adult),
+    db: Session = Depends(get_db),
+) -> ModelListResponse:
+    """Return tenant-filtered model list for DeerFlow-style execution mode selection.
+
+    Extracts models from active AIProviderConfig records, including:
+    - model_id (primary model)
+    - model_2_id (secondary model, e.g., reasoning-focused)
+    - model_3_id (tertiary model, e.g., vision-focused)
+
+    Each model includes capabilities (thinking, vision, tool_calling) derived
+    from the config's capability flags and test results.
+
+    Also returns tenant-level feature flags:
+    - subagent_enabled: Whether family has MCP/skill subagent capability
+    - websearch_enabled: Whether family has web search provider configured
+    """
+    # Query active AI providers for the family
+    configs = (
+        db.query(AIProviderConfig)
+        .filter(
+            AIProviderConfig.family_id == current_user.family_id,
+            AIProviderConfig.is_active == True,  # noqa: E712
+            AIProviderConfig.api_key_encrypted.isnot(None),
+            AIProviderConfig.circuit_state != "open",
+        )
+        .order_by(AIProviderConfig.display_order.asc().nulls_last())
+        .all()
+    )
+
+    models: list[ModelInfo] = []
+    seen_model_ids: set[str] = set()  # Dedup across configs
+
+    for cfg in configs:
+        # Extract all model IDs from the config
+        model_entries = [
+            (cfg.model_id, cfg.model_1_capabilities, True),  # Primary is default
+            (cfg.model_2_id, cfg.model_2_capabilities, False),
+            (cfg.model_3_id, cfg.model_3_capabilities, False),
+        ]
+
+        for model_id, capabilities_json, is_default in model_entries:
+            if not model_id or model_id in seen_model_ids:
+                continue
+            seen_model_ids.add(model_id)
+
+            # Parse capabilities
+            capabilities = _deserialize_capabilities(capabilities_json)
+
+            # Determine capability flags
+            supports_thinking = "thinking" in capabilities or cfg.thinking_supported
+            supports_vision = "vision" in capabilities or bool(cfg.vision_model_id)
+            supports_tool_calling = "tool_calling" in capabilities  # Default True if not specified
+
+            # Build display name from model_id
+            # E.g., "claude-sonnet-4-20250514" -> "Claude Sonnet 4"
+            display_name = _model_id_to_display_name(model_id, cfg.provider_name or cfg.provider)
+
+            models.append(ModelInfo(
+                name=model_id,
+                display_name=display_name,
+                provider=cfg.provider,
+                provider_name=cfg.provider_name or cfg.provider.capitalize(),
+                supports_thinking=supports_thinking,
+                supports_vision=supports_vision,
+                supports_tool_calling=supports_tool_calling if supports_tool_calling else True,
+                is_default=is_default and len([m for m in models if m.is_default]) == 0,  # Only first primary is default
+                config_id=str(cfg.id),
+            ))
+
+    # Check tenant-level feature flags
+    family_id_int = int(current_user.family_id)
+
+    # Subagent capability: MCP servers or skills enabled
+    subagent_enabled = (
+        db.query(FamilyMCPServer)
+        .filter(
+            FamilyMCPServer.family_id == family_id_int,
+            FamilyMCPServer.is_enabled == True,  # noqa: E712
+        )
+        .count() > 0
+    )
+
+    # Web search capability
+    websearch_enabled = (
+        db.query(FamilyWebSearchProvider)
+        .filter(
+            FamilyWebSearchProvider.family_id == family_id_int,
+            FamilyWebSearchProvider.is_enabled == True,  # noqa: E712
+        )
+        .count() > 0
+    )
+
+    return ModelListResponse(
+        models=models,
+        subagent_enabled=subagent_enabled,
+        websearch_enabled=websearch_enabled,
+    )
+
+
+def _model_id_to_display_name(model_id: str, provider_name: str) -> str:
+    """Convert model_id to user-friendly display name.
+
+    E.g., "claude-sonnet-4-20250514" -> "Claude Sonnet 4"
+         "gpt-4o-2024-05-13" -> "GPT-4o"
+    """
+    if not model_id:
+        return ""
+
+    # Known model patterns
+    if model_id.startswith("claude-"):
+        # Claude models: extract version
+        parts = model_id.replace("claude-", "").split("-")
+        if len(parts) >= 2:
+            # e.g., "sonnet-4" or "opus-4"
+            return f"Claude {parts[0].capitalize()} {parts[1]}"
+        return f"Claude {model_id.replace('claude-', '')}"
+
+    if model_id.startswith("gpt-"):
+        # GPT models
+        if "gpt-4o" in model_id:
+            return "GPT-4o"
+        if "gpt-4-turbo" in model_id:
+            return "GPT-4 Turbo"
+        if "gpt-4" in model_id:
+            return "GPT-4"
+        if "gpt-3.5" in model_id:
+            return "GPT-3.5"
+        return model_id
+
+    if model_id.startswith("deepseek-"):
+        # DeepSeek models
+        if "deepseek-reasoner" in model_id:
+            return "DeepSeek Reasoner"
+        if "deepseek-chat" in model_id:
+            return "DeepSeek Chat"
+        return model_id.replace("deepseek-", "DeepSeek ")
+
+    if model_id.startswith("qwen"):
+        # Qwen models
+        return model_id.replace("qwen", "Qwen")
+
+    # Fallback: use provider name + model_id prefix
+    prefix = model_id.split("-")[0] if "-" in model_id else model_id[:10]
+    return f"{provider_name} {prefix}" if provider_name else prefix.capitalize()
