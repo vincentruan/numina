@@ -67,8 +67,7 @@ export function useSuggestions(
       }
 
       // 找到最后一条 AI 消息
-      const reversed = [...messages.value].reverse()
-      const lastAi = reversed.find((m) => m.type === 'ai' || m.type === 'assistant')
+      const lastAi = messages.value.findLast((m) => m.type === 'ai' || m.type === 'assistant')
       const lastAiId = lastAi?.id ?? null
 
       // 防止重复生成

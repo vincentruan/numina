@@ -8,10 +8,19 @@
 
 import { ref, computed, onUnmounted, type Ref, type ComputedRef } from 'vue'
 import { showToast } from 'vant'
+import i18n from '@/i18n'
 import { deduplicateMessages } from '@/utils/ai-chat/message-identity'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
 import type { AgentEvent, NormalizedAiEvent, ProcessStep, Artifact } from '@/types/agent-stream'
 import { normalizeAgentEvent } from '@/utils/aiEventNormalizer'
+import { sendChatMessageStream } from '@/api/ai'
+import { createAgentEventParser } from '@/composables/useAgentEventStream'
+import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
+
+// i18n helper
+function t(key: string, params?: Record<string, unknown>): string {
+  return i18n.global.t(key, params ?? {})
+}
 
 /**
  * 流式对话配置
@@ -70,6 +79,9 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
   // 去重 Set
   const seenEventIds = new Set<string>()
 
+  // 组件卸载标记（防止 unmount 后的异步操作触发 toast）
+  let isUnmounted = false
+
   // 计算 isStreaming
   const isStreaming = computed(() => {
     return phase.value !== 'done' && phase.value !== 'error' && phase.value !== 'interrupted'
@@ -85,6 +97,7 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
 
   // 组件卸载时清理
   onUnmounted(() => {
+    isUnmounted = true
     cleanupAbortController()
   })
 
@@ -232,6 +245,20 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
           result: event.result,
           error: event.error,
         })
+        // Wire to global SubtaskCard state (P0 fix: handleSubagentUpdate)
+        const { handleSubagentUpdate } = useUpdateSubtask()
+        if (event.taskId && event.status) {
+          handleSubagentUpdate({
+            subagent: {
+              taskId: event.taskId,
+              status: event.status as 'running' | 'done' | 'failed',
+              title: event.title,
+              description: event.description,
+              result: event.result,
+              error: event.error,
+            },
+          })
+        }
         break
       }
 
@@ -259,7 +286,10 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
 
       case 'error': {
         phase.value = 'error'
-        showToast(`❌ ${event.message}`)
+        // 组件已卸载时不显示 toast（防止 abort 后的异步错误触发 toast）
+        if (!isUnmounted) {
+          showToast(t('aiChat.errorPrefix', { error: event.message }))
+        }
         if (config.onError) {
           config.onError(new Error(event.message))
         }
@@ -317,45 +347,88 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
     cleanupAbortController()
     abortController.value = new AbortController()
 
-    try {
-      // TODO: 调用实际 API
-      // const response = await fetch('/api/v1/ai/chat/stream', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //     'X-Family-Id': config.familyId || '',
-      //     'Last-Event-ID': lastEventId.value || '',
-      //   },
-      //   body: JSON.stringify({
-      //     question: content,
-      //     agent_id: config.agentId,
-      //     session_id: currentSessionId.value,
-      //     thread_id: currentThreadId.value,
-      //   }),
-      //   signal: abortController.value.signal,
-      // })
+    // Store reader for cleanup (P0-#2: Stream reader resource leak fix)
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
 
-      // 模拟发送成功
+    try {
+      // 调用实际 streaming API
+      reader = await sendChatMessageStream(
+        content,
+        false, // deepThink - default
+        false, // webSearch - default
+        abortController.value!.signal,
+        currentSessionId.value || undefined,
+        config.agentId,
+        'medium', // reasoningEffort
+        'ai_chat_page', // source
+      )
+
+      // 标记用户消息发送成功
       optimisticUserMessage.sendStatus = 'sent'
 
-      // 处理 session.start 事件
-      if (config.onSessionStart && !currentSessionId.value) {
-        // TODO: 从实际响应获取 session_id
-        const newSessionId = `session-${Date.now()}`
-        currentSessionId.value = newSessionId
-        config.onSessionStart(newSessionId)
+      // 创建 NDJSON 解析器
+      const parser = createAgentEventParser((event: AgentEvent) => {
+        _handleEvent(event)
+
+        // 从 session.start 事件获取 session_id
+        if (event.type === 'session.start' && event.session_id) {
+          if (!currentSessionId.value) {
+            currentSessionId.value = event.session_id
+            if (config.onSessionStart) {
+              config.onSessionStart(event.session_id)
+            }
+          }
+        }
+      })
+
+      // 读取流
+      const decoder = new TextDecoder()
+      phase.value = 'thinking'
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) {
+          break
+        }
+
+        const chunk = decoder.decode(value, { stream: true })
+        parser.push(chunk)
       }
+
+      parser.flush()
+      phase.value = 'done'
+
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
         // 用户主动取消，不显示错误
         optimisticUserMessage.sendStatus = 'sent'
         phase.value = 'interrupted'
+        // Cancel the reader on abort to release the stream lock
+        if (reader) {
+          try {
+            await reader.cancel()
+          } catch {
+            // Ignore cancel errors - stream may already be closed
+          }
+        }
       } else {
         phase.value = 'error'
         optimisticUserMessage.sendStatus = 'failed'
-        showToast(`❌ 发送失败: ${error instanceof Error ? error.message : '未知错误'}`)
+        // 组件已卸载时不显示 toast（防止 abort race 的异步错误）
+        if (!isUnmounted) {
+          showToast(t('aiChat.sendFailedError', { error: error instanceof Error ? error.message : t('common.failed') }))
+        }
         if (config.onError) {
-          config.onError(error instanceof Error ? error : new Error('未知错误'))
+          config.onError(error instanceof Error ? error : new Error(t('common.failed')))
+        }
+      }
+    } finally {
+      // Always release the reader lock to prevent 'ReadableStream is locked' errors
+      if (reader) {
+        try {
+          reader.releaseLock()
+        } catch {
+          // Ignore release errors - reader may already be released
         }
       }
     }
@@ -367,6 +440,7 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
   const stop = () => {
     cleanupAbortController()
     phase.value = 'interrupted'
+    seenEventIds.clear() // 清理去重 Set，防止 reconnect 时状态污染
 
     // 标记当前 AI 消息为 interrupted
     const currentAiMsg = messages.value.find(m => m.type === 'ai' && m.phase !== 'done')
@@ -377,24 +451,19 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
 
   /**
    * 重新连接
+   *
+   * 注意: 当前后端不支持 Last-Event-ID reconnect，
+   * 此函数仅显示提示信息。完整 reconnect 需要后端支持。
    */
   const reconnect = async () => {
     if (!lastEventId.value) {
-      showToast('⚠️ 无历史事件，无法重新连接')
+      showToast(t('aiChat.reconnectNoHistory'))
       return
     }
 
-    phase.value = 'connecting'
-    cleanupAbortController()
-    abortController.value = new AbortController()
-
-    try {
-      // TODO: 调用 reconnect API 带 Last-Event-ID header
-      showToast('📡 正在重新连接...')
-    } catch (error) {
-      phase.value = 'error'
-      showToast(`❌ 重连失败: ${error instanceof Error ? error.message : '未知错误'}`)
-    }
+    // 当前不支持 reconnect，提示用户重新发送
+    showToast(t('aiChat.reconnectNotSupported'))
+    phase.value = 'done'
   }
 
   /**

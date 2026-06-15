@@ -26,6 +26,7 @@ from apps.backend.app.models.cached_file import CachedFile
 from apps.backend.app.models.file_remote_location import FileRemoteLocation
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
+from apps.backend.app.schemas.base import SnowflakeBase
 from apps.backend.app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
@@ -63,6 +64,11 @@ class ChatStreamRequest(BaseModel):
     # adapter for backward compatibility.
     agent_id: str | None = None
     source: str | None = None
+    # DeerFlow execution mode parameters (Phase 2)
+    # is_plan_mode: enables DeerFlow plan_mode for multi-step task decomposition
+    is_plan_mode: bool = False
+    # subagent_enabled: enables DeerFlow subagent coordination (Ultra mode)
+    subagent_enabled: bool = False
 
     @field_validator("question")
     @classmethod
@@ -80,6 +86,63 @@ class ChatStreamRequest(BaseModel):
         if v is not None and not re.fullmatch(r"\d{15,20}", v):
             raise ValueError("agent_id 格式无效")
         return v
+
+
+# ── Session Response Schemas (SnowflakeBase for ID serialization) ────────────
+
+class SessionSummaryResponse(SnowflakeBase):
+    """Single session summary for list_all_sessions endpoint."""
+
+    session_id: int
+    family_id: int
+    user_id: int | None = None
+    agent_id: int | None = None
+    title: str | None = None
+    status: str | None = None
+    last_message_summary: str | None = None
+    last_model: str | None = None
+    has_attachments: bool = False
+    is_pinned: bool = False
+    source: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class SessionListResponse(BaseModel):
+    """Response wrapper for list_all_sessions endpoint."""
+
+    sessions: list[SessionSummaryResponse]
+    total: int
+
+
+class SessionDefaultResponse(SnowflakeBase):
+    """Response for get_system_default_session endpoint."""
+
+    session_id: int
+    status: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class SessionDefaultWrapper(BaseModel):
+    """Wrapper for system default session response."""
+
+    session: SessionDefaultResponse | None = None
+
+
+class SessionForkResponse(SnowflakeBase):
+    """Response for fork_session endpoint."""
+
+    session_id: int
+    message_count: int = 0
+
+
+class SessionForkWrapper(BaseModel):
+    """Wrapper for fork session response."""
+
+    ok: bool = True
+    session_id: int
+    message_count: int = 0
 
 
 def _get_session_for_family(
@@ -246,6 +309,9 @@ async def chat_stream(
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
                 "source": body.source,
+                # DeerFlow execution mode parameters (Phase 2)
+                "is_plan_mode": body.is_plan_mode,
+                "subagent_enabled": body.subagent_enabled,
             }
         else:
             agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
@@ -255,13 +321,15 @@ async def chat_stream(
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
                 "source": body.source,
+                # DeerFlow execution mode parameters (Phase 2)
+                "is_plan_mode": body.is_plan_mode,
+                "subagent_enabled": body.subagent_enabled,
             }
 
         answer_chunks: list[str] = []
-        buffer = ""
         try:
             async with (
-                httpx.AsyncClient(timeout=None) as client,
+                httpx.AsyncClient(timeout=120.0) as client,
                 client.stream(
                     "POST",
                     agent_url,
@@ -272,25 +340,15 @@ async def chat_stream(
                         "X-Thread-Id": str(session_id),
                         "X-User-Id": str(current_user.id),
                     },
-                    timeout=None,
                 ) as resp,
             ):
-                async for chunk in resp.aiter_text():
-                    buffer += chunk
-                    while "\n" in buffer:
-                        line, buffer = buffer.split("\n", 1)
-                        if not line.strip():
-                            continue
-                        token = _collect_answer_token_from_event(line)
-                        if token is not None:
-                            answer_chunks.append(token)
-                        yield f"{line}\n".encode()
-
-                if buffer.strip():
-                    token = _collect_answer_token_from_event(buffer)
+                async for line in resp.aiter_lines():
+                    if not line.strip():
+                        continue
+                    token = _collect_answer_token_from_event(line)
                     if token is not None:
                         answer_chunks.append(token)
-                    yield f"{buffer}\n".encode()
+                    yield f"{line}\n".encode()
 
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
@@ -442,7 +500,7 @@ def list_all_sessions(
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
-):
+) -> SessionListResponse:
     """列出当前家庭所有 AI 功能的会话，支持按 agent_id 过滤。"""
     q = db.query(AIChatSession).filter_by(family_id=current_user.family_id)
     if agent_id:
@@ -457,27 +515,27 @@ def list_all_sessions(
         .offset(offset)
         .all()
     )
-    return {
-        "sessions": [
-            {
-                "session_id": str(s.id),
-                "family_id": str(s.family_id),
-                "user_id": str(s.user_id) if s.user_id else None,
-                "agent_id": str(s.agent_id) if s.agent_id else None,
-                "title": s.title,
-                "status": s.status,
-                "last_message_summary": s.last_message_summary,
-                "last_model": s.last_model,
-                "has_attachments": s.has_attachments,
-                "is_pinned": s.is_pinned,
-                "source": s.source,
-                "created_at": s.created_at.isoformat() if s.created_at else None,
-                "updated_at": s.updated_at.isoformat() if s.updated_at else None,
-            }
+    return SessionListResponse(
+        sessions=[
+            SessionSummaryResponse(
+                session_id=s.id,
+                family_id=s.family_id,
+                user_id=s.user_id,
+                agent_id=s.agent_id,
+                title=s.title,
+                status=s.status,
+                last_message_summary=s.last_message_summary,
+                last_model=s.last_model,
+                has_attachments=s.has_attachments,
+                is_pinned=s.is_pinned,
+                source=s.source,
+                created_at=s.created_at.isoformat() if s.created_at else None,
+                updated_at=s.updated_at.isoformat() if s.updated_at else None,
+            )
             for s in rows
         ],
-        "total": total,
-    }
+        total=total,
+    )
 
 
 @sessions_router.get("/sessions/system-default")
@@ -485,7 +543,7 @@ def get_system_default_session(
     max_age_hours: int = Query(default=6, ge=1, le=24),
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
-):
+) -> SessionDefaultWrapper:
     """查找当前用户最近的系统默认会话（source=system_default），用于缓存复用。"""
     cutoff = datetime.utcnow() - timedelta(hours=max_age_hours)
     session = (
@@ -500,15 +558,15 @@ def get_system_default_session(
         .first()
     )
     if session is None:
-        return {"session": None}
-    return {
-        "session": {
-            "session_id": str(session.id),
-            "status": session.status,
-            "created_at": session.created_at.isoformat() if session.created_at else None,
-            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
-        }
-    }
+        return SessionDefaultWrapper(session=None)
+    return SessionDefaultWrapper(
+        session=SessionDefaultResponse(
+            session_id=session.id,
+            status=session.status,
+            created_at=session.created_at.isoformat() if session.created_at else None,
+            updated_at=session.updated_at.isoformat() if session.updated_at else None,
+        )
+    )
 
 
 class SessionUpdateRequest(BaseModel):
@@ -526,7 +584,7 @@ async def fork_session(
     body: SessionForkRequest,
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
-):
+) -> SessionForkWrapper:
     """Fork a session from a specific message, creating a new branch.
 
     This is used for the "edit and resend" feature - when a user edits a message,
@@ -554,11 +612,11 @@ async def fork_session(
         logger.warning("fork_session failed: %s", str(e))
         raise AppError(ErrorCode.NOT_FOUND) from e
 
-    return {
-        "ok": True,
-        "session_id": str(new_session.id),
-        "message_count": new_session.message_count,
-    }
+    return SessionForkWrapper(
+        ok=True,
+        session_id=new_session.id,
+        message_count=new_session.message_count,
+    )
 
 
 @sessions_router.patch("/sessions/{session_id}")
@@ -757,6 +815,7 @@ async def get_artifact(
     安全校验:
     1. session_id 必须属于当前 family
     2. filepath 必须是该 session 产生的 artifact
+    3. 防止路径遍历攻击（包括双编码绕过）
 
     返回:
     - 文件内容（Content-Type 根据扩展名自动设置）
@@ -767,17 +826,41 @@ async def get_artifact(
     if session is None:
         raise AppError(ErrorCode.NOT_FOUND)
 
-    # Decode filepath (was encoded by frontend)
+    # Security: Decode filepath completely to prevent double-encoding bypass
+    # FastAPI decodes once, but attacker can double-encode to bypass traversal check
     decoded_filepath = filepath
+    prev_decoded = None
+    max_decode_iterations = 3  # Prevent infinite loop
+    iteration = 0
+    while decoded_filepath != prev_decoded and iteration < max_decode_iterations:
+        prev_decoded = decoded_filepath
+        decoded_filepath = urllib.parse.unquote(decoded_filepath)
+        iteration += 1
+
+    # Security: Reject any path containing URL-encoded characters after max iterations
+    # This catches triple-encoding and other edge cases
+    if "%" in decoded_filepath:
+        logger.warning(
+            "artifact filepath still contains encoded chars after decode: %s",
+            filepath,
+        )
+        raise AppError(ErrorCode.NOT_FOUND)
+
+    # Security: Reject path traversal patterns in decoded path
+    if ".." in decoded_filepath or decoded_filepath.startswith("/") or decoded_filepath.startswith("\\"):
+        logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
+        raise AppError(ErrorCode.NOT_FOUND)
+
     # Try to find artifact in session's artifact directory
     # For now, artifacts are stored in the chat directory alongside JSONL
     artifact_dir = Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts"
     artifact_path = artifact_dir / decoded_filepath
 
-    # Security: prevent path traversal
+    # Security: Final check - resolved path must be within artifact_dir
     try:
         artifact_path.resolve().relative_to(artifact_dir.resolve())
     except ValueError:
+        logger.warning("artifact resolved path escapes directory: %s", decoded_filepath)
         raise AppError(ErrorCode.NOT_FOUND) from None
 
     if not artifact_path.exists():

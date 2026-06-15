@@ -183,40 +183,9 @@
     <!-- Chat body -->
     <div ref="scrollRef" class="chat-body">
 
-      <!-- Empty state: hero + suggestion cards — DeerFlow-aligned -->
-      <div v-if="!messages.length" class="chat-empty">
-        <div class="empty-hero" aria-hidden="true">
-          <!-- Wave animation emoji (DeerFlow pattern) -->
-          <span class="hero-emoji animate-wave">👋</span>
-          <!-- AuroraText gradient greeting -->
-          <h2 class="hero-title">
-            <AuroraText>{{ t('aiChat.greetingTitle') }}</AuroraText>
-          </h2>
-          <p class="hero-subtitle">{{ t('aiChat.greetingSubtitle') }}</p>
-        </div>
-
-        <!-- Suggestion cards -->
-        <div class="suggestion-grid">
-          <button
-            v-for="s in suggestions"
-            :key="s.text"
-            class="suggestion-card"
-            @click="onChipClick(s.text)"
-          >
-            <span class="suggestion-icon" aria-hidden="true">
-              <svg :viewBox="s.icon.viewBox" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path v-for="(d, i) in s.icon.paths" :key="i" :d="d" />
-              </svg>
-            </span>
-            <span class="suggestion-text">{{ s.text }}</span>
-            <span class="suggestion-arrow" aria-hidden="true">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="9 18 15 12 9 6"/>
-              </svg>
-            </span>
-          </button>
-        </div>
-      </div>
+      <!-- Empty state: placeholder for InputBox welcome mode -->
+      <!-- InputBox.vue handles the hero section in isWelcomeMode -->
+      <div v-if="!messages.length" class="chat-empty-placeholder" />
 
       <!-- Messages -->
       <template v-else>
@@ -321,19 +290,17 @@
       @replace="confirmReplaceAndSend(); onSend()"
     />
 
-    <!-- Input bar -->
+    <!-- Input bar — DeerFlow-aligned (Phase 2) -->
     <div class="input-bar">
-      <AIChatInput
-        v-model="inputText"
-        v-model:mode="chatMode"
-        v-model:web-search="webSearch"
-        :disabled="asking"
-        :loading="asking || connecting"
-        :show-clear="messages.length > 0"
-        :placeholder="t('aiChat.inputPlaceholder')"
-        @submit="onSend"
-        @abort="onAbort"
-        @action="onAction"
+      <InputBox
+        :status="asking ? 'streaming' : connecting ? 'submitted' : 'ready'"
+        :is-welcome-mode="messages.length === 0"
+        :thread-id="currentSessionId"
+        :initial-mode="inputMode"
+        :initial-model-name="modelName"
+        @submit="onDeerFlowSubmit"
+        @stop="onAbort"
+        @context-change="onInputContextChange"
       />
     </div>
 
@@ -361,7 +328,7 @@
     <ArtifactPreviewPopup
       v-model:show="showArtifactPreview"
       :artifact="selectedArtifactForPreview"
-      :thread-id="currentSessionId || ''"
+      :session-id="currentSessionId || ''"
     />
   </div>
 </template>
@@ -373,13 +340,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { sendChatEventStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
+import { sendChatMessageStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi, forkSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
 import { getAgent } from '@/api/agent'
 import type { Agent } from '@/types/agent'
-import AIChatInput from '@/components/common/AIChatInput.vue'
 import AiArtifactBadge from '@/components/ai/AiArtifactBadge.vue'
 import AiArtifactSheet from '@/components/ai/AiArtifactSheet.vue'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
@@ -389,10 +355,14 @@ import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
 import Suggestions from '@/components/ai-chat/Suggestions.vue'
 import SuggestionConfirmDialog from '@/components/ai-chat/SuggestionConfirmDialog.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
-import AuroraText from '@/components/ai-chat/AuroraText.vue'
+import InputBox from '@/components/ai-chat/InputBox.vue'
+import { useTenantAiResources, INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
+import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 import { useSuggestions } from '@/composables/ai-chat/useSuggestions'
+import { clearArtifactContentCache } from '@/composables/ai-chat/useArtifacts'
+import { clearSubtasks } from '@/composables/ai-chat/useSubtasks'
 import { toDeerFlowChatMessages } from '@/utils/ai-chat/messageAdapter'
 import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
 import { isLongTask } from '@/utils/aiTaskDetection'
@@ -410,25 +380,7 @@ function renderMarkdown(text: string): string {
 }
 
 // Static data — module-level to avoid re-allocation on each mount
-// Note: suggestions array is now computed to use i18n
-const suggestions = computed(() => [
-  {
-    text: t('aiChat.suggestionAssetTotal'),
-    icon: { viewBox: '0 0 24 24', paths: ['M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6'] },
-  },
-  {
-    text: t('aiChat.suggestionHighestCategory'),
-    icon: { viewBox: '0 0 24 24', paths: ['M21.21 15.89A10 10 0 1 1 8 2.83', 'M22 12A10 10 0 0 0 12 2v10z'] },
-  },
-  {
-    text: t('aiChat.suggestionIdleAssets'),
-    icon: { viewBox: '0 0 24 24', paths: ['M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z', 'M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16'] },
-  },
-  {
-    text: t('aiChat.suggestionNetWorthTrend'),
-    icon: { viewBox: '0 0 24 24', paths: ['M23 6l-9.5 9.5-5-5L1 18', 'M17 6h6v6'] },
-  },
-])
+// Note: welcome state suggestions are now handled by InputBox.vue
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString(locale.value, { hour: '2-digit', minute: '2-digit' })
@@ -634,16 +586,78 @@ const showArtifactSheet = ref(false)
 const showArtifactPreview = ref(false)
 const selectedArtifactForPreview = ref<Artifact | null>(null)
 
-// 2-state deep-think + independent web-search toggle.
-// "normal"  → no extended thinking; reasoning_effort=low.
-// "smart"   → deep_think=true; reasoning_effort=high.
-// webSearch is orthogonal — independent boolean.
-type ChatMode = 'normal' | 'smart'
-const chatMode = ref<ChatMode>('normal')
-const webSearch = ref<boolean>(false)
-const deepThink = computed(() => chatMode.value === 'smart')
-const reasoningEffort = computed<'low' | 'high'>(() => (deepThink.value ? 'high' : 'low'))
+// DeerFlow 4-mode system (Phase 2)
+// Flash/Thinking/Pro/Ultra with tenant-aware mode selection
+const inputMode = ref<InputMode>('pro')
+const modelName = ref<string>('')
+const inputContext = ref<InputContext>({
+  model_name: '',
+  mode: 'pro',
+  reasoning_effort: 'medium',
+})
 const currentSessionId = ref<string | null>(null)
+
+// Legacy refs for API compatibility (mapped from DeerFlow params)
+const deepThink = ref(false)
+const webSearch = ref(false)
+const reasoningEffort = ref<'low' | 'medium' | 'high'>('medium')
+
+// AC-001: DeerFlow execution mode state (wired to backend)
+const deerFlowPlanMode = ref(false)
+const deerFlowSubagentEnabled = ref(false)
+
+// Tenant AI resources for model/mode selection
+const {
+  models: _tenantModels,  // Unused but available for future use
+  supportsThinking: _supportsThinking,  // Unused but available for InputBox validation
+  supportsSubagent: _supportsSubagent,  // Unused but available for InputBox validation
+  defaultModel,
+} = useTenantAiResources()
+
+// Initialize model name from tenant resources
+watch(defaultModel, (model) => {
+  if (model && !modelName.value) {
+    modelName.value = model.name
+    inputContext.value.model_name = model.name
+  }
+})
+
+// Handle InputBox context change
+function onInputContextChange(ctx: InputContext) {
+  inputContext.value = ctx
+  inputMode.value = ctx.mode
+  modelName.value = ctx.model_name
+}
+
+// DeerFlow-style submit handler (Phase 2 integration)
+// AC-001: Wire is_plan_mode and subagent_enabled to backend API
+function onDeerFlowSubmit(payload: SubmitPayload) {
+  const { text, model_name, mode, thinking_enabled, is_plan_mode, subagent_enabled, reasoning_effort } = payload
+
+  // Map DeerFlow 4-mode to legacy parameters
+  // thinking_enabled → deepThink
+  // reasoning_effort → reasoningEffort (already supported)
+  // AC-005: Map 'minimal' to 'low' for backend compatibility
+  deepThink.value = thinking_enabled
+  reasoningEffort.value = reasoning_effort === 'minimal' ? 'low' : reasoning_effort
+
+  // AC-001: Store DeerFlow execution mode for backend routing
+  deerFlowPlanMode.value = is_plan_mode
+  deerFlowSubagentEnabled.value = subagent_enabled
+
+  // Update local state
+  inputMode.value = mode as InputMode
+  modelName.value = model_name
+  inputContext.value = {
+    model_name,
+    mode: mode as InputMode,
+    reasoning_effort: reasoning_effort === 'minimal' ? 'low' : reasoning_effort,
+  }
+
+  // Set input text and trigger send
+  inputText.value = text
+  onSend()
+}
 
 // Follow-up suggestions state (Phase 7)
 const {
@@ -667,7 +681,7 @@ const {
     return 'done'
   }),
   currentSessionId,
-  computed(() => chatMode.value === 'smart' ? 'pro' : 'flash'), // mode placeholder
+  modelName,  // Use modelName instead of mode placeholder
   inputText,
 )
 const scrollRef = ref<HTMLElement | null>(null)
@@ -1001,10 +1015,6 @@ function onScrollToBottom() {
   }
 }
 
-function onChipClick(text: string) {
-  inputText.value = text
-}
-
 function _phaseLabel(phase: NonNullable<Message['phase']>) {
   if (phase === 'connecting') return t('aiChat.connecting')
   if (phase === 'thinking') return t('aiChat.thinking')
@@ -1307,7 +1317,8 @@ async function onSend() {
     // agent-dispatch path (which runs _resolve_skills). Without this, R5
     // (AI问答 chat-only) is not enforced at runtime — every chat would
     // go through the legacy chat_adapter regardless of the selected agent.
-    const reader = await sendChatEventStream(
+    // AC-001: Pass DeerFlow execution mode parameters to backend
+    const reader = await sendChatMessageStream(
       q,
       deepThink.value,
       webSearch.value,
@@ -1316,6 +1327,8 @@ async function onSend() {
       activeAgent.value?.id,
       reasoningEffort.value,
       sessionSource.value ?? undefined,
+      deerFlowPlanMode.value,
+      deerFlowSubagentEnabled.value,
     )
     sessionSource.value = null
     const parser = createAgentEventParser(handleEvent)
@@ -1772,10 +1785,12 @@ onMounted(async () => {
   if (routeSource) sessionSource.value = routeSource
 
   // Map legacy deepThink/webSearch query params + aiStore flags onto the
-  // 2-state chatMode + independent webSearch ref.
+  // DeerFlow 4-mode inputMode + independent webSearch ref.
   const wantDeep = routeDeepThink || aiStore.deepThinkEnabled || aiStore.config?.ai_test_thinking_success === true
   const wantSearch = routeWebSearch || aiStore.webSearchEnabled
-  chatMode.value = wantDeep ? 'smart' : 'normal'
+  // Map legacy 2-state to DeerFlow 4-mode: smart → pro, normal → flash
+  inputMode.value = wantDeep ? 'pro' : 'flash'
+  deepThink.value = wantDeep  // Keep legacy ref for API compatibility
   webSearch.value = wantSearch
   if (wantDeep) aiStore.deepThinkEnabled = false
   if (wantSearch) aiStore.webSearchEnabled = false
@@ -1825,6 +1840,9 @@ onUnmounted(() => {
   themeObserver?.disconnect()
   paginationObserver?.disconnect()
   scrollRef.value?.removeEventListener('scroll', onChatScroll)
+  // Clear global caches for session isolation (DeerFlow pattern)
+  clearArtifactContentCache()
+  clearSubtasks()
 })
 </script>
 

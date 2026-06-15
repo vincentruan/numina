@@ -450,6 +450,9 @@ export async function sendChatMessageStream(
   agentId?: string,
   reasoningEffort: 'low' | 'medium' | 'high' = 'medium',
   source?: string,
+  // AC-001: DeerFlow execution mode parameters
+  isPlanMode?: boolean,
+  subagentEnabled?: boolean,
 ): Promise<ReadableStreamDefaultReader<Uint8Array>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
   if (sessionId) headers['X-Thread-Id'] = sessionId
@@ -465,6 +468,9 @@ export async function sendChatMessageStream(
   }
   if (agentId) payload.agent_id = agentId
   if (source) payload.source = source
+  // AC-001: Pass DeerFlow execution mode parameters to backend
+  if (isPlanMode !== undefined) payload.is_plan_mode = isPlanMode
+  if (subagentEnabled !== undefined) payload.subagent_enabled = subagentEnabled
   const body = JSON.stringify(payload)
 
   let res = await fetch('/api/v1/ai/chat/stream', {
@@ -494,8 +500,6 @@ export async function sendChatMessageStream(
   if (!res.body) throw new Error('streaming_not_supported')
   return res.body.getReader()
 }
-
-export const sendChatEventStream = sendChatMessageStream
 
 export const getChatHistory = (sessionId?: string) =>
   http.get<{ session_id: string | null; messages: ChatMessage[] }>('/ai/chat/history', {
