@@ -79,6 +79,12 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
   // 去重 Set
   const seenEventIds = new Set<string>()
 
+  // P1-#7: O(1) step lookup caches (avoid .find() on every streaming event)
+  // Map<toolCallId, ProcessStep> for tool_running/tool_result/tool_progress
+  const toolStepCache = new Map<string, ProcessStep>()
+  // Ref to streaming reasoning step for reasoning_delta
+  let streamingReasoningStep: ProcessStep | null = null
+
   // 组件卸载标记（防止 unmount 后的异步操作触发 toast）
   let isUnmounted = false
 
@@ -132,36 +138,34 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
       }
 
       case 'reasoning_delta': {
-        // 更新 reasoning step
-        const reasoningStep = processSteps.value.find(
-          s => s.type === 'reasoning' && s.status === 'streaming',
-        )
-        if (reasoningStep) {
-          reasoningStep.content += event.content
+        // P1-#7: Use cached streamingReasoningStep for O(1) lookup
+        if (streamingReasoningStep) {
+          streamingReasoningStep.content += event.content
         } else {
-          processSteps.value.push({
+          const newStep: ProcessStep = {
             type: 'reasoning',
             id: `reasoning-${Date.now()}`,
             content: event.content,
             status: 'streaming',
-          })
+          }
+          streamingReasoningStep = newStep
+          processSteps.value.push(newStep)
         }
         break
       }
 
       case 'reasoning_done': {
-        const streamingReasoning = processSteps.value.find(
-          s => s.type === 'reasoning' && s.status === 'streaming',
-        )
-        if (streamingReasoning) {
-          streamingReasoning.status = 'done'
-          streamingReasoning.elapsedMs = event.elapsedMs
+        // P1-#7: Use cached streamingReasoningStep for O(1) lookup
+        if (streamingReasoningStep) {
+          streamingReasoningStep.status = 'done'
+          streamingReasoningStep.elapsedMs = event.elapsedMs
+          streamingReasoningStep = null // Clear cache when done
         }
         break
       }
 
       case 'tool_call': {
-        processSteps.value.push({
+        const newStep: ProcessStep = {
           type: 'tool_call',
           id: event.toolCallId,
           name: event.name,
@@ -170,14 +174,16 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
           toolType: event.toolType,
           args: event.args,
           status: 'pending',
-        })
+        }
+        // P1-#7: Add to cache for O(1) lookup
+        toolStepCache.set(event.toolCallId, newStep)
+        processSteps.value.push(newStep)
         break
       }
 
       case 'tool_running': {
-        const pendingTool = processSteps.value.find(
-          s => s.type === 'tool_call' && s.id === event.toolCallId,
-        )
+        // P1-#7: Use cached toolStep for O(1) lookup
+        const pendingTool = toolStepCache.get(event.toolCallId)
         if (pendingTool) {
           pendingTool.status = 'running'
         }
@@ -185,22 +191,22 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
       }
 
       case 'tool_result': {
-        const runningTool = processSteps.value.find(
-          s => s.type === 'tool_call' && s.id === event.toolCallId,
-        )
+        // P1-#7: Use cached toolStep for O(1) lookup
+        const runningTool = toolStepCache.get(event.toolCallId)
         if (runningTool) {
           runningTool.status = event.success ? 'done' : 'error'
           runningTool.resultSummary = event.summary
           runningTool.error = event.error
           runningTool.elapsedMs = event.elapsedMs
+          // Remove from cache when done (completed or error)
+          toolStepCache.delete(event.toolCallId)
         }
         break
       }
 
       case 'tool_progress': {
-        const toolWithProgress = processSteps.value.find(
-          s => s.type === 'tool_call' && s.id === event.toolCallId,
-        )
+        // P1-#7: Use cached toolStep for O(1) lookup
+        const toolWithProgress = toolStepCache.get(event.toolCallId)
         if (toolWithProgress) {
           toolWithProgress.progressMessage = event.progressMessage
         }
@@ -344,6 +350,9 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
     // 重置状态
     phase.value = 'connecting'
     seenEventIds.clear()
+    // P1-#7: Clear O(1) lookup caches for new message
+    toolStepCache.clear()
+    streamingReasoningStep = null
     cleanupAbortController()
     abortController.value = new AbortController()
 
@@ -478,6 +487,9 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
     currentThreadId.value = null
     lastEventId.value = null
     seenEventIds.clear()
+    // P1-#7: Clear O(1) lookup caches
+    toolStepCache.clear()
+    streamingReasoningStep = null
     cleanupAbortController()
   }
 
