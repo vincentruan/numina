@@ -1,5 +1,6 @@
 """Agent-first stream router."""
 
+import hmac
 from typing import Literal
 
 from fastapi import APIRouter, Header, HTTPException
@@ -18,6 +19,9 @@ class AgentStreamRequest(BaseModel):
     enable_thinking: bool = False
     web_search: bool = False
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    # DeerFlow execution mode parameters (Phase 2)
+    is_plan_mode: bool = False
+    subagent_enabled: bool = False
 
 
 @router.post("/{agent_id}/stream")
@@ -29,7 +33,9 @@ async def stream_agent(
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
     x_thread_id: str = Header(None, alias="X-Thread-Id"),
 ) -> StreamingResponse:
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
     thread_id = body.thread_id or x_thread_id
@@ -44,6 +50,9 @@ async def stream_agent(
             enable_thinking=body.enable_thinking,
             web_search=body.web_search,
             reasoning_effort=body.reasoning_effort,
+            # DeerFlow execution mode parameters (Phase 2)
+            is_plan_mode=body.is_plan_mode,
+            subagent_enabled=body.subagent_enabled,
         ),
         media_type="application/x-ndjson",
     )

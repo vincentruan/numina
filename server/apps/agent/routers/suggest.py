@@ -1,5 +1,6 @@
 """智能资产录入助手端点（由 backend 调用）。"""
 
+import hmac
 import json
 import logging
 
@@ -26,7 +27,9 @@ async def suggest_asset(
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
     x_user_id: str = Header(None, alias="X-User-Id"),
 ):
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
     # Pass request fields as free_text JSON so the orchestrator/fallback can use them

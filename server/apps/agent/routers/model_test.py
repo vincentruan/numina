@@ -1,6 +1,7 @@
 """POST /test/model — stateless model capability test endpoint."""
 
 import asyncio
+import hmac
 import logging
 
 from fastapi import APIRouter, Header, HTTPException
@@ -24,7 +25,9 @@ async def run_model_test(
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> ModelTestResult:
     """Run model capability tests with provided credentials (called by backend)."""
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         logger.warning("model-test: auth rejected")
         raise HTTPException(status_code=401, detail="invalid token")
 

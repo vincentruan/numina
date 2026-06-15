@@ -1,5 +1,6 @@
-"""时光机 LLM 解读 agent 路由。"""
+"""时光机 LLM 解读 agent 路由."""
 
+import hmac
 import json
 import logging
 from typing import Literal
@@ -27,7 +28,9 @@ async def interpret_time_machine(
     x_family_id: str = Header(..., alias="X-Family-Id"),
     x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ):
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
     try:
@@ -57,7 +60,9 @@ async def interpret_time_machine_events(
     x_user_id: str | None = Header(None, alias="X-User-Id"),
 ):
     """NDJSON 事件流（由 backend 调用）。"""
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
     async def event_stream():

@@ -1,5 +1,6 @@
 """Sessions API — list sessions and stream session events."""
 
+import hmac
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Query
@@ -14,7 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def _verify_token(x_agent_token: str) -> None:
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
 
