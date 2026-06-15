@@ -1,5 +1,6 @@
 """问答助手 agent 路由。"""
 
+import hmac
 import logging
 import uuid
 from typing import Literal
@@ -28,6 +29,9 @@ class ChatStreamRequest(BaseModel):
     # router. The orchestrator path does not currently honor reasoning_effort —
     # see plan 2026-05-27-003 §"Deferred to Follow-Up Work".
     reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    # DeerFlow execution mode parameters (Phase 2)
+    is_plan_mode: bool = False
+    subagent_enabled: bool = False
 
 
 @router.post("/ask")
@@ -38,7 +42,9 @@ async def ask(
     x_user_id: str = Header(None, alias="X-User-Id"),
     x_thread_id: str = Header(None, alias="X-Thread-Id"),
 ):
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
     response = await orchestrator.dispatch(
@@ -60,7 +66,9 @@ async def ask_stream(
     x_thread_id: str = Header(None, alias="X-Thread-Id"),
 ):
     """流式问答，输出 NDJSON 事件流。"""
-    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+    if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
+        x_agent_token, settings.AGENT_INTERNAL_TOKEN
+    ):
         raise HTTPException(status_code=401, detail="invalid token")
 
     async def generate():
@@ -76,6 +84,9 @@ async def ask_stream(
                 free_text=body.question,
                 enable_thinking_override=body.deep_think,
                 web_search=body.web_search,
+                # DeerFlow execution mode parameters (Phase 2)
+                is_plan_mode=body.is_plan_mode,
+                subagent_enabled=body.subagent_enabled,
             ):
                 yield event_line
 
