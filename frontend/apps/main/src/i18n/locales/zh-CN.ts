@@ -280,9 +280,33 @@ export default {
     tenantUltraDisabled: '当前家庭资源不支持旗舰模式',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
+    // DeerFlow InputBox keys
+    selectModel: '选择模型',
+    heroTitleChat: '有什么想问的？',
+    heroSubtitleChat: '输入问题，智能助手帮你分析家庭资产',
+    continuePlaceholder: '继续对话...',
+    // DeerFlow WelcomeExamples keys (SuggestionList pattern)
+    welcomeExampleSurprise: '随机提问',
+    welcomeExampleAnalyze: '分析',
+    welcomeExampleAnalyzePrompt: '分析家庭资产负债健康度',
+    welcomeExamplePlan: '规划',
+    welcomeExamplePlanPrompt: '制定家庭资产配置规划',
+    welcomeExampleLearn: '学习',
+    welcomeExampleLearnPrompt: '学习家庭理财知识',
+    welcomeExampleOptimize: '优化',
+    welcomeExampleOptimizePrompt: '获取家庭资产优化建议',
     // DeerFlow clarification/subagent keys
     needClarification: '需要补充信息',
     subagentTasks: '正在执行 {count} 个子任务',
+    // Reconnect and error handling keys
+    reconnectNoHistory: '⚠️ 无历史事件，无法重新连接',
+    reconnecting: '📡 正在重新连接...',
+    reconnectFailed: '❌ 重连失败: {error}',
+    reconnectNotSupported: '⚠️ 当前不支持重连，请重新发送问题',
+    sendFailedError: '❌ 发送失败: {error}',
+    errorPrefix: '❌ {error}',
+    copiedSuccess: '✅ 已复制',
+    loadModelsFailed: '❌ 加载模型列表失败: {error}',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',
@@ -1470,6 +1494,8 @@ export default {
     AI_NOT_ENABLED: '🤖 AI 功能未开启，请联系家庭管理员在设置中配置并启用 AI 助手',
     AI_QUOTA_EXCEEDED: '🤖 AI 服务配额已用尽',
     AI_INVALID_RESPONSE: '🤖 AI 返回结果异常',
+    // Tenant isolation
+    NO_FAMILY_CONTEXT: '⚠️ 未选择家庭，无法执行操作',
     // Wish
     WISH_NOT_FOUND: '❌ 心愿不存在',
     WISH_FORBIDDEN: '⛔ 无权操作此心愿',

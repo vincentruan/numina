@@ -82,6 +82,9 @@ class ChatAdapter:
         web_search: bool = False,
         enable_thinking: bool = False,
         caller_user_id: str | None = None,
+        # DeerFlow execution mode parameters (Phase 2)
+        is_plan_mode: bool = False,
+        subagent_enabled: bool = False,
     ) -> AsyncGenerator[StreamChunk, None]:
         """Stream chat response via DeerFlow with family MCP server injected.
 
@@ -114,8 +117,10 @@ class ChatAdapter:
             family_id=family_id,
             ai_config=ai_config,
             timeout_seconds=int(ai_config.get("timeout_seconds", 60)),
-            subagent_enabled=deep_think,
-            plan_mode=deep_think,
+            # DeerFlow execution mode parameters (Phase 2)
+            # Use explicit params instead of deep_think fallback
+            subagent_enabled=subagent_enabled,
+            plan_mode=is_plan_mode,
             mcp_servers=mcp_servers,
         )
 

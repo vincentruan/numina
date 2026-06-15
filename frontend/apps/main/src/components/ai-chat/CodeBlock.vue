@@ -5,6 +5,7 @@
  * 用于代码高亮展示（Artifact 预览、工具调用结果）
  */
 import { computed } from 'vue'
+import IIcon from '@/components/IIcon.vue'
 
 const props = defineProps<{
   language: string
@@ -31,7 +32,7 @@ const languageLabel = computed(() => props.language || 'text')
     <div class="code-header">
       <span class="language-label">{{ languageLabel }}</span>
       <button class="copy-btn" @click="navigator.clipboard.writeText(code)">
-        <SvgIcon name="copy" />
+        <IIcon icon="copy" />
       </button>
     </div>
 

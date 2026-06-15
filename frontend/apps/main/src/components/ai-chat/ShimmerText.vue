@@ -11,10 +11,12 @@ import { computed } from 'vue'
 const props = defineProps<{
   text: string
   duration?: number // 动画周期（秒）
+  spread?: number // 光晕扩散范围 (DeerFlow spread={3})
 }>()
 
 const shimmerStyle = computed(() => ({
   '--shimmer-duration': `${props.duration || 3}s`,
+  '--shimmer-spread': props.spread || 3,
 }))
 </script>
 
@@ -29,11 +31,12 @@ const shimmerStyle = computed(() => ({
   position: relative;
   display: inline-block;
   font-weight: 500;
-  color: var(--text-primary);
+  /* DeerFlow shimmer effect: gradient spread across text */
   background: linear-gradient(
     90deg,
     var(--text-primary) 0%,
-    var(--van-primary-color) 50%,
+    var(--van-primary-color) calc(50% - var(--shimmer-spread) * 1%),
+    var(--van-primary-color) calc(50% + var(--shimmer-spread) * 1%),
     var(--text-primary) 100%
   );
   background-size: 200% 100%;

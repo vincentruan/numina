@@ -107,6 +107,7 @@ export interface ToolCallSummary {
   result?: unknown
   status?: 'pending' | 'running' | 'success' | 'error'
   elapsedMs?: number
+  progressMessage?: string
 }
 
 /** Artifact 结构 */

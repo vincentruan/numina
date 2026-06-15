@@ -7,10 +7,9 @@
  * - 节流渲染避免长内容卡顿
  * - Loading 状态骨架屏
  */
-import { computed, ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { Skeleton } from 'vant'
 
 const props = defineProps<{
   content: string

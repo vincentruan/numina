@@ -37,6 +37,24 @@ export function useSubtask(taskId: string) {
 }
 
 /**
+ * 清除所有子任务（session 结束时调用）
+ */
+export function clearSubtasks() {
+  tasks.value = {}
+}
+
+/**
+ * 清除已完成的子任务
+ */
+export function clearCompletedSubtasks() {
+  for (const [id, task] of Object.entries(tasks.value)) {
+    if (task.status !== 'in_progress') {
+      delete tasks.value[id]
+    }
+  }
+}
+
+/**
  * 更新子任务状态
  */
 export function useUpdateSubtask() {
@@ -120,24 +138,6 @@ export function useUpdateSubtask() {
       result,
       error,
     })
-  }
-
-  /**
-   * 清除所有子任务
-   */
-  function clearSubtasks() {
-    tasks.value = {}
-  }
-
-  /**
-   * 清除已完成的子任务
-   */
-  function clearCompletedSubtasks() {
-    for (const [id, task] of Object.entries(tasks.value)) {
-      if (task.status !== 'in_progress') {
-        delete tasks.value[id]
-      }
-    }
   }
 
   return {

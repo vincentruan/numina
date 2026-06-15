@@ -16,8 +16,14 @@
 
 import { ref, computed, onMounted, type Ref, type ComputedRef } from 'vue'
 import { showToast } from 'vant'
-import { http } from '@/api/http'
+import i18n from '@/i18n'
+import http from '@/api'
 import { useFamilyStore } from '@/stores/family'
+
+// i18n helper
+function t(key: string, params?: Record<string, unknown>): string {
+  return i18n.global.t(key, params ?? {})
+}
 
 /**
  * DeerFlow-aligned Model Info
@@ -119,7 +125,7 @@ export function useTenantAiResources(): {
    */
   async function loadResources(): Promise<void> {
     if (!familyId.value) {
-      error.value = '未选择家庭'
+      error.value = t('aiChat.tenantNoFamily')
       loading.value = false
       return
     }
@@ -135,8 +141,8 @@ export function useTenantAiResources(): {
         websearch_enabled: response.data.websearch_enabled,
       }
     } catch (e) {
-      error.value = e instanceof Error ? e.message : '加载失败'
-      showToast(`❌ 加载模型列表失败: ${error.value}`)
+      error.value = e instanceof Error ? e.message : t('common.failed')
+      showToast(t('aiChat.loadModelsFailed', { error: error.value }))
     } finally {
       loading.value = false
     }

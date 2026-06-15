@@ -7,11 +7,11 @@
 // Tool icon mapping
 export {
   TOOL_ICON_MAP,
-  TOOL_DISPLAY_NAME_MAP,
-  TOOL_ACTION_TEMPLATE,
+  TOOL_DISPLAY_NAME_KEY_MAP,
+  TOOL_ACTION_KEY_MAP,
   getToolIcon,
-  getToolDisplayName,
-  explainToolCall,
+  getToolDisplayNameKey,
+  explainToolCallKey,
 } from './tool-icon-map'
 
 // Message identity and deduplication

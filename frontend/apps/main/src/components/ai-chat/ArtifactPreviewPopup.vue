@@ -19,6 +19,7 @@
 import { ref, computed, watch } from 'vue'
 import { Popup, NavBar, Button, Toast, Loading } from 'vant'
 import { useI18n } from 'vue-i18n'
+import IIcon from '@/components/IIcon.vue'
 import CodeBlock from './CodeBlock.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import {
@@ -78,7 +79,13 @@ async function loadContent() {
   try {
     // Use artifactContentUrl helper for correct path (uses /ai/sessions/ not /api/sessions/)
     const url = artifactContentUrl(filepath.value, props.sessionId)
-    const familyId = familyStore.currentFamily?.id || ''
+    const familyId = familyStore.currentFamily?.id
+
+    // P0: Guard - must have valid family context for tenant isolation
+    if (!familyId) {
+      throw new Error(t('errors.NO_FAMILY_CONTEXT'))
+    }
+
     const response = await fetch(url, {
       headers: {
         'X-Family-Id': familyId,
@@ -176,15 +183,15 @@ function handleOpenNewWindow() {
           <div class="nav-actions">
             <!-- 复制 -->
             <Button size="small" plain @click="handleCopy">
-              <SvgIcon name="copy" />
+              <IIcon icon="copy" />
             </Button>
             <!-- 下载 -->
             <Button size="small" plain @click="handleDownload">
-              <SvgIcon name="download" />
+              <IIcon icon="download" />
             </Button>
             <!-- 新窗口 -->
             <Button size="small" plain @click="handleOpenNewWindow">
-              <SvgIcon name="external-link" />
+              <IIcon icon="external-link" />
             </Button>
           </div>
         </template>
@@ -218,7 +225,7 @@ function handleOpenNewWindow() {
 
         <!-- Error -->
         <div v-if="error" class="error-state">
-          <SvgIcon name="x-circle" />
+          <IIcon icon="x-circle" />
           <span>{{ error }}</span>
           <Button size="small" type="primary" @click="loadContent">{{ t('aiArtifact.retry') }}</Button>
         </div>
@@ -261,7 +268,7 @@ function handleOpenNewWindow() {
 
         <!-- 未知文件：下载提示 -->
         <div v-if="isUnknown" class="unknown-preview">
-          <SvgIcon name="file" class="unknown-icon" />
+          <IIcon icon="file" class="unknown-icon" />
           <span class="unknown-text">{{ t('aiArtifact.unknownFileType') }}</span>
           <Button size="small" type="primary" @click="handleDownload">
             {{ t('aiArtifact.downloadFile') }}

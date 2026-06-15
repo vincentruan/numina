@@ -98,7 +98,7 @@ export function usePlanInference(options: UsePlanInferenceOptions) {
     let hasWriteTodos = false
 
     for (const step of steps.value) {
-      let label: string | null = null
+      let label: string | null
 
       if (step.type === 'tool_call') {
         if (step.name === 'write_todos') {

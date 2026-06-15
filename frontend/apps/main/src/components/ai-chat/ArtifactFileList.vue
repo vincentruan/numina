@@ -12,6 +12,7 @@
  */
 import { Card, Button } from 'vant'
 import { useI18n } from 'vue-i18n'
+import IIcon from '@/components/IIcon.vue'
 import { getFileName, getFileIcon, isSkillFile } from '@/utils/ai-chat/fileType'
 import { artifactDownloadUrl } from '@/utils/ai-chat/artifactUrl'
 import type { Artifact } from '@/types/agent-stream'
@@ -55,7 +56,7 @@ function getDownloadUrl(artifact: Artifact): string {
     >
       <!-- 文件图标 -->
       <template #icon>
-        <SvgIcon :name="getFileIcon(artifact.path || '')" class="file-icon" />
+        <IIcon :icon="getFileIcon(artifact.path || '')" class="file-icon" />
       </template>
 
       <!-- 文件标题 -->

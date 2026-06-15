@@ -22,6 +22,8 @@ import {
 } from '@/utils/ai-chat'
 import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'
+import FlipDisplay from './FlipDisplay.vue'
+import IIcon from '@/components/IIcon.vue'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
 
 const { t } = useI18n()
@@ -46,6 +48,7 @@ const steps = computed(() => {
   const allSteps: Array<{
     type: 'reasoning' | 'toolCall'
     id: string
+    messageId?: string
     content?: string
     name?: string
     displayName?: string
@@ -64,22 +67,26 @@ const steps = computed(() => {
         allSteps.push({
           type: 'reasoning',
           id: `reasoning-${message.id}`,
+          messageId: message.id,
           content: reasoning,
           status: 'done',
         })
       }
 
-      // 工具调用
+      // 工具调用 (排除 task，task 由 SubtaskCard 处理)
       const toolCalls = extractToolCalls(message)
       for (const tc of toolCalls) {
+        // Skip 'task' tool - handled by SubtaskCard
+        if (tc.name === 'task') continue
         allSteps.push({
           type: 'toolCall',
           id: tc.id,
+          messageId: message.id,
           name: tc.name,
           displayName: tc.displayName,
           args: tc.args,
-          result: tc.resultSummary,
-          status: tc.status,
+          result: tc.result,
+          status: tc.status === 'success' ? 'done' : tc.status,
           elapsedMs: tc.elapsedMs,
           progressMessage: tc.progressMessage,
         })
@@ -100,29 +107,36 @@ const steps = computed(() => {
   return allSteps
 })
 
-// 可见步骤
-const visibleSteps = computed(() => {
-  const max = props.maxVisible || 3
-  if (expanded.value) {
-    return steps.value
-  }
-  return steps.value.slice(0, max)
-})
-
-// 隐藏的步骤数量
-const hiddenCount = computed(() => steps.value.length - visibleSteps.value.length)
-
-// 最后一个工具调用步骤
+// DeerFlow pattern: last tool call step (always visible)
 const lastToolCallStep = computed(() => {
   const toolCalls = steps.value.filter(s => s.type === 'toolCall')
   return toolCalls[toolCalls.length - 1] || null
 })
 
-// 最后的推理步骤
+// DeerFlow pattern: steps above the last tool call (hidden by default)
+const aboveLastToolCallSteps = computed(() => {
+  if (!lastToolCallStep.value) return []
+  const idx = steps.value.indexOf(lastToolCallStep.value)
+  return steps.value.slice(0, idx)
+})
+
+// DeerFlow pattern: reasoning step after the last tool call
+// (reasoning that happens after tool execution, not before)
 const lastReasoningStep = computed(() => {
+  if (lastToolCallStep.value) {
+    const idx = steps.value.indexOf(lastToolCallStep.value)
+    // Find reasoning after the last tool call
+    return steps.value.slice(idx + 1).find(s => s.type === 'reasoning') || null
+  }
+  // No tool calls: return the last reasoning
   const reasonings = steps.value.filter(s => s.type === 'reasoning')
   return reasonings[reasonings.length - 1] || null
 })
+
+// 隐藏的历史步骤数量 (DeerFlow pattern: aboveLastToolCallSteps)
+const hiddenCount = computed(() =>
+  expanded.value ? 0 : aboveLastToolCallSteps.value.length
+)
 
 // 当前正在运行的步骤
 const runningStep = computed(() =>
@@ -269,16 +283,145 @@ function handleArtifactClick(filepath: string) {
 
 <template>
   <div class="chain-of-thought" :class="{ loading: showLoading }">
-    <!-- 推理区域（可折叠） -->
-    <div v-if="lastReasoningStep" class="thinking-section">
+    <!-- DeerFlow pattern: "X more steps" button for aboveLastToolCallSteps -->
+    <button
+      v-if="hiddenCount > 0"
+      class="expand-btn"
+      @click="expanded = !expanded"
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        :class="['chevron', { rotated: expanded }]"
+      >
+        <polyline points="6 9 12 15 18 9"/>
+      </svg>
+      <span class="expand-label opacity-60">
+        {{ expanded ? t('aiChat.collapse') : t('aiChat.moreSteps', { count: hiddenCount }) }}
+      </span>
+    </button>
+
+    <!-- Tool calls content (DeerFlow pattern) -->
+    <div v-if="lastToolCallStep" class="cot-content">
+      <!-- Hidden history steps (shown when expanded) -->
+      <template v-if="expanded">
+        <div
+          v-for="step in aboveLastToolCallSteps"
+          :key="step.id"
+          class="cot-step"
+          :class="[step.type, step.status]"
+        >
+          <!-- Reasoning step -->
+          <template v-if="step.type === 'reasoning'">
+            <div class="step-header">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="step-icon reasoning-icon">
+                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
+              </svg>
+              <span class="step-name">{{ t('aiChat.thinkingLabel') }}</span>
+            </div>
+            <div v-if="step.content" class="thinking-content-inline">{{ step.content }}</div>
+          </template>
+
+          <!-- Tool call step (history) -->
+          <template v-else>
+            <div class="step-header">
+              <IIcon :icon="getIcon(step)" class="step-icon" />
+              <span class="step-name">{{ getName(step) }}</span>
+              <span v-if="getKeyArg(step)" class="step-arg">{{ getKeyArg(step) }}</span>
+              <div class="step-status">
+                <Badge :type="getBadgeType(step.status)" size="small">
+                  {{ step.status === 'done' ? '✓' : step.status === 'error' ? '✗' : '' }}
+                </Badge>
+              </div>
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <!-- Last tool call: always visible with FlipDisplay animation -->
+      <FlipDisplay :unique-key="lastToolCallStep.id">
+        <div
+          class="cot-step last-tool-call"
+          :class="[lastToolCallStep.status, { running: lastToolCallStep.status === 'running' }]"
+        >
+          <div class="step-header">
+            <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" />
+            <span class="step-name">{{ getName(lastToolCallStep) }}</span>
+            <span v-if="getKeyArg(lastToolCallStep)" class="step-arg">
+              {{ getKeyArg(lastToolCallStep) }}
+            </span>
+            <div class="step-status">
+              <svg
+                v-if="lastToolCallStep.status === 'running'"
+                class="status-loader animate-spin"
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M21 12a9 9 0 11-6.219-8.56"/>
+              </svg>
+              <Badge v-else :type="getBadgeType(lastToolCallStep.status)" size="small">
+                {{ lastToolCallStep.status === 'done' ? '✓' : lastToolCallStep.status === 'error' ? '✗' : '' }}
+              </Badge>
+            </div>
+          </div>
+
+          <!-- Progress message for running step -->
+          <div v-if="lastToolCallStep.progressMessage" class="step-progress">
+            {{ lastToolCallStep.progressMessage }}
+          </div>
+
+          <!-- Tool-specific result visualization -->
+          <div v-if="lastToolCallStep.status === 'done'" class="step-result">
+            <ChainOfThoughtSearchResults
+              v-if="getSearchResults(lastToolCallStep)"
+              :results="getSearchResults(lastToolCallStep)!"
+              :max-visible="3"
+            />
+            <CodeBlock
+              v-else-if="getBashCommand(lastToolCallStep)"
+              language="bash"
+              :code="getBashCommand(lastToolCallStep)!"
+              :show-line-numbers="false"
+            />
+            <button
+              v-else-if="getArtifactPath(lastToolCallStep)"
+              class="artifact-link"
+              @click="handleArtifactClick(getArtifactPath(lastToolCallStep)!)"
+            >
+              <IIcon icon="file-text" class="artifact-icon" />
+              <span class="artifact-path">{{ getArtifactPath(lastToolCallStep) }}</span>
+              <IIcon icon="external-link" class="external-icon" />
+            </button>
+          </div>
+
+          <!-- Error message -->
+          <div v-if="lastToolCallStep.status === 'error' && lastToolCallStep.result" class="step-error">
+            {{ lastToolCallStep.result }}
+          </div>
+        </div>
+      </FlipDisplay>
+    </div>
+
+    <!-- DeerFlow pattern: Thinking collapsible (after tool calls) -->
+    <template v-if="lastReasoningStep">
       <button
         class="thinking-toggle"
         @click="showThinking = !showThinking"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
-        </svg>
-        <span class="thinking-label">{{ t('aiChat.expandReasoning') }}</span>
+        <div class="thinking-toggle-inner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lightbulb-icon">
+            <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
+          </svg>
+          <span class="thinking-label">{{ t('aiChat.thinkingLabel') }}</span>
+        </div>
         <svg
           width="12"
           height="12"
@@ -292,125 +435,10 @@ function handleArtifactClick(filepath: string) {
         </svg>
       </button>
 
-      <div v-if="showThinking" class="thinking-content">
+      <div v-if="showThinking" class="thinking-content-expanded">
         {{ lastReasoningStep.content }}
       </div>
-    </div>
-
-    <!-- 工具调用历史 -->
-    <div class="cot-steps">
-      <!-- 折叠按钮 -->
-      <button
-        v-if="hiddenCount > 0"
-        class="expand-btn"
-        @click="expanded = !expanded"
-      >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          :class="['chevron', { rotated: expanded }]"
-        >
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        <span class="expand-label">
-          {{ expanded ? t('aiChat.collapse') : t('aiChat.moreSteps', { count: hiddenCount }) }}
-        </span>
-      </button>
-
-      <!-- 步骤列表 -->
-      <div
-        v-for="step in visibleSteps"
-        :key="step.id"
-        class="cot-step"
-        :class="[
-          step.type,
-          step.status,
-          { last: step === lastToolCallStep, running: step.status === 'running' }
-        ]"
-      >
-        <!-- Step header -->
-        <div class="step-header">
-          <!-- 图标 -->
-          <SvgIcon :name="getIcon(step)" class="step-icon" />
-
-          <!-- 名称 -->
-          <span class="step-name">{{ getName(step) }}</span>
-
-          <!-- 关键参数 -->
-          <span v-if="getKeyArg(step)" class="step-arg">
-            {{ getKeyArg(step) }}
-          </span>
-
-          <!-- 状态 -->
-          <div class="step-status">
-            <!-- Loading -->
-            <svg
-              v-if="step.status === 'running'"
-              class="status-loader animate-spin"
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-            >
-              <path d="M21 12a9 9 0 11-6.219-8.56"/>
-            </svg>
-
-            <!-- Badge -->
-            <Badge v-else :type="getBadgeType(step.status)" size="small">
-              {{ step.status === 'done' ? '✓' : step.status === 'error' ? '✗' : '' }}
-            </Badge>
-          </div>
-
-          <!-- 耗时 -->
-          <span v-if="step.elapsedMs" class="step-time">{{ step.elapsedMs }}ms</span>
-        </div>
-
-        <!-- 进度消息 -->
-        <div v-if="step.progressMessage" class="step-progress">
-          {{ step.progressMessage }}
-        </div>
-
-        <!-- 错误信息 -->
-        <div v-if="step.status === 'error' && step.result" class="step-error">
-          {{ step.result }}
-        </div>
-
-        <!-- 工具特定结果可视化 -->
-        <div v-if="step.status === 'done' && step.type === 'toolCall'" class="step-result">
-          <!-- web_search/image_search 结果 -->
-          <ChainOfThoughtSearchResults
-            v-if="getSearchResults(step)"
-            :results="getSearchResults(step)!"
-            :max-visible="3"
-          />
-
-          <!-- bash 命令 CodeBlock -->
-          <CodeBlock
-            v-else-if="getBashCommand(step)"
-            language="bash"
-            :code="getBashCommand(step)!"
-            :show-line-numbers="false"
-          />
-
-          <!-- write_file/read_file artifact 点击 -->
-          <button
-            v-else-if="getArtifactPath(step)"
-            class="artifact-link"
-            @click="handleArtifactClick(getArtifactPath(step)!)"
-          >
-            <SvgIcon name="file-text" class="artifact-icon" />
-            <span class="artifact-path">{{ getArtifactPath(step) }}</span>
-            <SvgIcon name="external-link" class="external-icon" />
-          </button>
-        </div>
-      </div>
-    </div>
+    </template>
   </div>
 </template>
 

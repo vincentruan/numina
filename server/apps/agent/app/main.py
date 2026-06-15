@@ -134,6 +134,16 @@ app = FastAPI(
     redoc_url=None,
 )
 
+# CORS middleware for frontend → agent calls (suggestions endpoint)
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["POST", "OPTIONS"],
+    allow_headers=["X-Family-Id", "X-Agent-Token", "X-User-Id", "Content-Type"],
+)
+
 
 # Router imports after app definition — noqa: E402
 from apps.agent.app.routers import cache as cache_router  # noqa: E402
@@ -151,10 +161,12 @@ from apps.agent.routers import report as report_router  # noqa: E402
 from apps.agent.routers import sessions as sessions_router  # noqa: E402
 from apps.agent.routers import spending_leak as spending_leak_router  # noqa: E402
 from apps.agent.routers import suggest as suggest_router  # noqa: E402
+from apps.agent.routers import suggestions as suggestions_router  # noqa: E402
 from apps.agent.routers import time_machine as time_machine_router  # noqa: E402
 
 app.include_router(report_router.router)
 app.include_router(suggest_router.router)
+app.include_router(suggestions_router.router)
 app.include_router(alerts_router.router)
 app.include_router(disposal_router.router)
 app.include_router(liability_router.router)

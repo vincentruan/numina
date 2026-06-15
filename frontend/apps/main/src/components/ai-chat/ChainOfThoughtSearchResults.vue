@@ -6,6 +6,7 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 
@@ -39,7 +40,7 @@ function openResult(url: string) {
       class="result-item"
       @click="openResult(result.url)"
     >
-      <SvgIcon name="external-link" class="result-icon" />
+      <IIcon icon="external-link" class="result-icon" />
       <span class="result-title">{{ result.title || result.url }}</span>
     </div>
 

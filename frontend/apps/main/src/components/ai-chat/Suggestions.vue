@@ -13,7 +13,7 @@
 import { Button } from 'vant'
 import { useI18n } from 'vue-i18n'
 import SuggestionChip from './SuggestionChip.vue'
-import SvgIcon from '@/components/SvgIcon.vue'
+import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 
@@ -55,7 +55,7 @@ function getAnimationDelay(index: number): string {
       />
       <!-- 关闭按钮 -->
       <Button class="close-btn" size="small" plain @click="emit('hide')">
-        <SvgIcon name="x" />
+        <IIcon icon="x" />
       </Button>
     </div>
   </div>

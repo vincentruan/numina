@@ -226,8 +226,8 @@ async function doCreate() {
     selectedTemplateName.value = ''
     targetValueStr.value = ''
     deadlineLabel.value = ''
-  } catch (e: any) {
-    const msg = e?.response?.data?.message || e?.message || t('common.failed')
+  } catch (e: unknown) {
+    const msg = (e as { response?: { data?: { message?: string } }; message?: string })?.response?.data?.message || (e as Error).message || t('common.failed')
     showToast(msg)
   }
 }

@@ -18,6 +18,7 @@ import MarkdownContent from './MarkdownContent.vue'
 import ShimmerText from './ShimmerText.vue'
 import ShineBorder from './ShineBorder.vue'
 import FlipDisplay from './FlipDisplay.vue'
+import IIcon from '@/components/IIcon.vue'
 import { explainLastToolCallKey } from '@/utils/ai-chat/tool-explainer'
 import type { AIMessage } from '@/types/agent-stream'
 
@@ -54,21 +55,6 @@ const statusIcon = computed(() => {
       return 'x-circle'
     default:
       return 'loader'
-  }
-})
-
-// 状态颜色
-const statusColor = computed(() => {
-  if (!task.value) return 'var(--van-primary-color)'
-  switch (task.value.status) {
-    case 'completed':
-      return '#22c55e'
-    case 'failed':
-    case 'cancelled':
-    case 'timed_out':
-      return '#ef4444'
-    default:
-      return 'var(--van-primary-color)'
   }
 })
 
@@ -115,7 +101,7 @@ const showShineBorder = computed(
     <!-- 卡片头部 -->
     <div class="subtask-header" @click="collapsed = !collapsed">
       <!-- 任务图标 -->
-      <SvgIcon name="clipboard-list" class="task-icon" />
+      <IIcon icon="clipboard-list" class="task-icon" />
 
       <!-- 任务描述 -->
       <div class="task-description">
@@ -123,24 +109,24 @@ const showShineBorder = computed(
           v-if="task.status === 'in_progress' && props.isLoading"
           :text="task.description || t('aiChat.subtaskExecuting')"
           :duration="3"
+          :spread="3"
         />
         <span v-else class="description-text">{{ task.description }}</span>
       </div>
 
       <!-- 折叠时显示的状态摘要 -->
       <div v-if="collapsed" class="status-summary">
-        <SvgIcon
-          :name="statusIcon"
-          :class="['status-icon', { animate: task.status === 'in_progress' }]"
-          :style="{ color: statusColor }"
+        <IIcon
+          :icon="statusIcon"
+          :class="['status-icon', { animate: task.status === 'in_progress' }, `status-${task.status}`]"
         />
-        <span class="status-text" :style="{ color: statusColor }">
+        <span :class="['status-text', `status-${task.status}`]">
           {{ currentAction || statusLabel }}
         </span>
       </div>
 
       <!-- 展开/折叠图标 -->
-      <SvgIcon name="chevron-up" :class="['collapse-icon', { rotated: collapsed }]" />
+      <IIcon icon="chevron-up" :class="['collapse-icon', { rotated: collapsed }]" />
     </div>
 
     <!-- 卡片内容（展开时） -->
@@ -151,16 +137,16 @@ const showShineBorder = computed(
       </div>
 
       <!-- 运行中：当前动作 -->
-      <FlipDisplay v-if="task.status === 'in_progress' && currentAction" :unique-key="currentAction || ''">
+      <FlipDisplay v-if="task.status === 'in_progress' && currentAction" :unique-key="currentAction">
         <div class="action-section">
-          <SvgIcon name="loader" class="action-icon animate-spin" />
+          <IIcon icon="loader" class="action-icon animate-spin" />
           <span class="action-text">{{ currentAction }}</span>
         </div>
       </FlipDisplay>
 
       <!-- 完成：结果 -->
       <div v-if="task.status === 'completed'" class="result-section">
-        <SvgIcon name="check-circle" class="result-icon" style="color: #22c55e" />
+        <IIcon icon="check-circle" class="result-icon status-completed" />
         <span class="result-label">{{ t('aiChat.subtaskComplete') }}</span>
         <MarkdownContent
           v-if="task.result"
@@ -172,7 +158,7 @@ const showShineBorder = computed(
 
       <!-- 失败：错误信息 -->
       <div v-if="task.status === 'failed' || task.status === 'cancelled' || task.status === 'timed_out'" class="error-section">
-        <SvgIcon name="x-circle" class="error-icon" style="color: #ef4444" />
+        <IIcon icon="x-circle" class="error-icon status-failed" />
         <span class="error-label">{{ statusLabel }}</span>
         <div v-if="task.error" class="error-message">{{ task.error }}</div>
       </div>
@@ -242,6 +228,21 @@ const showShineBorder = computed(
   animation: spin 1s linear infinite;
 }
 
+/* Status color classes for dark mode WCAG AA compliance */
+.status-completed {
+  color: var(--color-success, #22c55e);
+}
+
+.status-failed,
+.status-cancelled,
+.status-timed_out {
+  color: var(--color-error, #ef4444);
+}
+
+.status-in_progress {
+  color: var(--van-primary-color);
+}
+
 .status-text {
   max-width: 200px;
   overflow: hidden;
@@ -302,7 +303,7 @@ const showShineBorder = computed(
 
 .result-label {
   font-size: 13px;
-  color: #22c55e;
+  color: var(--color-success, #22c55e);
 }
 
 .result-content {
@@ -322,7 +323,7 @@ const showShineBorder = computed(
 
 .error-label {
   font-size: 13px;
-  color: #ef4444;
+  color: var(--color-error, #ef4444);
 }
 
 .error-message {
@@ -330,7 +331,7 @@ const showShineBorder = computed(
   background: rgba(239, 68, 68, 0.1);
   border-radius: 6px;
   font-size: 12px;
-  color: #ef4444;
+  color: var(--color-error, #ef4444);
 }
 
 .usage-section {

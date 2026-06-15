@@ -11,12 +11,42 @@
  */
 
 import { ref, computed, readonly } from 'vue'
+import { useFamilyStore } from '@/stores/family'
 import type { Artifact } from '@/types/agent-stream'
 
 // 状态
 const artifacts = ref<Record<string, Artifact>>({})
 const selectedArtifact = ref<Artifact | null>(null)
 const open = ref(false)
+
+// 全局 artifact 内容缓存（5分钟 staleTime，最多 50 条）
+// 必须在模块级别，否则每次调用 useArtifactContent 都会重新创建 Map，缓存失效
+const ARTIFACT_CONTENT_CACHE = new Map<string, { content: string; timestamp: number }>()
+const ARTIFACT_CACHE_STALE_TIME = 5 * 60 * 1000 // 5 minutes
+const ARTIFACT_CACHE_MAX_SIZE = 50 // LRU eviction threshold
+
+/**
+ * 清理过期和超出大小的缓存条目
+ */
+function evictArtifactCache() {
+  const now = Date.now()
+  // 清理过期条目
+  for (const [key, entry] of ARTIFACT_CONTENT_CACHE.entries()) {
+    if (now - entry.timestamp >= ARTIFACT_CACHE_STALE_TIME) {
+      ARTIFACT_CONTENT_CACHE.delete(key)
+    }
+  }
+  // 如果仍然超出大小限制，删除最旧的条目
+  if (ARTIFACT_CONTENT_CACHE.size > ARTIFACT_CACHE_MAX_SIZE) {
+    const entries = Array.from(ARTIFACT_CONTENT_CACHE.entries())
+    // 按时间戳排序，删除最旧的
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp)
+    const toDelete = entries.slice(0, ARTIFACT_CONTENT_CACHE.size - ARTIFACT_CACHE_MAX_SIZE)
+    for (const [key] of toDelete) {
+      ARTIFACT_CONTENT_CACHE.delete(key)
+    }
+  }
+}
 
 /**
  * Artifacts Context Composable
@@ -130,17 +160,36 @@ export function useArtifacts() {
 }
 
 /**
+ * 清除全局 artifact 内容缓存（session 结束时调用）
+ */
+export function clearArtifactContentCache() {
+  ARTIFACT_CONTENT_CACHE.clear()
+}
+
+/**
  * 加载 Artifact 内容
  *
  * 参考: frontend/src/core/artifacts/loader.ts loadArtifactContent()
  */
 export async function loadArtifactContent(filepath: string, sessionId: string): Promise<string> {
+  // P0: Prevent path traversal - reject any path containing .. or starting with /
+  if (filepath.includes('..') || filepath.startsWith('/')) {
+    throw new Error(`Invalid artifact path: ${filepath}`)
+  }
+
   const encodedPath = encodeURIComponent(filepath)
-  const url = `/api/sessions/${sessionId}/artifacts/${encodedPath}`
+  const url = `/api/v1/ai/sessions/${sessionId}/artifacts/${encodedPath}`
+  const familyStore = useFamilyStore()
+  const familyId = familyStore.currentFamily?.id
+
+  // P0: Guard - must have valid family context for tenant isolation
+  if (!familyId) {
+    throw new Error('No family context - cannot load artifact')
+  }
 
   const response = await fetch(url, {
     headers: {
-      'X-Family-Id': localStorage.getItem('currentFamilyId') || '',
+      'X-Family-Id': familyId,
     },
   })
 
@@ -166,14 +215,10 @@ export function useArtifactContent(filepath: string, sessionId: string) {
   // 缓存 key
   const cacheKey = `${sessionId}:${filepath}`
 
-  // 全局缓存（5分钟 staleTime）
-  const contentCache = new Map<string, { content: string; timestamp: number }>()
-  const STALE_TIME = 5 * 60 * 1000 // 5 minutes
-
   async function load() {
-    // 检查缓存
-    const cached = contentCache.get(cacheKey)
-    if (cached && Date.now() - cached.timestamp < STALE_TIME) {
+    // 检查模块级缓存
+    const cached = ARTIFACT_CONTENT_CACHE.get(cacheKey)
+    if (cached && Date.now() - cached.timestamp < ARTIFACT_CACHE_STALE_TIME) {
       content.value = cached.content
       return
     }
@@ -184,7 +229,9 @@ export function useArtifactContent(filepath: string, sessionId: string) {
     try {
       const result = await loadArtifactContent(filepath, sessionId)
       content.value = result
-      contentCache.set(cacheKey, { content: result, timestamp: Date.now() })
+      // 添加前执行 LRU eviction
+      evictArtifactCache()
+      ARTIFACT_CONTENT_CACHE.set(cacheKey, { content: result, timestamp: Date.now() })
     } catch (e) {
       error.value = e instanceof Error ? e.message : '加载失败'
     } finally {

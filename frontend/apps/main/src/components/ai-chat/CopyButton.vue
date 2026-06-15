@@ -5,6 +5,8 @@
  * 简化的复制按钮，用于复制文本内容
  */
 import { showToast } from 'vant'
+import i18n from '@/i18n'
+import IIcon from '@/components/IIcon.vue'
 
 const props = defineProps<{
   content: string
@@ -12,13 +14,13 @@ const props = defineProps<{
 
 function handleCopy() {
   navigator.clipboard.writeText(props.content)
-  showToast('✅ 已复制')
+  showToast(i18n.global.t('aiChat.copiedSuccess'))
 }
 </script>
 
 <template>
   <button class="copy-button" @click="handleCopy">
-    <SvgIcon name="copy" class="copy-icon" />
+    <IIcon icon="copy" class="copy-icon" />
   </button>
 </template>
 

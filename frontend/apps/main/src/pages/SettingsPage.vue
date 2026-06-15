@@ -7,13 +7,10 @@
       <van-cell
         :title="t('family.familyName')"
         :value="familyStore.family?.custom_title || familyStore.family?.name"
+        icon="home-o"
         :is-link="authStore.user?.role === 'owner'"
         @click="onEditFamilyTitle"
-      >
-        <template #icon>
-          <van-icon name="home-o" class="cell-icon" />
-        </template>
-      </van-cell>
+      />
       <van-cell :title="t('settings.currentUser')" :value="authStore.user?.display_name">
         <template #icon>
           <UserIcon :size="16" class="cell-icon" />
@@ -24,11 +21,7 @@
           <UsernameIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')">
-        <template #icon>
-          <van-icon name="medal-o" class="cell-icon" />
-        </template>
-      </van-cell>
+      <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" icon="medal-o" />
     </van-cell-group>
 
     <!-- 外观与偏好 -->
@@ -38,10 +31,7 @@
           <ThemeIcon :size="16" class="cell-icon" />
         </template>
       </van-cell>
-      <van-cell :title="t('settings.themeColor')" is-link @click="showThemeColorPicker = true">
-        <template #icon>
-          <van-icon name="diamond-o" class="cell-icon" />
-        </template>
+      <van-cell :title="t('settings.themeColor')" icon="diamond-o" is-link @click="showThemeColorPicker = true">
         <template #value>
           <span class="theme-color-preview" :style="{ backgroundColor: currentThemeColor }"></span>
         </template>

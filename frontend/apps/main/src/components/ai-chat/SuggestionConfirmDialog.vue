@@ -15,9 +15,8 @@
  * - t.inputBox.followupConfirmReplace: "替换并发送"
  * - t.common.cancel: "取消"
  */
-import { computed } from 'vue'
-import { Dialog, Button } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { Dialog, Button } from 'vant'
 
 const { t } = useI18n()
 
@@ -32,16 +31,6 @@ const emit = defineEmits<{
   append: []
   replace: []
 }>()
-
-// 预览文本（追加模式）
-const appendPreview = computed(() =>
-  props.currentInput.trim()
-    ? `${props.currentInput.trim()}\n${props.suggestion}`
-    : props.suggestion
-)
-
-// 预览文本（替换模式）
-const replacePreview = computed(() => props.suggestion)
 
 function handleAppend() {
   emit('append')

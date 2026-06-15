@@ -321,6 +321,9 @@ class Orchestrator:
         free_text: str | None = None,
         enable_thinking_override: bool | None = None,
         web_search: bool = False,
+        # DeerFlow execution mode parameters (Phase 2)
+        is_plan_mode: bool = False,
+        subagent_enabled: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Stream structured NDJSON events for a capability request."""
         try:
@@ -333,6 +336,9 @@ class Orchestrator:
                 free_text=free_text,
                 enable_thinking_override=enable_thinking_override,
                 web_search=web_search,
+                # DeerFlow execution mode parameters (Phase 2)
+                is_plan_mode=is_plan_mode,
+                subagent_enabled=subagent_enabled,
             ):
                 yield event_line
         except Exception as e:
@@ -350,6 +356,9 @@ class Orchestrator:
         free_text: str | None = None,
         enable_thinking_override: bool | None = None,
         web_search: bool = False,
+        # DeerFlow execution mode parameters (Phase 2)
+        is_plan_mode: bool = False,
+        subagent_enabled: bool = False,
     ) -> AsyncGenerator[str, None]:
         """Normalize DeerFlow output into the AgentEvent NDJSON contract."""
         builder = EventStreamBuilder(capability, task_id)
@@ -464,6 +473,9 @@ class Orchestrator:
                         web_search=web_search,
                         enable_thinking=("deep_thinking" in selected_caps and bool(enable_thinking_override)),
                         caller_user_id=user_id,
+                        # DeerFlow execution mode parameters (Phase 2)
+                        is_plan_mode=is_plan_mode,
+                        subagent_enabled=subagent_enabled,
                     ):
                         async for event_line in self._chunk_to_event_lines(
                             builder, chunk, answer_parts, family_id, effective_thread_id,

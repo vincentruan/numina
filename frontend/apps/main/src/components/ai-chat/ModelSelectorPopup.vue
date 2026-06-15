@@ -12,6 +12,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Popup, Search, Cell, CellGroup, Tag } from 'vant'
+import IIcon from '@/components/IIcon.vue'
 import type { ModelInfo } from '@/composables/ai-chat/useTenantAiResources'
 
 const { t } = useI18n()
@@ -64,7 +65,7 @@ function getCapabilityTags(model: ModelInfo): string[] {
       <div class="popup-header">
         <span class="popup-title">{{ t('model.selectTitle') }}</span>
         <button class="close-btn" @click="emit('update:show', false)">
-          <SvgIcon name="x" />
+          <IIcon icon="x" />
         </button>
       </div>
 
@@ -98,9 +99,9 @@ function getCapabilityTags(model: ModelInfo): string[] {
                 {{ tag }}
               </Tag>
             </div>
-            <SvgIcon
+            <IIcon
               v-if="currentModel === model.name"
-              name="check"
+              icon="check"
               class="check-icon"
             />
           </template>
@@ -109,7 +110,7 @@ function getCapabilityTags(model: ModelInfo): string[] {
 
       <!-- 空状态 -->
       <div v-if="filteredModels.length === 0" class="empty-state">
-        <SvgIcon name="search-x" class="empty-icon" />
+        <IIcon icon="search-x" class="empty-icon" />
         <span class="empty-text">{{ t('model.notFound') }}</span>
       </div>
     </div>

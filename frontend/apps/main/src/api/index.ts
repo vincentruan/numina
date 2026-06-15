@@ -176,8 +176,12 @@ http.interceptors.response.use(
         onRefreshFailed(refreshError)
         clearAuth()
         router.push('/login')
-        const re = refreshError as { response?: { data?: { code?: string; message?: string; detail?: string } } }
-        showToast(resolveErrorMsg(re.response?.data?.code, re.response?.data?.message || re.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+        // Safe type narrowing with axios.isAxiosError()
+        if (axios.isAxiosError(refreshError)) {
+          showToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+        } else {
+          showToast(t('errors.AUTH_REFRESH_FAILED'))
+        }
         return Promise.reject(refreshError)
       } finally {
         isRefreshing = false
@@ -251,8 +255,12 @@ export async function refreshTokenIfNeeded(): Promise<void> {
     onRefreshFailed(refreshError)
     clearAuth()
     router.push('/login')
-    const re = refreshError as { response?: { data?: { code?: string; message?: string; detail?: string } } }
-    showToast(resolveErrorMsg(re.response?.data?.code, re.response?.data?.message || re.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+    // Safe type narrowing with axios.isAxiosError()
+    if (axios.isAxiosError(refreshError)) {
+      showToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+    } else {
+      showToast(t('errors.AUTH_REFRESH_FAILED'))
+    }
     throw refreshError
   } finally {
     isRefreshing = false

@@ -204,6 +204,9 @@ async def stream_agent_dispatch(
     enable_thinking: bool = False,
     web_search: bool = False,
     reasoning_effort: str | None = None,
+    # DeerFlow execution mode parameters (Phase 2)
+    is_plan_mode: bool = False,
+    subagent_enabled: bool = False,
 ) -> AsyncGenerator[str, None]:
     """Agent-first execution entry point. Streams NDJSON events."""
     t_start = time.monotonic()
@@ -452,6 +455,9 @@ async def stream_agent_dispatch(
             "thread_id": thread_id,
             "app_config": app_config_obj,
             "user_id": user_id,
+            # DeerFlow execution mode parameters (Phase 2)
+            "is_plan_mode": is_plan_mode,
+            "subagent_enabled": subagent_enabled,
         }
     }
 

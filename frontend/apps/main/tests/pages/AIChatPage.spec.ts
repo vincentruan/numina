@@ -109,6 +109,22 @@ function streamReaderFromText(text: string) {
 
 // Common stubs for DeerFlow ai-chat components
 const deerflowComponentStubs = {
+  // Core component stub
+  SvgIcon: { template: '<span class="svg-icon">icon</span>', props: ['name', 'size', 'color'] },
+  // DeerFlow input components
+  InputBox: {
+    template: '<div class="input-box"><slot /></div>',
+    props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName'],
+  },
+  ModeSelector: {
+    template: '<button class="mode-selector" @click="$emit(\'select\', \'pro\')">{{ currentMode }}</button>',
+    props: ['currentMode', 'supportsThinking', 'ultraDisabled'],
+    emits: ['select'],
+  },
+  ModelSelectorPopup: {
+    template: '<div class="model-selector-popup"><slot /></div>',
+    props: ['show', 'models', 'currentModel'],
+  },
   ChainOfThought: { template: '<div class="chain-of-thought"><slot /></div>' },
   // MessageGroup stub must render the group prop content to verify messages
   MessageGroup: {
@@ -124,7 +140,7 @@ const deerflowComponentStubs = {
   ChatMessage: { template: '<div class="chat-message"><slot /></div>', props: ['message', 'isLoading'] },
   SubtaskCard: { template: '<div class="subtask-card">{{ $props.taskId }}</div>', props: ['taskId', 'isLoading'] },
   ArtifactFileList: { template: '<div class="artifact-file-list"><slot /></div>', props: ['artifacts', 'sessionId'] },
-  ArtifactPreviewPopup: { template: '<div class="artifact-preview"><slot /></div>', props: ['show', 'artifact', 'threadId'] },
+  ArtifactPreviewPopup: { template: '<div class="artifact-preview"><slot /></div>', props: ['show', 'artifact', 'sessionId'] },
   Suggestions: { template: '<div class="suggestions"><slot /></div>', props: ['suggestions', 'loading', 'hidden'] },
   MarkdownContent: { template: '<div class="markdown-content">{{ $props.content }}</div>', props: ['content', 'isLoading'] },
   AssistantMessage: { template: '<div class="assistant-message"><slot /></div>', props: ['id', 'content', 'phase', 'displayTime', 'suggestions', 'feedback'] },
@@ -167,11 +183,11 @@ describe('AIChatPage tool events', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName'],
+            emits: ['submit', 'stop', 'contextChange'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'净资产\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },
@@ -220,12 +236,12 @@ describe('AIChatPage tool events', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue', 'mode'],
-            emits: ['update:modelValue', 'submit', 'update:mode'],
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName'],
+            emits: ['submit', 'stop', 'contextChange'],
             template:
-              '<button class="chat-input" @click="$emit(\'update:mode\', \'smart\'); $emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
+              '<button class="chat-input" @click="$emit(\'submit\', { text: \'净资产\', model_name: \'test\', mode: \'pro\', thinking_enabled: true, is_plan_mode: true, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },
@@ -270,11 +286,11 @@ describe('AIChatPage artifact registry', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'生成报告\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'生成报告\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
           AiArtifactBadge: {
@@ -306,7 +322,7 @@ describe('AIChatPage artifact registry', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
           VanPopup: { template: '<div><slot /></div>' },
           AiArtifactBadge: {
             template: '<button v-if="$props.count > 0" class="artifact-badge">{{ $props.count }}</button>',
@@ -330,7 +346,7 @@ describe('AIChatPage artifact registry', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
           VanPopup: { template: '<div><slot /></div>' },
           AiArtifactBadge: {
             template: '<button class="artifact-badge" @click="$emit(\'tap\')">1</button>',
@@ -370,7 +386,7 @@ describe('AIChatPage artifact registry', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -401,7 +417,7 @@ describe('AIChatPage artifact registry', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -439,7 +455,7 @@ describe('AIChatPage artifact registry', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -470,7 +486,7 @@ describe('AIChatPage artifact registry', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -507,7 +523,7 @@ describe('AIChatPage artifact registry', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -552,11 +568,11 @@ describe('AIChatPage artifact registry', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'生成报告\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'生成报告\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
           AiArtifactBadge: {
@@ -618,7 +634,7 @@ describe('AIChatPage history reconstruction (U6)', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -657,7 +673,7 @@ describe('AIChatPage history reconstruction (U6)', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -691,7 +707,7 @@ describe('AIChatPage history reconstruction (U6)', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -732,7 +748,7 @@ describe('AIChatPage history reconstruction (U6)', () => {
         plugins: [pinia],
         stubs: {
           ...deerflowComponentStubs,
-          AIChatInput: { template: '<div></div>' },
+          InputBox: { template: '<button class="chat-input">send</button>' },
         },
       },
     })
@@ -775,11 +791,11 @@ describe('AIChatPage filterAIContent integration', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'净资产\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },
@@ -823,11 +839,11 @@ describe('AIChatPage filterAIContent integration', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'test\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'test\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },
@@ -867,11 +883,11 @@ describe('AIChatPage filterAIContent integration', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'净资产\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'净资产\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },
@@ -911,11 +927,11 @@ describe('AIChatPage filterAIContent integration', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'test\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'test\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },
@@ -956,11 +972,11 @@ describe('AIChatPage filterAIContent integration', () => {
       global: {
         plugins: [pinia],
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue'],
-            emits: ['update:modelValue', 'submit'],
-            template: '<button class="chat-input" @click="$emit(\'update:modelValue\', \'test\'); $emit(\'submit\')">send</button>',
+          InputBox: {
+            name: 'InputBox',
+            props: ['status', 'isWelcomeMode', 'threadId'],
+            emits: ['submit', 'stop'],
+            template: '<button class="chat-input" @click="$emit(\'submit\', { text: \'test\', model_name: \'test\', mode: \'pro\', thinking_enabled: false, is_plan_mode: false, subagent_enabled: false, reasoning_effort: \'medium\' })">send</button>',
           },
           VanPopup: { template: '<div><slot /></div>' },
         },

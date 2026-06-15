@@ -13,6 +13,7 @@
 import { ref, computed } from 'vue'
 import { Popup, Cell, CellGroup } from 'vant'
 import { useI18n } from 'vue-i18n'
+import IIcon from '@/components/IIcon.vue'
 import type { InputMode } from '@/types/ai-chat/input-mode'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 
@@ -68,7 +69,7 @@ function getModeDescription(mode: InputMode): string {
     :class="currentMode"
     @click="popupOpen = true"
   >
-    <SvgIcon :name="getModeIcon(currentMode)" class="mode-icon" />
+    <IIcon :icon="getModeIcon(currentMode)" class="mode-icon" />
     <span class="mode-label">{{ getModeLabel(currentMode) }}</span>
   </button>
 
@@ -95,12 +96,12 @@ function getModeDescription(mode: InputMode): string {
           @click="onSelect(config.mode)"
         >
           <template #icon>
-            <SvgIcon :name="config.icon" class="cell-icon" />
+            <IIcon :icon="config.icon" class="cell-icon" />
           </template>
           <template #right-icon>
-            <SvgIcon
+            <IIcon
               v-if="currentMode === config.mode"
-              name="check"
+              icon="check"
               class="check-icon"
             />
           </template>
