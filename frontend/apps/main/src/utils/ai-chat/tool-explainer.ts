@@ -5,7 +5,7 @@
  *
  * 从 AIMessage 的 tool_calls 中提取最后一个工具调用的说明
  */
-import type { AIMessage } from '@/types/agent-stream'
+import type { ChatMessage } from '@/types/ai-chat/message-group'
 import { getToolDisplayNameKey } from './tool-icon-map'
 
 /**
@@ -15,7 +15,7 @@ import { getToolDisplayNameKey } from './tool-icon-map'
  *
  * @returns { key, params } 或 null
  */
-export function explainLastToolCallKey(message: AIMessage): { key: string; params?: Record<string, string> } | null {
+export function explainLastToolCallKey(message: ChatMessage): { key: string; params?: Record<string, string> } | null {
   if (!message.tool_calls?.length) return null
 
   const lastToolCall = message.tool_calls[message.tool_calls.length - 1]

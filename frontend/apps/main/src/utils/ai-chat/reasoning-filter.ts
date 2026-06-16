@@ -110,7 +110,7 @@ export function extractReasoningContentFromMessage(message: {
   // Anthropic gateway thinking block
   if (Array.isArray(message.content)) {
     for (const part of message.content) {
-      if (part && typeof part === 'object' && part.type === 'thinking') {
+      if (part && typeof part === 'object' && (part as { type?: string }).type === 'thinking') {
         return (part as { thinking?: string }).thinking as string
       }
     }

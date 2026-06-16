@@ -32,14 +32,14 @@ import {
  * 检查是否有工具调用
  */
 export function hasToolCalls(message: ChatMessage): boolean {
-  return message.type === 'ai' && message.tool_calls?.length > 0
+  return message.type === 'ai' && (message.tool_calls?.length ?? 0) > 0
 }
 
 /**
  * 检查是否为 present_files 工具
  */
 export function hasPresentFiles(message: ChatMessage): boolean {
-  return message.type === 'ai' && message.tool_calls?.some(tc => tc.name === 'present_files')
+  return message.type === 'ai' && (message.tool_calls?.some(tc => tc.name === 'present_files') ?? false)
 }
 
 /**

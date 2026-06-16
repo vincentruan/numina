@@ -62,10 +62,8 @@ test.describe('DeerFlow parity: welcome state', () => {
     await page.goto('/ai/chat')
     await page.waitForLoadState('domcontentloaded')
 
-    // Send button should be disabled when no text
-    const sendButton = page.getByRole('button', { name: '发送' }).or(
-      page.locator('button[disabled]').filter({ hasText: '发送' })
-    )
+    // Send button should be disabled when no text - it's an icon button in the input row
+    const sendButton = page.locator('.input-row .submit-btn[disabled]')
     await expect(sendButton).toBeDisabled()
   })
 })

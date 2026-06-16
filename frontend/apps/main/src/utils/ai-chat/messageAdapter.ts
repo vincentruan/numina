@@ -67,7 +67,7 @@ export interface ProcessStep {
   icon?: string
   toolType?: string
   args?: Record<string, unknown>
-  status?: 'pending' | 'running' | 'streaming' | 'done' | 'error'
+  status?: 'pending' | 'running' | 'streaming' | 'done' | 'error' | 'failed'
   resultSummary?: string
   error?: string
   elapsedMs?: number
@@ -245,6 +245,14 @@ export function toDeerFlowChatMessages(messages: LegacyMessage[]): ChatMessage[]
  *
  * 用于在组件中访问 processSteps 等字段
  */
-export function extractLegacyFields(chatMsg: ChatMessage): LegacyMessage['_legacy'] | undefined {
-  return chatMsg.additional_kwargs?.['_legacy'] as LegacyMessage['_legacy'] | undefined
+export function extractLegacyFields(chatMsg: ChatMessage): { processSteps?: ProcessStep[]; planSteps?: PlanStep[]; planSource?: 'explicit' | 'inferred' | null; processElapsedMs?: number; reasoningStartTime?: number | null } | undefined {
+  const legacy = chatMsg.additional_kwargs?.['_legacy']
+  if (!legacy) return undefined
+  return {
+    processSteps: legacy.processSteps as ProcessStep[] | undefined,
+    planSteps: legacy.planSteps as PlanStep[] | undefined,
+    planSource: legacy.planSource as 'explicit' | 'inferred' | null | undefined,
+    processElapsedMs: legacy.processElapsedMs as number | undefined,
+    reasoningStartTime: legacy.reasoningStartTime as number | null | undefined,
+  }
 }

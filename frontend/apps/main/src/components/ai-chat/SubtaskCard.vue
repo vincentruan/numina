@@ -20,7 +20,7 @@ import ShineBorder from './ShineBorder.vue'
 import FlipDisplay from './FlipDisplay.vue'
 import IIcon from '@/components/IIcon.vue'
 import { explainLastToolCallKey } from '@/utils/ai-chat/tool-explainer'
-import type { AIMessage } from '@/types/agent-stream'
+import type { ChatMessage } from '@/types/ai-chat/message-group'
 
 const { t } = useI18n()
 
@@ -78,7 +78,7 @@ const statusLabel = computed(() => {
 // 当前动作说明（从 latestMessage 提取）
 const currentAction = computed(() => {
   if (!task.value?.latestMessage) return null
-  const result = explainLastToolCallKey(task.value.latestMessage as AIMessage)
+  const result = explainLastToolCallKey(task.value.latestMessage as ChatMessage)
   if (!result) return null
   return t(result.key, result.params)
 })

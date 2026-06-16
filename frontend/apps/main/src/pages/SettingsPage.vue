@@ -291,7 +291,7 @@ async function onToggleAI(val: boolean) {
     await aiStore.fetchConfigs()
     showToast({
       message: val ? t('toast.aiEnabled') : t('toast.aiDisabled'),
-      icon: () => h(SvgIcon, { name: 'robot', size: 20 }),
+      icon: 'none',
     })
   } catch {
     showToast(t('toast.operationFailed2'))
