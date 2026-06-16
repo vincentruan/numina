@@ -67,7 +67,13 @@
     </div>
 
     <!-- History sidebar drawer -->
-    <van-popup v-model:show="showHistory" position="left" :style="{ width: '66%', height: '100%' }">
+    <van-popup
+      v-model:show="showHistory"
+      position="left"
+      :style="{ width: '66%', height: '100%' }"
+      :destroy-on-close="true"
+      :close-on-click-overlay="true"
+    >
       <div class="history-panel">
         <div class="history-header">
           <button class="header-btn" :aria-label="t('aiChat.backAria')" @click="showHistory = false">

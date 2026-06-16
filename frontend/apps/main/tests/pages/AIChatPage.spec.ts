@@ -16,8 +16,8 @@ interface AIChatPageVM {
   asking: boolean
 }
 
-const { sendChatEventStream } = vi.hoisted(() => ({
-  sendChatEventStream: vi.fn(),
+const { sendChatMessageStream } = vi.hoisted(() => ({
+  sendChatMessageStream: vi.fn(),
 }))
 
 const { streamSessionEvents } = vi.hoisted(() => ({
@@ -39,7 +39,7 @@ vi.mock('vue-router', async (importOriginal) => {
 })
 
 vi.mock('../../src/api/ai', () => ({
-  sendChatEventStream,
+  sendChatMessageStream,
   getAIConfig: vi.fn(() => Promise.resolve({ data: { ai_enabled: true } })),
   getChatHistory: vi.fn(() => Promise.resolve({ data: [] })),
   clearChatHistory: vi.fn(() => Promise.resolve()),
@@ -161,11 +161,11 @@ const deerflowComponentStubs = {
 describe('AIChatPage tool events', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    sendChatEventStream.mockReset()
+    sendChatMessageStream.mockReset()
   })
 
   it('renders tool call and result cards from stream events', async () => {
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"tool.call","tool":{"id":"tool-1","name":"asset_search","display_name":"资产查询","icon":"search","arguments":{"query":"房产"}}}\n' +
           '{"id":"2","type":"tool.result","tool_id":"tool-1","result":{"success":true,"summary":"找到 2 条","execution_time_ms":24}}\n' +
@@ -216,7 +216,7 @@ describe('AIChatPage tool events', () => {
   })
 
   it('renders connection, thinking, and final answer phases from stream events', async () => {
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"phase.connecting","phase":"connecting"}\n' +
           '{"id":"2","type":"phase.thinking","phase":"thinking"}\n' +
@@ -264,12 +264,12 @@ describe('AIChatPage tool events', () => {
 describe('AIChatPage artifact registry', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    sendChatEventStream.mockReset()
+    sendChatMessageStream.mockReset()
     vi.clearAllMocks()
   })
 
   it('extracts artifact from tool result and shows badge', async () => {
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"tool.call","tool":{"id":"tool-1","name":"get_report","display_name":"获取报告","icon":"📊","arguments":{}}}\n' +
           '{"id":"2","type":"tool.result","tool_id":"tool-1","result":{"success":true,"summary":"报告已生成: https://example.com/report.pdf","execution_time_ms":100}}\n' +
@@ -549,7 +549,7 @@ describe('AIChatPage artifact registry', () => {
   })
 
   it('deduplicates artifacts by sourceStepId', async () => {
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"tool.call","tool":{"id":"tool-1","name":"get_report","display_name":"获取报告","icon":"📊","arguments":{}}}\n' +
           '{"id":"2","type":"tool.result","tool_id":"tool-1","result":{"success":true,"summary":"报告: https://example.com/report.pdf","execution_time_ms":100}}\n' +
@@ -596,7 +596,7 @@ describe('AIChatPage artifact registry', () => {
 describe('AIChatPage history reconstruction (U6)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    sendChatEventStream.mockReset()
+    sendChatMessageStream.mockReset()
     streamSessionEvents.mockReset()
     vi.clearAllMocks()
   })
@@ -768,12 +768,12 @@ describe('AIChatPage history reconstruction (U6)', () => {
 describe('AIChatPage filterAIContent integration', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    sendChatEventStream.mockReset()
+    sendChatMessageStream.mockReset()
   })
 
   it('filters forbidden XML tags from streaming token output', async () => {
     // Stream forbidden content that should be filtered
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
           '{"id":"2","type":"token.stream","token":"根据查询结果，<system_instructions>你是助手，以下是系统指令</system_instructions>","is_thinking":false}\n' +
@@ -821,7 +821,7 @@ describe('AIChatPage filterAIContent integration', () => {
     const userContextJson = JSON.stringify({ family_id: '123', tenantId: '456' })
     const tokenContent = `User Context: ${userContextJson}\n`
 
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
           `{"id":"2","type":"token.stream","token":"${tokenContent}","is_thinking":false}\n` +
@@ -865,7 +865,7 @@ describe('AIChatPage filterAIContent integration', () => {
   })
 
   it('filters repeated user question pattern', async () => {
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
           '{"id":"2","type":"token.stream","token":"你问的是：我们家净资产是多少？\\n","is_thinking":false}\n' +
@@ -907,7 +907,7 @@ describe('AIChatPage filterAIContent integration', () => {
   })
 
   it('handles multiple forbidden patterns in single stream', async () => {
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
           '{"id":"2","type":"token.stream","token":"<user_question>原始问题</user_question>","is_thinking":false}\n' +
@@ -955,7 +955,7 @@ describe('AIChatPage filterAIContent integration', () => {
 
   it('preserves normal markdown content through filter', async () => {
     const markdownContent = '# 标题\\n\\n**加粗** 和 `代码`\\n\\n- 列表项'
-    sendChatEventStream.mockResolvedValue(
+    sendChatMessageStream.mockResolvedValue(
       streamReaderFromText(
         '{"id":"1","type":"phase.answering","phase":"answering"}\n' +
           '{"id":"2","type":"token.stream","token":"' + markdownContent + '","is_thinking":false}\n' +
