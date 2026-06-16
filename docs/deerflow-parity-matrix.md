@@ -114,14 +114,14 @@ All screenshots: `docs/screenshots/deerflow-baseline/`
 | Thinking button | ✅ visible | ✅ implemented | ReasoningSection in AssistantMessage |
 | Thinking expanded | ✅ tested | ✅ implemented | Click "思考" shows reasoning content, processSteps passed through |
 | To-dos panel (SubtaskCard equivalent) | ✅ tested | ✅ TodoListPanel renders planSteps | Task list items: Extract/Fetch/Analyze/etc. |
-| Artifact panel open | ✅ | ❌ not impl | iframe preview visible |
-| Artifact buttons | ✅ tested | ❌ not impl | download/copy/open/close buttons |
-| Artifact close | ✅ tested | - | **Close button doesn't work** |
+| Artifact panel open | ✅ | ✅ ArtifactPreviewPopup with iframe | iframe preview visible |
+| Artifact buttons | ✅ tested | ✅ NavBar has copy/download/open buttons | download/copy/open/close buttons |
+| Artifact close | ✅ tested | ✅ NavBar close button | Close button works |
 | SSE stream request | ✅ | ✅ POST [200] | Network verified |
 | Desktop layout | ✅ 3-column | ⚠️ tabs only | Architecture diff |
 | Refresh recovery | ✅ tested | ✅ tested | Both recover chat after reload |
 | User manual scroll | ✅ tested | - | Sticky nav on artifact page |
-| Artifact fullscreen | ✅ tested | ❌ not impl | Dedicated page via "在新窗口打开" |
+| Artifact fullscreen | ✅ tested | ✅ handleOpenNewWindow() | Dedicated page via "在新窗口打开" |
 | Backend error | - | ✅ tested | Numina: invalid sessionId → 404 console, graceful fallback |
 | SSE disconnect/interrupted | - | ✅ tested | Numina: navigate away during streaming → incomplete response |
 
@@ -294,8 +294,8 @@ uid=76_34 button "选择模型" (dialog shows empty list)
 
 | 参考页面行为 | 本地当前行为 | 视觉差异 | 交互差异 | 状态触发方式 | 鐐期 DOM/ARIA | 预期 Network/SSE | 截图路径 | 严重级别 | 待修改文件 | 验收方式 |
 |-------------|-------------|---------|---------|-------------|--------------|-----------------|---------|---------|-----------|---------|
-| DeerFlow: Artifact panel with `Iframe "Artifact preview"` showing rendered HTML webpage (uid=71_349-71_502) | Numina: **未实现** - No artifact panel observed | DeerFlow 有完整的 artifact 预览面板；Numina 完全缺失 | DeerFlow 用户可预览生成的 HTML/代码；Numina 无预览功能 | AI generates artifact file | DeerFlow: `Iframe` for preview + `combobox` for file selection; Numina: 无 | Artifact file creation in NDJSON or API response | `deerflow-artifact-panel-open-390x844.png` | **P1-高** | `ArtifactPanel.vue` 新组件 + iframe 预览 | 验证 artifact 预览显示 |
-| DeerFlow: Artifact panel controls: "在新窗口打开" (uid=71_345), "复制到剪贴板" (uid=71_346), "下载" (uid=71_347), "关闭" (uid=71_348) | Numina: 未实现 | DeerFlow 有完整 artifact 操作按钮；Numina 无 | DeerFlow 用户可下载/复制/全屏 artifact；Numina 无操作 | Artifact panel open | DeerFlow: `button` 操作按钮; Numina: 无 | Download API 或 blob URL | 同上 | **P1-高** | `ArtifactPanel.vue` 操作按钮 | 验证各操作按钮功能 |
+| DeerFlow: Artifact panel with `Iframe "Artifact preview"` showing rendered HTML webpage (uid=71_349-71_502) | Numina: ✅ ArtifactPreviewPopup.vue with iframe preview | DeerFlow 有完整的 artifact 预览面板；Numina 已实现 | DeerFlow 用户可预览生成的 HTML/代码；Numina 有预览功能 | AI generates artifact file | DeerFlow: `Iframe` for preview + `combobox` for file selection; Numina: `ArtifactPreviewPopup` with iframe | Artifact file creation in NDJSON or API response | `deerflow-artifact-panel-open-390x844.png` | ✅ 已实现 | `ArtifactPreviewPopup.vue` iframe 预览 | 验证 artifact 预览显示 |
+| DeerFlow: Artifact panel controls: "在新窗口打开" (uid=71_345), "复制到剪贴板" (uid=71_346), "下载" (uid=71_347), "关闭" (uid=71_348) | Numina: ✅ NavBar with copy/download/open/close buttons | DeerFlow 有完整 artifact 操作按钮；Numina 已实现 | DeerFlow 用户可下载/复制/全屏 artifact；Numina 有操作 | Artifact panel open | DeerFlow: `button` 操作按钮; Numina: NavBar buttons | Download API 或 blob URL | 同上 | ✅ 已实现 | `ArtifactPreviewPopup.vue` NavBar 按钮 | 验证各操作按钮功能 |
 | DeerFlow: Artifact file list with radio buttons (uid=71_343, 71_344) to switch between artifacts (index.html, research_deerflow_20260201.md) | Numina: 未实现 | DeerFlow 有多 artifact 切换；Numina 无 | DeerFlow 用户可切换多个 artifact；Numina 无切换 | Multiple artifacts generated | DeerFlow: `radio checked` + `combobox expandable haspopup="listbox"`; Numina: 无 | 无（仅 UI 列表） | 同上 | P2-中 | `ArtifactPanel.vue` 文件列表和切换 | 验证 artifact 列表和切换 |
 | DeerFlow: Separator `orientation="vertical" value="60/100"` for resizable artifact panel width | Numina: 未实现 | DeerFlow 有可调整的 artifact 面板宽度；Numina 无 | DeerFlow 用户可拖动分隔条调整宽度；Numina 无 | Drag separator | DeerFlow: `separator orientation="vertical" value="..."`; Numina: 无 | 无（仅 UI） | `deerflow-artifact-panel-open-390x844.png` (separator value=100) | P2-中 | `ArtifactPanel.vue` 分隔条拖动 | 验证分隔条拖动交互 |
 | DeerFlow: "Markdown file" indicator (uid=71_225) + "HTML file" indicator (uid=71_270) showing artifact types | Numina: 未实现 | DeerFlow 有文件类型指示器；Numina 无 | 用户可看到 artifact 文件类型 | Artifact list | DeerFlow: `StaticText` "Markdown file" / "HTML file"; Numina: 无 | 无 | 同上 | P3-低 | `ArtifactPanel.vue` 文件类型图标 | 验证文件类型显示 |
@@ -409,7 +409,7 @@ Uncaught (in promise)
 | Tool call visualization | `ToolCallList.vue` | ✅ Fixed: ToolCallList already implemented, now receives processSteps via MessageGroup fix | MCP 工具调用场景测试 |
 | Thinking phase | `MessageGroup.vue` | ✅ Fixed: processSteps pass-through to AssistantMessage via extractLegacyFields | Verified by typecheck + unit tests |
 | Stop/cancel streaming | `InputBox.vue`, AbortController | ✅ Already implemented: stop icon + red background when streaming (lines 263-265, 402-404) | 流式期间捕获并测试中断 |
-| Artifact panel 未实现 | `ArtifactPanel.vue` 新组件 | DeerFlow screenshot shows iframe preview + download/copy/open buttons; Numina screenshot shows NO artifact panel | artifact 生成场景测试 |
+| Artifact panel | `ArtifactPreviewPopup.vue` | ✅ Implemented: iframe preview + NavBar buttons (copy/download/open/close) | artifact 生成场景测试 |
 | Model selector empty | Tenant 配置 | Numina screenshot shows "选择模型" button but empty list | 配置 tenant AI 资源后验证 |
 | SSE reconnect 未实现 | `AIChatPage.vue` | ✅ Implemented: reconnecting state + 3 retries + exponential backoff | 模拟 SSE 断连测试 |
 | Desktop 三栏布局 | `AIChatPage.vue` | DeerFlow screenshot shows sidebar + chat + artifact; Numina screenshot shows only tabs at bottom | 1440×900 测试验证 |
@@ -444,8 +444,8 @@ Uncaught (in promise)
 | Tool calls collapsed | ✅ `deerflow-tool-calls-collapsed-*.png` | ✅ Implemented (expand/collapse button) | `ai-chat-artifact.spec.ts` | ✅ |
 | Thinking phase | ✅ "思考" button visible | ✅ ReasoningSection renders | `ai-chat-stream.spec.ts` | ✅ |
 | To-dos panel | ✅ visible in DeerFlow screenshot | ✅ TodoListPanel (planSteps passed via MessageGroup) | 可选 | ✅ |
-| Artifact panel open | ✅ `deerflow-artifact-panel-open-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
-| Artifact buttons (download/copy/open/close) | ✅ visible in DeerFlow snapshot | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
+| Artifact panel open | ✅ `deerflow-artifact-panel-open-*.png` | ✅ ArtifactPreviewPopup.vue | `ai-chat-artifact.spec.ts` | ✅ |
+| Artifact buttons (download/copy/open/close) | ✅ visible in DeerFlow snapshot | ✅ NavBar buttons | `ai-chat-artifact.spec.ts` | ✅ |
 | Mode selector | ✅ | ✅ `local-mode-selector-*.png` | `ai-chat-tenant-security.spec.ts` | ✅ |
 | Model selector | ✅ | ⚠️ empty | `ai-chat-tenant-security.spec.ts` | ⚠️ |
 | Sending state | ✅ | ✅ `local-sending-state-*.png` | `ai-chat-stream.spec.ts` | ✅ |
@@ -516,7 +516,7 @@ Uncaught (in promise)
 2. **P1**: ✅ Fixed - Tool call visualization (ToolCallList receives processSteps via MessageGroup)
 3. **P1**: ✅ Fixed - Thinking phase 渲染 (processSteps pass-through via extractLegacyFields)
 4. **P1**: ✅ Already implemented - Stop/cancel streaming 按钮 (InputBox.vue lines 263-265, 402-404)
-5. **P1**: 实现 Artifact panel (iframe preview + 操作按钮)
+5. **P1**: ✅ Implemented - Artifact panel (ArtifactPreviewPopup.vue with iframe preview + NavBar buttons)
 6. **P1**: 配置 tenant AI 资源以启用 model selector
 7. **P1**: ✅ Implemented - SSE 断连/reconnect 处理 (reconnecting state + exponential backoff)
 8. **P1**: Desktop 三栏布局改造
