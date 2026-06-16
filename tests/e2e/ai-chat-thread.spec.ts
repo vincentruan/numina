@@ -46,8 +46,16 @@ test.describe('DeerFlow parity: header and navigation', () => {
     await page.goto('/ai/chat')
     await page.waitForLoadState('domcontentloaded')
 
-    // Edit title button should be visible
-    await expect(page.getByRole('button', { name: '修改标题' })).toBeVisible()
+    // Send a message to create a session with a title
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('创建会话测试')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
+    await page.waitForTimeout(3000)
+
+    // Edit title button should be visible after session has a title
+    await expect(page.getByRole('button', { name: '修改标题' })).toBeVisible({ timeout: 5000 })
   })
 
   test('session title displays correctly', async ({ page }) => {
@@ -84,9 +92,11 @@ test.describe('DeerFlow parity: header and navigation', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Send a message to create a session
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill('创建会话')
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('创建会话')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
     await page.waitForTimeout(2000)
 
     // Now click new chat
@@ -104,9 +114,11 @@ test.describe('DeerFlow parity: header and navigation', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Send a message to create a session
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill('测试取消')
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('测试取消')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
     await page.waitForTimeout(2000)
 
     // Click new chat
