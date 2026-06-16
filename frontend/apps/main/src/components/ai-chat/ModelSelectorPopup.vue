@@ -11,7 +11,7 @@
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Popup, Search, Cell, CellGroup, Tag } from 'vant'
+import { Popup, Search, CellGroup, Cell, Tag } from 'vant'
 import IIcon from '@/components/IIcon.vue'
 import type { ModelInfo } from '@/composables/ai-chat/useTenantAiResources'
 

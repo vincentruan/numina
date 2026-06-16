@@ -441,6 +441,18 @@ export const checkAllocationDrift = () =>
 export const sendChatMessage = (question: string, signal?: AbortSignal) =>
   http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question }, { signal })
 
+// P0-#3: Timeout wrapper for streaming fetch (matches backend 120s timeout)
+const STREAM_TIMEOUT_MS = 120000
+function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(STREAM_TIMEOUT_MS)
+  if (!signal) return timeoutSignal
+  // If both signals exist, create combined abort controller
+  const combinedController = new AbortController()
+  signal.addEventListener('abort', () => combinedController.abort(signal.reason))
+  timeoutSignal.addEventListener('abort', () => combinedController.abort(timeoutSignal.reason))
+  return combinedController.signal
+}
+
 export async function sendChatMessageStream(
   question: string,
   deepThink: boolean,
@@ -478,7 +490,7 @@ export async function sendChatMessageStream(
     headers,
     credentials: 'include',
     body,
-    signal,
+    signal: combineSignalWithTimeout(signal),
   })
 
   if (res.status === 401) {
@@ -492,7 +504,7 @@ export async function sendChatMessageStream(
       headers,
       credentials: 'include',
       body,
-      signal,
+      signal: combineSignalWithTimeout(signal),
     })
   }
 

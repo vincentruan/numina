@@ -329,7 +329,7 @@ async def chat_stream(
         answer_chunks: list[str] = []
         try:
             async with (
-                httpx.AsyncClient(timeout=120.0) as client,
+                httpx.AsyncClient(timeout=130.0) as client,  # 130s to allow backend errors before frontend 120s timeout
                 client.stream(
                     "POST",
                     agent_url,

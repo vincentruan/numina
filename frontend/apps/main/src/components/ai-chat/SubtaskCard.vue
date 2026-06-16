@@ -165,7 +165,7 @@ const showShineBorder = computed(
 
       <!-- Token 使用 -->
       <div v-if="task.usage" class="usage-section">
-        <span class="usage-label">Token: {{ task.usage.total_tokens }}</span>
+        <span class="usage-label">{{ t('aiChat.usageToken') }}: {{ task.usage.total_tokens }}</span>
       </div>
     </div>
   </div>

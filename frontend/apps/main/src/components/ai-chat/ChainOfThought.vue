@@ -13,8 +13,8 @@
  * - 最后一个 tool call 高亮显示
  */
 import { ref, computed } from 'vue'
-import { Badge } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { Badge } from 'vant'
 import { getToolIcon, getToolDisplayNameKey } from '@/utils/ai-chat/tool-icon-map'
 import {
   extractReasoningContentFromMessage,

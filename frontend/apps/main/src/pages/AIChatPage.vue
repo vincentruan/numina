@@ -189,8 +189,8 @@
 
       <!-- Messages -->
       <template v-else>
-        <!-- DeerFlow MessageGroup-based rendering (experimental, Phase 1 integration) -->
-        <transition-group v-if="USE_MESSAGE_GROUP_RENDERING" name="msg" tag="div" class="msg-list">
+        <!-- DeerFlow MessageGroup-based rendering -->
+        <transition-group name="msg" tag="div" class="msg-list">
           <MessageGroup
             v-for="group in messageGroups"
             :key="group.id || `group-${group.type}-${group.messages[0]?.id}`"
@@ -202,40 +202,6 @@
             @feedback="(mid, v) => onFeedback(mid, v)"
             @suggestion-click="onSuggestionChipClick"
             @artifact-tap="onArtifactTap"
-          />
-        </transition-group>
-
-        <!-- Legacy ChatMessage rendering (default for Phase 1 stability) -->
-        <transition-group v-else name="msg" tag="div" class="msg-list">
-          <ChatMessage
-            v-for="(msg, idx) in messages"
-            :id="msg.id"
-            :key="msg.id"
-            :role="msg.role"
-            :content="msg.content"
-            :phase="msg.phase"
-            :process-steps="msg.processSteps"
-            :plan-steps="msg.planSteps"
-            :plan-source="msg.planSource"
-            :process-elapsed-ms="msg.processElapsedMs"
-            :reasoning-start-time="msg.reasoningStartTime"
-            :rendered-content="msg.renderedContent"
-            :suggestions="msg.phase === 'done' && msg.content && msg.content.length >= 30 ? suggestionChipsFor(msg) : undefined"
-            :feedback="msg.feedback"
-            :display-time="msg.displayTime"
-            :send-status="msg.sendStatus"
-            :artifacts="sessionArtifacts"
-            :is-editing="editingMessageIdx === idx"
-            :edit-input="editInputText"
-            @retry="onRetryError(idx)"
-            @copy="onCopy"
-            @edit="onEditUserMessage(idx)"
-            @feedback="onFeedback"
-            @suggestion-click="onSuggestionChipClick"
-            @artifact-tap="onArtifactTap"
-            @send-edit="onSendEdit(idx)"
-            @cancel-edit="onCancelEdit"
-            @update:edit-input="editInputText = $event"
           />
         </transition-group>
       </template>
@@ -272,7 +238,7 @@
 
     <!-- Suggestions for follow-up (Phase 7) — DeerFlow-aligned -->
     <Suggestions
-      v-if="USE_MESSAGE_GROUP_RENDERING && messages.length > 0"
+      v-if="messages.length > 0"
       :suggestions="followups"
       :loading="followupsLoading"
       :hidden="followupsHidden"
@@ -402,70 +368,6 @@ function mapToolTimelineToSteps(timeline?: ToolTimelineItem[]): ProcessStep[] {
   }))
 }
 
-// Synthesize a unified ProcessStep[] from legacy Message fields (thinkContent + toolTimeline).
-// Used as a fallback when the message did not flow through aiEventNormalizer (e.g. older history
-// records or messages saved before the steps[] refactor). Reasoning is emitted as the leading
-// step; tool calls follow in timeline order.
-function _buildLegacySteps(msg: Message): ProcessStep[] {
-  const steps: ProcessStep[] = []
-  if (msg.thinkContent) {
-    steps.push({
-      type: 'reasoning',
-      id: `legacy-reasoning-${msg.id}`,
-      content: msg.thinkContent,
-      status: msg.thinkDone ? 'done' : 'streaming',
-      elapsedMs: msg.thinkSeconds ? msg.thinkSeconds * 1000 : undefined,
-    })
-  }
-  steps.push(...mapToolTimelineToSteps(msg.toolTimeline))
-  return steps
-}
-
-// Decide whether AiProcessBlock should render for an assistant message.
-// Show whenever there is process content (live steps, legacy think/tool data) or
-// when the message is in error so the inline retry button is visible.
-function _shouldShowProcessBlock(msg: Message): boolean {
-  if (msg.phase === 'error') return true
-  if (msg.processSteps && msg.processSteps.length > 0) return true
-  if (msg.thinkContent) return true
-  if (msg.toolTimeline && msg.toolTimeline.length > 0) return true
-  return false
-}
-
-// Decide whether to use full-width AgentRunCanvas for long tasks (U8).
-// Canvas is shown when: deepThink mode OR ≥3 steps OR trigger tool (generate_report).
-function _shouldUseCanvas(msg: Message): boolean {
-  // Get steps from either processSteps or legacy build
-  const steps = msg.processSteps || _buildLegacySteps(msg)
-  return isLongTask(steps, deepThink.value)
-}
-
-// U10: Calculate process status from phase, handling interrupted sessions.
-// Returns 'interrupted' for interrupted phase, otherwise falls back to processStatus or derived status.
-function _getProcessStatus(msg: Message): 'running' | 'done' | 'error' | 'interrupted' {
-  if (msg.processStatus) return msg.processStatus
-  if (msg.phase === 'interrupted') return 'interrupted'
-  if (msg.phase === 'error') return 'error'
-  if (msg.phase === 'done') return 'done'
-  return 'running'
-}
-
-// U10: Calculate total step count for progress summary.
-function _getTotalStepCount(msg: Message): number {
-  const steps = msg.processSteps || _buildLegacySteps(msg)
-  return steps.length
-}
-
-// U10: Calculate done step count for progress summary.
-// Steps with status 'done' or 'error' are counted as completed.
-// Only tool_call, reasoning, subagent, and progress steps have status.
-function _getDoneStepCount(msg: Message): number {
-  const steps = msg.processSteps || _buildLegacySteps(msg)
-  return steps.filter(s =>
-    s.type !== 'artifact' && (s.status === 'done' || s.status === 'error')
-  ).length
-}
-
 function parseToolArgs(argsText?: string): Record<string, unknown> {
   if (!argsText) return {}
   try {
@@ -566,13 +468,10 @@ const messages = ref<Message[]>([])
 // Feature flag: Enable DeerFlow MessageGroup rendering
 // Set to true for DeerFlow-aligned 6-type message grouping
 // Set to false to use existing ChatMessage rendering (legacy)
-const USE_MESSAGE_GROUP_RENDERING = true
-
 // DeerFlow message grouping
 // Convert legacy Message[] to DeerFlow ChatMessage[] for grouping
 const deerFlowMessages = computed(() => toDeerFlowChatMessages(messages.value))
 // Apply getMessageGroups() algorithm for 6-type grouping
-// Note: messageGroups is used for MessageGroup-based rendering when USE_MESSAGE_GROUP_RENDERING=true
 const messageGroups = useMessageGroups(deerFlowMessages)
 
 const inputText = ref('')
@@ -1669,18 +1568,6 @@ async function onSendEdit(idx: number) {
   await onSend()
 }
 
-async function _onRegenerate(idx: number) {
-  const prevUser = [...messages.value].slice(0, idx).reverse().find((m) => m.role === 'user')
-  if (!prevUser || asking.value) return
-
-  const prevUserIdx = messages.value.indexOf(prevUser)
-  // Remove the assistant response and the preceding user message, then re-send
-  // This avoids duplicating the user message when onSend() pushes a new one
-  messages.value.splice(prevUserIdx, idx - prevUserIdx + 1)
-  inputText.value = prevUser.content
-  await onSend()
-}
-
 function onFeedback(id: string, value: 1 | -1) {
   const msg = messages.value.find((m) => m.id === id)
   if (!msg) return
@@ -1696,18 +1583,6 @@ async function onRetryError(idx: number) {
   messages.value.splice(idx, 1)
   // Re-send the user's question
   inputText.value = prevUser.content
-  await onSend()
-}
-
-async function _onRetrySend(idx: number) {
-  if (asking.value) return
-  const msg = messages.value[idx]
-  if (!msg || msg.role !== 'user') return
-  // Reset send status and re-send
-  msg.sendStatus = 'sending'
-  inputText.value = msg.content
-  // Remove this user message so onSend re-pushes it fresh
-  messages.value.splice(idx, 1)
   await onSend()
 }
 

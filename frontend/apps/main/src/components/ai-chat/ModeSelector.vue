@@ -11,8 +11,8 @@
  * - Ultra: high, 子代理协作
  */
 import { ref, computed } from 'vue'
-import { Popup, Cell, CellGroup } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { Popup, CellGroup, Cell } from 'vant'
 import IIcon from '@/components/IIcon.vue'
 import type { InputMode } from '@/types/ai-chat/input-mode'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'

@@ -17,7 +17,7 @@
  *   - 未知：下载提示
  */
 import { ref, computed, watch } from 'vue'
-import { Popup, NavBar, Button, Toast, Loading } from 'vant'
+import { Toast, Popup, NavBar, Button, Loading } from 'vant'
 import { useI18n } from 'vue-i18n'
 import IIcon from '@/components/IIcon.vue'
 import CodeBlock from './CodeBlock.vue'

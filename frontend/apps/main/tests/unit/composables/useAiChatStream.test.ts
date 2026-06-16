@@ -63,29 +63,43 @@ vi.mock('@/composables/useAgentEventStream', () => ({
   }),
 }))
 
-// Mock normalizeAgentEvent
+// Mock normalizeAgentEvent and createNormalizationState
+// P0-#1: Mock must return array and include createNormalizationState
 vi.mock('@/utils/aiEventNormalizer', () => ({
-  normalizeAgentEvent: (event: Record<string, unknown>) => {
-    // Return normalized event based on type
+  createNormalizationState: () => ({
+    phase: 'connecting',
+    reasoningStartTime: null,
+    answerContent: '',
+    steps: [],
+    artifacts: [],
+    subagents: new Map(),
+    planSteps: [],
+    lastPlanHash: '',
+    planSource: null,
+    inferredSteps: [],
+    planWaitTimer: null,
+  }),
+  normalizeAgentEvent: (event: Record<string, unknown>, _state: unknown) => {
+    // Return normalized event array based on type (matches actual return type)
     if (event.type === 'phase.connecting') {
-      return { type: 'phase', phase: 'connecting' }
+      return [{ type: 'phase_change', phase: 'connecting' }]
     }
     if (event.type === 'phase.thinking') {
-      return { type: 'phase', phase: 'thinking' }
+      return [{ type: 'phase_change', phase: 'thinking' }]
     }
     if (event.type === 'phase.answering') {
-      return { type: 'phase', phase: 'answering' }
+      return [{ type: 'phase_change', phase: 'answering' }]
     }
     if (event.type === 'token.stream') {
-      return { type: 'token', content: event.content || '' }
+      return [{ type: 'answer_delta', content: event.content || '' }]
     }
     if (event.type === 'capability.end') {
-      return { type: 'capability_end' }
+      return [{ type: 'session_end' }]
     }
     if (event.type === 'session.start') {
-      return { type: 'session_start', session_id: event.session_id }
+      return [{ type: 'session_start', session_id: event.session_id }]
     }
-    return event
+    return [event]
   },
 }))
 

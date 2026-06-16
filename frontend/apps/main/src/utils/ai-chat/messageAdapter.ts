@@ -202,9 +202,42 @@ export function toDeerFlowChatMessage(msg: LegacyMessage): ChatMessage {
 
 /**
  * 批量转换 Legacy Messages 为 DeerFlow ChatMessages
+ *
+ * 关键: 对于每个已完成的 tool_call，生成独立的 tool result message
+ * 以便 messageGroups.ts 检测 ask_clarification 等 tool result 触发的分组
  */
 export function toDeerFlowChatMessages(messages: LegacyMessage[]): ChatMessage[] {
-  return messages.map(toDeerFlowChatMessage)
+  const result: ChatMessage[] = []
+
+  for (const msg of messages) {
+    // 1. 先生成主消息 (human 或 ai)
+    const chatMsg = toDeerFlowChatMessage(msg)
+    result.push(chatMsg)
+
+    // 2. 如果是 AI 消息且有已完成的 tool_calls，生成独立的 tool result messages
+    //    这是 DeerFlow messageGroups 检测 ask_clarification 的关键条件:
+    //    message.type === 'tool' && message.name === 'ask_clarification'
+    if (msg.role === 'assistant' && msg.processSteps) {
+      const completedToolCalls = msg.processSteps.filter(
+        step => step.type === 'tool_call' && step.status === 'done'
+      )
+
+      for (const toolCall of completedToolCalls) {
+        // 创建 tool result message
+        result.push({
+          id: `tool-result-${toolCall.id}`,
+          type: 'tool',
+          role: 'assistant', // tool messages technically have assistant role
+          content: toolCall.resultSummary || '',
+          tool_call_id: toolCall.id,
+          name: toolCall.name || 'unknown',
+          displayTime: msg.displayTime,
+        })
+      }
+    }
+  }
+
+  return result
 }
 
 /**

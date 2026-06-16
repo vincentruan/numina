@@ -298,6 +298,7 @@ export default {
     // DeerFlow clarification/subagent keys
     needClarification: '需要补充信息',
     subagentTasks: '正在执行 {count} 个子任务',
+    usageToken: 'Token',
     // Reconnect and error handling keys
     reconnectNoHistory: '⚠️ 无历史事件，无法重新连接',
     reconnecting: '📡 正在重新连接...',

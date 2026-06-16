@@ -10,8 +10,8 @@
  * - 点击触发全屏预览
  * - Skill 文件安装按钮
  */
-import { Card, Button } from 'vant'
 import { useI18n } from 'vue-i18n'
+import { Button } from 'vant'
 import IIcon from '@/components/IIcon.vue'
 import { getFileName, getFileIcon, isSkillFile } from '@/utils/ai-chat/fileType'
 import { artifactDownloadUrl } from '@/utils/ai-chat/artifactUrl'

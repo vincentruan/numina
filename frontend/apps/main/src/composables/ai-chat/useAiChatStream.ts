@@ -11,8 +11,8 @@ import { showToast } from 'vant'
 import i18n from '@/i18n'
 import { deduplicateMessages } from '@/utils/ai-chat/message-identity'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
-import type { AgentEvent, NormalizedAiEvent, ProcessStep, Artifact } from '@/types/agent-stream'
-import { normalizeAgentEvent } from '@/utils/aiEventNormalizer'
+import type { AgentEvent, NormalizedAiEvent, NormalizationState, ProcessStep, Artifact } from '@/types/agent-stream'
+import { normalizeAgentEvent, createNormalizationState } from '@/utils/aiEventNormalizer'
 import { sendChatMessageStream } from '@/api/ai'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
@@ -79,6 +79,9 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
   // 去重 Set
   const seenEventIds = new Set<string>()
 
+  // P0-#1: NormalizationState for event processing
+  const normState = createNormalizationState()
+
   // P1-#7: O(1) step lookup caches (avoid .find() on every streaming event)
   // Map<toolCallId, ProcessStep> for tool_running/tool_result/tool_progress
   const toolStepCache = new Map<string, ProcessStep>()
@@ -121,10 +124,10 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
     }
 
     // 归一化事件
-    const normalized = normalizeAgentEvent(event)
+    const normalized = normalizeAgentEvent(event, normState)
 
-    // 处理归一化事件
-    handleNormalizedEvent(normalized)
+    // 处理归一化事件数组
+    normalized.forEach(handleNormalizedEvent)
   }
 
   /**
@@ -353,6 +356,8 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
     // P1-#7: Clear O(1) lookup caches for new message
     toolStepCache.clear()
     streamingReasoningStep = null
+    // P0-#1: Reset NormalizationState for new message
+    Object.assign(normState, createNormalizationState())
     cleanupAbortController()
     abortController.value = new AbortController()
 
@@ -412,14 +417,6 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
         // 用户主动取消，不显示错误
         optimisticUserMessage.sendStatus = 'sent'
         phase.value = 'interrupted'
-        // Cancel the reader on abort to release the stream lock
-        if (reader) {
-          try {
-            await reader.cancel()
-          } catch {
-            // Ignore cancel errors - stream may already be closed
-          }
-        }
       } else {
         phase.value = 'error'
         optimisticUserMessage.sendStatus = 'failed'
@@ -432,8 +429,13 @@ export function useAiChatStream(config: AiChatStreamConfig): AiChatStreamState &
         }
       }
     } finally {
-      // Always release the reader lock to prevent 'ReadableStream is locked' errors
+      // P0-#4: Always cancel AND release the reader to prevent 'ReadableStream is locked' errors
       if (reader) {
+        try {
+          await reader.cancel()
+        } catch {
+          // Ignore cancel errors - stream may already be closed
+        }
         try {
           reader.releaseLock()
         } catch {

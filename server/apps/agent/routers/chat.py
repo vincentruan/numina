@@ -45,7 +45,7 @@ async def ask(
     if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
         x_agent_token, settings.AGENT_INTERNAL_TOKEN
     ):
-        raise HTTPException(status_code=401, detail="invalid token")
+        raise HTTPException(status_code=401, detail="无效令牌")
 
     response = await orchestrator.dispatch(
         capability="chat",
@@ -69,7 +69,7 @@ async def ask_stream(
     if not settings.AGENT_INTERNAL_TOKEN or not hmac.compare_digest(
         x_agent_token, settings.AGENT_INTERNAL_TOKEN
     ):
-        raise HTTPException(status_code=401, detail="invalid token")
+        raise HTTPException(status_code=401, detail="无效令牌")
 
     async def generate():
         task_id = str(uuid.uuid4())
