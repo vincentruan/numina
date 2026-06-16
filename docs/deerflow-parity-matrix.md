@@ -406,7 +406,7 @@ Uncaught (in promise)
 ### P1 高优先级 (核心功能缺失)
 | 问题 | 文件 | 实际证据 | 验收方式 |
 |------|------|---------|---------|
-| Tool call visualization 未实现 | `ToolCallCard.vue` 新组件 | DeerFlow screenshot shows tool calls; Numina screenshot shows NO tool call UI | MCP 工具调用场景测试 |
+| Tool call visualization | `ToolCallList.vue` | ✅ Fixed: ToolCallList already implemented, now receives processSteps via MessageGroup fix | MCP 工具调用场景测试 |
 | Thinking phase | `MessageGroup.vue` | ✅ Fixed: processSteps pass-through to AssistantMessage via extractLegacyFields | Verified by typecheck + unit tests |
 | Stop/cancel streaming | `InputBox.vue`, AbortController | ✅ Already implemented: stop icon + red background when streaming (lines 263-265, 402-404) | 流式期间捕获并测试中断 |
 | Artifact panel 未实现 | `ArtifactPanel.vue` 新组件 | DeerFlow screenshot shows iframe preview + download/copy/open buttons; Numina screenshot shows NO artifact panel | artifact 生成场景测试 |
@@ -418,8 +418,8 @@ Uncaught (in promise)
 | 问题 | 文件 | 实际证据 | 验收方式 |
 |------|------|---------|---------|
 | Sending indicator 文字 vs 动画 | `AIChatPage.vue` | Numina shows "发送中" text; DeerFlow has animation | 发送状态动画 |
-| Tool call collapse/expand | `ToolCallCard.vue` | DeerFlow screenshot shows "查看其他 52 个步骤"; Numina 无此功能 | 验证折叠交互 |
-| History drawer delete | `HistoryDrawer.vue` | 因 Vue 错误无法验证 | 抽屉修复后验证 |
+| Tool call collapse/expand | `ToolCallList.vue` | ✅ Implemented: expand/collapse button visible in ToolCallList.vue (lines 121-125) | 验证折叠交互 |
+| History drawer delete | `HistoryDrawer.vue` | ✅ Fixed: Vue errors resolved with destroy-on-close | 抽屉修复后验证 |
 | Network error/timeout retry | `AIChatPage.vue` | 未模拟测试 | 错误模拟验证 |
 | Scroll-follow | `MessageList.vue` | 未测试长时间响应 | 流式滚动验证 |
 
@@ -440,8 +440,8 @@ Uncaught (in promise)
 | Welcome/new chat | ✅ `deerflow-new-chat-welcome-*.png` | ✅ `local-welcome-*.png` | `ai-chat-welcome.spec.ts` | ✅ |
 | Input focus | ✅ | ✅ `local-input-focus-*.png` | `ai-chat-welcome.spec.ts` | ✅ |
 | Input with text | ✅ | ✅ | `ai-chat-stream.spec.ts` | ✅ |
-| Tool calls expanded | ✅ `deerflow-tool-calls-complete-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
-| Tool calls collapsed | ✅ `deerflow-tool-calls-collapsed-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
+| Tool calls expanded | ✅ `deerflow-tool-calls-complete-*.png` | ✅ ToolCallList renders | `ai-chat-artifact.spec.ts` | ✅ |
+| Tool calls collapsed | ✅ `deerflow-tool-calls-collapsed-*.png` | ✅ Implemented (expand/collapse button) | `ai-chat-artifact.spec.ts` | ✅ |
 | Thinking phase | ✅ "思考" button visible | ✅ ReasoningSection renders | `ai-chat-stream.spec.ts` | ✅ |
 | To-dos panel | ✅ visible in DeerFlow screenshot | ❌ 未实现 | 可选 | ❌ |
 | Artifact panel open | ✅ `deerflow-artifact-panel-open-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
