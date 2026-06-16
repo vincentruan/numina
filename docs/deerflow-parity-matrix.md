@@ -111,8 +111,8 @@ All screenshots: `docs/screenshots/deerflow-baseline/`
 | Tool calls collapsed | ✅ tested | ✅ tested | DeerFlow: "查看其他 52 个步骤"; Numina: "还有 1 步" button |
 | Tool success | ✅ visible | ✅ tested ✓ | Numina: ✓ indicator (uid=134_1), success status |
 | Tool collapsed click → expand | ✅ tested | ✅ tested | Numina: click "还有 1 步" → expanded view |
-| Thinking button | ✅ visible | ❌ not impl | "思考" button in DeerFlow |
-| Thinking expanded | ✅ tested | ❌ not impl | Click "思考" shows reasoning content |
+| Thinking button | ✅ visible | ✅ implemented | ReasoningSection in AssistantMessage |
+| Thinking expanded | ✅ tested | ✅ implemented | Click "思考" shows reasoning content, processSteps passed through |
 | To-dos panel (SubtaskCard equivalent) | ✅ tested | ❌ not impl | Task list items: Extract/Fetch/Analyze/etc. |
 | Artifact panel open | ✅ | ❌ not impl | iframe preview visible |
 | Artifact buttons | ✅ tested | ❌ not impl | download/copy/open/close buttons |
@@ -407,8 +407,8 @@ Uncaught (in promise)
 | 问题 | 文件 | 实际证据 | 验收方式 |
 |------|------|---------|---------|
 | Tool call visualization 未实现 | `ToolCallCard.vue` 新组件 | DeerFlow screenshot shows tool calls; Numina screenshot shows NO tool call UI | MCP 工具调用场景测试 |
-| Thinking phase 未实现 | `MessageGroup.vue` | DeerFlow screenshot shows "思考" button; Numina screenshot shows NO thinking UI | 需要 `RUN_AI_TESTS=1` 测试验证 |
-| Stop/cancel streaming 未实现 | `InputBox.vue`, AbortController | DeerFlow 有 stop 按钮；Numina 未观察到 stop 按钮 | 流式期间捕获并测试中断 |
+| Thinking phase | `MessageGroup.vue` | ✅ Fixed: processSteps pass-through to AssistantMessage via extractLegacyFields | Verified by typecheck + unit tests |
+| Stop/cancel streaming | `InputBox.vue`, AbortController | ✅ Already implemented: stop icon + red background when streaming (lines 263-265, 402-404) | 流式期间捕获并测试中断 |
 | Artifact panel 未实现 | `ArtifactPanel.vue` 新组件 | DeerFlow screenshot shows iframe preview + download/copy/open buttons; Numina screenshot shows NO artifact panel | artifact 生成场景测试 |
 | Model selector empty | Tenant 配置 | Numina screenshot shows "选择模型" button but empty list | 配置 tenant AI 资源后验证 |
 | SSE reconnect 未实现 | `AIChatPage.vue` | 未观察到 reconnect 提示 | 模拟 SSE 断连测试 |
@@ -442,7 +442,7 @@ Uncaught (in promise)
 | Input with text | ✅ | ✅ | `ai-chat-stream.spec.ts` | ✅ |
 | Tool calls expanded | ✅ `deerflow-tool-calls-complete-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
 | Tool calls collapsed | ✅ `deerflow-tool-calls-collapsed-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
-| Thinking phase | ✅ "思考" button visible | ❌ 未实现 | `ai-chat-stream.spec.ts` | ❌ |
+| Thinking phase | ✅ "思考" button visible | ✅ ReasoningSection renders | `ai-chat-stream.spec.ts` | ✅ |
 | To-dos panel | ✅ visible in DeerFlow screenshot | ❌ 未实现 | 可选 | ❌ |
 | Artifact panel open | ✅ `deerflow-artifact-panel-open-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
 | Artifact buttons (download/copy/open/close) | ✅ visible in DeerFlow snapshot | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
@@ -452,9 +452,9 @@ Uncaught (in promise)
 | Streaming complete | ✅ | ✅ `local-streaming-test-*.png` | `ai-chat-stream.spec.ts` | ✅ |
 | Message rendering (markdown) | ✅ | ✅ markdown lists/bold visible | `ai-chat-artifact.spec.ts` | ✅ |
 | Action buttons (copy/regenerate/feedback) | ✅ | ✅ visible in Numina screenshot | `ai-chat-artifact.spec.ts` | ✅ |
-| History drawer | ✅ | ❌ Vue errors | `ai-chat-thread.spec.ts` | ❌ |
+| History drawer | ✅ | ✅ Fixed (destroy-on-close) | `ai-chat-thread.spec.ts` | ✅ |
 | SSE stream request | ✅ | ✅ POST [200] verified | Network log | ✅ |
-| Stop/cancel | ✅ DeerFlow 有 | ❌ 未观察到 | `ai-chat-stream.spec.ts` | ❌ |
+| Stop/cancel | ✅ DeerFlow 有 | ✅ Implemented (stop icon + red bg) | `ai-chat-stream.spec.ts` | ✅ |
 | SSE reconnect | ❓ | ❓ | `ai-chat-error-recovery.spec.ts` | ❓ |
 | Error states | ✅ | ⚠️ 部分 | `ai-chat-error-recovery.spec.ts` | ⚠️ |
 | Desktop 1440×900 | ✅ 三栏布局 | ⚠️ 单栏+tabs | `ai-chat-mobile.spec.ts` | ⚠️ |
@@ -512,10 +512,10 @@ Uncaught (in promise)
 
 ## Next Steps
 
-1. **P0**: 修复 history drawer Vue errors (Transition/VanPopup handlers)
+1. **P0**: ✅ Fixed - history drawer Vue errors (destroy-on-close + close-on-click-overlay)
 2. **P1**: 实现 Tool call visualization (ToolCallCard.vue)
-3. **P1**: 实现 Thinking phase 渲染
-4. **P1**: 实现 Stop/cancel streaming 按钮
+3. **P1**: ✅ Fixed - Thinking phase 渲染 (processSteps pass-through via extractLegacyFields)
+4. **P1**: ✅ Already implemented - Stop/cancel streaming 按钮 (InputBox.vue lines 263-265, 402-404)
 5. **P1**: 实现 Artifact panel (iframe preview + 操作按钮)
 6. **P1**: 配置 tenant AI 资源以启用 model selector
 7. **P1**: 实现 SSE 断连/reconnect 处理

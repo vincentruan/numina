@@ -532,7 +532,7 @@ interface StreamEvent {
 |-------|----------|-------|--------|
 | History drawer Vue errors | P0 | `AIChatPage.vue`, `HistoryDrawer.vue` | ✅ Fixed (destroy-on-close + close-on-click-overlay) |
 | Model selector empty (no tenant AI) | P1 | Tenant config | ❌ Needs config |
-| Thinking phase not rendered | P1 | `MessageGroup.vue` | ❌ Not implemented |
+| Thinking phase not rendered | P1 | `MessageGroup.vue` | ✅ Fixed (processSteps pass-through to AssistantMessage) |
 | Tool call cards not rendered | P1 | `ToolCallCard.vue` | ❌ Not implemented |
 | Stop button not implemented | P1 | `InputBox.vue` | ✅ Already implemented (onAbort + stop icon + red background) |
 | SSE reconnect not implemented | P1 | `AIChatPage.vue` | ❌ Not implemented |

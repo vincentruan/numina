@@ -33,7 +33,9 @@ import {
   extractContentFromMessage,
   extractPresentFilesFromGroup,
   getSubagentTaskIds,
+  extractLegacyFields,
 } from '@/utils/ai-chat'
+import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 
 const props = defineProps<{
   group: MessageGroup
@@ -62,6 +64,37 @@ const humanMessage = computed(() =>
 // Assistant group: extract first message
 const assistantMessage = computed(() =>
   props.group.type === 'assistant' ? props.group.messages[0] : null
+)
+
+// Assistant group: extract legacy fields for processSteps, etc.
+const assistantLegacyFields = computed(() => {
+  if (!assistantMessage.value) return null
+  return extractLegacyFields(assistantMessage.value)
+})
+
+// Assistant group: extract processSteps for reasoning/tool rendering
+const assistantProcessSteps = computed((): ProcessStep[] | undefined =>
+  assistantLegacyFields.value?.processSteps
+)
+
+// Assistant group: extract planSteps for TodoList rendering
+const assistantPlanSteps = computed((): PlanStep[] | undefined =>
+  assistantLegacyFields.value?.planSteps
+)
+
+// Assistant group: extract planSource
+const assistantPlanSource = computed((): 'explicit' | 'inferred' | null | undefined =>
+  assistantLegacyFields.value?.planSource
+)
+
+// Assistant group: extract process elapsed time
+const assistantElapsedMs = computed((): number | undefined =>
+  assistantLegacyFields.value?.processElapsedMs
+)
+
+// Assistant group: extract reasoning start time
+const assistantReasoningStartTime = computed((): number | null | undefined =>
+  assistantLegacyFields.value?.reasoningStartTime
 )
 
 // Processing group: extract tool calls
@@ -119,6 +152,11 @@ function renderMarkdown(content: string): string {
       :id="assistantMessage.id"
       :content="assistantMessage.content"
       :phase="assistantMessage.phase || 'done'"
+      :process-steps="assistantProcessSteps"
+      :plan-steps="assistantPlanSteps"
+      :plan-source="assistantPlanSource"
+      :process-elapsed-ms="assistantElapsedMs"
+      :reasoning-start-time="assistantReasoningStartTime"
       :display-time="assistantMessage.displayTime"
       :suggestions="assistantMessage.suggestions"
       :feedback="assistantMessage.feedback"
