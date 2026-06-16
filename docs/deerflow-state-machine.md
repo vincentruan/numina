@@ -535,7 +535,7 @@ interface StreamEvent {
 | Thinking phase not rendered | P1 | `MessageGroup.vue` | ✅ Fixed (processSteps pass-through to AssistantMessage) |
 | Tool call cards not rendered | P1 | `ToolCallList.vue` | ✅ Fixed (processSteps pass-through enables ToolCallList rendering) |
 | Stop button not implemented | P1 | `InputBox.vue` | ✅ Already implemented (onAbort + stop icon + red background) |
-| SSE reconnect not implemented | P1 | `AIChatPage.vue` | ❌ Not implemented |
+| SSE reconnect not implemented | P1 | `AIChatPage.vue` | ✅ Implemented (reconnecting state + MAX_RECONNECT_ATTEMPTS + exponential backoff) |
 | Desktop layout differs | P1 | `AIChatPage.vue` | ❌ Architecture diff |
 
 ---

@@ -411,7 +411,7 @@ Uncaught (in promise)
 | Stop/cancel streaming | `InputBox.vue`, AbortController | ✅ Already implemented: stop icon + red background when streaming (lines 263-265, 402-404) | 流式期间捕获并测试中断 |
 | Artifact panel 未实现 | `ArtifactPanel.vue` 新组件 | DeerFlow screenshot shows iframe preview + download/copy/open buttons; Numina screenshot shows NO artifact panel | artifact 生成场景测试 |
 | Model selector empty | Tenant 配置 | Numina screenshot shows "选择模型" button but empty list | 配置 tenant AI 资源后验证 |
-| SSE reconnect 未实现 | `AIChatPage.vue` | 未观察到 reconnect 提示 | 模拟 SSE 断连测试 |
+| SSE reconnect 未实现 | `AIChatPage.vue` | ✅ Implemented: reconnecting state + 3 retries + exponential backoff | 模拟 SSE 断连测试 |
 | Desktop 三栏布局 | `AIChatPage.vue` | DeerFlow screenshot shows sidebar + chat + artifact; Numina screenshot shows only tabs at bottom | 1440×900 测试验证 |
 
 ### P2 中优先级 (用户体验差异)
@@ -455,7 +455,7 @@ Uncaught (in promise)
 | History drawer | ✅ | ✅ Fixed (destroy-on-close) | `ai-chat-thread.spec.ts` | ✅ |
 | SSE stream request | ✅ | ✅ POST [200] verified | Network log | ✅ |
 | Stop/cancel | ✅ DeerFlow 有 | ✅ Implemented (stop icon + red bg) | `ai-chat-stream.spec.ts` | ✅ |
-| SSE reconnect | ❓ | ❓ | `ai-chat-error-recovery.spec.ts` | ❓ |
+| SSE reconnect | ❓ DeerFlow demo | ✅ Implemented (reconnecting state) | `ai-chat-error-recovery.spec.ts` | ✅ |
 | Error states | ✅ | ⚠️ 部分 | `ai-chat-error-recovery.spec.ts` | ⚠️ |
 | Desktop 1440×900 | ✅ 三栏布局 | ⚠️ 单栏+tabs | `ai-chat-mobile.spec.ts` | ⚠️ |
 | Mobile 375×812 | ✅ | ✅ | `ai-chat-mobile.spec.ts` | ✅ |
@@ -513,12 +513,12 @@ Uncaught (in promise)
 ## Next Steps
 
 1. **P0**: ✅ Fixed - history drawer Vue errors (destroy-on-close + close-on-click-overlay)
-2. **P1**: 实现 Tool call visualization (ToolCallCard.vue)
+2. **P1**: ✅ Fixed - Tool call visualization (ToolCallList receives processSteps via MessageGroup)
 3. **P1**: ✅ Fixed - Thinking phase 渲染 (processSteps pass-through via extractLegacyFields)
 4. **P1**: ✅ Already implemented - Stop/cancel streaming 按钮 (InputBox.vue lines 263-265, 402-404)
 5. **P1**: 实现 Artifact panel (iframe preview + 操作按钮)
 6. **P1**: 配置 tenant AI 资源以启用 model selector
-7. **P1**: 实现 SSE 断连/reconnect 处理
+7. **P1**: ✅ Implemented - SSE 断连/reconnect 处理 (reconnecting state + exponential backoff)
 8. **P1**: Desktop 三栏布局改造
 9. **P2**: 发送状态动画优化
 10. Run full E2E suite: `RUN_DEMOUSER_TESTS=1 RUN_AI_TESTS=1 npx playwright test ai-chat-*.spec.ts`

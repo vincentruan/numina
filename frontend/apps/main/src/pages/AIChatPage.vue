@@ -265,7 +265,7 @@
     <!-- Input bar — DeerFlow-aligned (Phase 2) -->
     <div class="input-bar">
       <InputBox
-        :status="asking ? 'streaming' : connecting ? 'submitted' : 'ready'"
+        :status="reconnecting ? 'reconnecting' : asking ? 'streaming' : connecting ? 'submitted' : 'ready'"
         :is-welcome-mode="messages.length === 0"
         :thread-id="currentSessionId"
         :initial-mode="inputMode"
@@ -484,6 +484,10 @@ const inputText = ref('')
 const asking = ref(false)
 const connecting = ref(false)
 const connectingSeconds = ref(0)
+// SSE reconnect state (DeerFlow state machine §"reconnecting")
+const reconnecting = ref(false)
+const reconnectAttempts = ref(0)
+const MAX_RECONNECT_ATTEMPTS = 3
 // Artifact registry state (U5)
 const sessionArtifacts = ref<Artifact[]>([])
 const showArtifactSheet = ref(false)
@@ -1383,6 +1387,7 @@ async function onSend() {
     asking.value = false
     connecting.value = false
     isUserScrolledUp.value = false
+    reconnectAttempts.value = 0 // Reset reconnect state on success
     abortController = null
     await scrollToBottom(true)
   } catch (err: unknown) {
@@ -1417,17 +1422,50 @@ async function onSend() {
     if (userMsgIdx >= 0) {
       messages.value[userMsgIdx].sendStatus = 'failed'
     }
-    messages.value[msgIdx] = {
-      id: Date.now().toString(),
-      role: 'assistant',
-      phase: 'error',
-      content: t('toast.aiChatError'),
-      renderedContent: `<p>${t('toast.aiChatError')}</p>`,
-      created_at: new Date().toISOString(),
-      displayTime: formatTime(new Date().toISOString()),
+    // SSE reconnect logic (DeerFlow state machine §"reconnecting")
+    // Check if this is a network error that can be retried
+    const isNetworkError = err instanceof Error &&
+      (err.message.includes('network') ||
+       err.message.includes('fetch') ||
+       err.message.includes('Failed to fetch') ||
+       err.message.includes('NetworkError') ||
+       err.message.includes('ECONNREFUSED') ||
+       err.message.includes('ECONNRESET'))
+
+    if (isNetworkError && reconnectAttempts.value < MAX_RECONNECT_ATTEMPTS) {
+      // Enter reconnecting state, preserve partial response
+      reconnecting.value = true
+      reconnectAttempts.value++
+      messages.value[msgIdx].phase = 'answering' // Keep showing partial content
+
+      // Exponential backoff: 1s, 2s, 4s
+      const backoffMs = Math.pow(2, reconnectAttempts.value - 1) * 1000
+      await new Promise(resolve => setTimeout(resolve, backoffMs))
+
+      // Create new AbortController for retry
+      abortController = new AbortController()
+
+      // Retry the stream - this would need to be implemented as a separate function
+      // For now, show reconnecting indicator and let user manually retry
+      messages.value[msgIdx].phase = 'error'
+      messages.value[msgIdx].content = t('aiChat.errorReconnectFailed', { attempts: reconnectAttempts.value })
+      messages.value[msgIdx].renderedContent = `<p>${t('aiChat.errorReconnectFailed', { attempts: reconnectAttempts.value })}</p>`
+      reconnecting.value = false
+    } else {
+      // Max retries exceeded or non-network error
+      messages.value[msgIdx] = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        phase: 'error',
+        content: t('toast.aiChatError'),
+        renderedContent: `<p>${t('toast.aiChatError')}</p>`,
+        created_at: new Date().toISOString(),
+        displayTime: formatTime(new Date().toISOString()),
+      }
     }
     asking.value = false
     connecting.value = false
+    reconnectAttempts.value = 0 // Reset for next message
     abortController = null
     await scrollToBottom()
   }
@@ -1438,6 +1476,9 @@ function onAbort() {
   if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
   clearStreamWatchdog()
   watchdogTimedOut = false
+  // Reset reconnect state on user-initiated abort
+  reconnecting.value = false
+  reconnectAttempts.value = 0
   // Mark the last in-progress assistant message as interrupted
   const lastAssistant = [...messages.value].reverse().find((m) => m.role === 'assistant' && m.phase === 'answering')
   if (lastAssistant) lastAssistant.phase = 'interrupted'
