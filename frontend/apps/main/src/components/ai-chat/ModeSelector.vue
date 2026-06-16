@@ -10,7 +10,7 @@
  * - Pro: medium, 计划模式
  * - Ultra: high, 子代理协作
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Popup, CellGroup, Cell } from 'vant'
 import IIcon from '@/components/IIcon.vue'
@@ -60,6 +60,21 @@ function getModeLabel(mode: InputMode): string {
 function getModeDescription(mode: InputMode): string {
   return t(`mode.${mode}.description`)
 }
+
+// Handle Escape key to close popup
+function onEscapeKey(e: KeyboardEvent) {
+  if (e.key === 'Escape' && popupOpen.value) {
+    popupOpen.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('keydown', onEscapeKey)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onEscapeKey)
+})
 </script>
 
 <template>

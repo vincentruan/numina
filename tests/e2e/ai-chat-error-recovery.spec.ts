@@ -59,9 +59,11 @@ test.describe('DeerFlow parity: error states', () => {
     })
 
     // Try to send a message
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill('触发错误')
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('触发错误')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
 
     // Error message should be shown (toast or inline)
     await expect(
@@ -80,9 +82,11 @@ test.describe('DeerFlow parity: error states', () => {
       route.abort('timedout')
     })
 
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill('超时测试')
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('超时测试')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
 
     // Should show timeout-related error
     await expect(
@@ -130,9 +134,11 @@ test.describe('DeerFlow parity: error states', () => {
     await page.goto('/ai/chat')
     await page.waitForLoadState('domcontentloaded')
 
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill('流式错误测试')
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('流式错误测试')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
 
     // Should show streaming error message
     await expect(page.getByText(/暂时不可用|请稍后/)).toBeVisible({ timeout: 5000 })
@@ -154,15 +160,17 @@ test.describe('DeerFlow parity: error states', () => {
       }
     })
 
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill('重试测试')
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill('重试测试')
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
 
     // Wait for error
     await expect(page.getByText(/暂时不可用|失败/)).toBeVisible({ timeout: 5000 })
 
     // Input should still be enabled for retry
-    await expect(input).toBeEnabled()
+    await expect(textarea).toBeEnabled()
   })
 
   test('console error filtering works correctly', async ({ page }) => {

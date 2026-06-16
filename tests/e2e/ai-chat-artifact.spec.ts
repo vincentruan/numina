@@ -15,9 +15,11 @@ test.describe('DeerFlow parity: message rendering', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const testMessage = '用户消息样式测试'
-    const input = page.getByRole('textbox', { name: '请输入您的问题' })
-    await input.fill(testMessage)
-    await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+    const textarea = page.locator('.input-textarea')
+    await textarea.waitFor({ state: 'visible' })
+    await textarea.fill(testMessage)
+    await page.waitForTimeout(100)
+    await page.locator('.input-row .submit-btn').click()
 
     // User message should be visible
     await expect(page.getByText(testMessage)).toBeVisible({ timeout: 3000 })
@@ -35,9 +37,11 @@ test.describe('DeerFlow parity: message rendering', () => {
     const hasMarkdown = await existingMarkdown.count() > 0
 
     if (!hasMarkdown) {
-      const input = page.getByRole('textbox', { name: '请输入您的问题' })
-      await input.fill('请生成一个简单的表格')
-      await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+      const textarea = page.locator('.input-textarea')
+      await textarea.waitFor({ state: 'visible' })
+      await textarea.fill('请生成一个简单的表格')
+      await page.waitForTimeout(100)
+      await page.locator('.input-row .submit-btn').click()
       await page.waitForTimeout(5000)
     }
 
@@ -55,9 +59,11 @@ test.describe('DeerFlow parity: message rendering', () => {
     const hasExistingContent = await copyButton.isVisible().catch(() => false)
 
     if (!hasExistingContent) {
-      const input = page.getByRole('textbox', { name: '请输入您的问题' })
-      await input.fill('测试复制按钮')
-      await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+      const textarea = page.locator('.input-textarea')
+      await textarea.waitFor({ state: 'visible' })
+      await textarea.fill('测试复制按钮')
+      await page.waitForTimeout(100)
+      await page.locator('.input-row .submit-btn').click()
       await page.waitForTimeout(5000)
     }
 
@@ -74,9 +80,11 @@ test.describe('DeerFlow parity: message rendering', () => {
     const hasExistingContent = await regenerateButton.isVisible().catch(() => false)
 
     if (!hasExistingContent) {
-      const input = page.getByRole('textbox', { name: '请输入您的问题' })
-      await input.fill('测试重新生成')
-      await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+      const textarea = page.locator('.input-textarea')
+      await textarea.waitFor({ state: 'visible' })
+      await textarea.fill('测试重新生成')
+      await page.waitForTimeout(100)
+      await page.locator('.input-row .submit-btn').click()
       await page.waitForTimeout(5000)
     }
 
@@ -100,9 +108,11 @@ test.describe('DeerFlow parity: message rendering', () => {
     // At minimum, the page should have the capability for feedback
     // Test passes if buttons exist or if we can send a message to get them
     if (!hasHelpful && !hasNotHelpful) {
-      const input = page.getByRole('textbox', { name: '请输入您的问题' })
-      await input.fill('测试反馈')
-      await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+      const textarea = page.locator('.input-textarea')
+      await textarea.waitFor({ state: 'visible' })
+      await textarea.fill('测试反馈')
+      await page.waitForTimeout(100)
+      await page.locator('.input-row .submit-btn').click()
       await page.waitForTimeout(5000)
 
       // After response, feedback buttons should appear
@@ -121,9 +131,11 @@ test.describe('DeerFlow parity: message rendering', () => {
     // If no existing messages, create one
     const hasEditButton = await editButton.isVisible().catch(() => false)
     if (!hasEditButton) {
-      const input = page.getByRole('textbox', { name: '请输入您的问题' })
-      await input.fill('测试编辑')
-      await page.getByRole('button').filter({ hasText: '发送' }).last().click()
+      const textarea = page.locator('.input-textarea')
+      await textarea.waitFor({ state: 'visible' })
+      await textarea.fill('测试编辑')
+      await page.waitForTimeout(100)
+      await page.locator('.input-row .submit-btn').click()
       await page.waitForTimeout(2000)
     }
 
