@@ -113,7 +113,7 @@ All screenshots: `docs/screenshots/deerflow-baseline/`
 | Tool collapsed click → expand | ✅ tested | ✅ tested | Numina: click "还有 1 步" → expanded view |
 | Thinking button | ✅ visible | ✅ implemented | ReasoningSection in AssistantMessage |
 | Thinking expanded | ✅ tested | ✅ implemented | Click "思考" shows reasoning content, processSteps passed through |
-| To-dos panel (SubtaskCard equivalent) | ✅ tested | ❌ not impl | Task list items: Extract/Fetch/Analyze/etc. |
+| To-dos panel (SubtaskCard equivalent) | ✅ tested | ✅ TodoListPanel renders planSteps | Task list items: Extract/Fetch/Analyze/etc. |
 | Artifact panel open | ✅ | ❌ not impl | iframe preview visible |
 | Artifact buttons | ✅ tested | ❌ not impl | download/copy/open/close buttons |
 | Artifact close | ✅ tested | - | **Close button doesn't work** |
@@ -443,7 +443,7 @@ Uncaught (in promise)
 | Tool calls expanded | ✅ `deerflow-tool-calls-complete-*.png` | ✅ ToolCallList renders | `ai-chat-artifact.spec.ts` | ✅ |
 | Tool calls collapsed | ✅ `deerflow-tool-calls-collapsed-*.png` | ✅ Implemented (expand/collapse button) | `ai-chat-artifact.spec.ts` | ✅ |
 | Thinking phase | ✅ "思考" button visible | ✅ ReasoningSection renders | `ai-chat-stream.spec.ts` | ✅ |
-| To-dos panel | ✅ visible in DeerFlow screenshot | ❌ 未实现 | 可选 | ❌ |
+| To-dos panel | ✅ visible in DeerFlow screenshot | ✅ TodoListPanel (planSteps passed via MessageGroup) | 可选 | ✅ |
 | Artifact panel open | ✅ `deerflow-artifact-panel-open-*.png` | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
 | Artifact buttons (download/copy/open/close) | ✅ visible in DeerFlow snapshot | ❌ 未实现 | `ai-chat-artifact.spec.ts` | ❌ |
 | Mode selector | ✅ | ✅ `local-mode-selector-*.png` | `ai-chat-tenant-security.spec.ts` | ✅ |
