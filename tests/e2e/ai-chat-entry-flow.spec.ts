@@ -8,6 +8,7 @@ test.describe('AI chat entry flow', () => {
   test.skip(!process.env.RUN_DEMOUSER_TESTS, 'demouser-only test — set RUN_DEMOUSER_TESTS=1 to run')
 
   test('demouser can hand off AI hub input state into chat streaming UI', async ({ page }) => {
+    test.skip(!process.env.RUN_AI_TESTS, 'AI response requires configured provider — set RUN_AI_TESTS=1 to run')
     const consoleErrors: string[] = []
     page.on('console', (msg) => {
       if (msg.type() === 'error') consoleErrors.push(msg.text())

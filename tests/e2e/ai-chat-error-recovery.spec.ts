@@ -88,9 +88,11 @@ test.describe('DeerFlow parity: error states', () => {
     await page.waitForTimeout(100)
     await page.locator('.input-row .submit-btn').click()
 
-    // Should show timeout-related error
+    // Should show timeout-related error or failure state
+    // Match actual UI messages: "发送失败", "请求失败"，etc.
+    // Use .first() to avoid strict mode violation when multiple error elements exist
     await expect(
-      page.getByText(/超时|网络|连接|不可用|失败/)
+      page.getByText(/超时|网络|连接|不可用|失败|发送失败/).first()
     ).toBeVisible({ timeout: 10000 })
   })
 
@@ -166,8 +168,9 @@ test.describe('DeerFlow parity: error states', () => {
     await page.waitForTimeout(100)
     await page.locator('.input-row .submit-btn').click()
 
-    // Wait for error
-    await expect(page.getByText(/暂时不可用|失败/)).toBeVisible({ timeout: 5000 })
+    // Wait for error (match actual UI messages like "发送失败")
+    // Use .first() to avoid strict mode violation when multiple error elements exist
+    await expect(page.getByText(/暂时不可用|失败|发送失败|不可用/).first()).toBeVisible({ timeout: 5000 })
 
     // Input should still be enabled for retry
     await expect(textarea).toBeEnabled()
