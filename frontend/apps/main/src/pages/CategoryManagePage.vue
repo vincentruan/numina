@@ -105,7 +105,7 @@ async function onDialogConfirm() {
         icon: formData.value.icon,
         color: formData.value.color
       })
-      showToast(t('toast.updateSuccess'))
+      showSuccessToast(t('toast.updateSuccess'))
     } else {
       await categoryStore.createCategory({
         name: formData.value.name,
@@ -113,10 +113,10 @@ async function onDialogConfirm() {
         color: formData.value.color,
         asset_type: activeTab.value as 'physical' | 'financial'
       })
-      showToast(t('toast.addSuccess'))
+      showSuccessToast(t('toast.addSuccess'))
     }
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
@@ -124,7 +124,7 @@ async function onDelete(cat: Category) {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: cat.name }) })
     await categoryStore.deleteCategory(cat.id)
-    showToast(t('toast.deleteSuccess'))
+    showSuccessToast(t('toast.deleteSuccess'))
   } catch {
     // cancelled
   }

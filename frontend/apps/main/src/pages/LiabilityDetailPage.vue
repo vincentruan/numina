@@ -173,7 +173,7 @@ async function onPaymentConfirm(action: string) {
     }
     try {
       await liabilityStore.recordPayment(liability.value!.id, amount)
-      showToast(t('toast.paymentSuccess'))
+      showSuccessToast(t('toast.paymentSuccess'))
       paymentAmount.value = ''
       return true
     } catch {
@@ -189,7 +189,7 @@ async function onDelete() {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: liability.value?.name }) })
     deleting.value = true
     await liabilityStore.deleteLiability(liability.value!.id)
-    showToast(t('toast.deleteSuccess'))
+    showSuccessToast(t('toast.deleteSuccess'))
     router.back()
   } catch {
     // cancelled

@@ -17,7 +17,7 @@
  *   - 未知：下载提示
  */
 import { ref, computed, watch } from 'vue'
-import { Toast, Popup, NavBar, Button, Loading } from 'vant'
+import { showToast, showSuccessToast, Popup, NavBar, Button, Loading } from 'vant'
 import { useI18n } from 'vue-i18n'
 import IIcon from '@/components/IIcon.vue'
 import CodeBlock from './CodeBlock.vue'
@@ -79,7 +79,7 @@ async function loadContent() {
   try {
     // Use artifactContentUrl helper for correct path (uses /ai/sessions/ not /api/sessions/)
     const url = artifactContentUrl(filepath.value, props.sessionId)
-    const familyId = familyStore.currentFamily?.id
+    const familyId = familyStore.family?.id
 
     // P0: Guard - must have valid family context for tenant isolation
     if (!familyId) {
@@ -154,7 +154,7 @@ function handleBack() {
 function handleCopy() {
   if (contentRef.value) {
     navigator.clipboard.writeText(contentRef.value)
-    Toast(t('toast.copied'))
+    showSuccessToast(t('toast.copied'))
   }
 }
 

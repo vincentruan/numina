@@ -15,7 +15,7 @@
  */
 
 import { ref, computed, onMounted, type Ref, type ComputedRef } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import i18n from '@/i18n'
 import http from '@/api'
 import { useFamilyStore } from '@/stores/family'
@@ -92,7 +92,7 @@ export function useTenantAiResources(): {
   ) => boolean
 } {
   const familyStore = useFamilyStore()
-  const familyId = computed(() => familyStore.currentFamily?.id)
+  const familyId = computed(() => familyStore.family?.id)
 
   const models = ref<ModelInfo[]>([])
   const tenantConfig = ref<TenantAiConfig>({
@@ -142,7 +142,7 @@ export function useTenantAiResources(): {
       }
     } catch (e) {
       error.value = e instanceof Error ? e.message : t('common.failed')
-      showToast(t('aiChat.loadModelsFailed', { error: error.value }))
+      showFailToast(t('aiChat.loadModelsFailed', { error: error.value }))
     } finally {
       loading.value = false
     }

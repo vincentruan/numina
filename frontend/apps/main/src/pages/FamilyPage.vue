@@ -283,7 +283,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { useAuthStore } from '@/stores/auth'
@@ -382,7 +382,7 @@ function copyInviteCode() {
   const code = familyStore.family?.invite_code
   if (code) {
     navigator.clipboard.writeText(code).then(() => {
-      showToast(t('family.inviteCodeCopied'))
+      showSuccessToast(t('family.inviteCodeCopied'))
     }).catch(() => {
       showToast(t('toast.newInviteCode', { code }))
     })
@@ -433,9 +433,9 @@ async function onPromoteToAdmin(member: { id: string; display_name: string }) {
   } catch { return }
   try {
     await familyStore.updateMemberRole(member.id, 'owner')
-    showToast(t('family.memberPromoted'))
+    showSuccessToast(t('family.memberPromoted'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -445,9 +445,9 @@ async function onDemoteToMember(member: { id: string; display_name: string }) {
   } catch { return }
   try {
     await familyStore.updateMemberRole(member.id, 'member')
-    showToast(t('family.memberDemoted'))
+    showSuccessToast(t('family.memberDemoted'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -461,10 +461,10 @@ async function onToggleStatus(member: { id: string; display_name: string; is_act
   } catch { return }
   try {
     await updateMemberStatus(member.id, !willDisable)
-    showToast(willDisable ? t('family.memberDisabled') : t('family.memberEnabled'))
+    showSuccessToast(willDisable ? t('family.memberDisabled') : t('family.memberEnabled'))
     await familyStore.fetchFamily()
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -474,9 +474,9 @@ async function onRemoveMember(member: { id: string; display_name: string }) {
   } catch { return }
   try {
     await familyStore.removeMember(member.id)
-    showToast(t('toast.memberRemoved'))
+    showSuccessToast(t('toast.memberRemoved'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -499,10 +499,10 @@ async function submitResetPassword() {
   resetPwdSubmitting.value = true
   try {
     await resetMemberPassword(resetPwdTarget.value.id, resetPwdForm.value.password)
-    showToast(t('family.memberPasswordReset'))
+    showSuccessToast(t('family.memberPasswordReset'))
     resetPwdVisible.value = false
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     resetPwdSubmitting.value = false
   }
@@ -517,7 +517,7 @@ async function onRegenerate() {
     const code = await familyStore.regenerateInviteCode()
     showToast(t('toast.newInviteCode', { code }))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     regenerating.value = false
   }
@@ -553,11 +553,11 @@ async function submitEdit() {
       birthday: `${year}-${month}-${day}`,
       birthday_is_lunar: editForm.value.birthday_is_lunar,
     })
-    showToast(t('family.editChildSaved'))
+    showSuccessToast(t('family.editChildSaved'))
     editSheetVisible.value = false
     await familyStore.fetchMembers()
   } catch {
-    showToast(t('family.editChildFailed'))
+    showFailToast(t('family.editChildFailed'))
   } finally {
     editSubmitting.value = false
   }
@@ -587,7 +587,7 @@ async function doAddChild() {
       password: newChild.value.password,
       pin: [...newChild.value.pin],
     })
-    showToast(t('toast.addSuccess'))
+    showSuccessToast(t('toast.addSuccess'))
     showAddChildSheet.value = false
     newChild.value = { display_name: '', username: '', password: '', pin: [] }
     await familyStore.fetchFamily()
@@ -606,7 +606,7 @@ async function onForceLogout(child: { id: string; display_name: string }) {
   } catch { return }
   try {
     await forceLogoutChild(child.id)
-    showToast(t('toast.childForceLoggedOut'))
+    showSuccessToast(t('toast.childForceLoggedOut'))
   } catch {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
   }
@@ -615,7 +615,7 @@ async function onForceLogout(child: { id: string; display_name: string }) {
 async function onUnlockPin(child: { id: string; display_name: string }) {
   try {
     await unlockChildPin(child.id)
-    showToast(t('toast.childPinUnlocked'))
+    showSuccessToast(t('toast.childPinUnlocked'))
   } catch {
     showToast({ type: 'fail', message: t('toast.operationFailed2') })
   }

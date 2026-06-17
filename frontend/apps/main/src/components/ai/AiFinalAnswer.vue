@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import AiArtifactLink from './AiArtifactLink.vue'
@@ -135,9 +135,9 @@ watch(
 async function copyContent() {
   try {
     await navigator.clipboard.writeText(scrubForClipboard(props.content))
-    showToast(t('aiProcess.copySuccess'))
+    showSuccessToast(t('aiProcess.copySuccess'))
   } catch {
-    showToast(t('aiProcess.copyFailed'))
+    showFailToast(t('aiProcess.copyFailed'))
   }
 }
 </script>

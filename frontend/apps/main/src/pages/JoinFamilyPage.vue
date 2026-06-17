@@ -122,7 +122,7 @@ async function onSubmit() {
     // Use i18n for known error codes; api interceptor handles non-auth errors
     const i18nKey = code ? `errors.${code}` : ''
     if (i18nKey && t(i18nKey) !== i18nKey) {
-      showToast(t(i18nKey))
+      showFailToast(t(i18nKey))
     }
   } finally {
     loading.value = false

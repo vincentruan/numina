@@ -91,7 +91,7 @@
 <script setup lang="ts">
 import { ref, provide } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
@@ -140,7 +140,7 @@ async function onSubmit() {
   loading.value = true
   try {
     await authStore.register(form.value)
-    showToast(t('toast.registerSuccess'))
+    showSuccessToast(t('toast.registerSuccess'))
     router.push('/')
   } catch (error: unknown) {
     // Handle field-level validation errors (422)
@@ -158,7 +158,7 @@ async function onSubmit() {
     // Use i18n for known error codes; api interceptor handles non-auth errors
     const i18nKey = code ? `errors.${code}` : ''
     if (i18nKey && t(i18nKey) !== i18nKey) {
-      showToast(t(i18nKey))
+      showFailToast(t(i18nKey))
     }
   } finally {
     loading.value = false

@@ -115,7 +115,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getSpendingLeaks, dismissSpendingLeak } from '@/api/aiSpendingLeaks'
 import type { SpendingLeakItem } from '@/api/aiSpendingLeaks'
@@ -126,7 +126,7 @@ const { t } = useI18n()
 
 async function onScanComplete() {
   await loadLeaks()
-  showToast(t('toast.aiScanComplete'))
+  showSuccessToast(t('toast.aiScanComplete'))
 }
 
 const {
@@ -176,7 +176,7 @@ async function loadLeaks() {
     const res = await getSpendingLeaks()
     leaks.value = res
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -191,7 +191,7 @@ async function onDismiss(id: string) {
     await dismissSpendingLeak(id)
     leaks.value = leaks.value.filter(l => l.id !== id)
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 

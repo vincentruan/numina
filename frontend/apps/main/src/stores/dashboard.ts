@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import i18n from '@/i18n'
 import type { DashboardOverview, AllocationItem, TrendPoint, DailyCostItem, InvestmentReturnItem, TopAssetItem, LowUsageItem, StatesSummaryResponse, Asset, NewAssetsResponse } from '@/types'
 import * as dashboardApi from '@/api/dashboard'
@@ -196,7 +196,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
       assetListFinished.value = !data.has_next
     } catch (error) {
       console.error('[fetchAssetsPage] Failed to load assets:', error)
-      showToast(i18n.global.t('toast.assetLoadFailed'))
+      showFailToast(i18n.global.t('toast.assetLoadFailed'))
       // Prevent infinite retry on error
       assetListFinished.value = true
     } finally {

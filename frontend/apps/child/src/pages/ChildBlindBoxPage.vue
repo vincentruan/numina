@@ -75,7 +75,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { storeToRefs } from 'pinia'
 import { useBlindBoxStore } from '@/stores/blindBox'
@@ -111,7 +111,7 @@ async function onDraw() {
     await store.useBonusDraw(bonusDraws.value[0].id)
     revealed.value = true
   } catch {
-    showToast(t('toast.drawFailed'))
+    showFailToast(t('toast.drawFailed'))
   } finally {
     animating.value = false
   }
@@ -126,7 +126,7 @@ async function onUseBonusDraw(bonusId: string) {
     revealed.value = true
     activeTab.value = 'draw'
   } catch {
-    showToast(t('toast.useBonusFailed'))
+    showFailToast(t('toast.useBonusFailed'))
   } finally {
     animating.value = false
   }

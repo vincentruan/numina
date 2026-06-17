@@ -284,11 +284,11 @@ async function onRealize() {
       category_id: realizeForm.value.category_id || undefined
     }
     const res = await realizeWish(wish.value.id, payload)
-    showToast(t('toast.assetConverted'))
+    showSuccessToast(t('toast.assetConverted'))
     showRealizeDialog.value = false
     router.push(`/assets/${res.data.id}`)
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     realizing.value = false
   }
@@ -299,7 +299,7 @@ async function onCancel() {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmCancel') })
     acting.value = true
     await wishStore.updateWish(wish.value!.id, { status: 'cancelled' })
-    showToast(t('toast.wishCancelled'))
+    showSuccessToast(t('toast.wishCancelled'))
   } catch {
     // cancelled
   } finally {
@@ -311,7 +311,7 @@ async function onReactivate() {
   acting.value = true
   try {
     await wishStore.updateWish(wish.value!.id, { status: 'pending' })
-    showToast(t('toast.wishReactivated'))
+    showSuccessToast(t('toast.wishReactivated'))
   } finally {
     acting.value = false
   }
@@ -322,7 +322,7 @@ async function onDelete() {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: wish.value?.name }) })
     deleting.value = true
     await wishStore.deleteWish(wish.value!.id)
-    showToast(t('toast.deleteSuccess'))
+    showSuccessToast(t('toast.deleteSuccess'))
     router.back()
   } catch {
     // cancelled

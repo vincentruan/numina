@@ -122,7 +122,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getAllocationTarget, setAllocationTarget, checkAllocationDrift } from '@/api/ai'
 import { useAITask } from '@/composables/useAITask'
@@ -204,7 +204,7 @@ onMounted(async () => {
       getDefaultCategories().forEach(c => { editTargets[c] = 0 })
     }
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
     getDefaultCategories().forEach(c => { editTargets[c] = 0 })
   }
 })

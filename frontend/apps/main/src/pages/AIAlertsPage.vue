@@ -116,7 +116,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getAssetAlerts, dismissAssetAlert } from '@/api/ai'
 import { useAITask } from '@/composables/useAITask'
@@ -146,7 +146,7 @@ async function loadAlerts() {
     const res = await getAssetAlerts()
     alerts.value = res.data
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -183,7 +183,7 @@ async function onDismiss(id: string) {
     await dismissAssetAlert(id)
     alerts.value = alerts.value.filter(a => a.id !== id)
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 

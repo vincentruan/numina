@@ -95,7 +95,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { postWhatIf, type WhatIfAction, type WhatIfResponse } from '@/api/timeMachine'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
@@ -166,7 +166,7 @@ async function calculate() {
     await nextTick()
     renderChart(res.data)
   } catch {
-    showToast(t('toast.timeMachineError'))
+    showFailToast(t('toast.timeMachineError'))
   } finally {
     loading.value = false
   }

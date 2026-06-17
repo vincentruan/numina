@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { calculateBuyVsRent, type BuyVsRentResult } from '@/api/assetsAnalysis'
 
@@ -76,7 +76,7 @@ const form = ref({
 
 async function onCalculate() {
   if (!form.value.purchase_price || !form.value.monthly_rent || !form.value.usage_months) {
-    showToast(t('toast.buyVsRentFieldsRequired'))
+    showFailToast(t('toast.buyVsRentFieldsRequired'))
     return
   }
   loading.value = true
@@ -90,7 +90,7 @@ async function onCalculate() {
         : {}),
     })
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     loading.value = false
   }

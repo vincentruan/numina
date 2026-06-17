@@ -2,7 +2,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@numina/auth'
 import {
@@ -88,9 +88,9 @@ async function onCopyKey() {
     }
     if (!text) return
     await navigator.clipboard.writeText(text)
-    showToast(t('toast.copied'))
+    showSuccessToast(t('toast.copied'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 

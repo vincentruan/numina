@@ -148,7 +148,7 @@
 defineOptions({ name: 'LiabilityList' })
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
 import type { Liability } from '@/types'
@@ -253,7 +253,7 @@ async function confirmDelete(item: Liability) {
     confirmButtonColor: '#dc2626',
   })
   await liabilityStore.deleteLiability(item.id)
-  showToast(t('toast.deleteSuccess'))
+  showSuccessToast(t('toast.deleteSuccess'))
 }
 
 // --- Quick payment ---
@@ -284,7 +284,7 @@ async function submitPayment() {
     return
   }
   await liabilityStore.recordPayment(payTarget.value!.id, amount)
-  showToast(t('toast.paymentSuccess'))
+  showSuccessToast(t('toast.paymentSuccess'))
   payDialogVisible.value = false
 }
 

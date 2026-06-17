@@ -16,7 +16,7 @@
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useAIStore } from '@/stores/ai'
 import { refreshTokenIfNeeded } from '@/api'
 import {
@@ -281,7 +281,9 @@ export function useAITask(
         break
       case 'capability.end': {
         // Capture markdown file path from result (for elastic fallback)
-        const resultPath = event.result?.path
+        // result.data may contain path info, cast as Record<string, unknown>
+        const resultData = event.result?.data as Record<string, unknown> | undefined
+        const resultPath = resultData?.path as string | undefined
         if (resultPath) {
           markdownFilePath.value = resultPath
           // Update background task registry
@@ -304,18 +306,19 @@ export function useAITask(
         }
         break
       }
-      case 'phase.transition': {
-        // Backend emits this when transitioning from Phase 1 to Phase 2
+      case 'state.snapshot': {
+        // Backend may emit state.snapshot when transitioning from Phase 1 to Phase 2
         // Captures markdown_file_path for elastic fallback
-        if (event.metadata?.markdown_file_path) {
-          markdownFilePath.value = event.metadata.markdown_file_path as string
+        const metadata = event.metadata as Record<string, unknown> | undefined
+        if (metadata?.markdown_file_path) {
+          markdownFilePath.value = metadata.markdown_file_path as string
           if (isBackground.value && taskId.value) {
             aiStore.updateBackgroundTask(capability, {
-              markdownFilePath: event.metadata.markdown_file_path as string,
+              markdownFilePath: metadata.markdown_file_path as string,
             })
           }
           if (options?.onMarkdownGenerated) {
-            options.onMarkdownGenerated(event.metadata.markdown_file_path as string)
+            options.onMarkdownGenerated(metadata.markdown_file_path as string)
           }
         }
         break
@@ -571,11 +574,14 @@ export function useAITask(
       }
 
       // Register background task immediately after stream starts
-      taskId.value = result.taskId ?? null
-      if (backgroundMode && taskId.value) {
+      // Note: taskId is only available when queued=true; for non-queued streams, taskId remains null
+      // and will be populated by backend events if needed
+      if (backgroundMode) {
+        // taskId.value is set earlier from queued case; for non-queued, use sessionId as fallback identifier
+        const effectiveId = taskId.value || sessionId.value || ''
         aiStore.registerBackgroundTask({
           capability,
-          taskId: taskId.value,
+          taskId: effectiveId,
           sessionId: sessionId.value ?? '',
           startedAt: new Date().toISOString(),
           status: 'running',
@@ -743,7 +749,7 @@ export function useAITask(
         }
       }
     } catch {
-      showToast(t('toast.operationFailed'))
+      showFailToast(t('toast.operationFailed'))
       status.value = 'idle'
       phase.value = null
       stopTimer()

@@ -217,7 +217,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import draggable from 'vuedraggable'
@@ -304,7 +304,7 @@ async function onDragEnd() {
     await aiStore.reorderConfigs(aiStore.configs.map((c) => c.id))
     showToast(t('aiConfig.saveOrder'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -318,9 +318,9 @@ async function onCopyKey(cfg: ProviderConfig) {
       text = res.data.api_key
     }
     await navigator.clipboard.writeText(text)
-    showToast(t('toast.copied'))
+    showSuccessToast(t('toast.copied'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -357,7 +357,7 @@ async function onDelete(cfg: ProviderConfig) {
     deletingId.value = cfg.id
     await aiApi.deleteAIConfig(cfg.id)
     await aiStore.fetchConfigs()
-    showToast(t('toast.deleted'))
+    showSuccessToast(t('toast.deleted'))
   } catch {
     // user cancelled
   } finally {
@@ -369,9 +369,9 @@ async function onResetCircuit(id: string) {
   resettingCircuitId.value = id
   try {
     await aiStore.resetCircuit(id)
-    showToast(t('toast.aiConfigSaved'))
+    showSuccessToast(t('toast.aiConfigSaved'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     resettingCircuitId.value = null
   }

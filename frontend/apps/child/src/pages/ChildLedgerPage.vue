@@ -91,7 +91,7 @@ defineOptions({ name: 'ChildLedger' })
 import { ref, computed, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildLedgerSkeleton from '@/components/skeletons/ChildLedgerSkeleton.vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getCoinLedger, getSiblings, giftCoins, type CoinTransaction, type Sibling } from '@/api/coins'
 import CoinDisplay from '@/components/coins/CoinDisplay.vue'
@@ -152,7 +152,7 @@ async function doGift() {
     await refreshBalance()
     await load()
   } catch {
-    showToast(t('toast.grantBalanceFailed'))
+    showFailToast(t('toast.grantBalanceFailed'))
   }
 }
 

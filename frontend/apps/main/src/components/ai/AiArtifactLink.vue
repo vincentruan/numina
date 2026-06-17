@@ -22,7 +22,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import type { Artifact } from '@/types/agent-stream'
 
 const props = defineProps<{
@@ -88,9 +88,9 @@ async function copyPath() {
   copying.value = true
   try {
     await navigator.clipboard.writeText(scrubForClipboard(props.artifact.path))
-    showToast(t('aiProcess.pathCopied'))
+    showSuccessToast(t('aiProcess.pathCopied'))
   } catch {
-    showToast(t('aiProcess.copyFailed'))
+    showFailToast(t('aiProcess.copyFailed'))
   } finally {
     copying.value = false
   }

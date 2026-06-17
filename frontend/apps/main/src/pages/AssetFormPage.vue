@@ -14,7 +14,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useCategoryStore } from '@/stores/category'
@@ -38,16 +38,16 @@ async function onSubmit(data: Partial<Asset>) {
   try {
     if (isEdit.value) {
       await assetStore.updateAsset(route.params.id as string, data)
-      showToast(t('toast.updateSuccess'))
+      showSuccessToast(t('toast.updateSuccess'))
     } else {
       await assetStore.createAsset(data)
-      showToast(t('toast.addSuccess'))
+      showSuccessToast(t('toast.addSuccess'))
     }
     // Dashboard refreshes naturally via staleness guard (2 min TTL)
     // invalidateDashboard() already called by asset store methods
     router.back()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     submitting.value = false
   }

@@ -83,7 +83,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildWishDetailSkeleton from '@/components/skeletons/ChildWishDetailSkeleton.vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -152,7 +152,7 @@ async function redeem() {
     await requestRedemption(wish.value.id)
     await load()
   } catch {
-    showToast(t('toast.submitFailed'))
+    showFailToast(t('toast.submitFailed'))
   } finally {
     actioning.value = false
   }

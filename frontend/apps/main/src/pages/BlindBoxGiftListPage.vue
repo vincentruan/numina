@@ -93,7 +93,7 @@ async function onDelete(gift: BlindBoxGift) {
     message: t('toast.confirmDelete', { name: gift.name }),
   })
   await store.deleteGift(gift.id)
-  showToast(t('toast.deleteSuccess'))
+  showSuccessToast(t('toast.deleteSuccess'))
 }
 </script>
 

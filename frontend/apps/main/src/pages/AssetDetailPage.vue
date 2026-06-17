@@ -318,7 +318,7 @@ async function onRetire() {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmRetireAsset', { name: asset.value?.name }) })
     acting.value = true
     await assetStore.retireAsset(asset.value!.id)
-    showToast(t('toast.assetRetired'))
+    showSuccessToast(t('toast.assetRetired'))
   } catch {
     // cancelled
   } finally {
@@ -330,7 +330,7 @@ async function onReactivate() {
   acting.value = true
   try {
     await assetStore.reactivateAsset(asset.value!.id)
-    showToast(t('toast.assetReactivated'))
+    showSuccessToast(t('toast.assetReactivated'))
   } finally {
     acting.value = false
   }
@@ -341,7 +341,7 @@ async function onDelete() {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: asset.value?.name }) })
     deleting.value = true
     await assetStore.deleteAsset(asset.value!.id)
-    showToast(t('toast.deleteSuccess'))
+    showSuccessToast(t('toast.deleteSuccess'))
     router.replace('/')
   } catch {
     // cancelled

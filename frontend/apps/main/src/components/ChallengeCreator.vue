@@ -114,7 +114,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { listChildren, type ChildResponse } from '@/api/children'
 import { listChoreTemplates, type ChoreTemplate } from '@/api/chores'
 import { createChallenge, type ChallengeCreateRequest } from '@/api/challengeGrant'
@@ -211,7 +211,7 @@ async function doCreate() {
 
   try {
     await createChallenge(form.value)
-    showToast(t('challenge.createdSuccess'))
+    showSuccessToast(t('challenge.createdSuccess'))
     // Reset form
     form.value = {
       child_user_id: '',

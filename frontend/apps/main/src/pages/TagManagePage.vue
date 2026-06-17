@@ -104,14 +104,14 @@ async function onDialogConfirm() {
   try {
     if (editingId.value) {
       await tagApi.updateTag(editingId.value, formData.value)
-      showToast(t('toast.updateSuccess'))
+      showSuccessToast(t('toast.updateSuccess'))
     } else {
       await tagApi.createTag(formData.value)
-      showToast(t('toast.addSuccess'))
+      showSuccessToast(t('toast.addSuccess'))
     }
     await fetchTags()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
@@ -119,7 +119,7 @@ async function onDelete(tag: Tag) {
   try {
     await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDelete', { name: tag.name }) })
     await tagApi.deleteTag(tag.id)
-    showToast(t('toast.deleteSuccess'))
+    showSuccessToast(t('toast.deleteSuccess'))
     await fetchTags()
   } catch {
     // cancelled

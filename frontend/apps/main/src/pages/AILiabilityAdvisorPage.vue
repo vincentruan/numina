@@ -213,7 +213,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { getLiabilityAdvice } from '@/api/ai'
 import { useAITask } from '@/composables/useAITask'
@@ -257,7 +257,7 @@ async function loadData(): Promise<boolean> {
     }
     return true
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
     return false
   } finally {
     loading.value = false

@@ -82,9 +82,9 @@ function onSelectAgent(action: { value: string }) {
 // Attachment selection
 const showAttachmentMenu = ref(false)
 const attachmentActions = [
-  { name: 'File', value: 'file', icon: 'description' },
-  { name: 'Image', value: 'image', icon: 'photo' },
-  { name: 'Camera', value: 'camera', icon: 'photograph' }
+  { text: 'File', value: 'file', icon: 'description' },
+  { text: 'Image', value: 'image', icon: 'photo' },
+  { text: 'Camera', value: 'camera', icon: 'photograph' }
 ]
 function onSelectAttachment(action: any) {
   emit('action', action.value)

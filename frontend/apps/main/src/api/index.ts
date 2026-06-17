@@ -13,7 +13,7 @@
 
 import axios from 'axios'
 import type { AxiosRequestConfig } from 'axios'
-import { showToast, showDialog } from 'vant'
+import { showFailToast, showDialog } from 'vant'
 import { clearAuth } from '@/utils/storage'
 import router from '@/router'
 import i18n from '@/i18n'
@@ -109,7 +109,7 @@ http.interceptors.response.use(
       ) {
         clearAuth()
         router.push('/login')
-        showToast(resolveErrorMsg(code, (response.data as ApiEnvelope).message || t('errors.AUTH_TOKEN_EXPIRED')))
+        showFailToast(resolveErrorMsg(code, (response.data as ApiEnvelope).message || t('errors.AUTH_TOKEN_EXPIRED')))
         return Promise.reject(new Error(code))
       }
     }
@@ -133,7 +133,7 @@ http.interceptors.response.use(
       // Don't try to refresh or redirect for auth endpoints — they handle their own errors
       // This prevents a loop: LoginPage.onMounted calls checkDevice → 401 → router.push('/login') → loop
       if (originalRequest.url?.includes('/auth/')) {
-        showToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
+        showFailToast(resolveErrorMsg(error.response.data?.code, error.response.data?.message || error.response.data?.detail || t('errors.AUTH_INVALID_CREDENTIALS')))
         return Promise.reject(error)
       }
 
@@ -178,9 +178,9 @@ http.interceptors.response.use(
         router.push('/login')
         // Safe type narrowing with axios.isAxiosError()
         if (axios.isAxiosError(refreshError)) {
-          showToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+          showFailToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
         } else {
-          showToast(t('errors.AUTH_REFRESH_FAILED'))
+          showFailToast(t('errors.AUTH_REFRESH_FAILED'))
         }
         return Promise.reject(refreshError)
       } finally {
@@ -203,30 +203,30 @@ http.interceptors.response.use(
     if (error.response) {
       const { status, data } = error.response
       if (status === 403) {
-        showToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('errors.FORBIDDEN')))
+        showFailToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('errors.FORBIDDEN')))
       } else if (status === 422) {
         if (data?.details && Array.isArray(data.details)) {
           const msg = data.details.map((e: { msg: string }) => e.msg).join('; ')
-          showToast(msg || data.message || t('errors.VALIDATION_ERROR'))
+          showFailToast(msg || data.message || t('errors.VALIDATION_ERROR'))
         } else if (data?.detail) {
           const msg = Array.isArray(data.detail)
             ? data.detail.map((e: { msg: string }) => e.msg).join('; ')
             : data.detail
-          showToast(msg)
+          showFailToast(msg)
         } else {
-          showToast(data?.message || t('errors.VALIDATION_ERROR'))
+          showFailToast(data?.message || t('errors.VALIDATION_ERROR'))
         }
       } else if (status !== 401) {
-        showToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('toast.requestFailed')))
+        showFailToast(resolveErrorMsg(data?.code, data?.message || data?.detail || t('toast.requestFailed')))
       }
     } else if (error.code === 'ECONNABORTED') {
-      showToast(t('toast.networkTimeout'))
+      showFailToast(t('toast.networkTimeout'))
     } else if (error.message?.includes('Network Error')) {
-      showToast(t('toast.networkError'))
+      showFailToast(t('toast.networkError'))
     } else {
       const errMessage = error.message || '未知错误'
       console.error('[API Error]', errMessage, error)
-      showToast(errMessage.includes('CORS') ? t('toast.corsError') : t('toast.requestFailed'))
+      showFailToast(errMessage.includes('CORS') ? t('toast.corsError') : t('toast.requestFailed'))
     }
     return Promise.reject(error)
   }
@@ -257,9 +257,9 @@ export async function refreshTokenIfNeeded(): Promise<void> {
     router.push('/login')
     // Safe type narrowing with axios.isAxiosError()
     if (axios.isAxiosError(refreshError)) {
-      showToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
+      showFailToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
     } else {
-      showToast(t('errors.AUTH_REFRESH_FAILED'))
+      showFailToast(t('errors.AUTH_REFRESH_FAILED'))
     }
     throw refreshError
   } finally {

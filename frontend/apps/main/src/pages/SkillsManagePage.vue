@@ -334,7 +334,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -446,7 +446,7 @@ async function loadSkills() {
       return found || { id, skill_type: 'builtin' as const, is_enabled: false, display_order: 100, can_edit: false, can_delete: false }
     })
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -486,7 +486,7 @@ async function onToggle(skillId: string, enabled: boolean) {
     await toggleSkill(skillId, enabled)
     await loadSkills()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
@@ -542,7 +542,7 @@ async function onSubmitForm() {
     showForm.value = false
     await loadSkills()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     saving.value = false
   }
@@ -628,7 +628,7 @@ async function onAISave() {
     aiParsedDescription.value = null
     await loadSkills()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     saving.value = false
   }

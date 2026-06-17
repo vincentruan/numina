@@ -118,7 +118,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -176,7 +176,7 @@ async function submitWish() {
     })
     showSuccessDialog.value = true
   } catch {
-    showToast(t('toast.submitFailed'))
+    showFailToast(t('toast.submitFailed'))
   } finally {
     creating.value = false
   }

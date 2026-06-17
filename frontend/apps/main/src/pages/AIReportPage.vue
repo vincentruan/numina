@@ -267,7 +267,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -336,14 +336,14 @@ async function loadExistingReport() {
       hasMarkdownFallback.value = false  // We have structured data, no need for fallback
     }
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
 // Load markdown for elastic fallback when structured conversion failed
 async function loadFallbackMarkdown() {
   if (!fallbackMarkdownPath.value) {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
     return
   }
   try {
@@ -353,13 +353,13 @@ async function loadFallbackMarkdown() {
     markdownFileSize.value = res.data.file_size
     markdownVisible.value = true
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
 async function loadMarkdownPreview() {
   if (!currentReport.value?.markdown_file_path) {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
     return
   }
   try {
@@ -369,7 +369,7 @@ async function loadMarkdownPreview() {
     markdownFileSize.value = res.data.file_size
     markdownVisible.value = true
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 

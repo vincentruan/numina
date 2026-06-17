@@ -204,7 +204,7 @@ import ProgressRing from '@/components/ProgressRing.vue'
 import ChildHomeSkeleton from '@/components/skeletons/ChildHomeSkeleton.vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'vant'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getChildCalendar } from '@/api/calendar'
 import { listChildWishes, type ChildWish } from '@/api/childWishes'
@@ -323,12 +323,12 @@ async function complete(instanceId: string) {
     if (topWish.value) {
       const chore = todayChores.value.find(c => c.id === instanceId)
       const stars = chore?.coin_reward ?? 0
-      showToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
+      showSuccessToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
     }
     // Refresh balance after completing a chore
     await refreshBalance()
   } catch {
-    showToast(t('toast.submitFailed'))
+    showFailToast(t('toast.submitFailed'))
   } finally {
     submittingId.value = null
   }
@@ -347,7 +347,7 @@ async function claim(instanceId: string) {
   } catch {
     // Revert optimistic update
     if (idx !== -1) todayChores.value[idx] = { ...todayChores.value[idx], is_pool_unclaimed: true }
-    showToast(t('chore.claimFailed'))
+    showFailToast(t('chore.claimFailed'))
   } finally {
     claimingId.value = null
   }
@@ -368,7 +368,7 @@ async function doAbandon() {
     abandonSheetVisible.value = false
     abandonTarget.value = null
   } catch {
-    showToast(t('chore.abandonFailed'))
+    showFailToast(t('chore.abandonFailed'))
     abandonTarget.value = null
   } finally {
     abandoningId.value = null

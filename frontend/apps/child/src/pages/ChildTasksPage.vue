@@ -234,7 +234,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildTasksSkeleton from '@/components/skeletons/ChildTasksSkeleton.vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { getUser } from '@numina/auth'
 import { getMyChores, markChoreComplete, claimChore, abandonChore, type ChoreInstance } from '@/api/chores'
 import { getMyMilestones } from '@/api/milestones'
@@ -530,7 +530,7 @@ async function complete(instanceId: string) {
     if (topWish.value) {
       const chore = chores.value.find(c => c.id === instanceId)
       const stars = chore?.coin_reward ?? 0
-      showToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
+      showSuccessToast(t('chore.wishProgressBump', { stars, wishName: topWish.value.name }))
     }
     // Check for auto-triggered blind box
     if (updated.status === 'approved') {
@@ -558,7 +558,7 @@ async function claim(instanceId: string) {
   } catch {
     // Revert optimistic update
     if (idx !== -1) chores.value[idx] = { ...chores.value[idx], is_pool_unclaimed: true }
-    showToast(t('chore.claimFailed'))
+    showFailToast(t('chore.claimFailed'))
   } finally {
     claimingId.value = null
   }
@@ -579,7 +579,7 @@ async function doAbandon() {
     abandonSheetVisible.value = false
     abandonTarget.value = null
   } catch {
-    showToast(t('chore.abandonFailed'))
+    showFailToast(t('chore.abandonFailed'))
     abandonTarget.value = null
   } finally {
     abandoningId.value = null

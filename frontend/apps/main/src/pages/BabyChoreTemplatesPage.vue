@@ -134,7 +134,7 @@ async function loadData() {
   try {
     templates.value = await listChoreTemplates()
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
   } finally {
     decrement()
     loading.value = false
@@ -192,7 +192,7 @@ async function onDelete(template: ChoreTemplate) {
     if (idx >= 0) {
       templates.value.splice(idx, 0, template)
     }
-    showToast(t('toast.deleteFailed'))
+    showFailToast(t('toast.deleteFailed'))
   } finally {
     deletingId.value = null
   }

@@ -203,12 +203,12 @@
             :key="group.id || `group-${group.type}-${group.messages[0]?.id}`"
             :group="group"
             :is-loading="asking || connecting"
-            :thread-id="currentSessionId"
+            :thread-id="currentSessionId ?? undefined"
             @retry="onRetryError(messages.findIndex(m => m.id === group.messages[0]?.id))"
             @copy="onCopy"
-            @feedback="(mid, v) => onFeedback(mid, v)"
+            @feedback="(mid: string, v: 1 | -1) => onFeedback(mid, v)"
             @suggestion-click="onSuggestionChipClick"
-            @artifact-tap="onArtifactTap"
+            @artifact-tap="(artifact: { id: string; title: string; kind?: string; url?: string; path?: string }) => onArtifactTap({ ...artifact, kind: (artifact.kind || 'other') as Artifact['kind'] })"
           />
         </transition-group>
       </template>
@@ -225,7 +225,7 @@
       :visible="showArtifactSheet"
       :artifacts="sessionArtifacts"
       @close="showArtifactSheet = false"
-      @artifact-tap="onArtifactTap"
+      @artifact-tap="(artifact: Artifact) => onArtifactTap(artifact)"
     />
 
     <!-- Scroll-to-bottom floating button: shown when user scrolled up during streaming -->
@@ -260,7 +260,7 @@
       <InputBox
         :status="reconnecting ? 'reconnecting' : asking ? 'streaming' : connecting ? 'submitted' : 'ready'"
         :is-welcome-mode="messages.length === 0"
-        :thread-id="currentSessionId"
+        :thread-id="currentSessionId ?? undefined"
         :initial-mode="inputMode"
         :initial-model-name="modelName"
         @submit="onDeerFlowSubmit"
@@ -335,6 +335,7 @@ import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep 
 import { filterAIContent } from '@/utils/contentFilter'
 import type { ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
+import type { PartialSessionSummary } from '@/api/sessions'
 
 const NUMINA_AGENT_NAME = 'numina'
 
@@ -621,7 +622,7 @@ const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
 let programmaticScroll = false
 const showHistory = ref(false)
-const sessions = ref<SessionSummary[]>([])
+const sessions = ref<PartialSessionSummary[]>([])
 const sessionsLoading = ref(false)
 const sessionsLoadingMore = ref(false)
 const sessionsLoaded = ref(false)
@@ -636,7 +637,7 @@ let paginationObserver: IntersectionObserver | null = null
 // Session context menu state
 const sessionMenu = ref<{
   visible: boolean
-  session: SessionSummary | null
+  session: PartialSessionSummary | null
   x: number
   y: number
 }>({ visible: false, session: null, x: 0, y: 0 })
@@ -655,10 +656,10 @@ const groupedSessions = computed(() => {
   const weekStart = new Date(todayStart.getTime() - 7 * 86400000)
   const monthStart = new Date(todayStart.getTime() - 30 * 86400000)
 
-  const groups: Record<string, SessionSummary[]> = {}
+  const groups: Record<string, PartialSessionSummary[]> = {}
   const order: string[] = []
 
-  function addToGroup(label: string, session: SessionSummary) {
+  function addToGroup(label: string, session: PartialSessionSummary) {
     if (!groups[label]) { groups[label] = []; order.push(label) }
     groups[label].push(session)
   }
@@ -687,7 +688,7 @@ const groupedSessions = computed(() => {
   return order.map((label) => ({ label, sessions: groups[label] }))
 })
 
-function openSessionMenu(session: SessionSummary, event: MouseEvent) {
+function openSessionMenu(session: PartialSessionSummary, event: MouseEvent) {
   const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
   const menuWidth = 140
   const x = Math.max(4, Math.min(rect.left - menuWidth, window.innerWidth - menuWidth - 4))
@@ -742,7 +743,7 @@ async function onTogglePinSession() {
     ]
     showToast(newPinned ? t('aiChat.pinSessionSuccess') : t('aiChat.unpinSessionSuccess'))
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
@@ -993,7 +994,7 @@ async function loadSessions() {
     }
     sessionsOffset.value = res.data.sessions.length
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     sessionsLoading.value = false
   }
@@ -1014,7 +1015,7 @@ async function loadMoreSessions() {
       sessionsAllLoaded.value = true
     }
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     sessionsLoadingMore.value = false
   }
@@ -1035,7 +1036,7 @@ watch(showHistory, async (open) => {
   await loadSessions()
 })
 
-async function loadSessionMessages(session: SessionSummary) {
+async function loadSessionMessages(session: PartialSessionSummary) {
   showHistory.value = false
   messages.value = []
   currentSessionId.value = session.session_id
@@ -1220,9 +1221,10 @@ async function onSend() {
       { role: 'user', content: q },
       activeAgent.value?.id,
       aiMsgId,
-      (meta) => {
-        if (meta && meta.thread_id && !currentSessionId.value) {
-          currentSessionId.value = meta.thread_id
+      (meta: unknown) => {
+        const metaObj = meta as Record<string, unknown>
+        if (metaObj && metaObj.thread_id && !currentSessionId.value) {
+          currentSessionId.value = metaObj.thread_id as string
         }
       },
       {
@@ -1328,7 +1330,7 @@ async function onCopy(content: string) {
   if (navigator.clipboard && window.isSecureContext) {
     try {
       await navigator.clipboard.writeText(content)
-      showToast(t('toast.copied'))
+      showSuccessToast(t('toast.copied'))
       return
     } catch {
       // Fall through to legacy method
@@ -1348,12 +1350,12 @@ async function onCopy(content: string) {
     const success = document.execCommand('copy')
     document.body.removeChild(textarea)
     if (success) {
-      showToast(t('toast.copied'))
+      showSuccessToast(t('toast.copied'))
     } else {
-      showToast(t('toast.copyFailed'))
+      showFailToast(t('toast.copyFailed'))
     }
   } catch {
-    showToast(t('toast.copyFailed'))
+    showFailToast(t('toast.copyFailed'))
   }
 }
 
@@ -1387,7 +1389,7 @@ async function onSendEdit(idx: number) {
       // Use the new forked session (forkRes.data contains ForkSessionResponse)
       currentSessionId.value = forkRes.data.session_id
     } catch {
-      showToast(t('toast.operationFailed'))
+      showFailToast(t('toast.operationFailed'))
       return
     }
   }
@@ -1533,7 +1535,7 @@ onMounted(async () => {
       await markChatRead()
       await scrollToBottom()
     } catch {
-      showToast(t('toast.operationFailed'))
+      showFailToast(t('toast.operationFailed'))
     }
   }
 

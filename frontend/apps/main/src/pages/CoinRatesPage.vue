@@ -61,7 +61,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useFamilyStore } from '@/stores/family'
 import { getFamilySettings, updateFamilySettings } from '@/api/family'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -87,7 +87,7 @@ onMounted(async () => {
     copperToSilverStr.value = String(copperToSilver.value)
     silverToGoldStr.value = String(silverToGold.value)
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
   }
 })
 
@@ -134,10 +134,10 @@ async function saveRates() {
     })
     familyStore.coinCopperToSilver = copperToSilver.value
     familyStore.coinSilverToGold = silverToGold.value
-    showToast(t('toast.saveSuccess'))
+    showSuccessToast(t('toast.saveSuccess'))
     router.back()
   } catch {
-    showToast(t('toast.saveFailed'))
+    showFailToast(t('toast.saveFailed'))
   } finally {
     saving.value = false
   }

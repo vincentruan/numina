@@ -537,7 +537,7 @@
 <script setup lang="ts">
 defineOptions({ name: 'Baby' })
 import { ref, computed, onMounted } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
@@ -726,7 +726,7 @@ async function doApprove() {
   try {
     await approveChildWish(approveTarget.value.id, cost)
     showApproveDialog.value = false
-    showToast(t('toast.wishApproved'))
+    showSuccessToast(t('toast.wishApproved'))
     await loadData()
   } catch {
     wishDialogError.value = t('baby.wishOperationFailed')
@@ -751,7 +751,7 @@ async function doReject() {
   try {
     await rejectChildWish(rejectTarget.value.id, rejectReason.value || undefined)
     showRejectDialog.value = false
-    showToast(t('toast.wishRejected'))
+    showSuccessToast(t('toast.wishRejected'))
     await loadData()
   } catch {
     wishDialogError.value = t('baby.wishOperationFailed')
@@ -767,7 +767,7 @@ async function doRealize() {
   try {
     await realizeChildWish(realizeTarget.value.id)
     showRealizeDialog.value = false
-    showToast(t('toast.wishRealized'))
+    showSuccessToast(t('toast.wishRealized'))
     await loadData()
   } catch {
     wishDialogError.value = t('baby.wishOperationFailed')
@@ -780,10 +780,10 @@ async function doDefer(wishId: string) {
   actioningId.value = wishId
   try {
     await deferChildWish(wishId)
-    showToast(t('toast.wishDeferred'))
+    showSuccessToast(t('toast.wishDeferred'))
     await loadData()
   } catch {
-    showToast(t('baby.wishOperationFailed'))
+    showFailToast(t('baby.wishOperationFailed'))
   } finally {
     actioningId.value = null
   }
@@ -935,10 +935,10 @@ async function doGrant() {
   grantingCoins.value = true
   try {
     await grantCoins(grantTargetChild.value.id, amount, grantReason.value || t('baby.grantDefaultReason'))
-    showToast(t('toast.childGrantedStars', { amount, name: grantTargetChild.value.display_name }))
+    showSuccessToast(t('toast.childGrantedStars', { amount, name: grantTargetChild.value.display_name }))
     showGrantSheet.value = false
   } catch {
-    showToast(t('toast.grantFailed'))
+    showFailToast(t('toast.grantFailed'))
     return
   } finally {
     grantingCoins.value = false
@@ -946,7 +946,7 @@ async function doGrant() {
   try {
     const res = await getAllChildBalances()
     childBalances.value = res.data
-  } catch { showToast(t('toast.operationFailed')) }
+  } catch { showFailToast(t('toast.operationFailed')) }
 }
 
 function openAssignPicker(chore: ChoreInstance) {
@@ -966,9 +966,9 @@ async function selectChildForAssign(child: { id: string | number; display_name?:
     if (idx >= 0) {
       allChores.value[idx] = updated
     }
-    showToast(isReassign ? t('baby.choreReassignSuccess') : t('baby.choreAssignSuccess'))
+    showSuccessToast(isReassign ? t('baby.choreReassignSuccess') : t('baby.choreAssignSuccess'))
   } catch {
-    showToast(isReassign ? t('baby.choreReassignFailed') : t('baby.choreAssignFailed'))
+    showFailToast(isReassign ? t('baby.choreReassignFailed') : t('baby.choreAssignFailed'))
   } finally {
     assigningId.value = null
     assigningChore.value = null
@@ -987,10 +987,10 @@ async function doApproveChore(chore: ChoreInstance) {
   actioningId.value = chore.id
   try {
     await approveChore(chore.id)
-    showToast(t('baby.choreApproveSuccess'))
+    showSuccessToast(t('baby.choreApproveSuccess'))
     await loadData()
   } catch {
-    showToast(t('baby.choreApproveFailed'))
+    showFailToast(t('baby.choreApproveFailed'))
   } finally {
     actioningId.value = null
   }
@@ -1008,10 +1008,10 @@ async function doRejectChore(chore: ChoreInstance) {
   actioningId.value = chore.id
   try {
     await rejectChore(chore.id, true)
-    showToast(t('baby.choreRedoSuccess'))
+    showSuccessToast(t('baby.choreRedoSuccess'))
     await loadData()
   } catch {
-    showToast(t('baby.choreRedoFailed'))
+    showFailToast(t('baby.choreRedoFailed'))
   } finally {
     actioningId.value = null
   }
@@ -1036,13 +1036,13 @@ async function doVoidChore(chore: ChoreInstance) {
   }
   try {
     await voidChoreInstance(chore.id)
-    showToast(t('baby.choreVoidSuccess'))
+    showSuccessToast(t('baby.choreVoidSuccess'))
   } catch {
     // Re-add on error
     if (idx >= 0 && backup) {
       allChores.value.splice(idx, 0, backup)
     }
-    showToast(t('baby.choreVoidFailed'))
+    showFailToast(t('baby.choreVoidFailed'))
   } finally {
     voidingId.value = null
   }
@@ -1063,7 +1063,7 @@ async function loadData() {
     allWishes.value = wishes
     allChores.value = chores
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 

@@ -68,7 +68,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import http from '@/api/index'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -92,7 +92,7 @@ const canChangePassword = computed(() =>
 
 async function onChangePassword() {
   if (form.value.newPassword !== form.value.confirmPassword) {
-    showToast(t('changePassword.passwordMismatch'))
+    showFailToast(t('changePassword.passwordMismatch'))
     return
   }
   try {
@@ -106,15 +106,15 @@ async function onChangePassword() {
       old_password: form.value.oldPassword,
       new_password: form.value.newPassword,
     })
-    showToast(t('changePassword.changeSuccess'))
+    showSuccessToast(t('changePassword.changeSuccess'))
     authStore.logout({ onLogout: () => router.push('/login') })
   } catch (e: unknown) {
     const err = e as { response?: { data?: { code?: string } } }
     const code = err.response?.data?.code
     if (code && t(`errors.${code}`) !== `errors.${code}`) {
-      showToast(t(`errors.${code}`))
+      showFailToast(t(`errors.${code}`))
     } else {
-      showToast(t('changePassword.changeFailed'))
+      showFailToast(t('changePassword.changeFailed'))
     }
   } finally {
     changingPassword.value = false
@@ -130,17 +130,17 @@ async function onResetPassword() {
   resettingPassword.value = true
   try {
     await http.post('/auth/me/password/reset')
-    showToast(t('changePassword.resetSuccess'))
+    showSuccessToast(t('changePassword.resetSuccess'))
     authStore.logout({ onLogout: () => router.push('/login') })
   } catch (e: unknown) {
     const err = e as { response?: { data?: { code?: string } } }
     const code = err.response?.data?.code
     if (code === 'NOTIFICATION_NO_CHANNEL') {
-      showToast(t('changePassword.noNotificationChannel'))
+      showToast({ message: t('changePassword.noNotificationChannel'), icon: 'warning-o' })
     } else if (code && t(`errors.${code}`) !== `errors.${code}`) {
-      showToast(t(`errors.${code}`))
+      showFailToast(t(`errors.${code}`))
     } else {
-      showToast(t('changePassword.resetFailed'))
+      showFailToast(t('changePassword.resetFailed'))
     }
   } finally {
     resettingPassword.value = false

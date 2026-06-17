@@ -150,10 +150,10 @@ async function onSubmit() {
     }
     if (isEdit.value) {
       await updateWish(wishId.value!, payload)
-      showToast(t('toast.wishSaved'))
+      showSuccessToast(t('toast.wishSaved'))
     } else {
       await createWish(payload)
-      showToast(t('toast.wishAdded'))
+      showSuccessToast(t('toast.wishAdded'))
     }
     router.back()
   } finally {
@@ -165,7 +165,7 @@ async function onDelete() {
   if (!isEdit.value) return
   await showConfirmDialog({ title: t('common.confirm'), message: t('toast.confirmDeleteIrrevocable') })
   await deleteWish(wishId.value!)
-  showToast(t('toast.deleteSuccess'))
+  showSuccessToast(t('toast.deleteSuccess'))
   router.back()
 }
 

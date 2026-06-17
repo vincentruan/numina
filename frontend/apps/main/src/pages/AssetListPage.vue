@@ -159,7 +159,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useAssetStore } from '@/stores/asset'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/category'
@@ -293,7 +293,7 @@ async function executeBatchDelete() {
     exitSelectionMode()
     await assetStore.fetchAssets(buildFilters())
   } catch {
-    showToast(t('toast.deleteFailed'))
+    showFailToast(t('toast.deleteFailed'))
   }
 }
 

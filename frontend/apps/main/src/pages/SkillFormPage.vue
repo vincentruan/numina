@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import {
   getSkillsGrouped,
   createCustomSkill,
@@ -113,7 +113,7 @@ async function onSubmit() {
     }
     router.back()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     saving.value = false
   }
@@ -128,13 +128,13 @@ onMounted(async () => {
       if (skill) {
         loadSkill(skill)
       } else {
-        showToast(t('toast.loadFailed'))
+        showFailToast(t('toast.loadFailed'))
         router.replace({ name: 'SkillsManage' })
         return
       }
     }
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
     if (isEdit.value) {
       router.replace({ name: 'SkillsManage' })
       return

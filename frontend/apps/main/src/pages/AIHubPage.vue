@@ -260,7 +260,7 @@ import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportStream } from '@/composables/useAIReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
@@ -523,7 +523,7 @@ async function refreshReport(silent?: boolean) {
       reportGeneratedAt.value = stream.generatedAt.value
     }
   } catch {
-    if (!silent) showToast(t('toast.refreshFailed'))
+    if (!silent) showFailToast(t('toast.refreshFailed'))
   } finally {
     if (!silent) reportLoading.value = false
   }

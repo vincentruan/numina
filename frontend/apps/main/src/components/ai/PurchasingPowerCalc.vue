@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { getPurchasingPower, type PurchasingPowerResponse } from '@/api/timeMachine'
 
 const { t } = useI18n()
@@ -72,7 +72,7 @@ async function calculate() {
     })
     result.value = res.data
   } catch {
-    showToast(t('toast.timeMachineError'))
+    showFailToast(t('toast.timeMachineError'))
   } finally {
     loading.value = false
   }

@@ -17,7 +17,7 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted, onUnmounted, ref } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useFamilyStore } from '@/stores/family'
 import { useI18n } from 'vue-i18n'
@@ -102,7 +102,7 @@ async function onTrustConfirm() {
         // User declined biometric or device unavailable — non-fatal
       }
     },
-    onSuccess: () => showToast(t('toast.deviceTrustSuccess')),
+    onSuccess: () => showSuccessToast(t('toast.deviceTrustSuccess')),
   })
 }
 </script>

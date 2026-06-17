@@ -77,7 +77,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import { createChoreTemplate } from '@/api/chores'
@@ -102,7 +102,7 @@ const submitting = ref(false)
 async function onSubmit() {
   const coinReward = parseInt(rewardStr.value, 10)
   if (!coinReward || coinReward <= 0) {
-    showToast(t('baby.choreForm.rewardRequired'))
+    showFailToast(t('baby.choreForm.rewardRequired'))
     return
   }
   submitting.value = true
@@ -115,10 +115,10 @@ async function onSubmit() {
       assignment_type: form.value.assignment_type,
       assignee_ids: form.value.assignment_type === 'assigned' ? form.value.assignee_ids : [],
     })
-    showToast(t('baby.choreForm.success'))
+    showSuccessToast(t('baby.choreForm.success'))
     router.back()
   } catch {
-    showToast(t('baby.choreForm.failed'))
+    showFailToast(t('baby.choreForm.failed'))
   } finally {
     submitting.value = false
   }

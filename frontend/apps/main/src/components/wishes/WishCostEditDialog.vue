@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { updateChildWishCost, type ParentWish } from '@/api/childWishes'
 import { getChildBalance, getChildLedger, type ChildLedgerEntry } from '@/api/family'
@@ -203,7 +203,7 @@ async function commit() {
   submitError.value = ''
   try {
     await updateChildWishCost(props.wish.id, newCost.value)
-    showToast(t('wishCostEdit.success'))
+    showSuccessToast(t('wishCostEdit.success'))
     emit('saved')
     close()
   } catch {

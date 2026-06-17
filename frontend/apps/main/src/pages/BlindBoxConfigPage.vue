@@ -99,7 +99,7 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, watch } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
@@ -141,7 +141,7 @@ function onSave() {
   if (_saveTimer) clearTimeout(_saveTimer)
   _saveTimer = setTimeout(async () => {
     await store.updateConfig({ ...form })
-    showToast(t('toast.saveSuccess'))
+    showSuccessToast(t('toast.saveSuccess'))
   }, 600)
 }
 </script>

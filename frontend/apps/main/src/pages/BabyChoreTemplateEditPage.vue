@@ -85,7 +85,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import {
@@ -122,7 +122,7 @@ async function loadData() {
   try {
     await familyStore.fetchFamily()
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
     router.back()
     decrement()
     loading.value = false
@@ -145,7 +145,7 @@ async function loadData() {
     }
     rewardStr.value = String(found.coin_reward)
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
     router.back()
   } finally {
     decrement()
@@ -171,7 +171,7 @@ async function onSubmit() {
     showToast(t('choreTemplate.saveSuccess'))
     router.back()
   } catch {
-    showToast(t('toast.saveFailed'))
+    showFailToast(t('toast.saveFailed'))
   } finally {
     submitting.value = false
   }

@@ -56,7 +56,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { createTag as apiCreateTag } from '@/api/tags'
 import type { Tag } from '@/types'
@@ -100,7 +100,7 @@ async function createTag() {
     emit('tag-created', res.data)
     emit('update:modelValue', [...props.modelValue, res.data.id])
     newTagName.value = ''
-    showToast(t('toast.tagCreated'))
+    showSuccessToast(t('toast.tagCreated'))
   } catch {
     // error handled by interceptor
   }

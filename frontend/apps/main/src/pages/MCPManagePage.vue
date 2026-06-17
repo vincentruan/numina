@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -145,7 +145,7 @@ function onEdit(server: MCPServer) {
 async function onDelete(server: MCPServer) {
   await showConfirmDialog({ title: t('common.confirm'), message: t('mcp.deleteConfirm', { name: server.name }) })
   await deleteMCPServer(server.id)
-  showToast(t('toast.deleted'))
+  showSuccessToast(t('toast.deleted'))
   await load()
 }
 
@@ -186,7 +186,7 @@ async function onDialogClose(action: string) {
   } else {
     await createMCPServer(payload)
   }
-  showToast(t('toast.saved'))
+  showSuccessToast(t('toast.saved'))
   await load()
   return true
 }

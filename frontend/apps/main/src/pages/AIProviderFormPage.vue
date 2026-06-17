@@ -185,7 +185,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIStore } from '@/stores/ai'
 import * as aiApi from '@/api/ai'
@@ -329,9 +329,9 @@ async function onCopyKey() {
     }
     if (!text) return
     await navigator.clipboard.writeText(text)
-    showToast(t('toast.copied'))
+    showSuccessToast(t('toast.copied'))
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   }
 }
 
@@ -346,7 +346,7 @@ async function onToggleReveal() {
     const res = await aiApi.revealAIKey(configId.value)
     revealedKey.value = res.data.api_key
   } catch {
-    showToast(t('aiConfig.revealFailed'))
+    showFailToast(t('aiConfig.revealFailed'))
   } finally {
     revealing.value = false
   }
@@ -393,7 +393,7 @@ async function onSave() {
       }
       await aiApi.createAIConfig(payload)
     }
-    showToast(t('toast.aiConfigSaved'))
+    showSuccessToast(t('toast.aiConfigSaved'))
     await aiStore.fetchConfigs()
     router.back()
   } catch (err: unknown) {
@@ -418,7 +418,7 @@ onMounted(async () => {
     if (cfg) {
       loadConfig(cfg)
     } else {
-      showToast(t('toast.operationFailed2'))
+      showFailToast(t('toast.operationFailed2'))
       router.replace({ name: 'AIConfig' })
     }
   }

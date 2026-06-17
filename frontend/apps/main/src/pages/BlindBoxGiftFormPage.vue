@@ -61,7 +61,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import { storeToRefs } from 'pinia'
@@ -105,7 +105,7 @@ async function onSubmit() {
         description: form.description || null,
         value_score: form.value_score,
       })
-      showToast(t('toast.saveSuccess'))
+      showSuccessToast(t('toast.saveSuccess'))
     } else {
       const result = await store.createGift({
         name: form.name,
@@ -116,7 +116,7 @@ async function onSubmit() {
       if (result.warning) {
         showToast(`⚠️ ${result.warning}`)
       } else {
-        showToast(t('toast.addSuccess'))
+        showSuccessToast(t('toast.addSuccess'))
       }
     }
     router.back()

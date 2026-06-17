@@ -294,7 +294,7 @@ async function onToggleAI(val: boolean) {
       icon: 'none',
     })
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     togglingAI.value = false
   }
@@ -397,7 +397,7 @@ function selectThemeColor(color: string) {
   document.documentElement.style.setProperty('--theme-primary', color)
   document.documentElement.style.setProperty('--van-primary-color', color)
   showThemeColorPicker.value = false
-  showToast(t('toast.themeChanged'))
+  showSuccessToast(t('toast.themeChanged'))
 }
 
 async function onLogout() {

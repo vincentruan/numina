@@ -210,7 +210,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
 import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'
@@ -330,7 +330,7 @@ async function onStep1Submit() {
       // Single-step login complete — token already set via cookie
       await authStore.fetchMe()
       // fetchMe() succeeded — safe to show success and navigate
-      showToast(t('toast.loginSuccess'))
+      showSuccessToast(t('toast.loginSuccess'))
       authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
@@ -346,7 +346,7 @@ async function onStep1Submit() {
       router.push('/')
     } else {
       // second_factor_required=true but no temp_token — malformed server response
-      showToast(t('toast.loginFailedGeneric'))
+      showFailToast(t('toast.loginFailedGeneric'))
     }
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: { code?: string; message?: string; detail?: string }; status?: number } }
@@ -358,10 +358,10 @@ async function onStep1Submit() {
 
     const i18nKey = code ? `errors.${code}` : ''
     if (i18nKey && t(i18nKey) !== i18nKey) {
-      showToast(t(i18nKey))
+      showFailToast(t(i18nKey))
     } else {
       const fallback = axiosError.response?.data?.message || axiosError.response?.data?.detail || t('toast.loginFailedGeneric')
-      showToast(fallback)
+      showFailToast(fallback)
     }
   } finally {
     loading.value = false
@@ -408,7 +408,7 @@ async function authenticateWithWebAuthn(user: BoundUser) {
       }, 700)
     } else {
       await authStore.fetchMe()
-      showToast(t('toast.loginSuccess'))
+      showSuccessToast(t('toast.loginSuccess'))
       authStore.showTrustPrompt = true
       const authUser = authStore.user
       if (authUser?.role === 'child') {
@@ -419,7 +419,7 @@ async function authenticateWithWebAuthn(user: BoundUser) {
       router.push('/')
     }
   } catch {
-    showToast(t('toast.webauthnFailed'))
+    showFailToast(t('toast.webauthnFailed'))
     // Fall back — show ALTCHA by resetting hasPasskey so template condition reveals captcha
     selectedUser.value = { ...user, hasPasskey: false }
   } finally {
@@ -456,7 +456,7 @@ async function onSelectAltchaComplete() {
       }, 700)
     } else {
       await authStore.fetchMe()
-      showToast(t('toast.loginSuccess'))
+      showSuccessToast(t('toast.loginSuccess'))
       authStore.showTrustPrompt = true
       const user = authStore.user
       if (user?.role === 'child') {
@@ -471,9 +471,9 @@ async function onSelectAltchaComplete() {
     const code = axiosError.response?.data?.code
     if (code) {
       const i18nKey = `errors.${code}`
-      showToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
+      showFailToast(t(i18nKey) !== i18nKey ? t(i18nKey) : axiosError.response?.data?.message || t('toast.loginFailedGeneric'))
     } else {
-      showToast(t('toast.loginFailedGeneric'))
+      showFailToast(t('toast.loginFailedGeneric'))
     }
     selectAltchaRef.value?.reset()
     selectAltcha.value = undefined
@@ -519,7 +519,7 @@ async function submitPin() {
       factor_type: secondFactorType.value,
       payload: { pin: pinInput.value },
     })
-    showToast(t('toast.loginSuccess'))
+    showSuccessToast(t('toast.loginSuccess'))
     // Redirect based on user role
     const user = authStore.user
     if (user?.role === 'child') {
@@ -601,7 +601,7 @@ async function submitEmojiPin() {
       factor_type: 'emoji_pin',
       payload: { pin_sequence: emojiPin.value },
     })
-    showToast(t('toast.loginSuccess'))
+    showSuccessToast(t('toast.loginSuccess'))
     const user = authStore.user
     if (user?.role === 'child') {
       const childBaseUrl = getChildBaseUrl()

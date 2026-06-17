@@ -13,7 +13,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
 import type { Liability } from '@/types'
@@ -35,14 +35,14 @@ async function onSubmit(data: Partial<Liability>) {
   try {
     if (isEdit.value) {
       await liabilityStore.updateLiability(route.params.id as string, data)
-      showToast(t('toast.updateSuccess'))
+      showSuccessToast(t('toast.updateSuccess'))
     } else {
       await liabilityStore.createLiability(data)
-      showToast(t('toast.addSuccess'))
+      showSuccessToast(t('toast.addSuccess'))
     }
     router.back()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     submitting.value = false
   }

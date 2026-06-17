@@ -105,7 +105,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import { useDashboardStore } from '@/stores/dashboard'
@@ -175,7 +175,7 @@ async function onSubmit() {
     showResult.value = true
     dashboardStore.fetchAll()
   } catch {
-    showToast(t('toast.assetSellFailed'))
+    showFailToast(t('toast.assetSellFailed'))
   } finally {
     submitting.value = false
   }

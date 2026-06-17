@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import http from '@/api'
 
 interface CircuitRow {
@@ -64,7 +64,7 @@ async function loadCircuits() {
     const res = await http.get<{ rows: CircuitRow[] }>('/admin/ai-extraction-circuit')
     circuits.value = res.data.rows
   } catch {
-    showToast(t('toast.loadFailed'))
+    showFailToast(t('toast.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -81,9 +81,9 @@ async function onReset(c: CircuitRow) {
     circuits.value = circuits.value.filter(
       (r) => !(r.family_id === c.family_id && r.capability === c.capability),
     )
-    showToast(t('admin.extractionCircuit.resetSuccess'))
+    showSuccessToast(t('admin.extractionCircuit.resetSuccess'))
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     resetting.value = null
   }

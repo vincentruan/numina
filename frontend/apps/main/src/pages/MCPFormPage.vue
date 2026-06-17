@@ -2,7 +2,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import {
   getMCPServers,
   createMCPServer,
@@ -101,10 +101,10 @@ async function onSave() {
     } else {
       await createMCPServer(payload)
     }
-    showToast(t('toast.saved'))
+    showSuccessToast(t('toast.saved'))
     router.back()
   } catch {
-    showToast(t('toast.saveFailed'))
+    showFailToast(t('toast.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -118,12 +118,12 @@ onMounted(async () => {
       if (server) {
         loadServer(server)
       } else {
-        showToast(t('toast.loadFailed'))
+        showFailToast(t('toast.loadFailed'))
         router.replace({ name: 'MCPManage' })
         return
       }
     } catch {
-      showToast(t('toast.loadFailed'))
+      showFailToast(t('toast.loadFailed'))
       router.replace({ name: 'MCPManage' })
       return
     } finally {

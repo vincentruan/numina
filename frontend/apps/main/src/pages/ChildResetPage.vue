@@ -81,7 +81,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { showToast } from 'vant'
+import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { resetChildPin, resetChildPassword } from '@/api/children'
 
@@ -121,11 +121,11 @@ async function doResetPassword() {
   savingPassword.value = true
   try {
     await resetChildPassword(childId, newPassword.value)
-    showToast(t('toast.childPasswordReset'))
+    showSuccessToast(t('toast.childPasswordReset'))
     newPassword.value = ''
     confirmPassword.value = ''
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     savingPassword.value = false
   }
@@ -136,10 +136,10 @@ async function doResetPin() {
   savingPin.value = true
   try {
     await resetChildPin(childId, [...newPin.value])
-    showToast(t('toast.childPinReset'))
+    showSuccessToast(t('toast.childPinReset'))
     newPin.value = []
   } catch {
-    showToast(t('toast.operationFailed2'))
+    showFailToast(t('toast.operationFailed2'))
   } finally {
     savingPin.value = false
   }

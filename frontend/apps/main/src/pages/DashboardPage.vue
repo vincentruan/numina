@@ -273,7 +273,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { showToast, showConfirmDialog } from 'vant'
+import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -498,7 +498,7 @@ async function handleBatchDelete() {
       await dashboardStore.fetchAll()
     } catch {
       decrement()
-      showToast(t('toast.deleteFailed'))
+      showFailToast(t('toast.deleteFailed'))
     }
   } catch {
     // User cancelled
@@ -548,7 +548,7 @@ async function onMoreActionSelect(action: { value: string }) {
     await dashboardStore.fetchAll()
   } catch {
     decrement()
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   }
 }
 
@@ -585,7 +585,7 @@ async function setViewMode(mode: 'card' | 'list') {
     await updateSettings({ view_mode: mode })
     await authStore.fetchMe()
   } catch {
-    showToast(t('toast.operationFailed'))
+    showFailToast(t('toast.operationFailed'))
   } finally {
     updatingViewMode.value = false
   }

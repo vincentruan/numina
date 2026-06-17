@@ -172,7 +172,7 @@ defineOptions({ name: 'ChildWishes' })
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { usePageLoading } from '@/composables/usePageLoading'
 import ChildWishesSkeleton from '@/components/skeletons/ChildWishesSkeleton.vue'
-import { showToast } from 'vant'
+import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import {
@@ -315,7 +315,7 @@ async function redeem(wishId: string) {
     await requestRedemption(wishId)
     await load()
   } catch {
-    showToast(t('toast.submitFailed'))
+    showFailToast(t('toast.submitFailed'))
   } finally {
     actioningId.value = null
   }
