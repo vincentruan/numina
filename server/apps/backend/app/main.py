@@ -96,6 +96,7 @@ from apps.backend.app.routers import ai_skills as ai_skills_router
 from apps.backend.app.routers import ai_spending_leaks as ai_spending_leaks_router
 from apps.backend.app.routers import ai_suggest as ai_suggest_router
 from apps.backend.app.routers import ai_tasks as ai_tasks_router
+from apps.backend.app.routers import ai_threads as ai_threads_router
 from apps.backend.app.routers import ai_time_machine as ai_time_machine_router
 from apps.backend.app.routers import ai_web_search as ai_web_search_router
 from apps.backend.app.routers import (
@@ -429,6 +430,7 @@ app.include_router(ai_liability_router.router, prefix="/api/v1")
 app.include_router(ai_allocation_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.router, prefix="/api/v1")
 app.include_router(ai_chat_router.sessions_router, prefix="/api/v1")
+app.include_router(ai_threads_router.router, prefix="/api/threads")
 app.include_router(children_router.router, prefix="/api/v1")
 app.include_router(chores_router.router, prefix="/api/v1")
 app.include_router(coins_router.router, prefix="/api/v1")

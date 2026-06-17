@@ -33,6 +33,7 @@ Controlled by `CACHE_BACKEND` env var (default: `"memory"`). Set to `"redis"` to
 - **Pydantic v2 only** — see root [CLAUDE.md](../../../CLAUDE.md) §Key Invariants for rule; see §Patterns below for examples.
 - **Import direction** — apps never import sibling apps. Use `packages/` for shared logic. Never `from apps.agent import ...` or `from apps.scheduler_worker import ...` inside backend code.
 - **Error detail convention** — backend raises `HTTPException(status_code=..., detail={"code": "ENGLISH_CODE", "message": "中文消息"})`. Frontend catches via axios interceptor and maps `code` to i18n key `t('errors.ENGLISH_CODE')`. Chinese message is fallback if frontend lacks i18n mapping.
+- **Agent Communication** — Never use raw `httpx.AsyncClient` to call Agent microservices. Always use `apps.backend.app.services.agent_client.AgentClient`. It guarantees tenant isolation by automatically injecting `X-Family-Id`, `X-User-Id`, and `X-Agent-Token` headers.
 
 ## Snowflake ID Serialization
 

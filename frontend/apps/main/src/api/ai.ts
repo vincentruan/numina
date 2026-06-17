@@ -453,65 +453,7 @@ function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
   return combinedController.signal
 }
 
-export async function sendChatMessageStream(
-  question: string,
-  deepThink: boolean,
-  webSearch: boolean,
-  signal?: AbortSignal,
-  sessionId?: string,
-  agentId?: string,
-  reasoningEffort: 'low' | 'medium' | 'high' = 'medium',
-  source?: string,
-  // AC-001: DeerFlow execution mode parameters
-  isPlanMode?: boolean,
-  subagentEnabled?: boolean,
-): Promise<ReadableStreamDefaultReader<Uint8Array>> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (sessionId) headers['X-Thread-Id'] = sessionId
-  // R4/R5: agent_id is the routing key that activates per-agent skill scoping
-  // (_resolve_skills in agent_dispatch.py). When omitted, the backend falls
-  // back to the legacy chat_adapter path with no skill resolution — present
-  // for backward compatibility with any caller that hasn't migrated yet.
-  const payload: Record<string, unknown> = {
-    question,
-    deep_think: deepThink,
-    web_search: webSearch,
-    reasoning_effort: reasoningEffort,
-  }
-  if (agentId) payload.agent_id = agentId
-  if (source) payload.source = source
-  // AC-001: Pass DeerFlow execution mode parameters to backend
-  if (isPlanMode !== undefined) payload.is_plan_mode = isPlanMode
-  if (subagentEnabled !== undefined) payload.subagent_enabled = subagentEnabled
-  const body = JSON.stringify(payload)
 
-  let res = await fetch('/api/v1/ai/chat/stream', {
-    method: 'POST',
-    headers,
-    credentials: 'include',
-    body,
-    signal: combineSignalWithTimeout(signal),
-  })
-
-  if (res.status === 401) {
-    try {
-      await refreshTokenIfNeeded()
-    } catch {
-      throw new Error('401')
-    }
-    res = await fetch('/api/v1/ai/chat/stream', {
-      method: 'POST',
-      headers,
-      credentials: 'include',
-      body,
-      signal: combineSignalWithTimeout(signal),
-    })
-  }
-
-  if (!res.ok) throw new Error(`${res.status}`)
-  if (!res.body) throw new Error('streaming_not_supported')
-  return res.body.getReader()
-}
 
 export const getChatHistory = (sessionId?: string) =>
   http.get<{ session_id: string | null; messages: ChatMessage[] }>('/ai/chat/history', {

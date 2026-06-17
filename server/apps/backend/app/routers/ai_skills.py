@@ -28,6 +28,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family_skill_config import FamilySkillConfig
 from apps.backend.app.models.skill_registry import SkillRegistry
 from apps.backend.app.models.user import User
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services import workspace
 from apps.backend.app.services.skill_command_parser import SkillCommandParser
 from apps.backend.app.services.skill_downloader import SkillDownloadError, SkillDownloader
@@ -708,24 +709,23 @@ async def install_skill_endpoint(
     else:
         # AI fallback: call skill-installer via agent service
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                resp = await client.post(
-                    f"{settings.AGENT_BASE_URL}/internal/gateway/skill-dispatch",
-                    json={
-                        "skill_name": "skill-installer",
-                        "family_id": str(family_id),
-                        "input_text": payload.command,
-                    },
-                    headers={"X-Agent-Token": settings.AGENT_INTERNAL_TOKEN},
-                )
-                if resp.status_code == 504:
-                    raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 安装超时，请稍后重试")
-                if resp.status_code >= 400:
-                    raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 安装失败: {resp.text}")
-                body = resp.json()
-                content = body.get("content")
-                if not content:
-                    raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "AI 安装返回内容为空")
+            agent_client = AgentClient(family_id, current_user.id, timeout=60.0)
+            resp = await agent_client.post(
+                "/internal/gateway/skill-dispatch",
+                json={
+                    "skill_name": "skill-installer",
+                    "family_id": str(family_id),
+                    "input_text": payload.command,
+                },
+            )
+            if resp.status_code == 504:
+                raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 安装超时，请稍后重试")
+            if resp.status_code >= 400:
+                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 安装失败: {resp.text}")
+            body = resp.json()
+            content = body.get("content")
+            if not content:
+                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "AI 安装返回内容为空")
         except httpx.TimeoutException:
             raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 安装超时，请稍后重试")
         except httpx.HTTPError as e:
@@ -833,24 +833,23 @@ async def ai_create_skill_endpoint(
     family_id = current_user.family_id
 
     try:
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/internal/gateway/skill-dispatch",
-                json={
-                    "skill_name": "skill-creator",
-                    "family_id": str(family_id),
-                    "input_text": payload.description,
-                },
-                headers={"X-Agent-Token": settings.AGENT_INTERNAL_TOKEN},
-            )
-            if resp.status_code == 504:
-                raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 生成超时，请稍后重试")
-            if resp.status_code >= 400:
-                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 生成失败: {resp.text}")
-            body = resp.json()
-            content = body.get("content")
-            if not content:
-                raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "AI 生成返回内容为空")
+        agent_client = AgentClient(family_id, current_user.id, timeout=60.0)
+        resp = await agent_client.post(
+            "/internal/gateway/skill-dispatch",
+            json={
+                "skill_name": "skill-creator",
+                "family_id": str(family_id),
+                "input_text": payload.description,
+            },
+        )
+        if resp.status_code == 504:
+            raise AppError(ErrorCode.AI_SERVICE_TIMEOUT, "AI 生成超时，请稍后重试")
+        if resp.status_code >= 400:
+            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, f"AI 生成失败: {resp.text}")
+        body = resp.json()
+        content = body.get("content")
+        if not content:
+            raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE, "AI 生成返回内容为空")
     except AppError:
         raise
     except httpx.TimeoutException:

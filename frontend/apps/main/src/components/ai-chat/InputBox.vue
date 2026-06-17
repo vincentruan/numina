@@ -33,11 +33,12 @@ const props = defineProps<{
   initialModelName?: string
 }>()
 
-// Emits
 const emit = defineEmits<{
   submit: [payload: SubmitPayload]
   stop: []
   contextChange: [context: InputContext]
+  agentChange: [agentId: string]
+  action: [type: 'file' | 'image' | 'camera']
 }>()
 
 // 租户资源
@@ -64,6 +65,30 @@ const context = ref<InputContext>({
   mode: props.initialMode ?? 'pro',
   reasoning_effort: 'medium',
 })
+
+// Agent selection
+const showAgentMenu = ref(false)
+const selectedAgentId = ref('numina') // Defaults to numina agent
+const agentOptions = [
+  { text: 'Numina Agent', value: 'numina' },
+  { text: 'Open QA', value: 'chat' }
+]
+
+function onSelectAgent(action: { value: string }) {
+  selectedAgentId.value = action.value
+  emit('agentChange', action.value)
+}
+
+// Attachment selection
+const showAttachmentMenu = ref(false)
+const attachmentActions = [
+  { name: 'File', value: 'file', icon: 'description' },
+  { name: 'Image', value: 'image', icon: 'photo' },
+  { name: 'Camera', value: 'camera', icon: 'photograph' }
+]
+function onSelectAttachment(action: any) {
+  emit('action', action.value)
+}
 
 // 模型能力检查
 const currentModelSupportsThinking = computed(() =>
@@ -201,19 +226,32 @@ watch(models, (newModels) => {
   >
     <!-- 欢迎态 Hero 区域 (DeerFlow pattern) -->
     <div v-if="isWelcomeMode" class="welcome-hero">
-      <h2 class="hero-title">{{ t('aiChat.heroTitleChat') }}</h2>
-      <p class="hero-subtitle">{{ t('aiChat.heroSubtitleChat') }}</p>
+      <h2 class="hero-title">{{ selectedAgentId === 'numina' ? t('aiChat.heroTitleChat') : 'Open QA' }}</h2>
+      <p class="hero-subtitle">{{ selectedAgentId === 'numina' ? t('aiChat.heroSubtitleChat') : 'A general purpose chat assistant.' }}</p>
     </div>
 
     <!-- 欢迎态示例按钮 (DeerFlow SuggestionList pattern) -->
     <WelcomeExamples
       v-if="isWelcomeMode"
+      :agent-id="selectedAgentId"
       @select="handleWelcomeExampleSelect"
       @surprise="handleSurpriseMe"
     />
 
     <!-- 输入区域 -->
     <div class="input-row">
+      <!-- Agent 选择按钮 -->
+      <van-popover v-model:show="showAgentMenu" placement="top-start" :actions="agentOptions" @select="onSelectAgent">
+        <template #reference>
+          <button class="control-btn agent-btn" :disabled="!isWelcomeMode">
+            <span class="agent-name">{{ agentOptions.find(a => a.value === selectedAgentId)?.text }}</span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon" v-if="isWelcomeMode">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </template>
+      </van-popover>
+
       <!-- 模型选择按钮 -->
       <button
         class="control-btn model-btn"
@@ -221,7 +259,21 @@ watch(models, (newModels) => {
         @click="modelDialogOpen = true"
       >
         <span class="model-name">{{ selectedModel?.display_name || t('aiChat.selectModel') }}</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
       </button>
+
+      <!-- 附件选择按钮 -->
+      <van-popover v-model:show="showAttachmentMenu" placement="top-start" :actions="attachmentActions" @select="onSelectAttachment">
+        <template #reference>
+          <button class="control-btn attach-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </template>
+      </van-popover>
 
       <!-- Textarea -->
       <textarea

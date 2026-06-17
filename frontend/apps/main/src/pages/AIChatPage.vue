@@ -58,6 +58,7 @@
         <p class="agent-info-description">{{ activeAgent.description || t('aiChat.agentNoDescription') }}</p>
       </div>
       <div class="header-actions">
+        <TokenUsage :thread-id="currentSessionId" :refresh-trigger="tokenUsageRefreshTrigger" />
         <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -242,15 +243,7 @@
       </button>
     </transition>
 
-    <!-- Suggestions for follow-up (Phase 7) — DeerFlow-aligned -->
-    <Suggestions
-      v-if="messages.length > 0"
-      :suggestions="followups"
-      :loading="followupsLoading"
-      :hidden="followupsHidden"
-      @select="handleSuggestionClick"
-      @hide="hideSuggestions"
-    />
+
 
     <!-- Suggestion confirm dialog for non-empty input — DeerFlow-aligned -->
     <SuggestionConfirmDialog
@@ -273,6 +266,8 @@
         @submit="onDeerFlowSubmit"
         @stop="onAbort"
         @context-change="onInputContextChange"
+        @agent-change="onAgentChange"
+        @action="onAction"
       />
     </div>
 
@@ -312,7 +307,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { showConfirmDialog, showToast } from 'vant'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import { sendChatMessageStream, getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
+import { getChatHistory, clearChatHistory, markChatRead } from '@/api/ai'
 import { getSessions, streamSessionEvents, updateSession, deleteSession as deleteSessionApi, forkSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
@@ -332,14 +327,12 @@ import { useTenantAiResources, INPUT_MODE_CONFIGS } from '@/composables/ai-chat/
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 import { createAgentEventParser } from '@/composables/useAgentEventStream'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
-import { useSuggestions } from '@/composables/ai-chat/useSuggestions'
 import { clearArtifactContentCache } from '@/composables/ai-chat/useArtifacts'
 import { clearSubtasks } from '@/composables/ai-chat/useSubtasks'
 import { toDeerFlowChatMessages } from '@/utils/ai-chat/messageAdapter'
-import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
-import { isLongTask } from '@/utils/aiTaskDetection'
-import { filterAIContent } from '@/utils/contentFilter'
-import type { AgentEvent, ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
+import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
+import TokenUsage from '@/components/ai-chat/TokenUsage.vue'
+import type { ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -481,9 +474,9 @@ const deerFlowMessages = computed(() => toDeerFlowChatMessages(messages.value))
 const messageGroups = useMessageGroups(deerFlowMessages)
 
 const inputText = ref('')
-const asking = ref(false)
-const connecting = ref(false)
-const connectingSeconds = ref(0)
+const { getThreadHistory, submitRun, abortStream } = useThreadChat(messages)
+const tokenUsageRefreshTrigger = ref(0)
+
 // SSE reconnect state (DeerFlow state machine §"reconnecting")
 const reconnecting = ref(false)
 const reconnectAttempts = ref(0)
@@ -538,6 +531,21 @@ function onInputContextChange(ctx: InputContext) {
   modelName.value = ctx.model_name
 }
 
+// Handle Agent change from InputBox
+async function onAgentChange(agentId: string) {
+  activeAgentLoading.value = true
+  try {
+    const agent = await getAgent(agentId)
+    if (agent) {
+      activeAgent.value = agent
+    }
+  } catch (err) {
+    console.error('Failed to load agent:', err)
+  } finally {
+    activeAgentLoading.value = false
+  }
+}
+
 // DeerFlow-style submit handler (Phase 2 integration)
 // AC-001: Wire is_plan_mode and subagent_enabled to backend API
 function onDeerFlowSubmit(payload: SubmitPayload) {
@@ -568,31 +576,37 @@ function onDeerFlowSubmit(payload: SubmitPayload) {
   onSend()
 }
 
-// Follow-up suggestions state (Phase 7)
-const {
-  followups,
-  followupsHidden,
-  followupsLoading,
-  handleSuggestionClick,
-  hideSuggestions,
-  resetSuggestions,
-  // Confirm dialog state for non-empty input handling
-  confirmOpen,
-  pendingSuggestion,
-  confirmAppendAndSend,
-  confirmReplaceAndSend,
-} = useSuggestions(
-  deerFlowMessages,
-  computed(() => {
-    // Derive phase from asking/connecting state
-    if (connecting.value) return 'connecting'
-    if (asking.value) return 'answering'
-    return 'done'
-  }),
-  currentSessionId,
-  modelName,  // Use modelName instead of mode placeholder
-  inputText,
-)
+// Confirm dialog state for non-empty input handling
+const confirmOpen = ref(false)
+const pendingSuggestion = ref<string | null>(null)
+
+function handleSuggestionClick(suggestion: string) {
+  const current = inputText.value.trim()
+  if (current) {
+    pendingSuggestion.value = suggestion
+    confirmOpen.value = true
+  } else {
+    inputText.value = suggestion
+    onSend()
+  }
+}
+
+function confirmAppendAndSend() {
+  if (!pendingSuggestion.value) return
+  const current = inputText.value.trim()
+  inputText.value = current ? `${current}\n${pendingSuggestion.value}` : pendingSuggestion.value
+  confirmOpen.value = false
+  pendingSuggestion.value = null
+  onSend()
+}
+
+function confirmReplaceAndSend() {
+  if (!pendingSuggestion.value) return
+  inputText.value = pendingSuggestion.value
+  confirmOpen.value = false
+  pendingSuggestion.value = null
+  onSend()
+}
 const scrollRef = ref<HTMLElement | null>(null)
 const isUserScrolledUp = ref(false)
 let programmaticScroll = false
@@ -1158,316 +1172,82 @@ async function onSend() {
   const q = inputText.value.trim()
   if (!q || asking.value) return
 
-  // Reset scroll state at the start of a new turn (spec §B1): a fresh question
-  // means the user is committing to the new exchange, so subsequent
-  // scrollToBottom calls during streaming must not be suppressed by a stale
-  // isUserScrolledUp from earlier in the conversation.
   isUserScrolledUp.value = false
-
-  // Reset suggestions when user sends a new question (Phase 7)
   resetSuggestions()
 
-  const userMsgId = Date.now().toString()
+  const userMsgId = `user-${Date.now()}`
   messages.value.push({
     id: userMsgId,
     role: 'user',
     sendStatus: 'sending',
     content: q,
+    renderedContent: renderMarkdown(q),
     created_at: new Date().toISOString(),
     displayTime: formatTime(new Date().toISOString()),
   })
+  
   inputText.value = ''
-  asking.value = true
-  connecting.value = true  // Show connecting animation first
-  connectingSeconds.value = 0
-  connectTimer = setInterval(() => { connectingSeconds.value++ }, 1000)
-  abortController = new AbortController()
-  await scrollToBottom()
-  const userMsgIdx = messages.value.findIndex((m) => m.id === userMsgId)
-
-  // Add assistant message placeholder (with think block if deep_think)
-  const thinkStart = deepThink.value ? Date.now() : 0
-  const assistantMsg: Message = {
-    id: `pending-${Date.now()}`,
+  
+  const aiMsgId = `ai-${Date.now()}`
+  messages.value.push({
+    id: aiMsgId,
     role: 'assistant',
     phase: 'connecting',
     content: '',
-    renderedContent: '',
     created_at: new Date().toISOString(),
     displayTime: formatTime(new Date().toISOString()),
-    thinkContent: deepThink.value ? '' : undefined,
-    thinkOpen: deepThink.value ? true : undefined,
-    thinkDone: deepThink.value ? false : undefined,
-    thinkSeconds: deepThink.value ? 0 : undefined,
-    toolTimeline: [],
     processSteps: [],
-    processStatus: 'running',
-  }
-  messages.value.push(assistantMsg)
-  const msgIdx = messages.value.length - 1
+    planSteps: [],
+  })
+  
   await scrollToBottom()
 
-  let thinkTimer: ReturnType<typeof setInterval> | null = null
-  if (deepThink.value) {
-    thinkTimer = setInterval(() => {
-      if (!messages.value[msgIdx].thinkDone) {
-        messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-      }
-    }, 1000)
-  }
-
-  const decoder = new TextDecoder()
-  let textRaw = ''
-  let thinkingDone = false
-  const normState = createNormalizationState()
+  const { submitRun } = useThreadChat(messages)
 
   try {
-    // ADV-001 fix: pass agentId so the backend routes through the
-    // agent-dispatch path (which runs _resolve_skills). Without this, R5
-    // (AI问答 chat-only) is not enforced at runtime — every chat would
-    // go through the legacy chat_adapter regardless of the selected agent.
-    // AC-001: Pass DeerFlow execution mode parameters to backend
-    const reader = await sendChatMessageStream(
-      q,
-      deepThink.value,
-      webSearch.value,
-      abortController.signal,
-      currentSessionId.value ?? undefined,
+    await submitRun(
+      currentSessionId.value ?? 'new',
+      { role: 'user', content: q },
       activeAgent.value?.id,
-      reasoningEffort.value,
-      sessionSource.value ?? undefined,
-      deerFlowPlanMode.value,
-      deerFlowSubagentEnabled.value,
+      aiMsgId,
+      (meta) => {
+        if (meta && meta.thread_id && !currentSessionId.value) {
+          currentSessionId.value = meta.thread_id
+        }
+      },
+      {
+        deerflow_plan_mode: deerFlowPlanMode.value,
+        deerflow_subagent_enabled: deerFlowSubagentEnabled.value,
+        reasoning_effort: reasoningEffort.value,
+        deep_think: deepThink.value
+      }
     )
-    sessionSource.value = null
-    const parser = createAgentEventParser(handleEvent)
-
-    // Connection established, hide connecting animation
-    if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
-    connecting.value = false
-    messages.value[msgIdx].phase = deepThink.value ? 'thinking' : 'answering'
-    // Mark user message as sent
+    
+    const userMsgIdx = messages.value.findIndex(m => m.id === userMsgId)
     if (userMsgIdx >= 0) {
       messages.value[userMsgIdx].sendStatus = 'sent'
     }
-    await scrollToBottom()
-
-    // Stream timeout watchdog (spec §8 risk): if no event arrives within
-    // STREAM_TIMEOUT_MS, abort the stream and mark the message as errored.
-    // Reset on every received event so an active stream never times out.
-    watchdogTimedOut = false
-    function armWatchdog() {
-      clearStreamWatchdog()
-      watchdogTimer = setTimeout(() => {
-        watchdogTimedOut = true
-        abortController?.abort()
-      }, STREAM_TIMEOUT_MS)
-    }
-    armWatchdog()
-
-    function syncStepsToMessage() {
-      // Live render reads processSteps; assign a fresh array reference so Vue
-      // reactivity picks up step-array mutations made by the normalizer.
-      messages.value[msgIdx].processSteps = [...normState.steps]
-      messages.value[msgIdx].processStatus =
-        normState.phase === 'done' ? 'done' : 'running'
-      // Sync plan state so AiProcessBlock can render AiPlanProgressBar (U10)
-      messages.value[msgIdx].planSteps = normState.planSteps.length > 0
-        ? [...normState.planSteps]
-        : undefined
-      messages.value[msgIdx].planSource = normState.planSource
-    }
-
-    function handleEvent(event: AgentEvent) {
-      // Reset stream watchdog: any received event keeps the stream alive (spec §8).
-      armWatchdog()
-
-      if (event.type === 'session.start') {
-        if (event.session_id) currentSessionId.value = event.session_id
-        return
-      }
-
-      // Route every event through the normalizer so state.steps[] is the
-      // single source of truth for AiProcessBlock (spec §3.3 unified order).
-      normalizeAgentEvent(event, normState)
-      syncStepsToMessage()
-
-      if (event.type === 'phase.connecting') {
-        messages.value[msgIdx].phase = 'connecting'
-        return
-      }
-      if (event.type === 'phase.thinking') {
-        messages.value[msgIdx].phase = 'thinking'
-        if (messages.value[msgIdx].reasoningStartTime == null) {
-          messages.value[msgIdx].reasoningStartTime = Date.now()
-        }
-        return
-      }
-      if (event.type === 'phase.answering') {
-        messages.value[msgIdx].phase = 'answering'
-        // Auto-collapse think block when answering starts, unless user manually toggled it
-        if (messages.value[msgIdx].thinkDone && !messages.value[msgIdx].thinkManuallyToggled) {
-          messages.value[msgIdx].thinkOpen = false
-        }
-        return
-      }
-      if (event.type === 'token.stream' && event.is_thinking) {
-        // Reasoning content is captured inside normState.steps; nothing else to do.
-        return
-      }
-      if (event.type === 'token.stream') {
-        if (!thinkingDone && deepThink.value) {
-          thinkingDone = true
-          if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
-          messages.value[msgIdx].thinkDone = true
-          messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-          // Auto-collapse unless user manually toggled
-          if (!messages.value[msgIdx].thinkManuallyToggled) {
-            messages.value[msgIdx].thinkOpen = false
-          }
-        }
-        textRaw += event.token ?? ''
-        // 应用内容过滤器，移除违规内容和问题回声
-        const filteredContent = filterAIContent(textRaw, q)
-        // DEBUG: Log filter application (dev only)
-        if (import.meta.env.DEV && textRaw !== filteredContent) {
-          console.log('[filterAIContent] Applied:', { rawLen: textRaw.length, filteredLen: filteredContent.length, diff: textRaw.length - filteredContent.length, questionLen: q?.length })
-        }
-        messages.value[msgIdx].content = filteredContent
-        // Use throttled rendering for smoother streaming
-        renderMarkdownThrottled(filteredContent, messages.value[msgIdx])
-        scrollToBottom()
-        return
-      }
-      if (event.type === 'capability.error') {
-        messages.value[msgIdx].phase = 'error'
-        messages.value[msgIdx].content = event.error?.message ?? t('toast.aiChatError')
-        messages.value[msgIdx].renderedContent = renderMarkdown(messages.value[msgIdx].content)
-      }
-      if (event.type === 'capability.end') {
-        // syncStepsToMessage already ran at line 1452; just sync phase/processStatus
-        messages.value[msgIdx].phase = normState.phase
-        messages.value[msgIdx].processStatus = normState.phase === 'done' ? 'done' : 'running'
-        if (event.result?.suggestions?.length) {
-          messages.value[msgIdx].suggestions = event.result.suggestions
-        }
-        return
-      }
-    }
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      parser.push(decoder.decode(value, { stream: true }))
-    }
-    parser.flush()
-    clearStreamWatchdog()
-
-    // Flush pending markdown render
-    if (renderTimer) {
-      clearTimeout(renderTimer)
-      renderTimer = null
-      if (pendingRenderTarget && pendingRenderText) {
-        pendingRenderTarget.renderedContent = renderMarkdown(pendingRenderText)
-      }
-    }
-
-    // Finalize think block if no text came (e.g. error from agent)
-    if (deepThink.value && !thinkingDone) {
-      if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null }
-      messages.value[msgIdx].thinkDone = true
-      if (!messages.value[msgIdx].thinkManuallyToggled) {
-        messages.value[msgIdx].thinkOpen = false
-      }
-      messages.value[msgIdx].thinkSeconds = Math.round((Date.now() - thinkStart) / 1000)
-    }
-
-    messages.value[msgIdx].phase = textRaw ? 'done' : 'error'
-    messages.value[msgIdx].processStatus = textRaw ? 'done' : 'error'
-    asking.value = false
-    connecting.value = false
-    isUserScrolledUp.value = false
-    reconnectAttempts.value = 0 // Reset reconnect state on success
-    abortController = null
     await scrollToBottom(true)
-  } catch (err: unknown) {
-    if (thinkTimer) clearInterval(thinkTimer)
-    if (connectTimer) { clearInterval(connectTimer); connectTimer = null }
-    clearStreamWatchdog()
-    if (err instanceof Error && (err.name === 'AbortError' || err.name === 'CanceledError')) {
-      // Distinguish watchdog timeout from user-initiated cancel (spec §8)
-      const isTimeout = watchdogTimedOut
-      watchdogTimedOut = false
-      // Finalize the assistant message so it doesn't stay in connecting/thinking/answering phase
-      if (messages.value[msgIdx]) {
-        if (isTimeout) {
-          messages.value[msgIdx].phase = 'error'
-          messages.value[msgIdx].content = t('aiChat.errorTimeout')
-          messages.value[msgIdx].renderedContent = `<p>${t('aiChat.errorTimeout')}</p>`
-        } else {
-          messages.value[msgIdx].phase = textRaw ? 'interrupted' : 'error'
-          if (!textRaw) {
-            messages.value[msgIdx].content = t('toast.aiChatError')
-            messages.value[msgIdx].renderedContent = `<p>${t('toast.aiChatError')}</p>`
-          }
-        }
-      }
-      asking.value = false
-      connecting.value = false
-      isUserScrolledUp.value = false
-      abortController = null
-      return
-    }
-    // Mark user message as failed so the retry indicator shows
+    tokenUsageRefreshTrigger.value++
+  } catch (err) {
+    console.error('Run failed:', err)
+    const userMsgIdx = messages.value.findIndex(m => m.id === userMsgId)
     if (userMsgIdx >= 0) {
       messages.value[userMsgIdx].sendStatus = 'failed'
     }
-    // SSE reconnect logic (DeerFlow state machine §"reconnecting")
-    // Check if this is a network error that can be retried
-    const isNetworkError = err instanceof Error &&
-      (err.message.includes('network') ||
-       err.message.includes('fetch') ||
-       err.message.includes('Failed to fetch') ||
-       err.message.includes('NetworkError') ||
-       err.message.includes('ECONNREFUSED') ||
-       err.message.includes('ECONNRESET'))
-
-    if (isNetworkError && reconnectAttempts.value < MAX_RECONNECT_ATTEMPTS) {
-      // Enter reconnecting state, preserve partial response
-      reconnecting.value = true
-      reconnectAttempts.value++
-      messages.value[msgIdx].phase = 'answering' // Keep showing partial content
-
-      // Exponential backoff: 1s, 2s, 4s
-      const backoffMs = Math.pow(2, reconnectAttempts.value - 1) * 1000
-      await new Promise(resolve => setTimeout(resolve, backoffMs))
-
-      // Create new AbortController for retry
-      abortController = new AbortController()
-
-      // Retry the stream - this would need to be implemented as a separate function
-      // For now, show reconnecting indicator and let user manually retry
-      messages.value[msgIdx].phase = 'error'
-      messages.value[msgIdx].content = t('aiChat.errorReconnectFailed', { attempts: reconnectAttempts.value })
-      messages.value[msgIdx].renderedContent = `<p>${t('aiChat.errorReconnectFailed', { attempts: reconnectAttempts.value })}</p>`
-      reconnecting.value = false
-    } else {
-      // Max retries exceeded or non-network error
-      messages.value[msgIdx] = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        phase: 'error',
-        content: t('toast.aiChatError'),
-        renderedContent: `<p>${t('toast.aiChatError')}</p>`,
-        created_at: new Date().toISOString(),
-        displayTime: formatTime(new Date().toISOString()),
-      }
+    const aiIdx = messages.value.findIndex(m => m.id === aiMsgId)
+    if (aiIdx !== -1) {
+      messages.value[aiIdx].phase = 'error'
+      messages.value[aiIdx].content = 'Failed to get response.'
     }
-    asking.value = false
-    connecting.value = false
-    reconnectAttempts.value = 0 // Reset for next message
-    abortController = null
+    reconnectAttempts.value = 0
     await scrollToBottom()
+  } finally {
+    saveCurrentSession()
+    fetchSystemDefaultSession(true)
+    setTimeout(() => {
+      window.dispatchEvent(new Event('resize'))
+    }, 10)
   }
 }
 
@@ -1530,9 +1310,7 @@ function suggestionChipsFor(msg: Message): string[] {
 }
 
 function onSuggestionChipClick(chip: string) {
-  inputText.value = chip
-  // Submit immediately so the chip behaves like a one-tap follow-up.
-  void onSend()
+  handleSuggestionClick(chip)
 }
 
 async function onCopy(content: string) {

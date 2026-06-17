@@ -186,6 +186,76 @@ class DeerFlowAdapter:
             ):
                 yield chunk
 
+
+    async def raw_stream_dispatch(
+        self,
+        skill_name: str,
+        context: RedactedContext,
+        thread_id: str,
+        enable_thinking: bool = False,
+    ) -> AsyncGenerator[Any, None]:
+        """Yield raw LangGraph StreamEvents from DeerFlowClient.stream()."""
+        async with _get_semaphore():
+            loop = asyncio.get_running_loop()
+            import queue as thread_queue
+            queue = asyncio.Queue()
+
+            def _produce() -> None:
+                try:
+                    if self._config_path:
+                        from deerflow.config.app_config import pop_current_app_config, push_current_app_config, reload_app_config
+                        family_config = reload_app_config(str(self._config_path))
+                        push_current_app_config(family_config)
+
+                        import os as _os
+                        from pathlib import Path as _Path
+                        extensions_path = _Path(str(self._config_path)).parent / "extensions_config.json"
+                        prev_extensions_env = _os.environ.get("DEER_FLOW_EXTENSIONS_CONFIG_PATH")
+                        if extensions_path.exists():
+                            _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = str(extensions_path)
+                            try:
+                                from deerflow.config.extensions_config import reset_extensions_config
+                                from deerflow.mcp.cache import reset_mcp_tools_cache
+                                reset_mcp_tools_cache()
+                                reset_extensions_config()
+                            except ImportError:
+                                pass
+                        
+                        try:
+                            message = self._build_prompt(skill_name, context)
+                            for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                                loop.call_soon_threadsafe(queue.put_nowait, event)
+                        finally:
+                            if prev_extensions_env is not None:
+                                _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
+                            elif extensions_path.exists():
+                                _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
+                            pop_current_app_config()
+                    else:
+                        message = self._build_prompt(skill_name, context)
+                        for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
+                            loop.call_soon_threadsafe(queue.put_nowait, event)
+                except Exception as e:
+                    loop.call_soon_threadsafe(queue.put_nowait, e)
+                finally:
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
+
+            future = loop.run_in_executor(_get_executor(), _produce)
+            try:
+                while True:
+                    item = await asyncio.wait_for(queue.get(), timeout=self._timeout)
+                    if item is None:
+                        break
+                    if isinstance(item, BaseException):
+                        raise DeerFlowError(f"DeerFlow stream error: {item}") from item
+                    yield item
+            except TimeoutError as e:
+                raise DeerFlowTimeoutError(f"timeout after {self._timeout}s") from e
+            finally:
+                import contextlib
+                with contextlib.suppress(TimeoutError, asyncio.CancelledError):
+                    await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+
     async def _async_stream_chunks(
         self,
         skill_name: str,

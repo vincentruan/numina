@@ -17,6 +17,7 @@ from apps.backend.app.models.ai_allocation_drift_result import AIAllocationDrift
 from apps.backend.app.models.ai_allocation_target import AIAllocationTarget
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.user import User
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
 from apps.backend.app.schemas.ai_results import (
     AllocationDriftResultPayload,
@@ -130,20 +131,16 @@ async def check_drift(
         return {"has_target": False, "message": "尚未设置配置目标"}
 
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/allocation/drift",
-                json={
-                    "targets": target.category_targets,
-                    "threshold": target.drift_threshold,
-                },
-                headers={
-                    "X-Family-Id": str(current_user.family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()
+        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        resp = await agent_client.post(
+            "/allocation/drift",
+            json={
+                "targets": target.category_targets,
+                "threshold": target.drift_threshold,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()
     except Exception as e:
         logger.error(f"调用 agent allocation drift 失败: {e}")
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e

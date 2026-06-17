@@ -17,19 +17,13 @@ interface Props {
   content: string
   displayTime: string
   sendStatus?: 'sending' | 'sent' | 'failed'
-  isEditing?: boolean
-  editInput?: string
 }
 
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
   copy: []
-  edit: []
   retry: []
-  sendEdit: []
-  cancelEdit: []
-  'update:editInput': [value: string]
 }>()
 
 const { t } = useI18n()
@@ -43,7 +37,7 @@ function onCopy() {
 <template>
   <div class="user-bubble">
     <!-- Normal display mode -->
-    <div v-if="!isEditing" class="bubble-content">
+    <div class="bubble-content">
       <p class="bubble-text">{{ content }}</p>
 
       <!-- Send status indicator -->
@@ -68,31 +62,8 @@ function onCopy() {
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
           </button>
-          <button class="action-btn" :aria-label="t('aiChat.editAria')" @click="emit('edit')">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </button>
         </div>
         <span class="bubble-time">{{ displayTime }}</span>
-      </div>
-    </div>
-
-    <!-- Edit mode: replace bubble with input -->
-    <div v-if="isEditing" class="edit-mode">
-      <van-field
-        :model-value="editInput"
-        type="textarea"
-        :rows="2"
-        autosize
-        :placeholder="t('aiChat.editPlaceholder')"
-        class="edit-input"
-        @update:model-value="$emit('update:editInput', $event)"
-      />
-      <div class="edit-actions">
-        <button class="cancel-btn" @click="emit('cancelEdit')">{{ t('common.cancel') }}</button>
-        <button class="send-btn" :disabled="!editInput?.trim()" @click="emit('sendEdit')">{{ t('aiChat.sendEdit') }}</button>
       </div>
     </div>
   </div>
