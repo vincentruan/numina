@@ -60,7 +60,7 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 ## Cross-Cutting Conventions
 
 - **i18n required for all UI strings** — every user-facing string (toasts, dialogs, labels, status text) must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`. Never hard-code Chinese strings directly in `.vue` files or `.ts` logic — not even in template ternaries. Applies to both `frontend/apps/main` and `frontend/apps/child`.
-- **Emoji convention** — all toast/error strings must include an emoji prefix. See `frontend/apps/main/CLAUDE.md` for the full table.
+- **Toast 使用 Vant 图标** — 根据 `frontend/CLAUDE.md` §Key Invariants 选择正确的 toast 函数（`showSuccessToast`/`showFailToast`/`showLoadingToast`），i18n 文案不含 emoji。
 - **Error messages in Chinese** — backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.

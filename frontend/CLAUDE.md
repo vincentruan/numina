@@ -50,7 +50,13 @@ components/ (reusable UI, no direct api calls)
 - **`<script setup lang="ts">` only** — no Options API, no `defineComponent`
 - **Vant auto-import** — 不手动 import Vant 组件，仅 import functional API (`showToast`, `showDialog`)
 - **i18n** — 见 root [`CLAUDE.md`](../CLAUDE.md) §Cross-Cutting Conventions
-- **Emoji prefix** — toast/dialog 必须有 emoji (✅❌⚠️🔒🗑️📡🤖🔑💰🎨🔥🎉)
+- **Toast 使用 Vant 内置图标** — 根据场景选择正确的 toast 函数：
+  - ✅ 成功操作 → `showSuccessToast(message)` (自带成功图标)
+  - ❌ 失败/错误 → `showFailToast(message)` (自带失败图标)
+  - ⏳ 加载中 → `showLoadingToast(message)` (自带加载图标)
+  - ℹ️ 提示信息 → `showToast({ message })` (无图标纯文本)
+  - ⚠️ 警告提示 → `showToast({ message, icon: 'warning-o' })`
+- **i18n 文案不含 emoji** — toast 文案仅纯文本，图标由 toast 函数控制
 - **Type safety** — 禁止 `any`，接口类型必须显式声明
 - **Path alias** — `@/` maps to `src/`
 

@@ -161,7 +161,7 @@ export function explainToolCallKey(
   // 有结果时，返回完成说明
   if (result !== undefined) {
     const displayNameKey = getToolDisplayNameKey(normalized)
-    // 返回复合 key，调用方需拼接：t(displayNameKey) + t('tool.action.completed_suffix')
+    // 返回复合 key，调用方需拼接：t(displayNameKey, params) 其中 params.suffix 为完成标识
     return { key: displayNameKey, params: { suffix: ' ✓' } }
   }
 
