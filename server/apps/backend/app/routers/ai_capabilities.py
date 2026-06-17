@@ -10,7 +10,7 @@ from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
-from apps.backend.app.models.ai_skill_config import FamilySkillConfig
+from apps.backend.app.models.family_skill_config import FamilySkillConfig
 from apps.backend.app.models.user import User
 from apps.backend.app.routers.ai_skills import BUILTIN_CAPABILITIES
 from apps.backend.app.schemas.ai_capability import AICapabilitySchema
