@@ -21,6 +21,7 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.category import Category
 from apps.backend.app.models.user import User
+from apps.backend.app.services.agent_client import AgentClient
 
 router = APIRouter(prefix="/import", tags=["import"])
 logger = logging.getLogger(__name__)
@@ -44,17 +45,13 @@ def _extract_pdf_text(data: bytes) -> str:
 
 async def _call_agent_parse(text: str, family_id: str) -> dict:
     """调用 Agent 微服务解析文本，返回原始 dict。"""
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(
-            f"{settings.AGENT_BASE_URL}/import/parse",
-            json={"text": text},
-            headers={
-                "X-Family-Id": family_id,
-                "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-            },
-        )
-        resp.raise_for_status()
-        return resp.json()
+    agent_client = AgentClient(family_id, timeout=30.0)
+    resp = await agent_client.post(
+        "/import/parse",
+        json={"text": text},
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def _match_asset(name: str, family_id: str, db: Session) -> Asset | None:

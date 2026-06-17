@@ -21,6 +21,7 @@ from apps.backend.app.models.ai_provider_config import (
 from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.user import User
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.schemas.ai_config import (
     AICircuitResetResponse,
     AIConfigCreate,
@@ -409,35 +410,32 @@ async def test_ai_config(
     if not cfg.model_id:
         return AIConfigTestResult(connected=False, message="未配置主模型 ID")
 
-    async with httpx.AsyncClient(timeout=300.0) as client:
-        try:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/test/model",
-                headers={
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "provider": cfg.provider,
-                    "api_key": api_key,
-                    "model_id": cfg.model_id,
-                    "base_url": cfg.base_url,
-                    "vision_model_id": cfg.vision_model_id,
-                    "test_types": ["connection", "thinking", "vision", "vision_ocr"],
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except httpx.HTTPStatusError as e:
-            return AIConfigTestResult(
-                connected=False,
-                message=f"Agent 服务返回错误: HTTP {e.response.status_code}",
-            )
-        except Exception:
-            logger.exception("agent model-test call failed")
-            return AIConfigTestResult(
-                connected=False, message="无法连接 Agent 服务，请检查 Agent 服务状态"
-            )
+    agent_client = AgentClient(current_user.family_id, current_user.id, timeout=300.0)
+    try:
+        resp = await agent_client.post(
+            "/test/model",
+            headers={"Content-Type": "application/json"},
+            json={
+                "provider": cfg.provider,
+                "api_key": api_key,
+                "model_id": cfg.model_id,
+                "base_url": cfg.base_url,
+                "vision_model_id": cfg.vision_model_id,
+                "test_types": ["connection", "thinking", "vision", "vision_ocr"],
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except httpx.HTTPStatusError as e:
+        return AIConfigTestResult(
+            connected=False,
+            message=f"Agent 服务返回错误: HTTP {e.response.status_code}",
+        )
+    except Exception:
+        logger.exception("agent model-test call failed")
+        return AIConfigTestResult(
+            connected=False, message="无法连接 Agent 服务，请检查 Agent 服务状态"
+        )
 
     def _upsert_test(
         test_type: str, success: bool | None, message: str, latency_ms: int | None

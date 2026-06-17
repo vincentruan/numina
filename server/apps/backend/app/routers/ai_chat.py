@@ -27,6 +27,7 @@ from apps.backend.app.models.file_remote_location import FileRemoteLocation
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.schemas.base import SnowflakeBase
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.chat_session import ChatSessionService
 
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
@@ -230,20 +231,17 @@ async def chat(
 
     # Call agent
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/chat/ask",
-                json={"question": body.question},
-                headers={
-                    "X-Family-Id": str(current_user.family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Thread-Id": str(session.id),
-                    "X-User-Id": str(current_user.id),
-                },
-            )
-            resp.raise_for_status()
-            resp_data = resp.json()
-            answer = resp_data.get("summary") or resp_data.get("answer", "")
+        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        resp = await agent_client.post(
+            "/chat/ask",
+            json={"question": body.question},
+            headers={
+                "X-Thread-Id": str(session.id),
+            },
+        )
+        resp.raise_for_status()
+        resp_data = resp.json()
+        answer = resp_data.get("summary") or resp_data.get("answer", "")
     except httpx.TimeoutException:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from None
     except Exception as e:
@@ -301,8 +299,8 @@ async def chat_stream(
         # the request runs through _resolve_skills (per-agent skill scoping).
         # Otherwise use the legacy chat_adapter path.
         if body.agent_id:
-            agent_url = f"{settings.AGENT_BASE_URL}/agent/{body.agent_id}/stream"
-            agent_body = {
+            agent_url = f"/agent/{body.agent_id}/stream"
+            request_json = {
                 "message": body.question,
                 "thread_id": str(session_id),
                 "enable_thinking": body.deep_think,
@@ -314,8 +312,8 @@ async def chat_stream(
                 "subagent_enabled": body.subagent_enabled,
             }
         else:
-            agent_url = f"{settings.AGENT_BASE_URL}/chat/ask/stream"
-            agent_body = {
+            agent_url = "/chat/ask/stream"
+            request_json = {
                 "question": body.question,
                 "deep_think": body.deep_think,
                 "web_search": body.web_search,
@@ -328,20 +326,15 @@ async def chat_stream(
 
         answer_chunks: list[str] = []
         try:
-            async with (
-                httpx.AsyncClient(timeout=130.0) as client,  # 130s to allow backend errors before frontend 120s timeout
-                client.stream(
-                    "POST",
-                    agent_url,
-                    json=agent_body,
-                    headers={
-                        "X-Family-Id": str(current_user.family_id),
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Thread-Id": str(session_id),
-                        "X-User-Id": str(current_user.id),
-                    },
-                ) as resp,
-            ):
+            agent_client = AgentClient(current_user.family_id, current_user.id, timeout=130.0)
+            async with agent_client.stream(
+                "POST",
+                agent_url,
+                json=request_json,
+                headers={
+                    "X-Thread-Id": str(session_id),
+                },
+            ) as resp:
                 async for line in resp.aiter_lines():
                     if not line.strip():
                         continue
@@ -689,17 +682,11 @@ async def stream_session_events(
 
     async def proxy_events():
         try:
-            async with (
-                httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=120.0, write=10.0, pool=5.0)) as client,
-                client.stream(
-                    "GET",
-                    f"{settings.AGENT_BASE_URL}/sessions/{session_id}/events",
-                    headers={
-                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                        "X-Family-Id": str(current_user.family_id),
-                    },
-                ) as resp,
-            ):
+            agent_client = AgentClient(current_user.family_id, current_user.id, timeout=120.0)
+            async with agent_client.stream(
+                "GET",
+                f"/sessions/{session_id}/events",
+            ) as resp:
                 async for chunk in resp.aiter_bytes():
                     yield chunk
         except Exception as e:
@@ -708,95 +695,6 @@ async def stream_session_events(
     return StreamingResponse(proxy_events(), media_type="application/x-ndjson; charset=utf-8")
 
 
-# ── Suggestions endpoint (Phase 7: DeerFlow follow-up suggestions) ─────────────
-
-class SuggestionMessage(BaseModel):
-    role: str  # "user" | "assistant"
-    content: str
-
-
-class SuggestionsRequest(BaseModel):
-    messages: list[SuggestionMessage]
-    n: int = 3
-    model_name: str | None = None
-
-
-class SuggestionsResponse(BaseModel):
-    suggestions: list[str]
-
-
-@sessions_router.post("/sessions/{session_id}/suggestions", response_model=SuggestionsResponse)
-async def generate_suggestions(
-    session_id: str,
-    body: SuggestionsRequest,
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """生成追问建议（DeerFlow Phase 7）。
-
-    安全校验:
-    1. session_id 必须属于当前 family
-    2. 使用租户配置的模型调用 LLM
-
-    返回:
-    - suggestions: 3 条追问建议字符串
-    """
-    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
-        raise AppError(ErrorCode.NOT_FOUND)
-    session = _get_session_for_family(session_id, current_user.family_id, db)
-    if session is None:
-        raise AppError(ErrorCode.NOT_FOUND)
-
-    if not body.messages:
-        return SuggestionsResponse(suggestions=[])
-
-    n = body.n
-
-    # Format conversation for LLM
-    conversation_parts: list[str] = []
-    for m in body.messages:
-        role = m.role.strip().lower()
-        if role in ("user", "human"):
-            conversation_parts.append(f"用户: {m.content.strip()}")
-        elif role in ("assistant", "ai"):
-            conversation_parts.append(f"助手: {m.content.strip()}")
-        else:
-            conversation_parts.append(f"{m.role}: {m.content.strip()}")
-    conversation = "\n".join(conversation_parts).strip()
-
-    if not conversation:
-        return SuggestionsResponse(suggestions=[])
-
-    # Call agent for suggestions
-    try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/suggestions/generate",
-                json={
-                    "conversation": conversation,
-                    "n": n,
-                    "model_name": body.model_name,
-                },
-                headers={
-                    "X-Family-Id": str(current_user.family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-User-Id": str(current_user.id),
-                },
-            )
-            resp.raise_for_status()
-            resp_data = resp.json()
-            suggestions = resp_data.get("suggestions", [])
-    except httpx.TimeoutException:
-        logger.warning("suggestions request timed out session=%s", session_id)
-        return SuggestionsResponse(suggestions=[])
-    except Exception as e:
-        logger.error("suggestions request failed session=%s: %s", session_id, type(e).__name__)
-        return SuggestionsResponse(suggestions=[])
-
-    # Clean suggestions
-    cleaned = [s.replace("\n", " ").strip() for s in suggestions if s.strip()]
-    cleaned = cleaned[:n]
-    return SuggestionsResponse(suggestions=cleaned)
 
 
 # ── Artifacts endpoint (Phase 5: DeerFlow artifact preview) ───────────────────

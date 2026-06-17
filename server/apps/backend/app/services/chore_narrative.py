@@ -10,6 +10,7 @@ import logging
 import httpx
 
 from apps.backend.app.config import settings
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.models.family import Family
 
 logger = logging.getLogger(__name__)
@@ -70,21 +71,20 @@ async def generate_narrative(
     )
 
     try:
-        async with httpx.AsyncClient(timeout=2.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/chat/ask",
-                json={"question": prompt},
-                headers={"X-Internal-Token": settings.AGENT_INTERNAL_TOKEN},
-            )
-            resp.raise_for_status()
-            answer: str = resp.json().get("answer", "").strip()
-            if not answer:
-                return _fallback_narrative(chore_name, coins)
-            # Split leading emoji from text
-            parts = answer.split(" ", 1)
-            if len(parts) == 2:
-                return parts[1], parts[0]
-            return answer, "⭐"
+        agent_client = AgentClient(family_id="system", timeout=2.0)
+        resp = await agent_client.post(
+            "/chat/ask",
+            json={"question": prompt},
+        )
+        resp.raise_for_status()
+        answer: str = resp.json().get("answer", "").strip()
+        if not answer:
+            return _fallback_narrative(chore_name, coins)
+        # Split leading emoji from text
+        parts = answer.split(" ", 1)
+        if len(parts) == 2:
+            return parts[1], parts[0]
+        return answer, "⭐"
     except Exception:
         logger.debug("AI narrative generation failed, using fallback", exc_info=True)
         return _fallback_narrative(chore_name, coins)

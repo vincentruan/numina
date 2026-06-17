@@ -16,6 +16,7 @@ from apps.backend.app.services.ai_extraction_circuit_service import (
 )
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.utils.snowflake import next_id
 
 logger = logging.getLogger(__name__)
@@ -49,20 +50,16 @@ async def proxy_capability_events(
     answer_parts: list[str] = []
     try:
         request_json: dict = extra_json or {}
-        async with (
-            httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)) as client,
-            client.stream(
-                "POST",
-                f"{settings.AGENT_BASE_URL}{agent_path}",
-                json=request_json if request_json else None,
-                headers={
-                    "X-Family-Id": str(family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Task-Id": str(task_id),
-                    "X-Thread-Id": str(session_id),
-                },
-            ) as resp,
-        ):
+        agent_client = AgentClient(family_id, user_id)
+        async with agent_client.stream(
+            "POST",
+            agent_path,
+            json=request_json if request_json else None,
+            headers={
+                "X-Task-Id": str(task_id),
+                "X-Thread-Id": str(session_id),
+            },
+        ) as resp:
             async for line in resp.aiter_lines():
                 if not line:
                     continue
@@ -258,21 +255,16 @@ async def proxy_agent_first_events(
             "web_search": False,
             "reasoning_effort": "medium",
         }
-        async with (
-            httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)) as client,
-            client.stream(
-                "POST",
-                f"{settings.AGENT_BASE_URL}/agent/{agent_id}/stream",
-                json=request_body,
-                headers={
-                    "X-Family-Id": str(family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                    "X-Task-Id": str(task_id),
-                    "X-Thread-Id": str(session_id),
-                    "X-User-Id": str(user_id),
-                },
-            ) as resp,
-        ):
+        agent_client = AgentClient(family_id, user_id)
+        async with agent_client.stream(
+            "POST",
+            f"/agent/{agent_id}/stream",
+            json=request_body,
+            headers={
+                "X-Task-Id": str(task_id),
+                "X-Thread-Id": str(session_id),
+            },
+        ) as resp:
             async for line in resp.aiter_lines():
                 if not line:
                     continue
@@ -586,25 +578,20 @@ async def _call_agent_skill(
         raise ValueError(f"Unknown skill: {skill_name}")
 
     headers = {
-        "X-Family-Id": str(family_id),
-        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
         "X-Task-Id": str(task_id),
         "X-Thread-Id": str(session_id),
-        "X-User-Id": str(user_id),
     }
 
     # Pass markdown path via header for Phase 2
     if extra_context and extra_context.get("markdown_file_path"):
         headers["X-Markdown-Path"] = extra_context["markdown_file_path"]
 
-    async with (
-        httpx.AsyncClient(timeout=httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)) as client,
-        client.stream(
-            "POST",
-            f"{settings.AGENT_BASE_URL}{endpoint}",
-            headers=headers,
-        ) as resp,
-    ):
+    agent_client = AgentClient(family_id, user_id)
+    async with agent_client.stream(
+        "POST",
+        endpoint,
+        headers=headers,
+    ) as resp:
         async for line in resp.aiter_lines():
             if line:
                 yield (line + "\n").encode("utf-8")

@@ -10,10 +10,11 @@ from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
-from apps.backend.app.models.family_skill_config import FamilySkillConfig
+from apps.backend.app.models.ai_skill_config import FamilySkillConfig
 from apps.backend.app.models.user import User
 from apps.backend.app.routers.ai_skills import BUILTIN_CAPABILITIES
 from apps.backend.app.schemas.ai_capability import AICapabilitySchema
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.capability_catalog import apply_capability_overrides
 
 router = APIRouter(prefix="/ai/capabilities", tags=["ai-capabilities"])
@@ -72,15 +73,12 @@ def _enabled_capability_ids(family_id: str, db: Session) -> set[str]:
     return enabled
 
 
-async def _load_agent_capabilities() -> list[dict]:
+async def _load_agent_capabilities(family_id: int) -> list[dict]:
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.get(
-                f"{settings.AGENT_BASE_URL}/capabilities",
-                headers={"X-Agent-Token": settings.AGENT_INTERNAL_TOKEN},
-            )
-            resp.raise_for_status()
-            return list(resp.json())
+        agent_client = AgentClient(family_id, timeout=10.0)
+        resp = await agent_client.get("/capabilities")
+        resp.raise_for_status()
+        return list(resp.json())
     except Exception as exc:
         logger.warning(
             "capability discovery fell back to built-ins: %s", type(exc).__name__
@@ -96,7 +94,7 @@ async def list_capabilities(
     db: Session = Depends(get_db),
 ) -> list[AICapabilitySchema]:
     enabled_ids = _enabled_capability_ids(str(current_user.family_id), db)
-    agent_capabilities = await _load_agent_capabilities()
+    agent_capabilities = await _load_agent_capabilities(current_user.family_id)
     filtered = [
         apply_capability_overrides(cap)
         for cap in agent_capabilities

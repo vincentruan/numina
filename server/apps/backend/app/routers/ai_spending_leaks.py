@@ -17,6 +17,7 @@ from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak
 from apps.backend.app.models.user import User
 from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
 
@@ -86,20 +87,15 @@ async def refresh_leaks(
         buffer: list[str] = []
         with _SessionLocal() as stream_db:
             try:
-                async with (
-                    httpx.AsyncClient(timeout=None) as client,
-                    client.stream(
-                        "POST",
-                        f"{settings.AGENT_BASE_URL}/spending-leak/stream",
-                        headers={
-                            "X-Family-Id": str(current_user.family_id),
-                            "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                            "X-Task-Id": str(task.id),
-                            "X-Thread-Id": str(session.id),
-                        },
-                        timeout=None,
-                    ) as resp,
-                ):
+                agent_client = AgentClient(current_user.family_id, current_user.id, timeout=None)
+                async with agent_client.stream(
+                    "POST",
+                    "/spending-leak/stream",
+                    headers={
+                        "X-Task-Id": str(task.id),
+                        "X-Thread-Id": str(session.id),
+                    },
+                ) as resp:
                     async for chunk in resp.aiter_text():
                         buffer.append(chunk)
                         yield chunk.encode("utf-8")

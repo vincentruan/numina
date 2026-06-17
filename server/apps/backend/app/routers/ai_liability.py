@@ -15,7 +15,8 @@ from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_liability_result import AILiabilityResult
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import proxy_capability_events
+from apps.backend.app.services.agent_client import AgentClient
+from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
 from apps.backend.app.schemas.ai_results import (
     LiabilityResultPayload,
     NoResultPayload,
@@ -61,16 +62,10 @@ async def get_liability_advice(
 ):
     """获取负债优化建议（实时调用 agent）。"""
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            resp = await client.post(
-                f"{settings.AGENT_BASE_URL}/liability/analyze",
-                headers={
-                    "X-Family-Id": str(current_user.family_id),
-                    "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()
+        agent_client = AgentClient(current_user.family_id, current_user.id, timeout=45.0)
+        resp = await agent_client.post("/liability/analyze")
+        resp.raise_for_status()
+        return resp.json()
     except httpx.TimeoutException as e:
         raise AppError(ErrorCode.AI_SERVICE_TIMEOUT) from e
     except Exception as e:

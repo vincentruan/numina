@@ -16,38 +16,53 @@ import IIcon from '@/components/IIcon.vue'
 
 const { t } = useI18n()
 
+const props = defineProps<{
+  agentId: string
+}>()
+
 const emit = defineEmits<{
   select: [prompt: string]
   surprise: []
 }>()
 
 // 预设建议列表 - 家庭资产规划场景
-const suggestions = computed(() => [
-  {
-    key: 'analyze',
-    label: t('aiChat.welcomeExampleAnalyze'),
-    prompt: t('aiChat.welcomeExampleAnalyzePrompt'),
-    icon: 'chart-pie',
-  },
-  {
-    key: 'plan',
-    label: t('aiChat.welcomeExamplePlan'),
-    prompt: t('aiChat.welcomeExamplePlanPrompt'),
-    icon: 'lightbulb',
-  },
-  {
-    key: 'learn',
-    label: t('aiChat.welcomeExampleLearn'),
-    prompt: t('aiChat.welcomeExampleLearnPrompt'),
-    icon: 'graduation-cap',
-  },
-  {
-    key: 'optimize',
-    label: t('aiChat.welcomeExampleOptimize'),
-    prompt: t('aiChat.welcomeExampleOptimizePrompt'),
-    icon: 'target',
-  },
-])
+const suggestions = computed(() => {
+  if (props.agentId === 'chat') {
+    return [
+      { key: 'write', label: 'Help me write', prompt: 'Help me write an email', icon: 'edit' },
+      { key: 'code', label: 'Write code', prompt: 'Write a python script to sort an array', icon: 'code' },
+      { key: 'translate', label: 'Translate text', prompt: 'Translate "Hello World" to Spanish', icon: 'language' },
+      { key: 'explain', label: 'Explain concept', prompt: 'Explain quantum computing simply', icon: 'lightbulb' }
+    ]
+  }
+
+  return [
+    {
+      key: 'analyze',
+      label: t('aiChat.welcomeExampleAnalyze'),
+      prompt: t('aiChat.welcomeExampleAnalyzePrompt'),
+      icon: 'chart-pie',
+    },
+    {
+      key: 'plan',
+      label: t('aiChat.welcomeExamplePlan'),
+      prompt: t('aiChat.welcomeExamplePlanPrompt'),
+      icon: 'lightbulb',
+    },
+    {
+      key: 'learn',
+      label: t('aiChat.welcomeExampleLearn'),
+      prompt: t('aiChat.welcomeExampleLearnPrompt'),
+      icon: 'graduation-cap',
+    },
+    {
+      key: 'optimize',
+      label: t('aiChat.welcomeExampleOptimize'),
+      prompt: t('aiChat.welcomeExampleOptimizePrompt'),
+      icon: 'target',
+    },
+  ]
+})
 
 function handleSuggestionClick(prompt: string) {
   emit('select', prompt)
