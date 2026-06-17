@@ -1,3 +1,18 @@
+---
+title: 设备指纹稳定性问题 — 同一设备每次登录被识别为新设备
+date: 2026-04-12
+category: integration-issues
+module: frontend/packages/auth
+problem_type: integration_issue
+component: authentication
+severity: high
+applies_when:
+  - 设备信任功能无法正常工作（同一设备反复提示记录）
+  - 浏览器自动更新后设备指纹变化
+  - 使用 navigator.userAgent 作为指纹组件
+tags: [device-fingerprint, fingerprintjs, authentication, browser-update, useragent, chrome]
+---
+
 # 设备识别问题：同一设备每次登录被识别为新设备
 
 ## 问题现象

@@ -64,7 +64,28 @@ JS loses precision on integers > 2⁵³. All `bigint` fields (IDs, large amounts
 - **Error messages in Chinese** — backend HTTP exceptions use Chinese detail strings: `raise HTTPException(status_code=404, detail="资产不存在")`
 - **Incremental formatting** — format only files you touch. Do not run formatters on entire modules in a single commit.
 - **No speculative code** — don't add features, abstractions, or error handling beyond what was asked.
-- **Past solutions** — `docs/solutions/` contains documented fixes for recurring problems. Check before debugging known issue categories. Subdirectories: `architecture-patterns/` (e.g. MCP chat adapter, tenant isolation, three-state circuit breaker), `best-practices/` (e.g. Redis fail-fast strategy, cache key granularity, Pydantic validation), `workflow-issues/` (e.g. backend module extraction workflow), `integration-issues/` (e.g. DeerFlow silent fallback), `test-failures/`, `ui-bugs/`, `developer-experience/`.
+
+## Solutions (经验教训库)
+
+`docs/solutions/` 存放已验证的问题解决方案和最佳实践，帮助避免重复踩坑。每个文档包含 YAML frontmatter（`date`, `module`, `problem_type`, `tags`, `applies_when`）和标准结构（Problem/Context → Solution → Prevention）。
+
+**在开始调试或实现前，检查是否有相关文档。**
+
+### 目录映射
+
+| 子目录 | 内容类型 | 检查时机 |
+|--------|----------|----------|
+| `architecture-patterns/` | 架构设计模式 | MCP 集成、多 provider AI、熔断器、tenant isolation |
+| `best-practices/` | 最佳实践 | 缓存键设计、JWT 撤销、Snowflake ID 序列化、安全防护 |
+| `integration-issues/` | 集成问题 | DeerFlow adapter、设备指纹、stream 类型不匹配 |
+| `workflow-issues/` | 开发流程问题 | 模块拆分、monorepo 整合 |
+| `test-failures/` | 测试失败案例 | SQLAlchemy session 隔离、agent extraction 诊断 |
+| `ui-bugs/` | UI 问题 | 深色模式 CSS 特异性、Vant4 Field 绑定 |
+| `developer-experience/` | 开发体验 | CodeGraph 使用、CLAUDE.md 模块化、i18n 切换 |
+
+### 进度文档
+
+`docs/deerflow-integration/` 存放 DeerFlow 集成的进度跟踪文档（核对清单、验收报告、差距分析），不属于经验教训，但可作为功能对比参考。
 
 ## CodeGraph
 

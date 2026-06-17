@@ -1,3 +1,19 @@
+---
+title: CodeGraph 结构化代码检索 — 替代 grep+read 循环的高效方案
+date: 2026-06-10
+category: developer-experience
+module: tooling
+problem_type: developer_experience
+component: code-search
+severity: medium
+applies_when:
+  - 传统 grep+read 循环消耗过多上下文
+  - 需要追踪动态跳转（回调、React 渲染、JSX children）
+  - 需要完整调用链而非人工拼接
+  - 多次查询同一代码区域时降低成本
+tags: [codegraph, mcp, code-search, ast, tree-sitter, structural-query, call-trace]
+---
+
 # CodeGraph 结构化代码检索
 
 ## 问题背景

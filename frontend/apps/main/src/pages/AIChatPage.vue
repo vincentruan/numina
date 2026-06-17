@@ -319,7 +319,6 @@ import NuminaLogo from '@/components/common/NuminaLogo.vue'
 // DeerFlow-aligned chat components
 import ChatMessage from '@/components/chat/ChatMessage.vue'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
-import Suggestions from '@/components/ai-chat/Suggestions.vue'
 import SuggestionConfirmDialog from '@/components/ai-chat/SuggestionConfirmDialog.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import InputBox from '@/components/ai-chat/InputBox.vue'
@@ -332,6 +331,8 @@ import { clearSubtasks } from '@/composables/ai-chat/useSubtasks'
 import { toDeerFlowChatMessages } from '@/utils/ai-chat/messageAdapter'
 import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import TokenUsage from '@/components/ai-chat/TokenUsage.vue'
+import { createNormalizationState, normalizeAgentEvent, extractArtifactFromStep } from '@/utils/aiEventNormalizer'
+import { filterAIContent } from '@/utils/contentFilter'
 import type { ProcessStep, PlanStep, Artifact } from '@/types/agent-stream'
 import type { SessionSummary } from '@/types/session'
 
@@ -477,10 +478,19 @@ const inputText = ref('')
 const { getThreadHistory, submitRun, abortStream } = useThreadChat(messages)
 const tokenUsageRefreshTrigger = ref(0)
 
+// Streaming state refs (used by MessageGroup and InputBox)
+const asking = ref(false)
+const connecting = ref(false)
+
 // SSE reconnect state (DeerFlow state machine §"reconnecting")
 const reconnecting = ref(false)
 const reconnectAttempts = ref(0)
 const MAX_RECONNECT_ATTEMPTS = 3
+
+// No-op stubs for removed useSuggestions composable
+function resetSuggestions() {}
+function saveCurrentSession() {}
+function fetchSystemDefaultSession(_force = false) {}
 // Artifact registry state (U5)
 const sessionArtifacts = ref<Artifact[]>([])
 const showArtifactSheet = ref(false)

@@ -1,3 +1,18 @@
+---
+title: Agent Result Extraction Diagnostic — SkillConfig.prompt Is Dead Data
+date: 2026-05-19
+category: test-failures
+module: server/apps/agent
+problem_type: test_failure
+component: deerflow_adapter
+severity: medium
+applies_when:
+  - 调查 AI extraction audit 结果时需要诊断协议
+  - SkillConfig.prompt 字段未被消费导致功能缺失
+  - DeerFlow harness 独立加载 SKILL.md 与 skill_loader.py 不同步
+tags: [skill-loader, deerflow, prompt, agent-extraction, skillconfig, static-analysis]
+---
+
 # Async Agent Result Extraction — Production Sample Diagnostic Protocol (U10)
 
 **Status:** Resolved via static analysis (2026-05-19)
