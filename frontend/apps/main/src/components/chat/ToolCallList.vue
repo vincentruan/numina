@@ -10,16 +10,24 @@
  * - Collapsible result preview (click to expand)
  * - Status indicators: running (shimmer), done (check), error (x)
  */
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { ProcessStep } from '@/types/agent-stream'
+
+// Type guard for tool_call steps
+function isToolCallStep(step: ProcessStep): step is Extract<ProcessStep, { type: 'tool_call' }> {
+  return step.type === 'tool_call'
+}
 
 interface Props {
   steps: ProcessStep[]
   status?: 'running' | 'done' | 'error' | 'interrupted'
 }
 
-const _props = defineProps<Props>()
+const props = defineProps<Props>()
+
+// Filter to only show tool_call steps (other types don't have tool-specific properties)
+const toolCallSteps = computed(() => props.steps.filter(isToolCallStep))
 
 const { t } = useI18n()
 
@@ -47,6 +55,10 @@ const toolIconMap: Record<string, { icon: string; color: string }> = {
 }
 
 function getToolDisplay(step: ProcessStep): { icon: string; color: string; name: string } {
+  // Only tool_call steps have displayName, name, icon properties
+  if (!isToolCallStep(step)) {
+    return { icon: '⚙️', color: '#6b7280', name: 'Step' }
+  }
   const name = step.displayName ?? step.name ?? 'Tool'
   const key = step.name?.toLowerCase() ?? 'default'
   const mapping = toolIconMap[key] ?? toolIconMap.default
@@ -83,7 +95,7 @@ function formatTime(ms?: number): string {
 <template>
   <div class="tool-call-list">
     <div
-      v-for="step in steps"
+      v-for="step in toolCallSteps"
       :key="step.id"
       class="tool-card"
       :class="`tool-card--${step.status ?? 'running'}`"

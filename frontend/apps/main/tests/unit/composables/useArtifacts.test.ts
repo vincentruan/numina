@@ -15,7 +15,7 @@ global.fetch = mockFetch
 // Mock familyStore for Pinia dependency
 vi.mock('@/stores/family', () => ({
   useFamilyStore: () => ({
-    currentFamily: { id: 'family-1' },
+    family: { id: 'family-1' },
   }),
 }))
 

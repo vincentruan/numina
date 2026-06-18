@@ -80,7 +80,13 @@ const currentAction = computed(() => {
   if (!task.value?.latestMessage) return null
   const result = explainLastToolCallKey(task.value.latestMessage as ChatMessage)
   if (!result) return null
-  return t(result.key, result.params)
+  // Convert params to Record<string, unknown> for i18n t()
+  // t() expects Record<string, unknown> | undefined, so only pass if defined
+  if (result.params) {
+    const params: Record<string, unknown> = Object.fromEntries(Object.entries(result.params))
+    return t(result.key, params)
+  }
+  return t(result.key)
 })
 
 // 是否显示动画边框

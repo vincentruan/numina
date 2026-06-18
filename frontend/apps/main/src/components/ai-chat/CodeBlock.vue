@@ -24,6 +24,11 @@ const formattedCode = computed(() => {
 })
 
 const languageLabel = computed(() => props.language || 'text')
+
+// 复制代码到剪贴板
+function copyCode() {
+  navigator.clipboard.writeText(props.code)
+}
 </script>
 
 <template>
@@ -31,7 +36,7 @@ const languageLabel = computed(() => props.language || 'text')
     <!-- 语言标签 -->
     <div class="code-header">
       <span class="language-label">{{ languageLabel }}</span>
-      <button class="copy-btn" @click="navigator.clipboard.writeText(code)">
+      <button class="copy-btn" @click="copyCode">
         <IIcon icon="copy" />
       </button>
     </div>

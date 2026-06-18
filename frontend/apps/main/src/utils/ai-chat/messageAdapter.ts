@@ -6,6 +6,10 @@
  */
 
 import type { ChatMessage, ToolCallSummary } from '@/types/ai-chat/message-group'
+import type { ProcessStep, PlanStep } from '@/types/agent-stream'
+
+// Re-export types from agent-stream for backward compatibility
+export type { ProcessStep, PlanStep }
 
 /**
  * AIChatPage.vue 内部 Message 类型定义（简化版）
@@ -58,33 +62,6 @@ export interface ToolTimelineItem {
   }
 }
 
-export interface ProcessStep {
-  type: 'reasoning' | 'tool_call' | 'subagent' | 'artifact' | 'progress'
-  id: string
-  content?: string
-  name?: string
-  displayName?: string
-  icon?: string
-  toolType?: string
-  args?: Record<string, unknown>
-  status?: 'pending' | 'running' | 'streaming' | 'done' | 'error' | 'failed'
-  resultSummary?: string
-  error?: string
-  elapsedMs?: number
-  progressMessage?: string
-  // Subagent fields
-  taskId?: string
-  title?: string
-  description?: string
-  result?: string
-}
-
-export interface PlanStep {
-  id: string
-  label: string
-  status: 'running' | 'done' | 'error'
-}
-
 /**
  * 将 Legacy Message 的 toolTimeline 转换为 DeerFlow ToolCallSummary
  */
@@ -112,17 +89,21 @@ function mapProcessStepsToToolCalls(msg: LegacyMessage): ToolCallSummary[] {
 
   return msg.processSteps
     .filter(step => step.type === 'tool_call')
-    .map(step => ({
-      id: step.id,
-      name: step.name || 'unknown',
-      displayName: step.displayName || step.name || 'unknown',
-      args: step.args,
-      result: step.resultSummary,
-      status: step.status === 'done' ? 'success'
-        : step.status === 'error' ? 'error'
-        : 'pending',
-      elapsedMs: step.elapsedMs,
-    }))
+    .map(step => {
+      // Type assertion after filtering - step is now tool_call type
+      const toolStep = step as Extract<ProcessStep, { type: 'tool_call' }>
+      return {
+        id: toolStep.id,
+        name: toolStep.name || 'unknown',
+        displayName: toolStep.displayName || toolStep.name || 'unknown',
+        args: toolStep.args,
+        result: toolStep.resultSummary,
+        status: toolStep.status === 'done' ? 'success'
+          : toolStep.status === 'error' ? 'error'
+          : 'pending',
+        elapsedMs: toolStep.elapsedMs,
+      }
+    })
 }
 
 /**
@@ -223,14 +204,16 @@ export function toDeerFlowChatMessages(messages: LegacyMessage[]): ChatMessage[]
       )
 
       for (const toolCall of completedToolCalls) {
+        // Type assertion after filtering
+        const toolStep = toolCall as Extract<ProcessStep, { type: 'tool_call' }>
         // 创建 tool result message
         result.push({
-          id: `tool-result-${toolCall.id}`,
+          id: `tool-result-${toolStep.id}`,
           type: 'tool',
           role: 'assistant', // tool messages technically have assistant role
-          content: toolCall.resultSummary || '',
-          tool_call_id: toolCall.id,
-          name: toolCall.name || 'unknown',
+          content: toolStep.resultSummary || '',
+          tool_call_id: toolStep.id,
+          name: toolStep.name || 'unknown',
           displayTime: msg.displayTime,
         })
       }
@@ -246,7 +229,7 @@ export function toDeerFlowChatMessages(messages: LegacyMessage[]): ChatMessage[]
  * 用于在组件中访问 processSteps 等字段
  */
 export function extractLegacyFields(chatMsg: ChatMessage): { processSteps?: ProcessStep[]; planSteps?: PlanStep[]; planSource?: 'explicit' | 'inferred' | null; processElapsedMs?: number; reasoningStartTime?: number | null } | undefined {
-  const legacy = chatMsg.additional_kwargs?.['_legacy']
+  const legacy = chatMsg.additional_kwargs?.['_legacy'] as Record<string, unknown> | undefined
   if (!legacy) return undefined
   return {
     processSteps: legacy.processSteps as ProcessStep[] | undefined,

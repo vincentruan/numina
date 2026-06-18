@@ -27,7 +27,7 @@ const isExpanded = ref(true)
 
 // Count completed/active steps
 const completedCount = computed(() =>
-  props.steps.filter((s) => s.status === 'completed').length
+  props.steps.filter((s) => s.status === 'done').length
 )
 
 // Active count (for future use)

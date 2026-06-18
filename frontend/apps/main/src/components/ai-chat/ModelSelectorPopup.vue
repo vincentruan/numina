@@ -93,7 +93,6 @@ function getCapabilityTags(model: ModelInfo): string[] {
                 v-for="tag in getCapabilityTags(model)"
                 :key="tag"
                 type="primary"
-                size="small"
                 plain
               >
                 {{ tag }}

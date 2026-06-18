@@ -162,7 +162,7 @@ function renderMarkdown(content: string): string {
       :feedback="assistantMessage.feedback"
       @retry="emit('retry')"
       @copy="emit('copy', assistantMessage.content)"
-      @feedback="(v) => emit('feedback', assistantMessage.id, v)"
+      @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
       @suggestion-click="emit('suggestionClick', $event)"
     />
 
@@ -196,10 +196,10 @@ function renderMarkdown(content: string): string {
       />
       <!-- eslint-enable vue/no-v-html -->
       <ArtifactFileList
-        v-if="presentFilesData.files.length > 0"
+        v-if="presentFilesData.files && presentFilesData.files.length > 0"
         :artifacts="presentFilesData.files"
         :session-id="threadId || ''"
-        @select="emit('artifactTap', $event)"
+        @select="(artifact: { id: string; title: string; kind?: string; url?: string; path?: string }) => emit('artifactTap', { id: artifact.id, title: artifact.title, kind: artifact.kind || 'other', url: artifact.url, path: artifact.path })"
       />
     </div>
 

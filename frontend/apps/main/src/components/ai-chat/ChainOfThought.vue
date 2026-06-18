@@ -78,6 +78,16 @@ const steps = computed(() => {
       for (const tc of toolCalls) {
         // Skip 'task' tool - handled by SubtaskCard
         if (tc.name === 'task') continue
+        // Convert ToolCallSummary status to CoT step status
+        const stepStatus: 'pending' | 'running' | 'done' | 'error' =
+          tc.status === 'success' ? 'done'
+          : tc.status === 'error' ? 'error'
+          : tc.status === 'running' ? 'running'
+          : 'pending'
+        // Convert unknown result to string
+        const resultStr = tc.result !== undefined
+          ? (typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result))
+          : undefined
         allSteps.push({
           type: 'toolCall',
           id: tc.id,
@@ -85,8 +95,8 @@ const steps = computed(() => {
           name: tc.name,
           displayName: tc.displayName,
           args: tc.args,
-          result: tc.result,
-          status: tc.status === 'success' ? 'done' : tc.status,
+          result: resultStr,
+          status: stepStatus,
           elapsedMs: tc.elapsedMs,
           progressMessage: tc.progressMessage,
         })
@@ -99,7 +109,7 @@ const steps = computed(() => {
       const existingStep = allSteps.find(s => s.type === 'toolCall' && s.id === toolCallId)
       if (existingStep) {
         existingStep.result = message.content?.toString() || ''
-        existingStep.status = message.error ? 'error' : 'done'
+        existingStep.status = 'done'
       }
     }
   }
@@ -225,21 +235,28 @@ function getSearchResults(step: { name?: string; result?: string }): SearchResul
 
   try {
     // Result might be JSON array or JSON string
-    const parsed = JSON.parse(step.result)
+    const parsed = JSON.parse(step.result) as unknown
     if (Array.isArray(parsed)) {
-      return parsed.map(item => ({
-        url: item.url || item.link || item.source_url || '',
-        title: item.title || item.name || '',
-        snippet: item.snippet || item.description || '',
-      })).filter(item => item.url)
+      return parsed.map((item: unknown) => {
+        const obj = item as Record<string, unknown>
+        return {
+          url: (obj.url || obj.link || obj.source_url || '') as string,
+          title: (obj.title || obj.name || '') as string,
+          snippet: (obj.snippet || obj.description || '') as string,
+        }
+      }).filter(item => item.url)
     }
     // Some results are nested under 'results' key
-    if (parsed.results && Array.isArray(parsed.results)) {
-      return parsed.results.map(item => ({
-        url: item.url || item.link || '',
-        title: item.title || '',
-        snippet: item.snippet || '',
-      })).filter(item => item.url)
+    const parsedObj = parsed as Record<string, unknown>
+    if (parsedObj.results && Array.isArray(parsedObj.results)) {
+      return (parsedObj.results as unknown[]).map((item: unknown) => {
+        const obj = item as Record<string, unknown>
+        return {
+          url: (obj.url || obj.link || '') as string,
+          title: (obj.title || '') as string,
+          snippet: (obj.snippet || '') as string,
+        }
+      }).filter(item => item.url)
     }
   } catch {
     // Not JSON, try parsing as text with URLs

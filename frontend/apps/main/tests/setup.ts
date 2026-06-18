@@ -153,6 +153,22 @@ config.global.stubs = {
   VanSlider: { template: '<input type="range" class="van-slider" />', props: ['modelValue', 'min', 'max', 'step', 'barHeight', 'buttonSize', 'disabled'] },
   VanRate: { template: '<div class="van-rate" />', props: ['modelValue', 'count', 'size', 'icon', 'voidIcon', 'color', 'voidColor', 'disabled'] },
   VanProgress: { template: '<div class="van-progress" />', props: ['percentage', 'strokeWidth', 'color', 'trackColor', 'pivotText', 'pivotColor', 'showPivot'] },
+  VanPopover: { template: '<div class="van-popover"><slot /></div>', props: ['show', 'placement', 'actions'] },
+
+  // DeerFlow ai-chat component stubs
+  TokenUsage: { template: '<div class="token-usage"></div>', props: ['threadId', 'refreshTrigger'] },
+  MessageGroup: { template: '<div class="message-group"><slot /></div>', props: ['group', 'isLoading', 'threadId'] },
+  ChainOfThought: { template: '<div class="chain-of-thought"><slot /></div>' },
+  SubtaskCard: { template: '<div class="subtask-card"></div>', props: ['taskId', 'isLoading'] },
+  ArtifactFileList: { template: '<div class="artifact-file-list"><slot /></div>', props: ['artifacts', 'sessionId'] },
+  ArtifactPreviewPopup: { template: '<div class="artifact-preview"><slot /></div>', props: ['show', 'artifact', 'sessionId'] },
+  Suggestions: { template: '<div class="suggestions"><slot /></div>', props: ['suggestions', 'loading', 'hidden'] },
+  MarkdownContent: { template: '<div class="markdown-content"></div>', props: ['content', 'isLoading'] },
+  AssistantMessage: { template: '<div class="assistant-message"><slot /></div>', props: ['id', 'content', 'phase', 'displayTime', 'suggestions', 'feedback'] },
+  UserBubble: { template: '<div class="user-bubble"></div>', props: ['content', 'displayTime', 'sendStatus'] },
+  InputBox: { template: '<div class="input-box"><slot /></div>', props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName'] },
+  ModeSelector: { template: '<div class="mode-selector"></div>', props: ['currentMode', 'supportsThinking', 'ultraDisabled'] },
+  ModelSelectorPopup: { template: '<div class="model-selector-popup"><slot /></div>', props: ['show', 'models', 'currentModel'] },
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

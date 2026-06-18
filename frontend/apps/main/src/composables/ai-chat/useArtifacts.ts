@@ -180,7 +180,7 @@ export async function loadArtifactContent(filepath: string, sessionId: string): 
   const encodedPath = encodeURIComponent(filepath)
   const url = `/api/v1/ai/sessions/${sessionId}/artifacts/${encodedPath}`
   const familyStore = useFamilyStore()
-  const familyId = familyStore.currentFamily?.id
+  const familyId = familyStore.family?.id
 
   // P0: Guard - must have valid family context for tenant isolation
   if (!familyId) {

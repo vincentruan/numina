@@ -43,6 +43,11 @@ function handleInstallSkill(filepath: string) {
 function getDownloadUrl(artifact: Artifact): string {
   return artifactDownloadUrl(artifact.path || artifact.id || '', props.sessionId)
 }
+
+// 打开下载链接（Vue template 中 window 需要通过函数访问）
+function openDownloadUrl(artifact: Artifact) {
+  window.open(getDownloadUrl(artifact), '_blank')
+}
 </script>
 
 <template>
@@ -86,7 +91,7 @@ function getDownloadUrl(artifact: Artifact): string {
           <Button
             size="small"
             plain
-            @click.stop="window.open(getDownloadUrl(artifact), '_blank')"
+            @click.stop="openDownloadUrl(artifact)"
           >
             {{ t('aiArtifact.download') }}
           </Button>

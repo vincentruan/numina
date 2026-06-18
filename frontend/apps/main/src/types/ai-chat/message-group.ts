@@ -114,7 +114,7 @@ export interface ToolCallSummary {
 export interface Artifact {
   id: string
   title: string
-  kind: string
+  kind: 'data' | 'link' | 'image' | 'file' | 'other' | 'report'
   url?: string
   path?: string
 }
