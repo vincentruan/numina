@@ -22,7 +22,7 @@ from pathlib import Path
 # 添加当前目录到 Python 路径
 sys.path.insert(0, str(Path(__file__).parent))
 
-from db import init_engine, init_session_factory, get_db_session
+from db import Base, init_engine, init_session_factory, get_db_session
 from safety import safety_check
 
 # 导入场景
@@ -220,7 +220,10 @@ def main():
     # 初始化数据库连接
     engine = init_engine(db_url)
     init_session_factory(engine)
-    
+
+    # 创建所有表（models.py 使用独立的 Base）
+    Base.metadata.create_all(bind=engine)
+
     # 创建 session
     db = get_db_session()
     
