@@ -8,11 +8,14 @@ import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 const props = defineProps<{
   messages: ChatMessage[]
   isStreaming: boolean
+  threadId?: string
 }>()
 
 const emit = defineEmits<{
   retry: []
   stop: []
+  suggestionClick: [text: string]
+  artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
 }>()
 
 const { t } = useI18n()
@@ -44,6 +47,9 @@ watch(
         v-for="(group, index) in messageGroups"
         :key="group.id ?? index"
         :group="group"
+        :thread-id="threadId"
+        @suggestion-click="(text: string) => emit('suggestionClick', text)"
+        @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
       />
     </div>
     <div v-if="isStreaming" class="message-list-streaming-indicator">

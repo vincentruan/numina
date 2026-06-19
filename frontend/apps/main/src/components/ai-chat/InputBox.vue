@@ -86,7 +86,7 @@ const attachmentActions = [
   { text: 'Image', value: 'image', icon: 'photo' },
   { text: 'Camera', value: 'camera', icon: 'photograph' }
 ]
-function onSelectAttachment(action: any) {
+function onSelectAttachment(action: { value: string; text: string; icon?: string }) {
   emit('action', action.value)
 }
 
@@ -245,7 +245,7 @@ watch(models, (newModels) => {
         <template #reference>
           <button class="control-btn agent-btn" :disabled="!isWelcomeMode">
             <span class="agent-name">{{ agentOptions.find(a => a.value === selectedAgentId)?.text }}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon" v-if="isWelcomeMode">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-if="isWelcomeMode" class="dropdown-icon">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>

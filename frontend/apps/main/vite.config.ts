@@ -28,6 +28,10 @@ export default defineConfig({
       allow: ['../..']
     },
     proxy: {
+      '/api/threads': {
+        target: 'http://localhost:8001',
+        changeOrigin: true
+      },
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true

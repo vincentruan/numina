@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import http from '@/api/index'
+import { getTokenUsage } from '@/api/ai-chat'
 
 const props = defineProps<{
   threadId: string | null
@@ -29,8 +29,7 @@ const fetchUsage = async () => {
   
   try {
     loading.value = true
-    const res = await http.get<{prompt_tokens: number, completion_tokens: number, total_tokens: number}>(`/threads/${encodeURIComponent(props.threadId)}/token-usage`)
-    usage.value = res.data
+    usage.value = await getTokenUsage(props.threadId)
   } catch (err) {
     console.error('Failed to fetch token usage:', err)
   } finally {

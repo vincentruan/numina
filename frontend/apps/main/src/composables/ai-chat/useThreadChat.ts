@@ -2,29 +2,109 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
+import type { ChatMessage, ToolCallSummary } from '@/types/ai-chat/message-group'
 
-export interface ChatMessage {
-  id: string
-  type: 'human' | 'ai' | 'tool'
-  content: string
-  sendStatus?: 'sending' | 'sent' | 'failed'
-  phase?: 'connecting' | 'thinking' | 'answering' | 'done' | 'error' | 'interrupted'
-}
+export type { ChatMessage }
 
-/** A single chunk yielded by client.runs.stream(). */
+/** A single chunk yielded by client.runs.stream() in legacy SSE mode. */
 interface StreamChunk {
   event: string
   data?: unknown
 }
 
-/** Message payload shape inside `messages` / `values` stream events. */
-interface StreamMessage {
+/** DeerFlow messages-tuple event data shape (AI text chunk). */
+interface AiTextData {
+  type: 'ai'
+  content: string
   id?: string
-  type?: string
-  content?: string
+  tool_calls?: Array<{ id?: string; name: string; args: string | object }>
+  usage_metadata?: Record<string, unknown>
+  additional_kwargs?: Record<string, unknown>
 }
 
-export function useThreadChat() {
+/** DeerFlow messages-tuple event data shape (Tool result). */
+interface ToolResultData {
+  type: 'tool'
+  content: string
+  id?: string
+  tool_call_id?: string
+  name?: string
+}
+
+type MessagesTupleData = AiTextData | ToolResultData
+
+/** Serialized message from DeerFlow values event. */
+interface SerializedMessage {
+  type?: string
+  content?: string
+  id?: string
+  name?: string
+  tool_calls?: Array<{ id?: string; name: string; args: string | object }>
+  tool_call_id?: string
+  additional_kwargs?: Record<string, unknown>
+}
+
+/** DeerFlow values event data shape. */
+interface ValuesData {
+  title?: string
+  messages?: SerializedMessage[]
+  artifacts?: Array<Record<string, unknown>>
+}
+
+/** Format current time as HH:MM */
+function formatDisplayTime(): string {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+}
+
+/** Parse tool call args to Record<string, unknown> */
+function parseArgs(args: string | object): Record<string, unknown> {
+  if (typeof args === 'string') {
+    try { return JSON.parse(args) } catch { return { _raw: args } }
+  }
+  return args
+}
+
+/** Convert DeerFlow tool_calls to ToolCallSummary[] */
+function toToolCallSummaries(
+  toolCalls: Array<{ id?: string; name: string; args: string | object }>,
+): ToolCallSummary[] {
+  return toolCalls.map((tc, i) => ({
+    id: tc.id || `tc-${Date.now()}-${i}`,
+    name: tc.name,
+    displayName: tc.name,
+    args: parseArgs(tc.args),
+    status: 'pending' as const,
+  }))
+}
+
+/** Map a serialized backend message to rich ChatMessage */
+function serializedToChatMessage(m: SerializedMessage): ChatMessage {
+  const type = m.type === 'human' ? 'human' as const
+    : m.type === 'tool' ? 'tool' as const
+    : 'ai' as const
+  const role = type === 'human' ? 'user' as const : 'assistant' as const
+
+  return {
+    id: m.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    type,
+    role,
+    content: m.content || '',
+    displayTime: formatDisplayTime(),
+    phase: type !== 'human' ? 'done' as const : undefined,
+    name: m.name,
+    tool_call_id: m.tool_call_id,
+    tool_calls: m.tool_calls ? toToolCallSummaries(m.tool_calls) : undefined,
+    additional_kwargs: m.additional_kwargs,
+  }
+}
+
+export interface UseThreadChatOptions {
+  /** Called after stream ends — caller can schedule title refresh */
+  onStreamEnd?: (threadId: string) => void
+}
+
+export function useThreadChat(options: UseThreadChatOptions = {}) {
   const { t } = useI18n()
   const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
@@ -41,37 +121,102 @@ export function useThreadChat() {
     const msg: ChatMessage = {
       id: `msg-${Date.now()}`,
       type: 'human',
+      role: 'user',
       content: text,
+      displayTime: formatDisplayTime(),
       sendStatus: 'sending',
     }
     messages.value = [...messages.value, msg]
     return msg
   }
 
-  function mergeStreamingChunk(chunk: string): void {
-    const last = messages.value[messages.value.length - 1]
-    if (last && last.type === 'ai') {
-      messages.value = [
-        ...messages.value.slice(0, -1),
-        { ...last, content: last.content + chunk },
-      ]
-    } else {
-      messages.value = [...messages.value, {
-        id: `ai-${Date.now()}`,
-        type: 'ai',
-        content: chunk,
-        phase: 'answering',
-      }]
+  /**
+   * Merge a DeerFlow messages-tuple event.
+   *
+   * AI text chunks: append to existing AI message with same id, or create new.
+   * AI tool calls: attach tool_calls to existing AI message with same id.
+   * Tool results: add as separate tool message.
+   */
+  function mergeMessagesTuple(chunk: MessagesTupleData): void {
+    if (chunk.type === 'ai') {
+      const last = messages.value[messages.value.length - 1]
+      const chunkId = chunk.id
+
+      // If last message is AI with matching id (or both have no id), append text
+      if (last && last.type === 'ai' && (!chunkId || chunkId === last.id || !last.id)) {
+        const updated: ChatMessage = { ...last }
+        updated.content = last.content + chunk.content
+        updated.phase = 'answering'
+        if (chunkId) updated.id = chunkId
+        if (chunk.tool_calls) {
+          const newCalls = toToolCallSummaries(chunk.tool_calls)
+          updated.tool_calls = [...(last.tool_calls || []), ...newCalls]
+        }
+        if (chunk.additional_kwargs) {
+          updated.additional_kwargs = { ...(last.additional_kwargs || {}), ...chunk.additional_kwargs }
+        }
+        messages.value = [...messages.value.slice(0, -1), updated]
+      } else {
+        // New AI message
+        const msg: ChatMessage = {
+          id: chunkId || `ai-${Date.now()}`,
+          type: 'ai',
+          role: 'assistant',
+          content: chunk.content,
+          displayTime: formatDisplayTime(),
+          phase: 'answering',
+        }
+        if (chunk.tool_calls) {
+          msg.tool_calls = toToolCallSummaries(chunk.tool_calls)
+        }
+        if (chunk.additional_kwargs) {
+          msg.additional_kwargs = chunk.additional_kwargs
+        }
+        messages.value = [...messages.value, msg]
+      }
+    } else if (chunk.type === 'tool') {
+      // Tool result message
+      const msg: ChatMessage = {
+        id: chunk.id || `tool-${Date.now()}`,
+        type: 'tool',
+        role: 'assistant',
+        content: chunk.content,
+        displayTime: formatDisplayTime(),
+        name: chunk.name,
+        tool_call_id: chunk.tool_call_id,
+      }
+      messages.value = [...messages.value, msg]
+
+      // Update matching tool_call status to 'done' in the previous AI message
+      if (chunk.tool_call_id) {
+        const aiMsgIdx = messages.value.findLastIndex(
+          (m, i) => m.type === 'ai' && i < messages.value.length - 1
+            && m.tool_calls?.some(tc => tc.id === chunk.tool_call_id),
+        )
+        if (aiMsgIdx >= 0) {
+          const aiMsg = messages.value[aiMsgIdx]
+          const updatedCalls = (aiMsg.tool_calls || []).map(tc =>
+            tc.id === chunk.tool_call_id
+              ? { ...tc, status: 'success' as const, result: chunk.content }
+              : tc,
+          )
+          messages.value = [
+            ...messages.value.slice(0, aiMsgIdx),
+            { ...aiMsg, tool_calls: updatedCalls },
+            ...messages.value.slice(aiMsgIdx + 1),
+          ]
+        }
+      }
     }
   }
 
-  function mergeValuesMessages(raw: StreamMessage[]): void {
-    const mapped = raw.map((m) => ({
-      id: m.id || `msg-${Date.now()}`,
-      type: m.type === 'human' ? 'human' as const : 'ai' as const,
-      content: m.content || '',
-      phase: m.type === 'ai' ? 'done' as const : undefined,
-    }))
+  /**
+   * Merge messages from a DeerFlow values event.
+   * Values events contain full state snapshots — we deduplicate by id.
+   */
+  function mergeValuesMessages(raw: SerializedMessage[]): void {
+    if (!raw || raw.length === 0) return
+    const mapped = raw.map(serializedToChatMessage)
     const existingIds = new Set(messages.value.map(m => m.id))
     const newOnes = mapped.filter(m => !existingIds.has(m.id))
     if (newOnes.length > 0) {
@@ -89,6 +234,7 @@ export function useThreadChat() {
     }, STREAM_TIMEOUT_MS)
 
     const userMsg = addOptimisticUserMessage(text)
+    let pendingSuggestions: string[] | undefined
 
     try {
       if (!threadId && !currentThreadId) {
@@ -104,26 +250,49 @@ export function useThreadChat() {
 
       const client = getClient()
       const stream = client.runs.stream(currentThreadId as string, 'agent', {
-        input: { messages: [{ type: 'human', content: text }] },
+        input: { messages: [{ role: 'user', content: text }] },
         signal: abortController.signal,
       })
 
       userMsg.sendStatus = 'sent'
 
       for await (const chunk of stream as AsyncIterable<StreamChunk>) {
-        if (chunk.event === 'messages' && chunk.data) {
-          for (const msg of chunk.data as StreamMessage[]) {
-            if (msg.content) {
-              mergeStreamingChunk(msg.content)
-            }
-          }
+        if (chunk.event === 'messages-tuple' && chunk.data) {
+          mergeMessagesTuple(chunk.data as MessagesTupleData)
         } else if (chunk.event === 'values' && chunk.data) {
-          const data = chunk.data as { messages?: StreamMessage[] }
+          const data = chunk.data as ValuesData
           if (data.messages) {
             mergeValuesMessages(data.messages)
           }
-        } else if (chunk.event === 'metadata' && chunk.data) {
-          tokenUsage.value = chunk.data as TokenUsage
+        } else if (chunk.event === 'custom' && chunk.data) {
+          const customData = chunk.data as { type?: string; suggestions?: string[] }
+          if (customData.type === 'suggestions' && customData.suggestions) {
+            pendingSuggestions = customData.suggestions
+          }
+        } else if (chunk.event === 'end') {
+          if (chunk.data) {
+            const endData = chunk.data as { usage?: TokenUsage }
+            if (endData.usage) {
+              tokenUsage.value = endData.usage
+            }
+          }
+          // Mark last AI message as done (attach suggestions if available)
+          const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+          if (lastIdx >= 0) {
+            const last = messages.value[lastIdx]
+            messages.value = [
+              ...messages.value.slice(0, lastIdx),
+              { ...last, phase: 'done', suggestions: pendingSuggestions ?? last.suggestions },
+              ...messages.value.slice(lastIdx + 1),
+            ]
+          }
+          // Notify caller that stream ended (for title refresh)
+          if (currentThreadId) {
+            options.onStreamEnd?.(currentThreadId)
+          }
+        } else if (chunk.event === 'error' && chunk.data) {
+          const errData = chunk.data as { error?: string }
+          error.value = errData.error || t('aiChat.sendFailed')
         }
       }
     } catch (err) {
@@ -171,15 +340,16 @@ export function useThreadChat() {
       try {
         const client = getClient()
         const state = await client.threads.getState(threadId)
-        const values = state.values as { messages?: StreamMessage[] } | undefined
+        const values = state.values as { messages?: SerializedMessage[] } | undefined
         if (values?.messages) {
-          mergeValuesMessages(values.messages)
+          // Replace messages entirely for history load
+          messages.value = values.messages.map(serializedToChatMessage)
         }
         isLoading.value = false
-        return // success
+        return
       } catch (err) {
         const e = err as Error
-        if (attempt < retries) continue // retry
+        if (attempt < retries) continue
         error.value = e.message || t('aiChat.loadSessionFailed')
         isLoading.value = false
       }

@@ -5,7 +5,7 @@
  * 参考: frontend/src/components/workspace/artifacts/artifact-file-list.tsx
  *
  * 功能:
- * - 渲染文件列表（Card 组件）
+ * - 渲染文件列表（卡片式）
  * - 文件类型图标
  * - 点击触发全屏预览
  * - Skill 文件安装按钮
@@ -52,32 +52,28 @@ function openDownloadUrl(artifact: Artifact) {
 
 <template>
   <div class="artifact-file-list">
-    <Card
+    <div
       v-for="artifact in artifacts"
       :key="artifact.id || artifact.path"
       class="artifact-card"
-      clickable
+      role="button"
+      tabindex="0"
       @click="handleClick(artifact)"
+      @keydown.enter="handleClick(artifact)"
     >
-      <!-- 文件图标 -->
-      <template #icon>
+      <div class="artifact-card-body">
+        <!-- 文件图标 -->
         <IIcon :icon="getFileIcon(artifact.path || '')" class="file-icon" />
-      </template>
 
-      <!-- 文件标题 -->
-      <template #title>
-        <span class="file-name">{{ getFileName(artifact.path || '') }}</span>
-      </template>
+        <div class="artifact-card-info">
+          <!-- 文件标题 -->
+          <span class="file-name">{{ getFileName(artifact.path || '') }}</span>
+          <!-- 文件描述 -->
+          <span class="file-kind">{{ artifact.kind || t('aiArtifact.defaultKind') }}</span>
+        </div>
 
-      <!-- 文件描述 -->
-      <template #desc>
-        <span class="file-kind">{{ artifact.kind || t('aiArtifact.defaultKind') }}</span>
-      </template>
-
-      <!-- 操作按钮 -->
-      <template #footer>
-        <div class="card-actions">
-          <!-- Skill 文件：安装按钮 -->
+        <!-- 操作按钮 -->
+        <div class="card-actions" @click.stop>
           <Button
             v-if="isSkillFile(artifact.path || '')"
             size="small"
@@ -86,8 +82,6 @@ function openDownloadUrl(artifact: Artifact) {
           >
             {{ t('aiArtifact.install') }}
           </Button>
-
-          <!-- 下载按钮 -->
           <Button
             size="small"
             plain
@@ -96,8 +90,8 @@ function openDownloadUrl(artifact: Artifact) {
             {{ t('aiArtifact.download') }}
           </Button>
         </div>
-      </template>
-    </Card>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -112,18 +106,46 @@ function openDownloadUrl(artifact: Artifact) {
 .artifact-card {
   background: var(--card-bg);
   border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.artifact-card:hover,
+.artifact-card:focus-visible {
+  background: rgba(0, 0, 0, 0.02);
+  outline: none;
+}
+
+.artifact-card-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
 }
 
 .file-icon {
   width: 24px;
   height: 24px;
   color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.artifact-card-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .file-name {
   font-size: 14px;
   font-weight: 500;
   color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .file-kind {
@@ -134,6 +156,7 @@ function openDownloadUrl(artifact: Artifact) {
 .card-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 /* 375px */

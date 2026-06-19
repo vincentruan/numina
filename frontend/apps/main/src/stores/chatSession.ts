@@ -11,6 +11,20 @@ export const useChatSessionStore = defineStore('chatSession', () => {
     sessions.value.find(s => s.thread_id === activeThreadId.value) ?? null
   )
 
+  // Initialize from URL parameters
+  function initializeFromUrl() {
+    const params = new URLSearchParams(window.location.search)
+    const threadId = params.get('thread_id')
+    const newSession = params.get('newSession')
+
+    if (newSession === '1') {
+      // Start a new session by clearing active thread
+      clearActiveThread()
+    } else if (threadId) {
+      setActiveThread(threadId)
+    }
+  }
+
   function setActiveThread(id: string) {
     if (activeThreadId.value === id) {
       activeThreadId.value = null
@@ -35,6 +49,6 @@ export const useChatSessionStore = defineStore('chatSession', () => {
 
   return {
     activeThreadId, sessions, isWelcomeMode, activeSession,
-    setActiveThread, clearActiveThread, setSessions,
+    initializeFromUrl, setActiveThread, clearActiveThread, setSessions,
   }
 })

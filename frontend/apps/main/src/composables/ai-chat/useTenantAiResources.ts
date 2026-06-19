@@ -15,7 +15,7 @@
  */
 
 import { ref, computed, onMounted, type Ref, type ComputedRef } from 'vue'
-import { showToast, showFailToast } from 'vant'
+import { showFailToast } from 'vant'
 import i18n from '@/i18n'
 import http from '@/api'
 import { useFamilyStore } from '@/stores/family'
@@ -134,7 +134,7 @@ export function useTenantAiResources(): {
     error.value = null
 
     try {
-      const response = await http.get<ModelsApiResponse>('/api/v1/ai/models')
+      const response = await http.get<ModelsApiResponse>('/ai/models')
       models.value = response.data.models
       tenantConfig.value = {
         subagent_enabled: response.data.subagent_enabled,

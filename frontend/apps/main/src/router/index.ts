@@ -294,7 +294,7 @@ const router = createRouter({
         {
           path: 'ai/chat',
           name: 'AIChat',
-          component: () => import('@/pages/ai/chat/index.vue')
+          component: () => import('@/pages/AIChatPage.vue')
         },
         {
           path: 'ai/time-machine',
@@ -425,13 +425,13 @@ router.afterEach((to) => {
   }
 
   // Pages without skeleton: defer to page's usePageLoading
-  // Safety timeout: force-complete after 5s (handles both idle and stuck cases)
-  // - If page never called increment(): completes idle NProgress
-  // - If page called increment() but hung: force-completes stuck loading
-  // - If page called increment() within 5s: timeout cleared by increment(), page controls
+  // Short transition timeout: if the page does not call increment() within 200ms,
+  // we assume it is idle (never starts loading) and complete NProgress.
+  // If the page does call increment() within 200ms, this router timeout is cleared
+  // by increment(), and the page's own usePageLoading controls the lifecycle.
   const timeoutId = setTimeout(() => {
     completeGlobalLoading()
-  }, 5000)
+  }, 200)
   registerRouterTimeout(timeoutId)
 })
 

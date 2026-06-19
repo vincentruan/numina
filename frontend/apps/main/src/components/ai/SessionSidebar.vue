@@ -51,6 +51,10 @@ function close() {
   visible.value = false
 }
 
+function refreshSidebar() {
+  refresh()
+}
+
 function selectThread(threadId: string) {
   store.setActiveThread(threadId)
   emit('selectThread', threadId)
@@ -107,7 +111,7 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
   }
 }
 
-defineExpose({ open, close })
+defineExpose({ open, close, refreshSidebar })
 </script>
 
 <template>

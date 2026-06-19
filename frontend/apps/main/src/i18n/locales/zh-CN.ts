@@ -325,6 +325,7 @@ export default {
     needClarification: '需要补充信息',
     subagentTasks: '正在执行 {count} 个子任务',
     usageToken: 'Token',
+    tokenUsage: 'Token 用量',
     // Welcome page keys
     welcomeTitle: 'Numina AI',
     welcomeSubtitle: '家庭资产管理助手',
