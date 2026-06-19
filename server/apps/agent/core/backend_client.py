@@ -208,6 +208,20 @@ class BackendClient:
             title=title,
         )
 
+    async def update_session(
+        self,
+        *,
+        session_id: str,
+        title: str | None = None,
+        is_pinned: bool | None = None,
+    ) -> None:
+        await update_session(
+            self.family_id,
+            session_id=session_id,
+            title=title,
+            is_pinned=is_pinned,
+        )
+
     async def list_sessions(
         self,
         *,
@@ -563,6 +577,29 @@ async def update_session_summary(
     payload: dict = {"summary": summary, "model": model, "status": status}
     if title is not None:
         payload["title"] = title
+    resp = await client.post(
+        f"/api/v1/internal/ai/sessions/{session_id}/summary",
+        json=payload,
+        headers=_make_headers(validated_id),
+    )
+    resp.raise_for_status()
+
+
+async def update_session(
+    family_id: str,
+    *,
+    session_id: str,
+    title: str | None = None,
+    is_pinned: bool | None = None,
+) -> None:
+    """Update session metadata (title, is_pinned) via the internal summary endpoint."""
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    payload: dict = {"status": "completed"}
+    if title is not None:
+        payload["title"] = title
+    if is_pinned is not None:
+        payload["is_pinned"] = is_pinned
     resp = await client.post(
         f"/api/v1/internal/ai/sessions/{session_id}/summary",
         json=payload,

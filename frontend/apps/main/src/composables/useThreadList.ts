@@ -73,20 +73,21 @@ export function useThreadList() {
   }
 
   async function renameSession(id: string, title: string) {
-    const updated = await updateThread(id, { title })
+    await updateThread(id, { title })
     const idx = sessions.value.findIndex(s => s.thread_id === id)
     if (idx !== -1) {
-      sessions.value[idx] = { ...sessions.value[idx], ...updated }
+      sessions.value[idx] = { ...sessions.value[idx], title }
     }
   }
 
   async function togglePin(id: string) {
     const session = sessions.value.find(s => s.thread_id === id)
     if (!session) return
-    const updated = await updateThread(id, { is_pinned: !session.is_pinned })
+    const newPinned = !session.is_pinned
+    await updateThread(id, { is_pinned: newPinned })
     const idx = sessions.value.findIndex(s => s.thread_id === id)
     if (idx !== -1) {
-      sessions.value[idx] = { ...sessions.value[idx], ...updated }
+      sessions.value[idx] = { ...sessions.value[idx], is_pinned: newPinned }
     }
   }
 

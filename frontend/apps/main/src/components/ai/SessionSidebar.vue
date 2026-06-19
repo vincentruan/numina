@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { showDialog, showToast } from 'vant'
+import { showDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadList } from '@/composables/useThreadList'
@@ -59,16 +59,16 @@ function selectThread(threadId: string) {
 
 function handleDelete(threadId: string) {
   showDialog({
-    title: t('ai.chat.session.deleteConfirm'),
+    title: t('aiChat.confirmDeleteSession'),
     showCancelButton: true,
     confirmButtonColor: 'var(--van-danger-color, #ee0a24)',
   })
     .then(async () => {
       try {
         await deleteSession(threadId)
-        showToast({ message: t('ai.chat.session.delete') })
+        showSuccessToast(t('aiChat.deleteSessionSuccess'))
       } catch {
-        showToast({ message: t('ai.chat.errors.sendFailed') })
+        showFailToast(t('aiChat.sendFailed'))
       }
     })
     .catch(() => {
@@ -87,9 +87,9 @@ async function confirmRename(threadId: string) {
     await renameSession(threadId, renameInput.value.trim())
     renamingId.value = null
     renameInput.value = ''
-    showToast({ message: t('ai.chat.session.rename') })
+    showSuccessToast(t('aiChat.renameSessionSuccess'))
   } catch {
-    showToast({ message: t('ai.chat.errors.sendFailed') })
+    showFailToast(t('aiChat.sendFailed'))
   }
 }
 
@@ -101,9 +101,9 @@ function cancelRename() {
 async function handleTogglePin(threadId: string, isPinned: boolean) {
   try {
     await togglePin(threadId)
-    showToast({ message: isPinned ? t('ai.chat.session.unpin') : t('ai.chat.session.pin') })
+    showSuccessToast(isPinned ? t('aiChat.unpinSessionSuccess') : t('aiChat.pinSessionSuccess'))
   } catch {
-    showToast({ message: t('ai.chat.errors.sendFailed') })
+    showFailToast(t('aiChat.sendFailed'))
   }
 }
 
@@ -124,13 +124,13 @@ defineExpose({ open, close })
   <van-overlay :show="visible" @click="close">
     <div class="sidebar-overlay" @click.stop>
       <div class="sidebar-header">
-        <h3 class="sidebar-title">{{ t('ai.chat.session.title') }}</h3>
+        <h3 class="sidebar-title">{{ t('aiChat.historyTitle') }}</h3>
         <van-button icon="cross" type="default" size="small" @click="close" />
       </div>
 
       <div class="sidebar-content">
         <template v-if="dateGroups.length === 0 && !isLoading">
-          <div class="sidebar-empty">{{ t('ai.chat.session.noSessions') }}</div>
+          <div class="sidebar-empty">{{ t('aiChat.noHistory') }}</div>
         </template>
 
         <div v-for="group in dateGroups" :key="group.label" class="sidebar-group">
@@ -154,7 +154,7 @@ defineExpose({ open, close })
                 />
               </template>
               <template v-else>
-                <div class="session-title">{{ session.title || '新对话' }}</div>
+                <div class="session-title">{{ session.title || t('aiChat.newChat') }}</div>
                 <div class="session-time">{{ new Date(session.updated_at).toLocaleString() }}</div>
               </template>
             </div>

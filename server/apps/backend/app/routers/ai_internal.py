@@ -743,6 +743,7 @@ class SessionSummaryRequest(BaseModel):
     model: str | None = None
     status: str = "completed"
     title: str | None = None
+    is_pinned: bool | None = None
 
 
 def _session_to_dict(s: "object") -> dict:
@@ -822,6 +823,8 @@ def internal_update_session_summary(
     row.status = body.status
     if body.model:
         row.last_model = body.model
+    if body.is_pinned is not None:
+        row.is_pinned = body.is_pinned
     row.updated_at = datetime.utcnow()
     db.commit()
     logger.info("[backend] session updated successfully session=%s title=%s", session_id, repr(row.title))

@@ -106,3 +106,20 @@ class AiSessionRepository:
             )
         except Exception as e:
             logger.warning("session summary update failed for %s: %s", session_id, e)
+
+    async def update_session(
+        self,
+        *,
+        session_id: str,
+        title: str | None = None,
+        is_pinned: bool | None = None,
+    ) -> None:
+        """Update session metadata (title, is_pinned) via backend."""
+        try:
+            await self._client.update_session(
+                session_id=session_id,
+                title=title,
+                is_pinned=is_pinned,
+            )
+        except Exception as e:
+            logger.warning("session update failed for %s: %s", session_id, e)

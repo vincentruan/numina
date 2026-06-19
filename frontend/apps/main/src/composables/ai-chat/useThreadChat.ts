@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { getClient, createThread } from '@/api/ai-chat'
+import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
 
 export interface ChatMessage {
@@ -30,6 +30,10 @@ export function useThreadChat() {
   const tokenUsage = ref<TokenUsage | null>(null)
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
+  let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
+  let createdThreadInThisCall = false
+
+  const STREAM_TIMEOUT_MS = 120_000
 
   function addOptimisticUserMessage(text: string): ChatMessage {
     const msg: ChatMessage = {
@@ -78,6 +82,9 @@ export function useThreadChat() {
     isLoading.value = true
     error.value = null
     abortController = new AbortController()
+    streamTimeoutId = setTimeout(() => {
+      abortController?.abort()
+    }, STREAM_TIMEOUT_MS)
 
     const userMsg = addOptimisticUserMessage(text)
 
@@ -85,8 +92,12 @@ export function useThreadChat() {
       if (!threadId && !currentThreadId) {
         const thread = await createThread()
         currentThreadId = thread.thread_id
+        createdThreadInThisCall = true
       } else if (threadId) {
         currentThreadId = threadId
+        createdThreadInThisCall = false
+      } else {
+        createdThreadInThisCall = false
       }
 
       const client = getClient()
@@ -116,14 +127,24 @@ export function useThreadChat() {
     } catch (err) {
       const e = err as Error & { name?: string }
       if (e.name === 'AbortError') {
-        userMsg.sendStatus = 'sent'
+        userMsg.sendStatus = 'failed'
       } else {
         userMsg.sendStatus = 'failed'
         error.value = e.message || '发送失败'
       }
+      // Clean up orphan thread created during this call
+      if (createdThreadInThisCall && currentThreadId) {
+        deleteThread(currentThreadId).catch(() => {})
+        currentThreadId = null
+      }
     } finally {
+      createdThreadInThisCall = false
       isLoading.value = false
       abortController = null
+      if (streamTimeoutId !== null) {
+        clearTimeout(streamTimeoutId)
+        streamTimeoutId = null
+      }
     }
   }
 
@@ -131,6 +152,10 @@ export function useThreadChat() {
     if (abortController) {
       abortController.abort()
       abortController = null
+    }
+    if (streamTimeoutId !== null) {
+      clearTimeout(streamTimeoutId)
+      streamTimeoutId = null
     }
     isLoading.value = false
   }
@@ -142,17 +167,10 @@ export function useThreadChat() {
 
     try {
       const client = getClient()
-      const stream = client.runs.stream(threadId, 'agent', {
-        input: null,
-      })
-
-      for await (const chunk of stream as AsyncIterable<StreamChunk>) {
-        if (chunk.event === 'values' && chunk.data) {
-          const data = chunk.data as { messages?: StreamMessage[] }
-          if (data.messages) {
-            mergeValuesMessages(data.messages)
-          }
-        }
+      const state = await client.threads.getState(threadId)
+      const values = state.values as { messages?: StreamMessage[] } | undefined
+      if (values?.messages) {
+        mergeValuesMessages(values.messages)
       }
     } catch (err) {
       const e = err as Error

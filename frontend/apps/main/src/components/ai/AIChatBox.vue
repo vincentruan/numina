@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, watch } from 'vue'
-import { showToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import { createThread } from '@/api/ai-chat'
@@ -39,7 +39,7 @@ watch(
   () => chat.error.value,
   (err) => {
     if (err) {
-      showToast({ message: err })
+      showFailToast(err)
     }
   }
 )
@@ -48,15 +48,15 @@ async function handleStartChat(text: string) {
   try {
     const thread = await createThread()
     store.setActiveThread(thread.thread_id)
-    await chat.sendMessage(text, { mode: 'flash' }, thread.thread_id)
+    await chat.sendMessage(text, 'flash', thread.thread_id)
   } catch {
-    showToast({ message: t('ai.chat.errors.sendFailed') })
+    showFailToast(t('aiChat.sendFailed'))
   }
 }
 
 async function handleSendMessage(text: string) {
   if (!store.activeThreadId) return
-  await chat.sendMessage(text, { mode: 'flash' }, store.activeThreadId)
+  await chat.sendMessage(text, 'flash', store.activeThreadId)
 }
 
 function handleStopStream() {

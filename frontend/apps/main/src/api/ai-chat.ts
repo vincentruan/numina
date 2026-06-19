@@ -35,7 +35,7 @@ export async function searchThreads(params: ThreadSearchParams): Promise<ThreadS
 }
 
 export async function updateThread(id: string, data: Partial<ThreadSession>): Promise<ThreadSession> {
-  const res = await http.request({ method: 'PUT', url: `/api/threads/${id}`, data })
+  const res = await http.request({ method: 'PATCH', url: `/api/threads/${id}`, data })
   return res.data
 }
 

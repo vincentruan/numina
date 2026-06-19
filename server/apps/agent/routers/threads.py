@@ -10,13 +10,16 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from deerflow.utils.time import coerce_iso, now_iso
+from fastapi import APIRouter, Header, HTTPException
 from langgraph.checkpoint.base import empty_checkpoint, uuid6
 from pydantic import BaseModel, Field, field_validator
 
-from apps.agent.services.deerflow_adapter.family_adapter_cache import _get_shared_checkpointer
+from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+    _get_shared_checkpointer,
+)
 from apps.agent.services.session_store import AiSessionRepository
-from deerflow.utils.time import coerce_iso, now_iso
+
 
 def serialize_channel_values_for_api(values: dict[str, Any]) -> dict[str, Any]:
     """Convert channel values (including LangChain messages) to dicts for API response."""
@@ -86,6 +89,8 @@ class ThreadStateResponse(BaseModel):
 
 class ThreadPatchRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata to merge")
+    title: str | None = Field(default=None, description="Session title")
+    is_pinned: bool | None = Field(default=None, description="Pin/unpin session")
     _strip_reserved = field_validator("metadata")(classmethod(lambda cls, v: _strip_reserved_metadata(v)))
 
 class ThreadStateUpdateRequest(BaseModel):
@@ -141,7 +146,7 @@ async def delete_thread(
             await checkpointer.adelete_thread(thread_id)
         except Exception:
             pass
-    return ThreadDeleteResponse(success=True, message=f"Thread deleted")
+    return ThreadDeleteResponse(success=True, message="Thread deleted")
 
 @router.post("", response_model=ThreadResponse)
 async def create_thread(
@@ -228,13 +233,20 @@ async def patch_thread(
     x_family_id: str = Header(..., alias="X-Family-Id")
 ) -> ThreadResponse:
     repo = AiSessionRepository(x_family_id)
-    # BackendClient doesn't support generic metadata update, just title/summary update
+    # Handle metadata-based title updates (legacy path)
     if "title" in body.metadata:
         await repo.update_summary(
             session_id=thread_id,
             family_id=x_family_id,
             summary=None,
             title=body.metadata["title"]
+        )
+    # Handle top-level title/is_pinned updates
+    if body.title is not None or body.is_pinned is not None:
+        await repo.update_session(
+            session_id=thread_id,
+            title=body.title,
+            is_pinned=body.is_pinned,
         )
     return await get_thread(thread_id, x_family_id)
 
@@ -267,12 +279,19 @@ async def get_thread(
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {} if checkpoint_tuple is not None else {}
     channel_values = checkpoint.get("channel_values", {})
 
+    # Merge title and is_pinned into metadata for frontend ThreadSession compatibility
+    meta = dict(record.get("metadata", {}) or {})
+    if record.get("title"):
+        meta["title"] = record["title"]
+    if "is_pinned" in record:
+        meta["is_pinned"] = record["is_pinned"]
+
     return ThreadResponse(
         thread_id=thread_id,
         status=status,
         created_at=coerce_iso(record.get("created_at", "")),
         updated_at=coerce_iso(record.get("updated_at", "")),
-        metadata=record.get("metadata", {}),
+        metadata=meta,
         values=serialize_channel_values_for_api(channel_values),
     )
 
