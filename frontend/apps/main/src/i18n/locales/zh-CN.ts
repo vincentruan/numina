@@ -129,6 +129,7 @@ export default {
     createAgent: '创建新智能体',
     chat: {
       session: {
+        title: '会话列表',
         today: '今天',
         yesterday: '昨天',
         earlier: '更早',
