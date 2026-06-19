@@ -156,6 +156,7 @@ docker-compose.override.yml
 *.sqlite3
 *.db
 server/data/
+server/apps/backend/data/
 
 # ===========================
 # Environment & Secrets
