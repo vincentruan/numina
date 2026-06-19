@@ -208,8 +208,21 @@ class BackendClient:
             title=title,
         )
 
-    async def list_sessions(self, *, limit: int = 20, offset: int = 0) -> tuple[list[dict], int]:
-        return await list_sessions(self.family_id, limit=limit, offset=offset)
+    async def list_sessions(
+        self,
+        *,
+        limit: int = 20,
+        offset: int = 0,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
+    ) -> tuple[list[dict], int]:
+        return await list_sessions(
+            self.family_id,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
 
     async def get_session(self, session_id: str) -> dict | None:
         return await get_session(self.family_id, session_id)
@@ -563,12 +576,19 @@ async def list_sessions(
     *,
     limit: int = 20,
     offset: int = 0,
+    sort_by: str = "updated_at",
+    sort_order: str = "desc",
 ) -> tuple[list[dict], int]:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
     resp = await client.get(
         "/api/v1/internal/ai/sessions",
-        params={"limit": limit, "offset": offset},
+        params={
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_order": sort_order,
+        },
         headers=_make_headers(validated_id),
     )
     resp.raise_for_status()

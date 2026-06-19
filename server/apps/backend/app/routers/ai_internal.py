@@ -756,6 +756,7 @@ def _session_to_dict(s: "object") -> dict:
         "last_message_summary": s.last_message_summary,  # type: ignore[attr-defined]
         "last_model": s.last_model,  # type: ignore[attr-defined]
         "has_attachments": s.has_attachments,  # type: ignore[attr-defined]
+        "is_pinned": s.is_pinned,  # type: ignore[attr-defined]
         "source": s.source,  # type: ignore[attr-defined]
         "created_at": s.created_at.isoformat() if s.created_at else None,  # type: ignore[attr-defined]
         "updated_at": s.updated_at.isoformat() if s.updated_at else None,  # type: ignore[attr-defined]
@@ -832,6 +833,8 @@ def internal_list_sessions(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     agent_id: str | None = Query(default=None),
+    sort_by: str = Query(default="updated_at"),
+    sort_order: str = Query(default="desc"),
     family_id: str = Depends(verify_agent_token),
     db: Session = Depends(get_db),
 ):
@@ -841,8 +844,17 @@ def internal_list_sessions(
     if agent_id:
         q = q.filter(AIChatSession.agent_id == int(agent_id))
     total = q.count()
+
+    # Build the sort columns. Pinned sessions always surface first, then the
+    # requested sort column (defaults to updated_at desc).
+    sort_column = {
+        "updated_at": AIChatSession.updated_at,
+        "created_at": AIChatSession.created_at,
+    }.get(sort_by, AIChatSession.updated_at)
+    order_col = sort_column.desc() if sort_order.lower() == "desc" else sort_column.asc()
+
     rows = (
-        q.order_by(AIChatSession.updated_at.desc())
+        q.order_by(AIChatSession.is_pinned.desc(), order_col)
         .limit(limit)
         .offset(offset)
         .all()

@@ -70,10 +70,18 @@ class AiSessionRepository:
         family_id: str,
         limit: int = 20,
         offset: int = 0,
+        sort_by: str = "updated_at",
+        sort_order: str = "desc",
     ) -> tuple[list[dict], int]:
         """Return (sessions, total) for the family, or ([], 0) on error."""
         try:
-            return await self._client.list_sessions(family_id, limit=limit, offset=offset)
+            return await self._client.list_sessions(
+                family_id,
+                limit=limit,
+                offset=offset,
+                sort_by=sort_by,
+                sort_order=sort_order,
+            )
         except Exception as e:
             logger.warning("session list failed for family %s: %s", family_id, e)
             return [], 0

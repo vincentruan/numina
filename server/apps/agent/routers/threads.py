@@ -71,6 +71,8 @@ class ThreadSearchRequest(BaseModel):
     limit: int = Field(default=100, ge=1, le=1000, description="Maximum results")
     offset: int = Field(default=0, ge=0, description="Pagination offset")
     status: str | None = Field(default=None, description="Filter by thread status")
+    sortBy: str | None = Field(default="updated_at", description="Sort column")
+    sortOrder: str | None = Field(default="desc", description="Sort order (asc/desc)")
 
 class ThreadStateResponse(BaseModel):
     values: dict[str, Any] = Field(default_factory=dict, description="Current channel values")
@@ -198,15 +200,21 @@ async def search_threads(
     x_family_id: str = Header(..., alias="X-Family-Id")
 ) -> list[ThreadResponse]:
     repo = AiSessionRepository(x_family_id)
-    sessions, total = await repo.list_sessions(x_family_id, limit=body.limit, offset=body.offset)
-    
+    sessions, total = await repo.list_sessions(
+        x_family_id,
+        limit=body.limit,
+        offset=body.offset,
+        sort_by=body.sortBy or "updated_at",
+        sort_order=body.sortOrder or "desc",
+    )
+
     return [
         ThreadResponse(
             thread_id=r.get("session_id", ""),
             status=r.get("status", "idle"),
             created_at=coerce_iso(r.get("created_at", "")),
             updated_at=coerce_iso(r.get("updated_at", "")),
-            metadata={"title": r.get("title", "")},
+            metadata={"title": r.get("title", ""), "is_pinned": r.get("is_pinned", False)},
             values={"title": r.get("title", "")} if r.get("title") else {},
             interrupts={},
         )
