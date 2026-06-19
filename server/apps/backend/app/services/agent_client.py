@@ -47,25 +47,25 @@ class AgentClient:
     async def get(self, endpoint: str, params: dict[str, Any] | None = None, **kwargs) -> httpx.Response:
         """Send a GET request to the agent."""
         headers = {**self.headers, **kwargs.pop("headers", {})}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             return await client.get(self._build_url(endpoint), params=params, headers=headers, **kwargs)
 
     async def post(self, endpoint: str, json: Any = None, data: Any = None, **kwargs) -> httpx.Response:
         """Send a POST request to the agent."""
         headers = {**self.headers, **kwargs.pop("headers", {})}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             return await client.post(self._build_url(endpoint), json=json, data=data, headers=headers, **kwargs)
 
     async def patch(self, endpoint: str, json: Any = None, data: Any = None, **kwargs) -> httpx.Response:
         """Send a PATCH request to the agent."""
         headers = {**self.headers, **kwargs.pop("headers", {})}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             return await client.patch(self._build_url(endpoint), json=json, data=data, headers=headers, **kwargs)
 
     async def delete(self, endpoint: str, params: dict[str, Any] | None = None, **kwargs) -> httpx.Response:
         """Send a DELETE request to the agent."""
         headers = {**self.headers, **kwargs.pop("headers", {})}
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
+        async with httpx.AsyncClient(timeout=self.timeout, trust_env=False) as client:
             return await client.delete(self._build_url(endpoint), params=params, headers=headers, **kwargs)
 
     @asynccontextmanager
@@ -74,8 +74,8 @@ class AgentClient:
         headers = {**self.headers, **kwargs.pop("headers", {})}
         # Long read timeout for streaming LLM responses
         stream_timeout = httpx.Timeout(connect=5.0, read=300.0, write=10.0, pool=5.0)
-        
-        async with httpx.AsyncClient(timeout=stream_timeout) as client:
+
+        async with httpx.AsyncClient(timeout=stream_timeout, trust_env=False) as client:
             req = client.build_request(
                 method, 
                 self._build_url(endpoint), 

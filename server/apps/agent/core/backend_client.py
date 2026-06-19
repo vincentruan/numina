@@ -79,6 +79,7 @@ async def get_shared_client() -> httpx.AsyncClient:
             timeout=_TIMEOUT,
             limits=_POOL_LIMITS,
             base_url=settings.BACKEND_BASE_URL,
+            trust_env=False,  # Internal service calls must bypass system proxy
         )
         logger.debug(
             "Created shared backend client with pool: max_conn=%d, keepalive=%d",
@@ -503,7 +504,7 @@ async def get_family_ai_config(family_id: str) -> dict:
     validated_id = _validate_family_id(family_id)
     # 使用独立 client 以应用快速超时
     async with httpx.AsyncClient(
-        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
         resp = await client.get(
             "/api/v1/internal/ai/config",
@@ -524,7 +525,7 @@ async def get_ai_enabled_families() -> list[str]:
     """
     # 使用独立 client 以应用快速超时（admin endpoint 无需共享池）
     async with httpx.AsyncClient(
-        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
         resp = await client.get(
             "/api/v1/admin/ai/enabled-families",
@@ -669,7 +670,7 @@ async def report_circuit_event(
     """
     validated_id = _validate_family_id(family_id)
     async with httpx.AsyncClient(
-        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
         payload: dict = {"error_code": error_code, "error_type": error_type}
         if error_message:
@@ -687,7 +688,7 @@ async def reset_circuit_success(family_id: str, config_id: str) -> dict:
     """成功调用后重置熔断计数。"""
     validated_id = _validate_family_id(family_id)
     async with httpx.AsyncClient(
-        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
         resp = await client.post(
             f"/api/v1/internal/ai/config/{config_id}/circuit-reset",
@@ -729,7 +730,7 @@ async def report_half_open_result(
     """
     validated_id = _validate_family_id(family_id)
     async with httpx.AsyncClient(
-        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
         resp = await client.post(
             f"/api/v1/internal/ai/config/{config_id}/half-open-result",
@@ -754,7 +755,7 @@ async def report_web_search_circuit(family_id: str, provider_id: int, failure_ty
     """
     validated_id = _validate_family_id(family_id)
     async with httpx.AsyncClient(
-        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL
+        timeout=_CONFIG_TIMEOUT, base_url=settings.BACKEND_BASE_URL, trust_env=False
     ) as client:
         resp = await client.post(
             f"/api/v1/internal/ai/web-search/{provider_id}/circuit",

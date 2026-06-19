@@ -52,7 +52,10 @@ class AgentSettings(BaseSettings):
     # DeerFlow Gateway API 地址（内部代理端点使用）
     DEERFLOW_GATEWAY_URL: str = "http://localhost:8001"
 
-    model_config = {"env_file": ".env", "extra": "ignore"}
+    model_config = {
+        "env_file": [".env", str(Path(__file__).resolve().parents[4] / ".env")],
+        "extra": "ignore",
+    }
 
     @model_validator(mode="after")
     def _resolve_data_root(self) -> "AgentSettings":
