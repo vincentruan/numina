@@ -1,7 +1,5 @@
 # AGENTS.md
 
-Codex execution entry for this repository.
-
 ## Source of Truth
 
 - Primary rules: [`CLAUDE.md`](./CLAUDE.md)
@@ -15,7 +13,7 @@ Codex execution entry for this repository.
 
 If any instruction conflicts, follow the closest module `CLAUDE.md`, then root `CLAUDE.md`.
 
-## Codex Workflow Contract (No Duplication)
+## Workflow Contract (No Duplication)
 
 1. Read this file, then load the relevant `CLAUDE.md` files before editing.
 2. Keep changes minimal and scoped; do not refactor unrelated code.
