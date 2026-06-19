@@ -190,10 +190,8 @@ dogfood-output/
 tests/playwright-report/
 tests/test-results/
 
-# Screenshot test temp files (keep numbered baselines like 01-*.png)
-tests/screenshot/screenshots/audit-*.png
-tests/screenshot/screenshots/live-*.png
-tests/screenshot/screenshots/*-after-*.png
+# Screenshot test runtime screenshots
+tests/screenshot/screenshots/
 .claude/worktrees/
 .gstack/
 .worktrees/
