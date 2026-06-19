@@ -1,5 +1,15 @@
 import type { ThreadSession } from '@/types/ai-chat/session'
+import { Client } from '@langchain/langgraph-sdk'
 import http from '@/api/index'
+
+/**
+ * LangGraph SDK client pointing at the in-process /api base.
+ * Reused across composables that stream runs via client.runs.stream().
+ */
+export function getClient(): Client {
+  const apiUrl = typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api'
+  return new Client({ apiUrl })
+}
 
 export interface ThreadSearchParams {
   limit?: number
