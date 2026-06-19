@@ -324,6 +324,10 @@ export default {
     needClarification: '需要补充信息',
     subagentTasks: '正在执行 {count} 个子任务',
     usageToken: 'Token',
+    // Welcome page keys
+    welcomeTitle: 'Numina AI',
+    welcomeSubtitle: '家庭资产管理助手',
+    startConversation: '开始对话',
     // Reconnect and error handling keys
     reconnectNoHistory: '无历史事件，无法重新连接',
     reconnecting: '正在重新连接...',

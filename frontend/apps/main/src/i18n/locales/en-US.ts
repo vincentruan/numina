@@ -90,6 +90,10 @@ export default {
     panelImage: 'Upload image',
     retry: 'Retry',
     retrying: 'Regenerating',
+    // Welcome page keys
+    welcomeTitle: 'Numina AI',
+    welcomeSubtitle: 'Family asset management assistant',
+    startConversation: 'Start a conversation',
     errorRetry: 'Request failed, please retry',
     errorTimeout: '⏱️ Response timed out, please retry',
     historyTitle: 'Chat History',
