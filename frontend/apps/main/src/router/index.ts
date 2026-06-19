@@ -294,7 +294,7 @@ const router = createRouter({
         {
           path: 'ai/chat',
           name: 'AIChat',
-          component: () => import('@/pages/AIChatPage.vue')
+          component: () => import('@/pages/ai/chat/index.vue')
         },
         {
           path: 'ai/time-machine',

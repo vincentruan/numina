@@ -127,6 +127,30 @@ export default {
     systemAgentHint: '核心功能依赖，始终启用',
     customAgentHint: '完全可编辑，可删除',
     createAgent: '创建新智能体',
+    chat: {
+      session: {
+        today: '今天',
+        yesterday: '昨天',
+        earlier: '更早',
+        noSessions: '暂无会话',
+        deleteConfirm: '确认删除此会话？',
+        rename: '重命名',
+        delete: '删除',
+        pin: '置顶',
+        unpin: '取消置顶',
+      },
+      tokenDisplay: {
+        off: '关闭',
+        summary: '总计',
+        perTurn: '每次',
+        debug: '调试',
+      },
+      errors: {
+        sendFailed: '发送失败，请重试',
+        streamFailed: '连接中断，正在重连...',
+        sessionLoadFailed: '加载会话失败',
+      },
+    },
   },
   aiChat: {
     connecting: '正在连接模型',
