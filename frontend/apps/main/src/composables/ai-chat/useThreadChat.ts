@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
 
@@ -24,6 +25,7 @@ interface StreamMessage {
 }
 
 export function useThreadChat() {
+  const { t } = useI18n()
   const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -130,7 +132,7 @@ export function useThreadChat() {
         userMsg.sendStatus = 'failed'
       } else {
         userMsg.sendStatus = 'failed'
-        error.value = e.message || '发送失败'
+        error.value = e.message || t('aiChat.sendFailed')
       }
       // Clean up orphan thread created during this call
       if (createdThreadInThisCall && currentThreadId) {
@@ -160,27 +162,32 @@ export function useThreadChat() {
     isLoading.value = false
   }
 
-  async function loadHistory(threadId: string): Promise<void> {
+  async function loadHistory(threadId: string, retries = 1): Promise<void> {
     isLoading.value = true
     error.value = null
     currentThreadId = threadId
 
-    try {
-      const client = getClient()
-      const state = await client.threads.getState(threadId)
-      const values = state.values as { messages?: StreamMessage[] } | undefined
-      if (values?.messages) {
-        mergeValuesMessages(values.messages)
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const client = getClient()
+        const state = await client.threads.getState(threadId)
+        const values = state.values as { messages?: StreamMessage[] } | undefined
+        if (values?.messages) {
+          mergeValuesMessages(values.messages)
+        }
+        isLoading.value = false
+        return // success
+      } catch (err) {
+        const e = err as Error
+        if (attempt < retries) continue // retry
+        error.value = e.message || t('aiChat.loadSessionFailed')
+        isLoading.value = false
       }
-    } catch (err) {
-      const e = err as Error
-      error.value = e.message || '加载历史记录失败'
-    } finally {
-      isLoading.value = false
     }
   }
 
   async function retry(threadId?: string): Promise<void> {
+    if (isLoading.value) return
     const lastHuman = [...messages.value].reverse().find(m => m.type === 'human')
     if (lastHuman) {
       const lastIdx = messages.value.lastIndexOf(lastHuman)

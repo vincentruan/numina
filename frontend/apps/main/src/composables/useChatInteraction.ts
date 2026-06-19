@@ -1,7 +1,7 @@
 /**
  * useChatInteraction — Shared chat interaction composable
  *
- * DeerFlow-aligned interaction logic shared between AIChatPage and AIReportPage.
+ * DeerFlow-aligned interaction logic shared between AIChatBox and AIReportPage.
  * Handles:
  * - Session management (create, load, history)
  * - Event streaming with normalization

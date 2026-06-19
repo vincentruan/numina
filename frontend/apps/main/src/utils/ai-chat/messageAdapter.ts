@@ -1,7 +1,7 @@
 /**
  * DeerFlow Message Adapter
  *
- * 将 AIChatPage.vue 的 Message 类型转换为 DeerFlow ChatMessage 类型
+ * 将 ChatMessage 类型转换为 DeerFlow ChatMessage 类型
  * 以便使用 getMessageGroups() 分组算法
  */
 
@@ -12,9 +12,7 @@ import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 export type { ProcessStep, PlanStep }
 
 /**
- * AIChatPage.vue 内部 Message 类型定义（简化版）
- *
- * 完整定义在 AIChatPage.vue 第 475-505 行
+ * Message 类型定义（简化版）
  */
 export interface LegacyMessage {
   id: string

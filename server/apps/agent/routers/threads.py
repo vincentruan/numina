@@ -73,7 +73,6 @@ class ThreadSearchRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict, description="Metadata filter (exact match)")
     limit: int = Field(default=100, ge=1, le=1000, description="Maximum results")
     offset: int = Field(default=0, ge=0, description="Pagination offset")
-    status: str | None = Field(default=None, description="Filter by thread status")
     sortBy: str | None = Field(default="updated_at", description="Sort column")
     sortOrder: str | None = Field(default="desc", description="Sort order (asc/desc)")
 

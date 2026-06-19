@@ -14,13 +14,16 @@ export const useChatSessionStore = defineStore('chatSession', () => {
   function setActiveThread(id: string) {
     if (activeThreadId.value === id) {
       activeThreadId.value = null
+      history.replaceState(null, '', window.location.pathname)
       return
     }
     activeThreadId.value = id
+    history.replaceState(null, '', `?thread_id=${id}`)
   }
 
   function clearActiveThread() {
     activeThreadId.value = null
+    history.replaceState(null, '', window.location.pathname)
   }
 
   function setSessions(list: ThreadSession[]) {
@@ -30,20 +33,8 @@ export const useChatSessionStore = defineStore('chatSession', () => {
     })
   }
 
-  function updateSessionInCache(update: Partial<ThreadSession> & { thread_id: string }) {
-    const idx = sessions.value.findIndex(s => s.thread_id === update.thread_id)
-    if (idx !== -1) {
-      sessions.value[idx] = { ...sessions.value[idx], ...update }
-    }
-  }
-
-  function removeSessionFromCache(id: string) {
-    sessions.value = sessions.value.filter(s => s.thread_id !== id)
-  }
-
   return {
     activeThreadId, sessions, isWelcomeMode, activeSession,
     setActiveThread, clearActiveThread, setSessions,
-    updateSessionInCache, removeSessionFromCache,
   }
 })

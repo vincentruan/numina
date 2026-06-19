@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Mock vue-i18n — useI18n requires a Vue app instance; mock it in unit tests
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}))
+
 const mockSearchThreads = vi.fn()
 const mockDeleteThread = vi.fn()
 const mockUpdateThread = vi.fn()

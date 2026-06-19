@@ -30,7 +30,7 @@ export async function createThread(): Promise<ThreadSession> {
 }
 
 export async function searchThreads(params: ThreadSearchParams): Promise<ThreadSearchResponse> {
-  const res = await http.request({ method: 'GET', url: '/api/threads/search', params })
+  const res = await http.request({ method: 'POST', url: '/api/threads/search', data: params })
   return res.data
 }
 
@@ -41,9 +41,4 @@ export async function updateThread(id: string, data: Partial<ThreadSession>): Pr
 
 export async function deleteThread(id: string): Promise<void> {
   await http.request({ method: 'DELETE', url: `/api/threads/${id}` })
-}
-
-export async function forkThread(id: string): Promise<ThreadSession> {
-  const res = await http.request({ method: 'POST', url: `/api/threads/${id}/fork` })
-  return res.data
 }

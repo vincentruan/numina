@@ -61,7 +61,7 @@ import type { Artifact } from '@/types/agent-stream'
 //      elements, scoped DOMPurify instance with link-policy hook.
 //   2. AiFinalAnswer (this file, assistant output) — default DOMPurify profile
 //      (full GFM: tables, code, lists, headings), shared singleton.
-//   3. AIChatPage renderMarkdown (legacy assistant render in bubbles) — same
+//   3. AIChatBox renderMarkdown (legacy assistant render in bubbles) — same
 //      shape as #2 but inline, used during streaming throttle.
 // User input needs stricter rules than assistant output, and the streaming
 // path needs a render that doesn't allocate a new DOMPurify instance per token.

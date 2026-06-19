@@ -530,8 +530,8 @@ async function refreshReport(silent?: boolean) {
 }
 
 function handleAgentConsult(agent: Agent) {
-  // R4: unified agentId routing — every agent card lands in AIChatPage with
-  // the agent's id in the query string. AIChatPage loads the matching
+  // R4: unified agentId routing — every agent card lands in AIChatBox with
+  // the agent's id in the query string. AIChatBox loads the matching
   // agent's soul/skills based on agentId. No more agent_name special cases
   // (the old ai-assistant / time-machine branches were architectural
   // accidents from before agentId routing existed) and no more skills-based

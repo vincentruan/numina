@@ -25,7 +25,7 @@ const ALLOWED_ATTR = [
 
 // Scoped DOMPurify instance — registering hooks on the default DOMPurify
 // singleton would leak target=_blank and scheme stripping into every other
-// sanitize call site (AiFinalAnswer, AIChatPage renderMarkdown, TaskConsole),
+// sanitize call site (AiFinalAnswer, AIChatBox renderMarkdown, TaskConsole),
 // because those consumers share the global instance. Using a per-module
 // instance keeps the user-bubble policy local to this module.
 const purify = DOMPurify(window)

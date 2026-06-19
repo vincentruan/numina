@@ -45,26 +45,6 @@ describe('useChatSessionStore', () => {
     expect(store.sessions[0].thread_id).toBe('t1')
   })
 
-  it('updateSessionInCache merges updates', () => {
-    const store = useChatSessionStore()
-    store.setSessions([{
-      thread_id: 't1', title: 'old', status: 'idle', is_pinned: false,
-      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }])
-    store.updateSessionInCache({ thread_id: 't1', title: 'updated' })
-    expect(store.sessions[0].title).toBe('updated')
-  })
-
-  it('removeSessionFromCache deletes by id', () => {
-    const store = useChatSessionStore()
-    store.setSessions([{
-      thread_id: 't1', title: 'x', status: 'idle', is_pinned: false,
-      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-    }])
-    store.removeSessionFromCache('t1')
-    expect(store.sessions).toEqual([])
-  })
-
   it('setActiveThread clears active if switching to same thread', () => {
     const store = useChatSessionStore()
     store.setActiveThread('same')

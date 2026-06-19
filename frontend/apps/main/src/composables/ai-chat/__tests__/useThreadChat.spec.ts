@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
+// Mock vue-i18n — useI18n requires a Vue app instance; mock it in unit tests
+vi.mock('vue-i18n', () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}))
+
 // Mock the API client
 const mockStream = vi.fn()
-const mockClient = { runs: { stream: mockStream } }
+const mockGetState = vi.fn()
+const mockClient = {
+  runs: { stream: mockStream },
+  threads: { getState: mockGetState },
+}
 vi.mock('@/api/ai-chat', () => ({
   getClient: () => mockClient,
   createThread: vi.fn().mockResolvedValue({ thread_id: 't1' }),
@@ -50,11 +59,13 @@ describe('useThreadChat', () => {
   })
 
   it('loadHistory fetches and merges messages', async () => {
-    mockStream.mockImplementation(function* () {
-      yield { event: 'values', data: { messages: [
-        { type: 'human', content: 'Hi' },
-        { type: 'ai', content: 'Hello' },
-      ]}}
+    mockGetState.mockResolvedValue({
+      values: {
+        messages: [
+          { id: 'm1', type: 'human', content: 'Hi' },
+          { id: 'm2', type: 'ai', content: 'Hello' },
+        ],
+      },
     })
     const { useThreadChat } = await import('../useThreadChat')
     const chat = useThreadChat()

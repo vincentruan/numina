@@ -20,22 +20,22 @@ describe('ai-chat API', () => {
     expect(result.thread_id).toBe('t1')
   })
 
-  it('searchThreads calls GET /api/threads/search', async () => {
+  it('searchThreads calls POST /api/threads/search', async () => {
     mockRequest.mockResolvedValue({ data: { items: [] } })
     const { searchThreads } = await import('../ai-chat')
     const result = await searchThreads({})
     expect(mockRequest).toHaveBeenCalledWith({
-      method: 'GET', url: '/api/threads/search', params: {},
+      method: 'POST', url: '/api/threads/search', data: {},
     })
     expect(result.items).toEqual([])
   })
 
-  it('updateThread calls PUT /api/threads/:id', async () => {
+  it('updateThread calls PATCH /api/threads/:id', async () => {
     mockRequest.mockResolvedValue({ data: {} })
     const { updateThread } = await import('../ai-chat')
     await updateThread('t1', { title: 'new' })
     expect(mockRequest).toHaveBeenCalledWith({
-      method: 'PUT', url: '/api/threads/t1', data: { title: 'new' },
+      method: 'PATCH', url: '/api/threads/t1', data: { title: 'new' },
     })
   })
 
@@ -48,13 +48,4 @@ describe('ai-chat API', () => {
     })
   })
 
-  it('forkThread calls POST /api/threads/:id/fork', async () => {
-    mockRequest.mockResolvedValue({ data: { thread_id: 't2' } })
-    const { forkThread } = await import('../ai-chat')
-    const result = await forkThread('t1')
-    expect(mockRequest).toHaveBeenCalledWith({
-      method: 'POST', url: '/api/threads/t1/fork',
-    })
-    expect(result.thread_id).toBe('t2')
-  })
 })

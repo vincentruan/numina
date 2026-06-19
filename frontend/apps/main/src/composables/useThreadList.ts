@@ -1,10 +1,12 @@
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { searchThreads, deleteThread, updateThread } from '@/api/ai-chat'
 import type { ThreadSession, DateGroup, DateGroupLabel } from '@/types/ai-chat/session'
 
 const PAGE_SIZE = 20
 
 export function useThreadList() {
+  const { t } = useI18n()
   const sessions = ref<ThreadSession[]>([])
   const isLoading = ref(false)
   const hasMore = ref(true)
@@ -26,7 +28,7 @@ export function useThreadList() {
 
     const groups: DateGroup[] = []
     if (pinned.length > 0) {
-      groups.push({ label: 'pinned', displayName: '已置顶', sessions: pinned })
+      groups.push({ label: 'pinned', displayName: t('aiChat.groupPinned'), sessions: pinned })
     }
 
     const today: ThreadSession[] = []
@@ -40,9 +42,9 @@ export function useThreadList() {
       else earlier.push(s)
     }
 
-    if (today.length > 0) groups.push({ label: 'today', displayName: '今天', sessions: today })
-    if (yesterday.length > 0) groups.push({ label: 'yesterday', displayName: '昨天', sessions: yesterday })
-    if (earlier.length > 0) groups.push({ label: 'earlier', displayName: '更早', sessions: earlier })
+    if (today.length > 0) groups.push({ label: 'today', displayName: t('aiChat.groupToday'), sessions: today })
+    if (yesterday.length > 0) groups.push({ label: 'yesterday', displayName: t('aiChat.groupYesterday'), sessions: yesterday })
+    if (earlier.length > 0) groups.push({ label: 'earlier', displayName: t('aiChat.groupMonth'), sessions: earlier })
 
     return groups
   })
