@@ -903,6 +903,7 @@ defineExpose({
   margin: 0 0 10px;
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1228,6 +1229,7 @@ defineExpose({
   color: var(--van-text-color-2);
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -1295,7 +1297,7 @@ defineExpose({
 .agent-row--active {
   background-color: rgba(99, 102, 241, 0.08);
 }
-</style>
+
 .ai-disabled-card {
   margin: 12px 16px;
   background: var(--card-bg);
@@ -1390,5 +1392,4 @@ defineExpose({
 [data-theme='dark'] .report-empty-card:focus-visible {
   outline-color: rgba(255, 255, 255, 0.5);
 }
-
-/* ── AI disabled card ── */
+</style>

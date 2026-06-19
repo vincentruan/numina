@@ -230,7 +230,7 @@ import { useChildAuthStore } from '@numina/auth'
 const { t } = useI18n()
 const router = useRouter()
 const familyStore = useFamilyStore()
-const { complete } = usePageLoading()
+const { complete: completeLoading } = usePageLoading()
 const { themeMode, setMode } = useDarkMode()
 const { currentLocale, setLocale } = useLocale()
 const childAuthStore = useChildAuthStore()
@@ -414,7 +414,7 @@ async function load() {
   } finally {
     loadingChores.value = false
     // Complete page loading - skeleton takes over visual feedback
-    complete()
+    completeLoading()
   }
 }
 

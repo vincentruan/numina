@@ -262,7 +262,7 @@ const allDoneSvg = allDoneSvgRaw
 
 const { t, locale } = useI18n()
 const familyStore = useFamilyStore()
-const { complete } = usePageLoading()
+const { complete: completeLoading } = usePageLoading()
 
 const chores = ref<ChoreInstance[]>([])
 const loading = ref(true)
@@ -492,7 +492,7 @@ async function load() {
   } finally {
     loading.value = false
     // Complete page loading - skeleton takes over visual feedback
-    complete()
+    completeLoading()
   }
 }
 

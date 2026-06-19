@@ -17,11 +17,16 @@ def _patched_create_mcp_http_client(
 ) -> httpx.AsyncClient:
     """Patched factory that uses trust_env=False to avoid proxy issues."""
     import logging
+
     logger = logging.getLogger(__name__)
     logger.debug("[mcp_patch] creating httpx client with trust_env=False")
     return httpx.AsyncClient(
         headers=headers or {},
-        timeout=timeout or httpx.Timeout(_httpx_utils.MCP_DEFAULT_TIMEOUT, read=_httpx_utils.MCP_DEFAULT_SSE_READ_TIMEOUT),
+        timeout=timeout
+        or httpx.Timeout(
+            _httpx_utils.MCP_DEFAULT_TIMEOUT,
+            read=_httpx_utils.MCP_DEFAULT_SSE_READ_TIMEOUT,
+        ),
         auth=auth,
         follow_redirects=True,
         trust_env=False,  # CRITICAL: avoid macOS system proxy causing 503 errors
@@ -31,12 +36,22 @@ def _patched_create_mcp_http_client(
 _httpx_utils.create_mcp_http_client = _patched_create_mcp_http_client
 
 # noqa: E402 — imports after patch are intentional
+import os  # noqa: E402
 from contextlib import asynccontextmanager  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 from fastapi import FastAPI  # noqa: E402
 
 from apps.agent.app.config import settings  # noqa: E402
 from apps.agent.core.logging import setup_logging  # noqa: E402
+
+if "DEER_FLOW_CONFIG_PATH" not in os.environ:
+    os.environ["DEER_FLOW_CONFIG_PATH"] = str(
+        Path(__file__).resolve().parent.parent
+        / "deerflow_config"
+        / "base"
+        / "config.yaml"
+    )
 
 setup_logging()
 
@@ -58,6 +73,7 @@ async def lifespan(app: FastAPI):
     from pathlib import Path
 
     from packages.core import get_path_manager
+
     pm = get_path_manager()
     builtin_src = Path(__file__).resolve().parent.parent / "skills" / "builtin"
     if builtin_src.is_dir():
@@ -65,8 +81,11 @@ async def lifespan(app: FastAPI):
         for skill_dir in builtin_src.iterdir():
             if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
                 link = pm.builtin_skills_dir / skill_dir.name
+                import os
+
+                if link.is_symlink():
+                    link.unlink()
                 if not link.exists():
-                    import os
                     os.symlink(skill_dir, link)
 
     # Initialise DeerFlow persistence engine (checkpointer only — session metadata
@@ -81,7 +100,10 @@ async def lifespan(app: FastAPI):
         db_url = os.environ.get("DEERFLOW_DB_URL")
         if db_url:
             # Postgres or explicit URL (cluster deployments)
-            await init_engine(backend="postgres" if db_url.startswith("postgres") else "sqlite", url=db_url)
+            await init_engine(
+                backend="postgres" if db_url.startswith("postgres") else "sqlite",
+                url=db_url,
+            )
         else:
             # Default: local SQLite using settings.DEERFLOW_DB_PATH
             db_path = settings.DEERFLOW_DB_PATH
@@ -93,6 +115,7 @@ async def lifespan(app: FastAPI):
             )
     except Exception as _e:
         import logging
+
         logging.getLogger(__name__).warning("DeerFlow engine init failed: %s", _e)
 
     # Initialize AsyncSqliteSaver checkpointer for LangGraph conversation persistence.
@@ -101,9 +124,11 @@ async def lifespan(app: FastAPI):
         from apps.agent.services.deerflow_adapter.family_adapter_cache import (
             async_init_checkpointer,
         )
+
         await async_init_checkpointer()
     except Exception as _e:
         import logging
+
         logging.getLogger(__name__).warning("AsyncSqliteSaver init failed: %s", _e)
 
     yield
@@ -115,11 +140,13 @@ async def lifespan(app: FastAPI):
         from apps.agent.services.deerflow_adapter.family_adapter_cache import (
             close_shared_checkpointer,
         )
+
         await close_shared_checkpointer()
     except Exception:
         pass
     try:
         from deerflow.persistence.engine import close_engine
+
         await close_engine()
     except Exception:
         pass
@@ -136,9 +163,14 @@ app = FastAPI(
 
 # CORS middleware for frontend → agent calls (suggestions endpoint)
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:5174", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5173",
+    ],
     allow_credentials=True,
     allow_methods=["POST", "OPTIONS"],
     allow_headers=["X-Family-Id", "X-Agent-Token", "X-User-Id", "Content-Type"],
@@ -148,8 +180,6 @@ app.add_middleware(
 # Router imports after app definition — noqa: E402
 from apps.agent.app.routers import cache as cache_router  # noqa: E402
 from apps.agent.app.routers import gateway as gateway_router  # noqa: E402
-from apps.agent.routers import threads as threads_router  # noqa: E402
-from apps.agent.routers import runs as runs_router  # noqa: E402
 from apps.agent.routers import alerts as alerts_router  # noqa: E402
 from apps.agent.routers import allocation as allocation_router  # noqa: E402
 from apps.agent.routers import capabilities as capabilities_router  # noqa: E402
@@ -158,8 +188,10 @@ from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
 from apps.agent.routers import liability as liability_router  # noqa: E402
 from apps.agent.routers import model_test as model_test_router  # noqa: E402
 from apps.agent.routers import report as report_router  # noqa: E402
+from apps.agent.routers import runs as runs_router  # noqa: E402
 from apps.agent.routers import spending_leak as spending_leak_router  # noqa: E402
 from apps.agent.routers import suggest as suggest_router  # noqa: E402
+from apps.agent.routers import threads as threads_router  # noqa: E402
 from apps.agent.routers import time_machine as time_machine_router  # noqa: E402
 
 app.include_router(report_router.router)
