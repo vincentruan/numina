@@ -1,9 +1,19 @@
-"""AI 问答助手端点。"""
+"""AI 问答助手端点。
+
+SSE event type mapping from the agent's internal NDJSON event types to
+the public SSE event names used in the three-track protocol:
+
+    token.stream     → messages   (AI text/thinking tokens)
+    session.start    → session.start
+    phase.*          → custom     (connection/thinking/answering phases)
+    tool.call/result → custom     (tool execution progress)
+    capability.end   → end        (stream complete)
+    capability.error → error      (stream error)
+"""
 
 import json
 import logging
 import re
-import time
 import urllib.parse
 import uuid
 from datetime import datetime, timedelta
@@ -11,7 +21,7 @@ from pathlib import Path
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
@@ -33,6 +43,30 @@ from apps.backend.app.services.chat_session import ChatSessionService
 router = APIRouter(prefix="/ai/chat", tags=["ai-chat"])
 sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
 logger = logging.getLogger(__name__)
+
+# ── SSE Constants ──────────────────────────────────────────────────────────────
+
+# Map of agent NDJSON event types → public SSE event names.
+# The agent emits NDJSON internally; the proxy converts each line to SSE format
+# using this mapping so the frontend receives DeerFlow-compatible event types.
+_SSE_TYPE_MAP: dict[str, str] = {
+    "token.stream": "messages",
+    "session.start": "session.start",
+    "phase.connecting": "custom",
+    "phase.answering": "custom",
+    "phase.thinking": "custom",
+    "tool.call": "custom",
+    "tool.result": "custom",
+    "capability.end": "end",
+    "capability.error": "error",
+}
+
+# SSE response headers shared across all streaming endpoints.
+_SSE_HEADERS: dict[str, str] = {
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no",
+}
 
 
 class ChatRequest(BaseModel):
@@ -189,21 +223,6 @@ def _collect_answer_token_from_event(line: str) -> str | None:
     return str(event.get("token", ""))
 
 
-def _stream_error_event(task_id: str, message: str, code: str) -> str:
-    return json.dumps(
-        {
-            "id": f"{task_id}-proxy-error",
-            "type": "capability.error",
-            "timestamp": time.time(),
-            "capability_id": "chat",
-            "task_id": task_id,
-            "error": {"message": message, "code": code},
-        },
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ) + "\n"
-
-
 @router.post("", response_model=ChatResponse)
 async def chat(
     body: ChatRequest,
@@ -262,11 +281,19 @@ async def chat(
 @router.post("/stream")
 async def chat_stream(
     body: ChatStreamRequest,
+    request: Request,
     current_user: User = Depends(require_adult),
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
-    """流式问答，透传 agent 的 NDJSON 事件流。"""
+    """流式问答，透传 agent 的 NDJSON 事件流，并根据 Accept header 决定输出格式。
+
+    - `Accept: text/event-stream` → SSE 格式（默认，新版前端）
+    - 其他 Accept → NDJSON 格式（向后兼容，旧版前端）
+    """
+    # U5: Backward compatibility — detect preferred output format from Accept header
+    accept_header = request.headers.get("Accept", "")
+    use_sse = "text/event-stream" in accept_header or not accept_header
     if body.session_id is not None:
         session = _get_session_for_family(body.session_id, current_user.family_id, db)
         if session is None:
@@ -288,8 +315,12 @@ async def chat_stream(
     task_id = str(uuid.uuid4())
 
     async def proxy_stream():
-        # Emit session.start as first SSE event
-        yield f"event: session.start\ndata: {json.dumps({'session_id': str(session_id), 'task_id': task_id}, ensure_ascii=False)}\n\n".encode()
+        # Emit session.start as first event (SSE or NDJSON depending on Accept header)
+        start_event = {"session_id": str(session_id), "task_id": task_id}
+        if use_sse:
+            yield f"event: session.start\ndata: {json.dumps(start_event, ensure_ascii=False)}\n\n".encode()
+        else:
+            yield json.dumps({"type": "session.start", **start_event}, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
 
         # R4: when agent_id is present, route to the agent-dispatch endpoint so
         # the request runs through _resolve_skills (per-agent skill scoping).
@@ -320,19 +351,6 @@ async def chat_stream(
                 "subagent_enabled": body.subagent_enabled,
             }
 
-        # SSE event type mapping from NDJSON types
-        _SSE_TYPE_MAP: dict[str, str] = {
-            "token.stream": "messages",
-            "session.start": "session.start",
-            "phase.connecting": "custom",
-            "phase.answering": "custom",
-            "phase.thinking": "custom",
-            "tool.call": "custom",
-            "tool.result": "custom",
-            "capability.end": "end",
-            "capability.error": "error",
-        }
-
         answer_chunks: list[str] = []
         try:
             agent_client = AgentClient(current_user.family_id, current_user.id, timeout=130.0)
@@ -351,21 +369,31 @@ async def chat_stream(
                     token = _collect_answer_token_from_event(line)
                     if token is not None:
                         answer_chunks.append(token)
-                    # Convert NDJSON to SSE format
-                    try:
-                        event_data = json.loads(line)
-                        event_type = event_data.get("type", "custom")
-                        sse_type = _SSE_TYPE_MAP.get(event_type, "custom")
-                        payload = json.dumps(event_data, ensure_ascii=False, separators=(",", ":"))
-                        yield f"event: {sse_type}\ndata: {payload}\n\n".encode()
-                    except json.JSONDecodeError:
-                        # Fallback: send raw line as custom event
-                        yield f"event: custom\ndata: {line.strip()}\n\n".encode()
+                    if use_sse:
+                        # Convert NDJSON to SSE format
+                        try:
+                            event_data = json.loads(line)
+                            event_type = event_data.get("type", "custom")
+                            sse_type = _SSE_TYPE_MAP.get(event_type, "custom")
+                            payload = json.dumps(event_data, ensure_ascii=False, separators=(",", ":"))
+                            yield f"event: {sse_type}\ndata: {payload}\n\n".encode()
+                        except json.JSONDecodeError:
+                            yield f"event: custom\ndata: {line.strip()}\n\n".encode()
+                    else:
+                        # Pass through NDJSON as-is (backward compat)
+                        yield f"{line}\n".encode()
 
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
-            err_payload = json.dumps({"error": "抱歉，AI 服务暂时不可用。", "code": "backend_proxy_error"}, ensure_ascii=False)
-            yield f"event: error\ndata: {err_payload}\n\n".encode()
+            if use_sse:
+                err_payload = json.dumps({"error": "抱歉，AI 服务暂时不可用。", "code": "backend_proxy_error"}, ensure_ascii=False)
+                yield f"event: error\ndata: {err_payload}\n\n".encode()
+            else:
+                yield json.dumps(
+                    {"type": "capability.error", "error": {"message": "抱歉，AI 服务暂时不可用。", "code": "backend_proxy_error"}},
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode() + b"\n"
         finally:
             # Persist the full answer after stream completes
             if answer_chunks:
@@ -381,12 +409,8 @@ async def chat_stream(
 
     return StreamingResponse(
         proxy_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        media_type="text/event-stream" if use_sse else "application/x-ndjson; charset=utf-8",
+        headers=_SSE_HEADERS if use_sse else {},
     )
 
 
@@ -719,11 +743,7 @@ async def stream_session_events(
     return StreamingResponse(
         proxy_events(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
+        headers=_SSE_HEADERS,
     )
 
 
