@@ -292,6 +292,11 @@ const router = createRouter({
           component: () => import('@/pages/AILiabilityAdvisorPage.vue')
         },
         {
+          path: 'ai/chat/history',
+          name: 'ChatHistory',
+          component: () => import('@/pages/ChatHistoryPage.vue')
+        },
+        {
           path: 'ai/chat',
           name: 'AIChat',
           component: () => import('@/pages/AIChatPage.vue')

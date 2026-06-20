@@ -332,6 +332,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   async function loadHistory(threadId: string, retries = 1): Promise<void> {
+    // Cancel any ongoing stream before loading new history
+    cancelStream()
+
     isLoading.value = true
     error.value = null
     currentThreadId = threadId

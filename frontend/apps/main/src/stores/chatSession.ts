@@ -26,9 +26,11 @@ export const useChatSessionStore = defineStore('chatSession', () => {
   }
 
   function setActiveThread(id: string) {
+    // Always set the thread - removed toggle behavior that was clearing on same ID
+    // This ensures ChatHistoryPage can re-select the same thread without losing state
     if (activeThreadId.value === id) {
-      activeThreadId.value = null
-      history.replaceState(null, '', window.location.pathname)
+      // Already active - no change needed, just update URL
+      history.replaceState(null, '', `?thread_id=${id}`)
       return
     }
     activeThreadId.value = id
