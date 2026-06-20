@@ -67,6 +67,7 @@ def _mock_agent_stream(ndjson_lines: list[str]):
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
     mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.build_request = MagicMock(return_value=MagicMock(method="POST", url="http://test/stream", content=None, headers={}))
     mock_client.stream = MagicMock(return_value=mock_stream)
     return mock_client
 
@@ -153,7 +154,7 @@ def test_jsonl_file_contains_correct_messages(client, auth_headers, db, tmp_path
         )
 
     session_id = resp.json()["data"]["session_id"]
-    jsonl_file = tmp_path / family_id / f"{session_id}.jsonl"
+    jsonl_file = tmp_path / "tenants" / family_id / "chat" / f"{session_id}.jsonl"
     assert jsonl_file.exists()
 
     lines = [json.loads(line) for line in jsonl_file.read_text().strip().splitlines()]
@@ -302,7 +303,7 @@ def test_chat_stream_persists_only_non_thinking_tokens(client, auth_headers, db,
         resp = client.post(
             "/api/v1/ai/chat/stream",
             json={"question": "My question"},
-            headers=auth_headers,
+            headers={**auth_headers, "Accept": "text/event-stream"},
         )
 
     assert resp.status_code == 200
@@ -313,7 +314,7 @@ def test_chat_stream_persists_only_non_thinking_tokens(client, auth_headers, db,
 
     messages = [
         json.loads(line)
-        for line in (tmp_path / family_id / f"{session.id}.jsonl").read_text().splitlines()
+        for line in (tmp_path / "tenants" / family_id / "chat" / f"{session.id}.jsonl").read_text().splitlines()
     ]
     assert messages[0]["role"] == "user"
     assert messages[0]["content"] == "My question"

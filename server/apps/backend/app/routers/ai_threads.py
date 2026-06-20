@@ -5,14 +5,12 @@
 """
 
 import logging
-from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.config import settings
 from apps.backend.app.models.user import User
 from apps.backend.app.services.agent_client import AgentClient
 
@@ -72,7 +70,7 @@ async def proxy_langgraph_request(
             # But the HTTP method is dynamic (`method`). It's easier to just use `httpx.AsyncClient` here directly for the dynamic method 
             # while reusing the `agent_client.headers`.
             
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=30.0, trust_env=False) as client:
                 req = client.build_request(
                     method,
                     agent_client._build_url(f"/api/threads/{path}"),

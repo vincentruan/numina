@@ -1,8 +1,9 @@
 """Unified HTTP client for communicating with the Agent microservice."""
 
 import logging
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import httpx
 
@@ -84,3 +85,4 @@ class AgentClient:
             )
             async with client.stream(req.method, req.url, content=req.content, headers=req.headers) as resp:
                 yield resp
+

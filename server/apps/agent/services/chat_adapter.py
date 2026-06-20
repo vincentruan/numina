@@ -48,7 +48,7 @@ class ChatAdapter:
     async def _fetch_family_prompt(self, family_id: str) -> str | None:
         """Fetch family's custom chat prompt from backend internal API."""
         url = f"{self._backend_base_url}/api/v1/internal/prompts/{family_id}/chat"
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
             resp = await client.get(
                 url,
                 headers={

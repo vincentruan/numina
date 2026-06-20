@@ -72,11 +72,28 @@ class _FakeAsyncClient:
     async def __aexit__(self, *_args):
         return None
 
-    def stream(self, method, url, *, json, headers, **_kwargs):
+    def build_request(self, method, url, **kwargs):
+        """AgentClient.stream() calls build_request before stream()."""
+        from unittest.mock import MagicMock
+        req = MagicMock()
+        req.method = method
+        req.url = url
+        req.content = kwargs.pop("content", None)
+        req.headers = kwargs.pop("headers", {})
+        # Preserve remaining kwargs (json, etc.) for capture
+        self._build_kwargs = kwargs
+        return req
+
+    def stream(self, method, url, *, content, headers, **kwargs):
         _FakeAsyncClient.captured["method"] = method
         _FakeAsyncClient.captured["url"] = url
-        _FakeAsyncClient.captured["json"] = json
         _FakeAsyncClient.captured["headers"] = headers
+        # Merge kwargs captured from build_request
+        if hasattr(self, "_build_kwargs"):
+            _FakeAsyncClient.captured["json"] = self._build_kwargs.get("json")
+            _FakeAsyncClient.captured["content"] = self._build_kwargs.get("content")
+        else:
+            _FakeAsyncClient.captured["json"] = kwargs.get("json")
         return _FakeStreamResponse()
 
 

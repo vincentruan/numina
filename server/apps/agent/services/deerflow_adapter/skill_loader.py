@@ -153,7 +153,7 @@ class SkillLoader:
         when the family updates their prompt.
         """
         url = f"{backend_base_url.rstrip('/')}/api/v1/ai/skills/{capability}"
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=5.0, trust_env=False) as client:
             resp = await client.get(
                 url,
                 headers={"X-Internal-Token": internal_token, "X-Family-Id": family_id},
