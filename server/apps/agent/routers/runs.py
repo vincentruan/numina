@@ -204,24 +204,42 @@ async def stream_run(
 
     async def _sse_generator():
         ai_response_parts: list[str] = []
+        tool_calls_seen: list[dict] = []
         try:
-            async for event in adapter.raw_stream_dispatch(
+            async for sse_type, data in adapter.typed_stream_dispatch(
                 skill_name=capability,
                 context=redacted_context,
                 thread_id=thread_id,
                 enable_thinking=True
             ):
-                if hasattr(event, "type") and hasattr(event, "data"):
-                    yield format_sse(event.type, event.data)
-                    # Collect AI text from messages-tuple events
-                    if (event.type == "messages-tuple"
-                            and isinstance(event.data, dict)
-                            and event.data.get("type") == "ai"
-                            and event.data.get("content")):
-                        ai_response_parts.append(event.data["content"])
+                if sse_type == "messages":
+                    yield format_sse("messages", data)
+                    # Collect AI text for suggestions
+                    if isinstance(data, dict) and data.get("type") == "ai" and data.get("content"):
+                        ai_response_parts.append(data["content"])
+                    # Collect tool calls for custom events
+                    tool_calls_raw = data.get("tool_calls") if isinstance(data, dict) else None
+                    if tool_calls_raw:
+                        for tc in tool_calls_raw:
+                            tc_info = {"tool_call_id": tc.get("id", ""), "tool_name": tc.get("name", ""), "args": tc.get("args", {})}
+                            tool_calls_seen.append(tc_info)
+                            yield format_sse("custom", {
+                                "type": "tool_call",
+                                "tool_call_id": tc.get("id", ""),
+                                "tool_name": tc.get("name", ""),
+                                "args": tc.get("args", {}),
+                            })
+                elif sse_type == "values":
+                    yield format_sse("values", data)
+                elif sse_type == "custom":
+                    yield format_sse("custom", data)
+                elif sse_type == "error":
+                    yield format_sse("error", data)
+                    break
+                elif sse_type == "end":
+                    break
         except Exception as e:
             logger.error("[runs] Stream failed: %s", e)
-            # Send an error event in LangGraph format
             yield format_sse("error", {"error": str(e)})
         finally:
             # Generate follow-up suggestions before sending end event

@@ -34,8 +34,8 @@ def ai_enabled(db, auth_headers):
 
 class _FakeStreamResponse:
     """httpx.AsyncClient.stream() returns an async context manager whose value
-    has an `aiter_text()` iterator. This stub returns a single empty chunk
-    so the proxy stream terminates cleanly."""
+    has `aiter_lines()`, `aiter_text()`, and `aiter_bytes()` iterators.
+    This stub returns a single SSE end event so the proxy stream terminates."""
 
     def __init__(self):
         self.status_code = 200
@@ -43,6 +43,12 @@ class _FakeStreamResponse:
     async def aiter_text(self):
         if False:
             yield ""  # pragma: no cover
+
+    async def aiter_bytes(self):
+        yield b"event: end\ndata: null\n\n"
+
+    async def aiter_lines(self):
+        yield '{"type":"capability.end","result":{"summary":""}}'
 
     async def __aenter__(self):
         return self
@@ -78,7 +84,7 @@ class _FakeAsyncClient:
 def patched_httpx(monkeypatch):
     _FakeAsyncClient.captured = {}
     monkeypatch.setattr(
-        "apps.backend.app.routers.ai_chat.httpx.AsyncClient",
+        "apps.backend.app.services.agent_client.httpx.AsyncClient",
         _FakeAsyncClient,
     )
     yield _FakeAsyncClient.captured

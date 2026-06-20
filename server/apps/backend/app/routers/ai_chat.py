@@ -288,12 +288,8 @@ async def chat_stream(
     task_id = str(uuid.uuid4())
 
     async def proxy_stream():
-        # Emit session.start event first
-        yield json.dumps(
-            {"type": "session.start", "session_id": str(session_id), "task_id": task_id},
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode() + b"\n"
+        # Emit session.start as first SSE event
+        yield f"event: session.start\ndata: {json.dumps({'session_id': str(session_id), 'task_id': task_id}, ensure_ascii=False)}\n\n".encode()
 
         # R4: when agent_id is present, route to the agent-dispatch endpoint so
         # the request runs through _resolve_skills (per-agent skill scoping).
@@ -324,6 +320,19 @@ async def chat_stream(
                 "subagent_enabled": body.subagent_enabled,
             }
 
+        # SSE event type mapping from NDJSON types
+        _SSE_TYPE_MAP: dict[str, str] = {
+            "token.stream": "messages",
+            "session.start": "session.start",
+            "phase.connecting": "custom",
+            "phase.answering": "custom",
+            "phase.thinking": "custom",
+            "tool.call": "custom",
+            "tool.result": "custom",
+            "capability.end": "end",
+            "capability.error": "error",
+        }
+
         answer_chunks: list[str] = []
         try:
             agent_client = AgentClient(current_user.family_id, current_user.id, timeout=130.0)
@@ -338,18 +347,25 @@ async def chat_stream(
                 async for line in resp.aiter_lines():
                     if not line.strip():
                         continue
+                    # Collect answer tokens for persistence using NDJSON parsing
                     token = _collect_answer_token_from_event(line)
                     if token is not None:
                         answer_chunks.append(token)
-                    yield f"{line}\n".encode()
+                    # Convert NDJSON to SSE format
+                    try:
+                        event_data = json.loads(line)
+                        event_type = event_data.get("type", "custom")
+                        sse_type = _SSE_TYPE_MAP.get(event_type, "custom")
+                        payload = json.dumps(event_data, ensure_ascii=False, separators=(",", ":"))
+                        yield f"event: {sse_type}\ndata: {payload}\n\n".encode()
+                    except json.JSONDecodeError:
+                        # Fallback: send raw line as custom event
+                        yield f"event: custom\ndata: {line.strip()}\n\n".encode()
 
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)
-            yield _stream_error_event(
-                task_id,
-                "抱歉，AI 服务暂时不可用。",
-                "backend_proxy_error",
-            ).encode()
+            err_payload = json.dumps({"error": "抱歉，AI 服务暂时不可用。", "code": "backend_proxy_error"}, ensure_ascii=False)
+            yield f"event: error\ndata: {err_payload}\n\n".encode()
         finally:
             # Persist the full answer after stream completes
             if answer_chunks:
@@ -363,7 +379,15 @@ async def chat_stream(
                     except Exception as e:
                         logger.error("chat_stream persist failed: %s", type(e).__name__)
 
-    return StreamingResponse(proxy_stream(), media_type="application/x-ndjson; charset=utf-8")
+    return StreamingResponse(
+        proxy_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/sessions")
@@ -673,7 +697,7 @@ async def stream_session_events(
     current_user: User = Depends(require_adult),
     db: Session = Depends(get_db),
 ):
-    """代理 agent 的会话事件流（NDJSON），用于历史回放。"""
+    """代理 agent 的会话事件流（SSE），用于历史回放。"""
     if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
         raise AppError(ErrorCode.NOT_FOUND)
     session = _get_session_for_family(session_id, current_user.family_id, db)
@@ -692,7 +716,15 @@ async def stream_session_events(
         except Exception as e:
             logger.error("session events proxy failed session=%s: %s", session_id, type(e).__name__)
 
-    return StreamingResponse(proxy_events(), media_type="application/x-ndjson; charset=utf-8")
+    return StreamingResponse(
+        proxy_events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 

@@ -42,14 +42,25 @@ def _mock_agent_response(answer: str = "Test answer"):
 
 
 def _mock_agent_stream(ndjson_lines: list[str]):
-    """Create a mock httpx streaming response that yields NDJSON lines."""
+    """Create a mock httpx streaming response that yields SSE events."""
+    sse_output = "\n".join(ndjson_lines)
+
     async def _aiter_text():
+        for line in ndjson_lines:
+            yield line
+
+    async def _aiter_bytes():
+        yield sse_output.encode()
+
+    async def _aiter_lines():
         for line in ndjson_lines:
             yield line
 
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
     mock_resp.aiter_text = _aiter_text
+    mock_resp.aiter_bytes = _aiter_bytes
+    mock_resp.aiter_lines = _aiter_lines
     mock_stream = AsyncMock()
     mock_stream.__aenter__ = AsyncMock(return_value=mock_resp)
     mock_stream.__aexit__ = AsyncMock(return_value=False)
@@ -295,7 +306,7 @@ def test_chat_stream_persists_only_non_thinking_tokens(client, auth_headers, db,
         )
 
     assert resp.status_code == 200
-    assert "capability.end" in resp.text
+    assert "event: end" in resp.text
 
     session = db.query(AIChatSession).filter_by(family_id=family_id).first()
     assert session is not None

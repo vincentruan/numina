@@ -220,7 +220,7 @@ class DeerFlowAdapter:
                                 reset_extensions_config()
                             except ImportError:
                                 pass
-                        
+
                         try:
                             message = self._build_prompt(skill_name, context)
                             for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
@@ -255,6 +255,55 @@ class DeerFlowAdapter:
                 import contextlib
                 with contextlib.suppress(TimeoutError, asyncio.CancelledError):
                     await asyncio.wait_for(asyncio.shield(future), timeout=5.0)
+
+    async def typed_stream_dispatch(
+        self,
+        skill_name: str,
+        context: RedactedContext,
+        thread_id: str,
+        enable_thinking: bool = False,
+    ) -> AsyncGenerator[tuple[str, dict], None]:
+        """Yield (sse_event_type, data) tuples from DeerFlowClient.stream().
+
+        Maps raw LangGraph event types to SSE-friendly event names for the
+        three-track protocol (messages / custom / values / end / error).
+
+        Event type mapping:
+          - ``messages-tuple`` → ``"messages"`` (AI text, tool calls)
+          - ``values``         → ``"values"`` (state snapshots, plan todos)
+          - ``end``           → ``"end"`` (stream complete)
+          - ``error``         → ``"error"`` (stream error)
+          - All other types   → ``"custom"`` (tool progress, metadata)
+
+        Yields:
+            (sse_event_type, data_dict) tuples ready for ``format_sse()``.
+        """
+        async for event in self.raw_stream_dispatch(
+            skill_name, context, thread_id, enable_thinking
+        ):
+            if isinstance(event, BaseException):
+                yield ("error", {"error": str(event)})
+                continue
+            if not (hasattr(event, "type") and hasattr(event, "data")):
+                continue
+
+            event_type = event.type
+            event_data = event.data
+
+            if event_type == "messages-tuple" and isinstance(event_data, dict):
+                yield ("messages", event_data)
+            elif event_type == "values" and isinstance(event_data, dict):
+                yield ("values", event_data)
+            elif event_type == "end":
+                yield ("end", event_data)
+            elif event_type == "error":
+                yield ("error", {"error": str(event_data)})
+            else:
+                # All other event types (tool progress, metadata, etc.) → custom
+                if isinstance(event_data, dict):
+                    yield ("custom", event_data)
+                else:
+                    yield ("custom", {"type": event_type, "data": event_data})
 
     async def _async_stream_chunks(
         self,
