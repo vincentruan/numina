@@ -122,10 +122,10 @@ describe('AIHubPage chat entry', () => {
     const wrapper = mount(AIHubPage, {
       global: {
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue', 'mode', 'webSearch'],
-            emits: ['update:modelValue', 'update:mode', 'update:webSearch', 'submit'],
+          InputBox: {
+            name: 'InputBox',
+            props: ['modelValue', 'webSearch', 'isWelcomeMode', 'status'],
+            emits: ['update:modelValue', 'update:webSearch', 'submit'],
             template: '<button class="chat-input" @click="$emit(\'submit\', modelValue)">send</button>',
           },
           AIHubSkeleton: true,
@@ -157,11 +157,11 @@ describe('AIHubPage chat entry', () => {
       is_enabled: true,
     })
     wrapper.vm.chatInput = '我们家净资产是多少？'
-    wrapper.vm.chatMode = 'smart'
+    wrapper.vm.chatMode = 'thinking'
     wrapper.vm.webSearch = true
     await nextTick()
 
-    const input = wrapper.findComponent({ name: 'AIChatInput' })
+    const input = wrapper.findComponent({ name: 'InputBox' })
 
     // Trigger submit which calls submitChatFromInput
     input.vm.$emit('submit', '我们家净资产是多少？')
@@ -187,7 +187,7 @@ describe('AIHubPage chat entry', () => {
     const wrapper = shallowMount(AIHubPage, {
       global: {
         stubs: {
-          AIChatInput: true,
+          InputBox: true,
           AIHubSkeleton: true,
           VanLoading: true,
           VanIcon: true,
