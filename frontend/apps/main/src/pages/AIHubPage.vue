@@ -206,14 +206,16 @@
 
     <!-- Chat input with integrated toolbar -->
     <div class="chat-entry">
-      <AIChatInput
+      <InputBox
         v-model="chatInput"
-        v-model:mode="chatMode"
-        v-model:web-search="webSearch"
+        v-model:webSearch="webSearch"
         :disabled="!selectedAgent"
-        :placeholder="chatPlaceholder"
         :agents="agentChoices"
-        :selected-agent-id="selectedAgent?.id"
+        :agent-id="selectedAgent?.id"
+        :is-welcome-mode="true"
+        :status="'ready'"
+        :agent-icon="selectedAgent?.icon"
+        :agent-label="selectedAgent?.display_name"
         @submit="submitChatFromInput"
         @action="onInputAction"
         @select-agent="showAgentPicker = true"
@@ -266,7 +268,7 @@ import { useAIReportStream } from '@/composables/useAIReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
-import AIChatInput from '@/components/common/AIChatInput.vue'
+import InputBox from '@/components/ai-chat/InputBox.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
@@ -288,7 +290,7 @@ const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const initialLoading = ref(true)
 const chatInput = ref('')
-const chatMode = ref<'normal' | 'smart'>('normal')
+const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
 const webSearch = ref(false)
 const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
@@ -396,7 +398,7 @@ function submitChat() {
   const q = chatInput.value.trim()
   if (!q || !selectedAgent.value) return
 
-  const deepThink = chatMode.value === 'smart'
+  const deepThink = chatMode.value === 'thinking' || chatMode.value === 'ultra'
   aiStore.draftQuery = q
   aiStore.deepThinkEnabled = deepThink
   aiStore.webSearchEnabled = webSearch.value
@@ -420,7 +422,7 @@ function submitChatFromInput(value: string) {
   submitChat()
 }
 
-function onInputAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {
+function onInputAction(type: 'file' | 'image' | 'camera') {
   if (type === 'camera') triggerPhotoUpload()
   else if (type === 'file') triggerFileUpload()
   else if (type === 'image') triggerPhotoUpload()
