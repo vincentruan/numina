@@ -314,116 +314,214 @@ onBeforeUnmount(() => {
     :class="[
       status,
       isWelcomeMode ? 'welcome-mode' : 'chat-mode',
-      { focused },
+      { focused, expanded },
     ]"
+    @click.self="closePanel"
   >
-    <!-- 欢迎态 Hero 区域 (DeerFlow pattern) -->
+    <!-- Welcome hero (welcome mode only) -->
     <div v-if="isWelcomeMode" class="welcome-hero">
-      <h2 class="hero-title">{{ selectedAgentId === 'numina' ? t('aiChat.heroTitleChat') : 'Open QA' }}</h2>
-      <p class="hero-subtitle">{{ selectedAgentId === 'numina' ? t('aiChat.heroSubtitleChat') : 'A general purpose chat assistant.' }}</p>
+      <h2 class="hero-title">{{ displayAgentLabel || t('aiChat.heroTitleChat') }}</h2>
+      <p class="hero-subtitle">{{ t('aiChat.heroSubtitleChat') }}</p>
     </div>
 
-    <!-- 欢迎态示例按钮 (DeerFlow SuggestionList pattern) -->
+    <!-- Welcome examples (welcome mode only) -->
     <WelcomeExamples
       v-if="isWelcomeMode"
-      :agent-id="selectedAgentId"
+      :agent-id="agentId || 'numina'"
       @select="handleWelcomeExampleSelect"
       @surprise="handleSurpriseMe"
     />
 
-    <!-- 输入区域 -->
-    <div class="input-row">
-      <!-- Agent 选择按钮 -->
-      <van-popover v-model:show="showAgentMenu" placement="top-start" :actions="agentOptions" @select="onSelectAgent">
-        <template #reference>
-          <button class="control-btn agent-btn" :disabled="!isWelcomeMode">
-            <span class="agent-name">{{ agentOptions.find(a => a.value === selectedAgentId)?.text }}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" v-if="isWelcomeMode" class="dropdown-icon">
-              <polyline points="6 9 12 15 18 9"/>
+    <!-- Input row -->
+    <div class="input-row" :class="{ 'is-focused': focused, 'is-expanded': expanded }">
+      <!-- Attachments preview row (above textarea) -->
+      <div v-if="attachments && attachments.length > 0" class="attachments-row">
+        <div
+          v-for="(att, idx) in attachments"
+          :key="idx"
+          class="attachment-item"
+          :class="`attachment-item--${att.type}`"
+        >
+          <span class="attachment-icon" aria-hidden="true">
+            <svg v-if="att.type === 'image'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+          </span>
+          <span class="attachment-name">{{ att.name }}</span>
+          <button class="attachment-remove" :aria-label="t('common.remove')" @click="removeAttachment(idx)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/>
+              <line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
-        </template>
-      </van-popover>
-
-      <!-- 模型选择按钮 -->
-      <button
-        class="control-btn model-btn"
-        :disabled="resourcesLoading"
-        @click="modelDialogOpen = true"
-      >
-        <span class="model-name">{{ selectedModel?.display_name || t('aiChat.selectModel') }}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </button>
-
-      <!-- 附件选择按钮 -->
-      <van-popover v-model:show="showAttachmentMenu" placement="top-start" :actions="attachmentActions" @select="onSelectAttachment">
-        <template #reference>
-          <button class="control-btn attach-btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-        </template>
-      </van-popover>
+        </div>
+      </div>
 
       <!-- Textarea -->
       <textarea
-        v-model="inputValue"
-        class="input-textarea"
+        ref="inputRef"
+        v-model="internalValue"
+        class="chat-textarea"
         :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
-        :disabled="status === 'submitted'"
-        rows="1"
-        @input="adjustHeight($event.target as HTMLTextAreaElement)"
+        :disabled="disabled || status === 'submitted'"
+        rows="3"
+        @input="adjustHeight"
         @keydown.enter.ctrl="onSubmit"
         @focus="focused = true"
         @blur="focused = false"
       />
 
-      <!-- 模式选择器 -->
-      <ModeSelector
-        :current-mode="context.mode"
-        :supports-thinking="currentModelSupportsThinking"
-        :ultra-disabled="isUltraDisabled"
-        @select="onModeSelect"
-      />
-
-      <!-- 发送/停止按钮 -->
+      <!-- Expand button (top-right) -->
       <button
-        class="submit-btn"
-        :class="{ stop: status === 'streaming' }"
-        :disabled="status === 'submitted' || (status !== 'streaming' && !inputValue.trim())"
+        class="expand-btn"
+        :aria-label="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
+        :title="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
+        @click="toggleExpand"
+      >
+        <svg v-if="!expanded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+        </svg>
+        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+          <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
+        </svg>
+      </button>
+
+      <!-- Bottom toolbar (left to right) -->
+      <div class="input-controls">
+        <!-- Plus panel (positioned relative to controls) -->
+        <transition name="panel">
+          <div v-if="panelOpen" class="plus-panel plus-panel--up" role="menu" :aria-label="t('aiChat.moreFeatures')">
+            <button
+              v-for="item in panelItems"
+              :key="item.action"
+              class="panel-item"
+              role="menuitem"
+              @click="onPanelItem(item.action)"
+            >
+              <span class="panel-item-icon" aria-hidden="true">
+                <svg :viewBox="item.icon.viewBox" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path v-for="(d, i) in item.icon.paths" :key="i" :d="d" />
+                </svg>
+              </span>
+              <span class="panel-item-label">{{ item.label }}</span>
+            </button>
+          </div>
+        </transition>
+
+        <!-- [1] Agent button: clickable in welcome mode, static icon in chat mode -->
+        <button
+          v-if="agents && agents.length > 0 && isWelcomeMode"
+          class="control-btn control-btn--agent"
+          :aria-label="t('aiHub.selectAgent')"
+          :title="t('aiHub.selectAgent')"
+          @click="emit('selectAgent')"
+        >
+          <span v-if="displayAgentIcon" class="agent-emoji" aria-hidden="true">{{ displayAgentIcon }}</span>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4"/>
+            <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+            <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
+            <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
+          </svg>
+        </button>
+        <!-- Static agent icon in chat mode -->
+        <span
+          v-else-if="displayAgentIcon && !isWelcomeMode"
+          class="agent-static-icon"
+          :title="displayAgentLabel"
+        >
+          {{ displayAgentIcon }}
+        </span>
+
+        <!-- [2] Model selector button -->
+        <button
+          class="control-btn control-btn--model"
+          :disabled="resourcesLoading"
+          @click="modelDialogOpen = true"
+        >
+          <span class="model-name">{{ selectedModel?.display_name || t('aiChat.selectModel') }}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+
+        <!-- [3] Mode selector (4-mode DeerFlow) -->
+        <ModeSelector
+          :current-mode="context.mode"
+          :supports-thinking="currentModelSupportsThinking"
+          :ultra-disabled="isUltraDisabled"
+          @select="onModeSelect"
+        />
+
+        <!-- [4] Web search toggle -->
+        <button
+          class="control-btn control-btn--search"
+          :class="{ 'control-btn--active': webSearchEnabled }"
+          :aria-pressed="webSearchEnabled"
+          :aria-label="t('aiChat.webSearch')"
+          :title="t('aiChat.webSearch')"
+          @click="toggleWebSearch"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span v-if="webSearchEnabled" class="control-indicator" aria-hidden="true"></span>
+        </button>
+
+        <!-- [5] Plus button -->
+        <button
+          class="control-btn control-btn--plus"
+          :class="{ 'control-btn--open': panelOpen }"
+          :aria-label="t('aiChat.moreFeatures')"
+          :aria-expanded="panelOpen"
+          @click.stop="panelOpen = !panelOpen"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Send/Stop button (bottom-right) -->
+      <button
+        v-if="status === 'streaming' || status === 'submitted'"
+        class="send-btn send-btn--abort"
+        :aria-label="t('aiChat.stopGeneration')"
+        @click="emit('stop')"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <rect x="4" y="4" width="16" height="16" rx="2"/>
+        </svg>
+      </button>
+      <button
+        v-else
+        class="send-btn"
+        :class="{ 'send-btn--active': internalValue.trim() }"
+        :disabled="disabled || !internalValue.trim()"
+        :aria-label="t('common.send')"
         @click="onSubmit"
       >
-        <!-- 发送图标 -->
-        <svg v-if="status === 'ready'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
-        </svg>
-        <!-- 加载图标 -->
-        <svg v-if="status === 'submitted'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="animate-spin">
-          <line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.17" y2="7.17"/><line x1="16.83" y1="16.83" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.17" y2="16.83"/><line x1="16.83" y1="7.17" x2="19.07" y2="4.93"/>
-        </svg>
-        <!-- 停止图标 (红色方块) -->
-        <svg v-if="status === 'streaming'" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <rect x="6" y="6" width="12" height="12" rx="2"/>
-        </svg>
-        <!-- 重连图标 (旋转) -->
-        <svg v-if="status === 'reconnecting'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="animate-spin">
-          <polyline points="1 4 1 10 7 10"/>
-          <path d="M3.51 15a9 9 0 1 0 .49-3.5"/>
-        </svg>
-        <!-- 错误图标 -->
-        <svg v-if="status === 'error'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
         </svg>
       </button>
     </div>
 
-    <!-- 底部背景层 (聊天态，DeerFlow pattern) -->
+    <!-- Bottom background layer (chat mode) -->
     <div v-if="!isWelcomeMode" class="chat-bg-layer" />
 
-    <!-- 模型选择弹出层 -->
+    <!-- Model selector popup -->
     <ModelSelectorPopup
       v-model:show="modelDialogOpen"
       :models="models"
