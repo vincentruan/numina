@@ -1,47 +1,75 @@
 <script setup lang="ts">
 /**
- * DeerFlow InputBox Vue 实现
+ * Unified AI Chat InputBox — merged from AIChatInput.vue (hub) + InputBox.vue (chat)
  *
- * 参考: frontend/src/components/workspace/input-box.tsx
- *
- * 功能:
- * - Vant textarea 自动增高
- * - 空内容禁止发送
- * - running 时发送按钮变停止按钮
- * - 支持欢迎态居中输入
- * - 支持聊天态底部吸附输入
- * - DeerFlow 4-mode 选择器集成
- * - 模型选择弹出层集成
+ * Features:
+ * - AIChatInput custom CSS variable styling (dark/light)
+ * - DeerFlow 4-mode selector (Flash/Thinking/Pro/Ultra)
+ * - Web search toggle with provider pre-check
+ * - Plus panel (camera/file/image)
+ * - Attachment preview row
+ * - Expand button for full-screen textarea
+ * - Welcome mode (hero + examples)
+ * - Chat mode (bottom-sticky)
+ * - Agent picker in welcome mode, static icon in chat mode
+ * - Model selector popup
+ * - Tenant resource isolation (useTenantAiResources)
  */
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
 import ModelSelectorPopup from './ModelSelectorPopup.vue'
 import WelcomeExamples from './WelcomeExamples.vue'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
+import { getWebSearchStatus } from '@/api/webSearch'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
+
+interface AgentOption {
+  id: string
+  display_name: string
+  agent_name?: string
+  icon?: string
+}
+
+interface Attachment {
+  type: 'file' | 'image'
+  name: string
+  path?: string
+}
 
 const { t } = useI18n()
 
-// Props
+// ── Props ──
 const props = defineProps<{
   status: 'ready' | 'streaming' | 'submitted' | 'error' | 'reconnecting'
-  isWelcomeMode?: boolean  // 欢迎态 vs 聊天态
+  isWelcomeMode?: boolean
   threadId?: string
   initialMode?: InputMode
   initialModelName?: string
+  agentId?: string
+  agents?: AgentOption[]
+  agentIcon?: string
+  agentLabel?: string
+  disabled?: boolean
+  modelValue?: string
+  webSearch?: boolean
+  attachments?: Attachment[]
 }>()
 
+// ── Emits ──
 const emit = defineEmits<{
   submit: [payload: SubmitPayload]
   stop: []
-  contextChange: [context: InputContext]
-  agentChange: [agentId: string]
+  'update:modelValue': [value: string]
+  'update:webSearch': [value: boolean]
+  selectAgent: []
   action: [type: 'file' | 'image' | 'camera']
+  removeAttachment: [index: number]
+  contextChange: [context: InputContext]
 }>()
 
-// 租户资源
+// ── Tenant resources ──
 const {
   models,
   tenantConfig: _tenantConfig,
@@ -50,12 +78,16 @@ const {
   loading: resourcesLoading,
 } = useTenantAiResources()
 
-// State
-const inputValue = ref('')
+// ── Input state ──
+const internalValue = ref(props.modelValue ?? '')
 const focused = ref(false)
+const expanded = ref(false)
+const panelOpen = ref(false)
 const modelDialogOpen = ref(false)
+const webSearchEnabled = ref(props.webSearch ?? false)
+const inputRef = ref<HTMLTextAreaElement | null>(null)
 
-// 当前选中的模型和模式
+// ── Mode context (DeerFlow 4-mode) ──
 const selectedModel = computed(() =>
   models.value.find(m => m.name === context.value.model_name) ?? models.value[0],
 )
@@ -66,51 +98,12 @@ const context = ref<InputContext>({
   reasoning_effort: 'medium',
 })
 
-// Agent selection
-const showAgentMenu = ref(false)
-const selectedAgentId = ref('numina') // Defaults to numina agent
-const agentOptions = [
-  { text: 'Numina Agent', value: 'numina' },
-  { text: 'Open QA', value: 'chat' }
-]
-
-function onSelectAgent(action: { value: string }) {
-  selectedAgentId.value = action.value
-  emit('agentChange', action.value)
-}
-
-// Attachment selection
-const showAttachmentMenu = ref(false)
-const attachmentActions = [
-  { text: 'File', value: 'file', icon: 'description' },
-  { text: 'Image', value: 'image', icon: 'photo' },
-  { text: 'Camera', value: 'camera', icon: 'photograph' }
-]
-function onSelectAttachment(action: { value: string; text: string; icon?: string }) {
-  emit('action', action.value)
-}
-
-// 模型能力检查
 const currentModelSupportsThinking = computed(() =>
   selectedModel.value?.supports_thinking ?? false,
 )
 
-// 自动降级模式（DeerFlow pattern）
-watch(currentModelSupportsThinking, (supports) => {
-  const resolved = getResolvedMode(context.value.mode, supports, supportsSubagent.value)
-  if (resolved !== context.value.mode) {
-    showToast(t('aiChat.tenantModelFallback'))
-    context.value.mode = resolved
-    emitContextChange()
-  }
-})
+const isUltraDisabled = computed(() => !supportsSubagent.value)
 
-// Ultra 模式禁用检查
-const isUltraDisabled = computed(() =>
-  !supportsSubagent.value,
-)
-
-// 计算最终 API 参数
 const finalPayload = computed(() => {
   const config = INPUT_MODE_CONFIGS[context.value.mode]
   return {
@@ -121,8 +114,58 @@ const finalPayload = computed(() => {
   }
 })
 
-// Methods
-function adjustHeight(el: HTMLTextAreaElement) {
+// ── Agent display ──
+const selectedAgent = computed(() =>
+  props.agents?.find((a) => a.id === props.agentId) ?? props.agents?.[0] ?? null,
+)
+const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.icon || null)
+const displayAgentLabel = computed(() => props.agentLabel || selectedAgent.value?.display_name || '')
+
+// ── Watchers ──
+watch(internalValue, (val) => emit('update:modelValue', val))
+watch(() => props.modelValue, (val) => {
+  if (val !== undefined && val !== internalValue.value) {
+    internalValue.value = val
+  }
+})
+watch(webSearchEnabled, (val) => emit('update:webSearch', val))
+watch(() => props.webSearch, (val) => {
+  if (val !== undefined && val !== webSearchEnabled.value) {
+    webSearchEnabled.value = val
+  }
+})
+
+// Auto-downgrade mode when model doesn't support thinking
+watch(currentModelSupportsThinking, (supports) => {
+  const resolved = getResolvedMode(context.value.mode, supports, supportsSubagent.value)
+  if (resolved !== context.value.mode) {
+    showToast(t('aiChat.tenantModelFallback'))
+    context.value.mode = resolved
+    emitContextChange()
+  }
+})
+
+// Initialize default model
+watch(models, (newModels) => {
+  if (newModels.length > 0 && !context.value.model_name) {
+    const defaultModel = newModels.find(m => m.is_default) ?? newModels[0]
+    context.value.model_name = defaultModel.name
+    const resolved = getResolvedMode(context.value.mode, defaultModel.supports_thinking ?? false, supportsSubagent.value)
+    if (resolved !== context.value.mode) {
+      context.value.mode = resolved
+    }
+    emitContextChange()
+  }
+}, { immediate: true })
+
+// ── Methods ──
+function adjustHeight() {
+  const el = inputRef.value
+  if (!el) return
+  if (expanded.value) {
+    el.style.height = '75vh'
+    return
+  }
   el.style.height = 'auto'
   el.style.height = Math.min(el.scrollHeight, 120) + 'px'
 }
@@ -132,8 +175,7 @@ function onSubmit() {
     emit('stop')
     return
   }
-
-  const text = inputValue.value.trim()
+  const text = internalValue.value.trim()
   if (!text) return
 
   emit('submit', {
@@ -143,12 +185,10 @@ function onSubmit() {
     ...finalPayload.value,
     thread_id: props.threadId,
   })
-
-  inputValue.value = ''
+  internalValue.value = ''
 }
 
 function onModeSelect(mode: InputMode) {
-  // Ultra 模式租户限制检查
   if (mode === 'ultra' && !supportsSubagent.value) {
     showToast(t('aiChat.tenantUltraDisabled'))
     return
@@ -161,15 +201,12 @@ function onModeSelect(mode: InputMode) {
 function onModelSelect(modelName: string) {
   const model = models.value.find(m => m.name === modelName)
   if (!model) return
-
   context.value.model_name = modelName
-  // 模型切换时重新解析模式
   const resolved = getResolvedMode(context.value.mode, model.supports_thinking ?? false, supportsSubagent.value)
   if (resolved !== context.value.mode) {
     showToast(t('aiChat.tenantModelFallback'))
     context.value.mode = resolved
   }
-  modelDialogOpen.value = false
   emitContextChange()
 }
 
@@ -180,15 +217,68 @@ function emitContextChange() {
   })
 }
 
-// DeerFlow WelcomeExamples handlers
+// Web search
+async function toggleWebSearch() {
+  if (!webSearchEnabled.value) {
+    try {
+      const status = await getWebSearchStatus()
+      if (!status.has_web_search) {
+        showToast(t('webSearch.noProviderToast'))
+        return
+      }
+    } catch {
+      showToast(t('webSearch.noProviderToast'))
+      return
+    }
+  }
+  webSearchEnabled.value = !webSearchEnabled.value
+}
+
+// Expand
+function toggleExpand() {
+  expanded.value = !expanded.value
+  nextTick(adjustHeight)
+}
+
+// Panel
+function closePanel() {
+  panelOpen.value = false
+}
+
+function onPanelItem(action: 'file' | 'image' | 'camera') {
+  panelOpen.value = false
+  emit('action', action)
+}
+
+const panelItems = computed(() => [
+  {
+    action: 'camera' as const,
+    label: t('aiChat.panelCamera'),
+    icon: { viewBox: '0 0 24 24', paths: ['M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z', 'M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'] },
+  },
+  {
+    action: 'file' as const,
+    label: t('aiChat.panelFile'),
+    icon: { viewBox: '0 0 24 24', paths: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z', 'M14 2v6h6', 'M12 18v-6', 'M9 15h6'] },
+  },
+  {
+    action: 'image' as const,
+    label: t('aiChat.panelImage'),
+    icon: { viewBox: '0 0 24 24', paths: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12'] },
+  },
+])
+
+function removeAttachment(index: number) {
+  emit('removeAttachment', index)
+}
+
+// Welcome examples
 function handleWelcomeExampleSelect(prompt: string) {
-  inputValue.value = prompt
-  // 自动发送（DeerFlow pattern: setTimeout → requestFormSubmit）
+  internalValue.value = prompt
   setTimeout(() => onSubmit(), 0)
 }
 
 function handleSurpriseMe() {
-  // 随机选择一个预设问题（DeerFlow pattern: SparklesIcon + surpriseMe）
   const surprisePrompts = [
     t('aiChat.welcomeExampleAnalyzePrompt'),
     t('aiChat.welcomeExamplePlanPrompt'),
@@ -196,23 +286,26 @@ function handleSurpriseMe() {
     t('aiChat.welcomeExampleOptimizePrompt'),
   ]
   const randomPrompt = surprisePrompts[Math.floor(Math.random() * surprisePrompts.length)]
-  inputValue.value = randomPrompt
+  internalValue.value = randomPrompt
   setTimeout(() => onSubmit(), 0)
 }
 
-// 初始化默认模型
-watch(models, (newModels) => {
-  if (newModels.length > 0 && !context.value.model_name) {
-    const defaultModel = newModels.find(m => m.is_default) ?? newModels[0]
-    context.value.model_name = defaultModel.name
-    // 根据模型能力设置初始模式
-    const resolved = getResolvedMode(context.value.mode, defaultModel.supports_thinking ?? false, supportsSubagent.value)
-    if (resolved !== context.value.mode) {
-      context.value.mode = resolved
-    }
-    emitContextChange()
+// Click outside handler (for plus panel)
+function onDocClick(e: MouseEvent) {
+  const el = e.target as HTMLElement
+  if (!el.closest('.input-box')) {
+    panelOpen.value = false
   }
-}, { immediate: true })
+}
+
+onMounted(() => {
+  nextTick(adjustHeight)
+  document.addEventListener('click', onDocClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+})
 </script>
 
 <template>
