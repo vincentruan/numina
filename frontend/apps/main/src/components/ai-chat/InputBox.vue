@@ -532,7 +532,26 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* ── CSS variables (AIChatInput base, dark default) ── */
 .input-box {
+  --ai-btn-border: rgba(255, 255, 255, 0.1);
+  --ai-btn-color: var(--text-tertiary);
+  --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
+  --ai-btn-hover-color: rgba(255, 255, 255, 0.7);
+  --ai-panel-bg: #1e1e2e;
+  --ai-panel-border: rgba(255, 255, 255, 0.1);
+  --ai-panel-item-color: rgba(255, 255, 255, 0.6);
+  --ai-panel-item-hover-bg: rgba(255, 255, 255, 0.08);
+  --ai-panel-item-hover-color: rgba(255, 255, 255, 0.9);
+  --ai-input-bg: rgba(255, 255, 255, 0.07);
+  --ai-input-border: rgba(255, 255, 255, 0.1);
+  --ai-text-color: rgba(255, 255, 255, 0.9);
+  --ai-placeholder-color: rgba(255, 255, 255, 0.3);
+  --ai-scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --ai-expand-color: rgba(255, 255, 255, 0.3);
+  --ai-expand-hover-bg: rgba(255, 255, 255, 0.08);
+  --ai-expand-hover-color: rgba(255, 255, 255, 0.6);
+
   position: relative;
   display: flex;
   flex-direction: column;
@@ -543,7 +562,29 @@ onBeforeUnmount(() => {
   transition: all 0.2s ease;
 }
 
-/* 欢迎态: 居中布局 */
+/* ── Light mode overrides (AIChatInput pattern) ── */
+:global(.theme-light .input-box),
+:global([data-theme='light'] .input-box) {
+  --ai-btn-border: rgba(0, 0, 0, 0.4);
+  --ai-btn-color: rgba(0, 0, 0, 0.75);
+  --ai-btn-hover-bg: rgba(0, 0, 0, 0.1);
+  --ai-btn-hover-color: rgba(0, 0, 0, 0.9);
+  --ai-panel-bg: #ffffff;
+  --ai-panel-border: rgba(0, 0, 0, 0.25);
+  --ai-panel-item-color: rgba(0, 0, 0, 0.75);
+  --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.08);
+  --ai-panel-item-hover-color: rgba(0, 0, 0, 0.9);
+  --ai-input-bg: #ffffff;
+  --ai-input-border: rgba(0, 0, 0, 0.35);
+  --ai-text-color: rgba(0, 0, 0, 0.9);
+  --ai-placeholder-color: rgba(0, 0, 0, 0.6);
+  --ai-scrollbar-thumb: rgba(0, 0, 0, 0.25);
+  --ai-expand-color: rgba(0, 0, 0, 0.55);
+  --ai-expand-hover-bg: rgba(0, 0, 0, 0.1);
+  --ai-expand-hover-color: rgba(0, 0, 0, 0.8);
+}
+
+/* ── Layout modes ── */
 .input-box.welcome-mode {
   align-items: center;
   justify-content: center;
@@ -552,7 +593,6 @@ onBeforeUnmount(() => {
   max-width: 90%;
 }
 
-/* 聊天态: 底部吸附 */
 .input-box.chat-mode {
   position: sticky;
   bottom: 0;
@@ -560,6 +600,7 @@ onBeforeUnmount(() => {
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
 
+/* ── Welcome hero ── */
 .welcome-hero {
   text-align: center;
   margin-bottom: 16px;
@@ -577,85 +618,375 @@ onBeforeUnmount(() => {
   margin-top: 4px;
 }
 
+/* ── Input row (AIChatInput style) ── */
 .input-row {
+  position: relative;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  background: var(--ai-input-bg);
+  border: 1px solid var(--ai-input-border);
+  border-radius: 18px;
+  padding: 10px 48px 44px 14px;
+  min-height: 100px;
+  transition: border-color 0.2s, box-shadow 0.2s, border-radius 0.2s, min-height 0.2s;
 }
 
-.input-textarea {
+.input-row.is-focused {
+  border-color: rgba(99, 102, 241, 0.6);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.input-row.is-expanded {
+  border-radius: 14px;
+  min-height: 75vh;
+}
+
+/* ── Chat textarea (AIChatInput style) ── */
+.chat-textarea {
   flex: 1;
-  min-height: 36px;
-  max-height: 120px;
-  padding: 8px 12px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  font-size: 16px;
-  color: var(--text-primary);
-  resize: none;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--ai-text-color);
   outline: none;
-  transition: border-color 0.2s;
+  resize: none;
+  overflow-y: auto;
+  line-height: 20px;
+  min-height: 60px;
+  padding: 0;
+  margin: 0;
+  transition: height 0.12s ease;
+  caret-color: #6366f1;
 }
 
-.input-textarea:focus {
-  border-color: var(--van-primary-color);
+.chat-textarea::placeholder {
+  color: var(--ai-placeholder-color);
 }
 
-.control-btn {
+.chat-textarea:disabled {
+  opacity: 0.5;
+}
+
+.chat-textarea::-webkit-scrollbar {
+  width: 3px;
+}
+
+.chat-textarea::-webkit-scrollbar-thumb {
+  background: var(--ai-scrollbar-thumb);
+  border-radius: 2px;
+}
+
+/* ── Expand button (top-right) ── */
+.expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 10px;
-  min-height: 44px; /* Touch target - DeerFlow pattern */
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
   cursor: pointer;
+  color: var(--ai-expand-color);
+  transition: background 0.15s, color 0.15s;
 }
 
-.control-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.expand-btn:hover {
+  background: var(--ai-expand-hover-bg);
+  color: var(--ai-expand-hover-color);
 }
 
-.model-btn {
-  min-width: 80px;
-  min-height: 44px; /* Touch target - DeerFlow pattern */
+/* ── Bottom toolbar controls ── */
+.input-controls {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.control-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--ai-btn-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+  position: relative;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.control-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--ai-btn-hover-color);
+}
+
+.control-btn:active {
+  transform: scale(0.92);
+}
+
+.control-btn--active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4), 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+.control-btn--active:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%);
+  box-shadow: 0 3px 12px rgba(99, 102, 241, 0.5), 0 0 0 2px rgba(99, 102, 241, 0.3);
+}
+
+.control-btn--plus {
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+}
+
+.control-btn--open {
+  transform: rotate(45deg);
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+}
+
+.control-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 4px rgba(16, 185, 129, 0.6);
+}
+
+.agent-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.agent-static-icon {
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.12);
+  cursor: default;
+}
+
+/* ── Model selector button ── */
+.control-btn--model {
+  width: auto;
+  border-radius: 12px;
+  padding: 6px 10px;
+  gap: 4px;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--ai-btn-color);
+  border: 1px solid var(--ai-btn-border);
 }
 
 .model-name {
   font-weight: 500;
+  font-size: 12px;
 }
 
-.submit-btn {
+.dropdown-icon {
+  flex-shrink: 0;
+}
+
+/* ── Attachments row ── */
+.attachments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px dashed rgba(99, 102, 241, 0.2);
+}
+
+.attachment-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  font-size: 12px;
+  color: var(--ai-text-color);
+  max-width: 180px;
+}
+
+.attachment-icon {
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.attachment-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.attachment-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.attachment-item--image {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.attachment-item--image .attachment-icon {
+  color: #10b981;
+}
+
+/* ── Plus panel ── */
+.plus-panel {
+  position: absolute;
+  background: var(--ai-panel-bg);
+  border: 1px solid var(--ai-panel-border);
+  border-radius: 14px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  min-width: 160px;
+}
+
+.plus-panel--up {
+  bottom: calc(100% + 8px);
+  left: 0;
+}
+
+.panel-item {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ai-panel-item-color);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.panel-item:hover {
+  background: var(--ai-panel-item-hover-bg);
+  color: var(--ai-panel-item-hover-color);
+}
+
+.panel-item:active {
+  transform: scale(0.95);
+}
+
+.panel-item-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(99, 102, 241, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #818cf8;
+  flex-shrink: 0;
+}
+
+.panel-item-label {
+  line-height: 1.2;
+}
+
+/* ── Send/Stop button ── */
+.send-btn {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
   width: 36px;
   height: 36px;
-  min-height: 44px; /* Touch target - DeerFlow pattern */
   min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
-  background: var(--van-primary-color);
-  color: white;
+  border: none;
+  background: rgba(99, 102, 241, 0.2);
+  color: rgba(99, 102, 241, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
 }
 
-/* 停止按钮: 红色方块 (DeerFlow pattern) */
-.submit-btn.stop {
-  background: #ef4444;
+.send-btn--active {
+  background: linear-gradient(135deg, #6366f1, #7c3aed);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
 }
 
-.submit-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.send-btn--active:hover {
+  transform: scale(1.05);
 }
 
+.send-btn--active:active {
+  transform: scale(0.95);
+}
+
+.send-btn:disabled {
+  cursor: default;
+}
+
+.send-btn--abort {
+  background: #ff3b30;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(255, 59, 48, 0.4);
+  cursor: pointer;
+}
+
+.send-btn--abort:hover {
+  transform: scale(1.05);
+  background: #ff2d20;
+}
+
+.send-btn--abort:active {
+  transform: scale(0.95);
+}
+
+/* ── Chat background layer ── */
 .chat-bg-layer {
   position: absolute;
   left: 0;
@@ -666,6 +997,19 @@ onBeforeUnmount(() => {
   z-index: -1;
 }
 
+/* ── Panel transition ── */
+.panel-enter-active,
+.panel-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.panel-enter-from,
+.panel-leave-to {
+  opacity: 0;
+  transform: scale(0.92) translateY(4px);
+}
+
+/* ── Animations ── */
 .animate-spin {
   animation: spin 1s linear infinite;
 }
@@ -675,7 +1019,17 @@ onBeforeUnmount(() => {
   to { transform: rotate(360deg); }
 }
 
-/* 375px 响应式 */
+@media (prefers-reduced-motion: reduce) {
+  .send-btn,
+  .control-btn,
+  .input-row,
+  .panel-enter-active,
+  .panel-leave-active {
+    transition: none;
+  }
+}
+
+/* ── Responsive (375px) ── */
 @media (max-width: 375px) {
   .input-box {
     padding: 8px 12px;
@@ -687,23 +1041,8 @@ onBeforeUnmount(() => {
     max-width: 95%;
   }
 
-  .input-textarea {
+  .chat-textarea {
     font-size: 14px;
-    padding: 6px 10px;
-  }
-
-  .control-btn {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .model-btn {
-    min-width: 60px;
-  }
-
-  .submit-btn {
-    width: 32px;
-    height: 32px;
   }
 
   .hero-title {
