@@ -320,6 +320,7 @@ async def chat_stream(
                 "POST",
                 agent_url,
                 json=request_json,
+                headers={"X-Thread-Id": str(session_id)},
             ) as resp:
                 # runs.py returns SSE directly — passthrough with SSE-aware parsing
                 sse_buffer: list[str] = []
