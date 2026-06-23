@@ -107,6 +107,11 @@ def create_mcp_server(
     if payload.transport not in ALLOWED_TRANSPORTS:
         raise AppError(ErrorCode.VALIDATION_ERROR, f"transport 必须是 {ALLOWED_TRANSPORTS} 之一")
 
+    # [Security] Prevent users from creating servers with mcp_type="backend",
+    # which is reserved for system-created internal MCP servers only.
+    if payload.mcp_type == "backend":
+        raise AppError(ErrorCode.FORBIDDEN, "mcp_type 'backend' 为系统保留类型")
+
     env_encrypted: str | None = None
     if payload.env_vars:
         env_encrypted = encrypt_api_key(json.dumps(payload.env_vars))
@@ -141,6 +146,12 @@ def update_mcp_server(
     if not server:
         raise AppError(ErrorCode.NOT_FOUND)
 
+    # [Security] Protect backend-type MCP servers from frontend modification.
+    # The "Numina Backend MCP" server is auto-created and its URL must remain
+    # internal to prevent agent auth token leakage or data exfiltration.
+    if server.mcp_type == "backend":
+        raise AppError(ErrorCode.FORBIDDEN, "系统内置 MCP 服务器不可修改")
+
     if payload.transport is not None:
         if payload.transport not in ALLOWED_TRANSPORTS:
             raise AppError(ErrorCode.VALIDATION_ERROR, f"transport 必须是 {ALLOWED_TRANSPORTS} 之一")
@@ -174,5 +185,10 @@ def delete_mcp_server(
     ).first()
     if not server:
         raise AppError(ErrorCode.NOT_FOUND)
+
+    # [Security] Protect backend-type MCP servers from deletion.
+    if server.mcp_type == "backend":
+        raise AppError(ErrorCode.FORBIDDEN, "系统内置 MCP 服务器不可删除")
+
     db.delete(server)
     db.commit()

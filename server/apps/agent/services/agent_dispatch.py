@@ -16,6 +16,9 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
+from apps.agent.services.session_journal import session_journal
+from apps.agent.services.stream_events import EventStreamBuilder
+
 from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient, report_web_search_circuit
 from apps.agent.schemas.policy import CapabilityPolicy
@@ -30,8 +33,6 @@ from apps.agent.services.message_classifier import (
 )
 from apps.agent.services.pii_redactor import pii_redactor
 from apps.agent.services.policy_guard import policy_guard
-from apps.agent.services.session_journal import session_journal
-from apps.agent.services.stream_events import EventStreamBuilder
 from packages.core import get_path_manager
 from packages.core.effective_config import EffectiveConfigBuilder
 from packages.core.logging import get_logger
@@ -207,6 +208,7 @@ async def stream_agent_dispatch(
     # DeerFlow execution mode parameters (Phase 2)
     is_plan_mode: bool = False,
     subagent_enabled: bool = False,
+    cancellation_event: asyncio.Event | None = None,
 ) -> AsyncGenerator[str, None]:
     """Agent-first execution entry point. Streams NDJSON events."""
     t_start = time.monotonic()
@@ -340,6 +342,30 @@ async def stream_agent_dispatch(
             len(mcp_servers),
             [s.get("name") for s in mcp_servers],
         )
+
+        # [Security] Validate backend-type MCP servers — their URL must match
+        # the configured backend base URL. This prevents a compromised owner
+        # from redirecting the agent's internal MCP connection to an external
+        # server, which would leak AGENT_INTERNAL_TOKEN.
+        for srv in mcp_servers:
+            if srv.get("name") == "Numina Backend MCP":
+                expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
+                actual_url = (srv.get("url") or "").rstrip("/")
+                if not actual_url.startswith(expected_prefix):
+                    logger.warning(
+                        "[agent_dispatch] backend MCP URL mismatch! "
+                        "family=%s expected_prefix=%s actual_url=%s — correcting",
+                        family_id,
+                        expected_prefix,
+                        actual_url,
+                    )
+                    srv["url"] = settings.BACKEND_BASE_URL.rstrip("/") + "/api/v1/internal/mcp/" + family_id + "/sse"
+                    logger.info(
+                        "[agent_dispatch] corrected backend MCP URL for family=%s url=%s",
+                        family_id,
+                        srv["url"],
+                    )
+                break
     except Exception as e:
         logger.warning(
             "[agent_dispatch] get_enabled_mcp_servers failed family=%s err_type=%s err=%s",
@@ -425,9 +451,19 @@ async def stream_agent_dispatch(
             "Agent 运行环境未就绪", code="RUNTIME_ERROR"
         ).to_ndjson()
         return
+    # [Integrated with Numina Multi-Tenant] — use Numina's sandbox provider
+    # that scopes sandbox IDs and paths by family_id.
+    from apps.agent.services.runtime.sandbox_provider import (
+        set_family_sandbox_context,
+    )
+    set_family_sandbox_context(family_id)
+
     app_config_dict = dict(effective.config_dict)
     app_config_dict.setdefault(
-        "sandbox", {"use": "deerflow.sandbox.local:LocalSandboxProvider"}
+        "sandbox",
+        {
+            "use": "apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider"
+        },
     )
     # reasoning_effort only takes effect under deep-think mode. Surface it to
     # DeerFlow's app_config so model providers that honor it (OpenAI o-series,
@@ -629,6 +665,9 @@ async def stream_agent_dispatch(
             async for event in agent_graph.astream(
                 state, runnable_config, context=astream_context
             ):
+                if cancellation_event and cancellation_event.is_set():
+                    logger.info("[agent_dispatch] cancelled session=%s", thread_id)
+                    break
                 if not isinstance(event, dict):
                     continue
                 for _node_name, node_output in event.items():
