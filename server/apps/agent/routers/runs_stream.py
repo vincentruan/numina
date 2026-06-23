@@ -13,9 +13,11 @@ this file provides the new SSE protocol.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, Literal
 
+from deerflow.runtime import RunManager
 from fastapi import APIRouter, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -71,6 +73,23 @@ class RunCreateRequest(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+async def disconnect_watcher(request: Request, run_id: str, run_mgr: RunManager):
+    """Background task to actively poll for client disconnect.
+
+    This ensures that cooperative cancellation is triggered immediately,
+    even if the SSE generator is currently suspended waiting for the next event.
+    """
+    try:
+        while True:
+            if await request.is_disconnected():
+                logger.info("[runs_stream] active disconnect detected for run_id=%s", run_id)
+                await run_mgr.cancel(run_id)
+                break
+            await asyncio.sleep(0.5)
+    except asyncio.CancelledError:
+        pass
+
+
 @router.post("/{thread_id}/runs/stream")
 async def stream_run_v2(
     thread_id: str,
@@ -97,8 +116,17 @@ async def stream_run_v2(
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
+    watcher_task = asyncio.create_task(disconnect_watcher(request, record.run_id, run_mgr))
+
+    async def sse_generator():
+        try:
+            async for frame in sse_consumer(bridge, record, request, run_mgr):
+                yield frame
+        finally:
+            watcher_task.cancel()
+
     return StreamingResponse(
-        sse_consumer(bridge, record, request, run_mgr),
+        sse_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
