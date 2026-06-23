@@ -219,8 +219,8 @@ describe('mergeConsecutiveSteps', () => {
       const step1 = createToolCallStep('t1', 'custom_tool', '')
       const step2 = createToolCallStep('t2', 'another_tool', '')
       // Remove toolType to make it undefined
-      step1.toolType = undefined
-      step2.toolType = undefined
+      ;(step1 as any).toolType = undefined
+      ;(step2 as any).toolType = undefined
 
       const result = mergeConsecutiveSteps([step1, step2])
 
@@ -231,7 +231,7 @@ describe('mergeConsecutiveSteps', () => {
 
     it('handles undefined toolType mixed with defined toolType', () => {
       const step1 = createToolCallStep('t1', 'custom_tool', '')
-      step1.toolType = undefined
+      ;(step1 as any).toolType = undefined
       const step2 = createToolCallStep('t2', 'get_assets', 'data_query')
 
       const result = mergeConsecutiveSteps([step1, step2])

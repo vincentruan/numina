@@ -48,7 +48,7 @@ describe('AiArtifactBadge', () => {
     })
     await wrapper.find('.artifact-badge-btn').trigger('click')
     expect(wrapper.emitted('tap')).toBeTruthy()
-    expect(wrapper.emitted('tap').length).toBe(1)
+    expect(wrapper.emitted('tap')!.length).toBe(1)
   })
 
   it('touch target is at least 44×44px', () => {
@@ -85,10 +85,11 @@ describe('AiArtifactBadge', () => {
       global: { plugins: [i18n] },
     })
     const btn = wrapper.find('.artifact-badge-btn')
+    const element = btn.element as HTMLElement
     // Verify no inline color styles - should use CSS classes with variables
-    expect(btn.element.style.background).toBe('')
-    expect(btn.element.style.color).toBe('')
-    expect(btn.element.style.borderColor).toBe('')
+    expect(element.style.background).toBe('')
+    expect(element.style.color).toBe('')
+    expect(element.style.borderColor).toBe('')
   })
 
   it('badge-count pill is positioned correctly', () => {

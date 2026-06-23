@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     AGENT_INTERNAL_TOKEN: str = ""
     AGENT_BASE_URL: str = "http://agent:8001"
 
+    # Backend external URL (for constructing internal MCP SSE endpoint URLs)
+    BACKEND_BASE_URL: str = "http://localhost:8000"
+
     # Snowflake ID generator
     SNOWFLAKE_MACHINE_ID: int | None = None  # 0-1023; None = auto-derive from container IP
 

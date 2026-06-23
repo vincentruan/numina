@@ -17,6 +17,7 @@ from fastapi import APIRouter, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
@@ -39,14 +40,10 @@ class RunCreateRequest(BaseModel):
     context: dict[str, Any] | None = Field(default=None, description="DeerFlow context overrides")
     stream_mode: list[str] | str | None = Field(default=None, description="Stream mode(s)")
 
-def format_sse(event: str, data: Any, *, event_id: str | None = None) -> str:
-    payload = json.dumps(data, default=str, ensure_ascii=False)
-    parts = [f"event: {event}", f"data: {payload}"]
-    if event_id:
-        parts.append(f"id: {event_id}")
-    parts.append("")
-    parts.append("")
-    return "\n".join(parts)
+# [Deprecated] Use routers/runs_stream.stream_run_v2 for new SSE protocol
+# with Last-Event-ID reconnection, heartbeat, and client disconnect handling.
+
+from apps.agent.services.runtime.sse_gateway import format_sse  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Background Tasks
@@ -149,13 +146,18 @@ async def stream_run(
     body: RunCreateRequest,
     request: Request,
     x_family_id: str = Header(..., alias="X-Family-Id"),
-    x_user_id: str = Header(None, alias="X-User-Id")
+    x_user_id: str = Header(None, alias="X-User-Id"),
+    x_agent_token: str = Header(..., alias="X-Agent-Token"),
 ) -> StreamingResponse:
     """Create a run and stream events via SSE.
-    
+
     This replaces the complex background task and RunManager from DeerFlow,
     but yields the same LangGraph SSE format expected by the frontend's useStream hook.
     """
+    # Verify agent token (internal shared secret, must match backend's)
+    if x_agent_token != settings.AGENT_INTERNAL_TOKEN:
+        raise HTTPException(status_code=401, detail="invalid token")
+
     try:
         client = BackendClient(family_id=x_family_id)
         ai_config = await client.get_family_ai_config()
@@ -212,6 +214,9 @@ async def stream_run(
                 thread_id=thread_id,
                 enable_thinking=True
             ):
+                if await request.is_disconnected():
+                    logger.info("[runs] client disconnected thread=%s", thread_id)
+                    break
                 if sse_type == "messages":
                     yield format_sse("messages", data)
                     # Collect AI text for suggestions

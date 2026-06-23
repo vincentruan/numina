@@ -6,8 +6,10 @@ import { useRouter } from 'vue-router'
 import { updateThread } from '@/api/ai-chat'
 import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import TokenUsage from '@/components/ai-chat/TokenUsage.vue'
+import IIcon from '@/components/IIcon.vue'
+import { getAgentIcon, isEmoji } from '@/utils/agent'
 import type { ThreadSession } from '@/types/ai-chat/session'
-import type { SystemAgent } from '@/types/agent'
+import type { Agent } from '@/types/agent'
 
 defineOptions({ name: 'ChatHeader' })
 
@@ -17,7 +19,7 @@ const props = defineProps<{
   activeThreadId: string | null
   sessions: ThreadSession[]
   tokenUsageTotal?: number
-  activeAgent: SystemAgent | null
+  activeAgent: Agent | null
 }>()
 
 const emit = defineEmits<{
@@ -118,7 +120,10 @@ function onNewChat() {
       @click="onToggleAgentInfo"
     >
       <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="20" />
-      <span v-else class="header-agent-logo-emoji">{{ activeAgent.icon || '🤖' }}</span>
+      <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))" class="header-agent-logo-emoji">
+        {{ getAgentIcon(activeAgent.icon) || '🤖' }}
+      </span>
+      <IIcon v-else :icon="getAgentIcon(activeAgent.icon)" size="20" :color="activeAgent.color || 'var(--van-primary-color)'" />
     </button>
     <!-- Title wrap: title (truncated or scrolling) + inline edit button -->
     <div class="header-title-wrap">
@@ -153,7 +158,10 @@ function onNewChat() {
       <div class="agent-info-header">
         <span class="agent-info-icon" aria-hidden="true">
           <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="24" />
-          <span v-else>{{ activeAgent.icon || '🤖' }}</span>
+          <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))">
+            {{ getAgentIcon(activeAgent.icon) || '🤖' }}
+          </span>
+          <IIcon v-else :icon="getAgentIcon(activeAgent.icon)" size="24" :color="activeAgent.color || 'var(--van-primary-color)'" />
         </span>
         <span class="agent-info-name">{{ activeAgent.display_name }}</span>
       </div>

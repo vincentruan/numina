@@ -1,0 +1,109 @@
+"""Runs streaming endpoint — new SSE protocol with StreamBridge + RunManager.
+
+This is the v2 streaming endpoint that uses the full StreamBridge + RunManager
+lifecycle pipeline: heartbeat sentinels, client disconnect handling,
+Last-Event-ID reconnection, and deferred garbage collection.
+
+The existing ``routers/runs.py`` endpoint is kept for backward compatibility;
+this file provides the new SSE protocol.
+
+# [Copied from DeerFlow Reference] — adapted from app/gateway/routers/thread_runs.py
+# [Integrated with Numina Multi-Tenant] — X-Family-Id header for tenant isolation
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Literal
+
+from fastapi import APIRouter, Header, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from apps.agent.services.runtime.lifespan import get_run_manager, get_stream_bridge
+from apps.agent.services.runtime.sse_gateway import sse_consumer, start_run
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/threads", tags=["runs"])
+
+
+# ---------------------------------------------------------------------------
+# Request / response models
+# ---------------------------------------------------------------------------
+
+
+class RunCreateRequest(BaseModel):
+    """Request body matching the LangGraph Platform runs API."""
+
+    assistant_id: str | None = Field(
+        default=None, description="Agent / assistant to use"
+    )
+    input: dict[str, Any] | None = Field(
+        default=None, description="Graph input (e.g. {messages: [...]})"
+    )
+    command: dict[str, Any] | None = Field(
+        default=None, description="LangGraph Command"
+    )
+    metadata: dict[str, Any] | None = Field(default=None, description="Run metadata")
+    config: dict[str, Any] | None = Field(
+        default=None, description="RunnableConfig overrides"
+    )
+    context: dict[str, Any] | None = Field(
+        default=None, description="DeerFlow context overrides"
+    )
+    stream_mode: list[str] | str | None = Field(
+        default=None, description="Stream mode(s)"
+    )
+    stream_subgraphs: bool = Field(default=False, description="Include subgraph events")
+    on_disconnect: Literal["cancel", "continue"] = Field(
+        default="cancel", description="Behaviour on SSE disconnect"
+    )
+    multitask_strategy: Literal["reject", "rollback", "interrupt", "enqueue"] = Field(
+        default="reject", description="Concurrency strategy"
+    )
+    on_completion: Literal["delete", "keep"] = Field(
+        default="keep", description="Delete temp thread on completion"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.post("/{thread_id}/runs/stream")
+async def stream_run_v2(
+    thread_id: str,
+    body: RunCreateRequest,
+    request: Request,
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    x_user_id: str = Header(None, alias="X-User-Id"),
+) -> StreamingResponse:
+    """Create a run and stream events via SSE with full lifecycle management.
+
+    Uses ``StreamBridge`` + ``RunManager`` for:
+    - Heartbeat sentinels (``: heartbeat\\n\\n`` every 15s during silence)
+    - Client disconnect handling (``on_disconnect=cancel`` aborts the run)
+    - ``Last-Event-ID`` reconnection (replay buffered events after reconnect)
+    - Deferred garbage collection (cleanup after 60s / 300s)
+
+    Response headers match the LangGraph Platform protocol so the ``useStream``
+    React hook from ``@langchain/langgraph-sdk/react`` works without modification.
+
+    # [Copied from DeerFlow Reference] — app/gateway/routers/thread_runs.py stream_run
+    # [Integrated with Numina Multi-Tenant] — family_id in run metadata
+    """
+    record = await start_run(body, thread_id, request, x_family_id, x_user_id)
+    bridge = get_stream_bridge(request)
+    run_mgr = get_run_manager(request)
+
+    return StreamingResponse(
+        sse_consumer(bridge, record, request, run_mgr),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
+        },
+    )

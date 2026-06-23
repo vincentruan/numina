@@ -41,7 +41,7 @@ const mockPush = vi.fn()
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal()
   return {
-    ...actual,
+    ...(actual as any),
     useRouter: () => ({ push: mockPush }),
   }
 })
@@ -57,7 +57,7 @@ vi.mock('vant', () => ({
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal()
   return {
-    ...actual,
+    ...(actual as any),
     useI18n: () => ({ t: (key: string) => key }),
   }
 })

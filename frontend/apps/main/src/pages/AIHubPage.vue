@@ -243,7 +243,10 @@
           <template #icon>
             <div class="agent-row__icon">
               <AIBrainIcon v-if="agent.agent_name === NUMINA_AGENT_NAME" :active="true" />
-              <span v-else class="agent-row__emoji">{{ agent.icon || '🤖' }}</span>
+              <span v-else-if="isEmoji(getAgentIcon(agent.icon))" class="agent-row__emoji">
+                {{ getAgentIcon(agent.icon) || '🤖' }}
+              </span>
+              <IIcon v-else :icon="getAgentIcon(agent.icon)" size="24" :color="agent.color || 'var(--van-primary-color)'" />
             </div>
           </template>
         </van-cell>
@@ -268,11 +271,14 @@ import { useAIReportStream } from '@/composables/useAIReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
+import IIcon from '@/components/IIcon.vue'
+import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
+import type { SubmitPayload } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
 
@@ -417,8 +423,8 @@ function submitChat() {
   chatInput.value = ''
 }
 
-function submitChatFromInput(value: string) {
-  chatInput.value = value
+function submitChatFromInput(payload: SubmitPayload) {
+  chatInput.value = payload.text
   submitChat()
 }
 

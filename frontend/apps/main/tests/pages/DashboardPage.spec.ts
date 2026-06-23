@@ -120,7 +120,7 @@ const stubs = {
 describe('DashboardPage filter bar behavior', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    vi.mocked(useDashboardStore).mockImplementation(() => defaultStore())
+    vi.mocked(useDashboardStore).mockImplementation(() => defaultStore() as any)
   })
 
   describe('filter bar sticky positioning', () => {
@@ -145,7 +145,7 @@ describe('DashboardPage filter bar behavior', () => {
       vi.mocked(useDashboardStore).mockReturnValueOnce({
         ...defaultStore(),
         categoryCounts: [],
-      })
+      } as any)
 
       const wrapper = mount(DashboardPage, { global: { stubs } })
       await nextTick()
@@ -157,7 +157,7 @@ describe('DashboardPage filter bar behavior', () => {
   describe('filter interactions', () => {
     it('status select triggers fetchAssetsPage and fetchCategoryCounts', async () => {
       const store = defaultStore()
-      vi.mocked(useDashboardStore).mockReturnValueOnce(store)
+      vi.mocked(useDashboardStore).mockReturnValueOnce(store as any)
 
       const wrapper = mount(DashboardPage, { global: { stubs } })
       await nextTick()

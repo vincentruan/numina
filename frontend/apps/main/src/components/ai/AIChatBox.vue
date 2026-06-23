@@ -148,10 +148,6 @@ function handleContextChange(_context: InputContext) {
   // Handle context changes if needed
 }
 
-function handleAgentChange(_agentId: string) {
-  // Handle agent changes if needed
-}
-
 async function handleSuggestionClick(text: string) {
   if (!store.activeThreadId) return
   await chat.sendMessage(text, undefined, store.activeThreadId)
@@ -207,7 +203,6 @@ function handleNewChat() {
         @submit="handleSendMessage"
         @stop="handleStop"
         @context-change="handleContextChange"
-        @agent-change="handleAgentChange"
       />
     </template>
 

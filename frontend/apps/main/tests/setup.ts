@@ -5,15 +5,15 @@ import { config } from '@vue/test-utils'
 // Mock import.meta.hot before any modules load
 const mockHotData: Record<string, unknown> = {}
 
-if (!globalThis.importMetaHotMocked) {
-  Object.defineProperty(globalThis, 'importMetaHotMocked', {
+if (!(globalThis as any).importMetaHotMocked) {
+  Object.defineProperty(globalThis as any, 'importMetaHotMocked', {
     value: true,
     writable: false,
   })
 
-  const originalImportMeta = globalThis.importMeta
+  const originalImportMeta = (globalThis as any).importMeta;
 
-  globalThis.importMeta = {
+  (globalThis as any).importMeta = {
     ...originalImportMeta,
     hot: {
       data: mockHotData,
@@ -25,7 +25,7 @@ if (!globalThis.importMetaHotMocked) {
   }
 
   // Also stub for vitest
-  vi.stubGlobal('import.meta', globalThis.importMeta)
+  vi.stubGlobal('import.meta', (globalThis as any).importMeta)
 }
 
 // Mock NProgress for router loading indicator

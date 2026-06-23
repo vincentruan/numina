@@ -209,13 +209,15 @@ export function useTenantAiResources(): {
   }
 }
 
+export type InputMode = 'flash' | 'thinking' | 'pro' | 'ultra'
+
 /**
  * 执行模式配置
  *
  * DeerFlow 参考: frontend/src/components/workspace/input-box.tsx INPUT_MODE_CONFIGS
  */
 export interface InputModeConfig {
-  mode: 'flash' | 'thinking' | 'pro' | 'ultra'
+  mode: InputMode
   thinking_enabled: boolean
   is_plan_mode: boolean
   subagent_enabled: boolean

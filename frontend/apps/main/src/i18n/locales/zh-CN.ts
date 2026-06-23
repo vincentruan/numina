@@ -4,6 +4,7 @@ export default {
     cancel: '取消',
     save: '保存',
     delete: '删除',
+    remove: '移除',
     edit: '编辑',
     add: '添加',
     search: '搜索',
@@ -2061,16 +2062,8 @@ export default {
     promptReset: '已恢复默认提示词',
 
     capability: {
-      chat: {
-        name: '💬 智能问答',
-        description: '回答关于净资产、资产配置、负债、趋势等问题',
-      },
-      time_machine: {
-        name: '⏰ 资产时光机',
-        description: '模拟 What-if 消费场景和财务推演',
-      },
       alerts: {
-        name: '🔔 资产老化预警',
+        name: '资产老化预警',
         description: '扫描即将到期或老化的资产，给出处置建议',
       },
       allocation: {
@@ -2115,7 +2108,7 @@ export default {
       skillExamplesPlaceholder: '触发此技能的示例问题',
       skillPrompt: '提示词内容',
       skillPromptPlaceholder: 'Markdown 格式的技能提示词',
-      createBtn: '+ 新增技能',
+      createBtn: '新增技能',
       updateBtn: '保存修改',
       deleteBtn: '删除',
       deleteConfirm: '确定要删除技能「{name}」吗？此操作不可撤销。',

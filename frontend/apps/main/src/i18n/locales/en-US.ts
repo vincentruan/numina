@@ -1663,36 +1663,28 @@ export default {
     promptReset: '✅ Prompt reset to default',
 
     capability: {
-      chat: {
-        name: '💬 AI Chat',
-        description: 'Answer questions about net worth, allocation, liabilities, trends',
-      },
-      time_machine: {
-        name: '⏰ Financial Simulator',
-        description: 'What-if scenarios and financial projections',
-      },
       alerts: {
-        name: '🔔 Asset Aging Alerts',
+        name: 'Asset Aging Alerts',
         description: 'Scan assets nearing expiry or high maintenance',
       },
       allocation: {
-        name: '⚖️ Allocation Analysis',
+        name: 'Allocation Analysis',
         description: 'Evaluate drift from target allocation',
       },
       report: {
-        name: '📊 Financial Health Report',
+        name: 'Financial Health Report',
         description: 'Comprehensive structured analysis',
       },
       disposal: {
-        name: '🗑️ Idle Asset Disposal',
+        name: 'Idle Asset Disposal',
         description: 'Identify inefficient assets with disposal suggestions',
       },
       liability: {
-        name: '💳 Liability Analysis',
+        name: 'Liability Analysis',
         description: 'Analyze debt structure and pressure',
       },
       spending_leak: {
-        name: '🔍 Spending Leak Detection',
+        name: 'Spending Leak Detection',
         description: 'Identify wasteful spending patterns',
       },
     },
@@ -1716,7 +1708,7 @@ export default {
       skillExamplesPlaceholder: 'Example triggers for this skill',
       skillPrompt: 'Prompt Content',
       skillPromptPlaceholder: 'Markdown skill prompt',
-      createBtn: '+ New Skill',
+      createBtn: 'New Skill',
       updateBtn: 'Save Changes',
       deleteBtn: 'Delete',
       deleteConfirm: '⚠️ Delete skill "{name}"? This cannot be undone.',

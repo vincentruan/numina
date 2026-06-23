@@ -18,14 +18,14 @@ describe('redactSensitiveFields', () => {
 
   it('redacts api_key field', () => {
     const args = { api_key: 'sk-secret123', query: 'SELECT *' }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     expect(result.api_key).toBe(REDACTED_MARKER)
     expect(result.query).toBe('SELECT *')
   })
 
   it('redacts password field', () => {
     const args = { password: 'my-password', username: 'admin' }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     expect(result.password).toBe(REDACTED_MARKER)
     expect(result.username).toBe('admin')
   })
@@ -38,7 +38,7 @@ describe('redactSensitiveFields', () => {
       },
       action: 'fetch',
     }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     expect(result.config.secret).toBe(REDACTED_MARKER)
     expect(result.config.endpoint).toBe('https://api.example.com')
     expect(result.action).toBe('fetch')
@@ -51,7 +51,7 @@ describe('redactSensitiveFields', () => {
         expires_in: 3600,
       },
     }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     expect(result.auth.token).toBe(REDACTED_MARKER)
     expect(result.auth.expires_in).toBe(3600)
   })
@@ -79,7 +79,7 @@ describe('redactSensitiveFields', () => {
   it('truncates deep nesting at MAX_DEPTH', () => {
     // depth=0: root, depth=1: l1, ... depth=5: l5, depth=6: l6 (truncated)
     const args = { l1: { l2: { l3: { l4: { l5: { l6: { secret: 'deep' } } } } } } }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     // l5 contains l6, which gets truncated at depth=6
     expect(result.l1.l2.l3.l4.l5.l6).toEqual({ _truncated: '...' })
   })
@@ -98,7 +98,7 @@ describe('redactSensitiveFields', () => {
       secret: 'sec1',
       data: 'public',
     }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     expect(result.api_key).toBe(REDACTED_MARKER)
     expect(result.password).toBe(REDACTED_MARKER)
     expect(result.token).toBe(REDACTED_MARKER)
@@ -113,7 +113,7 @@ describe('redactSensitiveArray', () => {
       { api_key: 'key1', name: 'tool1' },
       { password: 'pass2', name: 'tool2' },
     ]
-    const result = redactSensitiveArray(arr)
+    const result = redactSensitiveArray(arr) as any
     expect(result[0].api_key).toBe(REDACTED_MARKER)
     expect(result[0].name).toBe('tool1')
     expect(result[1].password).toBe(REDACTED_MARKER)
@@ -140,7 +140,7 @@ describe('redactDeep', () => {
 
   it('redacts array of objects', () => {
     const value = [{ api_key: 's1' }, { token: 't1' }]
-    const result = redactDeep(value) as unknown[]
+    const result = redactDeep(value) as any
     expect(result[0].api_key).toBe(REDACTED_MARKER)
     expect(result[1].token).toBe(REDACTED_MARKER)
   })
@@ -157,9 +157,9 @@ describe('redactDeep', () => {
       config: { credentials: { username: 'user', password: 'pass' } },
       items: [{ api_key: 'k1' }],
     }
-    const result = redactDeep(value) as Record<string, unknown>
+    const result = redactDeep(value) as any
     expect(result.config.credentials).toBe(REDACTED_MARKER)
-    expect((result.items as unknown[])[0].api_key).toBe(REDACTED_MARKER)
+    expect((result.items as any[])[0].api_key).toBe(REDACTED_MARKER)
   })
 })
 
@@ -196,7 +196,7 @@ describe('constants', () => {
     expect(SENSITIVE_KEY_WHITELIST.has('keyboard')).toBe(true)
     // Verify behavior
     const args = { key: 'secret', keyboard: 'device' }
-    const result = redactSensitiveFields(args)
+    const result = redactSensitiveFields(args) as any
     expect(result.key).toBe(REDACTED_MARKER)
     expect(result.keyboard).toBe('device')
   })

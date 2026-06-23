@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
-import AIChatPage from '../../src/pages/ai/chat/index.vue'
+import AIChatPage from '@/pages/AIChatPage.vue'
 
 vi.mock('@/composables/ai-chat/useThreadChat', () => ({
   useThreadChat: () => ({
@@ -58,7 +58,7 @@ vi.mock('vant', () => ({
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal()
   return {
-    ...actual,
+    ...(actual as any),
     useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh-CN' } }),
   }
 })

@@ -328,6 +328,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       clearTimeout(streamTimeoutId)
       streamTimeoutId = null
     }
+    // Fire-and-forget server-side cancel so the agent run is cleaned up
+    if (currentThreadId) {
+      const client = getClient()
+      client.runs.cancel(currentThreadId, 'agent').catch(() => {})
+    }
     isLoading.value = false
   }
 

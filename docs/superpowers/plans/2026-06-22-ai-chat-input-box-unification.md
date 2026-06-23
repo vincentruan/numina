@@ -1,3 +1,57 @@
+# AI Chat Input Box Unification Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Merge `AIChatInput.vue` (hub page) into `InputBox.vue` (chat page), producing a single unified DeerFlow-aligned input component.
+
+**Architecture:** Replace `components/ai-chat/InputBox.vue` with a merged component using `AIChatInput.vue`'s custom CSS variable styling as base. The new component absorbs AIChatInput's features (expand button, attachments, plus panel, web search toggle) while keeping InputBox's DeerFlow features (4-mode selector, welcome mode, tenant resources, model selector popup). The slash palette is removed. Agent picker is owned by the parent component — InputBox emits `selectAgent` and parents (AIHubPage, AIChatBox) handle the action sheet.
+
+**Tech Stack:** Vue 3 `<script setup lang="ts">`, TypeScript strict, Vant 4, Pinia, Vue Router
+
+## Global Constraints
+
+- `<script setup lang="ts">` only — no Options API, no `defineComponent`
+- All user-facing strings must be defined in `src/i18n/locales/zh-CN.ts` and referenced via `t('key')`
+- TypeScript strict mode — no `any`, no `@ts-ignore`, no `@ts-expect-error`
+- Touch targets: min 44×44px for all interactive elements
+- CSS variables + scoped styles — no inline `style="color:..."`
+- No slash palette — removed entirely
+- `AIChatInput.vue` becomes dead code after unification (not deleted, marked as deprecated)
+
+---
+### File Structure
+
+| File | Action | Description |
+|------|--------|-------------|
+| `components/ai-chat/InputBox.vue` | **Replace** | Merged component with AIChatInput styling + all features |
+| `components/common/AIChatInput.vue` | Deprecate | Add deprecation comment at top, keep as dead code |
+| `components/ai/AIChatBox.vue` | No change needed | Already compatible with new InputBox interface |
+| `components/ai/WelcomePage.vue` | No change needed | Does not use InputBox or AIChatInput directly |
+| `pages/AIHubPage.vue` | Modify | Switch from AIChatInput to InputBox, update event handling |
+| `pages/AIChatPage.vue` | No change | Already uses InputBox via AIChatBox |
+
+### Task Dependencies
+
+```
+Task 1 (Script) ──→ Task 2 (Template) ──→ Task 3 (Styles) ──→ Task 4 (Consumers) ──→ Task 5 (Deprecate)
+```
+
+---
+
+### Task 1: Define Props, Events, and Composable Logic
+
+**Files:**
+- Replace: `frontend/apps/main/src/components/ai-chat/InputBox.vue` (script section, lines 1-215)
+
+**Interfaces:**
+- Consumes: `InputMode`, `SubmitPayload`, `InputContext` from `@/types/ai-chat/input-mode`; `useTenantAiResources` composable; `getWebSearchStatus` from `@/api/webSearch`
+- Produces: The merged component's `defineProps` / `defineEmits` signatures
+
+- [ ] **Step 1: Replace the `<script setup lang="ts">` block**
+
+Write the full merged script section to `InputBox.vue` (replacing everything from line 1 to `</script>`):
+
+```vue
 <script setup lang="ts">
 /**
  * Unified AI Chat InputBox — merged from AIChatInput.vue (hub) + InputBox.vue (chat)
@@ -21,8 +75,6 @@ import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
 import ModelSelectorPopup from './ModelSelectorPopup.vue'
 import WelcomeExamples from './WelcomeExamples.vue'
-import IIcon from '@/components/IIcon.vue'
-import { getAgentIcon, isEmoji } from '@/utils/agent'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
 import { getWebSearchStatus } from '@/api/webSearch'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
@@ -32,7 +84,6 @@ interface AgentOption {
   display_name: string
   agent_name?: string
   icon?: string
-  color?: string | null
 }
 
 interface Attachment {
@@ -310,7 +361,32 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocClick)
 })
 </script>
+```
 
+- [ ] **Step 2: Run typecheck**
+
+Run: `cd frontend/apps/main && pnpm typecheck`
+Expected: No type errors. If errors occur, fix the type issues.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/apps/main/src/components/ai-chat/InputBox.vue
+git commit -m "feat(InputBox): merge script section with AIChatInput composable logic"
+```
+
+---
+
+### Task 2: Template — Layout Structure
+
+**Files:**
+- Replace: `components/ai-chat/InputBox.vue` (template section)
+
+- [ ] **Step 1: Replace the `<template>` block**
+
+Write the merged template. Layout from bottom-left to bottom-right: Agent button → Model selector → Mode selector (4-mode) → Web search toggle → Plus button → Send/Stop. Expand button at top-right of textarea. Attachment preview row above textarea. Welcome hero + examples in welcome mode.
+
+```vue
 <template>
   <div
     class="input-box"
@@ -357,7 +433,7 @@ onBeforeUnmount(() => {
             </svg>
           </span>
           <span class="attachment-name">{{ att.name }}</span>
-          <button class="attachment-remove" :aria-label="t('common.delete')" @click="removeAttachment(idx)">
+          <button class="attachment-remove" :aria-label="t('common.remove')" @click="removeAttachment(idx)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
@@ -427,10 +503,7 @@ onBeforeUnmount(() => {
           :title="t('aiHub.selectAgent')"
           @click="emit('selectAgent')"
         >
-          <span v-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
-            {{ getAgentIcon(displayAgentIcon) }}
-          </span>
-          <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="16" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+          <span v-if="displayAgentIcon" class="agent-emoji" aria-hidden="true">{{ displayAgentIcon }}</span>
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3" y="3" width="18" height="18" rx="4"/>
             <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
@@ -444,8 +517,7 @@ onBeforeUnmount(() => {
           class="agent-static-icon"
           :title="displayAgentLabel"
         >
-          <span v-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
-          <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+          {{ displayAgentIcon }}
         </span>
 
         <!-- [2] Model selector button -->
@@ -537,7 +609,32 @@ onBeforeUnmount(() => {
     />
   </div>
 </template>
+```
 
+- [ ] **Step 2: Run typecheck**
+
+Run: `cd frontend/apps/main && pnpm typecheck`
+Expected: No type errors.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add frontend/apps/main/src/components/ai-chat/InputBox.vue
+git commit -m "feat(InputBox): add merged template with AIChatInput layout"
+```
+
+---
+
+### Task 3: Styles — AIChatInput CSS Variable Theme + DeerFlow Chat Layout
+
+**Files:**
+- Replace: `components/ai-chat/InputBox.vue` (style section)
+
+- [ ] **Step 1: Replace the `<style scoped>` block**
+
+Write the merged styles. Uses AIChatInput's custom CSS variable approach as the base (dark default + light mode overrides via `:global(.theme-light)`), then adds InputBox's welcome/chat mode layout and responsive breakpoints.
+
+```vue
 <style scoped>
 /* ── CSS variables (AIChatInput base, dark default) ── */
 .input-box {
@@ -1061,3 +1158,185 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+```
+
+- [ ] **Step 2: Run typecheck**
+
+Run: `cd frontend/apps/main && pnpm typecheck`
+Expected: No type errors.
+
+- [ ] **Step 3: Verify the full component renders correctly**
+
+Run: `cd frontend/apps/main && pnpm test:run` (if tests exist for this component)
+Run: `cd frontend/apps/main && pnpm typecheck`
+Expected: All tests pass, no type errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add frontend/apps/main/src/components/ai-chat/InputBox.vue
+git commit -m "feat(InputBox): merge AIChatInput styling with CSS variable theme"
+```
+
+---
+
+### Task 4: Update Consumer — AIHubPage
+
+**Files:**
+- Modify: `pages/AIHubPage.vue` — switch from `AIChatInput` to `InputBox`, remap events
+
+**Interfaces:**
+- Consumes: The merged `InputBox` component from Task 1-3
+- Produces: Working AI hub page with the new unified input
+
+- [ ] **Step 1: Replace AIChatInput import with InputBox in AIHubPage.vue**
+
+Current AIHubPage imports `AIChatInput` from `@/components/common/AIChatInput.vue`. Replace it with `InputBox` from `@/components/ai-chat/InputBox.vue`.
+
+Find the import line (likely `import AIChatInput from '@/components/common/AIChatInput.vue'`):
+```typescript
+// Remove:
+// import AIChatInput from '@/components/common/AIChatInput.vue'
+
+// Add:
+import InputBox from '@/components/ai-chat/InputBox.vue'
+```
+
+- [ ] **Step 2: Remap template usage in AIHubPage.vue**
+
+Replace the `<AIChatInput ... />` usage with `<InputBox ... />`. The key changes:
+
+Old AIChatInput props:
+- `v-model="message"` → `v-model="message"` (still works as `modelValue`)
+- `:loading="loading"` → `:status="loading ? 'submitted' : 'ready'"` (InputBox uses status enum)
+- `:web-search.sync="webSearch"` → `v-model:webSearch="webSearch"` (v-model syntax)
+- `:mode="mode"` → `:initialMode="mode"` (different naming)
+- `:agents="agents"` → same
+- `:selected-agent-id="selectedAgentId"` → `:agentId="selectedAgentId"` (rename)
+- `@submit="handleSubmit"` → `@submit="handleSubmit"` (same)
+- `@abort="handleAbort"` → `@stop="handleAbort"` (rename event)
+- `@action="handleAction"` → same
+- `@selectAgent="showAgentPicker = true"` → same (InputBox emits same event)
+- `@remove-attachment="handleRemoveAttachment"` → `@removeAttachment="handleRemoveAttachment"`
+
+New InputBox props to add:
+- `:is-welcome-mode="true"` (AIHubPage is always welcome mode)
+- `:status="computedStatus"` (map from loading state)
+- `:agent-icon="selectedAgent?.icon"` (pass icon for display)
+- `:agent-label="selectedAgent?.display_name"`
+
+The exact template replacement depends on the current AIHubPage template. The changes are:
+1. Component tag name: `AIChatInput` → `InputBox`
+2. `:loading` → `:status` (wrap in a computed or inline ternary)
+3. `:web-search.sync` → `v-model:webSearch`
+4. `:mode` → `:initialMode`
+5. `:selected-agent-id` → `:agentId`
+6. `@abort` → `@stop`
+7. Add `:is-welcome-mode="true"`
+8. Add `:agent-icon` and `:agent-label` if available in the page's state
+
+- [ ] **Step 3: Run typecheck**
+
+Run: `cd frontend/apps/main && pnpm typecheck`
+Expected: No type errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add frontend/apps/main/src/pages/AIHubPage.vue
+git commit -m "feat(AIHubPage): switch from AIChatInput to unified InputBox"
+```
+
+---
+
+### Task 5: Deprecate AIChatInput.vue
+
+**Files:**
+- Modify: `components/common/AIChatInput.vue` — add deprecation notice
+
+- [ ] **Step 1: Add deprecation comment at top of AIChatInput.vue**
+
+Add as the first line of the file:
+
+```vue
+<!--
+  @deprecated Use InputBox from @/components/ai-chat/InputBox.vue instead.
+  This component is kept as dead code for reference only.
+  Do not use in new code.
+-->
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add frontend/apps/main/src/components/common/AIChatInput.vue
+git commit -m "chore: deprecate AIChatInput in favor of unified InputBox"
+```
+
+---
+
+### Task 6: Verification
+
+- [ ] **Step 1: Run frontend typecheck**
+
+```bash
+cd frontend/apps/main
+pnpm typecheck
+```
+
+Expected: No type errors. If errors occur, fix them.
+
+- [ ] **Step 2: Run frontend tests**
+
+```bash
+cd frontend/apps/main
+pnpm test:run
+```
+
+Expected: All tests pass (pre-existing failures acceptable, but no new failures).
+
+- [ ] **Step 3: Verify the full component chain**
+
+Check that the component chain works end-to-end:
+1. AIHubPage imports InputBox → renders in welcome mode → agent picker works
+2. AIHubPage submits → navigates to `/ai/chat` → AIChatPage opens
+3. AIChatPage uses AIChatBox → AIChatBox uses InputBox → chat mode works
+4. InputBox in chat mode shows static agent icon, not clickable
+5. Mode selector shows 4 modes (Flash/Thinking/Pro/Ultra)
+6. Web search toggle calls getWebSearchStatus()
+7. Plus panel shows camera/file/image options
+8. Expand button toggles full-screen textarea
+9. Send button changes to Stop when streaming
+
+- [ ] **Step 4: Final commit**
+
+```bash
+git add -A
+git commit -m "feat: unify AI chat input boxes (InputBox + AIChatInput)"
+```
+
+---
+
+## Self-Review Checklist
+
+**1. Spec coverage:**
+- ✅ Requirement 1 (unified component): Task 1-3 create the merged InputBox
+- ✅ Requirement 2 (agent picker in welcome, static icon in chat): Task 2 template shows agent button only in welcome mode, static icon in chat mode
+- ✅ Requirement 3 (DeerFlow 4-mode: Flash/Thinking/Pro/Ultra): Task 1 reuses `ModeSelector.vue` and `INPUT_MODE_CONFIGS`
+- ✅ Requirement 4 (web search toggle): Task 1 includes `toggleWebSearch()` with provider pre-check
+- ✅ Requirement 5 (MCP/skills in family config): Out of scope — handled by backend and `useTenantAiResources`
+- ✅ AIChatInput styling as base: Task 3 uses AIChatInput CSS variable approach
+- ✅ No slash palette: Removed entirely (not in template or script)
+- ✅ Tenant isolation: `useTenantAiResources` composable retained from InputBox
+- ✅ AIChatInput becomes dead code: Task 5 adds deprecation notice
+
+**2. Placeholder scan:** No "TBD", "TODO", or "implement later" patterns. Every step contains complete code.
+
+**3. Type consistency:** Props/events are consistent across all tasks:
+- `status: 'ready' | 'streaming' | 'submitted' | 'error' | 'reconnecting'` — consistent
+- `isWelcomeMode?: boolean` — consistent
+- `submit` emit with `SubmitPayload` — consistent
+- `stop` emit — consistent (mapped from old `abort`)
+- `selectAgent` emit — consistent
+- `action` with `'file' | 'image' | 'camera'` — consistent
+- No function name drift across tasks
