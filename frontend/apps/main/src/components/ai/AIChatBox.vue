@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, computed } from 'vue'
+import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
 import { showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
@@ -12,6 +12,7 @@ import WelcomePage from '@/components/ai/WelcomePage.vue'
 import MessageList from '@/components/ai/MessageList.vue'
 import InputBox from '@/components/ai-chat/InputBox.vue'
 import SuggestionChips from '@/components/ai/SuggestionChips.vue'
+import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
@@ -98,12 +99,28 @@ watch(
   }
 )
 
+// Persistent error bar message (shown after retries exhausted, cleared on new message)
+const errorBarMessage = ref<string | null>(null)
+
 // Handle errors from chat
 watch(
   () => chat.error.value,
   (err) => {
     if (err) {
       showFailToast(err)
+      errorBarMessage.value = t('aiChat.connectionBrokenRetry')
+    } else {
+      errorBarMessage.value = null
+    }
+  }
+)
+
+// Clear error bar when a new message is sent successfully
+watch(
+  () => chat.isLoading.value,
+  (loading, prevLoading) => {
+    if (prevLoading && !loading && !chat.error.value) {
+      errorBarMessage.value = null
     }
   }
 )
@@ -203,6 +220,13 @@ function handleNewChat() {
         v-if="!chat.isLoading.value && chat.suggestions.value.length > 0"
         :suggestions="chat.suggestions.value"
         @select="handleSuggestionClick"
+      />
+      <!-- Connection error bar (after SSE retry exhaustion) -->
+      <ErrorMessage
+        v-if="errorBarMessage"
+        :message="errorBarMessage"
+        :show-retry="true"
+        @retry="handleRetry"
       />
       <!-- InputBox only in chat mode (WelcomePage has its own in welcome mode) -->
       <InputBox
