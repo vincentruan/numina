@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getTokenUsage } from '@/api/ai-chat'
+import type { UsageMetadata } from '@/types/ai-chat/message-group'
 
 const props = defineProps<{
   threadId: string | null
   // When true, signals to the component to refresh the data (e.g. after a stream ends)
   refreshTrigger?: number
+  /** 'popover' for header usage, 'inline' for per-message display */
+  mode?: 'popover' | 'inline'
+  /** Per-message usage data from SSE values events (primary source for inline mode) */
+  usageMetadata?: UsageMetadata | null
+  /** Whether streaming is in progress (enables polling fallback) */
+  isStreaming?: boolean
 }>()
 
 const { t } = useI18n()
@@ -20,13 +27,28 @@ const usage = ref({
 const loading = ref(false)
 const showPopover = ref(false)
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+/** Effective usage: prefer per-message usageMetadata, fall back to polled thread totals */
+const effectiveUsage = computed(() => {
+  if (props.mode === 'inline' && props.usageMetadata) {
+    return {
+      prompt_tokens: props.usageMetadata.inputTokens,
+      completion_tokens: props.usageMetadata.outputTokens,
+      total_tokens: props.usageMetadata.inputTokens + props.usageMetadata.outputTokens,
+    }
+  }
+  return usage.value
+})
+
+const hasUsage = computed(() => effectiveUsage.value.total_tokens > 0)
 
 const fetchUsage = async () => {
   if (!props.threadId || props.threadId === 'new') {
     usage.value = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 }
     return
   }
-  
+
   try {
     loading.value = true
     usage.value = await getTokenUsage(props.threadId)
@@ -42,17 +64,42 @@ const debouncedFetch = () => {
   debounceTimer = setTimeout(fetchUsage, 500)
 }
 
+// Polling during streaming (fallback when per-message data not yet available)
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (props.mode !== 'inline') return
+    if (streaming && !props.usageMetadata) {
+      // Start polling
+      pollTimer = setInterval(fetchUsage, 1500)
+    } else {
+      // Stop polling
+      if (pollTimer !== null) {
+        clearInterval(pollTimer)
+        pollTimer = null
+      }
+    }
+  },
+)
+
 watch(() => props.threadId, debouncedFetch)
 watch(() => props.refreshTrigger, debouncedFetch)
 
 onMounted(debouncedFetch)
 onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer)
+  if (pollTimer !== null) clearInterval(pollTimer)
 })
+
+function formatTokenCount(n: number): string {
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
+  return n.toLocaleString()
+}
 </script>
 
 <template>
-  <van-popover v-model:show="showPopover" placement="bottom-end">
+  <!-- Popover mode (existing header behavior) -->
+  <van-popover v-if="mode !== 'inline'" v-model:show="showPopover" placement="bottom-end">
     <div class="token-usage-popover">
       <div class="token-usage-row">
         <span>{{ t('aiChat.promptTokens', 'Prompt:') }}</span>
@@ -68,8 +115,8 @@ onUnmounted(() => {
       </div>
     </div>
     <template #reference>
-      <button 
-        class="header-btn token-usage-btn" 
+      <button
+        class="header-btn token-usage-btn"
         :class="{ 'has-tokens': usage.total_tokens > 0 }"
         :title="t('aiChat.tokenUsage', 'Token Usage')"
         v-show="usage.total_tokens > 0"
@@ -84,6 +131,29 @@ onUnmounted(() => {
       </button>
     </template>
   </van-popover>
+
+  <!-- Inline mode (per-message display) -->
+  <span v-else-if="hasUsage" class="token-usage-inline">
+    <svg class="token-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+    </svg>
+    <span class="token-label">{{ t('aiChat.usageToken', 'Token') }}</span>
+    <span class="token-sep">·</span>
+    <span class="token-item">
+      <span class="token-item-label">{{ t('aiChat.tokensInput', '输入') }}</span>
+      <strong>{{ formatTokenCount(effectiveUsage.prompt_tokens) }}</strong>
+    </span>
+    <span class="token-sep">·</span>
+    <span class="token-item">
+      <span class="token-item-label">{{ t('aiChat.tokensOutput', '输出') }}</span>
+      <strong>{{ formatTokenCount(effectiveUsage.completion_tokens) }}</strong>
+    </span>
+    <span class="token-sep">·</span>
+    <span class="token-item token-item-total">
+      <span class="token-item-label">{{ t('aiChat.tokensTotal', '总计') }}</span>
+      <strong>{{ formatTokenCount(effectiveUsage.total_tokens) }}</strong>
+    </span>
+  </span>
 </template>
 
 <style scoped>
@@ -130,5 +200,50 @@ onUnmounted(() => {
   padding-top: 8px;
   border-top: 1px dashed var(--van-border-color);
   color: var(--van-text-color);
+}
+
+/* Inline mode */
+.token-usage-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-secondary, #999);
+  padding: 4px 0;
+  flex-wrap: wrap;
+}
+
+.token-icon {
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.token-label {
+  font-weight: 500;
+  color: var(--text-secondary, #999);
+}
+
+.token-sep {
+  opacity: 0.4;
+}
+
+.token-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.token-item-label {
+  color: var(--text-secondary, #999);
+}
+
+.token-item strong {
+  color: var(--text-primary, #fff);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-item-total strong {
+  color: var(--van-primary-color, #6366f1);
 }
 </style>

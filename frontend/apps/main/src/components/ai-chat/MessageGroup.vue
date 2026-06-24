@@ -21,6 +21,7 @@ import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
 import PlanningStepsPanel from './PlanningStepsPanel.vue'
+import TokenUsage from './TokenUsage.vue'
 import SubtaskCard from './SubtaskCard.vue'
 import ArtifactFileList from './ArtifactFileList.vue'
 import type {
@@ -174,6 +175,14 @@ function renderMarkdown(content: string): string {
         @copy="emit('copy', assistantMessage.content)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
+      />
+      <!-- Per-message token usage (inline below AI message) -->
+      <TokenUsage
+        v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
+        mode="inline"
+        :thread-id="threadId || null"
+        :usage-metadata="assistantMessage.usageMetadata"
+        :is-streaming="isLoading && isLastAssistant"
       />
     </template>
 

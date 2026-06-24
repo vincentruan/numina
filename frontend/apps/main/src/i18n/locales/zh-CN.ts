@@ -327,6 +327,9 @@ export default {
     subagentTasks: '正在执行 {count} 个子任务',
     usageToken: 'Token',
     tokenUsage: 'Token 用量',
+    tokensInput: '输入',
+    tokensOutput: '输出',
+    tokensTotal: '总计',
     // Welcome page keys
     welcomeTitle: 'Numina AI',
     welcomeSubtitle: '家庭资产管理助手',
