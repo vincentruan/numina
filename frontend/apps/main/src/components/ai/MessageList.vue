@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { nextTick, ref, toRef, watch } from 'vue'
+import { computed, nextTick, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
-import type { ChatMessage } from '@/types/ai-chat/message-group'
+import type { ChatMessage, PlanningStep } from '@/types/ai-chat/message-group'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 
 const props = defineProps<{
   messages: ChatMessage[]
   isStreaming: boolean
   threadId?: string
+  planningSteps?: PlanningStep[]
 }>()
 
 const emit = defineEmits<{
@@ -24,6 +25,15 @@ const scrollRef = ref<HTMLElement | null>(null)
 
 // Group messages for display (dedupe + group into DeerFlow 6-type structure)
 const messageGroups = useMessageGroups(toRef(props, 'messages'))
+
+/** Index of the last assistant-type group (for planningSteps display) */
+const lastAssistantGroupIndex = computed(() => {
+  const groups = messageGroups.value
+  for (let i = groups.length - 1; i >= 0; i--) {
+    if (groups[i].type === 'assistant') return i
+  }
+  return -1
+})
 
 // Auto-scroll to bottom on new messages
 watch(
@@ -48,6 +58,8 @@ watch(
         :key="group.id ?? index"
         :group="group"
         :thread-id="threadId"
+        :planning-steps="index === lastAssistantGroupIndex ? planningSteps : undefined"
+        :is-last-assistant="index === lastAssistantGroupIndex"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
       />

@@ -20,6 +20,7 @@ import DOMPurify from 'dompurify'
 import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
+import PlanningStepsPanel from './PlanningStepsPanel.vue'
 import SubtaskCard from './SubtaskCard.vue'
 import ArtifactFileList from './ArtifactFileList.vue'
 import type {
@@ -28,6 +29,7 @@ import type {
   AssistantClarificationGroup,
   AssistantPresentFilesGroup,
   AssistantSubagentGroup,
+  PlanningStep,
 } from '@/types/ai-chat/message-group'
 import {
   extractContentFromMessage,
@@ -41,6 +43,8 @@ const props = defineProps<{
   group: MessageGroup
   isLoading?: boolean
   threadId?: string
+  planningSteps?: PlanningStep[]
+  isLastAssistant?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -147,24 +151,31 @@ function renderMarkdown(content: string): string {
     />
 
     <!-- Assistant: AssistantMessage -->
-    <AssistantMessage
-      v-else-if="assistantMessage"
-      :id="assistantMessage.id"
-      :content="assistantMessage.content"
-      :phase="assistantMessage.phase || 'done'"
-      :process-steps="assistantProcessSteps"
-      :plan-steps="assistantPlanSteps"
-      :plan-source="assistantPlanSource"
-      :process-elapsed-ms="assistantElapsedMs"
-      :reasoning-start-time="assistantReasoningStartTime"
-      :display-time="assistantMessage.displayTime"
-      :suggestions="assistantMessage.suggestions"
-      :feedback="assistantMessage.feedback"
-      @retry="emit('retry')"
-      @copy="emit('copy', assistantMessage.content)"
-      @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
-      @suggestion-click="emit('suggestionClick', $event)"
-    />
+    <template v-else-if="assistantMessage">
+      <!-- Real-time planning steps from SSE custom events (only for last assistant group) -->
+      <PlanningStepsPanel
+        v-if="isLastAssistant && planningSteps && planningSteps.length > 0"
+        :steps="planningSteps"
+        :is-streaming="isLoading"
+      />
+      <AssistantMessage
+        :id="assistantMessage.id"
+        :content="assistantMessage.content"
+        :phase="assistantMessage.phase || 'done'"
+        :process-steps="assistantProcessSteps"
+        :plan-steps="assistantPlanSteps"
+        :plan-source="assistantPlanSource"
+        :process-elapsed-ms="assistantElapsedMs"
+        :reasoning-start-time="assistantReasoningStartTime"
+        :display-time="assistantMessage.displayTime"
+        :suggestions="assistantMessage.suggestions"
+        :feedback="assistantMessage.feedback"
+        @retry="emit('retry')"
+        @copy="emit('copy', assistantMessage.content)"
+        @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
+        @suggestion-click="emit('suggestionClick', $event)"
+      />
+    </template>
 
     <!-- Processing: ChainOfThought -->
     <ChainOfThought
