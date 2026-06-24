@@ -1,8 +1,9 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
-import type { ChatMessage, ToolCallSummary } from '@/types/ai-chat/message-group'
+import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
+import { getToolIcon, getToolDisplayNameKey } from '@/utils/ai-chat/tool-icon-map'
 
 export type { ChatMessage }
 
@@ -42,6 +43,11 @@ interface SerializedMessage {
   tool_calls?: Array<{ id?: string; name: string; args: string | object }>
   tool_call_id?: string
   additional_kwargs?: Record<string, unknown>
+  usage_metadata?: {
+    input_tokens?: number
+    output_tokens?: number
+    total_tokens?: number
+  }
 }
 
 /** DeerFlow values event data shape. */
@@ -85,7 +91,7 @@ function serializedToChatMessage(m: SerializedMessage): ChatMessage {
     : 'ai' as const
   const role = type === 'human' ? 'user' as const : 'assistant' as const
 
-  return {
+  const msg: ChatMessage = {
     id: m.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     type,
     role,
@@ -97,6 +103,16 @@ function serializedToChatMessage(m: SerializedMessage): ChatMessage {
     tool_calls: m.tool_calls ? toToolCallSummaries(m.tool_calls) : undefined,
     additional_kwargs: m.additional_kwargs,
   }
+
+  // Extract per-message usage_metadata from values events
+  if (m.usage_metadata && (m.usage_metadata.input_tokens != null || m.usage_metadata.output_tokens != null)) {
+    msg.usageMetadata = {
+      inputTokens: m.usage_metadata.input_tokens ?? 0,
+      outputTokens: m.usage_metadata.output_tokens ?? 0,
+    }
+  }
+
+  return msg
 }
 
 export interface UseThreadChatOptions {
@@ -110,12 +126,20 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const tokenUsage = ref<TokenUsage | null>(null)
+  const planningSteps = ref<PlanningStep[]>([])
+  const suggestions = ref<string[]>([])
+  const runId = ref<string | null>(null)
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
   let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
   let createdThreadInThisCall = false
 
   const STREAM_TIMEOUT_MS = 120_000
+  const SSE_RETRY_DELAYS = [1000, 2000, 4000] as const
+  const SSE_MAX_RETRIES = SSE_RETRY_DELAYS.length
+
+  /** Expose isStreaming as alias for isLoading */
+  const isStreaming = computed(() => isLoading.value)
 
   function addOptimisticUserMessage(text: string): ChatMessage {
     const msg: ChatMessage = {
@@ -213,6 +237,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   /**
    * Merge messages from a DeerFlow values event.
    * Values events contain full state snapshots — we deduplicate by id.
+   * Also backfills usage_metadata on existing AI messages.
    */
   function mergeValuesMessages(raw: SerializedMessage[]): void {
     if (!raw || raw.length === 0) return
@@ -222,20 +247,52 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (newOnes.length > 0) {
       messages.value = [...messages.value, ...newOnes]
     }
+
+    // Backfill usage_metadata on existing AI messages
+    for (const m of mapped) {
+      if (m.usageMetadata && m.type === 'ai') {
+        const idx = messages.value.findIndex(msg => msg.id === m.id)
+        if (idx >= 0 && !messages.value[idx].usageMetadata) {
+          messages.value = [
+            ...messages.value.slice(0, idx),
+            { ...messages.value[idx], usageMetadata: m.usageMetadata },
+            ...messages.value.slice(idx + 1),
+          ]
+        }
+      }
+    }
+  }
+
+  /** Create a PlanningStep from a custom tool_call event. */
+  function createPlanningStep(customData: {
+    tool_call_id?: string
+    tool_name?: string
+    args?: Record<string, unknown>
+  }): PlanningStep {
+    const toolName = customData.tool_name || 'unknown'
+    return {
+      id: customData.tool_call_id || `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      toolName,
+      displayName: toolName,
+      icon: getToolIcon(toolName),
+      args: customData.args || {},
+      status: 'running',
+      timestamp: Date.now(),
+    }
   }
 
   async function sendMessage(text: string, _mode?: string, threadId?: string): Promise<void> {
     if (isLoading.value) return
     isLoading.value = true
     error.value = null
+    planningSteps.value = []
+    suggestions.value = []
+    runId.value = null
     abortController = new AbortController()
-    streamTimeoutId = setTimeout(() => {
-      abortController?.abort()
-    }, STREAM_TIMEOUT_MS)
 
     const userMsg = addOptimisticUserMessage(text)
-    let pendingSuggestions: string[] | undefined
 
+    // Resolve thread before streaming
     try {
       if (!threadId && !currentThreadId) {
         const thread = await createThread()
@@ -247,75 +304,126 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       } else {
         createdThreadInThisCall = false
       }
+    } catch (err) {
+      const e = err as Error
+      userMsg.sendStatus = 'failed'
+      error.value = e.message || t('aiChat.sendFailed')
+      isLoading.value = false
+      return
+    }
 
-      const client = getClient()
-      const stream = client.runs.stream(currentThreadId as string, 'agent', {
-        input: { messages: [{ role: 'user', content: text }] },
-        signal: abortController.signal,
-      })
+    // Stream with retry
+    let retryCount = 0
+    let streamSucceeded = false
 
-      userMsg.sendStatus = 'sent'
+    while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
+      if (retryCount > 0) {
+        const delay = SSE_RETRY_DELAYS[retryCount - 1]
+        await new Promise(resolve => setTimeout(resolve, delay))
+        if (abortController?.signal.aborted) break
+      }
 
-      for await (const chunk of stream as AsyncIterable<StreamChunk>) {
-        if (chunk.event === 'messages-tuple' && chunk.data) {
-          mergeMessagesTuple(chunk.data as MessagesTupleData)
-        } else if (chunk.event === 'values' && chunk.data) {
-          const data = chunk.data as ValuesData
-          if (data.messages) {
-            mergeValuesMessages(data.messages)
-          }
-        } else if (chunk.event === 'custom' && chunk.data) {
-          const customData = chunk.data as { type?: string; suggestions?: string[] }
-          if (customData.type === 'suggestions' && customData.suggestions) {
-            pendingSuggestions = customData.suggestions
-          }
-        } else if (chunk.event === 'end') {
-          if (chunk.data) {
-            const endData = chunk.data as { usage?: TokenUsage }
-            if (endData.usage) {
-              tokenUsage.value = endData.usage
+      streamTimeoutId = setTimeout(() => {
+        abortController?.abort()
+      }, STREAM_TIMEOUT_MS)
+
+      try {
+        const client = getClient()
+        const stream = client.runs.stream(currentThreadId as string, 'agent', {
+          input: { messages: [{ role: 'user', content: text }] },
+          signal: abortController.signal,
+          streamMode: ['messages-tuple', 'values', 'custom', 'events'],
+        })
+
+        userMsg.sendStatus = 'sent'
+
+        for await (const chunk of stream as AsyncIterable<StreamChunk>) {
+          if (chunk.event === 'metadata' && chunk.data) {
+            const metaData = chunk.data as { run_id?: string }
+            if (metaData.run_id) {
+              runId.value = metaData.run_id
             }
+          } else if (chunk.event === 'messages-tuple' && chunk.data) {
+            mergeMessagesTuple(chunk.data as MessagesTupleData)
+          } else if (chunk.event === 'values' && chunk.data) {
+            const data = chunk.data as ValuesData
+            if (data.messages) {
+              mergeValuesMessages(data.messages)
+            }
+          } else if (chunk.event === 'custom' && chunk.data) {
+            const customData = chunk.data as {
+              type?: string
+              tool_call_id?: string
+              tool_name?: string
+              args?: Record<string, unknown>
+              suggestions?: string[]
+            }
+            if (customData.type === 'tool_call') {
+              const step = createPlanningStep(customData)
+              planningSteps.value = [...planningSteps.value, step]
+            } else if (customData.type === 'suggestions' && customData.suggestions) {
+              suggestions.value = customData.suggestions
+            }
+          } else if (chunk.event === 'end') {
+            if (chunk.data) {
+              const endData = chunk.data as { usage?: TokenUsage }
+              if (endData.usage) {
+                tokenUsage.value = endData.usage
+              }
+            }
+            // Mark last AI message as done (attach suggestions if available)
+            const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+            if (lastIdx >= 0) {
+              const last = messages.value[lastIdx]
+              const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
+              messages.value = [
+                ...messages.value.slice(0, lastIdx),
+                { ...last, phase: 'done', suggestions: currentSuggestions ?? last.suggestions },
+                ...messages.value.slice(lastIdx + 1),
+              ]
+            }
+            // Mark all planning steps as done
+            planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+            // Notify caller that stream ended (for title refresh)
+            if (currentThreadId) {
+              options.onStreamEnd?.(currentThreadId)
+            }
+          } else if (chunk.event === 'error' && chunk.data) {
+            const errData = chunk.data as { error?: string }
+            error.value = errData.error || t('aiChat.sendFailed')
           }
-          // Mark last AI message as done (attach suggestions if available)
-          const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
-          if (lastIdx >= 0) {
-            const last = messages.value[lastIdx]
-            messages.value = [
-              ...messages.value.slice(0, lastIdx),
-              { ...last, phase: 'done', suggestions: pendingSuggestions ?? last.suggestions },
-              ...messages.value.slice(lastIdx + 1),
-            ]
-          }
-          // Notify caller that stream ended (for title refresh)
-          if (currentThreadId) {
-            options.onStreamEnd?.(currentThreadId)
-          }
-        } else if (chunk.event === 'error' && chunk.data) {
-          const errData = chunk.data as { error?: string }
-          error.value = errData.error || t('aiChat.sendFailed')
+        }
+
+        streamSucceeded = true
+      } catch (err) {
+        const e = err as Error & { name?: string }
+        if (e.name === 'AbortError') {
+          // User cancelled — don't retry
+          userMsg.sendStatus = 'failed'
+          break
+        }
+        retryCount++
+        if (retryCount > SSE_MAX_RETRIES) {
+          userMsg.sendStatus = 'failed'
+          error.value = e.message || t('aiChat.sendFailed')
+        }
+        // Otherwise loop and retry
+      } finally {
+        if (streamTimeoutId !== null) {
+          clearTimeout(streamTimeoutId)
+          streamTimeoutId = null
         }
       }
-    } catch (err) {
-      const e = err as Error & { name?: string }
-      if (e.name === 'AbortError') {
-        userMsg.sendStatus = 'failed'
-      } else {
-        userMsg.sendStatus = 'failed'
-        error.value = e.message || t('aiChat.sendFailed')
-      }
-      // Clean up orphan thread created during this call
-      if (createdThreadInThisCall && currentThreadId) {
-        deleteThread(currentThreadId).catch(() => {})
-        currentThreadId = null
-      }
-    } finally {
-      createdThreadInThisCall = false
-      isLoading.value = false
-      abortController = null
-      if (streamTimeoutId !== null) {
-        clearTimeout(streamTimeoutId)
-        streamTimeoutId = null
-      }
+    }
+
+    createdThreadInThisCall = false
+    isLoading.value = false
+    abortController = null
+
+    // Clean up orphan thread created during this call (only on total failure)
+    if (!streamSucceeded && createdThreadInThisCall && currentThreadId) {
+      deleteThread(currentThreadId).catch(() => {})
+      currentThreadId = null
     }
   }
 
@@ -334,6 +442,10 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       client.runs.cancel(currentThreadId, 'agent').catch(() => {})
     }
     isLoading.value = false
+    // Mark in-progress planning steps as interrupted
+    planningSteps.value = planningSteps.value.map(s =>
+      s.status === 'running' ? { ...s, status: 'error' as const } : s,
+    )
   }
 
   async function loadHistory(threadId: string, retries = 1): Promise<void> {
@@ -342,6 +454,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
     isLoading.value = true
     error.value = null
+    planningSteps.value = []
+    suggestions.value = []
+    runId.value = null
     currentThreadId = threadId
 
     for (let attempt = 0; attempt <= retries; attempt++) {
@@ -375,7 +490,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   return {
-    messages, isLoading, error, tokenUsage,
+    messages, isLoading, isStreaming, error, tokenUsage,
+    planningSteps, suggestions, runId,
     sendMessage, cancelStream, loadHistory, retry,
   }
 }
