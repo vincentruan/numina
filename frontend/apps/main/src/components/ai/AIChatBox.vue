@@ -11,6 +11,7 @@ import ChatHeader from '@/components/ai/ChatHeader.vue'
 import WelcomePage from '@/components/ai/WelcomePage.vue'
 import MessageList from '@/components/ai/MessageList.vue'
 import InputBox from '@/components/ai-chat/InputBox.vue'
+import SuggestionChips from '@/components/ai/SuggestionChips.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
@@ -150,6 +151,7 @@ function handleContextChange(_context: InputContext) {
 
 async function handleSuggestionClick(text: string) {
   if (!store.activeThreadId) return
+  chat.suggestions.value = []
   await chat.sendMessage(text, undefined, store.activeThreadId)
 }
 
@@ -195,6 +197,12 @@ function handleNewChat() {
         @stop="handleStopStream"
         @suggestion-click="handleSuggestionClick"
         @artifact-tap="handleArtifactTap"
+      />
+      <!-- Suggestion chips above input (from SSE custom events) -->
+      <SuggestionChips
+        v-if="!chat.isLoading.value && chat.suggestions.value.length > 0"
+        :suggestions="chat.suggestions.value"
+        @select="handleSuggestionClick"
       />
       <!-- InputBox only in chat mode (WelcomePage has its own in welcome mode) -->
       <InputBox
