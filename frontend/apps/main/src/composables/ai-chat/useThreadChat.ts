@@ -2,8 +2,8 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
-import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
-import { getToolIcon, getToolDisplayNameKey } from '@/utils/ai-chat/tool-icon-map'
+import type { ChatMessage, ToolCallSummary, PlanningStep } from '@/types/ai-chat/message-group'
+import { getToolIcon } from '@/utils/ai-chat/tool-icon-map'
 
 export type { ChatMessage }
 
