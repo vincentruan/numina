@@ -3,71 +3,150 @@
  * Markdown 渲染组件
  *
  * 功能:
- * - marked 解析 + DOMPurify sanitize
- * - 节流渲染避免长内容卡顿
- * - Loading 状态骨架屏
+ * - markdown-it 解析 + DOMPurify sanitize
+ * - shiki 双主题代码高亮（github-dark / github-light）
+ * - 表格操作栏（复制为 markdown / 下载 CSV）
  */
-import { ref, watch, onMounted } from 'vue'
-import { marked } from 'marked'
+import { ref, watch, onMounted, onUnmounted, shallowRef } from 'vue'
+import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import TableActionBar from './TableActionBar.vue'
 
 const props = defineProps<{
   content: string
   isLoading?: boolean
 }>()
 
-// Configure marked
-marked.use({ breaks: true })
+// markdown-it 实例
+const md = new MarkdownIt({
+  html: false,
+  breaks: true,
+  linkify: true,
+})
+
+// shiki 高亮器（shallowRef 避免深层响应式开销）
+const highlighter = shallowRef<import('shiki').Highlighter | null>(null)
+const rendererReady = ref(false)
 
 // 渲染结果
 const renderedContent = ref('')
 
-// 节流渲染（长内容分批渲染）
-const isRendering = ref(false)
+// 表格数据（用于操作栏）
+interface TableBlock {
+  html: string
+  key: string
+}
+const tables = ref<TableBlock[]>([])
 
-// 内容长度阈值（超过则节流）
-const THRESHOLD = 5000
+// 异步加载 shiki 高亮器
+async function loadHighlighter() {
+  if (highlighter.value) return
+  try {
+    const shiki = await import('shiki')
+    const hl = await shiki.createHighlighter({
+      themes: ['github-dark', 'github-light'],
+      langs: ['python', 'javascript', 'typescript', 'html', 'css', 'json', 'bash', 'sql'],
+    })
+    highlighter.value = hl
+    rendererReady.value = true
+    rerender()
+  } catch (err) {
+    console.error('Failed to load shiki highlighter:', err)
+  }
+}
+
+// 转换 shiki 高亮的 HTML 为当前主题（双主题模式输出两个 pre，CSS 控制显隐）
+function applyDualTheme(codeHtml: string): string {
+  // shiki 双主题输出格式：<pre class="shiki shiki-themes github-dark github-light">
+  // 由 shiki 自动处理，这里直接返回
+  return codeHtml
+}
+
+// 使用 shiki 高亮代码块
+function highlightCode(code: string, lang: string): string {
+  const hl = highlighter.value
+  if (!hl) {
+    // Fallback: plain code block
+    const escaped = md.utils.escapeHtml(code)
+    return `<pre class="code-block-fallback"><code>${escaped}</code></pre>`
+  }
+
+  const language = lang && hl.getLoadedLanguages().includes(lang) ? lang : 'text'
+  try {
+    // 双主题模式：同时输出两个主题的样式，由 CSS class 切换
+    const html = hl.codeToHtml(code, {
+      lang: language,
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+    return applyDualTheme(html)
+  } catch {
+    const escaped = md.utils.escapeHtml(code)
+    return `<pre><code>${escaped}</code></pre>`
+  }
+}
+
+// 配置 markdown-it 代码高亮
+md.set({
+  highlight: (str: string, lang: string): string => highlightCode(str, lang),
+})
+
+// 提取表格 HTML 用于操作栏注入
+function extractTablesAndInjectActionBar(html: string): string {
+  tables.value = []
+  const tableRegex = /<table[^>]*>[\s\S]*?<\/table>/gi
+  const matches: TableBlock[] = []
+  let match: RegExpExecArray | null
+  let idx = 0
+  while ((match = tableRegex.exec(html)) !== null) {
+    const tableHtml = match[0]
+    const key = `table-${idx}-${Date.now()}`
+    matches.push({ html: tableHtml, key })
+    idx++
+  }
+
+  if (matches.length === 0) return html
+
+  tables.value = matches
+  return html
+}
 
 // 渲染函数
 function renderMarkdown(content: string): string {
   if (!content) return ''
-  return DOMPurify.sanitize(marked.parse(content) as string)
+  const raw = md.render(content)
+  const sanitized = DOMPurify.sanitize(raw, {
+    ADD_ATTR: ['class', 'style'],
+  })
+  return extractTablesAndInjectActionBar(sanitized)
+}
+
+function rerender() {
+  if (!props.content) {
+    renderedContent.value = ''
+    return
+  }
+  renderedContent.value = renderMarkdown(props.content)
 }
 
 // 监听内容变化
 watch(
   () => props.content,
-  (content) => {
-    if (!content) {
-      renderedContent.value = ''
-      return
-    }
-
-    // 短内容直接渲染
-    if (content.length < THRESHOLD) {
-      renderedContent.value = renderMarkdown(content)
-      return
-    }
-
-    // 长内容节流渲染
-    isRendering.value = true
-    // 先渲染前 2000 字符
-    const firstChunk = content.slice(0, 2000)
-    renderedContent.value = renderMarkdown(firstChunk)
-
-    // 延迟渲染剩余内容
-    setTimeout(() => {
-      renderedContent.value = renderMarkdown(content)
-      isRendering.value = false
-    }, 100)
-  },
+  () => rerender(),
   { immediate: true }
 )
 
+// shiki 加载完成后重新渲染
+watch(rendererReady, (ready) => {
+  if (ready) rerender()
+})
+
 onMounted(() => {
-  if (props.content && props.content.length < THRESHOLD) {
-    renderedContent.value = renderMarkdown(props.content)
-  }
+  loadHighlighter()
+  rerender()
+})
+
+onUnmounted(() => {
+  highlighter.value = null
 })
 </script>
 
@@ -75,18 +154,24 @@ onMounted(() => {
   <div class="markdown-content">
     <!-- Loading skeleton -->
     <template v-if="isLoading">
-      <Skeleton :row="3" animated />
+      <van-skeleton :row="3" animated />
     </template>
 
     <!-- 渲染内容 -->
     <!-- eslint-disable vue/no-v-html -- sanitized by DOMPurify -->
-    <div
-      v-else
-      class="markdown-body"
-      :class="{ rendering: isRendering }"
-      v-html="renderedContent"
-    />
+    <div class="markdown-body" v-html="renderedContent" />
     <!-- eslint-enable vue/no-v-html -->
+
+    <!-- 表格操作栏（在每个表格上方渲染） -->
+    <template v-if="tables.length > 0">
+      <div
+        v-for="table in tables"
+        :key="table.key"
+        class="table-action-slot"
+      >
+        <TableActionBar :table-html="table.html" />
+      </div>
+    </template>
   </div>
 </template>
 
@@ -99,10 +184,6 @@ onMounted(() => {
 
 .markdown-body {
   word-break: break-word;
-}
-
-.markdown-body.rendering {
-  opacity: 0.7;
 }
 
 /* Markdown 元素样式 */
@@ -149,14 +230,13 @@ onMounted(() => {
   font-family: 'SF Mono', Monaco, 'Courier New', monospace;
   font-size: 13px;
   padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(127, 127, 127, 0.12);
   border-radius: 4px;
 }
 
 .markdown-body :deep(pre) {
   margin: 12px 0;
   padding: 12px;
-  background: var(--card-bg);
   border-radius: 8px;
   overflow-x: auto;
 }
@@ -164,6 +244,42 @@ onMounted(() => {
 .markdown-body :deep(pre code) {
   background: transparent;
   padding: 0;
+  font-size: 13px;
+}
+
+/* shiki 双主题代码块样式 */
+.markdown-body :deep(.shiki) {
+  margin: 12px 0;
+  border-radius: 8px;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+/* 双主题：默认显示当前主题，另一个隐藏 */
+.markdown-body :deep(.shiki.github-dark) {
+  display: var(--shiki-dark-display, block);
+}
+
+.markdown-body :deep(.shiki.github-light) {
+  display: var(--shiki-light-display, block);
+}
+
+/* 暗色模式下 */
+:global([data-theme='dark']) .markdown-body :deep(.shiki.github-dark) {
+  display: block;
+}
+
+:global([data-theme='dark']) .markdown-body :deep(.shiki.github-light) {
+  display: none;
+}
+
+/* 亮色模式下 */
+:global([data-theme='light']) .markdown-body :deep(.shiki.github-dark) {
+  display: none;
+}
+
+:global([data-theme='light']) .markdown-body :deep(.shiki.github-light) {
+  display: block;
 }
 
 .markdown-body :deep(blockquote) {
@@ -187,6 +303,8 @@ onMounted(() => {
   width: 100%;
   margin: 12px 0;
   border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
 }
 
 .markdown-body :deep(th),
@@ -199,13 +317,6 @@ onMounted(() => {
 .markdown-body :deep(th) {
   background: var(--card-bg);
   font-weight: 600;
-}
-
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .markdown-body :deep(code) {
-    background: rgba(255, 255, 255, 0.08);
-  }
 }
 
 /* 375px */

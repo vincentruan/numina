@@ -342,6 +342,9 @@ export default {
     sendFailedError: '发送失败: {error}',
     errorPrefix: '{error}',
     copiedSuccess: '已复制',
+    copyTableAsMarkdown: '复制表格',
+    downloadTable: '下载表格',
+    tableDownloaded: '表格已下载',
     loadModelsFailed: '加载模型列表失败: {error}',
   },
   aiPlanProgress: {

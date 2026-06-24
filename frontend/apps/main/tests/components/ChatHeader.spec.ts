@@ -11,8 +11,12 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
   useThreadChat: () => ({
     messages: { value: [] },
     isLoading: { value: false },
+    isStreaming: { value: false },
     error: { value: null },
     tokenUsage: { value: null },
+    planningSteps: { value: [] },
+    suggestions: { value: [] },
+    runId: { value: null },
     sendMessage: vi.fn(),
     cancelStream: vi.fn(),
     loadHistory: vi.fn(),

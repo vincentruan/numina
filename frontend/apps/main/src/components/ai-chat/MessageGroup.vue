@@ -15,13 +15,12 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
 import PlanningStepsPanel from './PlanningStepsPanel.vue'
 import TokenUsage from './TokenUsage.vue'
+import MarkdownContent from './MarkdownContent.vue'
 import SubtaskCard from './SubtaskCard.vue'
 import ArtifactFileList from './ArtifactFileList.vue'
 import type {
@@ -57,9 +56,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-// Configure marked
-marked.use({ breaks: true })
 
 // Human group: extract first message
 const humanMessage = computed(() =>
@@ -133,11 +129,6 @@ const subagentTaskIds = computed(() => {
   return getSubagentTaskIds(props.group as AssistantSubagentGroup)
 })
 
-// Markdown rendering helper
-function renderMarkdown(content: string): string {
-  if (!content) return ''
-  return DOMPurify.sanitize(marked.parse(content) as string)
-}
 </script>
 
 <template>
@@ -201,20 +192,20 @@ function renderMarkdown(content: string): string {
         </svg>
         <span class="clarification-title">{{ t('aiChat.needClarification') }}</span>
       </div>
-      <!-- eslint-disable vue/no-v-html -- sanitized markdown -->
-      <div class="clarification-content" v-html="renderMarkdown(clarificationContent)" />
-      <!-- eslint-enable vue/no-v-html -->
+      <MarkdownContent
+        v-if="clarificationContent"
+        class="clarification-content"
+        :content="clarificationContent"
+      />
     </div>
 
     <!-- Present-files: Content + File list -->
     <div v-else-if="presentFilesData" class="present-files-group">
-      <!-- eslint-disable vue/no-v-html -- sanitized markdown -->
-      <div
+      <MarkdownContent
         v-if="presentFilesData.content"
         class="present-files-text"
-        v-html="renderMarkdown(presentFilesData.content)"
+        :content="presentFilesData.content"
       />
-      <!-- eslint-enable vue/no-v-html -->
       <ArtifactFileList
         v-if="presentFilesData.files && presentFilesData.files.length > 0"
         :artifacts="presentFilesData.files"

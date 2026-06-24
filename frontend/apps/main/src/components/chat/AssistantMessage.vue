@@ -15,12 +15,11 @@
  */
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import type { ProcessStep, PlanStep } from '@/types/agent-stream'
 import ReasoningSection from './ReasoningSection.vue'
 import ToolCallList from './ToolCallList.vue'
 import TodoListPanel from './TodoListPanel.vue'
+import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 
 interface Props {
   id: string
@@ -49,16 +48,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-// Configure marked for markdown rendering
-marked.use({ breaks: true })
-
-// Compute rendered markdown content
-const markdownContent = computed(() => {
-  if (props.renderedContent) return props.renderedContent
-  if (!props.content) return ''
-  return DOMPurify.sanitize(marked.parse(props.content) as string)
-})
 
 // Extract reasoning steps from processSteps
 const reasoningSteps = computed(() =>
@@ -167,9 +156,8 @@ function suggestionChips(): string[] {
       class="message-content"
       :class="{ 'content--appearing': phase === 'answering' && !renderedContent }"
     >
-      <!-- eslint-disable vue/no-v-html -- sanitized markdown content -->
-      <div class="markdown-body" v-html="markdownContent" />
-      <!-- eslint-enable vue/no-v-html -->
+      <!-- Markdown rendered via MarkdownContent (markdown-it + shiki) -->
+      <MarkdownContent :content="content" :is-loading="false" />
 
       <!-- Streaming indicator -->
       <span v-if="phase === 'answering'" class="stream-dots" :aria-label="t('aiChat.streaming')">
