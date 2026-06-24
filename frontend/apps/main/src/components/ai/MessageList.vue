@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
 import type { ChatMessage, PlanningStep } from '@/types/ai-chat/message-group'
@@ -35,16 +35,94 @@ const lastAssistantGroupIndex = computed(() => {
   return -1
 })
 
-// Auto-scroll to bottom on new messages
+// ── Auto-scroll with user-interrupt (R5) ──
+const SCROLL_THRESHOLD = 50 // px from bottom to consider "at bottom"
+const isAutoScrolling = ref(true)
+const userScrolledUp = ref(false)
+
+/** Check if the scroll position is near the bottom */
+function isNearBottom(): boolean {
+  const el = scrollRef.value
+  if (!el) return true
+  return el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_THRESHOLD
+}
+
+/** Scroll to the bottom smoothly */
+function scrollToBottom() {
+  const el = scrollRef.value
+  if (!el) return
+  el.scrollTop = el.scrollHeight
+}
+
+/** Handle scroll events: detect user scroll-up vs at-bottom */
+function onScroll() {
+  if (!scrollRef.value) return
+  if (isNearBottom()) {
+    // User scrolled back to bottom — resume auto-scroll
+    userScrolledUp.value = false
+    isAutoScrolling.value = true
+  } else {
+    // User scrolled up — pause auto-scroll
+    userScrolledUp.value = true
+    isAutoScrolling.value = false
+  }
+}
+
+/** "回到底部" button click */
+function onScrollToBottom() {
+  scrollToBottom()
+  userScrolledUp.value = false
+  isAutoScrolling.value = true
+}
+
+// Auto-scroll to bottom on new messages (only if user hasn't scrolled up)
 watch(
   () => props.messages.length,
   async () => {
     await nextTick()
-    if (scrollRef.value) {
-      scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    if (isAutoScrolling.value) {
+      scrollToBottom()
     }
   }
 )
+
+// Also auto-scroll during streaming as content grows (last message content changes)
+watch(
+  () => props.messages[props.messages.length - 1]?.content,
+  async () => {
+    if (!props.isStreaming) return
+    await nextTick()
+    if (isAutoScrolling.value) {
+      scrollToBottom()
+    }
+  }
+)
+
+// Reset scroll state when streaming starts (new user message)
+watch(
+  () => props.isStreaming,
+  (streaming) => {
+    if (streaming) {
+      // User just sent a message — scroll to bottom and enable auto-scroll
+      isAutoScrolling.value = true
+      userScrolledUp.value = false
+      nextTick(() => scrollToBottom())
+    }
+  }
+)
+
+onMounted(() => {
+  if (scrollRef.value) {
+    scrollRef.value.addEventListener('scroll', onScroll, { passive: true })
+  }
+  scrollToBottom()
+})
+
+onUnmounted(() => {
+  if (scrollRef.value) {
+    scrollRef.value.removeEventListener('scroll', onScroll)
+  }
+})
 </script>
 
 <template>
@@ -58,24 +136,28 @@ watch(
         :key="group.id ?? index"
         :group="group"
         :thread-id="threadId"
+        :is-loading="isStreaming && index === lastAssistantGroupIndex"
         :planning-steps="index === lastAssistantGroupIndex ? planningSteps : undefined"
         :is-last-assistant="index === lastAssistantGroupIndex"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
       />
     </div>
-    <div v-if="isStreaming" class="message-list-streaming-indicator">
-      <van-loading type="spinner" />
-    </div>
-    <div v-if="!isStreaming && messages.length > 0" class="message-list-actions">
-      <van-button
-        size="small"
-        plain
-        @click="emit('retry')"
+
+    <!-- "回到底部" floating button (shown when user scrolled up) -->
+    <Transition name="scroll-btn">
+      <button
+        v-if="userScrolledUp"
+        class="scroll-to-bottom-btn"
+        type="button"
+        :aria-label="t('aiChat.scrollToBottom')"
+        @click="onScrollToBottom"
       >
-        {{ t('aiChat.retry') }}
-      </van-button>
-    </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </Transition>
   </div>
 </template>
 
@@ -88,6 +170,7 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 8px;
+  position: relative;
 }
 
 .message-list-empty {
@@ -105,15 +188,43 @@ watch(
   gap: 12px;
 }
 
-.message-list-streaming-indicator {
+/* "回到底部" floating button */
+.scroll-to-bottom-btn {
+  position: sticky;
+  bottom: 16px;
+  align-self: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--van-primary-color, #6366f1);
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 8px;
+  z-index: 10;
+  transition: transform 0.15s ease;
 }
 
-.message-list-actions {
-  display: flex;
-  justify-content: center;
-  padding: 8px;
+.scroll-to-bottom-btn:hover {
+  transform: scale(1.05);
+}
+
+.scroll-to-bottom-btn:active {
+  transform: scale(0.95);
+}
+
+/* Scroll button transition */
+.scroll-btn-enter-active,
+.scroll-btn-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.scroll-btn-enter-from,
+.scroll-btn-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.8);
 }
 </style>

@@ -20,6 +20,7 @@ import ReasoningSection from './ReasoningSection.vue'
 import ToolCallList from './ToolCallList.vue'
 import TodoListPanel from './TodoListPanel.vue'
 import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
+import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
 
 interface Props {
   id: string
@@ -159,12 +160,8 @@ function suggestionChips(): string[] {
       <!-- Markdown rendered via MarkdownContent (markdown-it + shiki) -->
       <MarkdownContent :content="content" :is-loading="false" />
 
-      <!-- Streaming indicator -->
-      <span v-if="phase === 'answering'" class="stream-dots" :aria-label="t('aiChat.streaming')">
-        <span class="stream-dot" />
-        <span class="stream-dot" />
-        <span class="stream-dot" />
-      </span>
+      <!-- Streaming indicator (block-level bouncing dots, U6) -->
+      <StreamingIndicator :visible="phase === 'answering'" />
     </div>
 
     <!-- Error state -->
@@ -377,25 +374,6 @@ function suggestionChips(): string[] {
   height: auto;
 }
 
-/* Streaming dots */
-.stream-dots {
-  display: inline-flex;
-  gap: 3px;
-  margin-left: 4px;
-}
-
-.stream-dot {
-  width: 4px;
-  height: 4px;
-  background: var(--van-primary-color);
-  border-radius: 50%;
-  animation: bounce 1.4s ease-in-out infinite;
-}
-
-.stream-dot:nth-child(1) { animation-delay: 0s; }
-.stream-dot:nth-child(2) { animation-delay: 0.2s; }
-.stream-dot:nth-child(3) { animation-delay: 0.4s; }
-
 /* Error state */
 .error-state {
   padding: 12px;
@@ -504,11 +482,6 @@ function suggestionChips(): string[] {
 @keyframes pulse {
   0%, 100% { opacity: 0.4; transform: scale(0.95); }
   50% { opacity: 1; transform: scale(1); }
-}
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-4px); }
 }
 
 @keyframes fadeIn {
