@@ -38,20 +38,20 @@ export default {
   },
   mode: {
     flash: {
-      label: '闪电',
-      description: '快速响应，无深度思考',
+      label: '闪速',
+      description: '快速且高效的完成任务，但可能不够精准',
     },
     thinking: {
       label: '思考',
-      description: '启用思考链，逐步推理',
+      description: '思考后再行动，在时间与准确性之间取得平衡',
     },
     pro: {
-      label: '专业',
-      description: '计划模式，自动拆解任务',
+      label: 'Pro',
+      description: '思考、计划再执行，获得更精准的结果，可能需要更多时间',
     },
     ultra: {
-      label: '旗舰',
-      description: '完整能力，子代理协作',
+      label: 'Ultra',
+      description: '继承自 Pro 模式，可调用子代理分工协作，适合复杂多步骤任务，能力最强',
     },
   },
   nav: {
@@ -303,7 +303,6 @@ export default {
     tenantQuotaExceeded: '家庭额度不足，无法生成追问建议',
     tenantNoFamily: '未选择家庭',
     tenantLoadFailed: '加载租户资源失败',
-    tenantModelFallback: '已按模型能力自动调整模式',
     tenantUltraDisabled: '当前家庭资源不支持旗舰模式',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
@@ -312,6 +311,7 @@ export default {
     heroTitleChat: '有什么想问的？',
     heroSubtitleChat: '输入问题，智能助手帮你分析家庭资产',
     continuePlaceholder: '继续对话...',
+    shortcutSendTip: '⏎发送，{cmd} + ⏎ 换行',
     // DeerFlow WelcomeExamples keys (SuggestionList pattern)
     welcomeExampleSurprise: '随机提问',
     welcomeExampleAnalyze: '分析',

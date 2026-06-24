@@ -45,11 +45,13 @@ describe('useChatSessionStore', () => {
     expect(store.sessions[0].thread_id).toBe('t1')
   })
 
-  it('setActiveThread clears active if switching to same thread', () => {
+  it('setActiveThread keeps active when switching to same thread (no toggle)', () => {
     const store = useChatSessionStore()
     store.setActiveThread('same')
     store.setActiveThread('same')
-    expect(store.isWelcomeMode).toBe(true)
-    expect(store.activeThreadId).toBeNull()
+    // Behavior: setting the same thread ID does not clear it
+    // (toggle behavior removed so ChatHistoryPage can re-select without losing state)
+    expect(store.isWelcomeMode).toBe(false)
+    expect(store.activeThreadId).toBe('same')
   })
 })

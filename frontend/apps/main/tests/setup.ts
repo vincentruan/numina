@@ -82,7 +82,7 @@ config.global.stubs = {
   },
   VanCellGroup: { template: '<div class="van-cell-group"><slot /></div>' },
   VanCell: {
-    template: '<div class="van-cell"><slot name="title" /><slot name="value" /></div>',
+    template: '<div class="van-cell"><slot name="icon" /><slot name="title" /><slot /><slot name="value" /><slot name="right-icon" /></div>',
     props: ['title', 'value', 'icon', 'isLink', 'clickable'],
   },
   VanPopup: { template: '<div class="van-popup"><slot /></div>', props: ['show', 'position', 'round'] },
@@ -166,7 +166,7 @@ config.global.stubs = {
   MarkdownContent: { template: '<div class="markdown-content"></div>', props: ['content', 'isLoading'] },
   AssistantMessage: { template: '<div class="assistant-message"><slot /></div>', props: ['id', 'content', 'phase', 'displayTime', 'suggestions', 'feedback'] },
   UserBubble: { template: '<div class="user-bubble"></div>', props: ['content', 'displayTime', 'sendStatus'] },
-  InputBox: { template: '<div class="input-box"><slot /></div>', props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName'] },
+  InputBox: { template: '<div class="input-box"><slot /></div>', props: ['status', 'isWelcomeMode', 'threadId', 'initialMode', 'initialModelName', 'agentId', 'agents', 'agentIcon', 'agentLabel', 'disabled', 'modelValue', 'webSearch', 'attachments'], emits: ['submit', 'stop', 'update:modelValue', 'update:webSearch', 'selectAgent', 'action', 'removeAttachment', 'contextChange'] },
   ModeSelector: { template: '<div class="mode-selector"></div>', props: ['currentMode', 'supportsThinking', 'ultraDisabled'] },
   ModelSelectorPopup: { template: '<div class="model-selector-popup"><slot /></div>', props: ['show', 'models', 'currentModel'] },
 }

@@ -121,7 +121,7 @@ describe('AgentGrid — AE integration tests', () => {
     expect(iconSlot?.text()).not.toContain('✨')
   })
 
-  it('AE5 inverse: non-numina cards render emoji icon, not SVG', () => {
+  it('AE5 inverse: non-numina cards render Iconify icon, not emoji text', () => {
     const customAgent = makeAgent({
       id: 'custom-1',
       agent_name: 'my-agent',
@@ -139,9 +139,10 @@ describe('AgentGrid — AE integration tests', () => {
     })
     const card = wrapper.find('.agent-card')
     const iconSlot = card.find('.agent-card__icon')
-    expect(iconSlot.text()).toContain('🎯')
+    // Emoji '🎯' is mapped to 'lucide:target' by getAgentIcon, so it renders as IIcon (SVG)
+    expect(iconSlot.find('svg').exists()).toBe(true)
     // No NuminaLogo SVG for non-numina agents.
-    expect(card.find('svg').exists()).toBe(false)
+    expect(iconSlot.findComponent({ name: 'NuminaLogo' }).exists()).toBe(false)
   })
 
   it('AE11: non-owner with zero custom agents sees section title and empty hint, no create card', () => {

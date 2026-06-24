@@ -23,7 +23,7 @@ describe('INPUT_MODE_CONFIGS', () => {
     expect(config.is_plan_mode).toBe(false)
     expect(config.subagent_enabled).toBe(false)
     expect(config.reasoning_effort).toBe('minimal')
-    expect(config.icon).toBe('zap')
+    expect(config.icon).toBe('lucide:zap')
     expect(config.label).toBe('闪电')
   })
 
@@ -33,7 +33,7 @@ describe('INPUT_MODE_CONFIGS', () => {
     expect(config.is_plan_mode).toBe(false)
     expect(config.subagent_enabled).toBe(false)
     expect(config.reasoning_effort).toBe('low')
-    expect(config.icon).toBe('lightbulb')
+    expect(config.icon).toBe('lucide:lightbulb')
     expect(config.label).toBe('思考')
   })
 
@@ -43,7 +43,7 @@ describe('INPUT_MODE_CONFIGS', () => {
     expect(config.is_plan_mode).toBe(true)
     expect(config.subagent_enabled).toBe(false)
     expect(config.reasoning_effort).toBe('medium')
-    expect(config.icon).toBe('graduation-cap')
+    expect(config.icon).toBe('lucide:graduation-cap')
     expect(config.label).toBe('专业')
   })
 
@@ -53,7 +53,7 @@ describe('INPUT_MODE_CONFIGS', () => {
     expect(config.is_plan_mode).toBe(true)
     expect(config.subagent_enabled).toBe(true)
     expect(config.reasoning_effort).toBe('high')
-    expect(config.icon).toBe('rocket')
+    expect(config.icon).toBe('lucide:rocket')
     expect(config.label).toBe('旗舰')
   })
 

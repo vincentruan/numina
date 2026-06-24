@@ -11,17 +11,14 @@ from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_owner
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_provider_config import (
     AIProviderConfig,
     AIProviderTestResult,
 )
-from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.family_web_search_provider import FamilyWebSearchProvider
 from apps.backend.app.models.user import User
-from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.schemas.ai_config import (
     AICircuitResetResponse,
     AIConfigCreate,
@@ -33,6 +30,7 @@ from apps.backend.app.schemas.ai_config import (
     ModelInfo,
     ModelListResponse,
 )
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_crypto import (
     decrypt_api_key,
     encrypt_api_key,
@@ -541,7 +539,7 @@ def get_tenant_models(
     from the config's capability flags and test results.
 
     Also returns tenant-level feature flags:
-    - subagent_enabled: Whether family has MCP/skill subagent capability
+    - subagent_enabled: Always true — ultra mode availability depends on model's reasoning_effort support
     - websearch_enabled: Whether family has web search provider configured
     """
     # Query active AI providers for the family
@@ -577,7 +575,7 @@ def get_tenant_models(
             capabilities = _deserialize_capabilities(capabilities_json)
 
             # Determine capability flags
-            supports_thinking = "thinking" in capabilities or cfg.thinking_supported
+            supports_thinking = "deep_thinking" in capabilities or cfg.thinking_supported
             supports_vision = "vision" in capabilities or bool(cfg.vision_model_id)
             supports_tool_calling = "tool_calling" in capabilities  # Default True if not specified
 
@@ -600,15 +598,10 @@ def get_tenant_models(
     # Check tenant-level feature flags
     family_id_int = int(current_user.family_id)
 
-    # Subagent capability: MCP servers or skills enabled
-    subagent_enabled = (
-        db.query(FamilyMCPServer)
-        .filter(
-            FamilyMCPServer.family_id == family_id_int,
-            FamilyMCPServer.is_enabled == True,  # noqa: E712
-        )
-        .count() > 0
-    )
+    # Subagent capability: depends on whether any model supports thinking.
+    # Ultra mode requires the same model capability as thinking/pro — no
+    # separate MCP/skill dependency.
+    subagent_enabled = any(m.supports_thinking for m in models)
 
     # Web search capability
     websearch_enabled = (

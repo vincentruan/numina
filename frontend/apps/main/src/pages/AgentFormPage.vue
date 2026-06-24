@@ -129,6 +129,22 @@ function toggleSkill(skillId: string) {
   }
   form.value.skills = [...skills]
 }
+
+const skillIcons: Record<string, string> = {
+  alerts: '🔔',
+  allocation: '⚖️',
+  disposal: '🗑️',
+  liability: '💳',
+  report: '📊',
+  spending_leak: '🔍',
+}
+
+function getSkillIcon(skill: SkillDefinition): string {
+  if (skill.skill_type === 'builtin') {
+    return skillIcons[skill.id] || '✨'
+  }
+  return skill.icon || '✨'
+}
 </script>
 
 <template>
@@ -233,9 +249,13 @@ function toggleSkill(skillId: string) {
         <van-cell
           v-for="skill in availableSkills"
           :key="skill.id"
-          :title="skill.name || skill.id"
-          :label="skill.description || ''"
+          :title="skill.skill_type === 'builtin' ? t(`skills.capability.${skill.id}.name`) : (skill.name || skill.id)"
+          :label="skill.skill_type === 'builtin' ? t(`skills.capability.${skill.id}.description`) : (skill.description || '')"
+          center
         >
+          <template #icon>
+            <span class="skill-icon">{{ getSkillIcon(skill) }}</span>
+          </template>
           <template #right-icon>
             <van-icon v-if="isSystemAgent" name="lock" />
             <van-checkbox
@@ -344,5 +364,10 @@ function toggleSkill(skillId: string) {
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background: var(--van-background);
+}
+
+.skill-icon {
+  margin-right: 8px;
+  font-size: 20px;
 }
 </style>

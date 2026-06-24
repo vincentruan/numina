@@ -15,17 +15,18 @@
  * - Model selector popup
  * - Tenant resource isolation (useTenantAiResources)
  */
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
-import ModelSelectorPopup from './ModelSelectorPopup.vue'
-import WelcomeExamples from './WelcomeExamples.vue'
 import IIcon from '@/components/IIcon.vue'
+import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import { useTenantAiResources, INPUT_MODE_CONFIGS, getResolvedMode } from '@/composables/ai-chat/useTenantAiResources'
 import { getWebSearchStatus } from '@/api/webSearch'
 import type { InputMode, SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
+
+const NUMINA_AGENT_NAME = 'numina'
 
 interface AgentOption {
   id: string
@@ -78,7 +79,7 @@ const {
   tenantConfig: _tenantConfig,
   supportsThinking: _supportsThinking,
   supportsSubagent,
-  loading: resourcesLoading,
+  loading: _resourcesLoading,
 } = useTenantAiResources()
 
 // ── Input state ──
@@ -86,18 +87,30 @@ const internalValue = ref(props.modelValue ?? '')
 const focused = ref(false)
 const expanded = ref(false)
 const panelOpen = ref(false)
-const modelDialogOpen = ref(false)
+const panelTriggerRef = ref<HTMLElement | null>(null)
 const webSearchEnabled = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 
 // ── Mode context (DeerFlow 4-mode) ──
+const LAST_MODE_KEY = 'ai-chat:last-mode'
+
+function getLastSelectedMode(): InputMode {
+  try {
+    const saved = localStorage.getItem(LAST_MODE_KEY)
+    if (saved && ['flash', 'thinking', 'pro', 'ultra'].includes(saved)) {
+      return saved as InputMode
+    }
+  } catch { /* ignore */ }
+  return 'thinking'
+}
+
 const selectedModel = computed(() =>
   models.value.find(m => m.name === context.value.model_name) ?? models.value[0],
 )
 
 const context = ref<InputContext>({
   model_name: props.initialModelName ?? '',
-  mode: props.initialMode ?? 'pro',
+  mode: props.initialMode ?? getLastSelectedMode(),
   reasoning_effort: 'medium',
 })
 
@@ -123,6 +136,7 @@ const selectedAgent = computed(() =>
 )
 const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.icon || null)
 const displayAgentLabel = computed(() => props.agentLabel || selectedAgent.value?.display_name || '')
+const isNuminaAgent = computed(() => selectedAgent.value?.agent_name === NUMINA_AGENT_NAME)
 
 // ── Watchers ──
 watch(internalValue, (val) => emit('update:modelValue', val))
@@ -138,11 +152,23 @@ watch(() => props.webSearch, (val) => {
   }
 })
 
+const showExpandIcon = computed(() => {
+  if (expanded.value) return true
+  const newlines = (internalValue.value.match(/\n/g) || []).length
+  return newlines >= 2 || internalValue.value.length > 36
+})
+
+function emitContextChange() {
+  emit('contextChange', {
+    ...context.value,
+    reasoning_effort: INPUT_MODE_CONFIGS[context.value.mode].reasoning_effort,
+  })
+}
+
 // Auto-downgrade mode when model doesn't support thinking
 watch(currentModelSupportsThinking, (supports) => {
   const resolved = getResolvedMode(context.value.mode, supports, supportsSubagent.value)
   if (resolved !== context.value.mode) {
-    showToast(t('aiChat.tenantModelFallback'))
     context.value.mode = resolved
     emitContextChange()
   }
@@ -162,17 +188,6 @@ watch(models, (newModels) => {
 }, { immediate: true })
 
 // ── Methods ──
-function adjustHeight() {
-  const el = inputRef.value
-  if (!el) return
-  if (expanded.value) {
-    el.style.height = '75vh'
-    return
-  }
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-}
-
 function onSubmit() {
   if (props.status === 'streaming') {
     emit('stop')
@@ -181,14 +196,19 @@ function onSubmit() {
   const text = internalValue.value.trim()
   if (!text) return
 
+  // Guard against submitting before models have loaded
+  if (!context.value.model_name) return
+
   emit('submit', {
     text,
     model_name: context.value.model_name,
     mode: context.value.mode,
+    websearch_enabled: webSearchEnabled.value,
     ...finalPayload.value,
     thread_id: props.threadId,
   })
   internalValue.value = ''
+  expanded.value = false
 }
 
 function onModeSelect(mode: InputMode) {
@@ -198,26 +218,10 @@ function onModeSelect(mode: InputMode) {
   }
   context.value.mode = mode
   context.value.reasoning_effort = INPUT_MODE_CONFIGS[mode].reasoning_effort
+  try {
+    localStorage.setItem(LAST_MODE_KEY, mode)
+  } catch { /* ignore */ }
   emitContextChange()
-}
-
-function onModelSelect(modelName: string) {
-  const model = models.value.find(m => m.name === modelName)
-  if (!model) return
-  context.value.model_name = modelName
-  const resolved = getResolvedMode(context.value.mode, model.supports_thinking ?? false, supportsSubagent.value)
-  if (resolved !== context.value.mode) {
-    showToast(t('aiChat.tenantModelFallback'))
-    context.value.mode = resolved
-  }
-  emitContextChange()
-}
-
-function emitContextChange() {
-  emit('contextChange', {
-    ...context.value,
-    reasoning_effort: INPUT_MODE_CONFIGS[context.value.mode].reasoning_effort,
-  })
 }
 
 // Web search
@@ -240,7 +244,6 @@ async function toggleWebSearch() {
 // Expand
 function toggleExpand() {
   expanded.value = !expanded.value
-  nextTick(adjustHeight)
 }
 
 // Panel
@@ -275,39 +278,65 @@ function removeAttachment(index: number) {
   emit('removeAttachment', index)
 }
 
-// Welcome examples
-function handleWelcomeExampleSelect(prompt: string) {
-  internalValue.value = prompt
-  setTimeout(() => onSubmit(), 0)
+const isMac = computed(() => {
+  if (typeof window === 'undefined' || !navigator) return false
+  return navigator.platform.toUpperCase().indexOf('MAC') >= 0
+})
+
+// Plus panel position: left-aligned with the + button, shown above it
+// Uses ref updated on open + scroll/resize for reactive positioning
+const panelPosition = ref<Record<string, string>>({})
+
+function updatePanelPosition() {
+  if (!panelTriggerRef.value || !panelOpen.value) return
+  const rect = panelTriggerRef.value.getBoundingClientRect()
+  const bottom = window.innerHeight - rect.top + 8
+  // Clamp: ensure panel doesn't go off-screen top
+  const panelHeight = 200 // approximate max height
+  const adjustedBottom = bottom > panelHeight ? bottom : panelHeight
+  panelPosition.value = {
+    position: 'fixed',
+    bottom: `${adjustedBottom}px`,
+    left: `${rect.left}px`,
+    maxWidth: `calc(100vw - 32px)`,
+  }
 }
 
-function handleSurpriseMe() {
-  const surprisePrompts = [
-    t('aiChat.welcomeExampleAnalyzePrompt'),
-    t('aiChat.welcomeExamplePlanPrompt'),
-    t('aiChat.welcomeExampleLearnPrompt'),
-    t('aiChat.welcomeExampleOptimizePrompt'),
-  ]
-  const randomPrompt = surprisePrompts[Math.floor(Math.random() * surprisePrompts.length)]
-  internalValue.value = randomPrompt
-  setTimeout(() => onSubmit(), 0)
+function onPanelOpen() {
+  panelOpen.value = true
+  // Use nextTick to ensure the button is rendered before calculating position
+  nextTick(() => updatePanelPosition())
 }
 
 // Click outside handler (for plus panel)
 function onDocClick(e: MouseEvent) {
-  const el = e.target as HTMLElement
-  if (!el.closest('.input-box')) {
-    panelOpen.value = false
-  }
+  const target = e.target as HTMLElement
+  if (!panelOpen.value) return
+  // Don't close if clicking the trigger button or the panel itself
+  if (panelTriggerRef.value?.contains(target)) return
+  if (target.closest('.plus-panel')) return
+  panelOpen.value = false
+}
+
+const enterTip = computed(() => {
+  return t('aiChat.shortcutSendTip', { cmd: isMac.value ? '⌘' : 'Ctrl' })
+})
+
+// Scroll/resize listener for reactive panel positioning
+function onScrollOrResize() {
+  updatePanelPosition()
 }
 
 onMounted(() => {
-  nextTick(adjustHeight)
-  document.addEventListener('click', onDocClick)
+  document.addEventListener('click', onDocClick, true)
+  window.addEventListener('scroll', onScrollOrResize, true)
+  window.addEventListener('resize', onScrollOrResize)
 })
 
-onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocClick)
+onUnmounted(() => {
+  document.removeEventListener('click', onDocClick, true)
+  window.removeEventListener('scroll', onScrollOrResize, true)
+  window.removeEventListener('resize', onScrollOrResize)
 })
 </script>
 
@@ -316,341 +345,303 @@ onBeforeUnmount(() => {
     class="input-box"
     :class="[
       status,
-      isWelcomeMode ? 'welcome-mode' : 'chat-mode',
-      { focused, expanded },
+      { 'is-focused': focused, 'is-expanded': expanded, 'welcome-mode': isWelcomeMode }
     ]"
     @click.self="closePanel"
   >
-    <!-- Welcome hero (welcome mode only) -->
-    <div v-if="isWelcomeMode" class="welcome-hero">
-      <h2 class="hero-title">{{ displayAgentLabel || t('aiChat.heroTitleChat') }}</h2>
-      <p class="hero-subtitle">{{ t('aiChat.heroSubtitleChat') }}</p>
-    </div>
+    <div class="input-card-border">
+      <div class="input-card-inner">
+        <!-- Attachments preview row (above textarea) -->
+        <div v-if="attachments && attachments.length > 0" class="attachments-row">
+          <div
+            v-for="(att, idx) in attachments"
+            :key="idx"
+            class="attachment-item"
+            :class="`attachment-item--${att.type}`"
+          >
+            <span class="attachment-icon" aria-hidden="true">
+              <svg v-if="att.type === 'image'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+            </span>
+            <span class="attachment-name">{{ att.name }}</span>
+            <button class="attachment-remove" :aria-label="t('common.delete')" @click="removeAttachment(idx)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        </div>
 
-    <!-- Welcome examples (welcome mode only) -->
-    <WelcomeExamples
-      v-if="isWelcomeMode"
-      :agent-id="agentId || 'numina'"
-      @select="handleWelcomeExampleSelect"
-      @surprise="handleSurpriseMe"
-    />
+        <!-- Textarea container -->
+        <div class="textarea-container">
+          <textarea
+            ref="inputRef"
+            v-model="internalValue"
+            class="chat-textarea"
+            :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
+            :disabled="disabled || status === 'submitted'"
+            rows="4"
+            @keydown.enter.ctrl="onSubmit"
+            @focus="focused = true"
+            @blur="focused = false"
+          />
 
-    <!-- Input row -->
-    <div class="input-row" :class="{ 'is-focused': focused, 'is-expanded': expanded }">
-      <!-- Attachments preview row (above textarea) -->
-      <div v-if="attachments && attachments.length > 0" class="attachments-row">
-        <div
-          v-for="(att, idx) in attachments"
-          :key="idx"
-          class="attachment-item"
-          :class="`attachment-item--${att.type}`"
-        >
-          <span class="attachment-icon" aria-hidden="true">
-            <svg v-if="att.type === 'image'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
+          <!-- Expand button (top-right of textarea) -->
+          <button
+            v-if="showExpandIcon"
+            class="expand-btn"
+            :aria-label="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
+            :title="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
+            @click="toggleExpand"
+          >
+            <svg v-if="!expanded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
             </svg>
-            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-            </svg>
-          </span>
-          <span class="attachment-name">{{ att.name }}</span>
-          <button class="attachment-remove" :aria-label="t('common.delete')" @click="removeAttachment(idx)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
+            <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
+              <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
             </svg>
           </button>
         </div>
-      </div>
 
-      <!-- Textarea -->
-      <textarea
-        ref="inputRef"
-        v-model="internalValue"
-        class="chat-textarea"
-        :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
-        :disabled="disabled || status === 'submitted'"
-        rows="3"
-        @input="adjustHeight"
-        @keydown.enter.ctrl="onSubmit"
-        @focus="focused = true"
-        @blur="focused = false"
-      />
+        <!-- Bottom actions row (flexbox) -->
+        <div class="bottom-actions-row">
+          <!-- Left: Bottom toolbar controls -->
+          <div class="input-controls">
+            <!-- Plus panel (teleported, positioned relative to + button) -->
+            <Teleport to="body">
+              <Transition name="panel">
+                <div v-if="panelOpen" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')" :style="panelPosition">
+                  <button
+                    v-for="item in panelItems"
+                    :key="item.action"
+                    class="panel-item"
+                    role="menuitem"
+                    @click="onPanelItem(item.action)"
+                  >
+                    <span class="panel-item-icon" aria-hidden="true">
+                      <svg :viewBox="item.icon.viewBox" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path v-for="(d, i) in item.icon.paths" :key="i" :d="d" />
+                      </svg>
+                    </span>
+                    <span class="panel-item-label">{{ item.label }}</span>
+                  </button>
+                </div>
+              </Transition>
+            </Teleport>
 
-      <!-- Expand button (top-right) -->
-      <button
-        class="expand-btn"
-        :aria-label="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
-        :title="expanded ? t('aiChat.collapse') : t('aiChat.expand')"
-        @click="toggleExpand"
-      >
-        <svg v-if="!expanded" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
-          <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
-        </svg>
-        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/>
-          <line x1="10" y1="14" x2="3" y2="21"/><line x1="21" y1="3" x2="14" y2="10"/>
-        </svg>
-      </button>
-
-      <!-- Bottom toolbar (left to right) -->
-      <div class="input-controls">
-        <!-- Plus panel (positioned relative to controls) -->
-        <transition name="panel">
-          <div v-if="panelOpen" class="plus-panel plus-panel--up" role="menu" :aria-label="t('aiChat.moreFeatures')">
+            <!-- [1] Agent button: clickable in welcome mode, static icon in chat mode -->
             <button
-              v-for="item in panelItems"
-              :key="item.action"
-              class="panel-item"
-              role="menuitem"
-              @click="onPanelItem(item.action)"
+              v-if="agents && agents.length > 0 && isWelcomeMode"
+              class="control-btn control-btn--agent"
+              :aria-label="t('aiHub.selectAgent')"
+              :title="t('aiHub.selectAgent')"
+              @click="emit('selectAgent')"
             >
-              <span class="panel-item-icon" aria-hidden="true">
-                <svg :viewBox="item.icon.viewBox" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                  <path v-for="(d, i) in item.icon.paths" :key="i" :d="d" />
-                </svg>
+              <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
+              <AIBrainIcon v-if="isNuminaAgent" :active="false" />
+              <span v-else-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
+                {{ getAgentIcon(displayAgentIcon) }}
               </span>
-              <span class="panel-item-label">{{ item.label }}</span>
+              <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+              <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="3" width="18" height="18" rx="4"/>
+                <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+                <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
+                <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
+              </svg>
+            </button>
+            <!-- Static agent icon in chat mode -->
+            <span
+              v-else-if="(displayAgentIcon || isNuminaAgent) && !isWelcomeMode"
+              class="agent-static-icon"
+              :title="displayAgentLabel"
+            >
+              <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
+              <AIBrainIcon v-if="isNuminaAgent" :active="false" />
+              <span v-else-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
+              <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+            </span>
+
+            <!-- [2] Mode selector (4-mode DeerFlow) -->
+            <ModeSelector
+              :current-mode="context.mode"
+              :supports-thinking="currentModelSupportsThinking"
+              :ultra-disabled="isUltraDisabled"
+              @select="onModeSelect"
+            />
+
+            <!-- [3] Web search toggle -->
+            <button
+              class="control-btn control-btn--search"
+              :class="{ 'control-btn--active': webSearchEnabled }"
+              :aria-pressed="webSearchEnabled"
+              :aria-label="t('aiChat.webSearch')"
+              :title="t('aiChat.webSearch')"
+              @click="toggleWebSearch"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+              <span v-if="webSearchEnabled" class="control-indicator" aria-hidden="true"></span>
+            </button>
+
+            <!-- [5] Plus button -->
+            <button
+              ref="panelTriggerRef"
+              class="control-btn control-btn--plus"
+              :class="{ 'control-btn--open': panelOpen }"
+              :aria-label="t('aiChat.moreFeatures')"
+              :aria-expanded="panelOpen"
+              @click.stop="onPanelOpen"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
             </button>
           </div>
-        </transition>
 
-        <!-- [1] Agent button: clickable in welcome mode, static icon in chat mode -->
-        <button
-          v-if="agents && agents.length > 0 && isWelcomeMode"
-          class="control-btn control-btn--agent"
-          :aria-label="t('aiHub.selectAgent')"
-          :title="t('aiHub.selectAgent')"
-          @click="emit('selectAgent')"
-        >
-          <span v-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
-            {{ getAgentIcon(displayAgentIcon) }}
-          </span>
-          <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="16" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="4"/>
-            <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
-            <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
-            <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
-          </svg>
-        </button>
-        <!-- Static agent icon in chat mode -->
-        <span
-          v-else-if="displayAgentIcon && !isWelcomeMode"
-          class="agent-static-icon"
-          :title="displayAgentLabel"
-        >
-          <span v-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
-          <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
-        </span>
+          <!-- Right: Keyboard shortcut hint + Send/Stop button -->
+          <div class="send-actions">
+            <span class="enter-shortcut-tip">{{ enterTip }}</span>
 
-        <!-- [2] Model selector button -->
-        <button
-          class="control-btn control-btn--model"
-          :disabled="resourcesLoading"
-          @click="modelDialogOpen = true"
-        >
-          <span class="model-name">{{ selectedModel?.display_name || t('aiChat.selectModel') }}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="dropdown-icon">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </button>
-
-        <!-- [3] Mode selector (4-mode DeerFlow) -->
-        <ModeSelector
-          :current-mode="context.mode"
-          :supports-thinking="currentModelSupportsThinking"
-          :ultra-disabled="isUltraDisabled"
-          @select="onModeSelect"
-        />
-
-        <!-- [4] Web search toggle -->
-        <button
-          class="control-btn control-btn--search"
-          :class="{ 'control-btn--active': webSearchEnabled }"
-          :aria-pressed="webSearchEnabled"
-          :aria-label="t('aiChat.webSearch')"
-          :title="t('aiChat.webSearch')"
-          @click="toggleWebSearch"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-          </svg>
-          <span v-if="webSearchEnabled" class="control-indicator" aria-hidden="true"></span>
-        </button>
-
-        <!-- [5] Plus button -->
-        <button
-          class="control-btn control-btn--plus"
-          :class="{ 'control-btn--open': panelOpen }"
-          :aria-label="t('aiChat.moreFeatures')"
-          :aria-expanded="panelOpen"
-          @click.stop="panelOpen = !panelOpen"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
+            <!-- Send/Stop button -->
+            <button
+              v-if="status === 'streaming' || status === 'submitted'"
+              class="send-btn send-btn--abort"
+              :aria-label="t('aiChat.stopGeneration')"
+              @click="emit('stop')"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+              </svg>
+            </button>
+            <button
+              v-else
+              class="send-btn"
+              :class="{ 'send-btn--active': internalValue.trim() }"
+              :disabled="disabled || !internalValue.trim()"
+              :aria-label="t('common.send')"
+              @click="onSubmit"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
-
-      <!-- Send/Stop button (bottom-right) -->
-      <button
-        v-if="status === 'streaming' || status === 'submitted'"
-        class="send-btn send-btn--abort"
-        :aria-label="t('aiChat.stopGeneration')"
-        @click="emit('stop')"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <rect x="4" y="4" width="16" height="16" rx="2"/>
-        </svg>
-      </button>
-      <button
-        v-else
-        class="send-btn"
-        :class="{ 'send-btn--active': internalValue.trim() }"
-        :disabled="disabled || !internalValue.trim()"
-        :aria-label="t('common.send')"
-        @click="onSubmit"
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="22" y1="2" x2="11" y2="13"/>
-          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-        </svg>
-      </button>
     </div>
-
-    <!-- Bottom background layer (chat mode) -->
-    <div v-if="!isWelcomeMode" class="chat-bg-layer" />
-
-    <!-- Model selector popup -->
-    <ModelSelectorPopup
-      v-model:show="modelDialogOpen"
-      :models="models"
-      :current-model="context.model_name"
-      @select="onModelSelect"
-    />
   </div>
 </template>
 
 <style scoped>
-/* ── CSS variables (AIChatInput base, dark default) ── */
+/* ── Theme variables override ── */
+:global([data-theme='light']) .input-box,
 .input-box {
+  --ai-btn-border: rgba(0, 0, 0, 0.08);
+  --ai-btn-color: var(--text-secondary, #666666);
+  --ai-btn-hover-bg: rgba(0, 0, 0, 0.04);
+  --ai-btn-hover-color: var(--text-primary, #111111);
+  --ai-panel-bg: #ffffff;
+  --ai-panel-border: rgba(0, 0, 0, 0.08);
+  --ai-panel-item-color: var(--text-secondary, #666666);
+  --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.03);
+  --ai-panel-item-hover-color: var(--text-primary, #111111);
+  --ai-text-color: var(--text-primary, #111111);
+  --ai-placeholder-color: var(--text-tertiary, #999999);
+  --ai-scrollbar-thumb: rgba(0, 0, 0, 0.1);
+  --ai-expand-color: var(--text-tertiary, #999999);
+  --ai-expand-hover-bg: rgba(0, 0, 0, 0.04);
+  --ai-expand-hover-color: var(--text-primary, #111111);
+}
+
+:global([data-theme='dark']) .input-box {
   --ai-btn-border: rgba(255, 255, 255, 0.1);
-  --ai-btn-color: var(--text-tertiary);
+  --ai-btn-color: var(--text-secondary, #c8c8d0);
   --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
-  --ai-btn-hover-color: rgba(255, 255, 255, 0.7);
-  --ai-panel-bg: #1e1e2e;
+  --ai-btn-hover-color: rgba(255, 255, 255, 0.9);
+  --ai-panel-bg: #12122a;
   --ai-panel-border: rgba(255, 255, 255, 0.1);
   --ai-panel-item-color: rgba(255, 255, 255, 0.6);
   --ai-panel-item-hover-bg: rgba(255, 255, 255, 0.08);
   --ai-panel-item-hover-color: rgba(255, 255, 255, 0.9);
-  --ai-input-bg: rgba(255, 255, 255, 0.07);
-  --ai-input-border: rgba(255, 255, 255, 0.1);
   --ai-text-color: rgba(255, 255, 255, 0.9);
   --ai-placeholder-color: rgba(255, 255, 255, 0.3);
   --ai-scrollbar-thumb: rgba(255, 255, 255, 0.15);
   --ai-expand-color: rgba(255, 255, 255, 0.3);
   --ai-expand-hover-bg: rgba(255, 255, 255, 0.08);
   --ai-expand-hover-color: rgba(255, 255, 255, 0.6);
+}
 
-  position: relative;
+.input-box {
+  position: fixed;
+  bottom: calc(50px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 100;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 16px;
-  background: var(--card-bg);
-  border-radius: 16px;
+  background: transparent;
+  padding: 8px 16px;
+  box-sizing: border-box;
   transition: all 0.2s ease;
 }
 
-/* ── Light mode overrides (AIChatInput pattern) ── */
-:global(.theme-light .input-box),
-:global([data-theme='light'] .input-box) {
-  --ai-btn-border: rgba(0, 0, 0, 0.4);
-  --ai-btn-color: rgba(0, 0, 0, 0.75);
-  --ai-btn-hover-bg: rgba(0, 0, 0, 0.1);
-  --ai-btn-hover-color: rgba(0, 0, 0, 0.9);
-  --ai-panel-bg: #ffffff;
-  --ai-panel-border: rgba(0, 0, 0, 0.25);
-  --ai-panel-item-color: rgba(0, 0, 0, 0.75);
-  --ai-panel-item-hover-bg: rgba(0, 0, 0, 0.08);
-  --ai-panel-item-hover-color: rgba(0, 0, 0, 0.9);
-  --ai-input-bg: #ffffff;
-  --ai-input-border: rgba(0, 0, 0, 0.35);
-  --ai-text-color: rgba(0, 0, 0, 0.9);
-  --ai-placeholder-color: rgba(0, 0, 0, 0.6);
-  --ai-scrollbar-thumb: rgba(0, 0, 0, 0.25);
-  --ai-expand-color: rgba(0, 0, 0, 0.55);
-  --ai-expand-hover-bg: rgba(0, 0, 0, 0.1);
-  --ai-expand-hover-color: rgba(0, 0, 0, 0.8);
+/* ── Premium Gradient Border wrapper ── */
+.input-card-border {
+  background: linear-gradient(135deg, #4040ff, #ff49fd, #d763fc, #3cc4fa);
+  border-radius: 16px;
+  padding: 1.5px; /* Border thickness */
+  box-shadow: 0 8px 30px rgba(64, 64, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.25s ease, transform 0.25s ease;
+  width: 100%;
+  box-sizing: border-box;
 }
 
-/* ── Layout modes ── */
-.input-box.welcome-mode {
-  align-items: center;
-  justify-content: center;
-  min-height: 200px;
-  margin: 0 auto;
-  max-width: 90%;
+.input-box.is-focused .input-card-border {
+  box-shadow: 0 12px 32px rgba(64, 64, 255, 0.15), 0 4px 16px rgba(215, 99, 252, 0.08);
 }
 
-.input-box.chat-mode {
-  position: sticky;
-  bottom: 0;
-  border-radius: 0;
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
-}
-
-/* ── Welcome hero ── */
-.welcome-hero {
-  text-align: center;
-  margin-bottom: 16px;
-}
-
-.hero-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.hero-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-/* ── Input row (AIChatInput style) ── */
-.input-row {
-  position: relative;
+.input-card-inner {
+  background: var(--bg-primary, #ffffff);
+  border-radius: 14.5px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  background: var(--ai-input-bg);
-  border: 1px solid var(--ai-input-border);
-  border-radius: 18px;
-  padding: 10px 48px 44px 14px;
-  min-height: 100px;
-  transition: border-color 0.2s, box-shadow 0.2s, border-radius 0.2s, min-height 0.2s;
+  box-sizing: border-box;
+  width: 100%;
+  position: relative;
+  transition: background-color 0.2s ease;
 }
 
-.input-row.is-focused {
-  border-color: rgba(99, 102, 241, 0.6);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+:global([data-theme='dark']) .input-card-inner {
+  background: var(--bg-primary, #010120);
 }
 
-.input-row.is-expanded {
-  border-radius: 14px;
-  min-height: 75vh;
+/* ── Textarea container ── */
+.textarea-container {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-/* ── Chat textarea (AIChatInput style) ── */
 .chat-textarea {
-  flex: 1;
+  width: 100%;
   border: none;
   background: transparent;
   font-size: 14px;
@@ -659,11 +650,19 @@ onBeforeUnmount(() => {
   resize: none;
   overflow-y: auto;
   line-height: 20px;
-  min-height: 60px;
+  height: 80px; /* Fixed height for 4 lines */
+  min-height: 80px;
   padding: 0;
+  padding-right: 36px; /* Avoid overlapping expand button */
   margin: 0;
-  transition: height 0.12s ease;
+  box-sizing: border-box;
+  transition: height 0.2s ease;
   caret-color: #6366f1;
+}
+
+.input-box.is-expanded .chat-textarea {
+  height: calc(66vh - 120px - env(safe-area-inset-bottom));
+  min-height: 150px;
 }
 
 .chat-textarea::placeholder {
@@ -683,13 +682,13 @@ onBeforeUnmount(() => {
   border-radius: 2px;
 }
 
-/* ── Expand button (top-right) ── */
+/* ── Expand button (top-right of textarea) ── */
 .expand-btn {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 30px;
-  height: 30px;
+  top: 0;
+  right: 0;
+  width: 32px;
+  height: 32px;
   background: transparent;
   border: none;
   border-radius: 8px;
@@ -706,19 +705,27 @@ onBeforeUnmount(() => {
   color: var(--ai-expand-hover-color);
 }
 
-/* ── Bottom toolbar controls ── */
+/* ── Bottom actions row ── */
+.bottom-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  position: relative;
+}
+
 .input-controls {
-  position: absolute;
-  bottom: 8px;
-  left: 10px;
   display: flex;
   align-items: center;
   gap: 6px;
+  position: relative;
 }
 
 .control-btn {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: none;
   background: rgba(99, 102, 241, 0.08);
@@ -731,6 +738,36 @@ onBeforeUnmount(() => {
   position: relative;
   min-width: 44px;
   min-height: 44px;
+}
+
+.control-btn :deep(svg),
+.control-btn :deep(.iconify) {
+  width: 20px;
+  height: 20px;
+}
+
+/* Scale down AIBrainIcon to fit the control button */
+.control-btn :deep(.ai-button-3d) {
+  width: 24px;
+  height: 24px;
+  padding: 4px;
+  box-shadow: none;
+  background: transparent;
+  border: none;
+}
+
+.control-btn :deep(.ai-button-wrapper) {
+  transform: none;
+}
+
+.control-btn :deep(.fg-icon) {
+  width: 16px;
+  height: 16px;
+}
+
+.control-btn :deep(.bg-icon) {
+  width: 14px;
+  height: 14px;
 }
 
 .control-btn:hover {
@@ -766,17 +803,17 @@ onBeforeUnmount(() => {
 
 .control-indicator {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 6px;
-  height: 6px;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #10b981;
   box-shadow: 0 0 4px rgba(16, 185, 129, 0.6);
 }
 
 .agent-emoji {
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1;
 }
 
@@ -795,33 +832,15 @@ onBeforeUnmount(() => {
   cursor: default;
 }
 
-/* ── Model selector button ── */
-.control-btn--model {
-  width: auto;
-  border-radius: 12px;
-  padding: 6px 10px;
-  gap: 4px;
-  background: rgba(99, 102, 241, 0.08);
-  color: var(--ai-btn-color);
-  border: 1px solid var(--ai-btn-border);
-}
 
-.model-name {
-  font-weight: 500;
-  font-size: 12px;
-}
-
-.dropdown-icon {
-  flex-shrink: 0;
-}
 
 /* ── Attachments row ── */
 .attachments-row {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  padding: 6px 0 4px;
-  margin-bottom: 4px;
+  padding: 6px 0 8px;
+  margin-bottom: 8px;
   border-bottom: 1px dashed rgba(99, 102, 241, 0.2);
 }
 
@@ -880,7 +899,7 @@ onBeforeUnmount(() => {
 
 /* ── Plus panel ── */
 .plus-panel {
-  position: absolute;
+  position: fixed;
   background: var(--ai-panel-bg);
   border: 1px solid var(--ai-panel-border);
   border-radius: 14px;
@@ -888,14 +907,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  z-index: 100;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 999;
   min-width: 160px;
-}
-
-.plus-panel--up {
-  bottom: calc(100% + 8px);
-  left: 0;
 }
 
 .panel-item {
@@ -939,19 +953,30 @@ onBeforeUnmount(() => {
   line-height: 1.2;
 }
 
-/* ── Send/Stop button ── */
+/* ── Send Actions & Send Button ── */
+.send-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.enter-shortcut-tip {
+  font-size: 11px;
+  color: var(--ai-placeholder-color);
+  white-space: nowrap;
+  user-select: none;
+  opacity: 0.7;
+}
+
 .send-btn {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
   width: 36px;
   height: 36px;
   min-width: 44px;
   min-height: 44px;
   border-radius: 50%;
   border: none;
-  background: rgba(99, 102, 241, 0.2);
-  color: rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.15);
+  color: rgba(99, 102, 241, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -959,10 +984,15 @@ onBeforeUnmount(() => {
   transition: background 0.2s, color 0.2s, transform 0.15s;
 }
 
+:global([data-theme='dark']) .send-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .send-btn--active {
   background: linear-gradient(135deg, #6366f1, #7c3aed);
-  color: #fff;
-  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.4);
+  color: #fff !important;
+  box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
 }
 
 .send-btn--active:hover {
@@ -979,7 +1009,7 @@ onBeforeUnmount(() => {
 
 .send-btn--abort {
   background: #ff3b30;
-  color: #fff;
+  color: #fff !important;
   box-shadow: 0 2px 12px rgba(255, 59, 48, 0.4);
   cursor: pointer;
 }
@@ -991,17 +1021,6 @@ onBeforeUnmount(() => {
 
 .send-btn--abort:active {
   transform: scale(0.95);
-}
-
-/* ── Chat background layer ── */
-.chat-bg-layer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -16px;
-  height: 16px;
-  background: var(--bg-primary);
-  z-index: -1;
 }
 
 /* ── Panel transition ── */
@@ -1029,7 +1048,6 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .send-btn,
   .control-btn,
-  .input-row,
   .panel-enter-active,
   .panel-leave-active {
     transition: none;
@@ -1039,25 +1057,19 @@ onBeforeUnmount(() => {
 /* ── Responsive (375px) ── */
 @media (max-width: 375px) {
   .input-box {
-    padding: 8px 12px;
-    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom)) 12px;
   }
 
   .input-box.welcome-mode {
-    min-height: 160px;
     max-width: 95%;
   }
 
   .chat-textarea {
-    font-size: 14px;
+    font-size: 13px;
   }
 
-  .hero-title {
-    font-size: 18px;
-  }
-
-  .hero-subtitle {
-    font-size: 12px;
+  .enter-shortcut-tip {
+    display: none; /* Hide shortcut tip on very narrow mobile screens */
   }
 }
 </style>

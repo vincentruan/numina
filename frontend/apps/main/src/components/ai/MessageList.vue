@@ -53,7 +53,7 @@ watch(
       />
     </div>
     <div v-if="isStreaming" class="message-list-streaming-indicator">
-      <van-loading type="ball" />
+      <van-loading type="spinner" />
     </div>
     <div v-if="!isStreaming && messages.length > 0" class="message-list-actions">
       <van-button
@@ -72,6 +72,7 @@ watch(
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  padding-bottom: 140px; /* Space for the floating bottom input box */
   display: flex;
   flex-direction: column;
   gap: 8px;

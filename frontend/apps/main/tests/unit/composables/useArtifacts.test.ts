@@ -47,7 +47,7 @@ describe('useArtifacts', () => {
       const { setArtifacts, artifacts } = useArtifacts()
 
       const newArtifacts: Artifact[] = [
-        { id: 'art1', path: '/file1.md', kind: 'file', title: 'file1.md' },
+        { path: '/file1.md', kind: 'file', title: 'file1.md' } as Artifact,
       ]
 
       setArtifacts(newArtifacts)
@@ -132,7 +132,8 @@ describe('useArtifacts', () => {
     it('selects artifact by filepath', async () => {
       const { setArtifacts, selectByPath, selectedArtifact, open } = useArtifacts()
 
-      setArtifacts([{ id: 'report', path: '/report.md', kind: 'file', title: 'report.md' }])
+      // Store without id so path becomes the key
+      setArtifacts([{ path: '/report.md', kind: 'file', title: 'report.md' } as Artifact])
       await nextTick()
 
       selectByPath('/report.md')

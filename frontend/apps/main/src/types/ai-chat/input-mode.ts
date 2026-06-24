@@ -44,6 +44,7 @@ export interface SubmitPayload {
   subagent_enabled: boolean
   reasoning_effort: 'minimal' | 'low' | 'medium' | 'high'
   thread_id?: string
+  websearch_enabled?: boolean
 }
 
 /**

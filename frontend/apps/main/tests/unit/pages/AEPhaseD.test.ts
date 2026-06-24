@@ -269,6 +269,12 @@ describe('AgentFormPage custom agent create/edit optimization', () => {
     const cells = skillsGroup!.findAll('.van-cell, van-cell')
     expect(cells.length).toBe(2)
 
+    // Verify icons are rendered
+    const icons = skillsGroup!.findAll('.skill-icon')
+    expect(icons.length).toBe(2)
+    expect(icons[0].text()).toBe('📊')
+    expect(icons[1].text()).toBe('✨')
+
     // Verify model field and subagent toggle cell-group are completely absent
     const fields = wrapper.findAll('.van-field')
     const hasModelField = fields.some(f => f.text().includes('模型'))

@@ -204,26 +204,24 @@
 
     </div>
 
-    <!-- Chat input with integrated toolbar -->
-    <div class="chat-entry">
-      <InputBox
-        v-model="chatInput"
-        v-model:webSearch="webSearch"
-        :disabled="!selectedAgent"
-        :agents="agentChoices"
-        :agent-id="selectedAgent?.id"
-        :is-welcome-mode="true"
-        :status="'ready'"
-        :agent-icon="selectedAgent?.icon"
-        :agent-label="selectedAgent?.display_name"
-        @submit="submitChatFromInput"
-        @action="onInputAction"
-        @select-agent="showAgentPicker = true"
-      />
-      <!-- Hidden file inputs (kept here so the page owns the upload state) -->
-      <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
-      <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
-    </div>
+    <!-- Chat input directly rendered (InputBox handles its own fixed bottom positioning) -->
+    <InputBox
+      v-model="chatInput"
+      v-model:webSearch="webSearch"
+      :disabled="!selectedAgent"
+      :agents="agentChoices"
+      :agent-id="selectedAgent?.id"
+      :is-welcome-mode="true"
+      :status="'ready'"
+      :agent-icon="selectedAgent?.icon"
+      :agent-label="selectedAgent?.display_name"
+      @submit="submitChatFromInput"
+      @action="onInputAction"
+      @select-agent="showAgentPicker = true"
+    />
+    <!-- Hidden file inputs (kept here so the page owns the upload state) -->
+    <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
+    <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
 
     <!-- Agent picker action sheet (only shows actual agents, not Time Machine) -->
     <van-action-sheet
@@ -1263,21 +1261,7 @@ defineExpose({
   font-size: 13px;
 }
 
-/* ── Chat entry ── */
-.chat-entry {
-  position: fixed;
-  bottom: calc(50px + env(safe-area-inset-bottom));
-  left: 0;
-  right: 0;
-  z-index: 10;
-  padding: 8px 16px 12px;
-  background: var(--bg-primary, #fff);
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
 
-[data-theme='dark'] .chat-entry {
-  border-top-color: rgba(255, 255, 255, 0.10);
-}
 
 /* ── Agent picker ── */
 .agent-row__icon {
