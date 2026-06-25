@@ -11,10 +11,11 @@ import uuid
 from typing import Any
 
 from deerflow.utils.time import coerce_iso, now_iso
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from langgraph.checkpoint.base import empty_checkpoint, uuid6
 from pydantic import BaseModel, Field, field_validator
 
+from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
 from apps.agent.services.deerflow_adapter.family_adapter_cache import (
     _get_shared_checkpointer,
 )
@@ -136,7 +137,8 @@ def get_checkpointer():
 @router.delete("/{thread_id}", response_model=ThreadDeleteResponse)
 async def delete_thread(
     thread_id: str,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadDeleteResponse:
     # Not implemented yet in Numina BackendClient, just best effort.
     checkpointer = get_checkpointer()
@@ -151,7 +153,8 @@ async def delete_thread(
 async def create_thread(
     body: ThreadCreateRequest,
     x_family_id: str = Header(..., alias="X-Family-Id"),
-    x_user_id: str = Header(None, alias="X-User-Id")
+    x_user_id: str = Header(None, alias="X-User-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadResponse:
     checkpointer = get_checkpointer()
     repo = AiSessionRepository(x_family_id)
@@ -201,7 +204,8 @@ async def create_thread(
 @router.post("/search", response_model=list[ThreadResponse])
 async def search_threads(
     body: ThreadSearchRequest,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> list[ThreadResponse]:
     repo = AiSessionRepository(x_family_id)
     sessions, total = await repo.list_sessions(
@@ -229,7 +233,8 @@ async def search_threads(
 async def patch_thread(
     thread_id: str,
     body: ThreadPatchRequest,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadResponse:
     repo = AiSessionRepository(x_family_id)
     # Handle metadata-based title updates (legacy path)
@@ -252,7 +257,8 @@ async def patch_thread(
 @router.get("/{thread_id}", response_model=ThreadResponse)
 async def get_thread(
     thread_id: str,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadResponse:
     repo = AiSessionRepository(x_family_id)
     checkpointer = get_checkpointer()
@@ -297,7 +303,8 @@ async def get_thread(
 @router.get("/{thread_id}/state", response_model=ThreadStateResponse)
 async def get_thread_state(
     thread_id: str,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadStateResponse:
     checkpointer = get_checkpointer()
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -333,7 +340,8 @@ async def get_thread_state(
 async def update_thread_state(
     thread_id: str,
     body: ThreadStateUpdateRequest,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadStateResponse:
     checkpointer = get_checkpointer()
     repo = AiSessionRepository(x_family_id)
@@ -384,7 +392,8 @@ async def update_thread_state(
 async def get_thread_history(
     thread_id: str,
     body: ThreadHistoryRequest,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> list[HistoryEntry]:
     checkpointer = get_checkpointer()
     config = {"configurable": {"thread_id": thread_id}}
@@ -434,7 +443,8 @@ async def get_thread_history(
 @router.get("/{thread_id}/token-usage")
 async def get_thread_token_usage(
     thread_id: str,
-    x_family_id: str = Header(..., alias="X-Family-Id")
+    x_family_id: str = Header(..., alias="X-Family-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> dict[str, int]:
     """Calculate and return the total token usage for a thread."""
     checkpointer = get_checkpointer()

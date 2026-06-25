@@ -18,10 +18,11 @@ import logging
 from typing import Any, Literal
 
 from deerflow.runtime import RunManager
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Depends, Header, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from apps.agent.app.auth.jwt_verify import VerifiedFamily, verify_family_token
 from apps.agent.services.runtime.lifespan import get_run_manager, get_stream_bridge
 from apps.agent.services.runtime.sse_gateway import sse_consumer, start_run
 
@@ -97,6 +98,7 @@ async def stream_run_v2(
     request: Request,
     x_family_id: str = Header(..., alias="X-Family-Id"),
     x_user_id: str = Header(None, alias="X-User-Id"),
+    verified: VerifiedFamily = Depends(verify_family_token),
 ) -> StreamingResponse:
     """Create a run and stream events via SSE with full lifecycle management.
 

@@ -117,7 +117,15 @@ class Settings(BaseSettings):
     LOG_ROTATION_MODE: str = "size"  # "size" or "time"
     LOG_FORMAT: str | None = None  # Uses default format if None
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8", "extra": "ignore"}
+    # Load `.env` (CWD-local, e.g. server/.env) then the repo-root `.env`
+    # with higher precedence — same precedence as apps/agent/app/config.py.
+    # This keeps shared secrets (SECRET_KEY, AGENT_INTERNAL_TOKEN) in sync
+    # between the backend and the agent, which both read the root .env.
+    model_config = {
+        "env_file": [".env", str(Path(__file__).resolve().parents[3] / ".env")],
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+    }
 
     @model_validator(mode="after")
     def _resolve_data_root(self) -> "Settings":
