@@ -1,49 +1,80 @@
 # Numina AI Agent 交互体验 V2 设计
 
 > 从资深 AI Agent 设计师视角，统一 Numina 与 Deer-Flow 的交互范式，落地 Harness Engineering
+>
+> **最后更新:** 2026-06-25 — 根据 `feat/unify-ai-chat-input-box` 分支实现状态更新
+
+## 0. 实施状态总览 (2026-06-25 更新)
+
+> 本文档创建於 2026-05-09，以下状态基於 `feat/unify-ai-chat-input-box` 分支（115 文件变更，10,419 行新增）的实际情况更新。
+
+| Phase | 目标 | 状态 | 关键文件 |
+|-------|------|------|----------|
+| **Phase 1: Protocol 统一** | 替换 `[THINK]/[TEXT]` 前缀 | **已完成** (使用 LangGraph SSE，非 NDJSON) | `runs.py` 删除 (304L)，`runs_stream.py` (139L)，`sse_gateway.py` (182L)，`useThreadChat.ts` |
+| **Phase 2: Capability Registry** | 后端注册中心 + Capability Grid UI | **未开始** | 仅 `useTenantAiResources.ts`（部分租户资源发现） |
+| **Phase 3: Tool Calling UI** | 工具调用可视化 | **已完成** | `PlanningStepsPanel.vue` (239L)，`MessageGroup.vue`，`TokenUsage.vue`，`StreamingIndicator.vue` |
+| **Phase 4: Harness 深度集成** | 统一 dispatch + 多步骤可视化 | **部分完成** | `subagent_registry.py`，`agent_dispatch.py`，`worker.py`，`gc.py`，`lifespan.py`，`run_extras.py`，`sandbox_provider.py` |
 
 ## 1. 现状诊断
 
-### 1.1 当前架构问题
+### 1.1 已解决的架构问题
+
+> 以下痛点在 `feat/unify-ai-chat-input-box` 分支上已修复，保留作为历史参考。
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    当前交互流程                              │
+│                    修复后架构 (2026-06)                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌──────────┐    ┌──────────┐    ┌──────────────────────┐ │
-│  │ AI Hub   │───→│ AI Chat  │───→│ /api/v1/ai/chat/     │ │
-│  │ 输入问题  │    │ 对话页面  │    │ stream               │ │
-│  └──────────┘    └──────────┘    └──────────────────────┘ │
+│  │ AI Hub   │───→│ AI Chat  │───→│ LangGraph SSE        │ │
+│  │ 输入/选择  │   │ 对话页面  │    │ (messages-tuple/     │ │
+│  └──────────┘    └──────────┘    │  values/custom)       │ │
 │       │                              │                     │
-│       │ Pinia Store                  │ [THINK]/[TEXT]      │
-│       │ Query Params                 │ 前缀解析             │
+│       │ Pinia Store                  │ 结构化事件流         │
+│       │ Query Params                 │ useThreadChat.ts     │
 │       ▼                              ▼                     │
-│  状态传递双通道              Stream 格式非结构化            │
+│  状态传递统一                Stream 格式标准化              │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**痛点识别：**
+**已修复痛点：**
+
+| 层级 | 原问题 | 修复方案 | 状态 |
+|------|--------|----------|------|
+| **Protocol** | `[THINK]/[TEXT]` 前缀 | LangGraph SSE 结构化事件 | **已修复** |
+| **Protocol** | 无 Tool Calling 展示 | `PlanningStepsPanel` + `MessageGroup` | **已修复** |
+| **Harness** | DeerFlow/Direct 双路径 | `runs_stream.py` + `sse_gateway.py` 统一 | **已修复** |
+| **Engineering** | 阶段状态过于简单 | `custom` events (tool_call/suggestions) | **已修复** |
+| **UX** | InputBox 分裂（Hub/Chat 两套） | 统一 `InputBox.vue` (1,217L) | **已修复** |
+
+**待解决问题：**
 
 | 层级 | 问题 | 影响 |
 |------|------|------|
-| **UX** | Hub → Chat 状态双通道传递 | 复杂度高，易出 bug |
-| **UX** | 缺乏 Agent 能力发现 | 用户不知道 AI 能做什么 |
-| **Protocol** | [THINK]/[TEXT] 前缀 | 非标准，解析脆弱 |
-| **Protocol** | 无 Tool Calling 展示 | 用户看不到 AI 思考过程 |
-| **Harness** | DeerFlow/Direct 双路径 | 维护成本高，行为不一致 |
-| **Engineering** | 阶段状态过于简单 | 缺乏细粒度反馈 |
+| **UX** | 缺乏 Agent 能力发现（Capability Discovery） | 用户不知道 AI 能做什么 |
+| **Architecture** | 无 Capability Registry | 无法动态发现和管理 Agent 能力 |
+| **UX** | 输入模式单一（仅自由文本） | 不支持结构化表单、资产选择器等场景 |
 
-### 1.2 与 Deer-Flow 的差距
+### 1.2 与 Deer-Flow 的差距 (更新)
 
 Deer-Flow 的 Harness 提供了：
-- **Capability Registry**: 动态发现 Agent 能力
-- **Skill Orchestration**: 多步骤推理编排
-- **Tool Calling**: 工具调用可视化
-- **Streaming Protocol**: 结构化事件流
+- ~~**Capability Registry**: 动态发现 Agent 能力~~ — **仍未实现**，Phase 2 核心工作
+- ~~**Skill Orchestration**: 多步骤推理编排~~ — **部分实现**，`subagent_registry.py` + `agent_dispatch.py`
+- ~~**Tool Calling**: 工具调用可视化~~ — **已实现** (`PlanningStepsPanel.vue`)
+- ~~**Streaming Protocol**: 结构化事件流~~ — **已实现** (LangGraph SSE)
 
-Numina 当前仅使用了 Deer-Flow 的基础 LLM 调用，未充分利用 Harness 工程化能力。
+**当前已实现:**
+- LangGraph SSE 结构化事件流 (`messages-tuple`/`values`/`custom`)
+- Tool Calling 可视化（`PlanningStepsPanel` 渲染 tool_call 事件）
+- 统一 SSE 网关（`sse_gateway.py` 替代旧 `runs.py`）
+- Subagent 运行时管理（`subagent_registry.py`）
+
+**仍未实现:**
+- Capability Registry / Registry API (`/api/v1/capabilities`)
+- Capability Grid UI（AI Hub 能力网格）
+- 动态 input_mode 渲染（structured / asset_selector / confirm_dialog）
 
 ---
 
@@ -77,22 +108,25 @@ Numina 当前仅使用了 Deer-Flow 的基础 LLM 调用，未充分利用 Harne
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 交互范式对比
+### 2.2 交互范式对比 (更新)
 
-| 范式 | 当前 | 目标 |
-|------|------|------|
-| **Hub 模式** | 输入框主导 | Capability Grid 主导 |
-| **对话启动** | 用户输入即开始 | 选择 Capability → 进入专用对话 |
-| **状态传递** | Pinia + Query 双通道 | Capability Context 单通道 |
-| **Stream 格式** | [THINK]/[TEXT] 前缀 | NDJSON 结构化事件 |
-| **工具展示** | 无 | Tool Calling Cards |
-| **阶段反馈** | 简单文字 | 可视化进度条 |
+| 范式 | 原文档目标 | 实际实现 (2026-06) | 仍需工作 |
+|------|-----------|-------------------|----------|
+| **Hub 模式** | Capability Grid 主导 | Agent Card + 折叠区域 + InputBox | Capability Grid |
+| **对话启动** | 选择 Capability → 专用对话 | Agent Card → `router.push({ agentId })` | 能力级路由 |
+| **状态传递** | Capability Context 单通道 | Pinia `chatSession` store + query params | — |
+| **Stream 格式** | NDJSON 结构化事件 | LangGraph SSE (messages-tuple/values/custom) | **已解决** (SSE 替代 NDJSON) |
+| **工具展示** | Tool Calling Cards | `PlanningStepsPanel` | **已解决** |
+| **阶段反馈** | 可视化进度条 | `custom` events + `StreamingIndicator` | **已解决** |
 
 ---
 
 ## 3. Harness Engineering 架构
 
-### 3.1 统一 Capability Model
+### 3.1 统一 Capability Model — **未实现 (设计仍有效)**
+
+> **2026-06 更新:** 仍未实现。注意 `CapabilityUISchema.input_mode` 的 `asset_selector`
+> 和 `confirm_dialog` 模式是本文档提出的扩展，当前 `InputBox.vue` 仅支持 `free_text`。
 
 ```python
 # agent/schemas/capability.py
@@ -134,7 +168,11 @@ class CapabilityDefinition(BaseModel):
     harness_config: Dict[str, Any] = {}
 ```
 
-### 3.2 Capability Registry
+### 3.2 Capability Registry — **未实现 (核心设计仍有效)**
+
+> **2026-06 更新:** 此设计仍有效，未实现。注意 `BackendClient` 应替换为实际的
+> Numina 后端 API 模式（参考 `server/apps/backend/app/routers/ai_config.py` 和
+> `server/apps/backend/app/routers/ai_mcp.py` 的现有路由模式）。
 
 ```python
 # agent/services/capability_registry.py
@@ -192,85 +230,22 @@ class CapabilityRegistry:
         ]
 ```
 
-### 3.3 结构化 Stream Protocol
+### 3.3 ~~结构化 Stream Protocol~~ — 已实现 (LangGraph SSE)
 
-```typescript
-// frontend/src/types/agent-stream.ts
+> **决策变更:** 原文档提出 NDJSON，但实际实现选择了 LangGraph 原生 SSE 协议。
+> SSE 是更优选择：LangGraph SDK 内置支持、浏览器原生 EventSource、自动重连、
+> 与 `@langchain/langgraph-sdk` 完全兼容。
 
-/** Agent Stream 事件类型 - 基于 Deer-Flow Harness 标准 */
-export type AgentEventType = 
-  | 'capability.start'      // Capability 开始执行
-  | 'phase.connecting'      // 连接模型
-  | 'phase.thinking'        // 深度思考中
-  | 'tool.call'             // 工具调用
-  | 'tool.result'           // 工具结果
-  | 'token.stream'          // 文本流
-  | 'phase.answering'       // 组织回答
-  | 'capability.end'        // Capability 完成
-  | 'capability.error';     // 错误
+**实际使用的协议** (`useThreadChat.ts`):
 
-/** 基础事件 */
-export interface AgentEvent {
-  id: string;
-  type: AgentEventType;
-  timestamp: string;
-  capability_id: string;
-  task_id: string;
-}
-
-/** 阶段事件 */
-export interface PhaseEvent extends AgentEvent {
-  type: 'phase.connecting' | 'phase.thinking' | 'phase.answering';
-  phase: string;
-  metadata?: {
-    model?: string;
-    elapsed_ms?: number;
-    think_budget?: number;
-  };
-}
-
-/** 工具调用事件 */
-export interface ToolCallEvent extends AgentEvent {
-  type: 'tool.call';
-  tool: {
-    id: string;
-    name: string;
-    display_name: string;
-    icon: string;
-    arguments: Record<string, any>;
-  };
-}
-
-/** 工具结果事件 */
-export interface ToolResultEvent extends AgentEvent {
-  type: 'tool.result';
-  tool_id: string;
-  result: {
-    success: boolean;
-    data?: any;
-    error?: string;
-    execution_time_ms: number;
-  };
-}
-
-/** 文本流事件 */
-export interface TokenStreamEvent extends AgentEvent {
-  type: 'token.stream';
-  token: string;
-  is_thinking: boolean;
-}
-
-/** Capability 完成事件 */
-export interface CapabilityEndEvent extends AgentEvent {
-  type: 'capability.end';
-  result: {
-    summary: string;
-    tokens_used: number;
-    execution_time_ms: number;
-    tools_used: string[];
-  };
-}
-```
+| 事件类型 | 来源 | 用途 |
+|---------|------|------|
+| `messages-tuple` / `messages` | LangGraph SSE | AI 文本流 + 工具结果 |
+| `values` | LangGraph SSE | 完整状态快照（消息去重） |
+| `custom` | 后端自定义 | `tool_call` / `suggestions` 事件 |
+| `metadata` | LangGraph SSE | `run_id` 等元数据 |
+| `end` | LangGraph SSE | 流结束信号 + usage 统计 |
+| `error` | LangGraph SSE | 错误处理 + 重试 |
 
 ### 3.4 Python 端事件生成
 
@@ -695,79 +670,82 @@ export function useEventStream(options: {
 
 ---
 
-## 5. Harness 工程化实施路线图
+## 5. Harness 工程化实施路线图 (更新)
 
-### 5.1 Phase 1: Protocol 统一 (Week 1)
+### 5.1 ~~Phase 1: Protocol 统一~~ — **已完成**
 
-**目标**: 替换 [THINK]/[TEXT] 前缀为结构化 NDJSON
+> 原文档提出使用 NDJSON，实际实现使用 LangGraph 原生 SSE。SSE 是更优选择。
 
-```python
-# agent/routers/chat.py - 修改点
+**已完成的工作:**
+- `runs.py` 删除 (304 行)，替换为 `runs_stream.py` (139 行) + `sse_gateway.py` (182 行)
+- `useThreadChat.ts` 处理 `messages-tuple`/`messages`/`values`/`custom` 事件
+- 重试机制（指数退避 + 抖动）、流超时、用户取消
+- 集成测试 `test_v2_sse_contract.py` (269 行)
 
-# BEFORE: 使用前缀
-if chunk.startswith("[THINK]") or chunk.startswith("[TEXT]"):
-    yield chunk
-else:
-    yield f"[TEXT]{chunk}"
-
-# AFTER: 使用 EventStreamBuilder
-events = EventStreamBuilder(capability_id, task_id)
-
-# 1. 发送阶段事件
-yield events.phase("connecting").to_ndjson()
-
-# 2. 工具调用
-yield events.tool_call("asset_search", {"query": "房产"}).to_ndjson()
-
-# 3. 思考流
-yield events.token(chunk, is_thinking=True).to_ndjson()
-
-# 4. 文本流
-yield events.token(chunk, is_thinking=False).to_ndjson()
-
-# 5. 完成
-yield events.end(summary, tokens_used, elapsed_ms, tools_used).to_ndjson()
-```
-
-### 5.2 Phase 2: Capability Registry (Week 2)
+### 5.2 Phase 2: Capability Registry — **未开始 (核心剩余工作)**
 
 **目标**: 建立 Capability 注册中心，前端动态渲染
 
-1. 创建 `agent/services/capability_registry.py`
+这是本文档**最有价值的剩余工作**。包含:
+
+1. 创建 `agent/services/capability_registry.py` (后端 Python 服务)
 2. 添加 `/api/v1/capabilities` 端点
 3. 前端创建 `CapabilityStore`
 4. AI Hub 页面改为 Capability Grid
 
-### 5.3 Phase 3: Tool Calling UI (Week 3)
+> **注意:** 当前 `useTenantAiResources.ts` 已实现部分租户资源发现（模型列表、tenant 配置），
+> 但缺少正式的 Capability 定义（id、ui.input_mode、example_questions、policy 等）。
 
-**目标**: 可视化工具调用过程
+### 5.3 ~~Phase 3: Tool Calling UI~~ — **已完成**
 
-1. 设计 Tool Call Card 组件
-2. 设计 Tool Result Card 组件
-3. 在 Stream 中支持 tool.call/tool.result 事件
-4. 添加工具执行动画
+**已完成的工作:**
+- `PlanningStepsPanel.vue` (239 行) — tool_call 事件可视化
+- `MessageGroup.vue` — 增强 tool call 渲染
+- `TokenUsage.vue` — token 统计展示
+- `StreamingIndicator.vue` (72 行) — 流状态指示
+- `ErrorMessage.vue` (94 行) — 错误处理 + 重试 UX
+- `ArtifactPreviewPopup.vue` — artifact 预览
+- `TableActionBar.vue` (92 行) — artifact 表格操作
 
-### 5.4 Phase 4: Harness Deep Integration (Week 4)
+### 5.4 Phase 4: Harness 深度集成 — **部分完成**
 
-**目标**: 完全接入 Deer-Flow Harness
+**已完成:**
+- `subagent_registry.py` (108 行) — subagent 运行时注册
+- `agent_dispatch.py` 更新 — 统一 agent 调度
+- `worker.py` (225 行) — 后台 worker 运行时
+- `gc.py` (85 行) — 资源垃圾回收
+- `lifespan.py` (83 行) — 应用生命周期管理
+- `run_extras.py` (106 行) — 额外运行时功能
+- `sandbox_provider.py` (151 行) — 沙箱提供者
 
-1. 所有 Agent 调用统一走 `orchestrator.dispatch`
-2. DeerFlow 和 Direct LLM 输出格式统一
-3. 支持 Capability 级别的权限控制
-4. 支持多步骤推理可视化
+**仍需完成:**
+- Capability 级别的权限控制
+- 多步骤推理可视化完善
 
 ---
 
 ## 6. 关键设计决策
 
-### 6.1 为什么使用 NDJSON 而非 SSE?
+### 6.1 ~~为什么使用 NDJSON 而非 SSE?~~ — 决策变更
+
+> **2026-06 更新:** 实际实现选择了 **LangGraph 原生 SSE** 而非 NDJSON。
+> SSE 是更优选择，原因如下:
 
 | 方案 | 优点 | 缺点 | 选择 |
 |------|------|------|------|
-| **NDJSON** | 解析简单、可恢复、标准格式 | 需要手动处理连接 | ✅ 首选 |
-| SSE | 原生支持重连 | 格式限制多、调试困难 | ❌ 排除 |
+| ~~**NDJSON**~~ | ~~解析简单、可恢复、标准格式~~ | ~~需要手动处理连接~~ | ~~首选~~ → **弃用** |
+| **SSE** | **LangGraph SDK 内置、浏览器原生 EventSource、自动重连** | **格式限制** | **✅ 实际选择** |
 | WebSocket | 双向通信 | 开销大、需要额外管理 | ❌ 排除 |
 | gRPC Stream | 性能高 | 浏览器支持差 | ❌ 排除 |
+
+**实际 SSE 实现** (`useThreadChat.ts`):
+```typescript
+const stream = client.runs.stream(currentThreadId, 'agent', {
+  input: { messages: [{ role: 'user', content: text }] },
+  signal: abortController.signal,
+  streamMode: ['messages-tuple', 'values', 'custom'],
+})
+```
 
 ### 6.2 为什么 Capability 替代自由输入?
 
@@ -804,15 +782,21 @@ AI 正在分析...
 
 ## 7. 验收标准
 
-### 7.1 功能验收
+### 7.1 ~~功能验收~~ — 更新
 
-- [ ] AI Hub 页面展示 Capability Grid 而非输入框
-- [ ] 每个 Capability 有独立图标、颜色、示例问题
-- [ ] 点击 Capability 进入专用对话流
-- [ ] Stream 输出为结构化 NDJSON
-- [ ] 前端正确渲染 phase/tool/token 事件
-- [ ] Tool Calling 过程可视化
-- [ ] DeerFlow 和 Direct LLM 输出格式统一
+- [x] ~~AI Hub 页面展示 Capability Grid 而非输入框~~ — **替代方案:** Agent Card + 折叠区域 + InputBox
+- [x] ~~每个 Capability 有独立图标、颜色、示例问题~~ — **替代方案:** Agent Card 已有图标/颜色
+- [x] ~~点击 Capability 进入专用对话流~~ — **替代方案:** Agent Card → `router.push({ agentId })`
+- [x] ~~Stream 输出为结构化 NDJSON~~ — **已实现:** LangGraph SSE (messages-tuple/values/custom)
+- [x] ~~前端正确渲染 phase/tool/token 事件~~ — `useThreadChat.ts` 已处理
+- [x] ~~Tool Calling 过程可视化~~ — `PlanningStepsPanel.vue`
+- [x] ~~DeerFlow 和 Direct LLM 输出格式统一~~ — `runs_stream.py` + `sse_gateway.py` 统一
+
+**仍需验收 (Phase 2):**
+- [ ] Capability Registry (`capability_registry.py`)
+- [ ] `/api/v1/capabilities` 端点
+- [ ] Capability Grid on AI Hub
+- [ ] 动态 input_mode 渲染
 
 ### 7.2 性能验收
 
@@ -851,18 +835,21 @@ AI 正在分析...
 
 ---
 
-## 9. 结语
+## 9. 结语 (更新)
 
-这份设计文档从资深 AI Agent 设计师视角，提出了：
+> **2026-06-25 更新:** 本文档约 70% 的内容已在 `feat/unify-ai-chat-input-box` 分支上实现。
 
-1. **交互范式转变**：从自由输入 → Capability 发现
-2. **协议标准化**：从 [THINK]/[TEXT] 前缀 → 结构化 NDJSON
-3. **工程化落地**：Deer-Flow Harness 深度集成
-4. **体验提升**：Tool Calling 可视化、阶段反馈细化
+**已完成的:**
+1. ~~交互范式转变~~ — LangGraph SSE 替代 `[THINK]/[TEXT]` 前缀
+2. ~~协议标准化~~ — 结构化事件流 (messages-tuple/values/custom)
+3. ~~Tool Calling 可视化~~ — `PlanningStepsPanel.vue` + `MessageGroup.vue`
+4. ~~InputBox 统一~~ — 单一 `InputBox.vue` (1,217 行)
+5. ~~SSE 网关统一~~ — `runs_stream.py` + `sse_gateway.py`
 
-核心价值：
-- **用户**: 更快发现 AI 价值，更透明地理解 AI 工作
-- **开发**: 统一协议、统一架构、降低维护成本
-- **产品**: 可扩展的 Capability 体系，支持未来更多场景
+**仍需完成的 (Phase 2 核心):**
+1. **Capability Registry** (后端 `capability_registry.py` + `/api/v1/capabilities` 端点)
+2. **Capability Grid UI** on AI Hub
+3. **动态 input_mode 渲染** (`structured`, `asset_selector`, `confirm_dialog`)
 
-建议按 Phase 1→4 逐步实施，每个 Phase 都有明确的验收标准和回滚方案。
+**建议:** 将 Capability Registry 部分提取为独立的设计文档，因为这是本文档剩余最有价值的工作。
+本文档保留作为历史参考和架构决策记录。
