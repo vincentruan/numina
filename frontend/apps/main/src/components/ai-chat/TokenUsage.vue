@@ -64,20 +64,22 @@ const debouncedFetch = () => {
   debounceTimer = setTimeout(fetchUsage, 500)
 }
 
-// Polling during streaming (fallback when per-message data not yet available)
+// Polling during streaming (fallback when per-message data not yet available).
+// Watch BOTH isStreaming and usageMetadata (#26): polling must stop the moment
+// per-message data arrives via props (from a values event), not only when the
+// stream ends — otherwise requests fire for the whole stream after data is in.
 watch(
-  () => props.isStreaming,
-  (streaming) => {
+  () => [props.isStreaming, props.usageMetadata] as const,
+  ([streaming, usageMetadata]) => {
     if (props.mode !== 'inline') return
-    if (streaming && !props.usageMetadata) {
-      // Start polling
-      pollTimer = setInterval(fetchUsage, 1500)
-    } else {
-      // Stop polling
-      if (pollTimer !== null) {
-        clearInterval(pollTimer)
-        pollTimer = null
+    const shouldPoll = streaming && !usageMetadata
+    if (shouldPoll) {
+      if (pollTimer === null) {
+        pollTimer = setInterval(fetchUsage, 1500)
       }
+    } else if (pollTimer !== null) {
+      clearInterval(pollTimer)
+      pollTimer = null
     }
   },
 )
@@ -140,17 +142,17 @@ function formatTokenCount(n: number): string {
     <span class="token-label">{{ t('aiChat.usageToken', 'Token') }}</span>
     <span class="token-sep">·</span>
     <span class="token-item">
-      <span class="token-item-label">{{ t('aiChat.tokensInput', '输入') }}</span>
+      <span class="token-item-label">{{ t('aiChat.tokensInput') }}</span>
       <strong>{{ formatTokenCount(effectiveUsage.prompt_tokens) }}</strong>
     </span>
     <span class="token-sep">·</span>
     <span class="token-item">
-      <span class="token-item-label">{{ t('aiChat.tokensOutput', '输出') }}</span>
+      <span class="token-item-label">{{ t('aiChat.tokensOutput') }}</span>
       <strong>{{ formatTokenCount(effectiveUsage.completion_tokens) }}</strong>
     </span>
     <span class="token-sep">·</span>
     <span class="token-item token-item-total">
-      <span class="token-item-label">{{ t('aiChat.tokensTotal', '总计') }}</span>
+      <span class="token-item-label">{{ t('aiChat.tokensTotal') }}</span>
       <strong>{{ formatTokenCount(effectiveUsage.total_tokens) }}</strong>
     </span>
   </span>

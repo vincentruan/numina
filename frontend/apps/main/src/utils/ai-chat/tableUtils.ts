@@ -62,12 +62,27 @@ export function htmlTableToMarkdown(html: string): string {
   return lines.join('\n')
 }
 
-/** Escape a CSV field (handle commas, quotes, newlines) */
+/**
+ * Escape a CSV field (handle commas, quotes, newlines) AND neutralize CSV
+ * formula injection (#14).
+ *
+ * Cells that begin with a formula trigger character (= + - @ \t \r) are
+ * prefixed with a single quote, which spreadsheet apps (Excel, LibreOffice,
+ * Google Sheets) treat as a literal-text escape. AI-generated table content is
+ * attacker-influenceable (prompt injection), so a cell like `=HYPERLINK(...)`
+ * must not execute when the user opens the downloaded CSV.
+ */
 export function escapeCsvField(field: string): string {
-  if (field.includes(',') || field.includes('"') || field.includes('\n')) {
-    return '"' + field.replace(/"/g, '""') + '"'
+  // OWASP-recommended mitigation: prefix dangerous leading chars.
+  const DANGEROUS_PREFIX = /^[=+\-@\t\r]/
+  let safe = field
+  if (DANGEROUS_PREFIX.test(safe)) {
+    safe = "'" + safe
   }
-  return field
+  if (safe.includes(',') || safe.includes('"') || safe.includes('\n')) {
+    return '"' + safe.replace(/"/g, '""') + '"'
+  }
+  return safe
 }
 
 /** Convert HTML table to CSV string with UTF-8 BOM */
