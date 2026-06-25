@@ -158,6 +158,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     return msg
   }
 
+  function addOptimisticAiMessage(): ChatMessage {
+    const msg: ChatMessage = {
+      id: `ai-optimistic-${crypto.randomUUID()}`,
+      type: 'ai',
+      role: 'assistant',
+      content: '',
+      displayTime: formatDisplayTime(),
+      phase: 'connecting',
+    }
+    messages.value = [...messages.value, msg]
+    return msg
+  }
+
   /**
    * Merge a DeerFlow messages-tuple event.
    *
@@ -315,6 +328,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     abortController = new AbortController()
 
     const userMsg = addOptimisticUserMessage(text)
+    addOptimisticAiMessage()
 
     // Resolve thread before streaming
     try {
@@ -332,6 +346,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       const e = err as Error
       userMsg.sendStatus = 'failed'
       error.value = e.message || t('aiChat.sendFailed')
+      // Remove empty optimistic AI message on thread creation failure
+      const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+      if (lastIdx >= 0 && messages.value[lastIdx].content === '') {
+        messages.value = [
+          ...messages.value.slice(0, lastIdx),
+          ...messages.value.slice(lastIdx + 1),
+        ]
+      }
       isLoading.value = false
       return
     }
@@ -532,6 +554,17 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     createdThreadInThisCall = false
     isLoading.value = false
     abortController = null
+
+    // Clean up empty optimistic AI message on total failure
+    if (!streamSucceeded) {
+      const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+      if (lastIdx >= 0 && messages.value[lastIdx].content === '') {
+        messages.value = [
+          ...messages.value.slice(0, lastIdx),
+          ...messages.value.slice(lastIdx + 1),
+        ]
+      }
+    }
 
     // Clean up orphan thread created during this call (only on total failure)
     if (!streamSucceeded && createdThreadInThisCall && currentThreadId) {

@@ -107,6 +107,14 @@ vi.mock('../../src/stores/agent', () => ({
   })),
 }))
 
+vi.mock('../../src/stores/capability', () => ({
+  useCapabilityStore: vi.fn(() => ({
+    capabilities: [],
+    loading: false,
+    loadCapabilities: vi.fn(() => Promise.resolve([])),
+  })),
+}))
+
 vi.mock('vant', () => ({
   showToast: vi.fn(),
 }))
@@ -137,6 +145,7 @@ describe('AIHubPage chat entry', () => {
           VanCell: true,
           AgentCard: true,
           NuminaAgentCard: true,
+          CapabilityCard: true,
           AIBrainIcon: true,
           SvgIcon: true,
         },
@@ -206,6 +215,7 @@ describe('AIHubPage chat entry', () => {
           VanCell: true,
           AgentCard: true,
           NuminaAgentCard: true,
+          CapabilityCard: true,
           AIBrainIcon: true,
           SvgIcon: true,
         },

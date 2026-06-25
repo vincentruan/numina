@@ -19,6 +19,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
+import WelcomeExamples from './WelcomeExamples.vue'
 import IIcon from '@/components/IIcon.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
@@ -88,6 +89,7 @@ const focused = ref(false)
 const expanded = ref(false)
 const panelOpen = ref(false)
 const panelTriggerRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
 const webSearchEnabled = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
 
@@ -211,6 +213,23 @@ function onSubmit() {
   expanded.value = false
 }
 
+// Welcome examples
+function handleWelcomeExampleSelect(prompt: string) {
+  internalValue.value = prompt
+  setTimeout(() => onSubmit(), 0)
+}
+
+function handleSurpriseMe() {
+  const surprisePrompts = [
+    t('aiChat.welcomeExampleAnalyzePrompt'),
+    t('aiChat.welcomeExamplePlanPrompt'),
+    t('aiChat.welcomeExampleLearnPrompt'),
+    t('aiChat.welcomeExampleOptimizePrompt'),
+  ]
+  const randomPrompt = surprisePrompts[Math.floor(Math.random() * surprisePrompts.length)]
+  internalValue.value = randomPrompt
+}
+
 function onModeSelect(mode: InputMode) {
   if (mode === 'ultra' && !supportsSubagent.value) {
     showToast(t('aiChat.tenantUltraDisabled'))
@@ -290,22 +309,31 @@ const panelPosition = ref<Record<string, string>>({})
 function updatePanelPosition() {
   if (!panelTriggerRef.value || !panelOpen.value) return
   const rect = panelTriggerRef.value.getBoundingClientRect()
-  const bottom = window.innerHeight - rect.top + 8
-  // Clamp: ensure panel doesn't go off-screen top
-  const panelHeight = 200 // approximate max height
-  const adjustedBottom = bottom > panelHeight ? bottom : panelHeight
-  panelPosition.value = {
-    position: 'fixed',
-    bottom: `${adjustedBottom}px`,
-    left: `${rect.left}px`,
-    maxWidth: `calc(100vw - 32px)`,
-  }
+  nextTick(() => {
+    const panelEl = panelRef.value
+    const panelHeight = panelEl ? panelEl.offsetHeight : 162
+    const gap = 8
+    const panelTop = rect.top - panelHeight - gap
+    const panelLeft = rect.left
+    const panelWidth = panelEl ? panelEl.offsetWidth : 160
+    let left = panelLeft
+    if (left + panelWidth > window.innerWidth - 16) {
+      left = Math.max(16, window.innerWidth - panelWidth - 16)
+    }
+    panelPosition.value = {
+      position: 'fixed',
+      top: `${Math.max(0, panelTop)}px`,
+      left: `${left}px`,
+      maxWidth: `calc(100vw - 32px)`,
+    }
+  })
 }
 
-function onPanelOpen() {
-  panelOpen.value = true
-  // Use nextTick to ensure the button is rendered before calculating position
-  nextTick(() => updatePanelPosition())
+function togglePanel() {
+  panelOpen.value = !panelOpen.value
+  if (panelOpen.value) {
+    nextTick(() => updatePanelPosition())
+  }
 }
 
 // Click outside handler (for plus panel)
@@ -331,12 +359,15 @@ onMounted(() => {
   document.addEventListener('click', onDocClick, true)
   window.addEventListener('scroll', onScrollOrResize, true)
   window.addEventListener('resize', onScrollOrResize)
+  // Listen for visualViewport changes (mobile Safari address bar show/hide)
+  window.visualViewport?.addEventListener('resize', onScrollOrResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick, true)
   window.removeEventListener('scroll', onScrollOrResize, true)
   window.removeEventListener('resize', onScrollOrResize)
+  window.visualViewport?.removeEventListener('resize', onScrollOrResize)
 })
 </script>
 
@@ -349,8 +380,22 @@ onUnmounted(() => {
     ]"
     @click.self="closePanel"
   >
+    <!-- Welcome hero (welcome mode only) -->
+    <div v-if="isWelcomeMode" class="welcome-hero">
+      <h2 class="hero-title">{{ displayAgentLabel || t('aiChat.heroTitleChat') }}</h2>
+      <p class="hero-subtitle">{{ t('aiChat.heroSubtitleChat') }}</p>
+    </div>
+
+    <!-- Welcome examples (welcome mode only) -->
+    <WelcomeExamples
+      v-if="isWelcomeMode"
+      :agent-id="agentId || 'numina'"
+      @select="handleWelcomeExampleSelect"
+      @surprise="handleSurpriseMe"
+    />
+
     <div class="input-card-border">
-      <div class="input-card-inner">
+      <div class="input-card-inner input-row">
         <!-- Attachments preview row (above textarea) -->
         <div v-if="attachments && attachments.length > 0" class="attachments-row">
           <div
@@ -387,6 +432,7 @@ onUnmounted(() => {
             v-model="internalValue"
             class="chat-textarea"
             :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
+            :aria-label="t('aiChat.inputAriaLabel')"
             :disabled="disabled || status === 'submitted'"
             rows="4"
             @keydown.enter.ctrl="onSubmit"
@@ -420,7 +466,7 @@ onUnmounted(() => {
             <!-- Plus panel (teleported, positioned relative to + button) -->
             <Teleport to="body">
               <Transition name="panel">
-                <div v-if="panelOpen" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')" :style="panelPosition">
+                <div v-if="panelOpen" ref="panelRef" class="plus-panel" role="menu" :aria-label="t('aiChat.moreFeatures')" :style="panelPosition">
                   <button
                     v-for="item in panelItems"
                     :key="item.action"
@@ -448,17 +494,19 @@ onUnmounted(() => {
               @click="emit('selectAgent')"
             >
               <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
-              <AIBrainIcon v-if="isNuminaAgent" :active="false" />
-              <span v-else-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
-                {{ getAgentIcon(displayAgentIcon) }}
-              </span>
-              <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
-              <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="4"/>
-                <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
-                <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
-                <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
-              </svg>
+              <AIBrainIcon v-if="isNuminaAgent" :active="true" />
+              <template v-else>
+                <span v-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
+                  {{ getAgentIcon(displayAgentIcon) }}
+                </span>
+                <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+                <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <rect x="3" y="3" width="18" height="18" rx="4"/>
+                  <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+                  <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
+                  <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
+                </svg>
+              </template>
             </button>
             <!-- Static agent icon in chat mode -->
             <span
@@ -467,9 +515,11 @@ onUnmounted(() => {
               :title="displayAgentLabel"
             >
               <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
-              <AIBrainIcon v-if="isNuminaAgent" :active="false" />
-              <span v-else-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
-              <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+              <AIBrainIcon v-if="isNuminaAgent" :active="true" />
+              <template v-else>
+                <span v-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
+                <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+              </template>
             </span>
 
             <!-- [2] Mode selector (4-mode DeerFlow) -->
@@ -503,7 +553,7 @@ onUnmounted(() => {
               :class="{ 'control-btn--open': panelOpen }"
               :aria-label="t('aiChat.moreFeatures')"
               :aria-expanded="panelOpen"
-              @click.stop="onPanelOpen"
+              @click.stop="togglePanel"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <line x1="12" y1="5" x2="12" y2="19"/>
@@ -529,7 +579,7 @@ onUnmounted(() => {
             </button>
             <button
               v-else
-              class="send-btn"
+              class="send-btn submit-btn"
               :class="{ 'send-btn--active': internalValue.trim() }"
               :disabled="disabled || !internalValue.trim()"
               :aria-label="t('common.send')"
@@ -599,6 +649,34 @@ onUnmounted(() => {
   padding: 8px 16px;
   box-sizing: border-box;
   transition: all 0.2s ease;
+}
+
+.input-box.welcome-mode {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  z-index: 1;
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.welcome-hero {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.hero-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.hero-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-top: 4px;
 }
 
 /* ── Premium Gradient Border wrapper ── */
@@ -746,28 +824,33 @@ onUnmounted(() => {
   height: 20px;
 }
 
-/* Scale down AIBrainIcon to fit the control button */
-.control-btn :deep(.ai-button-3d) {
-  width: 24px;
-  height: 24px;
-  padding: 4px;
+/* Scale down AIBrainIcon to fit the control button and match other 20px icons */
+.control-btn :deep(.ai-button-3d),
+.agent-static-icon :deep(.ai-button-3d) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
   box-shadow: none;
   background: transparent;
   border: none;
+  transform: none !important;
 }
 
-.control-btn :deep(.ai-button-wrapper) {
-  transform: none;
+.control-btn :deep(.ai-button-wrapper),
+.agent-static-icon :deep(.ai-button-wrapper) {
+  transform: none !important;
 }
 
-.control-btn :deep(.fg-icon) {
-  width: 16px;
-  height: 16px;
+.control-btn :deep(.fg-icon),
+.agent-static-icon :deep(.fg-icon) {
+  width: 20px;
+  height: 20px;
 }
 
-.control-btn :deep(.bg-icon) {
-  width: 14px;
-  height: 14px;
+.control-btn :deep(.bg-icon),
+.agent-static-icon :deep(.bg-icon) {
+  width: 18px;
+  height: 18px;
 }
 
 .control-btn:hover {

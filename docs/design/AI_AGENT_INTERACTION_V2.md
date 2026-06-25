@@ -11,7 +11,7 @@
 | Phase | 目标 | 状态 | 关键文件 |
 |-------|------|------|----------|
 | **Phase 1: Protocol 统一** | 替换 `[THINK]/[TEXT]` 前缀 | **已完成** (使用 LangGraph SSE，非 NDJSON) | `runs.py` 删除 (304L)，`runs_stream.py` (139L)，`sse_gateway.py` (182L)，`useThreadChat.ts` |
-| **Phase 2: Capability Registry** | 后端注册中心 + Capability Grid UI | **后端已完成，前端 UI 待完成** | `capability_registry.py` (296L)，`routers/capabilities.py`，`stores/capability.ts`，`CapabilityPickerSheet.vue` |
+| **Phase 2: Capability Registry** | 后端注册中心 + Capability Grid UI | **后端已完成，前端 UI 已完成** | `capability_registry.py` (296L)，`routers/capabilities.py`，`stores/capability.ts`，`CapabilityCard.vue`，`AIHubPage.vue` |
 | **Phase 3: Tool Calling UI** | 工具调用可视化 | **已完成** | `PlanningStepsPanel.vue` (239L)，`MessageGroup.vue`，`TokenUsage.vue`，`StreamingIndicator.vue` |
 | **Phase 4: Harness 深度集成** | 统一 dispatch + 多步骤可视化 | **部分完成** | `subagent_registry.py`，`agent_dispatch.py`，`worker.py`，`gc.py`，`lifespan.py`，`run_extras.py`，`sandbox_provider.py` |
 
@@ -696,29 +696,26 @@ export function useEventStream(options: {
 - 重试机制（指数退避 + 抖动）、流超时、用户取消
 - 集成测试 `test_v2_sse_contract.py` (269 行)
 
-### 5.2 ~~Phase 2: Capability Registry~~ — **后端已完成，前端 UI 部分完成**
+### 5.2 ~~Phase 2: Capability Registry~~ — **后端已完成，前端 UI 已完成**
 
-> **2026-06-25 更新:** Capability Registry 后端和前端 API 均已实现，仅需 AI Hub 页面改造。
+> **2026-06-25 更新:** Capability Grid 已在 AIHubPage 上实现!
 
 **已完成 (后端):**
-- `agent/services/capability_registry.py` (296 行) — 完整实现:
-  - Fixed capabilities (`chat`, `time_machine`)
-  - Builtin capabilities (从 `skills/builtin/*/SKILL.md` 加载)
-  - Custom capabilities (从 `skills/custom/{family_id}/*/SKILL.md` 加载)
-  - 家庭级别过滤 (`list_capabilities_for_family` + `ai_skills` API 集成)
+- `agent/services/capability_registry.py` (296 行) — 完整实现
 - `agent/routers/capabilities.py` — `GET /capabilities` + `GET /capabilities?family_id=X`
 - `agent/schemas/capability.py` — 完整 Pydantic schemas
 
-**已完成 (前端 API/Store):**
+**已完成 (前端 API/Store/UI):**
 - `stores/capability.ts` — Pinia store with `loadCapabilities()`
 - `api/ai.ts` — `getAICapabilities()` → `GET /api/v1/ai/capabilities`
 - `AICapability` TypeScript 接口 (匹配后端 schema)
+- `CapabilityCard.vue` — 能力卡片组件 (icon, color, name, description, example questions)
+- `AIHubPage.vue` — Capability Grid 集成在 Hub 页面 (位于 Agent 区域上方)
 - `AIChatInput.vue` — slash command palette 使用 capability store
 - `CapabilityPickerSheet.vue` — 能力选择器 UI
 
-**仍需完成 (前端 UI):**
-- AI Hub 页面改为 Capability Grid 展示 (当前使用 Agent Card)
-- Capability-scoped chat flows (`router.push({ capability })`)
+**仍需完成:**
+- Capability-scoped chat flows (`router.push({ capability })`) — 路由已实现，AIChatBox 需处理 capability 参数
 - 动态 `input_mode` 渲染 (`structured`, `asset_selector`, `confirm_dialog`)
 
 ### 5.3 ~~Phase 3: Tool Calling UI~~ — **已完成**

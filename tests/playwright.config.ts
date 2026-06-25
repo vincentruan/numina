@@ -8,8 +8,10 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
 
   use: {
-    baseURL: 'http://localhost',
+    baseURL: 'http://localhost:5173',
     viewport: { width: 390, height: 844 },
+    screenshot: 'on',
+    trace: 'on',
     // httpOnly cookies require credentials to be sent
     // Axios uses withCredentials: true — browser context handles this automatically
   },
@@ -19,6 +21,7 @@ export default defineConfig({
       name: 'chromium',
       use: {
         ...devices['Desktop Chrome'],
+        channel: 'chrome',
         viewport: { width: 390, height: 844 },
       },
     },

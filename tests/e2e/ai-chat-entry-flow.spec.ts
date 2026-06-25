@@ -23,7 +23,7 @@ test.describe('AI chat entry flow', () => {
     await page.getByLabel('向 AI 提问').fill('请概括我们家的资产情况')
 
     const streamRequest = page.waitForRequest((request) =>
-      request.url().includes('/api/v1/ai/chat/stream')
+      request.url().includes('runs/stream')
     )
 
     await page.getByRole('button', { name: '发送' }).click()

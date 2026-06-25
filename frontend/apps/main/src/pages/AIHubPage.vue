@@ -122,6 +122,22 @@
 
     <!-- Agent sections: 数鸣 featured card → My Agents → Analysis Apps -->
     <div class="feature-section">
+      <!-- Capability Grid: system-defined capabilities for discovery -->
+      <div v-if="capabilityStore.capabilities.length > 0" class="capability-section">
+        <div class="capability-section__header">
+          <span class="capability-section__title">{{ t('aiHub.capabilities') }}</span>
+          <span class="capability-section__count">{{ t('aiHub.capabilitiesCount', { count: capabilityStore.capabilities.length }) }}</span>
+        </div>
+        <div class="capability-grid">
+          <CapabilityCard
+            v-for="cap in capabilityStore.capabilities"
+            :key="cap.id"
+            :capability="cap"
+            @click="handleCapabilityClick"
+          />
+        </div>
+      </div>
+
       <!-- 数鸣 featured card (full width) -->
       <NuminaAgentCard @consult="handleNuminaConsult" />
 
@@ -263,10 +279,12 @@ import { getSystemDefaultSession } from '@/api/sessions'
 import { useAIStore } from '@/stores/ai'
 import { useAgentStore } from '@/stores/agent'
 import { useAuthStore } from '@/stores/auth'
+import { useCapabilityStore } from '@/stores/capability'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAIReportStream } from '@/composables/useAIReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
+import CapabilityCard from '@/components/ai-chat/CapabilityCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import IIcon from '@/components/IIcon.vue'
@@ -277,6 +295,7 @@ import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
+import type { AICapability } from '@/api/ai'
 
 const NUMINA_AGENT_NAME = 'numina'
 
@@ -286,6 +305,7 @@ const router = useRouter()
 const aiStore = useAIStore()
 const agentStore = useAgentStore()
 const authStore = useAuthStore()
+const capabilityStore = useCapabilityStore()
 const stream = useAIReportStream()
 const isOwner = authStore.user?.role === 'owner'
 
@@ -546,6 +566,18 @@ function handleAgentConsult(agent: Agent) {
   router.push({ name: 'AIChat', query: { agentId: agent.id } })
 }
 
+function handleCapabilityClick(cap: AICapability) {
+  // Route to the capability's dedicated page or default to AI chat
+  if (cap.ui.route) {
+    router.push(cap.ui.route)
+  } else {
+    router.push({
+      path: '/ai/chat',
+      query: { capability: cap.id },
+    })
+  }
+}
+
 function handleNuminaConsult() {
   if (!numinaAgent.value) return
   const agentId = numinaAgent.value.id
@@ -571,6 +603,7 @@ function handleAgentEdit(agent: Agent) {
 onMounted(async () => {
   await aiStore.fetchConfig()
   await agentStore.loadAgents()
+  await capabilityStore.loadCapabilities()
   await loadReport()
   initialLoading.value = false
 })
@@ -1019,6 +1052,45 @@ defineExpose({
 .feature-section {
   padding: 0 16px;
   margin-top: 4px;
+}
+
+/* ── Capability grid section ── */
+.capability-section {
+  margin-top: 12px;
+}
+
+.capability-section__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--card-bg);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.capability-section__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.capability-section__count {
+  font-size: 12px;
+  color: var(--van-primary-color);
+  background: rgba(25, 137, 250, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+[data-theme='dark'] .capability-section__count {
+  background: rgba(189, 187, 255, 0.15);
+}
+
+.capability-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
 /* Collapsible section styles */

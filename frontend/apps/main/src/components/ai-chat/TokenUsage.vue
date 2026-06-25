@@ -118,10 +118,10 @@ function formatTokenCount(n: number): string {
     </div>
     <template #reference>
       <button
+        v-show="usage.total_tokens > 0"
         class="header-btn token-usage-btn"
         :class="{ 'has-tokens': usage.total_tokens > 0 }"
         :title="t('aiChat.tokenUsage', 'Token Usage')"
-        v-show="usage.total_tokens > 0"
       >
         <van-loading v-if="loading" type="spinner" size="14" />
         <template v-else>

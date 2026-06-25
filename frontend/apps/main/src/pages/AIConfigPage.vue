@@ -15,6 +15,7 @@
           item-key="id"
           handle=".drag-handle"
           animation="200"
+          class="draggable-list"
           @end="onDragEnd"
         >
           <template #item="{ element: cfg, index }">
@@ -432,6 +433,9 @@ onMounted(async () => {
 
 .provider-list {
   padding: 12px 16px 0;
+}
+
+.draggable-list {
   display: flex;
   flex-direction: column;
   gap: 12px;

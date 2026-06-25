@@ -68,21 +68,30 @@ const popupPosition = ref<Record<string, string>>({})
 function updatePopupPosition() {
   if (!triggerRef.value || !popupOpen.value) return
   const rect = triggerRef.value.getBoundingClientRect()
-  let bottom = window.innerHeight - rect.top + 8
-  // Clamp: ensure panel doesn't go above viewport
-  const minBottom = 300 // approximate dropdown card height + padding
-  if (bottom < minBottom) bottom = minBottom
+  // Use visualViewport for mobile Safari compatibility (excludes browser chrome)
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const gap = 8
+  
+  const panelLeft = rect.left
+  const popupWidth = 300
+  let left = panelLeft
+  if (left + popupWidth > window.innerWidth - 16) {
+    left = Math.max(16, window.innerWidth - popupWidth - 16)
+  }
+
   popupPosition.value = {
     position: 'fixed' as const,
-    bottom: `${bottom}px`,
-    left: `${rect.left}px`,
+    bottom: `${viewportHeight - rect.top + gap}px`,
+    left: `${left}px`,
     maxWidth: `calc(100vw - 32px)`,
   }
 }
 
-function onPopupOpen() {
-  popupOpen.value = true
-  nextTick(() => updatePopupPosition())
+function togglePopup() {
+  popupOpen.value = !popupOpen.value
+  if (popupOpen.value) {
+    nextTick(() => updatePopupPosition())
+  }
 }
 
 // Scroll/resize listener for reactive popup positioning
@@ -119,6 +128,8 @@ onMounted(() => {
   document.addEventListener('click', onOutsideClick, true)
   window.addEventListener('scroll', onScrollOrResize, true)
   window.addEventListener('resize', onScrollOrResize)
+  // Listen for visualViewport changes (mobile Safari address bar show/hide)
+  window.visualViewport?.addEventListener('resize', onScrollOrResize)
 })
 
 onUnmounted(() => {
@@ -126,6 +137,7 @@ onUnmounted(() => {
   document.removeEventListener('click', onOutsideClick, true)
   window.removeEventListener('scroll', onScrollOrResize, true)
   window.removeEventListener('resize', onScrollOrResize)
+  window.visualViewport?.removeEventListener('resize', onScrollOrResize)
 })
 </script>
 
@@ -135,7 +147,10 @@ onUnmounted(() => {
     ref="triggerRef"
     class="mode-trigger control-btn"
     :class="{ 'mode-trigger--ultra': currentMode === 'ultra' }"
-    @click="onPopupOpen"
+    :aria-label="t('aiChat.modeSmart')"
+    :title="t('aiChat.modeSmart')"
+    :aria-pressed="currentMode !== 'flash' ? 'true' : 'false'"
+    @click.stop="togglePopup"
   >
     <IIcon :icon="getModeIcon(currentMode)" class="mode-trigger-icon" />
   </button>
