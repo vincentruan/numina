@@ -14,12 +14,6 @@ def seed_minimal():
     db = SessionLocal()
 
     try:
-        # Check for invitation code
-        result = db.execute(text("SELECT code FROM family_invitation_codes WHERE code = 'DEMO-CODE'"))
-        if not result.fetchone():
-            db.execute(text("INSERT INTO family_invitation_codes (code) VALUES ('DEMO-CODE')"))
-            print("Created invitation code: DEMO-CODE")
-
         # Check for existing user
         result = db.execute(text("SELECT id, family_id FROM users WHERE username = 'demouser'"))
         user_row = result.fetchone()
@@ -46,6 +40,22 @@ def seed_minimal():
             """), {"uid": user_id, "hash": password_hash, "fid": family_id, "now": datetime.utcnow()})
 
             print(f"Created demouser: user_id={user_id}, family_id={family_id}")
+
+        # Check for invitation code and link it to the family
+        result = db.execute(text("SELECT code FROM family_invitation_codes WHERE code = 'DEMO-CODE'"))
+        if not result.fetchone():
+            from packages.core.snowflake import next_id as _next_id
+            db.execute(text("""
+                INSERT INTO family_invitation_codes (id, code, is_used, used_at, used_by_family_id, used_by_username)
+                VALUES (:cid, 'DEMO-CODE', 1, :now, :fid, 'demouser')
+            """), {"cid": _next_id(), "now": datetime.utcnow(), "fid": family_id})
+            print("Created invitation code: DEMO-CODE")
+        else:
+            db.execute(text("""
+                UPDATE family_invitation_codes
+                SET is_used = 1, used_at = :now, used_by_family_id = :fid, used_by_username = 'demouser'
+                WHERE code = 'DEMO-CODE'
+            """), {"now": datetime.utcnow(), "fid": family_id})
 
         db.commit()
 

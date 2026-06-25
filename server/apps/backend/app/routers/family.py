@@ -10,7 +10,7 @@ from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.asset import Asset
 from apps.backend.app.models.child_economy_config import ChildEconomyConfig
-from apps.backend.app.models.family import Family
+from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
 from apps.backend.app.models.liability import Liability
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.auth import UpdateMemberInfoRequest, UserResponse
@@ -57,11 +57,14 @@ def get_family(
     response.headers["Cache-Control"] = "private, max-age=300"
     family = family_service.get_family_info(db, user)
     members = family_service.get_family_members(db, user)
+    invitation_record = db.query(FamilyInvitationCode).filter(FamilyInvitationCode.used_by_family_id == family.id).first()
+    creator_code = invitation_record.code if invitation_record else None
     return FamilyResponse(
         id=family.id,
         name=family.name,
         custom_title=family.custom_title,
         invite_code=family.invite_code,
+        creator_code=creator_code,
         created_by=family.created_by,
         members=[UserResponse.model_validate(m) for m in members],
     )
@@ -74,11 +77,14 @@ def update_family_title(
 ):
     family = family_service.update_family_title(db, user, body.custom_title)
     members = family_service.get_family_members(db, user)
+    invitation_record = db.query(FamilyInvitationCode).filter(FamilyInvitationCode.used_by_family_id == family.id).first()
+    creator_code = invitation_record.code if invitation_record else None
     return FamilyResponse(
         id=family.id,
         name=family.name,
         custom_title=family.custom_title,
         invite_code=family.invite_code,
+        creator_code=creator_code,
         created_by=family.created_by,
         members=[UserResponse.model_validate(m) for m in members],
     )
