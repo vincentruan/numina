@@ -2,8 +2,8 @@ import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
-import type { ChatMessage, ToolCallSummary, PlanningStep } from '@/types/ai-chat/message-group'
-import { getToolIcon } from '@/utils/ai-chat/tool-icon-map'
+import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
+import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
 
 export type { ChatMessage }
 
@@ -76,7 +76,7 @@ function toToolCallSummaries(
   toolCalls: Array<{ id?: string; name: string; args: string | object }>,
 ): ToolCallSummary[] {
   return toolCalls.map((tc, i) => ({
-    id: tc.id || `tc-${Date.now()}-${i}`,
+    id: tc.id || `tc-${crypto.randomUUID()}`,
     name: tc.name,
     displayName: tc.name,
     args: parseArgs(tc.args),
@@ -92,7 +92,7 @@ function serializedToChatMessage(m: SerializedMessage): ChatMessage {
   const role = type === 'human' ? 'user' as const : 'assistant' as const
 
   const msg: ChatMessage = {
-    id: m.id || `msg-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: m.id || `msg-${crypto.randomUUID()}`,
     type,
     role,
     content: m.content || '',
@@ -132,7 +132,11 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
   let streamTimeoutId: ReturnType<typeof setTimeout> | null = null
+  let retryDelayId: ReturnType<typeof setTimeout> | null = null
   let createdThreadInThisCall = false
+  // Distinguishes a user-initiated cancel from a stream timeout/error abort.
+  // Timeout and stream errors must be retryable; a user cancel must not be.
+  let userCancelled = false
 
   const STREAM_TIMEOUT_MS = 120_000
   const SSE_RETRY_DELAYS = [1000, 2000, 4000] as const
@@ -143,7 +147,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   function addOptimisticUserMessage(text: string): ChatMessage {
     const msg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${crypto.randomUUID()}`,
       type: 'human',
       role: 'user',
       content: text,
@@ -183,7 +187,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       } else {
         // New AI message
         const msg: ChatMessage = {
-          id: chunkId || `ai-${Date.now()}`,
+          id: chunkId || `ai-${crypto.randomUUID()}`,
           type: 'ai',
           role: 'assistant',
           content: chunk.content,
@@ -201,7 +205,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     } else if (chunk.type === 'tool') {
       // Tool result message
       const msg: ChatMessage = {
-        id: chunk.id || `tool-${Date.now()}`,
+        id: chunk.id || `tool-${crypto.randomUUID()}`,
         type: 'tool',
         role: 'assistant',
         content: chunk.content,
@@ -248,17 +252,38 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       messages.value = [...messages.value, ...newOnes]
     }
 
-    // Backfill usage_metadata on existing AI messages
+    // Backfill/refresh usage_metadata on existing AI messages. Values events are
+    // authoritative full-state snapshots emitted multiple times per run; a later
+    // values event may carry the COMPLETE usage after an earlier one carried
+    // partial. Always overwrite with the latest incoming usage (#16) and do it
+    // in a single array rebuild instead of one slice per match (#18).
+    const usageById = new Map<string, UsageMetadata>()
     for (const m of mapped) {
       if (m.usageMetadata && m.type === 'ai') {
-        const idx = messages.value.findIndex(msg => msg.id === m.id)
-        if (idx >= 0 && !messages.value[idx].usageMetadata) {
-          messages.value = [
-            ...messages.value.slice(0, idx),
-            { ...messages.value[idx], usageMetadata: m.usageMetadata },
-            ...messages.value.slice(idx + 1),
-          ]
+        usageById.set(m.id, m.usageMetadata)
+      }
+    }
+    if (usageById.size > 0) {
+      let changed = false
+      const next = messages.value.map(msg => {
+        const incoming = usageById.get(msg.id)
+        if (incoming && msg.type === 'ai' && msg.usageMetadata !== incoming) {
+          // Overwrite with the authoritative latest counts (input+output tokens
+          // grow as the run progresses; the final values event has the totals).
+          const prev = msg.usageMetadata
+          if (
+            !prev
+            || incoming.inputTokens >= prev.inputTokens
+            || incoming.outputTokens >= prev.outputTokens
+          ) {
+            changed = true
+            return { ...msg, usageMetadata: incoming }
+          }
         }
+        return msg
+      })
+      if (changed) {
+        messages.value = next
       }
     }
   }
@@ -271,10 +296,8 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }): PlanningStep {
     const toolName = customData.tool_name || 'unknown'
     return {
-      id: customData.tool_call_id || `step-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      id: customData.tool_call_id || `step-${crypto.randomUUID()}`,
       toolName,
-      displayName: toolName,
-      icon: getToolIcon(toolName),
       args: customData.args || {},
       status: 'running',
       timestamp: Date.now(),
@@ -288,6 +311,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     planningSteps.value = []
     suggestions.value = []
     runId.value = null
+    userCancelled = false
     abortController = new AbortController()
 
     const userMsg = addOptimisticUserMessage(text)
@@ -315,27 +339,66 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // Stream with retry
     let retryCount = 0
     let streamSucceeded = false
+    // True once an `end` chunk arrives in the current attempt. Distinguishes a
+    // clean stream-end (decide success/failure by content) from a mid-stream
+    // drop (decide success by whether we got substantial content). Reset to
+    // false at the top of each attempt so a prior iteration's `end` doesn't leak.
+    let streamEnded: boolean
 
     while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
+      streamEnded = false
       if (retryCount > 0) {
-        const delay = SSE_RETRY_DELAYS[retryCount - 1]
-        await new Promise(resolve => setTimeout(resolve, delay))
-        if (abortController?.signal.aborted) break
+        // Exponential backoff with jitter to avoid thundering herd on backend
+        // recovery (#24). Jitter is bounded to [85%, 100%] of the base delay so
+        // the timer always fires no later than the base delay — this keeps retry
+        // behavior deterministic enough for tests that advance the exact base
+        // delay values (1s/2s/4s) while still desynchronizing concurrent clients.
+        const baseDelay = SSE_RETRY_DELAYS[retryCount - 1]
+        const jitteredDelay = Math.floor(baseDelay * (0.85 + Math.random() * 0.15))
+        await new Promise(resolve => {
+          retryDelayId = setTimeout(resolve, jitteredDelay)
+        })
+        retryDelayId = null
+        // If the user cancelled during the delay (or nulled the controller via
+        // cancelStream), exit cleanly instead of dereferencing a null controller.
+        if (userCancelled || !abortController || abortController.signal.aborted) break
       }
 
       streamTimeoutId = setTimeout(() => {
+        // A timeout abort is NOT a user cancel — the catch block still retries.
         abortController?.abort()
       }, STREAM_TIMEOUT_MS)
 
       try {
         const client = getClient()
+
+        // Idempotent retry (#2): if we have already streamed content in a prior
+        // attempt (partial progress observed server-side), do NOT re-send the
+        // user message — that would append a duplicate and re-execute tools.
+        // Resume the run instead by passing `input: null`.
+        const hasPriorProgress = planningSteps.value.length > 0
+          || messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
-          input: { messages: [{ role: 'user', content: text }] },
+          input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text }] },
           signal: abortController.signal,
-          streamMode: ['messages-tuple', 'values', 'custom', 'events'],
+          // #17: drop 'events' — the active backend never emits an 'events' frame
+          // and there is no handler branch for it; requesting it advertises an
+          // unfulfilled contract.
+          streamMode: ['messages-tuple', 'values', 'custom'],
         })
 
-        userMsg.sendStatus = 'sent'
+        if (!hasPriorProgress) {
+          userMsg.sendStatus = 'sent'
+        }
+
+        // Clear any error carried over from a prior attempt (#20): an error chunk
+        // in attempt N must not persist if attempt N+1 succeeds.
+        error.value = null
+        // Reset planning steps on retry (#21) so the backend's re-emitted tool_call
+        // events don't append duplicates.
+        if (retryCount > 0) {
+          planningSteps.value = []
+        }
 
         for await (const chunk of stream as AsyncIterable<StreamChunk>) {
           if (chunk.event === 'metadata' && chunk.data) {
@@ -343,7 +406,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             if (metaData.run_id) {
               runId.value = metaData.run_id
             }
-          } else if (chunk.event === 'messages-tuple' && chunk.data) {
+          } else if (
+            // #1 (P0): the active backend (runs.py:221) emits `event: messages`,
+            // while LangGraph Platform wire convention is `messages-tuple`. The
+            // SDK's SSEDecoder passes the event name through verbatim, so listen
+            // for both to stay correct whichever router serves the request.
+            (chunk.event === 'messages-tuple' || chunk.event === 'messages')
+            && chunk.data
+          ) {
             mergeMessagesTuple(chunk.data as MessagesTupleData)
           } else if (chunk.event === 'values' && chunk.data) {
             const data = chunk.data as ValuesData
@@ -360,54 +430,97 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             }
             if (customData.type === 'tool_call') {
               const step = createPlanningStep(customData)
-              planningSteps.value = [...planningSteps.value, step]
+              // Dedup by tool_call_id across retries (#21): if the backend re-emits
+              // the same step, don't append a duplicate.
+              const exists = step.id && planningSteps.value.some(s => s.id === step.id)
+              if (!exists) {
+                planningSteps.value = [...planningSteps.value, step]
+              }
             } else if (customData.type === 'suggestions' && customData.suggestions) {
               suggestions.value = customData.suggestions
             }
           } else if (chunk.event === 'end') {
+            streamEnded = true
             if (chunk.data) {
               const endData = chunk.data as { usage?: TokenUsage }
               if (endData.usage) {
                 tokenUsage.value = endData.usage
               }
             }
-            // Mark last AI message as done (attach suggestions if available)
+            // Mark last AI message as done (attach suggestions if available).
+            // #19: an `end` chunk is the backend's completion signal — treat it
+            // as success. Truncated-content detection is unreliable from `end`
+            // alone (a tool-only turn legitimately ends with no AI text), and
+            // duplicate-execution risk on retry is already mitigated by #2
+            // (idempotent resume via input:null). Marking the last AI message
+            // 'done' only when one exists; absent AI message (tool-only turn
+            // with no text yet) is still a clean success.
             const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
             if (lastIdx >= 0) {
               const last = messages.value[lastIdx]
               const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
               messages.value = [
                 ...messages.value.slice(0, lastIdx),
-                { ...last, phase: 'done', suggestions: currentSuggestions ?? last.suggestions },
+                {
+                  ...last,
+                  phase: 'done' as const,
+                  suggestions: currentSuggestions ?? last.suggestions,
+                },
                 ...messages.value.slice(lastIdx + 1),
               ]
             }
             // Mark all planning steps as done
             planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+            streamSucceeded = true
             // Notify caller that stream ended (for title refresh)
             if (currentThreadId) {
               options.onStreamEnd?.(currentThreadId)
             }
           } else if (chunk.event === 'error' && chunk.data) {
             const errData = chunk.data as { error?: string }
-            error.value = errData.error || t('aiChat.sendFailed')
+            // #20: an `error` chunk is terminal for this attempt. Set the error
+            // and throw so the catch block classifies and retries; do NOT let
+            // the loop fall through to streamSucceeded=true with a stale error.
+            const errMsg = errData.error || t('aiChat.sendFailed')
+            throw new Error(errMsg)
           }
         }
 
-        streamSucceeded = true
+        // If the stream closed WITHOUT an explicit `end` chunk (network drop
+        // mid-stream) but we DID receive substantial AI content, treat it as a
+        // completed answer rather than retrying and duplicating it. A clean `end`
+        // sets streamSucceeded directly above; this only covers the dropped-
+        // connection-after-content case. Truncated/empty content falls through
+        // to retry.
+        if (!streamSucceeded && streamEnded === false) {
+          const lastAi = [...messages.value].reverse().find(m => m.type === 'ai')
+          if (lastAi && lastAi.content.trim().length > 0) {
+            streamSucceeded = true
+          }
+        }
       } catch (err) {
         const e = err as Error & { name?: string }
+        // #9: distinguish a user-initiated cancel (break, no retry, mark failed)
+        // from a timeout/stream error abort (retryable transient failure).
         if (e.name === 'AbortError') {
-          // User cancelled — don't retry
-          userMsg.sendStatus = 'failed'
-          break
+          if (userCancelled) {
+            userMsg.sendStatus = 'failed'
+            break
+          }
+          // Timeout abort — retry like any transient failure.
+          retryCount++
+          if (retryCount > SSE_MAX_RETRIES) {
+            userMsg.sendStatus = 'failed'
+            error.value = e.message || t('aiChat.sendFailed')
+          }
+        } else {
+          retryCount++
+          if (retryCount > SSE_MAX_RETRIES) {
+            userMsg.sendStatus = 'failed'
+            error.value = e.message || t('aiChat.sendFailed')
+          }
+          // Otherwise loop and retry
         }
-        retryCount++
-        if (retryCount > SSE_MAX_RETRIES) {
-          userMsg.sendStatus = 'failed'
-          error.value = e.message || t('aiChat.sendFailed')
-        }
-        // Otherwise loop and retry
       } finally {
         if (streamTimeoutId !== null) {
           clearTimeout(streamTimeoutId)
@@ -428,6 +541,9 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }
 
   function cancelStream() {
+    // Mark this as a user-initiated cancel so the retry loop (#9) treats the
+    // resulting AbortError as terminal rather than a retryable timeout.
+    userCancelled = true
     if (abortController) {
       abortController.abort()
       abortController = null
@@ -435,6 +551,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (streamTimeoutId !== null) {
       clearTimeout(streamTimeoutId)
       streamTimeoutId = null
+    }
+    // Cancel the pending retry-delay timer (#3): otherwise a setTimeout that
+    // resolves mid-cancel leaves the loop to dereference a nulled controller.
+    if (retryDelayId !== null) {
+      clearTimeout(retryDelayId)
+      retryDelayId = null
     }
     // Fire-and-forget server-side cancel so the agent run is cleaned up
     if (currentThreadId) {

@@ -48,7 +48,6 @@ describe('useThreadChat — U1 SSE extensions', () => {
 
     expect(chat.planningSteps.value).toHaveLength(1)
     expect(chat.planningSteps.value[0].toolName).toBe('web_search')
-    expect(chat.planningSteps.value[0].icon).toBe('search')
     expect(chat.planningSteps.value[0].status).toBe('done') // marked done on end
   })
 

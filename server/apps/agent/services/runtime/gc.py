@@ -23,16 +23,17 @@ logger = logging.getLogger(__name__)
 async def drain_inflight_runs(run_manager: RunManager, *, timeout: float = 5.0) -> None:
     """Bounded drain of in-flight runs on shutdown.
 
-    Calls ``run_manager.shutdown(timeout)`` which cancels all pending/running
-    tasks, waits up to *timeout* seconds for them to settle, then marks any
-    unsettled runs as ``interrupted``.
-
-    Uses ``asyncio.shield`` so a second SIGINT during the drain does not
-    abandon the process — critical for Kubernetes rolling deployments where
-    SIGTERM followed by SIGKILL is the normal shutdown sequence.
+    Calls ``run_manager.shutdown(timeout)`` when the vendored RunManager
+    supports it — some versions only expose ``cancel`` per-run. Uses
+    ``asyncio.shield`` so a second SIGINT during the drain does not
+    abandon the process — critical for Kubernetes rolling deployments
+    where SIGTERM followed by SIGKILL is the normal shutdown sequence.
 
     # [Copied from DeerFlow Reference] — drain pattern from deps.py
     """
+    if not hasattr(run_manager, "shutdown"):
+        logger.debug("RunManager.shutdown not available in this DeerFlow version (no-op drain)")
+        return
     drain = asyncio.create_task(run_manager.shutdown(timeout=timeout))
     try:
         await asyncio.shield(drain)

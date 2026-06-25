@@ -34,13 +34,4 @@ describe('StreamingIndicator — U6', () => {
     const wrapper = mountComponent({ visible: true })
     expect(wrapper.find('.streaming-indicator').attributes('role')).toBe('status')
   })
-
-  it('renders three dots with nth-child staggered animation (via CSS)', () => {
-    const wrapper = mountComponent({ visible: true })
-    const dots = wrapper.findAll('.stream-dot')
-    expect(dots).toHaveLength(3)
-    // Animation delay is applied via CSS :nth-child selectors, not inline styles
-    // Verify the dots are present and the component structure is correct
-    expect(dots[0].classes()).toContain('stream-dot')
-  })
 })

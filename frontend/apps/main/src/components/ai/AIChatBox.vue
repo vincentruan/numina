@@ -84,6 +84,10 @@ onMounted(() => {
 
 // Cleanup on unmount
 onUnmounted(() => {
+  // #8: cancel any in-flight stream + retry loop so the for-await and retry
+  // timers don't keep mutating refs / firing network requests for up to 120s
+  // after navigation away from the chat page.
+  chat.cancelStream()
   cancelTitleRefresh()
 })
 
@@ -167,7 +171,7 @@ function handleContextChange(_context: InputContext) {
 }
 
 async function handleSuggestionClick(text: string) {
-  if (!store.activeThreadId) return
+  if (!store.activeThreadId || chat.isLoading.value) return
   chat.suggestions.value = []
   await chat.sendMessage(text, undefined, store.activeThreadId)
 }

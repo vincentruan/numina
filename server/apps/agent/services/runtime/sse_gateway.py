@@ -163,7 +163,6 @@ async def start_run(
             "config": getattr(body, "config", None),
         },
         multitask_strategy=getattr(body, "multitask_strategy", "reject"),
-        user_id=user_id,
     )
 
     task = asyncio.create_task(

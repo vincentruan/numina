@@ -72,11 +72,8 @@ export interface UsageMetadata {
 export interface PlanningStep {
   id: string
   toolName: string
-  displayName: string
-  icon: string
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'done' | 'error'
-  result?: string
   timestamp: number
 }
 

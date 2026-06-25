@@ -148,22 +148,13 @@ export const TOOL_ACTION_KEY_MAP: Record<string, (args?: Record<string, unknown>
  *
  * @param toolName - 工具名称
  * @param args - 工具参数
- * @param result - 工具结果（可选，用于判断是否完成）
  * @returns { key, params } 对象（调用方需使用 t(key, params) 翻译）
  */
 export function explainToolCallKey(
   toolName: string,
   args?: Record<string, unknown>,
-  result?: unknown,
 ): { key: string; params?: Record<string, string> } {
   const normalized = toolName.replace(/^(mcp|skill|builtin):\/\//, '')
-
-  // 有结果时，返回完成说明
-  if (result !== undefined) {
-    const displayNameKey = getToolDisplayNameKey(normalized)
-    // 返回复合 key，调用方需拼接：t(displayNameKey, params) 其中 params.suffix 为完成标识
-    return { key: displayNameKey, params: { suffix: ' ✓' } }
-  }
 
   // 使用动作模板生成说明
   const template = TOOL_ACTION_KEY_MAP[normalized]

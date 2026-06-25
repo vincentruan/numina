@@ -27,6 +27,7 @@ from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
+from .run_extras import generate_and_save_title, generate_suggestions
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,9 @@ async def run_family_agent(
     t_start = time.monotonic()
     success = False
     error_type: str | None = None
+    # Completion status surfaced to the client in the `end` frame (Q2). Default
+    # to "error" so an unexpected path never reports "complete" falsely.
+    completion_status = "error"
 
     try:
         # 1. Mark running + publish metadata (DeerFlow pattern)
@@ -109,7 +113,14 @@ async def run_family_agent(
         context = FamilyContext(family_id=family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
 
-        # 6. Stream via typed_stream_dispatch → publish to bridge
+        # 6. Stream via typed_stream_dispatch → publish to bridge.
+        # Collect AI text for suggestions, and synthesize `tool_call` custom
+        # events from `messages` frames so R6 (规划步骤) renders under v2 —
+        # the legacy runs.py router did this inline; the v2 worker must too,
+        # because typed_stream_dispatch yields raw LangGraph `messages` events
+        # (with tool_calls on the AI message) rather than pre-split tool_call
+        # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
+        ai_response_parts: list[str] = []
         capability = "chat"
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
@@ -127,13 +138,32 @@ async def run_family_agent(
                 await bridge.publish(run_id, "error", data)
                 break
 
+            # Forward the canonical frame (messages / values / custom).
             await bridge.publish(run_id, sse_type, data)
 
-        # 7. Terminal status
+            # Mirror runs.py:223-236 — collect AI text and synthesize
+            # `tool_call` custom events from the AI message's tool_calls so
+            # the frontend planning-steps UI (R6) updates in real time.
+            if sse_type == "messages" and isinstance(data, dict):
+                if data.get("type") == "ai" and data.get("content"):
+                    ai_response_parts.append(data["content"])
+                tool_calls_raw = data.get("tool_calls")
+                if tool_calls_raw:
+                    for tc in tool_calls_raw:
+                        await bridge.publish(run_id, "custom", {
+                            "type": "tool_call",
+                            "tool_call_id": tc.get("id", ""),
+                            "tool_name": tc.get("name", ""),
+                            "args": tc.get("args", {}),
+                        })
+
+        # 7. Terminal status — drives the `end` completion signal (Q2).
         if record.abort_event.is_set():
             await run_manager.set_status(run_id, RunStatus.interrupted)
+            completion_status = "interrupted"
         else:
             await run_manager.set_status(run_id, RunStatus.success)
+            completion_status = "complete"
         success = record.status == RunStatus.success
 
     except asyncio.CancelledError:
@@ -164,7 +194,32 @@ async def run_family_agent(
                 duration_ms=int((time.monotonic() - t_start) * 1000),
             )
         )
-        # 9. Publish end sentinel + schedule deferred cleanup (DeerFlow pattern)
+        # 9. Terminal frames: `end` with completion status (Q2), follow-up
+        # suggestions (R8), and fire-and-forget title generation — then the
+        # end sentinel + deferred cleanup (DeerFlow pattern).
+        #
+        # Q2: publish a real `end` data frame carrying the completion status
+        # so the frontend can distinguish a clean completion from a truncated
+        # stream (#19) without guessing from content. publish_end() below only
+        # signals the sentinel (data=None), so the data frame must precede it.
+        await bridge.publish(run_id, "end", {"status": completion_status})
+
+        # R8: generate follow-up suggestions from the accumulated AI response
+        # and emit them as a `custom` event before the stream closes. Mirrors
+        # the legacy runs.py:251-254 finally-block behavior.
+        ai_response = "".join(ai_response_parts)
+        suggestions = await generate_suggestions(ai_response, user_message, ai_config)
+        if suggestions:
+            await bridge.publish(run_id, "custom", {
+                "type": "suggestions",
+                "suggestions": suggestions,
+            })
+
+        # Background title generation (best-effort, does not block the stream).
+        asyncio.create_task(
+            generate_and_save_title(thread_id, family_id, user_message, ai_config)
+        )
+
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
         asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
