@@ -13,6 +13,7 @@
       <van-cell
         :title="t('aiConfig.aiProvider')"
         is-link
+        class="provider-select-cell"
         @click="showProviderPicker = true"
       >
         <template #value>
@@ -546,10 +547,22 @@ onMounted(async () => {
 }
 
 /* Provider cell value with logo */
+.provider-select-cell :deep(.van-cell__title) {
+  flex: none;
+  width: var(--van-field-label-width, 6.2em);
+  margin-right: var(--van-field-label-margin-right, 12px);
+}
+
+.provider-select-cell :deep(.van-cell__value) {
+  flex: 1;
+  min-width: 0;
+}
+
 .provider-cell-value {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .provider-cell-logo {
@@ -603,5 +616,10 @@ onMounted(async () => {
 .provider-cell-text {
   font-size: 13px;
   color: var(--text-secondary);
+  flex: 1;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
