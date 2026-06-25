@@ -11,7 +11,7 @@
 | Phase | 目标 | 状态 | 关键文件 |
 |-------|------|------|----------|
 | **Phase 1: Protocol 统一** | 替换 `[THINK]/[TEXT]` 前缀 | **已完成** (使用 LangGraph SSE，非 NDJSON) | `runs.py` 删除 (304L)，`runs_stream.py` (139L)，`sse_gateway.py` (182L)，`useThreadChat.ts` |
-| **Phase 2: Capability Registry** | 后端注册中心 + Capability Grid UI | **未开始** | 仅 `useTenantAiResources.ts`（部分租户资源发现） |
+| **Phase 2: Capability Registry** | 后端注册中心 + Capability Grid UI | **后端已完成，前端 UI 待完成** | `capability_registry.py` (296L)，`routers/capabilities.py`，`stores/capability.ts`，`CapabilityPickerSheet.vue` |
 | **Phase 3: Tool Calling UI** | 工具调用可视化 | **已完成** | `PlanningStepsPanel.vue` (239L)，`MessageGroup.vue`，`TokenUsage.vue`，`StreamingIndicator.vue` |
 | **Phase 4: Harness 深度集成** | 统一 dispatch + 多步骤可视化 | **部分完成** | `subagent_registry.py`，`agent_dispatch.py`，`worker.py`，`gc.py`，`lifespan.py`，`run_extras.py`，`sandbox_provider.py` |
 
@@ -168,11 +168,25 @@ class CapabilityDefinition(BaseModel):
     harness_config: Dict[str, Any] = {}
 ```
 
-### 3.2 Capability Registry — **未实现 (核心设计仍有效)**
+### 3.2 ~~Capability Registry~~ — **后端已完成 (2026-06 更新)**
 
-> **2026-06 更新:** 此设计仍有效，未实现。注意 `BackendClient` 应替换为实际的
-> Numina 后端 API 模式（参考 `server/apps/backend/app/routers/ai_config.py` 和
-> `server/apps/backend/app/routers/ai_mcp.py` 的现有路由模式）。
+> **2026-06 更新:** 后端已完整实现! 以下设计文档与实际代码一致:
+
+**后端实现** (`capability_registry.py`, `capabilities.py`):
+- `CapabilityRegistry` class — 296 行，支持 builtin/custom/fixed capabilities
+- `GET /capabilities` — 列出所有 capabilities
+- `GET /capabilities?family_id=X` — 家庭级别过滤
+- 从 `skills/builtin/*/SKILL.md` 和 `skills/custom/{family_id}/*/SKILL.md` 加载
+- 与 `ai_skills` API 集成（`is_enabled` 过滤）
+
+**前端实现** (`stores/capability.ts`, `api/ai.ts`):
+- `useCapabilityStore()` — Pinia store with `loadCapabilities()`
+- `getAICapabilities()` — `GET /api/v1/ai/capabilities`
+- `AICapability` TypeScript 接口匹配后端 schema
+- `AIChatInput.vue` — slash command palette 使用 capability store
+- `CapabilityPickerSheet.vue` — 能力选择器 UI
+
+**仍需完成:** AI Hub Capability Grid 展示（当前使用 Agent Card 布局）
 
 ```python
 # agent/services/capability_registry.py
@@ -682,19 +696,30 @@ export function useEventStream(options: {
 - 重试机制（指数退避 + 抖动）、流超时、用户取消
 - 集成测试 `test_v2_sse_contract.py` (269 行)
 
-### 5.2 Phase 2: Capability Registry — **未开始 (核心剩余工作)**
+### 5.2 ~~Phase 2: Capability Registry~~ — **后端已完成，前端 UI 部分完成**
 
-**目标**: 建立 Capability 注册中心，前端动态渲染
+> **2026-06-25 更新:** Capability Registry 后端和前端 API 均已实现，仅需 AI Hub 页面改造。
 
-这是本文档**最有价值的剩余工作**。包含:
+**已完成 (后端):**
+- `agent/services/capability_registry.py` (296 行) — 完整实现:
+  - Fixed capabilities (`chat`, `time_machine`)
+  - Builtin capabilities (从 `skills/builtin/*/SKILL.md` 加载)
+  - Custom capabilities (从 `skills/custom/{family_id}/*/SKILL.md` 加载)
+  - 家庭级别过滤 (`list_capabilities_for_family` + `ai_skills` API 集成)
+- `agent/routers/capabilities.py` — `GET /capabilities` + `GET /capabilities?family_id=X`
+- `agent/schemas/capability.py` — 完整 Pydantic schemas
 
-1. 创建 `agent/services/capability_registry.py` (后端 Python 服务)
-2. 添加 `/api/v1/capabilities` 端点
-3. 前端创建 `CapabilityStore`
-4. AI Hub 页面改为 Capability Grid
+**已完成 (前端 API/Store):**
+- `stores/capability.ts` — Pinia store with `loadCapabilities()`
+- `api/ai.ts` — `getAICapabilities()` → `GET /api/v1/ai/capabilities`
+- `AICapability` TypeScript 接口 (匹配后端 schema)
+- `AIChatInput.vue` — slash command palette 使用 capability store
+- `CapabilityPickerSheet.vue` — 能力选择器 UI
 
-> **注意:** 当前 `useTenantAiResources.ts` 已实现部分租户资源发现（模型列表、tenant 配置），
-> 但缺少正式的 Capability 定义（id、ui.input_mode、example_questions、policy 等）。
+**仍需完成 (前端 UI):**
+- AI Hub 页面改为 Capability Grid 展示 (当前使用 Agent Card)
+- Capability-scoped chat flows (`router.push({ capability })`)
+- 动态 `input_mode` 渲染 (`structured`, `asset_selector`, `confirm_dialog`)
 
 ### 5.3 ~~Phase 3: Tool Calling UI~~ — **已完成**
 
@@ -846,10 +871,10 @@ AI 正在分析...
 4. ~~InputBox 统一~~ — 单一 `InputBox.vue` (1,217 行)
 5. ~~SSE 网关统一~~ — `runs_stream.py` + `sse_gateway.py`
 
-**仍需完成的 (Phase 2 核心):**
-1. **Capability Registry** (后端 `capability_registry.py` + `/api/v1/capabilities` 端点)
-2. **Capability Grid UI** on AI Hub
-3. **动态 input_mode 渲染** (`structured`, `asset_selector`, `confirm_dialog`)
+**仍需完成的:**
+1. **AI Hub Capability Grid** — 将当前 Agent Card 布局改为 Capability Grid 展示
+2. **Capability-scoped chat flows** — `router.push({ capability })` 能力级路由
+3. **动态 input_mode 渲染** — `structured`, `asset_selector`, `confirm_dialog`
 
-**建议:** 将 Capability Registry 部分提取为独立的设计文档，因为这是本文档剩余最有价值的工作。
+**建议:** 本文档约 85% 已完成。剩余工作集中在前端 UI 层（Hub Grid 展示、动态 input_mode 渲染）。
 本文档保留作为历史参考和架构决策记录。
