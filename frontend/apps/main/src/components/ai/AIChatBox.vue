@@ -77,9 +77,15 @@ function cancelTitleRefresh() {
   titleRefreshTimeouts.clear()
 }
 
-// Initialize from URL on mount
+// Initialize from URL on mount and auto-send pending message if present
 onMounted(() => {
   store.initializeFromUrl()
+  // Auto-send pending message from URL (passed from AIHubPage)
+  if (store.pendingMessage) {
+    const msg = store.pendingMessage
+    store.pendingMessage = null // clear so it only fires once
+    handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
+  }
 })
 
 // Cleanup on unmount
