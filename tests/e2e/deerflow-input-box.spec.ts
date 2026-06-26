@@ -14,7 +14,7 @@ test.describe('DeerFlow parity: input box', () => {
     await page.goto('/ai/chat')
     await page.waitForLoadState('domcontentloaded')
 
-    const input = page.getByRole('textbox', { name: '向 AI 提问' })
+    const input = page.getByRole('textbox', { name: '请输入您的问题' })
     await input.click()
 
     // Focus state - input should be focused
@@ -26,7 +26,7 @@ test.describe('DeerFlow parity: input box', () => {
     await page.goto('/ai/chat')
     await page.waitForLoadState('domcontentloaded')
 
-    const input = page.getByRole('textbox', { name: '向 AI 提问' })
+    const input = page.getByRole('textbox', { name: '请输入您的问题' })
     await input.fill('我的净资产是多少？')
 
     // Send button should now be enabled
@@ -42,7 +42,7 @@ test.describe('DeerFlow parity: input box', () => {
     await page.goto('/ai/chat')
     await page.waitForLoadState('domcontentloaded')
 
-    const input = page.getByRole('textbox', { name: '向 AI 提问' })
+    const input = page.getByRole('textbox', { name: '请输入您的问题' })
     const initialHeight = await input.evaluate((el) => el.getBoundingClientRect().height)
 
     // Type multiline content
@@ -59,7 +59,7 @@ test.describe('DeerFlow parity: input box', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Initial placeholder
-    const input = page.getByRole('textbox', { name: '向 AI 提问' })
+    const input = page.getByRole('textbox', { name: '请输入您的问题' })
     await expect(input).toHaveAttribute('placeholder', '请输入您的问题…')
 
     // Submit a message

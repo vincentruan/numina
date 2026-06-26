@@ -19,7 +19,6 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
-import WelcomeExamples from './WelcomeExamples.vue'
 import IIcon from '@/components/IIcon.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
@@ -136,7 +135,7 @@ const finalPayload = computed(() => {
 const selectedAgent = computed(() =>
   props.agents?.find((a) => a.id === props.agentId) ?? props.agents?.[0] ?? null,
 )
-const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.icon || null)
+const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.icon || undefined)
 const displayAgentLabel = computed(() => props.agentLabel || selectedAgent.value?.display_name || '')
 const isNuminaAgent = computed(() => selectedAgent.value?.agent_name === NUMINA_AGENT_NAME)
 
@@ -177,7 +176,7 @@ watch(currentModelSupportsThinking, (supports) => {
 })
 
 // Initialize default model
-watch(models, (newModels) => {
+watch(() => models.value, (newModels) => {
   if (newModels.length > 0 && !context.value.model_name) {
     const defaultModel = newModels.find(m => m.is_default) ?? newModels[0]
     context.value.model_name = defaultModel.name
@@ -211,23 +210,6 @@ function onSubmit() {
   })
   internalValue.value = ''
   expanded.value = false
-}
-
-// Welcome examples
-function handleWelcomeExampleSelect(prompt: string) {
-  internalValue.value = prompt
-  setTimeout(() => onSubmit(), 0)
-}
-
-function handleSurpriseMe() {
-  const surprisePrompts = [
-    t('aiChat.welcomeExampleAnalyzePrompt'),
-    t('aiChat.welcomeExamplePlanPrompt'),
-    t('aiChat.welcomeExampleLearnPrompt'),
-    t('aiChat.welcomeExampleOptimizePrompt'),
-  ]
-  const randomPrompt = surprisePrompts[Math.floor(Math.random() * surprisePrompts.length)]
-  internalValue.value = randomPrompt
 }
 
 function onModeSelect(mode: InputMode) {
@@ -380,22 +362,8 @@ onUnmounted(() => {
     ]"
     @click.self="closePanel"
   >
-    <!-- Welcome hero (welcome mode only) -->
-    <div v-if="isWelcomeMode" class="welcome-hero">
-      <h2 class="hero-title">{{ displayAgentLabel || t('aiChat.heroTitleChat') }}</h2>
-      <p class="hero-subtitle">{{ t('aiChat.heroSubtitleChat') }}</p>
-    </div>
-
-    <!-- Welcome examples (welcome mode only) -->
-    <WelcomeExamples
-      v-if="isWelcomeMode"
-      :agent-id="agentId || 'numina'"
-      @select="handleWelcomeExampleSelect"
-      @surprise="handleSurpriseMe"
-    />
-
     <div class="input-card-border">
-      <div class="input-card-inner input-row">
+      <div class="input-card-inner">
         <!-- Attachments preview row (above textarea) -->
         <div v-if="attachments && attachments.length > 0" class="attachments-row">
           <div
@@ -432,7 +400,6 @@ onUnmounted(() => {
             v-model="internalValue"
             class="chat-textarea"
             :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
-            :aria-label="t('aiChat.inputAriaLabel')"
             :disabled="disabled || status === 'submitted'"
             rows="4"
             @keydown.enter.ctrl="onSubmit"
@@ -579,7 +546,7 @@ onUnmounted(() => {
             </button>
             <button
               v-else
-              class="send-btn submit-btn"
+              class="send-btn"
               :class="{ 'send-btn--active': internalValue.trim() }"
               :disabled="disabled || !internalValue.trim()"
               :aria-label="t('common.send')"
@@ -649,34 +616,6 @@ onUnmounted(() => {
   padding: 8px 16px;
   box-sizing: border-box;
   transition: all 0.2s ease;
-}
-
-.input-box.welcome-mode {
-  position: relative;
-  bottom: auto;
-  left: auto;
-  right: auto;
-  z-index: 1;
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 0;
-}
-
-.welcome-hero {
-  text-align: center;
-  margin-bottom: 16px;
-}
-
-.hero-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.hero-subtitle {
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-top: 4px;
 }
 
 /* ── Premium Gradient Border wrapper ── */

@@ -145,8 +145,8 @@ export function useArtifacts() {
   return {
     artifacts: readonly(artifacts),
     artifactList: computed(() => Object.values(artifacts.value)),
-    selectedArtifact: readonly(selectedArtifact),
-    open: readonly(open),
+    selectedArtifact: computed(() => selectedArtifact.value),
+    open: computed(() => open.value),
     setArtifacts,
     addArtifact,
     select,

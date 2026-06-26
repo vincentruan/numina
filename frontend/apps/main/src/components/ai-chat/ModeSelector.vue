@@ -147,9 +147,6 @@ onUnmounted(() => {
     ref="triggerRef"
     class="mode-trigger control-btn"
     :class="{ 'mode-trigger--ultra': currentMode === 'ultra' }"
-    :aria-label="t('aiChat.modeSmart')"
-    :title="t('aiChat.modeSmart')"
-    :aria-pressed="currentMode !== 'flash' ? 'true' : 'false'"
     @click.stop="togglePopup"
   >
     <IIcon :icon="getModeIcon(currentMode)" class="mode-trigger-icon" />

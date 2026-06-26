@@ -3,7 +3,6 @@ import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
 import { showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
-import { useAIStore } from '@/stores/ai'
 import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import { useArtifacts } from '@/composables/ai-chat/useArtifacts'
 import { useAgentStore } from '@/stores/agent'
@@ -78,26 +77,9 @@ function cancelTitleRefresh() {
   titleRefreshTimeouts.clear()
 }
 
-const aiStore = useAIStore()
-
 // Initialize from URL on mount
-onMounted(async () => {
+onMounted(() => {
   store.initializeFromUrl()
-
-  // Extract and auto-send draft query or route.query.q
-  const params = new URLSearchParams(window.location.search)
-  const q = params.get('q') || aiStore.draftQuery
-  if (q && q.trim()) {
-    aiStore.draftQuery = ''
-
-    // Clear q from URL to prevent duplicate submissions on refresh
-    const url = new URL(window.location.href)
-    url.searchParams.delete('q')
-    history.replaceState(null, '', url.pathname + url.search)
-
-    const mode = params.get('mode') || undefined
-    await handleStartChat({ text: q.trim(), mode })
-  }
 })
 
 // Cleanup on unmount

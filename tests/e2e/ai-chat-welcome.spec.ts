@@ -52,7 +52,7 @@ test.describe('DeerFlow parity: welcome state', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Input placeholder should be visible
-    const input = page.getByRole('textbox', { name: '向 AI 提问' })
+    const input = page.getByRole('textbox', { name: '请输入您的问题' })
     await expect(input).toBeVisible()
     await expect(input).toHaveAttribute('placeholder', '请输入您的问题…')
   })
