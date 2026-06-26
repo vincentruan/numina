@@ -8,6 +8,7 @@ export interface Family {
   name: string
   custom_title?: string
   invite_code: string
+  creator_code?: string
   created_by: string
   members: import('@numina/auth').User[]
 }

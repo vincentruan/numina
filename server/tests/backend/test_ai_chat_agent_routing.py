@@ -107,10 +107,10 @@ def patched_httpx(monkeypatch):
     yield _FakeAsyncClient.captured
 
 
-def test_chat_stream_without_agent_id_proxies_to_legacy_chat_ask(
+def test_chat_stream_without_agent_id_proxies_to_runs_stream_with_numina_fallback(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """When agent_id is absent, the proxy hits /chat/ask/stream (legacy path)."""
+    """When agent_id is absent, the proxy hits /runs/stream with NUMINA_AGENT_ID."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={"question": "hello", "deep_think": False, "web_search": False},
@@ -118,16 +118,17 @@ def test_chat_stream_without_agent_id_proxies_to_legacy_chat_ask(
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert captured["url"].endswith("/chat/ask/stream"), captured["url"]
-    assert captured["json"]["question"] == "hello"
+    assert "/runs/stream" in captured["url"], captured["url"]
+    assert captured["json"]["assistant_id"] == "100000000000005"
+    assert captured["json"]["input"]["messages"][0]["content"] == "hello"
     assert "agent_id" not in captured["json"]
     assert "message" not in captured["json"]
 
 
-def test_chat_stream_with_agent_id_proxies_to_agent_dispatch(
+def test_chat_stream_with_agent_id_proxies_to_runs_stream(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """When agent_id is present, the proxy hits /agent/{id}/stream (new path)."""
+    """When agent_id is present, the proxy hits the runs stream endpoint."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={
@@ -140,18 +141,16 @@ def test_chat_stream_with_agent_id_proxies_to_agent_dispatch(
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert captured["url"].endswith("/agent/100000000000005/stream"), captured["url"]
-    # The new endpoint uses `message` not `question`, and `enable_thinking`
-    # not `deep_think`. web_search isn't supported on the agent path yet.
-    assert captured["json"]["message"] == "what's my net worth"
-    assert captured["json"]["enable_thinking"] is False
+    assert "/runs/stream" in captured["url"], captured["url"]
+    assert captured["json"]["assistant_id"] == "100000000000005"
+    assert captured["json"]["input"]["messages"][0]["content"] == "what's my net worth"
     assert "question" not in captured["json"]
 
 
-def test_chat_stream_with_agent_id_propagates_deep_think_as_enable_thinking(
+def test_chat_stream_with_agent_id_propagates_deep_think_metadata(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """deep_think on the request maps to enable_thinking on the agent body."""
+    """deep_think on the request maps to deep_think under metadata in the agent payload."""
     resp = client.post(
         "/api/v1/ai/chat/stream",
         json={
@@ -164,13 +163,13 @@ def test_chat_stream_with_agent_id_propagates_deep_think_as_enable_thinking(
     )
     assert resp.status_code == 200
     captured = patched_httpx
-    assert captured["json"]["enable_thinking"] is True
+    assert captured["json"]["metadata"]["deep_think"] is True
 
 
-def test_chat_stream_sets_internal_headers_on_both_paths(
+def test_chat_stream_sets_internal_headers(
     client, auth_headers, ai_enabled, patched_httpx
 ):
-    """Both paths require X-Family-Id, X-Agent-Token, X-Thread-Id, X-User-Id."""
+    """All proxy paths require X-Family-Id, X-Agent-Token, X-Thread-Id, X-User-Id."""
     client.post(
         "/api/v1/ai/chat/stream",
         json={"question": "hi", "agent_id": "100000000000005"},

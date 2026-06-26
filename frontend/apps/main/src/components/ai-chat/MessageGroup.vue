@@ -15,11 +15,12 @@
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { marked } from 'marked'
-import DOMPurify from 'dompurify'
 import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
+import PlanningStepsPanel from './PlanningStepsPanel.vue'
+import TokenUsage from './TokenUsage.vue'
+import MarkdownContent from './MarkdownContent.vue'
 import SubtaskCard from './SubtaskCard.vue'
 import ArtifactFileList from './ArtifactFileList.vue'
 import type {
@@ -28,6 +29,7 @@ import type {
   AssistantClarificationGroup,
   AssistantPresentFilesGroup,
   AssistantSubagentGroup,
+  PlanningStep,
 } from '@/types/ai-chat/message-group'
 import {
   extractContentFromMessage,
@@ -41,6 +43,8 @@ const props = defineProps<{
   group: MessageGroup
   isLoading?: boolean
   threadId?: string
+  planningSteps?: PlanningStep[]
+  isLastAssistant?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -52,9 +56,6 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
-
-// Configure marked
-marked.use({ breaks: true })
 
 // Human group: extract first message
 const humanMessage = computed(() =>
@@ -128,11 +129,6 @@ const subagentTaskIds = computed(() => {
   return getSubagentTaskIds(props.group as AssistantSubagentGroup)
 })
 
-// Markdown rendering helper
-function renderMarkdown(content: string): string {
-  if (!content) return ''
-  return DOMPurify.sanitize(marked.parse(content) as string)
-}
 </script>
 
 <template>
@@ -147,24 +143,39 @@ function renderMarkdown(content: string): string {
     />
 
     <!-- Assistant: AssistantMessage -->
-    <AssistantMessage
-      v-else-if="assistantMessage"
-      :id="assistantMessage.id"
-      :content="assistantMessage.content"
-      :phase="assistantMessage.phase || 'done'"
-      :process-steps="assistantProcessSteps"
-      :plan-steps="assistantPlanSteps"
-      :plan-source="assistantPlanSource"
-      :process-elapsed-ms="assistantElapsedMs"
-      :reasoning-start-time="assistantReasoningStartTime"
-      :display-time="assistantMessage.displayTime"
-      :suggestions="assistantMessage.suggestions"
-      :feedback="assistantMessage.feedback"
-      @retry="emit('retry')"
-      @copy="emit('copy', assistantMessage.content)"
-      @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
-      @suggestion-click="emit('suggestionClick', $event)"
-    />
+    <template v-else-if="assistantMessage">
+      <!-- Real-time planning steps from SSE custom events (only for last assistant group) -->
+      <PlanningStepsPanel
+        v-if="isLastAssistant && planningSteps && planningSteps.length > 0"
+        :steps="planningSteps"
+        :is-streaming="isLoading"
+      />
+      <AssistantMessage
+        :id="assistantMessage.id"
+        :content="assistantMessage.content"
+        :phase="assistantMessage.phase || 'done'"
+        :process-steps="assistantProcessSteps"
+        :plan-steps="assistantPlanSteps"
+        :plan-source="assistantPlanSource"
+        :process-elapsed-ms="assistantElapsedMs"
+        :reasoning-start-time="assistantReasoningStartTime"
+        :display-time="assistantMessage.displayTime"
+        :suggestions="assistantMessage.suggestions"
+        :feedback="assistantMessage.feedback"
+        @retry="emit('retry')"
+        @copy="emit('copy', assistantMessage.content)"
+        @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
+        @suggestion-click="emit('suggestionClick', $event)"
+      />
+      <!-- Per-message token usage (inline below AI message) -->
+      <TokenUsage
+        v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
+        mode="inline"
+        :thread-id="threadId || null"
+        :usage-metadata="assistantMessage.usageMetadata"
+        :is-streaming="isLoading && isLastAssistant"
+      />
+    </template>
 
     <!-- Processing: ChainOfThought -->
     <ChainOfThought
@@ -181,20 +192,20 @@ function renderMarkdown(content: string): string {
         </svg>
         <span class="clarification-title">{{ t('aiChat.needClarification') }}</span>
       </div>
-      <!-- eslint-disable vue/no-v-html -- sanitized markdown -->
-      <div class="clarification-content" v-html="renderMarkdown(clarificationContent)" />
-      <!-- eslint-enable vue/no-v-html -->
+      <MarkdownContent
+        v-if="clarificationContent"
+        class="clarification-content"
+        :content="clarificationContent"
+      />
     </div>
 
     <!-- Present-files: Content + File list -->
     <div v-else-if="presentFilesData" class="present-files-group">
-      <!-- eslint-disable vue/no-v-html -- sanitized markdown -->
-      <div
+      <MarkdownContent
         v-if="presentFilesData.content"
         class="present-files-text"
-        v-html="renderMarkdown(presentFilesData.content)"
+        :content="presentFilesData.content"
       />
-      <!-- eslint-enable vue/no-v-html -->
       <ArtifactFileList
         v-if="presentFilesData.files && presentFilesData.files.length > 0"
         :artifacts="presentFilesData.files"

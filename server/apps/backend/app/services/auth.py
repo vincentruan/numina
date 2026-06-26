@@ -15,6 +15,7 @@ Rate Limiting Trade-offs:
 See design.md for detailed trade-off analysis.
 """
 
+import logging
 import time
 from datetime import datetime, timedelta
 
@@ -27,6 +28,7 @@ from apps.backend.app.auth.jwt_utils import user_claims
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.family import Family
 from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
+from apps.backend.app.models.family_mcp_server import FamilyMCPServer
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.auth import (
     JoinFamilyRequest,
@@ -37,7 +39,12 @@ from apps.backend.app.schemas.auth import (
 )
 from apps.backend.app.services.audit_log import write_audit_log
 from apps.backend.app.services.device import rotate_device_session_jti
-from apps.backend.app.services.security_log import SecurityEventType, _log_security_event
+from apps.backend.app.services.security_log import (
+    SecurityEventType,
+    _log_security_event,
+)
+
+logger = logging.getLogger(__name__)
 
 # Login rate limiting: {username: (fail_count, first_fail_time)}
 _login_attempts: dict[str, tuple[int, float]] = {}
@@ -53,6 +60,42 @@ _REFRESH_RATE_LIMIT_PER_MINUTE = 10
 _PASSWORD_CHANGE_RATE_LIMIT_PER_HOUR = 3
 # Invite code regeneration rate limit: 5 per hour per user_id
 _INVITE_CODE_RATE_LIMIT_PER_HOUR = 5
+
+
+def _create_default_mcp_server(db: Session, family_id: int) -> None:
+    """Create the default "Numina Backend" MCP server for a new family.
+
+    This MCP server connects the AI agent to the backend's internal data API,
+    allowing the agent to query family assets, liabilities, wishes, and other
+    data on behalf of family members.
+
+    The MCP SSE endpoint URL is constructed from ``BACKEND_BASE_URL``.
+    """
+    from apps.backend.app.utils.snowflake import next_id as _next_id
+    from packages.core.settings import settings
+
+    # Check if already exists (idempotent)
+    existing = db.query(FamilyMCPServer).filter_by(
+        family_id=family_id,
+        name="Numina Backend MCP",
+    ).first()
+    if existing:
+        return
+
+    mcp_url = f"{settings.BACKEND_BASE_URL.rstrip('/')}/api/v1/internal/mcp/{family_id}/sse"
+
+    server = FamilyMCPServer(
+        id=_next_id(),
+        family_id=family_id,
+        name="Numina Backend MCP",
+        url=mcp_url,
+        transport="sse",
+        is_enabled=True,
+        mcp_type="backend",
+    )
+    db.add(server)
+    db.commit()
+    logger.info("Created default MCP server for family=%s url=%s", family_id, mcp_url)
 
 
 def _check_refresh_rate_limit(user_id: str) -> None:
@@ -346,6 +389,9 @@ def register(
     db.add(user)
     db.commit()
 
+    # Create default backend MCP server for this family
+    _create_default_mcp_server(db, family_id)
+
     # Mark invitation code as used after successful registration
     invitation_code.is_used = True
     invitation_code.used_at = datetime.utcnow()
@@ -605,7 +651,10 @@ def child_pin_login(
     """
     import unicodedata
 
-    from apps.backend.app.auth.deps import create_access_token, create_child_refresh_token
+    from apps.backend.app.auth.deps import (
+        create_access_token,
+        create_child_refresh_token,
+    )
 
     # 根据 identifier 类型查找儿童
     if username:

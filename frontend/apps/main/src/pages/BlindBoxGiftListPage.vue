@@ -67,17 +67,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { showConfirmDialog, showToast } from 'vant'
+import { onMounted, ref, toRefs } from 'vue'
+import { showConfirmDialog, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import EmptyState from '@/components/common/EmptyState.vue'
-import { storeToRefs } from 'pinia'
 import type { BlindBoxGift } from '@/types/blindBox'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()
-const { gifts, loading } = storeToRefs(store)
+const { gifts, loading } = toRefs(store)
 const refreshing = ref(false)
 
 onMounted(() => store.fetchGifts())

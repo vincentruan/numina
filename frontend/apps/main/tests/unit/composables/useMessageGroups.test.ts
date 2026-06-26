@@ -43,13 +43,12 @@ vi.mock('@/utils/ai-chat/messageGroups', () => ({
           messages: [msg],
           id: msg.id,
         })
-      } else if (msg.type === 'ai' || msg.type === 'assistant') {
+      } else if (msg.type === 'ai') {
         if (msg.tool_calls && msg.tool_calls.length > 0) {
           groups.push({
             type: 'assistant:processing',
             messages: [msg],
             id: msg.id,
-            toolCalls: msg.tool_calls,
           })
         } else if (msg.tool_call_id) {
           // Tool result message - would merge with processing in real impl
@@ -57,7 +56,6 @@ vi.mock('@/utils/ai-chat/messageGroups', () => ({
             type: 'assistant:processing',
             messages: [msg],
             id: msg.id,
-            toolCalls: [],
           })
         } else {
           groups.push({
@@ -89,7 +87,7 @@ describe('useMessageGroups', () => {
       expect(groups.value.length).toBe(0)
 
       messages.value = [
-        { id: 'msg-1', type: 'human', content: 'Hello', phase: 'done' },
+        { id: 'msg-1', type: 'human', role: 'user', content: 'Hello', displayTime: '', phase: 'done' },
       ]
       await nextTick()
 
@@ -99,7 +97,7 @@ describe('useMessageGroups', () => {
 
     it('reacts to message additions', async () => {
       const messages = ref<ChatMessage[]>([
-        { id: 'msg-1', type: 'human', content: 'Hello', phase: 'done' },
+        { id: 'msg-1', type: 'human', role: 'user', content: 'Hello', displayTime: '', phase: 'done' },
       ])
       const groups = useMessageGroups(messages)
 
@@ -107,7 +105,7 @@ describe('useMessageGroups', () => {
 
       messages.value = [
         ...messages.value,
-        { id: 'msg-2', type: 'assistant', content: 'Hi!', phase: 'done' },
+        { id: 'msg-2', type: 'ai', role: 'assistant', content: 'Hi!', displayTime: '', phase: 'done' },
       ]
       await nextTick()
 
@@ -118,8 +116,8 @@ describe('useMessageGroups', () => {
   describe('deduplication integration', () => {
     it('removes duplicate messages by id', async () => {
       const messages = ref<ChatMessage[]>([
-        { id: 'msg-1', type: 'human', content: 'Hello', phase: 'done' },
-        { id: 'msg-1', type: 'human', content: 'Hello', phase: 'done' }, // Duplicate
+        { id: 'msg-1', type: 'human', role: 'user', content: 'Hello', displayTime: '', phase: 'done' },
+        { id: 'msg-1', type: 'human', role: 'user', content: 'Hello', displayTime: '', phase: 'done' }, // Duplicate
       ])
       const groups = useMessageGroups(messages)
 
@@ -134,7 +132,7 @@ describe('useMessageGroups', () => {
 describe('getCurrentProcessingGroup', () => {
   it('returns null when not loading', () => {
     const groups: MessageGroup[] = [
-      { type: 'assistant:processing', messages: [], id: 'proc-1', toolCalls: [] },
+      { type: 'assistant:processing', messages: [], id: 'proc-1' },
     ]
 
     const result = getCurrentProcessingGroup(groups, false)
@@ -155,9 +153,9 @@ describe('getCurrentProcessingGroup', () => {
 
   it('returns last processing group when loading', () => {
     const groups: MessageGroup[] = [
-      { type: 'assistant:processing', messages: [], id: 'proc-1', toolCalls: [] },
+      { type: 'assistant:processing', messages: [], id: 'proc-1' },
       { type: 'human', messages: [], id: 'human-1' },
-      { type: 'assistant:processing', messages: [], id: 'proc-2', toolCalls: [] },
+      { type: 'assistant:processing', messages: [], id: 'proc-2' },
     ]
 
     const result = getCurrentProcessingGroup(groups, true)
@@ -195,7 +193,7 @@ describe('getMessageStats', () => {
 
   it('counts assistant subtypes as assistant', () => {
     const groups: MessageGroup[] = [
-      { type: 'assistant:processing', messages: [], id: 'p1', toolCalls: [] },
+      { type: 'assistant:processing', messages: [], id: 'p1' },
       { type: 'assistant:clarification', messages: [], id: 'c1' },
     ]
 
@@ -210,10 +208,9 @@ describe('getMessageStats', () => {
       {
         type: 'assistant:processing',
         messages: [
-          { id: 't1', type: 'tool', content: 'tool result', phase: 'done', tool_call_id: 'tc1' },
+          { id: 't1', type: 'tool', role: 'assistant', content: 'tool result', displayTime: '', phase: 'done', tool_call_id: 'tc1' },
         ],
         id: 'p1',
-        toolCalls: [],
       },
     ]
 

@@ -658,7 +658,7 @@ onMounted(loadSkills)
 
 <style scoped>
 .skills-manage-page {
-  padding-bottom: 80px;
+  padding-bottom: 160px;
 }
 
 .section {
@@ -688,9 +688,10 @@ onMounted(loadSkills)
 .add-skill-section {
   padding: 16px;
   position: fixed;
-  bottom: 0;
+  bottom: calc(50px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
+  z-index: 1;
   background: var(--van-background);
   border-top: 1px solid var(--van-border-color);
 }

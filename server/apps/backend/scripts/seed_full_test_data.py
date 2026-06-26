@@ -77,6 +77,13 @@ def seed_test_users(db):
         if existing_user:
             existing_user.password_hash = hash_password(user_data["password"])
             print(f"User {user_data['username']} already exists (family_id={existing_user.family_id}); password resynced")
+            # Link invitation code for existing user
+            code_record = db.query(FamilyInvitationCode).filter_by(code=user_data["invitation_code"]).first()
+            if code_record:
+                code_record.is_used = True
+                code_record.used_at = code_record.used_at or datetime.utcnow()
+                code_record.used_by_family_id = existing_user.family_id
+                code_record.used_by_username = existing_user.username
             continue
 
         # Create family
@@ -105,6 +112,15 @@ def seed_test_users(db):
         db.flush()
 
         family.created_by = user.id
+
+        # Link invitation code
+        code_record = db.query(FamilyInvitationCode).filter_by(code=user_data["invitation_code"]).first()
+        if code_record:
+            code_record.is_used = True
+            code_record.used_at = datetime.utcnow()
+            code_record.used_by_family_id = family.id
+            code_record.used_by_username = user.username
+
         print(f"Created user: {user_data['username']} (id={user.id}, family_id={family.id})")
 
     db.commit()

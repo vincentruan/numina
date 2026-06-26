@@ -29,6 +29,7 @@ from sqlalchemy.orm import Session
 from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
+from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
 from apps.backend.app.database import SessionLocal, get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
@@ -45,21 +46,6 @@ sessions_router = APIRouter(prefix="/ai", tags=["ai-sessions"])
 logger = logging.getLogger(__name__)
 
 # ── SSE Constants ──────────────────────────────────────────────────────────────
-
-# Map of agent NDJSON event types → public SSE event names.
-# The agent emits NDJSON internally; the proxy converts each line to SSE format
-# using this mapping so the frontend receives DeerFlow-compatible event types.
-_SSE_TYPE_MAP: dict[str, str] = {
-    "token.stream": "messages",
-    "session.start": "session.start",
-    "phase.connecting": "custom",
-    "phase.answering": "custom",
-    "phase.thinking": "custom",
-    "tool.call": "custom",
-    "tool.result": "custom",
-    "capability.end": "end",
-    "capability.error": "error",
-}
 
 # SSE response headers shared across all streaming endpoints.
 _SSE_HEADERS: dict[str, str] = {
@@ -209,20 +195,6 @@ def _get_latest_session(family_id: str, db: Session) -> AIChatSession | None:
     )
 
 
-def _collect_answer_token_from_event(line: str) -> str | None:
-    """Return final-answer token from a stream event, excluding thinking tokens."""
-    try:
-        event = json.loads(line)
-    except json.JSONDecodeError:
-        logger.warning("chat_stream received invalid NDJSON line")
-        return None
-    if event.get("type") != "token.stream":
-        return None
-    if event.get("is_thinking") is not False:
-        return None
-    return str(event.get("token", ""))
-
-
 @router.post("", response_model=ChatResponse)
 async def chat(
     body: ChatRequest,
@@ -322,34 +294,24 @@ async def chat_stream(
         else:
             yield json.dumps({"type": "session.start", **start_event}, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
 
-        # R4: when agent_id is present, route to the agent-dispatch endpoint so
-        # the request runs through _resolve_skills (per-agent skill scoping).
-        # Otherwise use the legacy chat_adapter path.
-        if body.agent_id:
-            agent_url = f"/agent/{body.agent_id}/stream"
-            request_json = {
-                "message": body.question,
-                "thread_id": str(session_id),
-                "enable_thinking": body.deep_think,
-                "web_search": body.web_search,
-                "reasoning_effort": body.reasoning_effort,
-                "source": body.source,
-                # DeerFlow execution mode parameters (Phase 2)
-                "is_plan_mode": body.is_plan_mode,
-                "subagent_enabled": body.subagent_enabled,
-            }
-        else:
-            agent_url = "/chat/ask/stream"
-            request_json = {
-                "question": body.question,
+        # Route to the runs.py endpoint (LangGraph SSE format).
+        # When agent_id is absent, fall back to the 数鸣 system agent (NUMINA_AGENT_ID).
+        agent_id = body.agent_id or str(NUMINA_AGENT_ID)
+        agent_url = f"/api/threads/{session_id}/runs/stream"
+        request_json = {
+            "assistant_id": agent_id,
+            "input": {
+                "messages": [{"role": "user", "content": body.question}],
+            },
+            "metadata": {
                 "deep_think": body.deep_think,
                 "web_search": body.web_search,
                 "reasoning_effort": body.reasoning_effort,
                 "source": body.source,
-                # DeerFlow execution mode parameters (Phase 2)
                 "is_plan_mode": body.is_plan_mode,
                 "subagent_enabled": body.subagent_enabled,
-            }
+            },
+        }
 
         answer_chunks: list[str] = []
         try:
@@ -358,30 +320,40 @@ async def chat_stream(
                 "POST",
                 agent_url,
                 json=request_json,
-                headers={
-                    "X-Thread-Id": str(session_id),
-                },
+                headers={"X-Thread-Id": str(session_id)},
             ) as resp:
+                # runs.py returns SSE directly — passthrough with SSE-aware parsing
+                sse_buffer: list[str] = []
                 async for line in resp.aiter_lines():
-                    if not line.strip():
-                        continue
-                    # Collect answer tokens for persistence using NDJSON parsing
-                    token = _collect_answer_token_from_event(line)
-                    if token is not None:
-                        answer_chunks.append(token)
-                    if use_sse:
-                        # Convert NDJSON to SSE format
-                        try:
-                            event_data = json.loads(line)
-                            event_type = event_data.get("type", "custom")
-                            sse_type = _SSE_TYPE_MAP.get(event_type, "custom")
-                            payload = json.dumps(event_data, ensure_ascii=False, separators=(",", ":"))
-                            yield f"event: {sse_type}\ndata: {payload}\n\n".encode()
-                        except json.JSONDecodeError:
-                            yield f"event: custom\ndata: {line.strip()}\n\n".encode()
-                    else:
-                        # Pass through NDJSON as-is (backward compat)
-                        yield f"{line}\n".encode()
+                    if not line.strip() and sse_buffer:
+                        # Complete SSE event — forward it
+                        full_event = "\n".join(sse_buffer) + "\n\n"
+                        yield full_event.encode()
+
+                        # Parse event type and data for answer token collection
+                        event_type = ""
+                        data_text = ""
+                        for ev_line in sse_buffer:
+                            if ev_line.startswith("event: "):
+                                event_type = ev_line[7:]
+                            elif ev_line.startswith("data: "):
+                                data_text = ev_line[6:]
+
+                        if event_type == "messages" and data_text:
+                            try:
+                                msg_data = json.loads(data_text)
+                                if isinstance(msg_data, dict) and msg_data.get("type") == "ai" and msg_data.get("content"):
+                                    answer_chunks.append(msg_data["content"])
+                            except json.JSONDecodeError:
+                                pass
+
+                        sse_buffer = []
+                    elif line.strip():
+                        sse_buffer.append(line)
+
+                    if await request.is_disconnected():
+                        logger.info("chat_stream client disconnected session=%s", session_id)
+                        break
 
         except Exception as e:
             logger.error("chat_stream proxy failed: %s", type(e).__name__)

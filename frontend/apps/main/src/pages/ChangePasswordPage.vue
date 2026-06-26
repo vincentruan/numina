@@ -68,7 +68,7 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showSuccessToast, showFailToast, showConfirmDialog } from 'vant'
+import { showSuccessToast, showFailToast, showConfirmDialog, showToast } from 'vant'
 import http from '@/api/index'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { useAuthStore } from '@/stores/auth'

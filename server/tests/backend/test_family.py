@@ -10,6 +10,7 @@ def test_get_family_info(client, auth_headers):
     assert "id" in data
     assert "name" in data
     assert "invite_code" in data
+    assert "creator_code" in data
     assert isinstance(data["members"], list)
     assert len(data["members"]) >= 1
 
@@ -181,3 +182,33 @@ def test_cross_family_isolation_aggregate(client, auth_headers, second_user_head
     agg_b = client.get("/api/v1/family/aggregate", headers=second_user_headers).json()["data"]
     assert agg_b["total_assets"] == 0
     assert agg_b["asset_count"] == 0
+
+
+def test_family_info_returns_correct_creator_code(client, db):
+    """GET /family returns the correct creator_code that was used during registration."""
+    from apps.backend.app.models.family_invitation_code import FamilyInvitationCode
+    from apps.backend.app.schemas.auth import RegisterRequest
+    from apps.backend.app.services.auth import register
+    import random
+    import string
+
+    code_str = "".join(random.choices(string.ascii_uppercase, k=6))
+    inv_code = FamilyInvitationCode(code=code_str)
+    db.add(inv_code)
+    db.commit()
+
+    req = RegisterRequest(
+        username=f"user_{code_str.lower()}",
+        password="Password123",
+        display_name="Creator User",
+        family_name="Creator Family",
+        family_invitation_code=code_str,
+    )
+    tokens = register(db, req, client_ip="127.0.0.1")
+    headers = {"Authorization": f"Bearer {tokens.access_token}"}
+
+    response = client.get("/api/v1/family", headers=headers)
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["creator_code"] == code_str
+

@@ -55,6 +55,9 @@ async def proxy_langgraph_request(
                 ) as resp:
                     async for chunk in resp.aiter_bytes():
                         yield chunk
+                        if await request.is_disconnected():
+                            logger.info(f"LangGraph proxy stream client disconnected path={path}")
+                            break
             except Exception as e:
                 logger.error(f"LangGraph proxy stream error on {path}: {e}")
                 yield b""

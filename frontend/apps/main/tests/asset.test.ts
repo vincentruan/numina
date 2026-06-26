@@ -44,7 +44,9 @@ describe('useAssetStore - optimistic create', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -56,7 +58,7 @@ describe('useAssetStore - optimistic create', () => {
     const apiPromise = new Promise<{ data: Asset }>((resolve) => {
       resolveApi = resolve
     })
-    vi.mocked(assetApi.createAsset).mockReturnValue(apiPromise)
+    vi.mocked(assetApi.createAsset).mockReturnValue(apiPromise as any)
 
     // Start create operation
     const createPromise = store.createAsset({
@@ -65,8 +67,7 @@ describe('useAssetStore - optimistic create', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
-    })
+    } as any)
 
     // BEFORE API resolves: asset should already be in list with temp ID
     expect(store.assets.length).toBe(1)
@@ -125,7 +126,9 @@ describe('useAssetStore - optimistic create', () => {
       asset_type: 'physical',
       purchase_price: 500,
       current_value: 500,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -137,7 +140,7 @@ describe('useAssetStore - optimistic create', () => {
     const apiPromise = new Promise<{ data: Asset }>((resolve) => {
       resolveApi = resolve
     })
-    vi.mocked(assetApi.createAsset).mockReturnValue(apiPromise)
+    vi.mocked(assetApi.createAsset).mockReturnValue(apiPromise as any)
 
     // Call createAsset twice rapidly
     const createPromise1 = store.createAsset({
@@ -172,14 +175,16 @@ describe('useAssetStore - optimistic create', () => {
       asset_type: 'physical',
       purchase_price: 2000,
       current_value: 2000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
       updated_at: '2026-04-18T00:00:00Z',
     }
 
-    vi.mocked(assetApi.createAsset).mockResolvedValue({ data: mockAsset })
+    vi.mocked(assetApi.createAsset).mockResolvedValue({ data: mockAsset } as any)
 
     // Create and set as currentAsset
     const created = await store.createAsset({
@@ -214,7 +219,9 @@ describe('useAssetStore - optimistic update', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -233,7 +240,7 @@ describe('useAssetStore - optimistic update', () => {
     const apiPromise = new Promise<{ data: Asset }>((resolve) => {
       resolveApi = resolve
     })
-    vi.mocked(assetApi.updateAsset).mockReturnValue(apiPromise)
+    vi.mocked(assetApi.updateAsset).mockReturnValue(apiPromise as any)
 
     // Start update operation
     const updatePromise = store.updateAsset('asset-1', { name: '新名称' })
@@ -260,7 +267,9 @@ describe('useAssetStore - optimistic update', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -298,7 +307,9 @@ describe('useAssetStore - optimistic update', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -312,7 +323,7 @@ describe('useAssetStore - optimistic update', () => {
       name: '更新名称',
       updated_at: '2026-04-18T01:00:00Z',
     }
-    vi.mocked(assetApi.updateAsset).mockResolvedValue({ data: updatedAsset })
+    vi.mocked(assetApi.updateAsset).mockResolvedValue({ data: updatedAsset } as any)
 
     // Update while viewing detail
     await store.updateAsset('asset-3', { name: '更新名称' })
@@ -338,7 +349,9 @@ describe('useAssetStore - optimistic delete', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -351,7 +364,9 @@ describe('useAssetStore - optimistic delete', () => {
       asset_type: 'physical',
       purchase_price: 2000,
       current_value: 2000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -364,7 +379,7 @@ describe('useAssetStore - optimistic delete', () => {
     const apiPromise = new Promise<void>((resolve) => {
       resolveApi = resolve
     })
-    vi.mocked(assetApi.deleteAsset).mockReturnValue(apiPromise)
+    vi.mocked(assetApi.deleteAsset).mockReturnValue(apiPromise as any)
 
     // Start delete operation for asset1
     const deletePromise = store.deleteAsset('asset-a')
@@ -392,7 +407,9 @@ describe('useAssetStore - optimistic delete', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',
@@ -431,7 +448,9 @@ describe('useAssetStore - optimistic delete', () => {
       asset_type: 'physical',
       purchase_price: 1000,
       current_value: 1000,
-      quantity: 1,
+      currency: 'CNY',
+      purchase_date: '2026-04-18',
+      status: 'in_use',
       user_id: 'user-1',
       family_id: 'family-1',
       created_at: '2026-04-18T00:00:00Z',

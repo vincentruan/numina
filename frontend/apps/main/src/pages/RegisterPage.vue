@@ -91,7 +91,7 @@
 <script setup lang="ts">
 import { ref, provide } from 'vue'
 import { useRouter } from 'vue-router'
-import { showToast, showSuccessToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import AltchaWidget from '@/components/common/AltchaWidget.vue'
@@ -211,7 +211,7 @@ async function onSubmit() {
 }
 .register-links a {
   color: rgba(255, 255, 255, 0.9);
-  textDecoration: none;
+  text-decoration: none;
   font-size: 14px;
 }
 </style>

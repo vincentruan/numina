@@ -74,17 +74,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, toRefs } from 'vue'
 import { showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
-import { storeToRefs } from 'pinia'
 import { useBlindBoxStore } from '@/stores/blindBox'
 import DrawAnimation from '@/components/blindBox/DrawAnimation.vue'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
 
 const { t, locale } = useI18n()
 const store = useBlindBoxStore()
-const { draws, bonusDraws, loading, lastDraw } = storeToRefs(store)
+const { draws, bonusDraws, loading, lastDraw } = toRefs(store)
 
 const activeTab = ref<'draw' | 'history'>('draw')
 const animating = ref(false)

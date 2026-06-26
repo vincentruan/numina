@@ -2,18 +2,16 @@
 /**
  * DeerFlow 执行模式选择器
  *
- * 参考: frontend/src/components/workspace/input-box.tsx PromptInputActionMenu (第523-693行)
+ * 参考: deer-flow-reference/frontend/src/components/workspace/input-box.tsx PromptInputActionMenu (第709-878行)
  *
  * 四种模式:
- * - Flash: minimal, 快速响应
- * - Thinking: low, 启用思考链
- * - Pro: medium, 计划模式
- * - Ultra: high, 子代理协作
+ * - flash: 快速且高效的完成任务，但可能不够精准
+ * - thinking: 思考后再行动，在时间与准确性之间取得平衡
+ * - pro: 思考、计划再执行，获得更精准的结果，可能需要更多时间
+ * - ultra: 继承自 Pro 模式，可调用子代理分工协作，适合复杂多步骤任务，能力最强
  */
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Popup, CellGroup, Cell } from 'vant'
-import IIcon from '@/components/IIcon.vue'
 import type { InputMode } from '@/types/ai-chat/input-mode'
 import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 
@@ -30,35 +28,91 @@ const emit = defineEmits<{
 }>()
 
 const popupOpen = ref(false)
+const triggerRef = ref<HTMLElement | null>(null)
 
-// 可用模式列表
-const availableModes = computed(() =>
-  Object.values(INPUT_MODE_CONFIGS).filter((config) => {
-    // Flash 模式始终可用
-    if (config.mode === 'flash') return true
-    // 其他模式需要模型支持 thinking
-    if (!props.supportsThinking) return false
-    // Ultra 模式还需要租户支持 subagent
-    if (config.mode === 'ultra' && props.ultraDisabled) return false
-    return true
+// 可用模式列表（不过滤，全部展示，用 dimmed 表示不可用）
+const allModes = computed(() =>
+  Object.values(INPUT_MODE_CONFIGS).map((config) => {
+    let available = true
+    if (config.mode === 'ultra' && props.ultraDisabled) available = false
+    if (config.mode !== 'flash' && !props.supportsThinking) available = false
+    return {
+      mode: config.mode,
+      available,
+      icon: config.icon,
+      label: t(`mode.${config.mode}.label`),
+      description: t(`mode.${config.mode}.description`),
+    }
   }),
 )
 
+function isModeActive(mode: InputMode): boolean {
+  return mode === props.currentMode
+}
+
+function isModeDimmed(mode: InputMode): boolean {
+  return !allModes.value.find(m => m.mode === mode)?.available
+}
+
 function onSelect(mode: InputMode) {
+  const item = allModes.value.find(m => m.mode === mode)
+  if (!item?.available) return
   emit('select', mode)
   popupOpen.value = false
 }
 
-function getModeIcon(mode: InputMode): string {
-  return INPUT_MODE_CONFIGS[mode].icon
+// 弹出层位置：左对齐 trigger 按钮，显示在按钮上方
+// Uses ref updated on open + scroll/resize for reactive positioning
+const popupPosition = ref<Record<string, string>>({})
+
+function updatePopupPosition() {
+  if (!triggerRef.value || !popupOpen.value) return
+  const rect = triggerRef.value.getBoundingClientRect()
+  // Use visualViewport for mobile Safari compatibility (excludes browser chrome)
+  const viewportHeight = window.visualViewport?.height ?? window.innerHeight
+  const gap = 8
+  
+  const panelLeft = rect.left
+  const popupWidth = 300
+  let left = panelLeft
+  if (left + popupWidth > window.innerWidth - 16) {
+    left = Math.max(16, window.innerWidth - popupWidth - 16)
+  }
+
+  popupPosition.value = {
+    position: 'fixed' as const,
+    bottom: `${viewportHeight - rect.top + gap}px`,
+    left: `${left}px`,
+    maxWidth: `calc(100vw - 32px)`,
+  }
 }
 
-function getModeLabel(mode: InputMode): string {
+function togglePopup() {
+  popupOpen.value = !popupOpen.value
+  if (popupOpen.value) {
+    nextTick(() => updatePopupPosition())
+  }
+}
+
+// Scroll/resize listener for reactive popup positioning
+function onScrollOrResize() {
+  updatePopupPosition()
+}
+
+function getModeIcon(mode: InputMode): string {
+  return INPUT_MODE_CONFIGS[mode]?.icon || ''
+}
+
+function _getModeLabel(mode: InputMode): string {
   return t(`mode.${mode}.label`)
 }
 
-function getModeDescription(mode: InputMode): string {
-  return t(`mode.${mode}.description`)
+// 点击页面其他位置关闭弹出层
+function onOutsideClick(e: MouseEvent) {
+  if (!popupOpen.value) return
+  const target = e.target as HTMLElement
+  if (triggerRef.value?.contains(target)) return
+  popupOpen.value = false
 }
 
 // Handle Escape key to close popup
@@ -70,163 +124,237 @@ function onEscapeKey(e: KeyboardEvent) {
 
 onMounted(() => {
   document.addEventListener('keydown', onEscapeKey)
+  // 使用 capture 阶段拦截，确保先于其他组件的点击事件触发
+  document.addEventListener('click', onOutsideClick, true)
+  window.addEventListener('scroll', onScrollOrResize, true)
+  window.addEventListener('resize', onScrollOrResize)
+  // Listen for visualViewport changes (mobile Safari address bar show/hide)
+  window.visualViewport?.addEventListener('resize', onScrollOrResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', onEscapeKey)
+  document.removeEventListener('click', onOutsideClick, true)
+  window.removeEventListener('scroll', onScrollOrResize, true)
+  window.removeEventListener('resize', onScrollOrResize)
+  window.visualViewport?.removeEventListener('resize', onScrollOrResize)
 })
 </script>
 
 <template>
-  <!-- 模式按钮 -->
+  <!-- 模式触发按钮 -->
   <button
-    class="mode-btn"
-    :class="currentMode"
-    @click="popupOpen = true"
+    ref="triggerRef"
+    class="mode-trigger control-btn"
+    :class="{ 'mode-trigger--ultra': currentMode === 'ultra' }"
+    @click.stop="togglePopup"
   >
-    <IIcon :icon="getModeIcon(currentMode)" class="mode-icon" />
-    <span class="mode-label">{{ getModeLabel(currentMode) }}</span>
+    <IIcon :icon="getModeIcon(currentMode)" class="mode-trigger-icon" />
   </button>
 
   <!-- 模式选择弹出层 -->
-  <Popup
-    v-model:show="popupOpen"
-    position="bottom"
-    round
-    :style="{ maxHeight: '50vh' }"
-  >
-    <div class="mode-selector-popup">
-      <div class="popup-header">
-        <span class="popup-title">{{ t('aiChat.modeSelectorTitle') }}</span>
-      </div>
+  <Teleport to="body">
+    <Transition name="mode-dropdown">
+      <div v-if="popupOpen" class="mode-dropdown" :style="popupPosition" @click.self="popupOpen = false">
+        <div class="mode-dropdown-card">
+          <!-- 模式列表 -->
+          <div
+            v-for="item in allModes"
+            :key="item.mode"
+            class="mode-item"
+            :class="{
+              'mode-item--active': isModeActive(item.mode),
+              'mode-item--dimmed': isModeDimmed(item.mode),
+              'mode-item--ultra': item.mode === 'ultra',
+            }"
+            @click="onSelect(item.mode)"
+          >
+            <div class="mode-item-header">
+              <IIcon :icon="item.icon" class="mode-item-icon" />
+              <span class="mode-item-label">{{ item.label }}</span>
+              <IIcon v-if="isModeActive(item.mode)" icon="lucide:check" class="mode-item-check" />
+              <div v-else class="mode-item-spacer" />
+            </div>
+            <div class="mode-item-desc">{{ item.description }}</div>
+          </div>
 
-      <CellGroup inset>
-        <Cell
-          v-for="config in availableModes"
-          :key="config.mode"
-          :title="getModeLabel(config.mode)"
-          :label="getModeDescription(config.mode)"
-          clickable
-          :class="{ active: currentMode === config.mode }"
-          @click="onSelect(config.mode)"
-        >
-          <template #icon>
-            <IIcon :icon="config.icon" class="cell-icon" />
-          </template>
-          <template #right-icon>
-            <IIcon
-              v-if="currentMode === config.mode"
-              icon="check"
-              class="check-icon"
-            />
-          </template>
-        </Cell>
-      </CellGroup>
-
-      <!-- 不可用模式提示 -->
-      <div v-if="!supportsThinking" class="disabled-hint">
-        {{ t('aiChat.tenantModelFallback') }}
+        </div>
       </div>
-      <div v-if="ultraDisabled" class="disabled-hint">
-        {{ t('aiChat.tenantUltraDisabled') }}
-      </div>
-    </div>
-  </Popup>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
-.mode-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  font-size: 12px;
+/* ── Trigger Button — circular, matches control-btn style ── */
+.mode-trigger {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.12));
+  background: rgba(99, 102, 241, 0.08);
   color: var(--text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.mode-btn.flash {
-  border-color: #f59e0b;
-  color: #f59e0b;
-}
-.mode-btn.thinking {
-  border-color: #3b82f6;
-  color: #3b82f6;
-}
-.mode-btn.pro {
-  border-color: #8b5cf6;
-  color: #8b5cf6;
-}
-.mode-btn.ultra {
-  border-color: #ef4444;
-  color: #ef4444;
-}
-
-.mode-icon {
-  width: 14px;
-  height: 14px;
-}
-
-.mode-label {
-  font-weight: 500;
-}
-
-.mode-selector-popup {
-  padding: 16px;
-}
-
-.popup-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.15s, box-shadow 0.2s;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
 }
 
-.popup-title {
-  font-size: 16px;
-  font-weight: 600;
+.mode-trigger:hover {
+  background: rgba(99, 102, 241, 0.15);
   color: var(--text-primary);
 }
 
-.cell-icon {
+.mode-trigger:active {
+  transform: scale(0.92);
+}
+
+.mode-trigger--ultra {
+  background: rgba(218, 187, 94, 0.12);
+  border-color: rgba(218, 187, 94, 0.3);
+  color: #dabb5e;
+}
+
+.mode-trigger--ultra:hover {
+  background: rgba(218, 187, 94, 0.2);
+}
+
+.mode-trigger-icon {
   width: 20px;
   height: 20px;
-  margin-right: 8px;
+  flex-shrink: 0;
 }
 
-.check-icon {
+/* ── Dropdown ── */
+.mode-dropdown {
+  z-index: 999;
+}
+
+.mode-dropdown-card {
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* ── Mode Item ── */
+.mode-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.mode-item:hover:not(.mode-item--dimmed) {
+  background: var(--bg-primary);
+}
+
+.mode-item--active {
+  color: var(--text-primary);
+}
+
+.mode-item--dimmed {
+  opacity: 0.45;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.mode-item--dimmed:hover {
+  background: transparent;
+}
+
+.mode-item--ultra .mode-item-label,
+.mode-item--ultra .mode-item-icon {
+  color: #dabb5e;
+}
+
+.mode-item-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mode-item-icon {
   width: 16px;
   height: 16px;
-  color: var(--van-primary-color);
-}
-
-.disabled-hint {
-  margin-top: 12px;
-  padding: 8px 12px;
-  background: var(--bg-primary);
-  border-radius: 8px;
-  font-size: 12px;
+  flex-shrink: 0;
   color: var(--text-secondary);
 }
 
-/* 375px */
+.mode-item-label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+.mode-item--active .mode-item-label {
+  font-weight: 700;
+}
+
+.mode-item-check {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  color: var(--van-primary-color);
+  flex-shrink: 0;
+}
+
+.mode-item-spacer {
+  width: 14px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.mode-item-desc {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  padding-left: 22px; /* align with label start */
+}
+
+.mode-item--dimmed .mode-item-desc {
+  color: var(--text-secondary);
+}
+
+/* ── Transition ── */
+.mode-dropdown-enter-active,
+.mode-dropdown-leave-active {
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.mode-dropdown-enter-from,
+.mode-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+/* ── Responsive ── */
 @media (max-width: 375px) {
-  .mode-btn {
-    padding: 4px 8px;
-    font-size: 11px;
+  .mode-dropdown-card {
+    width: 270px;
   }
 
-  .mode-icon {
-    width: 12px;
-    height: 12px;
+  .mode-trigger {
+    width: 28px;
+    height: 28px;
+    min-width: 40px;
+    min-height: 40px;
   }
 
-  .popup-title {
-    font-size: 14px;
+  .mode-trigger-icon {
+    width: 14px;
+    height: 14px;
   }
 }
 </style>

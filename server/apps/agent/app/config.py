@@ -49,6 +49,21 @@ class AgentSettings(BaseSettings):
     DEERFLOW_CONCURRENCY: int = 8
     DEERFLOW_DEFAULT_TIMEOUT: int = 120
 
+    # SSE streaming gateway (Phase 2 runtime)
+    SSE_HEARTBEAT_INTERVAL: float = 15.0
+    SSE_QUEUE_MAXSIZE: int = 256
+    RUN_CLEANUP_DELAY_SECONDS: float = 300.0
+    STREAM_CLEANUP_DELAY_SECONDS: float = 60.0
+    RUN_DRAIN_TIMEOUT_SECONDS: float = 5.0
+
+    # Subagent background tasks
+    SUBAGENT_MAX_CONCURRENT: int = 3
+    SUBAGENT_TIMEOUT_SECONDS: int = 900
+
+    # Sandbox
+    SANDBOX_MAX_CACHED_THREADS: int = 256
+    SANDBOX_IDLE_TIMEOUT_SECONDS: int = 600
+
     # DeerFlow Gateway API 地址（内部代理端点使用）
     DEERFLOW_GATEWAY_URL: str = "http://localhost:8001"
 

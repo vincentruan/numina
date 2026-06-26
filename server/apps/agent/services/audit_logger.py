@@ -62,6 +62,7 @@ class AuditEntry:
     duration_ms: int | None = None
     error_type: str | None = None
     output_summary: str | None = None
+    run_id: str | None = None  # [Integrated with Numina Multi-Tenant]
 
     def __post_init__(self) -> None:
         if self.output_summary and len(self.output_summary) > 200:

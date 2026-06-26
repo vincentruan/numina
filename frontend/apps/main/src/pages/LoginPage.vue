@@ -210,7 +210,7 @@
 import { ref, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { showToast, showSuccessToast } from 'vant'
+import { showSuccessToast, showFailToast } from 'vant'
 import { useAuthStore } from '@/stores/auth'
 import { useDeerField } from '@/composables/useDeerField'
 import { TrustedDeviceCard, readDeviceId, PixelLoading } from '@numina/auth'

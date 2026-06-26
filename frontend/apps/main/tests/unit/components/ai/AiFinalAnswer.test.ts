@@ -23,7 +23,7 @@ const i18n = createI18n({
   },
 })
 
-function mountWith(props: Record<string, unknown>) {
+function mountWith(props: any) {
   return mount(AiFinalAnswer, {
     props,
     global: { plugins: [i18n] },

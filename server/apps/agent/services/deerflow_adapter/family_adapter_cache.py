@@ -467,6 +467,13 @@ def _generate_temp_config(
         config["memory"] = {}
     config["memory"]["storage_path"] = str(memory_path)
 
+    # [Integrated with Numina Multi-Tenant] — inject Numina's sandbox provider
+    # so that the per-family config YAML uses the family-scoped provider.
+    if "sandbox" not in config:
+        config["sandbox"] = {
+            "use": "apps.agent.services.runtime.sandbox_provider:NuminaLocalSandboxProvider"
+        }
+
     if mcp_servers:
         config["mcp_servers"] = mcp_servers
 

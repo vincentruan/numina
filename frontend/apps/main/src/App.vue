@@ -72,6 +72,9 @@ onMounted(() => {
   mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
   mediaQuery.addEventListener('change', handleSystemThemeChange)
 
+  // Load family data for agent API calls (X-Family-Id header)
+  familyStore.fetchFamily()
+
   // Load coin config for adult users (children don't have access to /family/settings)
   if (authStore.user && authStore.user.role !== 'child') {
     familyStore.loadCoinConfig()

@@ -58,7 +58,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useCategoryStore } from '@/stores/category'
 import type { Category } from '@/types'

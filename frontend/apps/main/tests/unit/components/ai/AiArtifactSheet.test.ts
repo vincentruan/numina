@@ -189,7 +189,7 @@ describe('AiArtifactSheet', () => {
     })
     await wrapper.find('.artifact-sheet__close').trigger('click')
     expect(wrapper.emitted('close')).toBeTruthy()
-    expect(wrapper.emitted('close').length).toBe(1)
+    expect(wrapper.emitted('close')!.length).toBe(1)
   })
 
   it('scrollable when many artifacts', () => {
@@ -241,9 +241,10 @@ describe('AiArtifactSheet', () => {
       },
     })
     const header = wrapper.find('.artifact-sheet__header')
+    const element = header.element as HTMLElement
     // Verify no inline color styles - should use CSS classes with variables
-    expect(header.element.style.color).toBe('')
-    expect(header.element.style.background).toBe('')
+    expect(element.style.color).toBe('')
+    expect(element.style.background).toBe('')
   })
 
   it('has correct safe-area-inset-bottom padding', () => {

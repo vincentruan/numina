@@ -1,6 +1,7 @@
 import type { ThreadSession } from '@/types/ai-chat/session'
 import { Client } from '@langchain/langgraph-sdk'
 import { useFamilyStore } from '@/stores/family'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * LangGraph SDK client pointing at the in-process /api base.
@@ -8,13 +9,14 @@ import { useFamilyStore } from '@/stores/family'
  */
 export function getClient(): Client {
   const apiUrl = typeof window !== 'undefined' ? `${window.location.origin}/api` : '/api'
+  const authStore = useAuthStore()
   const familyStore = useFamilyStore()
-  const familyId = familyStore.family?.id
-  const defaultHeaders: Record<string, string> = {}
-  if (familyId) {
-    defaultHeaders['X-Family-Id'] = familyId
+  // Prefer familyStore.family.id (full family object), fallback to authStore.user.family_id
+  const familyId = familyStore.family?.id || authStore.user?.family_id
+  if (!familyId) {
+    throw new Error('Family not loaded - cannot make agent API calls')
   }
-  return new Client({ apiUrl, defaultHeaders })
+  return new Client({ apiUrl, defaultHeaders: { 'X-Family-Id': familyId } })
 }
 
 export interface ThreadSearchParams {
@@ -37,8 +39,9 @@ function getAgentApiBase(): string {
 
 /** Get required headers for agent service calls */
 function getAgentHeaders(): Record<string, string> {
+  const authStore = useAuthStore()
   const familyStore = useFamilyStore()
-  const familyId = familyStore.family?.id
+  const familyId = familyStore.family?.id || authStore.user?.family_id
   if (!familyId) {
     throw new Error('Family not loaded - cannot make agent API calls')
   }

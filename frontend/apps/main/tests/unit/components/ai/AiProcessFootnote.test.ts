@@ -58,7 +58,7 @@ describe('AiProcessFootnote', () => {
     await wrapper.find('.footnote-header').trigger('click')
 
     expect(wrapper.emitted('toggle')).toBeTruthy()
-    expect(wrapper.emitted('toggle')[0]).toEqual([true])
+    expect(wrapper.emitted('toggle')![0]).toEqual([true])
   })
 
   it('shows ProcessBlock when expanded', async () => {
@@ -101,7 +101,7 @@ describe('AiProcessFootnote', () => {
     await wrapper.find('.footnote-header').trigger('click')
 
     expect(wrapper.emitted('toggle')).toBeTruthy()
-    expect(wrapper.emitted('toggle')[0]).toEqual([false])
+    expect(wrapper.emitted('toggle')![0]).toEqual([false])
   })
 
   it('aria-expanded reflects state', () => {
@@ -143,7 +143,7 @@ describe('AiProcessFootnote', () => {
 
     await wrapper.find('.footnote-header').trigger('keydown.enter')
     expect(wrapper.emitted('toggle')).toBeTruthy()
-    expect(wrapper.emitted('toggle')[0]).toEqual([true])
+    expect(wrapper.emitted('toggle')![0]).toEqual([true])
   })
 
   it('keyboard navigation: Space triggers toggle', async () => {
@@ -159,7 +159,7 @@ describe('AiProcessFootnote', () => {
 
     await wrapper.find('.footnote-header').trigger('keydown.space')
     expect(wrapper.emitted('toggle')).toBeTruthy()
-    expect(wrapper.emitted('toggle')[0]).toEqual([true])
+    expect(wrapper.emitted('toggle')![0]).toEqual([true])
   })
 
   it('has proper accessibility attributes', () => {

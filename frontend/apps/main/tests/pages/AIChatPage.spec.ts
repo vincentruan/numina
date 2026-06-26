@@ -2,14 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 
-import AIChatPage from '../../src/pages/ai/chat/index.vue'
+import AIChatPage from '@/pages/AIChatPage.vue'
 
 vi.mock('@/composables/ai-chat/useThreadChat', () => ({
   useThreadChat: () => ({
     messages: { value: [] },
     isLoading: { value: false },
+    isStreaming: { value: false },
     error: { value: null },
     tokenUsage: { value: null },
+    planningSteps: { value: [] },
+    suggestions: { value: [] },
+    runId: { value: null },
     sendMessage: vi.fn(),
     cancelStream: vi.fn(),
     loadHistory: vi.fn(),
@@ -58,7 +62,7 @@ vi.mock('vant', () => ({
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal()
   return {
-    ...actual,
+    ...(actual as any),
     useI18n: () => ({ t: (key: string) => key, locale: { value: 'zh-CN' } }),
   }
 })

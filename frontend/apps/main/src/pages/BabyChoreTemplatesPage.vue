@@ -25,6 +25,17 @@
           role="listitem"
           :aria-label="`${template.emoji ?? ''} ${template.name}`"
         >
+          <!-- Status Tag in Top Right -->
+          <van-tag
+            :type="template.is_active ? 'success' : 'default'"
+            class="status-tag"
+            :aria-label="template.is_active ? t('choreTemplate.statusActive') : t('choreTemplate.statusInactive')"
+            @click="onToggle(template)"
+          >
+            <van-loading v-if="togglingId === template.id" size="10" color="currentColor" />
+            <span v-else>{{ template.is_active ? t('choreTemplate.statusActive') : t('choreTemplate.statusInactive') }}</span>
+          </van-tag>
+
           <div class="template-info">
             <span class="template-emoji" aria-hidden="true">{{ template.emoji ?? '📋' }}</span>
             <div class="template-details">
@@ -50,40 +61,29 @@
                   {{ (assignee.display_name ?? '?').charAt(0) }}
                 </div>
               </div>
-              <div v-else class="pool-label">
-                {{ t('choreTemplate.poolLabel') }}
-              </div>
             </div>
           </div>
+
+          <!-- Bottom Actions styled like family page -->
           <div class="template-actions">
-            <van-tag
-              :type="template.is_active ? 'success' : 'default'"
-              class="status-tag"
-              :aria-label="template.is_active ? t('choreTemplate.statusActive') : t('choreTemplate.statusInactive')"
-              @click="onToggle(template)"
-            >
-              <van-loading v-if="togglingId === template.id" size="10" color="currentColor" />
-              <span v-else>{{ template.is_active ? t('choreTemplate.statusActive') : t('choreTemplate.statusInactive') }}</span>
-            </van-tag>
-            <van-button
-              size="small"
-              type="primary"
-              plain
+            <button
+              class="action-btn action-btn--edit"
               :aria-label="`${t('choreTemplate.editBtn')} ${template.name}`"
               @click="$router.push(`/baby/chore-templates/${template.id}/edit`)"
             >
-              {{ t('choreTemplate.editBtn') }}
-            </van-button>
-            <van-button
-              size="small"
-              type="danger"
-              plain
+              <van-icon name="edit" size="18" />
+              <span>{{ t('choreTemplate.editBtn') }}</span>
+            </button>
+            <button
+              class="action-btn action-btn--danger"
               :aria-label="`${t('choreTemplate.deleteBtn')} ${template.name}`"
-              :loading="deletingId === template.id"
+              :disabled="deletingId === template.id"
               @click="onDelete(template)"
             >
-              {{ t('choreTemplate.deleteBtn') }}
-            </van-button>
+              <van-loading v-if="deletingId === template.id" size="18" />
+              <van-icon v-else name="delete-o" size="18" />
+              <span>{{ t('choreTemplate.deleteBtn') }}</span>
+            </button>
           </div>
         </div>
       </div>
@@ -93,7 +93,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog, showToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useFamilyStore } from '@/stores/family'
 import {
@@ -218,6 +218,7 @@ onMounted(async () => {
 }
 
 .template-item {
+  position: relative;
   background: var(--van-background-2);
   border-radius: 10px;
   padding: 12px 16px;
@@ -243,6 +244,7 @@ onMounted(async () => {
   gap: 4px;
   flex: 1;
   min-width: 0;
+  padding-right: 64px; /* Prevent overlap with absolute positioned status-tag */
 }
 
 .template-name {
@@ -286,26 +288,68 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
-.pool-label {
-  font-size: 12px;
-  color: var(--van-text-color-2);
-  margin-top: 4px;
-}
-
 .template-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  margin: 12px -16px -12px;
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+}
+
+[data-theme='dark'] .template-actions {
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .status-tag {
+  position: absolute;
+  top: 12px;
+  right: 16px;
   cursor: pointer;
   min-width: 60px;
   text-align: center;
   touch-action: manipulation;
 }
 
-.template-actions .van-button {
-  flex-shrink: 0;
+.action-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 4px;
+  border: none;
+  background: transparent;
+  color: var(--van-text-color-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  position: relative;
+}
+
+.action-btn + .action-btn::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+[data-theme='dark'] .action-btn + .action-btn::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.action-btn:active {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.action-btn--edit {
+  color: #4f46e5;
+}
+
+.action-btn--danger {
+  color: #ee0a24;
 }
 </style>

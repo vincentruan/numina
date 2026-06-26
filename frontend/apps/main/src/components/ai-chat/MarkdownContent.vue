@@ -3,71 +3,261 @@
  * Markdown 渲染组件
  *
  * 功能:
- * - marked 解析 + DOMPurify sanitize
- * - 节流渲染避免长内容卡顿
- * - Loading 状态骨架屏
+ * - markdown-it 解析 + DOMPurify sanitize
+ * - shiki 双主题代码高亮（github-dark / github-light）
+ * - 表格操作栏（复制为 markdown / 下载 CSV）
  */
-import { ref, watch, onMounted } from 'vue'
-import { marked } from 'marked'
+import { ref, watch, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
+import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
+import TableActionBar from './TableActionBar.vue'
 
 const props = defineProps<{
   content: string
   isLoading?: boolean
 }>()
 
-// Configure marked
-marked.use({ breaks: true })
+// markdown-it 实例
+const md = new MarkdownIt({
+  html: false,
+  breaks: true,
+  linkify: true,
+})
+
+/**
+ * Shared singleton shiki highlighter (#11).
+ * MarkdownContent mounts once per assistant message; creating a highlighter per
+ * instance re-runs the expensive WASM/oniguruma init N times. This module-level
+ * promise is shared across all instances — created once, awaited by all.
+ * On failure the promise resets so a retry is possible.
+ */
+type ShikiModule = typeof import('shiki')
+type ShikiHighlighter = Awaited<ReturnType<ShikiModule['createHighlighter']>>
+let highlighterPromise: Promise<ShikiHighlighter> | null = null
+function getHighlighter(): Promise<ShikiHighlighter> {
+  if (!highlighterPromise) {
+    highlighterPromise = import('shiki').then((shiki) =>
+      shiki.createHighlighter({
+        themes: ['github-dark', 'github-light'],
+        langs: ['python', 'javascript', 'typescript', 'html', 'css', 'json', 'bash', 'sql'],
+      }),
+    ).catch((err) => {
+      // Reset so a later mount can retry instead of being stuck on a rejected promise.
+      highlighterPromise = null
+      throw err
+    })
+  }
+  return highlighterPromise
+}
+
+// Per-instance ref mirroring the shared singleton (read by highlightCode).
+const highlighter = shallowRef<ShikiHighlighter | null>(null)
+const rendererReady = ref(false)
 
 // 渲染结果
 const renderedContent = ref('')
 
-// 节流渲染（长内容分批渲染）
-const isRendering = ref(false)
+// 表格数据（用于操作栏）—— key 由表格内容哈希派生，渲染期保持稳定。
+interface TableBlock {
+  html: string
+  key: string
+}
+const tables = ref<TableBlock[]>([])
 
-// 内容长度阈值（超过则节流）
-const THRESHOLD = 5000
+// Track mounted state so async shiki load doesn't write to stale refs after unmount (#13).
+let isMounted = false
+
+// 简单字符串哈希（FNV-1a）用于稳定的 v-for key，避免 Date.now() 每次渲染变化导致重挂载。
+function hashString(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0
+  }
+  return h.toString(16)
+}
+
+// 异步加载 shiki 高亮器（共享单例）
+async function loadHighlighter() {
+  if (highlighter.value) return
+  try {
+    const hl = await getHighlighter()
+    // #13: 如果组件在 await 期间卸载，不要写已失效的 ref 或触发 rerender。
+    if (!isMounted) return
+    highlighter.value = hl
+    rendererReady.value = true
+    rerender()
+  } catch (err) {
+    if (isMounted) console.error('Failed to load shiki highlighter:', err)
+  }
+}
+
+// 使用 shiki 高亮代码块
+function highlightCode(code: string, lang: string): string {
+  const hl = highlighter.value
+  if (!hl) {
+    // Fallback: plain code block
+    const escaped = md.utils.escapeHtml(code)
+    return `<pre class="code-block-fallback"><code>${escaped}</code></pre>`
+  }
+
+  const language = lang && hl.getLoadedLanguages().includes(lang) ? lang : 'text'
+  try {
+    // 双主题模式：同时输出两个主题的样式，由 CSS class 切换
+    return hl.codeToHtml(code, {
+      lang: language,
+      themes: { light: 'github-light', dark: 'github-dark' },
+    })
+  } catch {
+    const escaped = md.utils.escapeHtml(code)
+    return `<pre><code>${escaped}</code></pre>`
+  }
+}
+
+// 配置 markdown-it 代码高亮
+md.set({
+  highlight: (str: string, lang: string): string => highlightCode(str, lang),
+})
+
+/**
+ * 提取表格并在其原位注入操作栏锚点 (#6)。
+ * 之前所有 TableActionBar 渲染在 markdown body 下方，与各自表格脱离；
+ * 现在在每个表格前插入一个锚点 div，挂载后把对应的操作栏组件移动到锚点内，
+ * 使操作栏紧贴其表格上方。同时使用基于内容的稳定 key (#10)。
+ */
+function extractTablesAndInjectAnchors(html: string): string {
+  tables.value = []
+  const tableRegex = /<table[^>]*>[\s\S]*?<\/table>/gi
+  const matches: TableBlock[] = []
+  let result = ''
+  let lastIdx = 0
+  let match: RegExpExecArray | null
+  let idx = 0
+  while ((match = tableRegex.exec(html)) !== null) {
+    const tableHtml = match[0]
+    // 稳定 key：表格内容哈希 + 索引，内容不变时 key 不变。
+    const key = `table-${idx}-${hashString(tableHtml)}`
+    matches.push({ html: tableHtml, key })
+    // 在表格前插入锚点（操作栏将移动到此容器内）
+    result += html.slice(lastIdx, match.index)
+    result += `<div class="table-action-anchor" data-table-idx="${idx}"></div>`
+    result += tableHtml
+    lastIdx = match.index + tableHtml.length
+    idx++
+  }
+  result += html.slice(lastIdx)
+
+  if (matches.length === 0) return html
+  tables.value = matches
+  return result
+}
 
 // 渲染函数
 function renderMarkdown(content: string): string {
   if (!content) return ''
-  return DOMPurify.sanitize(marked.parse(content) as string)
+  const raw = md.render(content)
+  const sanitized = DOMPurify.sanitize(raw, {
+    ADD_ATTR: ['class', 'style'],
+  })
+  return extractTablesAndInjectAnchors(sanitized)
 }
 
-// 监听内容变化
+function rerender() {
+  if (!props.content) {
+    renderedContent.value = ''
+    tables.value = []
+    return
+  }
+  renderedContent.value = renderMarkdown(props.content)
+  // 渲染后把操作栏移动到锚点位置（nextTick 确保 DOM 已更新）。
+  nextTick(positionActionBars)
+}
+
+/**
+ * 将每个 TableActionBar 元素移动到其在 markdown-body 内的锚点 div 中 (#6)。
+ * 锚点由 data-table-idx 标记，与 tables 数组索引一一对应。
+ */
+function positionActionBars() {
+  if (!isMounted) return
+  const root = document.querySelector('.markdown-content')
+  if (!root) return
+  const anchors = root.querySelectorAll<HTMLElement>('.table-action-anchor')
+  const bars = root.querySelectorAll<HTMLElement>('.table-action-bar-wrapper')
+  anchors.forEach((anchor, idx) => {
+    const bar = bars[idx]
+    if (bar && anchor.parentElement !== bar.parentElement) {
+      // 将操作栏移入锚点（锚点本身留在表格之前的原位）。
+      // 若锚点已有子元素（重复移动），先清空避免重复。
+      anchor.innerHTML = ''
+      anchor.appendChild(bar)
+    } else if (bar && anchor.firstElementChild !== bar) {
+      anchor.innerHTML = ''
+      anchor.appendChild(bar)
+    }
+  })
+}
+
+// 防抖渲染 (#5)：流式输出时每个 token 都会触发 watch，但全量重解析 md.render
+// + DOMPurify + 表格提取是 O(n) 的；不做防抖会导致 O(n²) 的重复解析。
+// 用 ~60ms 防抖把多个快速 chunk 合并为一次渲染，并在流结束时强制刷新。
+const RENDER_DEBOUNCE_MS = 60
+let renderTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleRender() {
+  if (renderTimer !== null) clearTimeout(renderTimer)
+  renderTimer = setTimeout(() => {
+    renderTimer = null
+    rerender()
+  }, RENDER_DEBOUNCE_MS)
+}
+
+function flushNow() {
+  if (renderTimer !== null) {
+    clearTimeout(renderTimer)
+    renderTimer = null
+  }
+  rerender()
+}
+
+// 监听内容变化（防抖）
 watch(
   () => props.content,
-  (content) => {
-    if (!content) {
-      renderedContent.value = ''
-      return
-    }
-
-    // 短内容直接渲染
-    if (content.length < THRESHOLD) {
-      renderedContent.value = renderMarkdown(content)
-      return
-    }
-
-    // 长内容节流渲染
-    isRendering.value = true
-    // 先渲染前 2000 字符
-    const firstChunk = content.slice(0, 2000)
-    renderedContent.value = renderMarkdown(firstChunk)
-
-    // 延迟渲染剩余内容
-    setTimeout(() => {
-      renderedContent.value = renderMarkdown(content)
-      isRendering.value = false
-    }, 100)
-  },
+  () => scheduleRender(),
   { immediate: true }
 )
 
-onMounted(() => {
-  if (props.content && props.content.length < THRESHOLD) {
-    renderedContent.value = renderMarkdown(props.content)
+// isLoading 从 true 变 false 表示流结束，强制刷新一次确保最终内容渲染完整。
+watch(
+  () => props.isLoading,
+  (loading, prev) => {
+    if (prev && !loading) {
+      // 流结束：确保最后一次渲染包含完整内容。
+      flushNow()
+    }
   }
+)
+
+// shiki 加载完成后重新渲染
+watch(rendererReady, (ready) => {
+  if (ready) rerender()
+})
+
+onMounted(() => {
+  isMounted = true
+  loadHighlighter()
+  rerender()
+})
+
+onUnmounted(() => {
+  isMounted = false
+  // 清理防抖计时器，避免卸载后写入失效 ref。
+  if (renderTimer !== null) {
+    clearTimeout(renderTimer)
+    renderTimer = null
+  }
+  // 不清空共享单例 highlighterPromise（跨实例共享）；
+  // 仅清理本实例的 ref 引用。
+  highlighter.value = null
 })
 </script>
 
@@ -75,18 +265,25 @@ onMounted(() => {
   <div class="markdown-content">
     <!-- Loading skeleton -->
     <template v-if="isLoading">
-      <Skeleton :row="3" animated />
+      <van-skeleton :row="3" animated />
     </template>
 
-    <!-- 渲染内容 -->
+    <!-- 渲染内容（表格锚点 div 在 v-html 内，挂载后由 positionActionBars 注入操作栏） -->
     <!-- eslint-disable vue/no-v-html -- sanitized by DOMPurify -->
-    <div
-      v-else
-      class="markdown-body"
-      :class="{ rendering: isRendering }"
-      v-html="renderedContent"
-    />
+    <div class="markdown-body" v-html="renderedContent" />
     <!-- eslint-enable vue/no-v-html -->
+
+    <!-- 表格操作栏：初始渲染为隐藏源节点，nextTick 后移动到对应锚点 (#6) -->
+    <template v-if="tables.length > 0">
+      <div
+        v-for="(table, idx) in tables"
+        :key="table.key"
+        class="table-action-bar-wrapper"
+        :data-table-idx="idx"
+      >
+        <TableActionBar :table-html="table.html" />
+      </div>
+    </template>
   </div>
 </template>
 
@@ -99,10 +296,6 @@ onMounted(() => {
 
 .markdown-body {
   word-break: break-word;
-}
-
-.markdown-body.rendering {
-  opacity: 0.7;
 }
 
 /* Markdown 元素样式 */
@@ -149,14 +342,13 @@ onMounted(() => {
   font-family: 'SF Mono', Monaco, 'Courier New', monospace;
   font-size: 13px;
   padding: 2px 6px;
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(127, 127, 127, 0.12);
   border-radius: 4px;
 }
 
 .markdown-body :deep(pre) {
   margin: 12px 0;
   padding: 12px;
-  background: var(--card-bg);
   border-radius: 8px;
   overflow-x: auto;
 }
@@ -164,6 +356,42 @@ onMounted(() => {
 .markdown-body :deep(pre code) {
   background: transparent;
   padding: 0;
+  font-size: 13px;
+}
+
+/* shiki 双主题代码块样式 */
+.markdown-body :deep(.shiki) {
+  margin: 12px 0;
+  border-radius: 8px;
+  overflow-x: auto;
+  padding: 12px;
+}
+
+/* 双主题：默认显示当前主题，另一个隐藏 */
+.markdown-body :deep(.shiki.github-dark) {
+  display: var(--shiki-dark-display, block);
+}
+
+.markdown-body :deep(.shiki.github-light) {
+  display: var(--shiki-light-display, block);
+}
+
+/* 暗色模式下 */
+:global([data-theme='dark']) .markdown-body :deep(.shiki.github-dark) {
+  display: block;
+}
+
+:global([data-theme='dark']) .markdown-body :deep(.shiki.github-light) {
+  display: none;
+}
+
+/* 亮色模式下 */
+:global([data-theme='light']) .markdown-body :deep(.shiki.github-dark) {
+  display: none;
+}
+
+:global([data-theme='light']) .markdown-body :deep(.shiki.github-light) {
+  display: block;
 }
 
 .markdown-body :deep(blockquote) {
@@ -187,6 +415,17 @@ onMounted(() => {
   width: 100%;
   margin: 12px 0;
   border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+/* 表格操作栏锚点：紧贴表格上方，不影响表格自身布局 (#6) */
+.markdown-body :deep(.table-action-anchor) {
+  margin-top: 4px;
+}
+
+.markdown-body :deep(.table-action-anchor:empty) {
+  margin: 0;
 }
 
 .markdown-body :deep(th),
@@ -199,13 +438,6 @@ onMounted(() => {
 .markdown-body :deep(th) {
   background: var(--card-bg);
   font-weight: 600;
-}
-
-/* Dark mode adjustments */
-@media (prefers-color-scheme: dark) {
-  .markdown-body :deep(code) {
-    background: rgba(255, 255, 255, 0.08);
-  }
 }
 
 /* 375px */

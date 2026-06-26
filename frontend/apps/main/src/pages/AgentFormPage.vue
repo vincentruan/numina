@@ -9,6 +9,11 @@ import { getSkillsGrouped } from '@/api/ai'
 import type { AgentCreatePayload, AgentUpdatePayload } from '@/types/agent'
 import type { SkillDefinition } from '@/api/ai'
 import EmptyState from '@/components/common/EmptyState.vue'
+import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
+import IIcon from '@/components/IIcon.vue'
+import { ICON_OPTIONS, EMOJI_TO_ICONIFY } from '@/utils/agent'
+
+const NUMINA_AGENT_NAME = 'numina'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -22,7 +27,7 @@ const form = ref<AgentCreatePayload>({
   agent_name: '',
   display_name: '',
   description: '',
-  icon: '🤖',
+  icon: 'lucide:bot',
   color: '#6366F1',
   soul_md: '',
   skills: [],
@@ -39,8 +44,7 @@ const availableSkills = ref<SkillDefinition[]>([])
 const skillsLoading = ref(true)
 const submitting = ref(false)
 
-const ICON_OPTIONS = ['🤖', '🏥', '💰', '🎯', '📊', '🔍', '💡', '🛡️', '📈', '🧮',
-  '🏠', '💳', '🎓', '🌟', '⚡', '🔧', '📋', '🧠', '✨', '🎨']
+// ICON_OPTIONS is imported from @/utils/agent.ts
 
 const COLOR_OPTIONS = [
   '#6366F1', '#10B981', '#F59E0B', '#EF4444',
@@ -55,6 +59,9 @@ onMounted(async () => {
       ...skillData.builtin.filter((s: SkillDefinition) => s.is_enabled),
       ...skillData.custom.filter((s: SkillDefinition) => s.is_enabled),
     ]
+    if (!isEdit.value) {
+      form.value.skills = availableSkills.value.map(s => s.id)
+    }
   } finally {
     skillsLoading.value = false
   }
@@ -62,11 +69,18 @@ onMounted(async () => {
   if (isEdit.value) {
     const agent = await getAgent(agentId.value)
     agentType.value = agent.agent_type
+    
+    // Map emoji icon to Iconify if available
+    let loadedIcon = agent.icon || 'lucide:bot'
+    if (loadedIcon in EMOJI_TO_ICONIFY) {
+      loadedIcon = EMOJI_TO_ICONIFY[loadedIcon]
+    }
+
     form.value = {
       agent_name: agent.agent_name,
       display_name: agent.display_name,
       description: agent.description || '',
-      icon: agent.icon || '🤖',
+      icon: loadedIcon,
       color: agent.color || '#6366F1',
       soul_md: agent.soul_md,
       skills: agent.skills || [],
@@ -114,6 +128,22 @@ function toggleSkill(skillId: string) {
     skills.push(skillId)
   }
   form.value.skills = [...skills]
+}
+
+const skillIcons: Record<string, string> = {
+  alerts: '🔔',
+  allocation: '⚖️',
+  disposal: '🗑️',
+  liability: '💳',
+  report: '📊',
+  spending_leak: '🔍',
+}
+
+function getSkillIcon(skill: SkillDefinition): string {
+  if (skill.skill_type === 'builtin') {
+    return skillIcons[skill.id] || '✨'
+  }
+  return skill.icon || '✨'
 }
 </script>
 
@@ -167,7 +197,17 @@ function toggleSkill(skillId: string) {
           :class="{ 'icon-option--active': form.icon === icon }"
           @click="!isSystemAgent && (form.icon = icon)"
         >
-          {{ icon }}
+          <AIBrainIcon
+            v-if="isSystemAgent && form.agent_name === NUMINA_AGENT_NAME && form.icon === icon"
+            :active="true"
+            class="numina-brain-icon"
+          />
+          <IIcon
+            v-else
+            :icon="icon"
+            size="24"
+            :color="form.icon === icon ? 'var(--van-primary-color)' : 'var(--van-text-color-2)'"
+          />
         </div>
       </div>
     </van-cell-group>
@@ -209,9 +249,13 @@ function toggleSkill(skillId: string) {
         <van-cell
           v-for="skill in availableSkills"
           :key="skill.id"
-          :title="skill.name || skill.id"
-          :label="skill.description || ''"
+          :title="skill.skill_type === 'builtin' ? t(`skills.capability.${skill.id}.name`) : (skill.name || skill.id)"
+          :label="skill.skill_type === 'builtin' ? t(`skills.capability.${skill.id}.description`) : (skill.description || '')"
+          center
         >
+          <template #icon>
+            <span class="skill-icon">{{ getSkillIcon(skill) }}</span>
+          </template>
           <template #right-icon>
             <van-icon v-if="isSystemAgent" name="lock" />
             <van-checkbox
@@ -222,19 +266,6 @@ function toggleSkill(skillId: string) {
           </template>
         </van-cell>
       </template>
-    </van-cell-group>
-
-    <van-cell-group v-if="!isSystemAgent" inset>
-      <van-field
-        v-model="form.model"
-        :label="t('agents.form.model')"
-        :placeholder="t('agents.form.modelInherit')"
-      />
-      <van-cell :title="t('agents.form.subagentEnabled')">
-        <template #value>
-          <van-switch v-model="form.subagent_enabled" size="20" />
-        </template>
-      </van-cell>
     </van-cell-group>
 
     <!-- Save button: removed from DOM (not just disabled) for system agents. -->
@@ -254,7 +285,7 @@ function toggleSkill(skillId: string) {
 
 <style scoped>
 .page {
-  padding-bottom: 80px;
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
 
 .icon-grid {
@@ -279,6 +310,26 @@ function toggleSkill(skillId: string) {
   border-radius: 8px;
   cursor: pointer;
   border: 2px solid transparent;
+}
+
+.numina-brain-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+
+.numina-brain-icon :deep(.ai-button-wrapper) {
+  transform: translateY(0) scale(0.65);
+  margin: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.numina-brain-icon :deep(.ai-button-3d) {
+  width: 36px;
+  height: 36px;
 }
 
 .icon-option--active {
@@ -306,11 +357,17 @@ function toggleSkill(skillId: string) {
 
 .bottom-bar {
   position: fixed;
-  bottom: 0;
+  bottom: calc(50px + env(safe-area-inset-bottom));
   left: 0;
   right: 0;
+  z-index: 1;
   padding: 12px 16px;
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
   background: var(--van-background);
+}
+
+.skill-icon {
+  margin-right: 8px;
+  font-size: 20px;
 }
 </style>

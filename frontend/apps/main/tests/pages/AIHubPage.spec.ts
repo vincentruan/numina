@@ -26,7 +26,7 @@ const { push, loadAgents, aiStoreMock } = vi.hoisted(() => ({
 vi.mock('vue-router', async (importOriginal) => {
   const actual = await importOriginal()
   return {
-    ...actual,
+    ...(actual as any),
     useRouter: () => ({ push }),
     createRouter: vi.fn(() => ({
       push,
@@ -39,7 +39,7 @@ vi.mock('vue-router', async (importOriginal) => {
 vi.mock('vue-i18n', async (importOriginal) => {
   const actual = await importOriginal()
   return {
-    ...actual,
+    ...(actual as any),
     useI18n: () => ({ t: (key: string) => key }),
   }
 })
@@ -107,6 +107,7 @@ vi.mock('../../src/stores/agent', () => ({
   })),
 }))
 
+
 vi.mock('vant', () => ({
   showToast: vi.fn(),
 }))
@@ -122,10 +123,10 @@ describe('AIHubPage chat entry', () => {
     const wrapper = mount(AIHubPage, {
       global: {
         stubs: {
-          AIChatInput: {
-            name: 'AIChatInput',
-            props: ['modelValue', 'mode', 'webSearch'],
-            emits: ['update:modelValue', 'update:mode', 'update:webSearch', 'submit'],
+          InputBox: {
+            name: 'InputBox',
+            props: ['modelValue', 'webSearch', 'isWelcomeMode', 'status'],
+            emits: ['update:modelValue', 'update:webSearch', 'submit'],
             template: '<button class="chat-input" @click="$emit(\'submit\', modelValue)">send</button>',
           },
           AIHubSkeleton: true,
@@ -155,16 +156,25 @@ describe('AIHubPage chat entry', () => {
       display_name: '数鸣',
       description: '家庭财务大使',
       is_enabled: true,
-    })
+    } as any)
     wrapper.vm.chatInput = '我们家净资产是多少？'
-    wrapper.vm.chatMode = 'smart'
+    wrapper.vm.chatMode = 'thinking'
     wrapper.vm.webSearch = true
     await nextTick()
 
-    const input = wrapper.findComponent({ name: 'AIChatInput' })
+    const input = wrapper.findComponent({ name: 'InputBox' })
 
     // Trigger submit which calls submitChatFromInput
-    input.vm.$emit('submit', '我们家净资产是多少？')
+    input.vm.$emit('submit', {
+      text: '我们家净资产是多少？',
+      model_name: '',
+      mode: 'thinking',
+      thinking_enabled: true,
+      is_plan_mode: false,
+      subagent_enabled: false,
+      reasoning_effort: 'low',
+      thread_id: undefined,
+    })
     await flushPromises()
 
     const aiStore = useAIStore()
@@ -187,7 +197,7 @@ describe('AIHubPage chat entry', () => {
     const wrapper = shallowMount(AIHubPage, {
       global: {
         stubs: {
-          AIChatInput: true,
+          InputBox: true,
           AIHubSkeleton: true,
           VanLoading: true,
           VanIcon: true,

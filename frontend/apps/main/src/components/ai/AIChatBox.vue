@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, computed } from 'vue'
+import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
 import { showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
@@ -11,6 +11,8 @@ import ChatHeader from '@/components/ai/ChatHeader.vue'
 import WelcomePage from '@/components/ai/WelcomePage.vue'
 import MessageList from '@/components/ai/MessageList.vue'
 import InputBox from '@/components/ai-chat/InputBox.vue'
+import SuggestionChips from '@/components/ai/SuggestionChips.vue'
+import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
@@ -75,13 +77,23 @@ function cancelTitleRefresh() {
   titleRefreshTimeouts.clear()
 }
 
-// Initialize from URL on mount
+// Initialize from URL on mount and auto-send pending message if present
 onMounted(() => {
   store.initializeFromUrl()
+  // Auto-send pending message from URL (passed from AIHubPage)
+  if (store.pendingMessage) {
+    const msg = store.pendingMessage
+    store.pendingMessage = null // clear so it only fires once
+    handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
+  }
 })
 
 // Cleanup on unmount
 onUnmounted(() => {
+  // #8: cancel any in-flight stream + retry loop so the for-await and retry
+  // timers don't keep mutating refs / firing network requests for up to 120s
+  // after navigation away from the chat page.
+  chat.cancelStream()
   cancelTitleRefresh()
 })
 
@@ -97,12 +109,28 @@ watch(
   }
 )
 
+// Persistent error bar message (shown after retries exhausted, cleared on new message)
+const errorBarMessage = ref<string | null>(null)
+
 // Handle errors from chat
 watch(
   () => chat.error.value,
   (err) => {
     if (err) {
       showFailToast(err)
+      errorBarMessage.value = t('aiChat.connectionBrokenRetry')
+    } else {
+      errorBarMessage.value = null
+    }
+  }
+)
+
+// Clear error bar when a new message is sent successfully
+watch(
+  () => chat.isLoading.value,
+  (loading, prevLoading) => {
+    if (prevLoading && !loading && !chat.error.value) {
+      errorBarMessage.value = null
     }
   }
 )
@@ -148,12 +176,9 @@ function handleContextChange(_context: InputContext) {
   // Handle context changes if needed
 }
 
-function handleAgentChange(_agentId: string) {
-  // Handle agent changes if needed
-}
-
 async function handleSuggestionClick(text: string) {
-  if (!store.activeThreadId) return
+  if (!store.activeThreadId || chat.isLoading.value) return
+  chat.suggestions.value = []
   await chat.sendMessage(text, undefined, store.activeThreadId)
 }
 
@@ -194,10 +219,24 @@ function handleNewChat() {
         :messages="chat.messages.value"
         :is-streaming="chat.isLoading.value"
         :thread-id="store.activeThreadId || undefined"
+        :planning-steps="chat.planningSteps.value"
         @retry="handleRetry"
         @stop="handleStopStream"
         @suggestion-click="handleSuggestionClick"
         @artifact-tap="handleArtifactTap"
+      />
+      <!-- Suggestion chips above input (from SSE custom events) -->
+      <SuggestionChips
+        v-if="!chat.isLoading.value && chat.suggestions.value.length > 0"
+        :suggestions="chat.suggestions.value"
+        @select="handleSuggestionClick"
+      />
+      <!-- Connection error bar (after SSE retry exhaustion) -->
+      <ErrorMessage
+        v-if="errorBarMessage"
+        :message="errorBarMessage"
+        :show-retry="true"
+        @retry="handleRetry"
       />
       <!-- InputBox only in chat mode (WelcomePage has its own in welcome mode) -->
       <InputBox
@@ -207,7 +246,6 @@ function handleNewChat() {
         @submit="handleSendMessage"
         @stop="handleStop"
         @context-change="handleContextChange"
-        @agent-change="handleAgentChange"
       />
     </template>
 

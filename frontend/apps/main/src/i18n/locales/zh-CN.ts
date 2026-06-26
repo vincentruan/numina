@@ -4,6 +4,7 @@ export default {
     cancel: '取消',
     save: '保存',
     delete: '删除',
+    remove: '移除',
     edit: '编辑',
     add: '添加',
     search: '搜索',
@@ -37,20 +38,20 @@ export default {
   },
   mode: {
     flash: {
-      label: '闪电',
-      description: '快速响应，无深度思考',
+      label: '闪速',
+      description: '快速且高效的完成任务，但可能不够精准',
     },
     thinking: {
       label: '思考',
-      description: '启用思考链，逐步推理',
+      description: '思考后再行动，在时间与准确性之间取得平衡',
     },
     pro: {
-      label: '专业',
-      description: '计划模式，自动拆解任务',
+      label: 'Pro',
+      description: '思考、计划再执行，获得更精准的结果，可能需要更多时间',
     },
     ultra: {
-      label: '旗舰',
-      description: '完整能力，子代理协作',
+      label: 'Ultra',
+      description: '继承自 Pro 模式，可调用子代理分工协作，适合复杂多步骤任务，能力最强',
     },
   },
   nav: {
@@ -197,6 +198,7 @@ export default {
     errorRetry: '请求失败，请重试',
     errorTimeout: '响应超时，请重试',
     errorReconnectFailed: '连接中断，已尝试 {attempts} 次重连，请手动重试',
+    connectionBrokenRetry: '连接中断，点击重试',
     historyTitle: '会话历史',
     loadingHistory: '加载历史中…',
     noHistory: '暂无历史会话',
@@ -302,7 +304,6 @@ export default {
     tenantQuotaExceeded: '家庭额度不足，无法生成追问建议',
     tenantNoFamily: '未选择家庭',
     tenantLoadFailed: '加载租户资源失败',
-    tenantModelFallback: '已按模型能力自动调整模式',
     tenantUltraDisabled: '当前家庭资源不支持旗舰模式',
     tenantModeAdjusted: '已按当前家庭资源自动调整模式',
     modeSelectorTitle: '选择执行模式',
@@ -311,6 +312,7 @@ export default {
     heroTitleChat: '有什么想问的？',
     heroSubtitleChat: '输入问题，智能助手帮你分析家庭资产',
     continuePlaceholder: '继续对话...',
+    shortcutSendTip: '⏎发送，{cmd} + ⏎ 换行',
     // DeerFlow WelcomeExamples keys (SuggestionList pattern)
     welcomeExampleSurprise: '随机提问',
     welcomeExampleAnalyze: '分析',
@@ -326,6 +328,9 @@ export default {
     subagentTasks: '正在执行 {count} 个子任务',
     usageToken: 'Token',
     tokenUsage: 'Token 用量',
+    tokensInput: '输入',
+    tokensOutput: '输出',
+    tokensTotal: '总计',
     // Welcome page keys
     welcomeTitle: 'Numina AI',
     welcomeSubtitle: '家庭资产管理助手',
@@ -338,6 +343,9 @@ export default {
     sendFailedError: '发送失败: {error}',
     errorPrefix: '{error}',
     copiedSuccess: '已复制',
+    copyTableAsMarkdown: '复制表格',
+    downloadTable: '下载表格',
+    tableDownloaded: '表格已下载',
     loadModelsFailed: '加载模型列表失败: {error}',
   },
   aiPlanProgress: {
@@ -1128,7 +1136,7 @@ export default {
     title: '家庭',
     familyName: '家庭名称',
     members: '成员',
-    inviteCode: '邀请码',
+    inviteCode: '家庭成员邀请码',
     regenerateCode: '重新生成',
     owner: '管理员',
     member: '成员',
@@ -1248,6 +1256,7 @@ export default {
     currentUser: '当前用户',
     username: '用户名',
     role: '角色',
+    creationInviteCode: '家庭邀请码',
     logout: '退出登录',
     logoutConfirm: '确定要退出登录吗？',
     settingsSaved: '设置已保存',
@@ -2061,16 +2070,8 @@ export default {
     promptReset: '已恢复默认提示词',
 
     capability: {
-      chat: {
-        name: '💬 智能问答',
-        description: '回答关于净资产、资产配置、负债、趋势等问题',
-      },
-      time_machine: {
-        name: '⏰ 资产时光机',
-        description: '模拟 What-if 消费场景和财务推演',
-      },
       alerts: {
-        name: '🔔 资产老化预警',
+        name: '资产老化预警',
         description: '扫描即将到期或老化的资产，给出处置建议',
       },
       allocation: {
@@ -2115,7 +2116,7 @@ export default {
       skillExamplesPlaceholder: '触发此技能的示例问题',
       skillPrompt: '提示词内容',
       skillPromptPlaceholder: 'Markdown 格式的技能提示词',
-      createBtn: '+ 新增技能',
+      createBtn: '新增技能',
       updateBtn: '保存修改',
       deleteBtn: '删除',
       deleteConfirm: '确定要删除技能「{name}」吗？此操作不可撤销。',
@@ -2313,6 +2314,7 @@ export default {
   },
   aiHub: {
     capabilities: 'AI 能力',
+    capabilitiesCount: '{count} 个',
     disabledTitle: 'AI 助手未开启',
     disabledDesc: '请联系家庭管理员在设置中配置并启用 AI 助手',
     disabledAction: '前往设置',

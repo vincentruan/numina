@@ -98,16 +98,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, watch } from 'vue'
+import { onMounted, reactive, watch, toRefs } from 'vue'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
-import { storeToRefs } from 'pinia'
 import { usePageLoading } from '@/composables/usePageLoading'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()
-const { config, loading } = storeToRefs(store)
+const { config, loading } = toRefs(store)
 const { increment, decrement } = usePageLoading()
 
 const form = reactive({

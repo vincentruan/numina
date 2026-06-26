@@ -32,8 +32,8 @@ describe('useArtifacts', () => {
       const { setArtifacts, artifacts, artifactList } = useArtifacts()
 
       const newArtifacts: Artifact[] = [
-        { id: 'art1', path: '/file1.md', kind: 'markdown' },
-        { id: 'art2', path: '/file2.py', kind: 'code' },
+        { id: 'art1', path: '/file1.md', kind: 'file', title: 'file1.md' },
+        { id: 'art2', path: '/file2.py', kind: 'file', title: 'file2.py' },
       ]
 
       setArtifacts(newArtifacts)
@@ -47,7 +47,7 @@ describe('useArtifacts', () => {
       const { setArtifacts, artifacts } = useArtifacts()
 
       const newArtifacts: Artifact[] = [
-        { path: '/file1.md', kind: 'markdown' },
+        { path: '/file1.md', kind: 'file', title: 'file1.md' } as Artifact,
       ]
 
       setArtifacts(newArtifacts)
@@ -60,8 +60,8 @@ describe('useArtifacts', () => {
       const { setArtifacts, artifacts } = useArtifacts()
 
       const newArtifacts: Artifact[] = [
-        { id: 'art1', path: '/file1.md' },
-        { kind: 'markdown' }, // no id, no path
+        { id: 'art1', path: '/file1.md', title: 'file1.md' },
+        { kind: 'file' } as any as Artifact, // no id, no path
       ]
 
       setArtifacts(newArtifacts)
@@ -75,10 +75,10 @@ describe('useArtifacts', () => {
     it('adds single artifact to existing dict', async () => {
       const { setArtifacts, addArtifact, artifacts } = useArtifacts()
 
-      setArtifacts([{ id: 'art1', path: '/file1.md' }])
+      setArtifacts([{ id: 'art1', path: '/file1.md', title: 'file1.md' }])
       await nextTick()
 
-      addArtifact({ id: 'art2', path: '/file2.py' })
+      addArtifact({ id: 'art2', path: '/file2.py', title: 'file2.py' })
       await nextTick()
 
       expect(Object.keys(artifacts.value)).toEqual(['art1', 'art2'])
@@ -87,10 +87,10 @@ describe('useArtifacts', () => {
     it('does nothing when artifact has no id or path', async () => {
       const { setArtifacts, addArtifact, artifacts } = useArtifacts()
 
-      setArtifacts([{ id: 'art1', path: '/file1.md' }])
+      setArtifacts([{ id: 'art1', path: '/file1.md', title: 'file1.md' }])
       await nextTick()
 
-      addArtifact({ kind: 'markdown' }) // no id, no path
+      addArtifact({ kind: 'file' } as any as Artifact) // no id, no path
       await nextTick()
 
       expect(Object.keys(artifacts.value)).toEqual(['art1'])
@@ -101,7 +101,7 @@ describe('useArtifacts', () => {
     it('selects artifact and opens preview', async () => {
       const { setArtifacts, select, selectedArtifact, open } = useArtifacts()
 
-      const artifact: Artifact = { id: 'art1', path: '/file.md' }
+      const artifact: Artifact = { id: 'art1', path: '/file.md', title: 'file.md' }
       setArtifacts([artifact])
       await nextTick()
 
@@ -115,7 +115,7 @@ describe('useArtifacts', () => {
     it('deselect closes preview and clears selection', async () => {
       const { setArtifacts, select, deselect, selectedArtifact, open } = useArtifacts()
 
-      const artifact: Artifact = { id: 'art1', path: '/file.md' }
+      const artifact: Artifact = { id: 'art1', path: '/file.md', title: 'file.md' }
       setArtifacts([artifact])
       select(artifact)
       await nextTick()
@@ -132,7 +132,8 @@ describe('useArtifacts', () => {
     it('selects artifact by filepath', async () => {
       const { setArtifacts, selectByPath, selectedArtifact, open } = useArtifacts()
 
-      setArtifacts([{ path: '/report.md', kind: 'markdown' }])
+      // Store without id so path becomes the key
+      setArtifacts([{ path: '/report.md', kind: 'file', title: 'report.md' } as Artifact])
       await nextTick()
 
       selectByPath('/report.md')
@@ -145,7 +146,7 @@ describe('useArtifacts', () => {
     it('does nothing when path not found', async () => {
       const { setArtifacts, selectByPath, selectedArtifact } = useArtifacts()
 
-      setArtifacts([{ path: '/report.md' }])
+      setArtifacts([{ id: 'report', path: '/report.md', title: 'report.md' }])
       await nextTick()
 
       selectByPath('/nonexistent.md')
@@ -160,9 +161,9 @@ describe('useArtifacts', () => {
       const { setArtifacts, autoSelect, selectedArtifact } = useArtifacts()
 
       setArtifacts([
-        { id: 'art1', path: '/file1.md' },
-        { id: 'art2', path: '/file2.md' },
-        { id: 'art3', path: '/file3.md' },
+        { id: 'art1', path: '/file1.md', title: 'file1.md' },
+        { id: 'art2', path: '/file2.md', title: 'file2.md' },
+        { id: 'art3', path: '/file3.md', title: 'file3.md' },
       ])
       await nextTick()
 
@@ -176,7 +177,7 @@ describe('useArtifacts', () => {
     it('autoOpen opens preview when artifacts exist', async () => {
       const { setArtifacts, autoOpen, open, selectedArtifact } = useArtifacts()
 
-      setArtifacts([{ id: 'art1', path: '/file.md' }])
+      setArtifacts([{ id: 'art1', path: '/file.md', title: 'file.md' }])
       await nextTick()
 
       autoOpen()
@@ -198,13 +199,13 @@ describe('useArtifacts', () => {
     it('autoOpen does nothing when already open', async () => {
       const { setArtifacts, select, autoOpen, open } = useArtifacts()
 
-      const artifact: Artifact = { id: 'art1', path: '/file.md' }
+      const artifact: Artifact = { id: 'art1', path: '/file.md', title: 'file.md' }
       setArtifacts([artifact])
       select(artifact)
       await nextTick()
 
       // Add another artifact and try autoOpen
-      setArtifacts([{ id: 'art2', path: '/file2.md' }])
+      setArtifacts([{ id: 'art2', path: '/file2.md', title: 'file2.md' }])
       await nextTick()
 
       autoOpen()
@@ -233,7 +234,7 @@ describe('useArtifacts', () => {
     it('clears selection when closing', async () => {
       const { setArtifacts, select, setOpen, open, selectedArtifact } = useArtifacts()
 
-      const artifact: Artifact = { id: 'art1', path: '/file.md' }
+      const artifact: Artifact = { id: 'art1', path: '/file.md', title: 'file.md' }
       setArtifacts([artifact])
       select(artifact)
       await nextTick()
@@ -251,7 +252,7 @@ describe('useArtifacts', () => {
       const { setArtifacts, select, clearArtifacts, artifacts, selectedArtifact, open } =
         useArtifacts()
 
-      const artifact: Artifact = { id: 'art1', path: '/file.md' }
+      const artifact: Artifact = { id: 'art1', path: '/file.md', title: 'file.md' }
       setArtifacts([artifact])
       select(artifact)
       await nextTick()
@@ -269,13 +270,13 @@ describe('useArtifacts', () => {
     it('artifacts is readonly - mutation prevented', async () => {
       const { artifacts, setArtifacts } = useArtifacts()
 
-      setArtifacts([{ id: 'art1', path: '/file.md' }])
+      setArtifacts([{ id: 'art1', path: '/file.md', title: 'file.md' }])
       await nextTick()
 
       // Vue readonly doesn't throw, it silently prevents mutation
       // Try to mutate directly - value should not change
       const originalValue = artifacts.value['art1']
-      artifacts.value['art1'] = { id: 'modified' }
+      ;(artifacts.value as any)['art1'] = { id: 'modified', title: 'modified' }
       await nextTick()
 
       expect(artifacts.value['art1']).toStrictEqual(originalValue)
@@ -284,14 +285,14 @@ describe('useArtifacts', () => {
     it('selectedArtifact is readonly - mutation prevented', async () => {
       const { setArtifacts, select, selectedArtifact } = useArtifacts()
 
-      const artifact: Artifact = { id: 'art1', path: '/file.md' }
+      const artifact: Artifact = { id: 'art1', path: '/file.md', title: 'file.md' }
       setArtifacts([artifact])
       select(artifact)
       await nextTick()
 
       // Vue readonly doesn't throw, it silently prevents mutation
       const originalValue = selectedArtifact.value
-      selectedArtifact.value = { id: 'modified' }
+      ;(selectedArtifact as any).value = { id: 'modified', title: 'modified' }
       await nextTick()
 
       expect(selectedArtifact.value).toStrictEqual(originalValue)
@@ -302,7 +303,7 @@ describe('useArtifacts', () => {
 
       // Vue readonly doesn't throw, it silently prevents mutation
       const originalValue = open.value
-      open.value = true
+      ;(open as any).value = true
       await nextTick()
 
       expect(open.value).toBe(originalValue)

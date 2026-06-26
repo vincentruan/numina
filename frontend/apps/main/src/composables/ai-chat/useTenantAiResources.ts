@@ -209,13 +209,15 @@ export function useTenantAiResources(): {
   }
 }
 
+export type InputMode = 'flash' | 'thinking' | 'pro' | 'ultra'
+
 /**
  * 执行模式配置
  *
  * DeerFlow 参考: frontend/src/components/workspace/input-box.tsx INPUT_MODE_CONFIGS
  */
 export interface InputModeConfig {
-  mode: 'flash' | 'thinking' | 'pro' | 'ultra'
+  mode: InputMode
   thinking_enabled: boolean
   is_plan_mode: boolean
   subagent_enabled: boolean
@@ -235,7 +237,7 @@ export const INPUT_MODE_CONFIGS: Record<
     is_plan_mode: false,
     subagent_enabled: false,
     reasoning_effort: 'minimal',
-    icon: 'zap',
+    icon: 'lucide:zap',
     label: '闪电',
     description: '快速响应，无深度思考',
   },
@@ -245,7 +247,7 @@ export const INPUT_MODE_CONFIGS: Record<
     is_plan_mode: false,
     subagent_enabled: false,
     reasoning_effort: 'low',
-    icon: 'lightbulb',
+    icon: 'lucide:lightbulb',
     label: '思考',
     description: '启用思考链，逐步推理',
   },
@@ -255,7 +257,7 @@ export const INPUT_MODE_CONFIGS: Record<
     is_plan_mode: true,
     subagent_enabled: false,
     reasoning_effort: 'medium',
-    icon: 'graduation-cap',
+    icon: 'lucide:graduation-cap',
     label: '专业',
     description: '计划模式，自动拆解任务',
   },
@@ -265,7 +267,7 @@ export const INPUT_MODE_CONFIGS: Record<
     is_plan_mode: true,
     subagent_enabled: true,
     reasoning_effort: 'high',
-    icon: 'rocket',
+    icon: 'lucide:rocket',
     label: '旗舰',
     description: '完整能力，子代理协作',
   },

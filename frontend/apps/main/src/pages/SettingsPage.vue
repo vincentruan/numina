@@ -22,6 +22,12 @@
         </template>
       </van-cell>
       <van-cell :title="t('settings.role')" :value="authStore.user?.role === 'owner' ? t('family.owner') : t('family.member')" icon="medal-o" />
+      <van-cell
+        v-if="authStore.user?.role === 'owner' && familyStore.family?.creator_code"
+        :title="t('settings.creationInviteCode')"
+        :value="familyStore.family?.creator_code"
+        icon="coupon-o"
+      />
     </van-cell-group>
 
     <!-- 外观与偏好 -->
@@ -88,8 +94,9 @@
     <van-cell-group inset :title="t('settings.aiSettings')" class="section">
       <van-cell
         v-if="authStore.user?.role === 'owner'"
+        center
         :title="t('settings.enableAI')"
-        :label="hasAnyModel ? '' : t('settings.enableAIDesc')"
+        :label="hasAnyModel ? undefined : t('settings.enableAIDesc')"
       >
         <template #icon>
           <SvgIcon name="sparkles" :size="16" class="cell-icon" />
@@ -214,8 +221,8 @@
 
 <script setup lang="ts">
 defineOptions({ name: 'Settings' })
-import { ref, computed, onMounted, watch, h } from 'vue'
-import { showConfirmDialog, showToast } from 'vant'
+import { ref, computed, onMounted, watch } from 'vue'
+import { showConfirmDialog, showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { usePageLoading } from '@/composables/usePageLoading'
@@ -226,7 +233,6 @@ import { updateSettings } from '@/api/auth'
 import * as aiApi from '@/api/ai'
 import PageHeader from '@/components/common/PageHeader.vue'
 import CurrencyPicker from '@/components/common/CurrencyPicker.vue'
-import NuminaLogo from '@/components/common/NuminaLogo.vue'
 import SvgIcon from '@/components/SvgIcon.vue'
 import UserIcon from '@/components/common/UserIcon.vue'
 import UsernameIcon from '@/components/common/UsernameIcon.vue'
@@ -469,7 +475,7 @@ async function onLogout() {
 }
 
 .cell-icon {
-  margin-right: 8px;
+  margin-right: 4px;
   color: var(--van-cell-icon-color);
   flex-shrink: 0;
   /* Override van-cell's align-items: normal which causes top alignment */

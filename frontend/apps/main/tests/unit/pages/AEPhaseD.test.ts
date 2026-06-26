@@ -14,6 +14,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
 
+const mockParams = { id: '' }
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
+  useRoute: () => ({ params: mockParams }),
+}))
+
 const i18n = createI18n({
   legacy: false,
   locale: 'zh-CN',
@@ -207,10 +213,7 @@ describe('AE10: AgentFormPage read-only for numina', () => {
   })
 
   it('AE10: shows the system-agent banner', async () => {
-    vi.doMock('vue-router', () => ({
-      useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
-      useRoute: () => ({ params: { id: 'numina-id' } }),
-    }))
+    mockParams.id = 'numina-id'
     const AgentFormPage = (await import('@/pages/AgentFormPage.vue')).default
     const wrapper = mount(AgentFormPage, {
       global: { plugins: [i18n] },
@@ -223,10 +226,7 @@ describe('AE10: AgentFormPage read-only for numina', () => {
   })
 
   it('AE10: save button is removed from DOM (not just disabled)', async () => {
-    vi.doMock('vue-router', () => ({
-      useRouter: () => ({ back: vi.fn(), push: vi.fn() }),
-      useRoute: () => ({ params: { id: 'numina-id' } }),
-    }))
+    mockParams.id = 'numina-id'
     const AgentFormPage = (await import('@/pages/AgentFormPage.vue')).default
     const wrapper = mount(AgentFormPage, {
       global: { plugins: [i18n] },
@@ -237,3 +237,51 @@ describe('AE10: AgentFormPage read-only for numina', () => {
     expect(wrapper.find('.bottom-bar').exists()).toBe(false)
   })
 })
+
+describe('AgentFormPage custom agent create/edit optimization', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    skillsManageMocks.getSkillsGrouped.mockReset()
+    skillsManageMocks.getSkillsGrouped.mockResolvedValue({
+      fixed: [],
+      builtin: [
+        { id: 'report', skill_type: 'builtin', is_enabled: true, display_order: 100 },
+        { id: 'alerts', skill_type: 'builtin', is_enabled: false, display_order: 101 },
+      ],
+      custom: [
+        { id: 'custom-skill', name: '自定义技能', skill_type: 'custom', is_enabled: true, display_order: 102 },
+      ],
+    })
+  })
+
+  it('only shows enabled skills, checks them by default on create, and hides model/subagent fields', async () => {
+    mockParams.id = ''
+    const AgentFormPage = (await import('@/pages/AgentFormPage.vue')).default
+    const wrapper = mount(AgentFormPage, {
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    // It should load and show only the enabled skills: 'report' and 'custom-skill' (not 'alerts')
+    const groups = wrapper.findAll('.van-cell-group')
+    const skillsGroup = groups.find(g => g.attributes('title') === '可用技能')
+    expect(skillsGroup).toBeDefined()
+    const cells = skillsGroup!.findAll('.van-cell, van-cell')
+    expect(cells.length).toBe(2)
+
+    // Verify icons are rendered
+    const icons = skillsGroup!.findAll('.skill-icon')
+    expect(icons.length).toBe(2)
+    expect(icons[0].text()).toBe('📊')
+    expect(icons[1].text()).toBe('✨')
+
+    // Verify model field and subagent toggle cell-group are completely absent
+    const fields = wrapper.findAll('.van-field')
+    const hasModelField = fields.some(f => f.text().includes('模型'))
+    expect(hasModelField).toBe(false)
+
+    const switches = wrapper.findAll('.van-switch')
+    expect(switches.length).toBe(0)
+  })
+})
+

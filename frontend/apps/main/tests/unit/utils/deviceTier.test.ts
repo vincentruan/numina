@@ -59,11 +59,9 @@ function mockWindow({
   navigator.deviceMemory = deviceMemory
 
   if (ontouchstart) {
-    // @ts-expect-error - adding ontouchstart
-    window.ontouchstart = () => {}
+    (window as any).ontouchstart = () => {}
   } else {
-    // @ts-expect-error - removing ontouchstart
-    delete window.ontouchstart
+    delete (window as any).ontouchstart
   }
 }
 

@@ -1,3 +1,8 @@
+<!--
+  @deprecated Use InputBox from @/components/ai-chat/InputBox.vue instead.
+  This component is kept as dead code for reference only.
+  Do not use in new code.
+-->
 <template>
   <div class="input-shell" @click.self="closePanel">
     <!-- Slash command palette -->

@@ -9,6 +9,7 @@ class FamilyResponse(SnowflakeBase):
     name: str
     custom_title: str | None = None
     invite_code: str
+    creator_code: str | None = None
     created_by: int
     members: list[UserResponse] = []
 

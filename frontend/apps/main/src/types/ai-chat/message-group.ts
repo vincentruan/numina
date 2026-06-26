@@ -62,6 +62,21 @@ export type MessageGroup =
   | AssistantClarificationGroup
   | AssistantSubagentGroup
 
+/** Per-message token usage metadata (from SSE values events). */
+export interface UsageMetadata {
+  inputTokens: number
+  outputTokens: number
+}
+
+/** Real-time planning step from SSE custom events. */
+export interface PlanningStep {
+  id: string
+  toolName: string
+  args: Record<string, unknown>
+  status: 'pending' | 'running' | 'done' | 'error'
+  timestamp: number
+}
+
 /**
  * 消息类型 — 统一前端消息结构
  *
@@ -96,6 +111,8 @@ export interface ChatMessage {
   additional_kwargs?: Record<string, unknown>
   /** 子智能体信息 */
   subagent?: SubagentInfo
+  /** Per-message token usage (from SSE values usage_metadata) */
+  usageMetadata?: UsageMetadata
 }
 
 /** 工具调用摘要 */

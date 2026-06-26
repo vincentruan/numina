@@ -59,18 +59,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, toRefs } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { showToast, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
-import { storeToRefs } from 'pinia'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useBlindBoxStore()
-const { gifts } = storeToRefs(store)
+const { gifts } = toRefs(store)
 
 const isEdit = computed(() => !!route.params.id)
 const loading = ref(false)

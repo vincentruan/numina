@@ -204,24 +204,24 @@
 
     </div>
 
-    <!-- Chat input with integrated toolbar -->
-    <div class="chat-entry">
-      <AIChatInput
-        v-model="chatInput"
-        v-model:mode="chatMode"
-        v-model:web-search="webSearch"
-        :disabled="!selectedAgent"
-        :placeholder="chatPlaceholder"
-        :agents="agentChoices"
-        :selected-agent-id="selectedAgent?.id"
-        @submit="submitChatFromInput"
-        @action="onInputAction"
-        @select-agent="showAgentPicker = true"
-      />
-      <!-- Hidden file inputs (kept here so the page owns the upload state) -->
-      <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
-      <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
-    </div>
+    <!-- Chat input directly rendered (InputBox handles its own fixed bottom positioning) -->
+    <InputBox
+      v-model="chatInput"
+      v-model:webSearch="webSearch"
+      :disabled="!selectedAgent"
+      :agents="agentChoices"
+      :agent-id="selectedAgent?.id"
+      :is-welcome-mode="true"
+      :status="'ready'"
+      :agent-icon="selectedAgent?.icon"
+      :agent-label="selectedAgent?.display_name"
+      @submit="submitChatFromInput"
+      @action="onInputAction"
+      @select-agent="showAgentPicker = true"
+    />
+    <!-- Hidden file inputs (kept here so the page owns the upload state) -->
+    <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
+    <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
 
     <!-- Agent picker action sheet (only shows actual agents, not Time Machine) -->
     <van-action-sheet
@@ -241,7 +241,10 @@
           <template #icon>
             <div class="agent-row__icon">
               <AIBrainIcon v-if="agent.agent_name === NUMINA_AGENT_NAME" :active="true" />
-              <span v-else class="agent-row__emoji">{{ agent.icon || '🤖' }}</span>
+              <span v-else-if="isEmoji(getAgentIcon(agent.icon))" class="agent-row__emoji">
+                {{ getAgentIcon(agent.icon) || '🤖' }}
+              </span>
+              <IIcon v-else :icon="getAgentIcon(agent.icon)" size="24" :color="agent.color || 'var(--van-primary-color)'" />
             </div>
           </template>
         </van-cell>
@@ -266,11 +269,14 @@ import { useAIReportStream } from '@/composables/useAIReportStream'
 import AgentCard from '@/components/agent/AgentCard.vue'
 import NuminaAgentCard from '@/components/agent/NuminaAgentCard.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
-import AIChatInput from '@/components/common/AIChatInput.vue'
+import IIcon from '@/components/IIcon.vue'
+import { getAgentIcon, isEmoji } from '@/utils/agent'
+import InputBox from '@/components/ai-chat/InputBox.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
+import type { SubmitPayload } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
 
@@ -288,7 +294,7 @@ const reportGeneratedAt = ref<string | null>(null)
 const reportLoading = ref(false)
 const initialLoading = ref(true)
 const chatInput = ref('')
-const chatMode = ref<'normal' | 'smart'>('normal')
+const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
 const webSearch = ref(false)
 const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
@@ -396,7 +402,7 @@ function submitChat() {
   const q = chatInput.value.trim()
   if (!q || !selectedAgent.value) return
 
-  const deepThink = chatMode.value === 'smart'
+  const deepThink = chatMode.value === 'thinking' || chatMode.value === 'ultra'
   aiStore.draftQuery = q
   aiStore.deepThinkEnabled = deepThink
   aiStore.webSearchEnabled = webSearch.value
@@ -415,12 +421,12 @@ function submitChat() {
   chatInput.value = ''
 }
 
-function submitChatFromInput(value: string) {
-  chatInput.value = value
+function submitChatFromInput(payload: SubmitPayload) {
+  chatInput.value = payload.text
   submitChat()
 }
 
-function onInputAction(type: 'file' | 'image' | 'link' | 'clear' | 'camera' | 'ocr' | 'webpage' | 'history') {
+function onInputAction(type: 'file' | 'image' | 'camera') {
   if (type === 'camera') triggerPhotoUpload()
   else if (type === 'file') triggerFileUpload()
   else if (type === 'image') triggerPhotoUpload()
@@ -1255,21 +1261,7 @@ defineExpose({
   font-size: 13px;
 }
 
-/* ── Chat entry ── */
-.chat-entry {
-  position: fixed;
-  bottom: calc(50px + env(safe-area-inset-bottom));
-  left: 0;
-  right: 0;
-  z-index: 10;
-  padding: 8px 16px 12px;
-  background: var(--bg-primary, #fff);
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
-}
 
-[data-theme='dark'] .chat-entry {
-  border-top-color: rgba(255, 255, 255, 0.10);
-}
 
 /* ── Agent picker ── */
 .agent-row__icon {
