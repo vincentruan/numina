@@ -112,7 +112,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog, showToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useLiabilityStore } from '@/stores/liability'
 import PageHeader from '@/components/common/PageHeader.vue'

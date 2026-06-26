@@ -1,4 +1,4 @@
-import { onMounted, onUnmounted, type Ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 
 // Two-layer background system:
 //   bgCanvas  — stellar particles with bright cores + irregular halos
@@ -434,8 +434,8 @@ function drawParticles(
 // ── Main composable ────────────────────────────────────────────────────────
 
 export function useDeerField(
-  bgCanvasRef: Ref<HTMLCanvasElement | null>,
-  deerCanvasRef: Ref<HTMLCanvasElement | null>,
+  bgCanvasRef: { value: HTMLCanvasElement | null },
+  deerCanvasRef: { value: HTMLCanvasElement | null },
 ) {
   let rafId: number | null = null
   let bgCtx: CanvasRenderingContext2D | null = null

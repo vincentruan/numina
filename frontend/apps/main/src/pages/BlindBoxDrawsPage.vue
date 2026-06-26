@@ -17,16 +17,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, toRefs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useBlindBoxStore } from '@/stores/blindBox'
-import { storeToRefs } from 'pinia'
 import DrawHistoryList from '@/components/blindBox/DrawHistoryList.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const { t } = useI18n()
 const store = useBlindBoxStore()
-const { draws, loading } = storeToRefs(store)
+const { draws, loading } = toRefs(store)
 const refreshing = ref(false)
 
 onMounted(() => store.fetchDraws())

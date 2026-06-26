@@ -213,7 +213,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { showConfirmDialog, showToast } from 'vant'
+import { showConfirmDialog, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAssetStore } from '@/stores/asset'
 import * as assetApi from '@/api/assets'
