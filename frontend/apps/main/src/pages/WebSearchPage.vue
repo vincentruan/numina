@@ -139,6 +139,7 @@ onMounted(load)
       <div class="drag-hint">{{ t('webSearch.dragHint') }}</div>
       <draggable
         v-model="enabledProviders"
+        :item-key="'id'"
         :disabled="!isOwner"
         handle=".drag-handle"
         ghost-class="ghost-item"
@@ -146,7 +147,6 @@ onMounted(load)
       >
         <template #item="{ element: provider }">
           <van-cell
-            :key="provider.id"
             :title="provider.display_name || provider.provider_name"
             :label="getTemplate(provider.provider_name)?.note"
             is-link
