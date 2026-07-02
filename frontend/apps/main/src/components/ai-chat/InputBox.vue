@@ -189,6 +189,22 @@ watch(() => models.value, (newModels) => {
 }, { immediate: true })
 
 // ── Methods ──
+// PC (fine-pointer / keyboard) devices: Enter inserts a newline,
+// Cmd (mac) / Ctrl (win) + Enter sends. Mobile falls back to the Send button.
+const isDesktop = ref(false)
+function syncDesktop() {
+  isDesktop.value = window.matchMedia?.('(pointer: fine)').matches ?? false
+}
+
+function onKeydownEnter(e: KeyboardEvent) {
+  if (!isDesktop.value) return
+  if (e.metaKey || e.ctrlKey) {
+    e.preventDefault()
+    onSubmit()
+  }
+  // else: let the textarea insert a newline (default behavior)
+}
+
 function onSubmit() {
   if (props.status === 'streaming') {
     emit('stop')
@@ -279,11 +295,6 @@ function removeAttachment(index: number) {
   emit('removeAttachment', index)
 }
 
-const isMac = computed(() => {
-  if (typeof window === 'undefined' || !navigator) return false
-  return navigator.platform.toUpperCase().indexOf('MAC') >= 0
-})
-
 // Plus panel position: left-aligned with the + button, shown above it
 // Uses ref updated on open + scroll/resize for reactive positioning
 const panelPosition = ref<Record<string, string>>({})
@@ -328,21 +339,20 @@ function onDocClick(e: MouseEvent) {
   panelOpen.value = false
 }
 
-const enterTip = computed(() => {
-  return t('aiChat.shortcutSendTip', { cmd: isMac.value ? '⌘' : 'Ctrl' })
-})
-
 // Scroll/resize listener for reactive panel positioning
 function onScrollOrResize() {
   updatePanelPosition()
 }
 
 onMounted(() => {
+  syncDesktop()
   document.addEventListener('click', onDocClick, true)
   window.addEventListener('scroll', onScrollOrResize, true)
   window.addEventListener('resize', onScrollOrResize)
   // Listen for visualViewport changes (mobile Safari address bar show/hide)
   window.visualViewport?.addEventListener('resize', onScrollOrResize)
+  // Re-evaluate desktop pointer media query changes
+  window.matchMedia?.('(pointer: fine)').addEventListener('change', syncDesktop)
 })
 
 onUnmounted(() => {
@@ -350,6 +360,7 @@ onUnmounted(() => {
   window.removeEventListener('scroll', onScrollOrResize, true)
   window.removeEventListener('resize', onScrollOrResize)
   window.visualViewport?.removeEventListener('resize', onScrollOrResize)
+  window.matchMedia?.('(pointer: fine)').removeEventListener('change', syncDesktop)
 })
 </script>
 
@@ -402,7 +413,7 @@ onUnmounted(() => {
             :placeholder="isWelcomeMode ? t('aiChat.inputPlaceholder') : t('aiChat.continuePlaceholder')"
             :disabled="disabled || status === 'submitted'"
             rows="4"
-            @keydown.enter.ctrl="onSubmit"
+            @keydown.enter="onKeydownEnter"
             @focus="focused = true"
             @blur="focused = false"
           />
@@ -529,10 +540,8 @@ onUnmounted(() => {
             </button>
           </div>
 
-          <!-- Right: Keyboard shortcut hint + Send/Stop button -->
+          <!-- Right: Send/Stop button -->
           <div class="send-actions">
-            <span class="enter-shortcut-tip">{{ enterTip }}</span>
-
             <!-- Send/Stop button -->
             <button
               v-if="status === 'streaming' || status === 'submitted'"
@@ -982,14 +991,6 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.enter-shortcut-tip {
-  font-size: 11px;
-  color: var(--ai-placeholder-color);
-  white-space: nowrap;
-  user-select: none;
-  opacity: 0.7;
-}
-
 .send-btn {
   width: 36px;
   height: 36px;
@@ -1088,10 +1089,6 @@ onUnmounted(() => {
 
   .chat-textarea {
     font-size: 13px;
-  }
-
-  .enter-shortcut-tip {
-    display: none; /* Hide shortcut tip on very narrow mobile screens */
   }
 }
 </style>

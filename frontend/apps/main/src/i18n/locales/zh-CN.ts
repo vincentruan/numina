@@ -312,7 +312,6 @@ export default {
     heroTitleChat: '有什么想问的？',
     heroSubtitleChat: '输入问题，智能助手帮你分析家庭资产',
     continuePlaceholder: '继续对话...',
-    shortcutSendTip: '⏎发送，{cmd} + ⏎ 换行',
     // DeerFlow WelcomeExamples keys (SuggestionList pattern)
     welcomeExampleSurprise: '随机提问',
     welcomeExampleAnalyze: '分析',
