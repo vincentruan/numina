@@ -19,6 +19,7 @@ dependencies = [
     # Scheduler (backend + agent + scheduler_worker)
     "apscheduler>=3.11.2",
     "json-repair>=0.59.10",
+    "filelock>=3.29.0",
 ]
 
 [project.optional-dependencies]
