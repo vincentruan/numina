@@ -132,10 +132,33 @@ class Settings(BaseSettings):
         root = str(Path(self.DATA_ROOT).expanduser().resolve())
         self.DATA_ROOT = root
 
+        # ── DATABASE_URL: expand ~ in SQLite paths ──────────────────────
+        # SQLAlchemy does not expand "~" in URLs — it treats it as a literal
+        # relative directory from CWD, silently creating a separate empty DB
+        # under server/~/.numina/ instead of using the home directory.
+        # Always expand "~" regardless of whether the URL is explicit or default.
+        if self.DATABASE_URL and self.DATABASE_URL.startswith("sqlite:///"):
+            # sqlite:/// has 3 slashes: the database part starts after the 3rd /
+            db_part = self.DATABASE_URL[len("sqlite:///"):]
+            if db_part.startswith("~"):
+                expanded = str(Path(db_part).expanduser().resolve())
+                self.DATABASE_URL = f"sqlite:///{expanded}"
+
+        # Derive from DATA_ROOT only when DATABASE_URL still matches the old default
         if _OLD_DEFAULTS["DATABASE_URL"] == self.DATABASE_URL or not self.DATABASE_URL:
             db_path = Path(root) / "db" / "numina.db"
             self.DATABASE_URL = f"sqlite:///{db_path}"
 
+        # ── Other file-path settings: always expand ~ ───────────────────
+        # These are consumed by PathManager and OS APIs which *do* expand ~,
+        # but expanding here ensures consistent resolution regardless of
+        # which consumer reads the value.
+        for attr in ("UPLOAD_DIR", "WORKSPACE_ROOT", "CHAT_DIR", "LOG_DIR"):
+            val = getattr(self, attr, None)
+            if val and val.startswith("~"):
+                setattr(self, attr, str(Path(val).expanduser().resolve()))
+
+        # Derive from DATA_ROOT when still at old defaults
         if _OLD_DEFAULTS["UPLOAD_DIR"] == self.UPLOAD_DIR or not self.UPLOAD_DIR:
             self.UPLOAD_DIR = str(Path(root) / "workspaces")
 
