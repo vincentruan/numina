@@ -1093,7 +1093,6 @@ onMounted(async () => {
 
 <style scoped>
 .baby-page {
-  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 20px;
 }

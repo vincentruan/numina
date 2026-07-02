@@ -351,7 +351,6 @@ liabilityStore.fetchLiabilities({ is_active: true })
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Crimson+Pro:wght@600&display=swap');
 
 .liability-list-page {
-  background: var(--bg-secondary);
   min-height: 100vh;
   padding-bottom: 80px;
 }
