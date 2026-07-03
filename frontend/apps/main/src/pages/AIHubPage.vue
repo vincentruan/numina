@@ -116,7 +116,7 @@
           <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
         </svg>
       </div>
-      <p class="report-empty-text">{{ t('aiHub.generateFirstReport') }}</p>
+      <p class="report-empty-text"><ShimmerText :text="t('aiHub.generateFirstReport')" :duration="3" /></p>
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
@@ -272,6 +272,7 @@ import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import IIcon from '@/components/IIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
+import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
 import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
