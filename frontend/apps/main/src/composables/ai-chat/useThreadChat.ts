@@ -441,11 +441,21 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             }
           } else if (chunk.event === 'end') {
             streamEnded = true
+            // worker.py publishes an `end` data frame `{"status": ...}` before
+            // the END_SENTINEL. "error" means the agent run threw (LLM failure,
+            // API-key decrypt, etc.) — treat as a retryable failure instead of
+            // the silent success below, which left the page blank with no AI
+            // reply and no error UI (B-end-status).
+            let endStatus: string | undefined
             if (chunk.data) {
-              const endData = chunk.data as { usage?: TokenUsage }
+              const endData = chunk.data as { usage?: TokenUsage; status?: string }
+              endStatus = endData.status
               if (endData.usage) {
                 tokenUsage.value = endData.usage
               }
+            }
+            if (endStatus === 'error') {
+              throw new Error(t('aiChat.sendFailed'))
             }
             // Mark last AI message as done (attach suggestions if available).
             // #19: an `end` chunk is the backend's completion signal — treat it
@@ -477,11 +487,14 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               options.onStreamEnd?.(currentThreadId)
             }
           } else if (chunk.event === 'error' && chunk.data) {
-            const errData = chunk.data as { error?: string }
+            // worker.py publishes `{"message": str(exc), "name": error_type}`;
+            // accept both `message` and `error` so the toast carries the real
+            // backend reason instead of falling back to the generic string.
+            const errData = chunk.data as { error?: string; message?: string; name?: string }
             // #20: an `error` chunk is terminal for this attempt. Set the error
             // and throw so the catch block classifies and retries; do NOT let
             // the loop fall through to streamSucceeded=true with a stale error.
-            const errMsg = errData.error || t('aiChat.sendFailed')
+            const errMsg = errData.error || errData.message || t('aiChat.sendFailed')
             throw new Error(errMsg)
           }
         }

@@ -16,7 +16,17 @@ export function getClient(): Client {
   if (!familyId) {
     throw new Error('Family not loaded - cannot make agent API calls')
   }
-  return new Client({ apiUrl, defaultHeaders: { 'X-Family-Id': familyId } })
+  // The @langchain/langgraph-sdk Client builds fetch requests without setting
+  // `credentials`, so the browser does not attach the `access_token` cookie
+  // that `verify_family_token` (runs_stream.py) reads. Every direct fetch() in
+  // this module uses `credentials: 'include'` for the same reason; the SDK
+  // client must match, or `client.runs.stream()` 401s before the run starts
+  // and the thread is left empty (no AI output, no checkpoint messages).
+  return new Client({
+    apiUrl,
+    defaultHeaders: { 'X-Family-Id': familyId },
+    onRequest: (_url, init) => ({ ...init, credentials: 'include' }),
+  })
 }
 
 export interface ThreadSearchParams {
