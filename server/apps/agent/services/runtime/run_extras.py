@@ -1,10 +1,12 @@
-"""Post-stream extras: follow-up suggestions and thread title generation.
+"""Post-stream extras: follow-up suggestions and thread title sync.
 
 Extracted from the legacy ``routers/runs.py`` so the v2 ``runs_stream`` worker
 can reuse them without duplicating the LLM calls. Both are best-effort and
 swallow their own errors — a failure here must never break the stream.
 
-# [Extracted from routers/runs.py] — preserved verbatim, only relocated.
+# [Extracted from routers/runs.py] — suggestions preserved verbatim; title
+# now synced from the DeerFlow TitleMiddleware checkpoint instead of a
+# separate LLM call.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
 
         model = ai_config.get("ai_model_id") or "gpt-4o-mini"
         api_key = ai_config.get("api_key") or "dummy"
-        base_url = ai_config.get("base_url")
+        base_url = ai_config.get("ai_base_url")
 
         llm = ChatOpenAI(
             model=model,
@@ -65,42 +67,49 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
     return []
 
 
-async def generate_and_save_title(thread_id: str, family_id: str, user_message: str, ai_config: dict[str, Any]) -> None:
-    """Generate a short title for the thread in the background."""
-    if not user_message:
-        return
+async def sync_title_from_checkpoint(thread_id: str, family_id: str) -> None:
+    """Sync the thread title from the LangGraph checkpoint into the session row.
 
+    DeerFlow's ``TitleMiddleware`` (already active in the chat path via
+    ``_build_middlewares``) generates a title during the stream and writes it
+    to the checkpoint's ``channel_values["title"]``. The frontend, however,
+    reads the title from the persistent ``ai_chat_sessions`` record (via
+    ``getThread`` → ``get_thread``). This bridges that gap by reading the
+    checkpoint title and persisting it — reusing the DeerFlow-generated title
+    instead of making a second LLM call.
+
+    Best-effort: any failure is logged and swallowed. Only writes when the
+    session exists and is still untitled (``None`` or ``"New Chat"``), so a
+    user-renamed title is never clobbered.
+    """
     try:
-        from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
-
-        # Determine model
-        model = ai_config.get("ai_model_id") or "gpt-4o-mini"
-        api_key = ai_config.get("api_key") or "dummy"
-        base_url = ai_config.get("base_url")
-
-        llm = ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            temperature=0.3,
-            max_tokens=30,
+        from apps.agent.services.deerflow_adapter.family_adapter_cache import (
+            _get_shared_checkpointer,
         )
+        from apps.agent.services.session_store import AiSessionRepository
 
-        prompt = SystemMessage(content="You are a helpful assistant that generates a concise 2-4 word title for a chat conversation based on the user's first message. Respond ONLY with the title. Do not use quotes or punctuation.")
-        human = HumanMessage(content=user_message)
+        checkpointer = _get_shared_checkpointer(None)
+        config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
+        checkpoint_tuple = await checkpointer.aget_tuple(config)
+        if checkpoint_tuple is None:
+            return
 
-        response = await llm.ainvoke([prompt, human])
-        title = response.content.strip().strip('"').strip("'")
+        checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
+        title = (checkpoint.get("channel_values", {}) or {}).get("title")
+        if not title or not str(title).strip():
+            return
 
-        if title:
-            from apps.agent.services.session_store import AiSessionRepository
-
-            repo = AiSessionRepository(family_id)
-            # Only update if the session exists
-            session = await repo.get_session(thread_id)
-            if session and (not session.get("title") or session.get("title") == "New Chat"):
-                await repo.update_summary(session_id=thread_id, family_id=family_id, summary=None, title=title)
-                logger.info("[run_extras] Generated title '%s' for thread %s", title, thread_id)
+        repo = AiSessionRepository(family_id)
+        session = await repo.get_session(thread_id)
+        # Only set the title on a freshly-created, still-untitled session —
+        # never overwrite a title the user has already renamed.
+        if session and (not session.get("title") or session.get("title") == "New Chat"):
+            await repo.update_summary(
+                session_id=thread_id,
+                family_id=family_id,
+                summary=None,
+                title=str(title).strip(),
+            )
+            logger.info("[run_extras] Synced title '%s' for thread %s", title, thread_id)
     except Exception as e:
-        logger.error("[run_extras] Failed to generate title for thread %s: %s", thread_id, e)
+        logger.warning("[run_extras] Failed to sync title for thread %s: %s", thread_id, e)

@@ -112,7 +112,7 @@ def client():
             return_value=["What is my net worth?", "How should I invest?", "Review my debts"],
         ),
         patch(
-            "apps.agent.services.runtime.worker.generate_and_save_title",
+            "apps.agent.services.runtime.worker.sync_title_from_checkpoint",
             new_callable=AsyncMock,
             return_value=None,
         ),

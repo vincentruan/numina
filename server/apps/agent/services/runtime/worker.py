@@ -27,7 +27,7 @@ from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
 from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
-from .run_extras import generate_and_save_title, generate_suggestions
+from .run_extras import generate_suggestions, sync_title_from_checkpoint
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +68,12 @@ async def run_family_agent(
     # Completion status surfaced to the client in the `end` frame (Q2). Default
     # to "error" so an unexpected path never reports "complete" falsely.
     completion_status = "error"
+    # Stream-extras inputs — initialised here so the ``finally`` block is safe
+    # when the run aborts before streaming starts. Title/suggestion generation
+    # are skipped when ``selected_provider`` stays None.
+    selected_provider: dict[str, Any] | None = None
+    user_message = ""
+    ai_response_parts: list[str] = []
 
     try:
         # 1. Mark running + publish metadata (DeerFlow pattern)
@@ -101,7 +107,6 @@ async def run_family_agent(
         )
 
         # 4. Extract user message for context
-        user_message = ""
         if graph_input and "messages" in graph_input:
             msgs = graph_input["messages"]
             if isinstance(msgs, list) and msgs:
@@ -120,7 +125,6 @@ async def run_family_agent(
         # because typed_stream_dispatch yields raw LangGraph `messages` events
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        ai_response_parts: list[str] = []
         capability = "chat"
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
@@ -204,21 +208,30 @@ async def run_family_agent(
         # signals the sentinel (data=None), so the data frame must precede it.
         await bridge.publish(run_id, "end", {"status": completion_status})
 
-        # R8: generate follow-up suggestions from the accumulated AI response
-        # and emit them as a `custom` event before the stream closes. Mirrors
-        # the legacy runs.py:251-254 finally-block behavior.
-        ai_response = "".join(ai_response_parts)
-        suggestions = await generate_suggestions(ai_response, user_message, ai_config)
-        if suggestions:
-            await bridge.publish(run_id, "custom", {
-                "type": "suggestions",
-                "suggestions": suggestions,
-            })
+        # R8: generate follow-up suggestions from the selected provider config
+        # — NOT the whole ``ai_config`` envelope, which nests provider keys
+        # (api_key/ai_model_id/ai_base_url) under ``providers``. Passing the
+        # envelope leaves every key unset, so the suggestions LLM falls back
+        # to a dummy key and silently 401s. Skipped when the run aborted
+        # before a provider was selected. Mirrors the legacy runs.py:251-254
+        # finally-block behavior.
+        if selected_provider is not None:
+            ai_response = "".join(ai_response_parts)
+            suggestions = await generate_suggestions(ai_response, user_message, selected_provider)
+            if suggestions:
+                await bridge.publish(run_id, "custom", {
+                    "type": "suggestions",
+                    "suggestions": suggestions,
+                })
 
-        # Background title generation (best-effort, does not block the stream).
-        asyncio.create_task(
-            generate_and_save_title(thread_id, family_id, user_message, ai_config)
-        )
+            # Sync the title produced by DeerFlow's TitleMiddleware (written to
+            # the checkpoint's channel_values during the stream) into the
+            # persistent session record the frontend reads via getThread.
+            # Best-effort, fire-and-forget — no extra LLM call (the title was
+            # already generated inside the stream by the middleware).
+            asyncio.create_task(
+                sync_title_from_checkpoint(thread_id, family_id)
+            )
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
