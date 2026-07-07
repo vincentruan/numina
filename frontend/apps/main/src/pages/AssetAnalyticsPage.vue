@@ -366,7 +366,9 @@ const tabActiveColor = computed(() =>
   }
   .van-tab--active {
     background: var(--van-primary-color);
-    color: var(--color-on-primary);
+    /* !important to override the global .van-tab--active color rule in style.css,
+       which would otherwise render primary-colored text on a primary-colored fill. */
+    color: var(--color-on-primary) !important;
   }
 }
 
@@ -379,7 +381,7 @@ const tabActiveColor = computed(() =>
   }
   .van-tab--active {
     background: var(--color-lavender);
-    color: #010120;
+    color: #010120 !important;
   }
 }
 

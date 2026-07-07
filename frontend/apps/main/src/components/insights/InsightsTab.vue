@@ -1352,6 +1352,10 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+/* Dark-mode bar fill is light lavender, so white count text is illegible —
+   step the text down to the same dark navy used on other lavender fills. */
+[data-theme='dark'] .dur-bar-count { color: #010120; }
+
 .dur-count {
   width: 28px;
   font-size: 12px;
