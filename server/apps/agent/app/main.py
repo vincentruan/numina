@@ -55,6 +55,12 @@ if "DEER_FLOW_CONFIG_PATH" not in os.environ:
 
 setup_logging()
 
+# Bridge the per-family DeerFlow AppConfig into the background memory-update
+# timer thread (see services/deerflow_adapter/memory_config_bridge.py for why).
+# Importing the module installs the patch idempotently at process start, before
+# any agent run can enqueue a memory update.
+from apps.agent.services.deerflow_adapter import memory_config_bridge  # noqa: F401,E402
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
