@@ -81,6 +81,28 @@ describe('useThreadChat — U1 SSE extensions', () => {
     expect(chat.runId.value).toBe('run-abc')
   })
 
+  it('cancelStream passes the real run_id to runs.cancel', async () => {
+    // runs.cancel is async in the SDK — the mock must return a Promise so
+    // cancelStream's .catch(() => {}) chaining does not blow up.
+    const cancelMock = vi.fn().mockResolvedValue(undefined)
+    const mockStream = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-xyz' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: cancelMock },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    // metadata event has been processed, so runId is captured
+    expect(chat.runId.value).toBe('run-xyz')
+
+    chat.cancelStream()
+    expect(cancelMock).toHaveBeenCalledWith('thread-1', 'run-xyz')
+  })
+
   it('extracts usage_metadata from values events', async () => {
     const mockStream = makeMockStream([
       {

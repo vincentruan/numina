@@ -18,7 +18,7 @@ import logging
 from typing import Any, Literal
 
 from deerflow.runtime import RunManager
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -137,3 +137,30 @@ async def stream_run_v2(
             "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
         },
     )
+
+
+@router.post("/{thread_id}/runs/{run_id}/cancel")
+async def cancel_run(
+    thread_id: str,
+    run_id: str,
+    action: Literal["interrupt", "rollback"] = "interrupt",
+    verified: VerifiedFamily = Depends(verify_family_token),
+    run_mgr: RunManager = Depends(get_run_manager),
+) -> dict[str, Any]:
+    """Cancel an in-flight agent run.
+
+    Implements the ``@langchain/langgraph-sdk`` ``runs.cancel`` protocol — the
+    SDK sends ``POST /threads/{thread_id}/runs/{run_id}/cancel?action=interrupt&wait=0``.
+    The run is cancelled via ``RunManager``; tenant isolation is enforced by
+    checking the run's ``family_id`` metadata against the verified family. A
+    mismatched or unknown run returns 404 so existence is not leaked.
+    """
+    record = run_mgr.get(run_id)
+    if (
+        record is None
+        or record.thread_id != thread_id
+        or record.metadata.get("family_id") != verified.family_id
+    ):
+        raise HTTPException(status_code=404, detail="运行不存在")
+    cancelled = await run_mgr.cancel(run_id, action=action)
+    return {"run_id": run_id, "cancelled": cancelled}

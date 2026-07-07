@@ -571,10 +571,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       clearTimeout(retryDelayId)
       retryDelayId = null
     }
-    // Fire-and-forget server-side cancel so the agent run is cleaned up
-    if (currentThreadId) {
+    // Fire-and-forget server-side cancel so the agent run is cleaned up.
+    // Pass the real run_id captured from the metadata SSE event; if metadata
+    // hasn't arrived yet, skip — the server's SSE disconnect watcher still
+    // cancels the run when abortController fires.
+    if (currentThreadId && runId.value) {
       const client = getClient()
-      client.runs.cancel(currentThreadId, 'agent').catch(() => {})
+      client.runs.cancel(currentThreadId, runId.value).catch(() => {})
     }
     isLoading.value = false
     // Mark in-progress planning steps as interrupted
