@@ -5,11 +5,11 @@
  * DeerFlow reference: frontend/src/components/workspace/messages/message-list-item.tsx
  *
  * Key patterns:
+ * - ml-auto (right-aligned within message-row)
+ * - flex flex-col gap-2 (column layout, bubble + toolbar below)
  * - w-fit (narrow bubble that fits content)
  * - max-width 70% (prevents overly wide bubbles)
- * - Right-aligned within message-row
- * - Rounded corners, proper padding
- * - Copy, edit, retry actions
+ * - Bubble contains ONLY user text; copy + time are below the bubble
  */
 import { useI18n } from 'vue-i18n'
 
@@ -36,43 +36,47 @@ function onCopy() {
 
 <template>
   <div class="user-bubble">
-    <!-- Normal display mode -->
+    <!-- Bubble: only the user's text content (DeerFlow: w-fit, right-aligned) -->
     <div class="bubble-content">
       <p class="bubble-text">{{ content }}</p>
+    </div>
 
-      <!-- Send status indicator -->
-      <div v-if="sendStatus === 'sending'" class="send-status sending" aria-live="polite">
-        <span class="status-dot" aria-hidden="true" />
-        <span>{{ t('aiChat.sendingMessage') }}</span>
-      </div>
-      <div v-if="sendStatus === 'failed'" class="send-status failed" aria-live="polite">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-        </svg>
-        <span>{{ t('aiChat.sendFailed') }}</span>
-        <button class="retry-btn" @click="emit('retry')">{{ t('aiChat.resend') }}</button>
-      </div>
+    <!-- Send status indicator (below bubble) -->
+    <div v-if="sendStatus === 'sending'" class="send-status sending" aria-live="polite">
+      <span class="status-dot" aria-hidden="true" />
+      <span>{{ t('aiChat.sendingMessage') }}</span>
+    </div>
+    <div v-if="sendStatus === 'failed'" class="send-status failed" aria-live="polite">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{{ t('aiChat.sendFailed') }}</span>
+      <button class="retry-btn" @click="emit('retry')">{{ t('aiChat.resend') }}</button>
+    </div>
 
-      <!-- Footer: actions left, time right -->
-      <div class="bubble-footer">
-        <div class="bubble-actions">
-          <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="onCopy">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-            </svg>
-          </button>
-        </div>
-        <span class="bubble-time">{{ displayTime }}</span>
+    <!-- Footer: copy + time (below bubble, right-aligned) -->
+    <div class="bubble-footer">
+      <div class="bubble-actions">
+        <button class="action-btn" :aria-label="t('aiChat.copyAria')" @click="onCopy">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+        </button>
       </div>
+      <span class="bubble-time">{{ displayTime }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
-/* DeerFlow pattern: w-fit + max-width constraint */
+/* DeerFlow pattern: ml-auto + flex column → right-aligned bubble with toolbar below */
 .user-bubble {
-  width: fit-content;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   max-width: 70%;
   min-width: 60px;
 }
@@ -83,6 +87,7 @@ function onCopy() {
   border-radius: 16px 16px 4px 16px;
   padding: 10px 14px;
   word-break: break-word;
+  max-width: 100%;
 }
 
 .bubble-text {
@@ -99,14 +104,14 @@ function onCopy() {
   }
 }
 
-/* Send status */
+/* Send status (below bubble) */
 .send-status {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-top: 6px;
   font-size: 12px;
   opacity: 0.8;
+  padding: 0 4px;
 }
 
 .send-status.sending .status-dot {
@@ -132,13 +137,12 @@ function onCopy() {
   cursor: pointer;
 }
 
-/* Footer */
+/* Footer (below bubble, right-aligned) */
 .bubble-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 6px;
   gap: 8px;
+  padding: 0 4px;
 }
 
 .bubble-actions {

@@ -627,6 +627,17 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 
+/* Chat mode: participate in the flex column so MessageList can allocate space
+   and content never overlaps the input. Welcome mode keeps fixed positioning
+   (floats over the scrolling hub page). */
+.input-box:not(.welcome-mode) {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  width: auto;
+}
+
 /* ── Premium Gradient Border wrapper ── */
 .input-card-border {
   background: linear-gradient(135deg, #4040ff, #ff49fd, #d763fc, #3cc4fa);

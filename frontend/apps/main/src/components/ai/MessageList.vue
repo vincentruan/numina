@@ -166,7 +166,7 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  padding-bottom: 140px; /* Space for the floating bottom input box */
+  padding-bottom: 20px; /* Small gap above the in-flow InputBox below */
   display: flex;
   flex-direction: column;
   gap: 8px;
