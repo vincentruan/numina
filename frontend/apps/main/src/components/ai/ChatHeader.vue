@@ -4,7 +4,7 @@ import { showFailToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { updateThread } from '@/api/ai-chat'
-import NuminaLogo from '@/components/common/NuminaLogo.vue'
+import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import TokenUsage from '@/components/ai-chat/TokenUsage.vue'
 import IIcon from '@/components/IIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
@@ -119,7 +119,7 @@ function onNewChat() {
       :aria-label="t('aiChat.agentInfoAria')"
       @click="onToggleAgentInfo"
     >
-      <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="20" />
+      <AIBrainIcon v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :active="true" />
       <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))" class="header-agent-logo-emoji">
         {{ getAgentIcon(activeAgent.icon) || '🤖' }}
       </span>
@@ -157,7 +157,7 @@ function onNewChat() {
     >
       <div class="agent-info-header">
         <span class="agent-info-icon" aria-hidden="true">
-          <NuminaLogo v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :width="24" />
+          <AIBrainIcon v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :active="true" />
           <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))">
             {{ getAgentIcon(activeAgent.icon) || '🤖' }}
           </span>
@@ -241,6 +241,36 @@ function onNewChat() {
 .header-agent-logo-emoji {
   font-size: 20px;
   line-height: 1;
+}
+
+/* 数鸣 AIBrainIcon: strip the 3D button chrome so the brain mark scales to
+ * match neighboring 20px header icons (mirrors InputBox.vue's handling). */
+.header-agent-logo-btn :deep(.ai-button-wrapper),
+.agent-info-icon :deep(.ai-button-wrapper) {
+  transform: none !important;
+}
+
+.header-agent-logo-btn :deep(.ai-button-3d),
+.agent-info-icon :deep(.ai-button-3d) {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+  border: none;
+  transform: none !important;
+}
+
+.header-agent-logo-btn :deep(.fg-icon),
+.agent-info-icon :deep(.fg-icon) {
+  width: 20px;
+  height: 20px;
+}
+
+.header-agent-logo-btn :deep(.bg-icon),
+.agent-info-icon :deep(.bg-icon) {
+  width: 18px;
+  height: 18px;
 }
 
 .header-title-wrap {
