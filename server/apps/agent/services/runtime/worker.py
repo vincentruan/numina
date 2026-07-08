@@ -20,6 +20,7 @@ from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
+from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
@@ -97,16 +98,72 @@ async def run_family_agent(
             (p for p in providers if p.get("is_active")), providers[0]
         )
 
-        # 3. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
+        # 3. Fetch enabled MCP servers so the chat skill can query family data
+        # via MCP tools (get_family_overview, get_assets, ...). Without this,
+        # _generate_temp_config writes no extensions_config.json and DeerFlow
+        # loads zero MCP tools - the agent then falls back to the empty context
+        # fields injected by _build_prompt and reports "all records empty".
+        # Mirrors the same logic in agent_dispatch.stream_agent_dispatch.
+        try:
+            mcp_servers = await client.get_enabled_mcp_servers()
+            for srv in mcp_servers:
+                if srv.get("name") == "Numina Backend MCP":
+                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
+                    actual_url = (srv.get("url") or "").rstrip("/")
+                    if not actual_url.startswith(expected_prefix):
+                        srv["url"] = (
+                            expected_prefix
+                            + "/api/v1/internal/mcp/"
+                            + family_id
+                            + "/sse"
+                        )
+                    break
+            # Auth headers required by the backend MCP SSE handshake
+            # (X-Caller-User-Id is mandatory; without it the SSE endpoint 403s).
+            mcp_headers: dict[str, str] = {
+                "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                "X-Family-Id": family_id,
+            }
+            if user_id:
+                mcp_headers["X-Caller-User-Id"] = user_id
+            for srv in mcp_servers:
+                srv["headers"] = mcp_headers
+        except Exception as exc:
+            logger.warning(
+                "[run_family_agent] get_enabled_mcp_servers failed family=%s err=%s",
+                family_id, type(exc).__name__,
+            )
+            mcp_servers = []
+
+        # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
+        #
+        # subagent_enabled/plan_mode init-time defaults are False; per-call
+        # overrides (driven by the frontend's flash/thinking/pro/ultra mode
+        # selector) are extracted from ``config["configurable"]`` below and
+        # passed to typed_stream_dispatch as kwargs, which route them into
+        # DeerFlowClient.stream() -> _get_runnable_config() to override the
+        # init-time setting for this specific call. This mirrors the reference
+        # Gateway path (agent_dispatch.stream_agent_dispatch).
         adapter = create_family_adapter(
             family_id,
             selected_provider,
             timeout_seconds=240,
-            subagent_enabled=True,
+            subagent_enabled=False,
             plan_mode=False,
+            mcp_servers=mcp_servers,
         )
 
-        # 4. Extract user message for context
+        # 4a. Extract per-call execution-mode overrides from the RunnableConfig.
+        # The frontend sends these in config.configurable (see reference
+        # backend/app/gateway/services.py:merge_run_context_overrides). They
+        # control DeerFlow's tool loading (subagent_enabled -> task tool) and
+        # planning middleware (plan_mode -> TodoList) on a per-call basis.
+        configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+        call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
+        call_plan_mode = bool(configurable.get("is_plan_mode", False))
+        call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
+
+        # 5. Extract user message for context
         if graph_input and "messages" in graph_input:
             msgs = graph_input["messages"]
             if isinstance(msgs, list) and msgs:
@@ -114,11 +171,11 @@ async def run_family_agent(
                 if isinstance(last, dict) and last.get("role") in ("user", "human"):
                     user_message = last.get("content", "")
 
-        # 5. PII redaction (Key Invariant #1)
+        # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
 
-        # 6. Stream via typed_stream_dispatch → publish to bridge.
+        # 7. Stream via typed_stream_dispatch → publish to bridge.
         # Collect AI text for suggestions, and synthesize `tool_call` custom
         # events from `messages` frames so R6 (规划步骤) renders under v2 —
         # the legacy runs.py router did this inline; the v2 worker must too,
@@ -130,7 +187,9 @@ async def run_family_agent(
             skill_name=capability,
             context=redacted,
             thread_id=thread_id,
-            enable_thinking=True,
+            enable_thinking=call_thinking_enabled,
+            subagent_enabled=call_subagent_enabled,
+            plan_mode=call_plan_mode,
         ):
             # Cooperative cancellation check (DeerFlow pattern)
             if record.abort_event.is_set():
@@ -161,7 +220,7 @@ async def run_family_agent(
                             "args": tc.get("args", {}),
                         })
 
-        # 7. Terminal status — drives the `end` completion signal (Q2).
+        # 8. Terminal status — drives the `end` completion signal (Q2).
         if record.abort_event.is_set():
             await run_manager.set_status(run_id, RunStatus.interrupted)
             completion_status = "interrupted"
@@ -185,7 +244,7 @@ async def run_family_agent(
         )
 
     finally:
-        # 8. Audit log (Key Invariant #3)
+        # 9. Audit log (Key Invariant #3)
         audit_logger.log_call(
             AuditEntry(
                 family_id=family_id,
@@ -198,7 +257,7 @@ async def run_family_agent(
                 duration_ms=int((time.monotonic() - t_start) * 1000),
             )
         )
-        # 9. Terminal frames: `end` with completion status (Q2), follow-up
+        # 10. Terminal frames: `end` with completion status (Q2), follow-up
         # suggestions (R8), and fire-and-forget title generation — then the
         # end sentinel + deferred cleanup (DeerFlow pattern).
         #
@@ -224,13 +283,21 @@ async def run_family_agent(
                     "suggestions": suggestions,
                 })
 
-            # Sync the title produced by DeerFlow's TitleMiddleware (written to
-            # the checkpoint's channel_values during the stream) into the
-            # persistent session record the frontend reads via getThread.
-            # Best-effort, fire-and-forget — no extra LLM call (the title was
-            # already generated inside the stream by the middleware).
+            # Sync / generate the thread title. DeerFlow's TitleMiddleware
+            # writes to the checkpoint, but Numina's adapter runs the sync
+            # ``stream()`` path so only the sync ``after_model`` hook fires -
+            # that returns a local fallback (the raw ``[SKILL:chat]`` wrapper),
+            # never an LLM summary. sync_title_from_checkpoint generates a
+            # proper title via the family provider when the checkpoint title is
+            # a fallback. Best-effort, fire-and-forget.
             asyncio.create_task(
-                sync_title_from_checkpoint(thread_id, family_id)
+                sync_title_from_checkpoint(
+                    thread_id,
+                    family_id,
+                    ai_config=selected_provider,
+                    user_message=user_message,
+                    ai_response="".join(ai_response_parts),
+                )
             )
 
         await bridge.publish_end(run_id)

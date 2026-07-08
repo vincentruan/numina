@@ -48,12 +48,16 @@ function scheduleTitleRefresh(threadId: string) {
     if (store.activeThreadId !== threadId) return
     try {
       const thread = await getThread(threadId)
-      if (thread.title && store.activeThreadId === threadId) {
-        // Update store sessions if this thread is tracked there
-        const idx = store.sessions.findIndex(s => s.thread_id === threadId)
-        if (idx !== -1) {
-          store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
-        }
+      // Skip empty titles and the raw [SKILL:chat] prompt wrapper (sync
+      // after_model fallback) - wait for the LLM-generated title.
+      if (!thread.title || thread.title.startsWith('[SKILL:')) return
+      if (store.activeThreadId !== threadId) return
+      const idx = store.sessions.findIndex(s => s.thread_id === threadId)
+      if (idx !== -1) {
+        store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
+      } else {
+        // New thread not yet in sessions list (e.g. created from /ai page)
+        store.sessions.unshift(thread)
       }
     } catch {
       // Title may not be ready yet — ignore
@@ -70,6 +74,12 @@ function scheduleTitleRefresh(threadId: string) {
     doRefresh()
   }, 8000)
   titleRefreshTimeouts.add(timeout2)
+  // Third attempt at 15s - safety margin for slow LLM title generation
+  const timeout3 = setTimeout(() => {
+    titleRefreshTimeouts.delete(timeout3)
+    doRefresh()
+  }, 15000)
+  titleRefreshTimeouts.add(timeout3)
 }
 
 function cancelTitleRefresh() {
@@ -77,8 +87,32 @@ function cancelTitleRefresh() {
   titleRefreshTimeouts.clear()
 }
 
+/** Ensure the active thread's metadata (especially title) is in store.sessions.
+ *  On page refresh or route navigation, store.sessions is empty and loadHistory
+ *  only fetches messages via client.threads.getState - the thread title would
+ *  show "新对话" without this fetch. */
+async function ensureThreadInSessions(threadId: string) {
+  if (store.sessions.find(s => s.thread_id === threadId)) return
+  try {
+    const thread = await getThread(threadId)
+    // Re-check: a concurrent scheduleTitleRefresh may have added it already
+    if (!store.sessions.find(s => s.thread_id === threadId)) {
+      store.sessions.unshift(thread)
+    }
+  } catch {
+    // Non-critical: title stays as default until next refresh
+  }
+}
+
 // Initialize from URL on mount and auto-send pending message if present
 onMounted(() => {
+  // Ensure agent data is available for ChatHeader logo. Direct navigation to
+  // /ai/chat (page refresh, direct URL, browser back) bypasses AIHubPage which
+  // normally loads agents - without this, systemAgents stays empty and the
+  // agent logo never renders. Non-blocking: logo appears once the API returns.
+  if (agentStore.systemAgents.length === 0) {
+    agentStore.loadAgents()
+  }
   // Capture the store's active thread before initializeFromUrl possibly changes it.
   // If the ID is unchanged after init (e.g. returning from /ai/chat/history to
   // the same thread, or closing history back to /ai/chat), the activeThreadId
@@ -92,6 +126,8 @@ onMounted(() => {
     && !store.pendingMessage
   ) {
     chat.loadHistory(store.activeThreadId)
+    // Watcher won't fire (same ID) - fetch thread metadata here too.
+    ensureThreadInSessions(store.activeThreadId)
   }
   // Auto-send pending message from URL (passed from AIHubPage)
   if (store.pendingMessage) {
@@ -130,7 +166,12 @@ watch(
       }
       // Cancel pending title refreshes for old thread
       cancelTitleRefresh()
-      await chat.loadHistory(newId)
+      // Load messages and thread metadata in parallel - loadHistory only
+      // fetches checkpoint messages, ensureThreadInSessions fetches the title.
+      await Promise.all([
+        chat.loadHistory(newId),
+        ensureThreadInSessions(newId),
+      ])
     }
   }
 )
@@ -177,7 +218,16 @@ async function handleStartChat(payload: SubmitPayload) {
     // would cancelStream-abort the run (see skipNextHistoryLoadFor comment).
     skipNextHistoryLoadFor.value = thread.thread_id
     store.setActiveThread(thread.thread_id)
-    await chat.sendMessage(payload.text, payload.mode, thread.thread_id)
+    // Add to sessions so ChatHeader can display the title once generated
+    if (!store.sessions.find(s => s.thread_id === thread.thread_id)) {
+      store.sessions.unshift(thread)
+    }
+    await chat.sendMessage(payload.text, payload.mode, thread.thread_id, {
+      thinking_enabled: payload.thinking_enabled,
+      is_plan_mode: payload.is_plan_mode,
+      subagent_enabled: payload.subagent_enabled,
+      reasoning_effort: payload.reasoning_effort,
+    })
   } catch {
     skipNextHistoryLoadFor.value = null
     showFailToast(t('aiChat.sendFailed'))
@@ -186,7 +236,12 @@ async function handleStartChat(payload: SubmitPayload) {
 
 async function handleSendMessage(payload: SubmitPayload) {
   if (!store.activeThreadId) return
-  await chat.sendMessage(payload.text, payload.mode, store.activeThreadId)
+  await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
+    thinking_enabled: payload.thinking_enabled,
+    is_plan_mode: payload.is_plan_mode,
+    subagent_enabled: payload.subagent_enabled,
+    reasoning_effort: payload.reasoning_effort,
+  })
 }
 
 function handleStopStream() {

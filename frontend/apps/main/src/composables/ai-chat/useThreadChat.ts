@@ -380,7 +380,17 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
-  async function sendMessage(text: string, _mode?: string, threadId?: string): Promise<void> {
+  async function sendMessage(
+    text: string,
+    mode?: string,
+    threadId?: string,
+    modeConfig?: {
+      thinking_enabled?: boolean
+      is_plan_mode?: boolean
+      subagent_enabled?: boolean
+      reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'
+    },
+  ): Promise<void> {
     if (isLoading.value) return
     isLoading.value = true
     error.value = null
@@ -454,6 +464,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // Resume the run instead by passing `input: null`.
         const hasPriorProgress = planningSteps.value.length > 0
           || messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
+        // Pass execution-mode overrides (flash/thinking/pro/ultra) to the backend
+        // via config.configurable. The worker (run_family_agent) reads these and
+        // forwards them to DeerFlowClient.stream() as per-call kwargs, which
+        // control tool loading (subagent_enabled -> task tool for ultra mode)
+        // and planning middleware (is_plan_mode -> TodoList for pro/ultra).
+        // Mirrors the reference frontend (hooks.ts:781-796).
+        const configurable: Record<string, unknown> = {}
+        if (modeConfig) {
+          if (modeConfig.thinking_enabled !== undefined) configurable.thinking_enabled = modeConfig.thinking_enabled
+          if (modeConfig.is_plan_mode !== undefined) configurable.is_plan_mode = modeConfig.is_plan_mode
+          if (modeConfig.subagent_enabled !== undefined) configurable.subagent_enabled = modeConfig.subagent_enabled
+          if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
+        }
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
           input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text }] },
           signal: abortController.signal,
@@ -461,6 +484,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           // and there is no handler branch for it; requesting it advertises an
           // unfulfilled contract.
           streamMode: ['messages-tuple', 'values', 'custom'],
+          ...(Object.keys(configurable).length > 0 ? { config: { configurable } } : {}),
         })
 
         if (!hasPriorProgress) {

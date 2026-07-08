@@ -137,6 +137,22 @@ async def lifespan(app: FastAPI):
 
         logging.getLogger(__name__).warning("AsyncSqliteSaver init failed: %s", _e)
 
+    # Apply DeerFlow sync-tool compatibility patch: the pinned harness (rev
+    # 4538c322) predates upstream fix 3599b570, so the built-in ``task`` tool
+    # (subagent delegation, used in ultra mode) lacks the sync wrapper that
+    # MCP tools already get. Without this, ultra mode fails with
+    # "StructuredTool does not support sync invocation" on the sync stream path.
+    try:
+        from apps.agent.services.deerflow_adapter.sync_tool_patch import (
+            apply_sync_tool_patches,
+        )
+
+        apply_sync_tool_patches()
+    except Exception as _e:
+        import logging
+
+        logging.getLogger(__name__).warning("sync_tool_patch failed: %s", _e)
+
     # [Copied from DeerFlow Reference] — initialise runtime (StreamBridge + RunManager)
     # [Integrated with Numina Multi-Tenant] — shared singletons for all families
     from apps.agent.services.runtime.lifespan import init_runtime, shutdown_runtime
