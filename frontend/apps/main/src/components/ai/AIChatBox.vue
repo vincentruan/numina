@@ -14,6 +14,7 @@ import InputBox from '@/components/ai-chat/InputBox.vue'
 import SuggestionChips from '@/components/ai/SuggestionChips.vue'
 import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
+import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
@@ -104,8 +105,11 @@ async function ensureThreadInSessions(threadId: string) {
   }
 }
 
+// Initial loading state for skeleton display (during thread creation + first send)
+const initialLoading = ref(true)
+
 // Initialize from URL on mount and auto-send pending message if present
-onMounted(() => {
+onMounted(async () => {
   // Ensure agent data is available for ChatHeader logo. Direct navigation to
   // /ai/chat (page refresh, direct URL, browser back) bypasses AIHubPage which
   // normally loads agents - without this, systemAgents stays empty and the
@@ -125,15 +129,22 @@ onMounted(() => {
     && store.activeThreadId === prevActiveId
     && !store.pendingMessage
   ) {
+    // Existing thread: load history and hide skeleton immediately
     chat.loadHistory(store.activeThreadId)
     // Watcher won't fire (same ID) - fetch thread metadata here too.
     ensureThreadInSessions(store.activeThreadId)
+    initialLoading.value = false
   }
   // Auto-send pending message from URL (passed from AIHubPage)
   if (store.pendingMessage) {
     const msg = store.pendingMessage
     store.pendingMessage = null // clear so it only fires once
-    handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
+    await handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
+    // handleStartChat completes after thread creation + send starts streaming
+    // Skeleton will be hidden once streaming begins (isLoading becomes true)
+  } else {
+    // No pending message: hide skeleton immediately
+    initialLoading.value = false
   }
 })
 
@@ -222,6 +233,8 @@ async function handleStartChat(payload: SubmitPayload) {
     if (!store.sessions.find(s => s.thread_id === thread.thread_id)) {
       store.sessions.unshift(thread)
     }
+    // Hide skeleton once thread is created - streaming will show actual content
+    initialLoading.value = false
     await chat.sendMessage(payload.text, payload.mode, thread.thread_id, {
       thinking_enabled: payload.thinking_enabled,
       is_plan_mode: payload.is_plan_mode,
@@ -230,6 +243,7 @@ async function handleStartChat(payload: SubmitPayload) {
     })
   } catch {
     skipNextHistoryLoadFor.value = null
+    initialLoading.value = false
     showFailToast(t('aiChat.sendFailed'))
   }
 }
@@ -286,27 +300,33 @@ function handleNewChat() {
 
 <template>
   <div class="ai-chat-box">
-    <!-- Header bar -->
-    <ChatHeader
-      :active-thread-id="store.activeThreadId"
-      :sessions="store.sessions"
-      :token-usage-total="chat.tokenUsage.value?.total_tokens"
-      :active-agent="activeAgent"
-      @title-updated="handleTitleUpdated"
-      @new-chat="handleNewChat"
-    />
+    <!-- Skeleton for initial loading (thread creation + first message) -->
+    <AIChatSkeleton v-if="initialLoading" />
 
-    <template v-if="store.isWelcomeMode">
-      <!-- WelcomePage includes its own InputBox (DeerFlow pattern) -->
-      <WelcomePage @start-chat="handleStartChat" />
-    </template>
+    <!-- Actual Content -->
     <template v-else>
-      <MessageList
-        :messages="chat.messages.value"
+      <!-- Header bar -->
+      <ChatHeader
+        :active-thread-id="store.activeThreadId"
+        :sessions="store.sessions"
+        :token-usage-total="chat.tokenUsage.value?.total_tokens"
         :is-streaming="chat.isLoading.value"
-        :thread-id="store.activeThreadId || undefined"
-        :planning-steps="chat.planningSteps.value"
-        @retry="handleRetry"
+        :active-agent="activeAgent"
+        @title-updated="handleTitleUpdated"
+        @new-chat="handleNewChat"
+      />
+
+      <template v-if="store.isWelcomeMode">
+        <!-- WelcomePage includes its own InputBox (DeerFlow pattern) -->
+        <WelcomePage @start-chat="handleStartChat" />
+      </template>
+      <template v-else>
+        <MessageList
+          :messages="chat.messages.value"
+          :is-streaming="chat.isLoading.value"
+          :thread-id="store.activeThreadId || undefined"
+          :planning-steps="chat.planningSteps.value"
+          @retry="handleRetry"
         @stop="handleStopStream"
         @suggestion-click="handleSuggestionClick"
         @artifact-tap="handleArtifactTap"
@@ -342,6 +362,7 @@ function handleNewChat() {
       :session-id="store.activeThreadId || ''"
       @update:show="(v: boolean) => v ? undefined : deselectArtifact()"
     />
+    </template>
   </div>
 </template>
 

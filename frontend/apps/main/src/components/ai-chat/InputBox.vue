@@ -549,7 +549,7 @@ onUnmounted(() => {
               :aria-label="t('aiChat.stopGeneration')"
               @click="emit('stop')"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="4" y="4" width="16" height="16" rx="2"/>
               </svg>
             </button>
