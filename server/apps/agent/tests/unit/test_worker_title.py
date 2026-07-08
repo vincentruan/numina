@@ -3,10 +3,10 @@
 Regression guard: the worker's ``finally`` block must schedule
 ``sync_title_from_checkpoint`` (which reads the title DeerFlow's
 TitleMiddleware wrote to the checkpoint) — NOT the old
-``generate_and_save_title`` which made a redundant second LLM call and needed
-the provider config. The sync takes only ``(thread_id, family_id)`` and reuses
-the DeerFlow-generated title, so the ai_config envelope shape is no longer
-relevant to the title path.
+``generate_and_save_title`` which made a redundant second LLM call. The sync
+takes ``(thread_id, family_id)`` as positional args plus kwargs
+(``ai_config``, ``user_message``, ``ai_response``) used to generate an LLM
+title when the checkpoint only has the sync ``[SKILL:chat]`` fallback.
 
 Calls ``run_family_agent`` directly with stubbed dependencies, bypassing the
 FastAPI lifespan layer (the v2 SSE contract tests are pre-existing broken on
@@ -104,8 +104,9 @@ async def test_run_family_agent_schedules_title_sync_from_checkpoint():
         # Drain the fire-and-forget tasks created in the finally block.
         await asyncio.sleep(0.1)
 
-    # Title sync must have been scheduled with (thread_id, family_id) — no
-    # provider config, no envelope (it reads the checkpoint instead).
+    # Title sync is scheduled with positional (thread_id, family_id) plus kwargs
+    # (ai_config, user_message, ai_response) for LLM title generation when the
+    # checkpoint title is a [SKILL:chat] fallback.
     assert title_sync_mock.called, "sync_title_from_checkpoint was not invoked"
     assert title_sync_mock.call_args.args == ("thread-1", "family-1"), (
         f"expected (thread-1, family-1), got: {title_sync_mock.call_args.args}"
