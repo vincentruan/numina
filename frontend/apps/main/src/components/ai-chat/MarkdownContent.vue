@@ -57,6 +57,9 @@ const rendererReady = ref(false)
 // 渲染结果
 const renderedContent = ref('')
 
+// 组件根元素 ref（避免 document.querySelector 命中其他 MarkdownContent 实例）
+const rootRef = ref<HTMLElement | null>(null)
+
 // 表格数据（用于操作栏）—— key 由表格内容哈希派生，渲染期保持稳定。
 interface TableBlock {
   html: string
@@ -120,10 +123,10 @@ md.set({
 })
 
 /**
- * 提取表格并在其原位注入操作栏锚点 (#6)。
- * 之前所有 TableActionBar 渲染在 markdown body 下方，与各自表格脱离；
- * 现在在每个表格前插入一个锚点 div，挂载后把对应的操作栏组件移动到锚点内，
- * 使操作栏紧贴其表格上方。同时使用基于内容的稳定 key (#10)。
+ * 提取表格并用 .table-wrapper 包裹（参考 DeerFlow 截图：操作栏浮动在表格右上角）。
+ * 每个表格被包裹在 position:relative 的 .table-wrapper 内，
+ * 挂载后 TableActionBar（absolute top-right）被移动到 wrapper 内，
+ * 使图标按钮紧贴表格右上角。使用基于内容的稳定 key (#10)。
  */
 function extractTablesAndInjectAnchors(html: string): string {
   tables.value = []
@@ -138,10 +141,12 @@ function extractTablesAndInjectAnchors(html: string): string {
     // 稳定 key：表格内容哈希 + 索引，内容不变时 key 不变。
     const key = `table-${idx}-${hashString(tableHtml)}`
     matches.push({ html: tableHtml, key })
-    // 在表格前插入锚点（操作栏将移动到此容器内）
+    // 用 .table-wrapper 包裹表格 + 锚点（操作栏将移动到 wrapper 内）
     result += html.slice(lastIdx, match.index)
-    result += `<div class="table-action-anchor" data-table-idx="${idx}"></div>`
+    result += `<div class="table-wrapper" data-table-idx="${idx}">`
+    result += `<div class="table-action-anchor"></div>`
     result += tableHtml
+    result += `</div>`
     lastIdx = match.index + tableHtml.length
     idx++
   }
@@ -174,25 +179,28 @@ function rerender() {
 }
 
 /**
- * 将每个 TableActionBar 元素移动到其在 markdown-body 内的锚点 div 中 (#6)。
- * 锚点由 data-table-idx 标记，与 tables 数组索引一一对应。
+ * 将每个 TableActionBar 元素移动到其 .table-wrapper 容器内。
+ * wrapper 由 data-table-idx 标记，与 tables 数组索引一一对应。
+ * TableActionBar 使用 position:absolute 定位到 wrapper 的右上角。
+ *
+ * 注意：必须使用组件自身的 rootRef，不能用 document.querySelector('.markdown-content')，
+ * 因为页面上可能同时存在多个 MarkdownContent 实例（多轮对话），全局查询会命中
+ * 第一个实例（可能没有表格），导致后续实例的表格操作栏无法被移入 wrapper。
  */
 function positionActionBars() {
   if (!isMounted) return
-  const root = document.querySelector('.markdown-content')
+  const root = rootRef.value
   if (!root) return
-  const anchors = root.querySelectorAll<HTMLElement>('.table-action-anchor')
+  const wrappers = root.querySelectorAll<HTMLElement>('.table-wrapper')
   const bars = root.querySelectorAll<HTMLElement>('.table-action-bar-wrapper')
-  anchors.forEach((anchor, idx) => {
+  wrappers.forEach((wrapper, idx) => {
     const bar = bars[idx]
-    if (bar && anchor.parentElement !== bar.parentElement) {
-      // 将操作栏移入锚点（锚点本身留在表格之前的原位）。
-      // 若锚点已有子元素（重复移动），先清空避免重复。
-      anchor.innerHTML = ''
-      anchor.appendChild(bar)
-    } else if (bar && anchor.firstElementChild !== bar) {
-      anchor.innerHTML = ''
-      anchor.appendChild(bar)
+    if (!bar) return
+    // 将操作栏移入 wrapper（TableActionBar absolute 定位到右上角）
+    if (bar.parentElement !== wrapper) {
+      wrapper.appendChild(bar)
+    } else if (!wrapper.contains(bar)) {
+      wrapper.appendChild(bar)
     }
   })
 }
@@ -262,7 +270,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="markdown-content">
+  <div ref="rootRef" class="markdown-content">
     <!-- Loading skeleton -->
     <template v-if="isLoading">
       <van-skeleton :row="3" animated />
@@ -417,13 +425,15 @@ onUnmounted(() => {
   overflow-x: auto;
 }
 
-/* 表格操作栏锚点：紧贴表格上方，不影响表格自身布局 (#6) */
-.markdown-body :deep(.table-action-anchor) {
-  margin-top: 4px;
+/* DeerFlow 模式：表格包裹容器，为操作栏 absolute 定位提供参照 */
+.markdown-body :deep(.table-wrapper) {
+  position: relative;
+  margin: 12px 0;
 }
 
-.markdown-body :deep(.table-action-anchor:empty) {
-  margin: 0;
+/* 旧锚点不再使用，保留空规则避免 :deep 引用错误 */
+.markdown-body :deep(.table-action-anchor) {
+  display: none;
 }
 
 .markdown-body :deep(th),

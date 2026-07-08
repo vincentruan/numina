@@ -15,7 +15,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Badge } from 'vant'
-import { getToolIcon, getToolDisplayNameKey } from '@/utils/ai-chat/tool-icon-map'
+import { getToolIcon, explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
 import {
   extractReasoningContentFromMessage,
   extractToolCalls,
@@ -78,6 +78,8 @@ const steps = computed(() => {
       for (const tc of toolCalls) {
         // Skip 'task' tool - handled by SubtaskCard
         if (tc.name === 'task') continue
+        // 跳过空名 tool_call（后端有时发出 name="" 的占位条目，id 形如 tc-xxx）
+        if (!tc.name) continue
         // Convert ToolCallSummary status to CoT step status
         const stepStatus: 'pending' | 'running' | 'done' | 'error' =
           tc.status === 'success' ? 'done'
@@ -164,12 +166,14 @@ function getIcon(step: { type: string; name?: string }): string {
   return getToolIcon(step.name || 'default')
 }
 
-// 工具名称获取
-function getName(step: { type: string; name?: string; displayName?: string }): string {
+// 工具名称获取 - 参考 DeerFlow message-group.tsx ToolCall 的行动描述模式
+// 不再显示工具技术名，而是显示抽象后的行动步骤说明
+// （如 web_search + query -> "在网络上搜索 XXX"，read_file + path -> "读取文件: path"）
+function getName(step: { type: string; name?: string; displayName?: string; args?: Record<string, unknown> }): string {
   if (step.type === 'reasoning') return t('aiChat.thinkingLabel')
-  // Use i18n key for tool display name
-  if (step.displayName) return step.displayName
-  return t(getToolDisplayNameKey(step.name || ''))
+  // 使用 explainToolCallKey 生成行动描述（i18n key + params）
+  const { key, params } = explainToolCallKey(step.name || '', step.args)
+  return params ? t(key, params) : t(key)
 }
 
 // 状态 badge 类型
@@ -179,8 +183,7 @@ function getBadgeType(status: string): 'success' | 'danger' | 'primary' {
   return 'primary'
 }
 
-// 关键参数提取（用于简洁展示）
-// Tool args interface for key argument extraction
+// Tool args interfaces for result parsing
 interface ToolArgsWithPath {
   path?: string
   file_path?: string
@@ -188,32 +191,6 @@ interface ToolArgsWithPath {
 interface ToolArgsWithCommand {
   command?: string
   code?: string
-}
-interface ToolArgsWithQuery {
-  query?: string
-}
-
-function getKeyArg(step: { name?: string; args?: Record<string, unknown> }): string | null {
-  if (!step.args) return null
-
-  const name = step.name?.replace(/^(mcp|skill|builtin):\/\//, '')
-
-  if (name === 'read_file' || name === 'write_file' || name === 'str_replace') {
-    const pathArgs = step.args as ToolArgsWithPath
-    return pathArgs.path || pathArgs.file_path || null
-  }
-  if (name === 'bash') {
-    const bashArgs = step.args as ToolArgsWithCommand
-    const cmd = bashArgs.command || ''
-    return cmd.length > 30 ? cmd.slice(0, 30) + '...' : cmd
-  }
-  if (name === 'web_search') {
-    const searchArgs = step.args as ToolArgsWithQuery
-    const query = searchArgs.query || ''
-    return query.length > 20 ? `"${query.slice(0, 20)}..."` : `"${query}"`
-  }
-
-  return null
 }
 
 // ============== Tool-specific result parsing ==============
@@ -348,7 +325,6 @@ function handleArtifactClick(filepath: string) {
             <div class="step-header">
               <IIcon :icon="getIcon(step)" class="step-icon" />
               <span class="step-name">{{ getName(step) }}</span>
-              <span v-if="getKeyArg(step)" class="step-arg">{{ getKeyArg(step) }}</span>
               <div class="step-status">
                 <Badge :type="getBadgeType(step.status)" size="small">
                   {{ step.status === 'done' ? '✓' : step.status === 'error' ? '✗' : '' }}
@@ -368,9 +344,6 @@ function handleArtifactClick(filepath: string) {
           <div class="step-header">
             <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" />
             <span class="step-name">{{ getName(lastToolCallStep) }}</span>
-            <span v-if="getKeyArg(lastToolCallStep)" class="step-arg">
-              {{ getKeyArg(lastToolCallStep) }}
-            </span>
             <div class="step-status">
               <svg
                 v-if="lastToolCallStep.status === 'running'"
@@ -546,6 +519,20 @@ function handleArtifactClick(filepath: string) {
   padding: 6px 8px;
   background: var(--bg-primary);
   border-radius: 6px;
+  position: relative;
+}
+
+/* DeerFlow 竖直连接线：从当前步骤图标延伸到下一个步骤
+   参考 chain-of-thought.tsx .step-connector */
+.cot-content .cot-step:not(.last-tool-call)::after {
+  content: '';
+  position: absolute;
+  left: 16px; /* 对齐 step-icon 中心 (8px padding + 8px icon half) */
+  top: 28px;  /* 图标下方开始 */
+  bottom: -4px; /* 延伸到下一个步骤 */
+  width: 1px;
+  background: var(--border-color, var(--separator));
+  z-index: 0;
 }
 
 .cot-step.last {
@@ -569,12 +556,17 @@ function handleArtifactClick(filepath: string) {
   display: flex;
   align-items: center;
   gap: 8px;
+  position: relative;
+  z-index: 1;
 }
 
 .step-icon {
   width: 16px;
   height: 16px;
   color: var(--text-secondary);
+  background: var(--bg-primary);
+  border-radius: 50%;
+  flex-shrink: 0;
 }
 
 .step-name {
