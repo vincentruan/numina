@@ -181,6 +181,11 @@ function suggestionChips(): string[] {
       {{ t('aiChat.generationStopped') }}
     </div>
 
+    <!-- Token usage slot: rendered between content and footer so the order is
+         content -> token usage -> timestamp/actions -> suggestions.
+         Slotted in by MessageGroup to keep this component data-agnostic. -->
+    <slot name="token-usage" />
+
     <!-- Footer: timestamp and actions -->
     <div v-if="phase === 'done' || phase === 'interrupted' || phase === 'error'" class="message-footer">
       <span class="message-time">{{ displayTime }}</span>

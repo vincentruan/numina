@@ -73,9 +73,15 @@ interface ThreadApiResponse {
 
 /** Map agent ThreadResponse → frontend ThreadSession */
 function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
+  const metadataTitle = (r.metadata?.title as string) || ''
+  const valuesTitle = (r.values?.title as string) || ''
+  // values.title is the raw [SKILL:chat] prompt wrapper on the sync stream
+  // path (sync after_model fallback) - never display it as a title.
+  const title = metadataTitle
+    || (valuesTitle && !valuesTitle.startsWith('[SKILL:') ? valuesTitle : '')
   return {
     thread_id: r.thread_id,
-    title: (r.metadata?.title as string) || (r.values?.title as string) || '',
+    title,
     original_title: (r.metadata?.original_title as string) || undefined,
     status: (r.status as ThreadSession['status']) || 'idle',
     is_pinned: (r.metadata?.is_pinned as boolean) || false,

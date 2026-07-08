@@ -575,7 +575,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* ── Theme variables override ── */
-:global([data-theme='light']) .input-box,
+:global([data-theme='light'] .input-box),
 .input-box {
   --ai-btn-border: rgba(0, 0, 0, 0.08);
   --ai-btn-color: var(--text-secondary, #666666);
@@ -594,7 +594,7 @@ onUnmounted(() => {
   --ai-expand-hover-color: var(--text-primary, #111111);
 }
 
-:global([data-theme='dark']) .input-box {
+:global([data-theme='dark'] .input-box) {
   --ai-btn-border: rgba(255, 255, 255, 0.1);
   --ai-btn-color: var(--text-secondary, #c8c8d0);
   --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
@@ -665,7 +665,7 @@ onUnmounted(() => {
   transition: background-color 0.2s ease;
 }
 
-:global([data-theme='dark']) .input-card-inner {
+:global([data-theme='dark'] .input-card-inner) {
   background: var(--bg-primary, #010120);
 }
 
@@ -1018,7 +1018,7 @@ onUnmounted(() => {
   transition: background 0.2s, color 0.2s, transform 0.15s;
 }
 
-:global([data-theme='dark']) .send-btn {
+:global([data-theme='dark'] .send-btn) {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.4);
 }

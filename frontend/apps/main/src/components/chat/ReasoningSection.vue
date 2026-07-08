@@ -292,10 +292,9 @@ function toggleExpanded() {
   40% { transform: translateY(-4px); }
 }
 
-/* Light theme */
-@media (prefers-color-scheme: light) {
-  :global(.theme-light) .reasoning-content {
-    background: rgba(0, 0, 0, 0.02);
-  }
+/* Light theme - wrap FULL selector in :global() so it matches the scoped
+ * element; data-theme attr (not OS preference) is the source of truth. */
+:global([data-theme='light'] .reasoning-content) {
+  background: rgba(0, 0, 0, 0.02);
 }
 </style>

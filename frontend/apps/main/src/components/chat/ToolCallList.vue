@@ -348,15 +348,14 @@ function formatTime(ms?: number): string {
   to { transform: rotate(360deg); }
 }
 
-/* Light theme */
-@media (prefers-color-scheme: light) {
-  :global(.theme-light) .tool-card {
-    background: rgba(0, 0, 0, 0.02);
-    border-color: rgba(0, 0, 0, 0.06);
-  }
+/* Light theme - wrap FULL selector in :global() so it matches the scoped
+ * element; data-theme attr (not OS preference) is the source of truth. */
+:global([data-theme='light'] .tool-card) {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
 
-  :global(.theme-light) .tool-result {
-    background: rgba(0, 0, 0, 0.02);
-  }
+:global([data-theme='light'] .tool-result) {
+  background: rgba(0, 0, 0, 0.02);
 }
 </style>

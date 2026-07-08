@@ -47,9 +47,11 @@ const headerTitle = computed(() => {
   return session?.title || t('aiChat.newChat')
 })
 
-// Check if title can be edited
+// Check if title can be edited - only when there's an active thread AND the
+// title has been generated (not the default "新对话"). Before the first
+// message or while the LLM title is still pending, the edit button is hidden.
 const canEditTitle = computed(() => {
-  return props.activeThreadId && headerTitle.value !== t('aiChat.newChat')
+  return !!props.activeThreadId && headerTitle.value !== t('aiChat.newChat')
 })
 
 // Check if title needs scroll animation (titles >8 chars overflow container)
@@ -62,7 +64,9 @@ function onToggleAgentInfo() {
 }
 
 function onEditTitle() {
-  editTitleInput.value = headerTitle.value
+  // If the title is still the default (LLM title not yet generated), start
+  // with an empty input so the user can type a custom title from scratch.
+  editTitleInput.value = headerTitle.value === t('aiChat.newChat') ? '' : headerTitle.value
   showEditTitleDialog.value = true
 }
 
@@ -176,9 +180,13 @@ function onNewChat() {
       </button>
     </div>
 
-    <!-- Edit title dialog -->
+    <!-- Edit title dialog
+         teleport="body" is required: .chat-header has backdrop-filter which
+         creates a containing block for position:fixed descendants, trapping
+         the dialog inside the 50px header without it. -->
     <van-dialog
       v-model:show="showEditTitleDialog"
+      teleport="body"
       :title="t('aiChat.editTitle')"
       show-cancel-button
       :loading="isUpdatingTitle"
@@ -274,23 +282,23 @@ function onNewChat() {
 }
 
 .header-title-wrap {
-  flex: 1;
   display: flex;
   align-items: center;
-  justify-content: center;
+  /* Title sits right after the agent logo (left-aligned), not pushed to the
+   * right. Remaining space flows to the gap before token-usage/new-chat. */
   min-width: 0;
-  padding: 0 8px;
+  padding: 0 4px;
   gap: 4px;
 }
 
 .header-title-container {
   min-width: 0;
-  max-width: 120px;
+  max-width: 140px;
   overflow: hidden;
 }
 
 .header-title-container.needs-scroll {
-  max-width: 140px;
+  max-width: 160px;
 }
 
 .header-title {

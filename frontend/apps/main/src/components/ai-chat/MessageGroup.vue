@@ -166,15 +166,19 @@ const subagentTaskIds = computed(() => {
         @copy="emit('copy', assistantMessage.content)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
-      />
-      <!-- Per-message token usage (inline below AI message) -->
-      <TokenUsage
-        v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
-        mode="inline"
-        :thread-id="threadId || null"
-        :usage-metadata="assistantMessage.usageMetadata"
-        :is-streaming="isLoading && isLastAssistant"
-      />
+      >
+        <!-- Per-message token usage (slotted between content and footer so the
+             order is: content -> token usage -> timestamp/actions -> suggestions) -->
+        <template #token-usage>
+          <TokenUsage
+            v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
+            mode="inline"
+            :thread-id="threadId || null"
+            :usage-metadata="assistantMessage.usageMetadata"
+            :is-streaming="isLoading && isLastAssistant"
+          />
+        </template>
+      </AssistantMessage>
     </template>
 
     <!-- Processing: ChainOfThought -->
@@ -301,19 +305,18 @@ const subagentTaskIds = computed(() => {
   padding-top: 8px;
 }
 
-/* Light theme */
-@media (prefers-color-scheme: light) {
-  :global(.theme-light) .clarification-card {
-    background: rgba(129, 140, 248, 0.08);
-  }
+/* Light theme - wrap FULL selector in :global() so it matches the scoped
+ * element; data-theme attr (not OS preference) is the source of truth. */
+:global([data-theme='light'] .clarification-card) {
+  background: rgba(129, 140, 248, 0.08);
+}
 
-  :global(.theme-light) .file-card {
-    background: var(--card-bg);
-    border-color: rgba(0, 0, 0, 0.06);
-  }
+:global([data-theme='light'] .file-card) {
+  background: var(--card-bg);
+  border-color: rgba(0, 0, 0, 0.06);
+}
 
-  :global(.theme-light) .file-card:hover {
-    background: rgba(0, 0, 0, 0.02);
-  }
+:global([data-theme='light'] .file-card:hover) {
+  background: rgba(0, 0, 0, 0.02);
 }
 </style>

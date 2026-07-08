@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
+import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
 import type { ChatMessage, PlanningStep } from '@/types/ai-chat/message-group'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 
@@ -33,6 +34,21 @@ const lastAssistantGroupIndex = computed(() => {
     if (groups[i].type === 'assistant') return i
   }
   return -1
+})
+
+/**
+ * Show the three-dot thinking indicator while the user's message has been sent
+ * but no assistant-type group exists yet (the AI hasn't produced any text or
+ * tool-call chunk). Once an assistant / assistant:processing / etc. group
+ * appears, that group renders its own streaming indicator and this placeholder
+ * hides. Without this, the only feedback during the first model round-trip is
+ * the input-box button state, which looks like the page is stuck.
+ */
+const showThinkingIndicator = computed(() => {
+  if (!props.isStreaming) return false
+  const groups = messageGroups.value
+  if (groups.length === 0) return false
+  return groups[groups.length - 1].type === 'human'
 })
 
 // ── Auto-scroll with user-interrupt (R5) ──
@@ -142,6 +158,10 @@ onUnmounted(() => {
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
       />
+      <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
+      <div v-if="showThinkingIndicator" class="thinking-placeholder">
+        <StreamingIndicator :visible="true" />
+      </div>
     </div>
 
     <!-- "回到底部" floating button (shown when user scrolled up) -->
@@ -186,6 +206,15 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Three-dot thinking bubble shown while waiting for the first AI chunk */
+.thinking-placeholder {
+  padding: 10px 16px;
+  background: var(--bubble-ai-bg, rgba(189, 187, 255, 0.12));
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 80%;
 }
 
 /* "回到底部" floating button */
