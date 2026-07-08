@@ -125,7 +125,7 @@ describe('getMessageGroups — processing groups (tool_calls/reasoning)', () => 
     expect(groups[0].messages).toHaveLength(2)
   })
 
-  it('AI with both tool_calls and content stays in processing only (no assistant body)', () => {
+  it('AI with both tool_calls and content creates processing + assistant body', () => {
     const msgs = [
       ai('a1', {
         content: 'partial body',
@@ -133,9 +133,15 @@ describe('getMessageGroups — processing groups (tool_calls/reasoning)', () => 
       }),
     ]
     const groups = getMessageGroups(msgs)
-    // 4d guard: only when !hasToolCalls
-    expect(groups).toHaveLength(1)
-    expect(groups[0].type).toBe('assistant:processing')
+    // tool_calls → processing group (ChainOfThought); content → assistant body
+    // bubble. Both render so the AI's text reply is never silently dropped
+    // (the blank-page bug when an AI replies text + ask_clarification).
+    expect(groups.map(g => g.type)).toEqual([
+      'assistant:processing',
+      'assistant',
+    ])
+    expect(groups[0].messages[0].id).toBe('a1')
+    expect(groups[1].messages[0].id).toBe('a1')
   })
 })
 

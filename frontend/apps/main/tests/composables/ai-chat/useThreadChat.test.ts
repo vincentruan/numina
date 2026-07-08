@@ -216,4 +216,78 @@ describe('useThreadChat — U1 SSE extensions', () => {
     const chat = useThreadChat()
     expect(chat.isStreaming.value).toBe(false)
   })
+
+  it('does not add human messages from values events (skips [SKILL:chat] wrapper)', async () => {
+    // The agent adapter wraps the user message as `[SKILL:chat]\n{json}` for
+    // the DeerFlow harness. LangGraph persists that wrapper as the human message
+    // and replays it via values events. The optimistic message (with the user's
+    // original text) is authoritative — the wrapper must not produce a duplicate
+    // human bubble showing raw JSON.
+    const mockStream = makeMockStream([
+      {
+        event: 'values',
+        data: {
+          messages: [
+            { id: 'human-backend-1', type: 'human', content: '[SKILL:chat]\n{"free_text":"hello"}' },
+            { id: 'ai-1', type: 'ai', content: 'Answer' },
+          ],
+        },
+      },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: vi.fn() },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    const humanMessages = chat.messages.value.filter(m => m.type === 'human')
+    expect(humanMessages).toHaveLength(1)
+    expect(humanMessages[0].content).toBe('hello')
+    expect(humanMessages[0].sendStatus).toBe('sent')
+  })
+
+  it('transitions optimistic user message sendStatus from sending to sent', async () => {
+    const mockStream = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-1' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: vi.fn() },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    const humanMsg = chat.messages.value.find(m => m.type === 'human')
+    expect(humanMsg?.sendStatus).toBe('sent')
+  })
+
+  it('strips [SKILL:chat] wrapper and recovers free_text on loadHistory', async () => {
+    const skillWrapper = '[SKILL:chat]\n' + JSON.stringify({
+      family_id: 'fam-1',
+      free_text: '用户原始输入',
+    }, null, 2)
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: vi.fn(), cancel: vi.fn() },
+      threads: {
+        getState: vi.fn().mockResolvedValue({
+          values: {
+            messages: [
+              { id: 'human-1', type: 'human', content: skillWrapper },
+              { id: 'ai-1', type: 'ai', content: 'AI 回复' },
+            ],
+          },
+        }),
+      },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.loadHistory('thread-1')
+
+    const humanMsg = chat.messages.value.find(m => m.type === 'human')
+    expect(humanMsg?.content).toBe('用户原始输入')
+    expect(humanMsg?.content).not.toContain('[SKILL:')
+  })
 })

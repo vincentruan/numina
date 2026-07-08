@@ -376,22 +376,20 @@ onUnmounted(() => {
   display: var(--shiki-light-display, block);
 }
 
-/* 暗色模式下 */
-:global([data-theme='dark']) .markdown-body :deep(.shiki.github-dark) {
-  display: block;
+/* 暗色/亮色模式下切换 shiki 双主题代码块可见性。
+   注意：不能用 :global([data-theme]) .markdown-body :deep(.shiki.xxx) 组合——
+   Vue scoped CSS 编译器会丢弃 :global() 之后的 scoped 部分，只留下
+   [data-theme='dark'] { display: none; } 这样的全局规则，直接匹配 <html>
+   元素并隐藏整个页面（blank page bug）。改用 CSS 变量：在 :global([data-theme])
+   上设置变量（仅设变量不会隐藏元素），由上面 scoped 的 .shiki 规则消费。 */
+:global([data-theme='dark']) {
+  --shiki-dark-display: block;
+  --shiki-light-display: none;
 }
 
-:global([data-theme='dark']) .markdown-body :deep(.shiki.github-light) {
-  display: none;
-}
-
-/* 亮色模式下 */
-:global([data-theme='light']) .markdown-body :deep(.shiki.github-dark) {
-  display: none;
-}
-
-:global([data-theme='light']) .markdown-body :deep(.shiki.github-light) {
-  display: block;
+:global([data-theme='light']) {
+  --shiki-dark-display: none;
+  --shiki-light-display: block;
 }
 
 .markdown-body :deep(blockquote) {

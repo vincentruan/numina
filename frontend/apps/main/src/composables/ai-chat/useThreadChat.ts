@@ -1,11 +1,30 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { nanoid } from 'nanoid'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
 
 export type { ChatMessage }
+
+/**
+ * Generate a unique id for an optimistic/temporary chat message.
+ *
+ * `crypto.randomUUID()` is only available in secure contexts (HTTPS or
+ * localhost). The Vite dev server is commonly reached over plain HTTP on a
+ * LAN IP (e.g. http://100.72.41.99:5173), where `crypto.randomUUID` is
+ * `undefined` — and calling it throws `TypeError: crypto.randomUUID is not
+ * a function`. That throw aborts `sendMessage` before the stream starts,
+ * leaving the /ai/chat page blank. Fall back to nanoid on non-secure
+ * contexts so the dev flow works identically to production (HTTPS).
+ */
+function genId(prefix: string): string {
+  const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : nanoid()
+  return `${prefix}-${uuid}`
+}
 
 /** A single chunk yielded by client.runs.stream() in legacy SSE mode. */
 interface StreamChunk {
@@ -71,12 +90,37 @@ function parseArgs(args: string | object): Record<string, unknown> {
   return args
 }
 
+/**
+ * Recover the user's original input text from a backend-stored human message.
+ *
+ * The agent adapter (server/apps/agent/services/deerflow_adapter/adapter.py
+ * `_build_prompt`) wraps the user message as ``[SKILL:chat]\n{json}`` so the
+ * DeerFlow harness knows which skill to dispatch. That wrapper is an internal
+ * prompt string — it must never be shown to the user. LangGraph persists it as
+ * the human message content and replays it via ``values`` events and thread
+ * history, so strip the wrapper here and recover ``free_text`` (the user's
+ * original text, PII-redacted) for display. If ``free_text`` is empty/missing
+ * (e.g. the wrapper arrived without user text), return an empty string rather
+ * than leaking the raw JSON to the UI.
+ */
+function unwrapSkillPrompt(content: string): string {
+  const match = content.match(/^\[SKILL:[^\]]+\]\s*\n?([\s\S]*)$/)
+  if (!match) return content
+  try {
+    const ctx = JSON.parse(match[1]) as { free_text?: unknown }
+    if (typeof ctx.free_text === 'string' && ctx.free_text.length > 0) {
+      return ctx.free_text
+    }
+  } catch { /* not valid JSON — fall through to empty */ }
+  return ''
+}
+
 /** Convert DeerFlow tool_calls to ToolCallSummary[] */
 function toToolCallSummaries(
   toolCalls: Array<{ id?: string; name: string; args: string | object }>,
 ): ToolCallSummary[] {
   return toolCalls.map((tc, i) => ({
-    id: tc.id || `tc-${crypto.randomUUID()}`,
+    id: tc.id || genId('tc'),
     name: tc.name,
     displayName: tc.name,
     args: parseArgs(tc.args),
@@ -91,11 +135,14 @@ function serializedToChatMessage(m: SerializedMessage): ChatMessage {
     : 'ai' as const
   const role = type === 'human' ? 'user' as const : 'assistant' as const
 
+  const rawContent = m.content || ''
+  const content = type === 'human' ? unwrapSkillPrompt(rawContent) : rawContent
+
   const msg: ChatMessage = {
-    id: m.id || `msg-${crypto.randomUUID()}`,
+    id: m.id || genId('msg'),
     type,
     role,
-    content: m.content || '',
+    content,
     displayTime: formatDisplayTime(),
     phase: type !== 'human' ? 'done' as const : undefined,
     name: m.name,
@@ -147,7 +194,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   function addOptimisticUserMessage(text: string): ChatMessage {
     const msg: ChatMessage = {
-      id: `msg-${crypto.randomUUID()}`,
+      id: genId('msg'),
       type: 'human',
       role: 'user',
       content: text,
@@ -156,6 +203,26 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
     messages.value = [...messages.value, msg]
     return msg
+  }
+
+  /**
+   * Reactively update an optimistic user message's send status.
+   *
+   * ``addOptimisticUserMessage`` returns the raw message object, but
+   * ``messages.value`` exposes a reactive proxy of it. Mutating the raw object
+   * (``userMsg.sendStatus = 'sent'``) updates the underlying data but does NOT
+   * call Vue's ``trigger()``, so the "发送中" indicator stays stuck until some
+   * unrelated reassignment happens to re-run the computed. Replace the message
+   * through the reactive array so watchers/computeds re-run immediately.
+   */
+  function setUserMsgStatus(id: string, status: 'sending' | 'sent' | 'failed'): void {
+    const idx = messages.value.findIndex(m => m.id === id)
+    if (idx === -1) return
+    messages.value = [
+      ...messages.value.slice(0, idx),
+      { ...messages.value[idx], sendStatus: status },
+      ...messages.value.slice(idx + 1),
+    ]
   }
 
   /**
@@ -187,7 +254,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       } else {
         // New AI message
         const msg: ChatMessage = {
-          id: chunkId || `ai-${crypto.randomUUID()}`,
+          id: chunkId || genId('ai'),
           type: 'ai',
           role: 'assistant',
           content: chunk.content,
@@ -205,7 +272,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     } else if (chunk.type === 'tool') {
       // Tool result message
       const msg: ChatMessage = {
-        id: chunk.id || `tool-${crypto.randomUUID()}`,
+        id: chunk.id || genId('tool'),
         type: 'tool',
         role: 'assistant',
         content: chunk.content,
@@ -247,7 +314,16 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (!raw || raw.length === 0) return
     const mapped = raw.map(serializedToChatMessage)
     const existingIds = new Set(messages.value.map(m => m.id))
-    const newOnes = mapped.filter(m => !existingIds.has(m.id))
+    // Skip human messages from values events. sendMessage always creates an
+    // optimistic human message with the user's original text before streaming,
+    // and that optimistic message is the authoritative display text. The
+    // backend persists the human message as a `[SKILL:chat]\n{json}` prompt
+    // wrapper (adapter._build_prompt) — an internal prompt string that must
+    // never be shown. Including it here would render a duplicate human bubble
+    // with the raw JSON. Prior turns' human messages are already in
+    // messages.value (from earlier optimistic messages or loadHistory), so
+    // skipping human messages only drops the current turn's prompt wrapper.
+    const newOnes = mapped.filter(m => !existingIds.has(m.id) && m.type !== 'human')
     if (newOnes.length > 0) {
       messages.value = [...messages.value, ...newOnes]
     }
@@ -296,7 +372,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }): PlanningStep {
     const toolName = customData.tool_name || 'unknown'
     return {
-      id: customData.tool_call_id || `step-${crypto.randomUUID()}`,
+      id: customData.tool_call_id || genId('step'),
       toolName,
       args: customData.args || {},
       status: 'running',
@@ -330,7 +406,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       }
     } catch (err) {
       const e = err as Error
-      userMsg.sendStatus = 'failed'
+      setUserMsgStatus(userMsg.id, 'failed')
       error.value = e.message || t('aiChat.sendFailed')
       isLoading.value = false
       return
@@ -388,7 +464,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         })
 
         if (!hasPriorProgress) {
-          userMsg.sendStatus = 'sent'
+          setUserMsgStatus(userMsg.id, 'sent')
         }
 
         // Clear any error carried over from a prior attempt (#20): an error chunk
@@ -517,19 +593,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // from a timeout/stream error abort (retryable transient failure).
         if (e.name === 'AbortError') {
           if (userCancelled) {
-            userMsg.sendStatus = 'failed'
+            setUserMsgStatus(userMsg.id, 'failed')
             break
           }
           // Timeout abort — retry like any transient failure.
           retryCount++
           if (retryCount > SSE_MAX_RETRIES) {
-            userMsg.sendStatus = 'failed'
+            setUserMsgStatus(userMsg.id, 'failed')
             error.value = e.message || t('aiChat.sendFailed')
           }
         } else {
           retryCount++
           if (retryCount > SSE_MAX_RETRIES) {
-            userMsg.sendStatus = 'failed'
+            setUserMsgStatus(userMsg.id, 'failed')
             error.value = e.message || t('aiChat.sendFailed')
           }
           // Otherwise loop and retry

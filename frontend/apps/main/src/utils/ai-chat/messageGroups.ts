@@ -205,8 +205,12 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
 
       // 4d: 有正文内容 → assistant group（正文气泡）
       // 注意：不是 else-if，一个 message 可能同时进入 processing + assistant
-      // （有 reasoning + content 但无 tool_calls 的情况）
-      if (hasContent(message) && !hasToolCalls(message)) {
+      // （有 reasoning/tool_calls + content 的情况）。tool_calls 的可视化在
+      // processing group (ChainOfThought) 渲染，正文 content 必须在 assistant
+      // group 渲染 —— 否则当 AI 消息同时携带 content 与 tool_calls（例如
+      // ask_clarification）时，正文会被丢弃，页面看起来"空白"无 AI 回复。
+      // 不使用 !hasToolCalls 限制：只要 hasContent 就生成正文气泡。
+      if (hasContent(message)) {
         groups.push({
           type: 'assistant',
           id: message.id,
