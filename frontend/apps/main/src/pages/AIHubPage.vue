@@ -227,8 +227,9 @@
     <van-action-sheet
       v-model:show="showAgentPicker"
       :title="t('aiHub.selectAgent')"
+      safe-area-inset-bottom
     >
-      <van-cell-group inset>
+      <van-cell-group inset class="agent-picker-group">
         <van-cell
           v-for="agent in agentChoices"
           :key="agent.id"
@@ -1265,6 +1266,10 @@ defineExpose({
 
 
 /* ── Agent picker ── */
+.agent-picker-group {
+  padding-bottom: 12px;
+}
+
 .agent-row__icon {
   width: 36px;
   height: 36px;
