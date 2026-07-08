@@ -403,45 +403,49 @@ function onNewChat() {
   word-break: break-word;
 }
 
-/* Dark mode */
-:global([data-theme='dark']) .chat-header {
+/* Dark mode
+ * Wrap the FULL selector in :global() - Vue scoped CSS only scopes the last
+ * simple selector outside :global(), so `:global([data-theme='dark']) .x`
+ * compiles to `[data-theme='dark'] .x` (no [data-v-xxx]) and never matches.
+ * See AIChatInput.vue:472 for the same gotcha. */
+:global([data-theme='dark'] .chat-header) {
   background: rgba(var(--bg-primary-rgb, 15, 17, 23), 0.95);
   border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
-:global([data-theme='dark']) .header-btn {
+:global([data-theme='dark'] .header-btn) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .header-btn:hover {
+:global([data-theme='dark'] .header-btn:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .header-title {
+:global([data-theme='dark'] .header-title) {
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .header-edit-btn {
+:global([data-theme='dark'] .header-edit-btn) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .header-edit-btn:hover {
+:global([data-theme='dark'] .header-edit-btn:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .agent-info-popup {
+:global([data-theme='dark'] .agent-info-popup) {
   background: rgba(var(--bg-primary-rgb, 15, 17, 23), 0.95);
   border-color: rgba(255, 255, 255, 0.06);
   box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
 }
 
-:global([data-theme='dark']) .agent-info-name {
+:global([data-theme='dark'] .agent-info-name) {
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .agent-info-description {
+:global([data-theme='dark'] .agent-info-description) {
   color: var(--text-secondary);
 }
 </style>

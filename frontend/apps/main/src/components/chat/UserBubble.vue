@@ -82,26 +82,25 @@ function onCopy() {
 }
 
 .bubble-content {
-  background: var(--bubble-user-bg, rgba(99, 102, 241, 0.22));
-  color: var(--bubble-user-color, #ffffff);
+  /* DeerFlow-style: neutral gray bg + theme-aware text (black in light, white in dark). */
+  background: #e8e8ec;
+  color: var(--text-primary);
   border-radius: 16px 16px 4px 16px;
   padding: 10px 14px;
   word-break: break-word;
   max-width: 100%;
 }
 
+/* Wrap FULL selector in :global() - `:global([data-theme='dark']) .x` compiles
+ * without the [data-v-xxx] scoping attr and never matches. See AIChatInput.vue:472. */
+:global([data-theme='dark'] .bubble-content) {
+  background: #27272a;
+}
+
 .bubble-text {
   margin: 0;
   font-size: 15px;
   line-height: 1.5;
-}
-
-/* Light theme adjustments */
-@media (prefers-color-scheme: light) {
-  :global(.theme-light) .bubble-content {
-    background: var(--bubble-user-bg-light, #e8e8f4);
-    color: var(--bubble-user-color-light, #1a1a2e);
-  }
 }
 
 /* Send status (below bubble) */
