@@ -290,4 +290,68 @@ describe('useThreadChat — U1 SSE extensions', () => {
     expect(humanMsg?.content).toBe('用户原始输入')
     expect(humanMsg?.content).not.toContain('[SKILL:')
   })
+
+  it('marks ALL AI messages done on end (not just the last) so streaming indicators stop', async () => {
+    // A single turn can emit multiple AI messages: a tool-call message then a
+    // text-reply message (or a summarization-leak message then the real reply).
+    // The end handler must mark every AI message 'done', not just the last -
+    // otherwise earlier ones stay phase='answering' and their StreamingIndicator
+    // (three-dot animation) never stops. This also breaks the next turn's
+    // hasPriorProgress check, leaving the follow-up user bubble on "发送中".
+    const mockStream = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-1' } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-toolcall', content: '', tool_calls: [{ id: 'tc-1', name: 'search', args: {} }] } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-reply', content: 'Final answer' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: vi.fn() },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    const aiMessages = chat.messages.value.filter(m => m.type === 'ai')
+    expect(aiMessages).toHaveLength(2)
+    // Both AI messages must be 'done', not just the last - otherwise the
+    // three-dot StreamingIndicator stays visible on the earlier one forever.
+    expect(aiMessages[0].phase).toBe('done')
+    expect(aiMessages[1].phase).toBe('done')
+  })
+
+  it('follow-up sendStatus is sent even when a prior turn had multiple AI messages', async () => {
+    // Regression: after a turn that left a non-last AI message at phase='answering',
+    // the next sendMessage's hasPriorProgress check returned true (because it
+    // scans for any AI message with phase='answering'), so setUserMsgStatus was
+    // skipped and the follow-up user bubble stayed on "发送中".
+    const chat = useThreadChat()
+
+    // Turn 1: multiple AI messages, all should be marked done by end
+    const mockStream1 = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-1' } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-toolcall', content: '', tool_calls: [{ id: 'tc-1', name: 'search', args: {} }] } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-reply', content: 'Answer 1' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream1, cancel: vi.fn() },
+    } as never)
+    await chat.sendMessage('first', undefined, 'thread-1')
+
+    // Turn 2: follow-up on the same thread
+    const mockStream2 = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-2' } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-reply-2', content: 'Answer 2' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream2, cancel: vi.fn() },
+    } as never)
+    await chat.sendMessage('second', undefined, 'thread-1')
+
+    // The follow-up user message must transition to 'sent', not stay 'sending'
+    const humanMessages = chat.messages.value.filter(m => m.type === 'human')
+    expect(humanMessages).toHaveLength(2)
+    expect(humanMessages[1].sendStatus).toBe('sent')
+  })
 })

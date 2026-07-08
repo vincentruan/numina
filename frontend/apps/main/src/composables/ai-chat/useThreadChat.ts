@@ -557,27 +557,38 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             if (endStatus === 'error') {
               throw new Error(t('aiChat.sendFailed'))
             }
-            // Mark last AI message as done (attach suggestions if available).
+            // Mark ALL AI messages as done (attach suggestions to the last one).
             // #19: an `end` chunk is the backend's completion signal — treat it
             // as success. Truncated-content detection is unreliable from `end`
             // alone (a tool-only turn legitimately ends with no AI text), and
             // duplicate-execution risk on retry is already mitigated by #2
-            // (idempotent resume via input:null). Marking the last AI message
-            // 'done' only when one exists; absent AI message (tool-only turn
-            // with no text yet) is still a clean success.
+            // (idempotent resume via input:null).
+            //
+            // A single turn can produce multiple AI messages (e.g. a tool-call
+            // message followed by a text-reply message, or a summarization-leak
+            // message followed by the real reply). Previously only the LAST AI
+            // message was marked 'done', leaving earlier ones stuck at
+            // phase='answering' — their StreamingIndicator stayed visible forever
+            // (three-dot animation never stops), and the next turn's
+            // hasPriorProgress check saw an 'answering' message and skipped
+            // setUserMsgStatus, leaving the follow-up user bubble on "发送中".
             const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
             if (lastIdx >= 0) {
-              const last = messages.value[lastIdx]
               const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
-              messages.value = [
-                ...messages.value.slice(0, lastIdx),
-                {
-                  ...last,
+              let changed = false
+              const next = messages.value.map((msg, i) => {
+                if (msg.type !== 'ai' || msg.phase === 'done') return msg
+                changed = true
+                const isLast = i === lastIdx
+                return {
+                  ...msg,
                   phase: 'done' as const,
-                  suggestions: currentSuggestions ?? last.suggestions,
-                },
-                ...messages.value.slice(lastIdx + 1),
-              ]
+                  suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+                }
+              })
+              if (changed) {
+                messages.value = next
+              }
             }
             // Mark all planning steps as done
             planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
