@@ -318,7 +318,7 @@ describe('ChatHeader', () => {
       expect(wrapper.find('.header-edit-btn').exists()).toBe(false)
     })
 
-    it('cannot edit when title is "New Chat"', async () => {
+    it('cannot edit when title is "New Chat" (empty title not yet generated)', async () => {
       wrapper = mount(ChatHeader, {
         props: {
           activeThreadId: 'thread-8',

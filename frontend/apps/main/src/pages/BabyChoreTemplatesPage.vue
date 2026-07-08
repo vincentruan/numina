@@ -306,7 +306,7 @@ onMounted(async () => {
   right: 16px;
   cursor: pointer;
   min-width: 60px;
-  text-align: center;
+  justify-content: center;
   touch-action: manipulation;
 }
 

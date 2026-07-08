@@ -390,63 +390,66 @@ function handleMore(session: ThreadSession) {
   color: var(--van-text-color-3, #999);
 }
 
-/* Dark mode */
-:global([data-theme='dark']) .chat-history-page {
+/* Dark mode
+ * Wrap the FULL selector in :global() - `:global([data-theme='dark']) .x`
+ * compiles without the [data-v-xxx] scoping attr and never matches.
+ * See AIChatInput.vue:472. */
+:global([data-theme='dark'] .chat-history-page) {
   background: var(--bg-primary);
 }
 
-:global([data-theme='dark']) .history-header {
+:global([data-theme='dark'] .history-header) {
   background: rgba(var(--bg-primary-rgb, 15, 17, 23), 0.95);
   border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
-:global([data-theme='dark']) .history-title {
+:global([data-theme='dark'] .history-title) {
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .close-btn {
+:global([data-theme='dark'] .close-btn) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .close-btn:hover {
+:global([data-theme='dark'] .close-btn:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .empty-icon {
+:global([data-theme='dark'] .empty-icon) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .empty-text {
+:global([data-theme='dark'] .empty-text) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .empty-hint {
+:global([data-theme='dark'] .empty-hint) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .history-group-label {
+:global([data-theme='dark'] .history-group-label) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .session-title {
+:global([data-theme='dark'] .session-title) {
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .session-time {
+:global([data-theme='dark'] .session-time) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .session-original-title {
+:global([data-theme='dark'] .session-original-title) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .history-session:hover,
-:global([data-theme='dark']) .history-session.active {
+:global([data-theme='dark'] .history-session:hover),
+:global([data-theme='dark'] .history-session.active) {
   background: rgba(25, 137, 250, 0.15);
 }
 
-:global([data-theme='dark']) .no-more {
+:global([data-theme='dark'] .no-more) {
   color: var(--text-secondary);
 }
 </style>

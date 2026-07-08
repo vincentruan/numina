@@ -3,7 +3,7 @@
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="reminders">
         <template #title>
-          <span>🔔 {{ t('alertCards.reminder') }}</span>
+          <span><span class="bell-icon" :class="{ 'bell-icon--ringing': hasExpiringSoon }">🔔</span> {{ t('alertCards.reminder') }}</span>
           <span v-if="totalCount > 0" class="reminder-summary">
             <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
             <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
@@ -238,6 +238,28 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
 </script>
 
 <style scoped>
+.bell-icon {
+  display: inline-block;
+  transform-origin: top center;
+}
+.bell-icon--ringing {
+  animation: bell-ring 8s ease-in-out infinite;
+}
+@keyframes bell-ring {
+  0%, 2% { transform: rotate(0); }
+  4% { transform: rotate(14deg); }
+  6% { transform: rotate(-12deg); }
+  8% { transform: rotate(10deg); }
+  10% { transform: rotate(-8deg); }
+  12% { transform: rotate(6deg); }
+  14%, 100% { transform: rotate(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bell-icon--ringing {
+    animation: none;
+  }
+}
+
 .reminder-summary {
   margin-left: 8px;
   font-size: 12px;
