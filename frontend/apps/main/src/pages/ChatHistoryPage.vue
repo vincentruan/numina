@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showDialog, showSuccessToast, showFailToast } from 'vant'
+import { showDialog, showSuccessToast, showFailToast, showActionSheet } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadList } from '@/composables/useThreadList'
+import type { ThreadSession } from '@/types/ai-chat/session'
 
 defineOptions({ name: 'ChatHistory' })
 
 const router = useRouter()
 const store = useChatSessionStore()
-const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin } = useThreadList()
+const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession } = useThreadList()
 const { t } = useI18n()
 
 const renamingId = ref<string | null>(null)
@@ -99,6 +100,36 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
     showFailToast(t('aiChat.sendFailed'))
   }
 }
+
+async function handleExport(threadId: string, format: 'markdown' | 'json') {
+  try {
+    await exportSession(threadId, format)
+    showSuccessToast(t('aiChat.exportSuccess'))
+  } catch {
+    showFailToast(t('aiChat.exportFailed'))
+  }
+}
+
+async function handleShare(threadId: string) {
+  try {
+    await shareSession(threadId)
+    showSuccessToast(t('aiChat.shareLinkCopied'))
+  } catch {
+    showFailToast(t('aiChat.shareFailed'))
+  }
+}
+
+function handleMore(session: ThreadSession) {
+  showActionSheet({
+    actions: [
+      { name: t('aiChat.exportAsMarkdown'), callback: () => handleExport(session.thread_id, 'markdown') },
+      { name: t('aiChat.exportAsJson'), callback: () => handleExport(session.thread_id, 'json') },
+      { name: t('aiChat.shareSession'), callback: () => handleShare(session.thread_id) },
+    ],
+    cancelText: t('common.cancel'),
+    closeOnClickAction: true,
+  })
+}
 </script>
 
 <template>
@@ -148,6 +179,9 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
                 @keydown.enter="confirmRename(session.thread_id)"
                 @click.stop
               />
+              <div v-if="session.original_title" class="session-original-title">
+                {{ t('aiChat.originalTitleHint', { title: session.original_title }) }}
+              </div>
             </template>
             <template v-else>
               <div class="session-title">{{ session.title || t('aiChat.newChat') }}</div>
@@ -169,6 +203,18 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
               :aria-label="session.is_pinned ? t('aiChat.unpinSession') : t('aiChat.pinSession')"
               @click="handleTogglePin(session.thread_id, session.is_pinned)"
             />
+            <van-button
+              type="default"
+              size="small"
+              :aria-label="t('aiChat.moreActionsAria')"
+              @click="handleMore(session)"
+            >
+              <template #icon>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+                </svg>
+              </template>
+            </van-button>
             <van-button
               icon="delete"
               type="default"
@@ -315,6 +361,13 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
   margin-top: 2px;
 }
 
+.session-original-title {
+  font-size: 11px;
+  color: var(--van-text-color-3, #999);
+  margin-top: 4px;
+  font-style: italic;
+}
+
 .session-actions {
   display: flex;
   gap: 4px;
@@ -381,6 +434,10 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
 }
 
 :global([data-theme='dark']) .session-time {
+  color: var(--text-secondary);
+}
+
+:global([data-theme='dark']) .session-original-title {
   color: var(--text-secondary);
 }
 

@@ -76,6 +76,7 @@ function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
   return {
     thread_id: r.thread_id,
     title: (r.metadata?.title as string) || (r.values?.title as string) || '',
+    original_title: (r.metadata?.original_title as string) || undefined,
     status: (r.status as ThreadSession['status']) || 'idle',
     is_pinned: (r.metadata?.is_pinned as boolean) || false,
     created_at: r.created_at,
@@ -101,6 +102,21 @@ export async function getThread(id: string): Promise<ThreadSession> {
   })
   if (!res.ok) throw new Error(`Failed to get thread: ${res.status}`)
   return mapThreadResponse(await res.json() as ThreadApiResponse)
+}
+
+/** Thread state (including channel_values.messages) — used for export. */
+export interface ThreadState {
+  values: { title?: string; messages?: unknown[]; [k: string]: unknown }
+  [k: string]: unknown
+}
+
+export async function getThreadState(id: string): Promise<ThreadState> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(id)}/state`, {
+    headers: getAgentHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`Failed to get thread state: ${res.status}`)
+  return (await res.json()) as ThreadState
 }
 
 export async function searchThreads(params: ThreadSearchParams): Promise<ThreadSearchResponse> {

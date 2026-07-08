@@ -79,7 +79,20 @@ function cancelTitleRefresh() {
 
 // Initialize from URL on mount and auto-send pending message if present
 onMounted(() => {
+  // Capture the store's active thread before initializeFromUrl possibly changes it.
+  // If the ID is unchanged after init (e.g. returning from /ai/chat/history to
+  // the same thread, or closing history back to /ai/chat), the activeThreadId
+  // watcher below won't fire — but this fresh composable instance has empty
+  // messages, so we must explicitly load history to avoid a blank page.
+  const prevActiveId = store.activeThreadId
   store.initializeFromUrl()
+  if (
+    store.activeThreadId
+    && store.activeThreadId === prevActiveId
+    && !store.pendingMessage
+  ) {
+    chat.loadHistory(store.activeThreadId)
+  }
   // Auto-send pending message from URL (passed from AIHubPage)
   if (store.pendingMessage) {
     const msg = store.pendingMessage
@@ -97,11 +110,24 @@ onUnmounted(() => {
   cancelTitleRefresh()
 })
 
+// When handleStartChat creates a new thread and calls setActiveThread, the
+// activeThreadId watcher below fires loadHistory → cancelStream. If this runs
+// after sendMessage has started its stream, cancelStream aborts the in-flight
+// run (userCancelled=true → silent break, no retry) and the thread is left as
+// an empty shell — the blank-page bug. Set this flag before setActiveThread so
+// the watcher skips exactly one loadHistory for the thread we are about to
+// stream into; sendMessage already manages that thread's messages.
+const skipNextHistoryLoadFor = ref<string | null>(null)
+
 // Watch for thread switches — load history
 watch(
   () => store.activeThreadId,
   async (newId, oldId) => {
     if (newId && newId !== oldId) {
+      if (skipNextHistoryLoadFor.value === newId) {
+        skipNextHistoryLoadFor.value = null
+        return
+      }
       // Cancel pending title refreshes for old thread
       cancelTitleRefresh()
       await chat.loadHistory(newId)
@@ -146,9 +172,14 @@ function handleTitleUpdated(threadId: string, newTitle: string) {
 async function handleStartChat(payload: SubmitPayload) {
   try {
     const thread = await createThread()
+    // Mark this thread so the activeThreadId watcher skips loadHistory for it
+    // — sendMessage below will stream into it, and a concurrent loadHistory
+    // would cancelStream-abort the run (see skipNextHistoryLoadFor comment).
+    skipNextHistoryLoadFor.value = thread.thread_id
     store.setActiveThread(thread.thread_id)
     await chat.sendMessage(payload.text, payload.mode, thread.thread_id)
   } catch {
+    skipNextHistoryLoadFor.value = null
     showFailToast(t('aiChat.sendFailed'))
   }
 }

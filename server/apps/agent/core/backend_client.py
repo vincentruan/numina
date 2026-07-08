@@ -242,6 +242,10 @@ class BackendClient:
     async def get_session(self, session_id: str) -> dict | None:
         return await get_session(self.family_id, session_id)
 
+    async def delete_session(self, session_id: str) -> None:
+        """Delete a session row via the backend internal API."""
+        await delete_session(self.family_id, session_id)
+
     async def report_circuit_event(
         self,
         config_id: str,
@@ -647,6 +651,22 @@ async def get_session(family_id: str, session_id: str) -> dict | None:
         return None
     resp.raise_for_status()
     return _unwrap(resp)
+
+
+async def delete_session(family_id: str, session_id: str) -> None:
+    """Delete a session row via the backend internal API.
+
+    Best-effort — the caller (threads router) also handles checkpointer cleanup.
+    """
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    resp = await client.delete(
+        f"/api/v1/internal/ai/sessions/{session_id}",
+        headers=_make_headers(validated_id),
+    )
+    if resp.status_code == 404:
+        return
+    resp.raise_for_status()
 
 
 async def report_circuit_event(

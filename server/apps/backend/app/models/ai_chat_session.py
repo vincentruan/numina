@@ -35,6 +35,9 @@ class AIChatSession(Base):
         BigInteger, ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Preserved auto-generated title (from DeerFlow TitleMiddleware) before the
+    # user manually renames — see internal_update_session_summary's preserve logic.
+    original_title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     jsonl_path: Mapped[str] = mapped_column(String(512), nullable=False)
     last_message_summary: Mapped[str | None] = mapped_column(String(200), nullable=True)

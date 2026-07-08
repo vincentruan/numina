@@ -6,6 +6,7 @@ session storage (via AiSessionRepository) for fast metadata querying.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import uuid
 from typing import Any
@@ -140,13 +141,15 @@ async def delete_thread(
     x_family_id: str = Header(..., alias="X-Family-Id"),
     verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadDeleteResponse:
-    # Not implemented yet in Numina BackendClient, just best effort.
+    # Delete the persistent session row (ai_chat_sessions) so the thread does
+    # not reappear in search after deletion, then best-effort drop the
+    # checkpointer state.
+    repo = AiSessionRepository(x_family_id)
+    await repo.delete_session(session_id=thread_id, family_id=x_family_id)
     checkpointer = get_checkpointer()
     if hasattr(checkpointer, "adelete_thread"):
-        try:
+        with contextlib.suppress(Exception):
             await checkpointer.adelete_thread(thread_id)
-        except Exception:
-            pass
     return ThreadDeleteResponse(success=True, message="Thread deleted")
 
 @router.post("", response_model=ThreadResponse)
@@ -222,7 +225,11 @@ async def search_threads(
             status=r.get("status", "idle"),
             created_at=coerce_iso(r.get("created_at", "")),
             updated_at=coerce_iso(r.get("updated_at", "")),
-            metadata={"title": r.get("title", ""), "is_pinned": r.get("is_pinned", False)},
+            metadata={
+                "title": r.get("title", ""),
+                "original_title": r.get("original_title"),
+                "is_pinned": r.get("is_pinned", False),
+            },
             values={"title": r.get("title", "")} if r.get("title") else {},
             interrupts={},
         )
@@ -288,6 +295,8 @@ async def get_thread(
     meta = dict(record.get("metadata", {}) or {})
     if record.get("title"):
         meta["title"] = record["title"]
+    if record.get("original_title"):
+        meta["original_title"] = record["original_title"]
     if "is_pinned" in record:
         meta["is_pinned"] = record["is_pinned"]
 

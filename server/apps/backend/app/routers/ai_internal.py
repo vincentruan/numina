@@ -753,6 +753,7 @@ def _session_to_dict(s: "object") -> dict:
         "user_id": str(s.user_id) if s.user_id else None,  # type: ignore[attr-defined]
         "agent_id": str(s.agent_id) if s.agent_id else None,  # type: ignore[attr-defined]
         "title": s.title,  # type: ignore[attr-defined]
+        "original_title": s.original_title,  # type: ignore[attr-defined]
         "status": s.status,  # type: ignore[attr-defined]
         "last_message_summary": s.last_message_summary,  # type: ignore[attr-defined]
         "last_model": s.last_model,  # type: ignore[attr-defined]
@@ -818,6 +819,10 @@ def internal_update_session_summary(
     if body.summary:
         row.last_message_summary = body.summary[:200]
     if body.title:
+        # Preserve the existing (auto-generated) title on the first manual
+        # rename so the original TitleMiddleware-produced title is never lost.
+        if row.title and not row.original_title:
+            row.original_title = row.title
         row.title = body.title[:50]
         logger.info("[backend] updating title for session=%s to %s", session_id, repr(body.title[:50]))
     row.status = body.status
@@ -877,6 +882,23 @@ def internal_get_session(
     if row is None or row.family_id != int(family_id):
         raise AppError(ErrorCode.NOT_FOUND)
     return _session_to_dict(row)
+
+
+@router.delete("/ai/sessions/{session_id}")
+def internal_delete_session(
+    session_id: str,
+    family_id: str = Depends(verify_agent_token),
+    db: Session = Depends(get_db),
+):
+    """Delete a session row (agent-facing). Checkpointer cleanup is the caller's responsibility."""
+    from apps.backend.app.models.ai_chat_session import AIChatSession
+
+    row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
+    if row is None or row.family_id != int(family_id):
+        raise AppError(ErrorCode.NOT_FOUND)
+    db.delete(row)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/prompts/{family_id_path}/chat")
