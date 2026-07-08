@@ -97,7 +97,6 @@ async def stream_run_v2(
     body: RunCreateRequest,
     request: Request,
     x_family_id: str = Header(..., alias="X-Family-Id"),
-    x_user_id: str = Header(None, alias="X-User-Id"),
     verified: VerifiedFamily = Depends(verify_family_token),
 ) -> StreamingResponse:
     """Create a run and stream events via SSE with full lifecycle management.
@@ -114,7 +113,14 @@ async def stream_run_v2(
     # [Copied from DeerFlow Reference] — app/gateway/routers/thread_runs.py stream_run
     # [Integrated with Numina Multi-Tenant] — family_id in run metadata
     """
-    record = await start_run(body, thread_id, request, x_family_id, x_user_id)
+    # Use the user_id from the verified JWT, not a separate ``X-User-Id``
+    # header. The frontend LangGraph SDK client (ai-chat.ts:getClient) only
+    # sends ``X-Family-Id`` + cookies - it does NOT set ``X-User-Id`` - so
+    # reading the header left user_id=None, which made worker.py skip
+    # ``X-Caller-User-Id`` on the MCP SSE handshake, causing the backend
+    # /internal/mcp/{family_id}/sse endpoint to 403 ("missing caller_user_id")
+    # and load zero MCP tools (the agent then reported "所有记录仍为空").
+    record = await start_run(body, thread_id, request, x_family_id, verified.user_id)
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
