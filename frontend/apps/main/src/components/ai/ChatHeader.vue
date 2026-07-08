@@ -282,10 +282,13 @@ function onNewChat() {
 }
 
 .header-title-wrap {
+  /* flex:1 so the title region fills the space between the agent logo and
+   * the right-pinned actions; the title then centers within this region
+   * instead of shrinking to content width and hugging the left edge. */
+  flex: 1;
   display: flex;
   align-items: center;
-  /* Title sits right after the agent logo (left-aligned), not pushed to the
-   * right. Remaining space flows to the gap before token-usage/new-chat. */
+  justify-content: center;
   min-width: 0;
   padding: 0 4px;
   gap: 4px;
@@ -293,12 +296,14 @@ function onNewChat() {
 
 .header-title-container {
   min-width: 0;
-  max-width: 140px;
+  /* Cap width so very long titles truncate/scroll rather than squeeze the
+   * edit button off-screen; scales up on tablets/PCs for breathing room. */
+  max-width: clamp(120px, 22vw, 320px);
   overflow: hidden;
 }
 
 .header-title-container.needs-scroll {
-  max-width: 160px;
+  max-width: clamp(140px, 26vw, 360px);
 }
 
 .header-title {
@@ -309,6 +314,8 @@ function onNewChat() {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Center the title text within its container. */
+  text-align: center;
 }
 
 /* Scroll animation for long titles */
@@ -354,6 +361,10 @@ function onNewChat() {
   display: flex;
   align-items: center;
   gap: 4px;
+  /* Pin to the right edge so token-usage / new-chat buttons stay fixed
+   * regardless of title length. */
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 /* Agent info popup */
