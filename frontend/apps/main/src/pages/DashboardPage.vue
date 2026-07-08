@@ -1,11 +1,11 @@
 <template>
   <div class="dashboard-page" role="main" :aria-label="t('dashboard.aria.pageTitle')">
-    <!-- Skeleton Loading State -->
-    <DashboardSkeleton v-if="dashboardStore.loading && !overview?.asset_count" />
+    <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+      <!-- Skeleton Loading State -->
+      <DashboardSkeleton v-if="dashboardStore.loading && !overview?.asset_count" />
 
-    <van-pull-refresh v-else v-model="refreshing" @refresh="onRefresh">
       <!-- Empty State for new users -->
-      <div v-if="!dashboardStore.loading && overview?.asset_count === 0" class="empty-dashboard">
+      <div v-else-if="!dashboardStore.loading && overview?.asset_count === 0" class="empty-dashboard">
         <van-empty :description="t('dashboard.emptyState.startRecording')">
           <van-button type="primary" size="small" @click="$router.push('/assets/new')">
             {{ t('dashboard.emptyState.addAssetBtn') }}
