@@ -108,6 +108,12 @@ async function ensureThreadInSessions(threadId: string) {
 // Initial loading state for skeleton display (during thread creation + first send)
 const initialLoading = ref(true)
 
+// Inherited web search state: when the chat page is entered from the AI hub
+// page, the hub's web search toggle is carried via pendingMessage.webSearch.
+// Pass it to the chat InputBox as an explicit initial value so it inherits the
+// user's choice instead of re-running the auto-default logic.
+const chatWebSearch = ref<boolean | undefined>(undefined)
+
 // Initialize from URL on mount and auto-send pending message if present
 onMounted(async () => {
   // Ensure agent data is available for ChatHeader logo. Direct navigation to
@@ -139,6 +145,10 @@ onMounted(async () => {
   if (store.pendingMessage) {
     const msg = store.pendingMessage
     store.pendingMessage = null // clear so it only fires once
+    // Inherit the hub page's web search toggle into the chat InputBox
+    if (msg.webSearch !== undefined) {
+      chatWebSearch.value = msg.webSearch
+    }
     await handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
     // handleStartChat completes after thread creation + send starts streaming
     // Skeleton will be hidden once streaming begins (isLoading becomes true)
@@ -349,6 +359,7 @@ function handleNewChat() {
         :status="chat.isLoading.value ? 'streaming' : 'ready'"
         :is-welcome-mode="false"
         :thread-id="store.activeThreadId || undefined"
+        :web-search="chatWebSearch"
         @submit="handleSendMessage"
         @stop="handleStop"
         @context-change="handleContextChange"

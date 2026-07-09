@@ -416,7 +416,11 @@ function submitChat() {
       agentId: selectedAgent.value.id,
       newSession: '1',
       deepThink: deepThink ? '1' : undefined,
-      webSearch: webSearch.value ? '1' : undefined,
+      // Always carry the web search state so the chat page can inherit the
+      // user's explicit choice (including "off"). Omitting it would make the
+      // chat page unable to distinguish "user turned it off" from "direct
+      // navigation" and would re-run the auto-default logic.
+      webSearch: webSearch.value ? '1' : '0',
     },
   })
 

@@ -41,11 +41,14 @@ export const useChatSessionStore = defineStore('chatSession', () => {
 
     // If there's a message in the URL, stash it for AIChatBox to auto-send
     if (q) {
+      // webSearch is only present when navigating from the AI hub page.
+      // '1' = on, '0' = explicitly off, absent = direct navigation (let the
+      // chat page run its own auto-default logic).
       pendingMessage.value = {
         text: q,
         agentId: agentId || undefined,
         deepThink: deepThink === '1',
-        webSearch: webSearch === '1',
+        webSearch: webSearch === null ? undefined : webSearch === '1',
         source: source || undefined,
       }
     }

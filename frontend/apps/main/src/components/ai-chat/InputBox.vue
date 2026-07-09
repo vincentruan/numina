@@ -80,6 +80,7 @@ const {
   supportsThinking: _supportsThinking,
   supportsSubagent,
   loading: _resourcesLoading,
+  webSearchAvailable,
 } = useTenantAiResources()
 
 // ── Input state ──
@@ -91,6 +92,24 @@ const panelTriggerRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const webSearchEnabled = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+
+// Track whether web search state was explicitly set (by the user toggling it,
+// or by the parent passing a definite webSearch prop e.g. inherited from the
+// AI hub page). The auto-default logic below never overrides an explicit value.
+let webSearchExplicitlySet = props.webSearch !== undefined
+
+// Auto-enable web search by default when the family tenant has AI enabled
+// (models loaded) AND has web search available (enabled provider or websearch
+// MCP). Only fires once on first resource load; never overrides explicit user
+// or parent-driven choices.
+watch(webSearchAvailable, (available) => {
+  if (webSearchExplicitlySet) return
+  // AI enabled = at least one model is available to the tenant
+  const aiEnabled = models.value.length > 0
+  if (available && aiEnabled && !webSearchEnabled.value) {
+    webSearchEnabled.value = true
+  }
+})
 
 // ── Mode context (DeerFlow 4-mode) ──
 const LAST_MODE_KEY = 'ai-chat:last-mode'
@@ -150,6 +169,8 @@ watch(webSearchEnabled, (val) => emit('update:webSearch', val))
 watch(() => props.webSearch, (val) => {
   if (val !== undefined && val !== webSearchEnabled.value) {
     webSearchEnabled.value = val
+    // Parent-driven changes are treated as explicit intent
+    webSearchExplicitlySet = true
   }
 })
 
@@ -256,6 +277,7 @@ async function toggleWebSearch() {
     }
   }
   webSearchEnabled.value = !webSearchEnabled.value
+  webSearchExplicitlySet = true
 }
 
 // Expand
