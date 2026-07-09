@@ -163,7 +163,11 @@ const subagentTaskIds = computed(() => {
         @suggestion-click="emit('suggestionClick', $event)"
       >
         <!-- Per-message token usage (slotted between content and footer so the
-             order is: content -> token usage -> timestamp/actions -> suggestions) -->
+             order is: content -> token usage -> timestamp/actions -> suggestions).
+             Visibility is controlled by the global token-usage preset inside
+             TokenUsage (off/summary/per_turn/debug). The `message` prop feeds
+             the debug-mode per-step card; per_turn mode only needs
+             usageMetadata. -->
         <template #token-usage>
           <TokenUsage
             v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
@@ -171,6 +175,7 @@ const subagentTaskIds = computed(() => {
             :thread-id="threadId || null"
             :usage-metadata="assistantMessage.usageMetadata"
             :is-streaming="isLoading && isLastAssistant"
+            :message="assistantMessage"
           />
         </template>
       </AssistantMessage>
