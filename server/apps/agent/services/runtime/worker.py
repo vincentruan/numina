@@ -162,6 +162,7 @@ async def run_family_agent(
         call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
         call_plan_mode = bool(configurable.get("is_plan_mode", False))
         call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
+        call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
 
         # 5. Extract user message for context
         if graph_input and "messages" in graph_input:
@@ -170,6 +171,24 @@ async def run_family_agent(
                 last = msgs[-1]
                 if isinstance(last, dict) and last.get("role") in ("user", "human"):
                     user_message = last.get("content", "")
+
+        # 5a. Inject web_search behavioural guidance so the LLM knows whether it
+        # may search. The web_search tool is always loaded when the family has a
+        # configured provider (family_adapter_cache.py:485), but without this
+        # prompt the LLM won't proactively call it. Mirrors chat_adapter.py:96-100
+        # and agent_dispatch.py:630-651 (legacy Gateway path).
+        if call_websearch_enabled:
+            web_search_providers = ai_config.get("web_search_providers", [])
+            web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
+            if web_search_providers:
+                web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+            elif web_search_mcp_servers:
+                web_search_guidance = (
+                    "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
+                )
+            else:
+                web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+            user_message = f"## 联网搜索\n\n{web_search_guidance}\n\n{user_message}"
 
         # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)

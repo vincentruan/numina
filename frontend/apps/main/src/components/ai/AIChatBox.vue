@@ -250,6 +250,7 @@ async function handleStartChat(payload: SubmitPayload) {
       is_plan_mode: payload.is_plan_mode,
       subagent_enabled: payload.subagent_enabled,
       reasoning_effort: payload.reasoning_effort,
+      websearch_enabled: payload.websearch_enabled,
     })
   } catch {
     skipNextHistoryLoadFor.value = null
@@ -265,6 +266,7 @@ async function handleSendMessage(payload: SubmitPayload) {
     is_plan_mode: payload.is_plan_mode,
     subagent_enabled: payload.subagent_enabled,
     reasoning_effort: payload.reasoning_effort,
+    websearch_enabled: payload.websearch_enabled,
   })
 }
 

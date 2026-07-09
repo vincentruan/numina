@@ -389,6 +389,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       is_plan_mode?: boolean
       subagent_enabled?: boolean
       reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'
+      websearch_enabled?: boolean
     },
   ): Promise<void> {
     if (isLoading.value) return
@@ -476,6 +477,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           if (modeConfig.is_plan_mode !== undefined) configurable.is_plan_mode = modeConfig.is_plan_mode
           if (modeConfig.subagent_enabled !== undefined) configurable.subagent_enabled = modeConfig.subagent_enabled
           if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
+          if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
         }
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
           input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text }] },
