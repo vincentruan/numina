@@ -823,8 +823,8 @@ def internal_update_session_summary(
         # rename so the original TitleMiddleware-produced title is never lost.
         if row.title and not row.original_title:
             row.original_title = row.title
-        row.title = body.title[:50]
-        logger.info("[backend] updating title for session=%s to %s", session_id, repr(body.title[:50]))
+        row.title = body.title.strip()[:256]
+        logger.info("[backend] updating title for session=%s to %s", session_id, repr(body.title.strip()[:256]))
     row.status = body.status
     if body.model:
         row.last_model = body.model
@@ -893,8 +893,13 @@ def internal_delete_session(
     """Delete a session row (agent-facing). Checkpointer cleanup is the caller's responsibility."""
     from apps.backend.app.models.ai_chat_session import AIChatSession
 
+    try:
+        family_id_int = int(family_id)
+    except ValueError:
+        raise AppError(ErrorCode.NOT_FOUND) from None
+
     row = db.query(AIChatSession).filter(AIChatSession.id == session_id).first()
-    if row is None or row.family_id != int(family_id):
+    if row is None or row.family_id != family_id_int:
         raise AppError(ErrorCode.NOT_FOUND)
     db.delete(row)
     db.commit()

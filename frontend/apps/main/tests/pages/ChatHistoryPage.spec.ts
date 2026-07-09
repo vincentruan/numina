@@ -381,14 +381,16 @@ describe('ChatHistoryPage', () => {
       await nextTick()
 
       const actionButtons = wrapper.findAll('.session-actions .van-button')
-      expect(actionButtons.length).toBe(3)
+      expect(actionButtons.length).toBe(4)
 
       // Edit button
       expect(actionButtons[0].attributes('aria-label')).toBe('aiChat.editTitle')
       // Pin button (unpinned session shows "pin")
       expect(actionButtons[1].attributes('aria-label')).toBe('aiChat.pinSession')
+      // More-actions button (opens export/share action sheet)
+      expect(actionButtons[2].attributes('aria-label')).toBe('aiChat.moreActionsAria')
       // Delete button
-      expect(actionButtons[2].attributes('aria-label')).toBe('common.delete')
+      expect(actionButtons[3].attributes('aria-label')).toBe('common.delete')
     })
 
     it('rename field has aria-label when in rename mode', async () => {

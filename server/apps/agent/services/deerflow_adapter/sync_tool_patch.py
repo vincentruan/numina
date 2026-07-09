@@ -54,10 +54,16 @@ def apply_sync_tool_patches() -> None:
         return
 
     # Detect whether the installed version already wraps built-in tools
-    # (upstream fix 3599b570). If so, no patch is needed.
+    # (upstream fix 3599b570). The fix wraps the *final assembled* tool list
+    # (``all_tools`` / ``unique_tools``) before returning, not just the
+    # config-loaded ``loaded_tools``. We detect by checking whether the
+    # ``return`` statement runs tools through ``_ensure_sync_invocable_tool``;
+    # the older code only wraps ``loaded_tools`` (line ~44) but leaves
+    # ``SUBAGENT_TOOLS`` (``task``) and other builtins unwrapped.
     try:
         source = inspect.getsource(_orig_get_available_tools)
-        if "_ensure_sync_invocable_tool(t) for t in" in source.replace(" ", " "):
+        return_section = source.rsplit("return", 1)[-1]
+        if "_ensure_sync_invocable_tool" in return_section:
             logger.debug("[sync_tool_patch] upstream fix already present; skipping")
             _patched = True
             _apply_mcp_proxy_bypass_patch()
@@ -69,10 +75,20 @@ def apply_sync_tool_patches() -> None:
         tools = _orig_get_available_tools(*args, **kwargs)
         return [_ensure_sync_invocable_tool(t) for t in tools]
 
-    # Replace on the module so other importers pick up the patched version.
+    # Replace on BOTH the submodule and the parent package. DeerFlowClient's
+    # ``_get_tools()`` imports ``get_available_tools`` from the ``deerflow.tools``
+    # *package* (``from deerflow.tools import get_available_tools``), whose
+    # ``__init__.py`` re-exports it via ``from .tools import get_available_tools``.
+    # Patching only ``deerflow.tools.tools.get_available_tools`` leaves the
+    # package-level binding pointing at the original unwrapped function, so the
+    # client never sees the patch and the ``task`` tool still fails with
+    # ``StructuredTool does not support sync invocation``. Both names must be
+    # rebound for the patch to reach the sync stream path.
+    import deerflow.tools as _tools_pkg
     import deerflow.tools.tools as _tools_mod
 
     _tools_mod.get_available_tools = _patched_get_available_tools
+    _tools_pkg.get_available_tools = _patched_get_available_tools
 
     logger.info("[sync_tool_patch] patched get_available_tools to wrap all tools for sync invocation")
     _patched = True

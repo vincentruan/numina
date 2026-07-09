@@ -145,7 +145,9 @@ async def delete_thread(
     # not reappear in search after deletion, then best-effort drop the
     # checkpointer state.
     repo = AiSessionRepository(x_family_id)
-    await repo.delete_session(session_id=thread_id, family_id=x_family_id)
+    deleted = await repo.delete_session(session_id=thread_id, family_id=x_family_id)
+    if not deleted:
+        raise HTTPException(status_code=503, detail="Failed to delete thread from database")
     checkpointer = get_checkpointer()
     if hasattr(checkpointer, "adelete_thread"):
         with contextlib.suppress(Exception):
@@ -279,6 +281,10 @@ async def get_thread(
 
     if record is None and checkpoint_tuple is not None:
         ckpt_meta = getattr(checkpoint_tuple, "metadata", {}) or {}
+        # Family ownership check for checkpoint fallback
+        ckpt_family_id = ckpt_meta.get("family_id")
+        if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
         record = {
             "session_id": thread_id,
             "status": "idle",
@@ -324,6 +330,11 @@ async def get_thread_state(
 
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
     metadata = getattr(checkpoint_tuple, "metadata", {}) or {}
+
+    # Family ownership check
+    ckpt_family_id = metadata.get("family_id")
+    if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
     checkpoint_id = getattr(checkpoint_tuple, "config", {}).get("configurable", {}).get("checkpoint_id")
     channel_values = checkpoint.get("channel_values", {})
 
@@ -365,6 +376,12 @@ async def update_thread_state(
 
     checkpoint = dict(getattr(checkpoint_tuple, "checkpoint", {}) or {})
     metadata = dict(getattr(checkpoint_tuple, "metadata", {}) or {})
+
+    # Family ownership check
+    ckpt_family_id = metadata.get("family_id")
+    if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
     channel_values = dict(checkpoint.get("channel_values", {}))
 
     if body.values:
@@ -415,6 +432,12 @@ async def get_thread_history(
         ckpt_config = getattr(checkpoint_tuple, "config", {})
         parent_config = getattr(checkpoint_tuple, "parent_config", None)
         metadata = getattr(checkpoint_tuple, "metadata", {}) or {}
+
+        # Family ownership check
+        ckpt_family_id = metadata.get("family_id")
+        if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
         checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
 
         checkpoint_id = ckpt_config.get("configurable", {}).get("checkpoint_id", "")
@@ -459,10 +482,17 @@ async def get_thread_token_usage(
     checkpointer = get_checkpointer()
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
     checkpoint_tuple = await checkpointer.aget_tuple(config)
-    
+
     if checkpoint_tuple is None:
         return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
-        
+
+    metadata = getattr(checkpoint_tuple, "metadata", {}) or {}
+
+    # Family ownership check
+    ckpt_family_id = metadata.get("family_id")
+    if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
     messages = checkpoint.get("channel_values", {}).get("messages", [])
     

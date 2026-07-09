@@ -372,14 +372,14 @@ function onNewChat() {
 .agent-info-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 100;
+  z-index: 2000;
 }
 
 .agent-info-popup {
   position: fixed;
   top: calc(50px + env(safe-area-inset-top) + 4px);
   left: 108px;
-  z-index: 101;
+  z-index: 2001;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
@@ -456,7 +456,9 @@ function onNewChat() {
 }
 
 :global([data-theme='dark'] .agent-info-popup) {
-  background: rgba(var(--bg-primary-rgb, 15, 17, 23), 0.95);
+  /* Fully opaque in dark mode: 0.95 alpha let chat content bleed through
+   * and overlap the popup text, even with backdrop-filter blur. */
+  background: rgb(var(--bg-primary-rgb, 15, 17, 23));
   border-color: rgba(255, 255, 255, 0.06);
   box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
 }

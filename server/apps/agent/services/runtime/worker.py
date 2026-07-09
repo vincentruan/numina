@@ -32,6 +32,15 @@ from .run_extras import generate_suggestions, sync_title_from_checkpoint
 
 logger = logging.getLogger(__name__)
 
+# Track fire-and-forget background tasks so they don't get garbage collected prematurely
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _track_task(task: asyncio.Task) -> None:
+    """Track a background task and auto-remove it when done."""
+    _background_tasks.add(task)
+    task.add_done_callback(lambda t: _background_tasks.discard(t))
+
 
 async def run_family_agent(
     *,
@@ -117,17 +126,17 @@ async def run_family_agent(
                             + family_id
                             + "/sse"
                         )
+                    # Auth headers required by the backend MCP SSE handshake
+                    # (X-Caller-User-Id is mandatory; without it the SSE endpoint 403s).
+                    # Only attach headers to the Numina Backend MCP entry, not to all servers.
+                    mcp_headers: dict[str, str] = {
+                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                        "X-Family-Id": family_id,
+                    }
+                    if user_id:
+                        mcp_headers["X-Caller-User-Id"] = user_id
+                    srv["headers"] = mcp_headers
                     break
-            # Auth headers required by the backend MCP SSE handshake
-            # (X-Caller-User-Id is mandatory; without it the SSE endpoint 403s).
-            mcp_headers: dict[str, str] = {
-                "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
-                "X-Family-Id": family_id,
-            }
-            if user_id:
-                mcp_headers["X-Caller-User-Id"] = user_id
-            for srv in mcp_servers:
-                srv["headers"] = mcp_headers
         except Exception as exc:
             logger.warning(
                 "[run_family_agent] get_enabled_mcp_servers failed family=%s err=%s",
@@ -291,9 +300,9 @@ async def run_family_agent(
         # (api_key/ai_model_id/ai_base_url) under ``providers``. Passing the
         # envelope leaves every key unset, so the suggestions LLM falls back
         # to a dummy key and silently 401s. Skipped when the run aborted
-        # before a provider was selected. Mirrors the legacy runs.py:251-254
-        # finally-block behavior.
-        if selected_provider is not None:
+        # before a provider was selected OR when the run was cancelled/interrupted.
+        # Mirrors the legacy runs.py:251-254 finally-block behavior.
+        if completion_status == 'complete' and selected_provider is not None:
             ai_response = "".join(ai_response_parts)
             suggestions = await generate_suggestions(ai_response, user_message, selected_provider)
             if suggestions:
@@ -309,7 +318,7 @@ async def run_family_agent(
             # never an LLM summary. sync_title_from_checkpoint generates a
             # proper title via the family provider when the checkpoint title is
             # a fallback. Best-effort, fire-and-forget.
-            asyncio.create_task(
+            task = asyncio.create_task(
                 sync_title_from_checkpoint(
                     thread_id,
                     family_id,
@@ -318,6 +327,7 @@ async def run_family_agent(
                     ai_response="".join(ai_response_parts),
                 )
             )
+            _track_task(task)
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))

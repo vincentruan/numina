@@ -116,13 +116,32 @@ export interface ThreadState {
   [k: string]: unknown
 }
 
+/**
+ * Minimal runtime shape check for a thread-state response.
+ *
+ * The agent returns a JSON object with ``channel_values`` under ``values``;
+ * ``as ThreadState`` alone would pass ``null`` / arrays / strings through and
+ * crash the consumer's ``state.values?.messages`` access. We avoid pulling in
+ * Zod just for this one boundary - a structural guard is enough.
+ */
+function asThreadState(raw: unknown): ThreadState {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Unexpected thread state response shape')
+  }
+  const obj = raw as Record<string, unknown>
+  if (!obj.values || typeof obj.values !== 'object') {
+    throw new Error('Thread state response missing values')
+  }
+  return raw as ThreadState
+}
+
 export async function getThreadState(id: string): Promise<ThreadState> {
   const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(id)}/state`, {
     headers: getAgentHeaders(),
     credentials: 'include',
   })
   if (!res.ok) throw new Error(`Failed to get thread state: ${res.status}`)
-  return (await res.json()) as ThreadState
+  return asThreadState(await res.json())
 }
 
 export async function searchThreads(params: ThreadSearchParams): Promise<ThreadSearchResponse> {

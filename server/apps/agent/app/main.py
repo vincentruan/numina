@@ -1,5 +1,7 @@
 """Numina AI Agent 微服务入口。"""
 
+import logging
+
 # Patch MCP SDK's httpx client factory before any imports that use it.
 # CRITICAL: httpx defaults trust_env=True, which picks up macOS system proxy settings.
 # This causes 503 errors when connecting to SSE endpoints. trust_env=False bypasses
@@ -59,7 +61,12 @@ setup_logging()
 # timer thread (see services/deerflow_adapter/memory_config_bridge.py for why).
 # Importing the module installs the patch idempotently at process start, before
 # any agent run can enqueue a memory update.
-from apps.agent.services.deerflow_adapter import memory_config_bridge  # noqa: F401,E402
+try:
+    from apps.agent.services.deerflow_adapter import (
+        memory_config_bridge,  # noqa: F401,E402
+    )
+except Exception as e:
+    logging.getLogger(__name__).warning("memory_config_bridge install failed: %s", e)
 
 
 @asynccontextmanager

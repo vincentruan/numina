@@ -26,9 +26,9 @@ const actionSheetActions = computed(() => {
   const session = actionSheetSession.value
   if (!session) return []
   return [
-    { name: t('aiChat.exportAsMarkdown') },
-    { name: t('aiChat.exportAsJson') },
-    { name: t('aiChat.shareSession') },
+    { key: 'export-markdown', name: t('aiChat.exportAsMarkdown') },
+    { key: 'export-json', name: t('aiChat.exportAsJson') },
+    { key: 'share', name: t('aiChat.shareSession') },
   ]
 })
 
@@ -139,15 +139,15 @@ function handleMore(session: ThreadSession) {
   actionSheetVisible.value = true
 }
 
-function onActionSelect(action: { name: string }, index: number) {
+function onActionSelect(action: { key: string }, index: number) {
   const session = actionSheetSession.value
   if (!session) return
   actionSheetVisible.value = false
-  // Match by index because Vant 4 action objects only carry {name}; keeping
-  // the order in sync with actionSheetActions above.
-  if (index === 0) handleExport(session.thread_id, 'markdown')
-  else if (index === 1) handleExport(session.thread_id, 'json')
-  else if (index === 2) handleShare(session.thread_id)
+  // Dispatch by key instead of index (more robust)
+  const key = action.key
+  if (key === 'export-markdown') handleExport(session.thread_id, 'markdown')
+  else if (key === 'export-json') handleExport(session.thread_id, 'json')
+  else if (key === 'share') handleShare(session.thread_id)
 }
 </script>
 

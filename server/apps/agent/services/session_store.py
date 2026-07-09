@@ -128,9 +128,14 @@ class AiSessionRepository:
         except Exception as e:
             logger.warning("session update failed for %s: %s", session_id, e)
 
-    async def delete_session(self, *, session_id: str, family_id: str) -> None:
-        """Delete a session row via backend. Best-effort; checkpointer cleanup is the caller's job."""
+    async def delete_session(self, *, session_id: str, family_id: str) -> bool:
+        """Delete a session row via backend.
+
+        Returns:
+            True if deleted successfully, False if not found or on error.
+        """
         try:
-            await self._client.delete_session(session_id)
+            return await self._client.delete_session(session_id)
         except Exception as e:
             logger.warning("session delete failed for %s: %s", session_id, e)
+            return False

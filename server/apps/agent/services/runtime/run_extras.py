@@ -36,21 +36,8 @@ async def generate_suggestions(ai_response: str, user_message: str, ai_config: d
         return []
 
     try:
+        llm = _create_lightweight_llm(ai_config, temperature=0.7, max_tokens=200)
         from langchain_core.messages import HumanMessage, SystemMessage
-        from langchain_openai import ChatOpenAI
-
-        model = ai_config.get("ai_model_id") or "gpt-4o-mini"
-        api_key = ai_config.get("api_key") or "dummy"
-        base_url = ai_config.get("ai_base_url")
-
-        llm = ChatOpenAI(
-            model=model,
-            api_key=api_key,
-            base_url=base_url,
-            temperature=0.7,
-            max_tokens=200,
-            extra_body={"enable_thinking": False},
-        )
 
         system = SystemMessage(content=(
             "You are a helpful assistant that suggests 3 concise follow-up questions "
@@ -110,14 +97,24 @@ def _parse_title_content(content: Any) -> str:
     return title
 
 
-def _create_title_llm(provider: str, model: str, api_key: str, base_url: str | None):
-    """Build a lightweight chat model for title generation, honouring the provider type.
+def _create_lightweight_llm(
+    ai_config: dict[str, Any],
+    *,
+    temperature: float = 0.3,
+    max_tokens: int = 60,
+):
+    """Build a lightweight chat model for short LLM calls (titles, suggestions).
 
-    ``generate_suggestions`` always uses ``ChatOpenAI``; that works for
-    OpenAI-compatible gateways but silently 401s on native Anthropic. The title
-    path avoids that by dispatching to ``ChatAnthropic`` when ``ai_provider``
-    is ``"anthropic"``.
+    Shared by ``generate_suggestions`` and ``_generate_title_via_llm`` so both
+    honour the family's ``ai_provider`` (Anthropic vs OpenAI-compatible) and
+    the ``enable_thinking: False`` flag for reasoning models. Uses
+    ``ai_base_url`` with a ``base_url`` fallback for OpenAI-compatible gateways.
     """
+    provider = (ai_config.get("ai_provider") or "openai").lower()
+    model = ai_config.get("ai_model_id") or "gpt-4o-mini"
+    api_key = ai_config.get("api_key") or "dummy"
+    base_url = ai_config.get("ai_base_url") or ai_config.get("base_url")
+
     if provider == "anthropic":
         try:
             from langchain_anthropic import ChatAnthropic
@@ -125,8 +122,8 @@ def _create_title_llm(provider: str, model: str, api_key: str, base_url: str | N
             kwargs: dict[str, Any] = {
                 "model": model,
                 "api_key": api_key,
-                "temperature": 0.3,
-                "max_tokens": 60,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
             }
             if base_url:
                 kwargs["base_url"] = base_url
@@ -138,8 +135,8 @@ def _create_title_llm(provider: str, model: str, api_key: str, base_url: str | N
     kwargs = {
         "model": model,
         "api_key": api_key,
-        "temperature": 0.3,
-        "max_tokens": 60,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
         # Qwen3 (and similar reasoning models) consume the entire token budget
         # on reasoning tokens, leaving content empty. Disable thinking for this
         # lightweight call - the title doesn't need chain-of-thought.
@@ -166,12 +163,7 @@ async def _generate_title_via_llm(
     try:
         from langchain_core.messages import HumanMessage, SystemMessage
 
-        model_name = ai_config.get("ai_model_id") or "gpt-4o-mini"
-        api_key = ai_config.get("api_key") or "dummy"
-        base_url = ai_config.get("ai_base_url")
-        provider = (ai_config.get("ai_provider") or "openai").lower()
-
-        llm = _create_title_llm(provider, model_name, api_key, base_url)
+        llm = _create_lightweight_llm(ai_config, temperature=0.3, max_tokens=60)
 
         system = SystemMessage(content=(
             "Generate a concise title (max 6 words, in the user's language) for this conversation. "

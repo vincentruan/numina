@@ -122,12 +122,10 @@ md.set({
   highlight: (str: string, lang: string): string => highlightCode(str, lang),
 })
 
-/**
- * 提取表格并用 .table-wrapper 包裹（参考 DeerFlow 截图：操作栏浮动在表格右上角）。
- * 每个表格被包裹在 position:relative 的 .table-wrapper 内，
- * 挂载后 TableActionBar（absolute top-right）被移动到 wrapper 内，
- * 使图标按钮紧贴表格右上角。使用基于内容的稳定 key (#10)。
- */
+// Use .table-wrapper to wrap tables (reference: DeerFlow screenshot with action bar floating top-right).
+// Each table is wrapped in a position:relative .table-wrapper,
+// after mount TableActionBar (absolute top-right) is moved into the wrapper,
+// making icon buttons stick to the table's top-right corner. Use content-based stable key (#10).
 function extractTablesAndInjectAnchors(html: string): string {
   tables.value = []
   const tableRegex = /<table[^>]*>[\s\S]*?<\/table>/gi
@@ -138,13 +136,12 @@ function extractTablesAndInjectAnchors(html: string): string {
   let idx = 0
   while ((match = tableRegex.exec(html)) !== null) {
     const tableHtml = match[0]
-    // 稳定 key：表格内容哈希 + 索引，内容不变时 key 不变。
+    // Stable key: table content hash + index, key stays same when content doesn't change.
     const key = `table-${idx}-${hashString(tableHtml)}`
     matches.push({ html: tableHtml, key })
-    // 用 .table-wrapper 包裹表格 + 锚点（操作栏将移动到 wrapper 内）
+    // Wrap table with .table-wrapper (action bar will be moved into wrapper later)
     result += html.slice(lastIdx, match.index)
     result += `<div class="table-wrapper" data-table-idx="${idx}">`
-    result += `<div class="table-action-anchor"></div>`
     result += tableHtml
     result += `</div>`
     lastIdx = match.index + tableHtml.length
@@ -429,11 +426,6 @@ onUnmounted(() => {
 .markdown-body :deep(.table-wrapper) {
   position: relative;
   margin: 12px 0;
-}
-
-/* 旧锚点不再使用，保留空规则避免 :deep 引用错误 */
-.markdown-body :deep(.table-action-anchor) {
-  display: none;
 }
 
 .markdown-body :deep(th),

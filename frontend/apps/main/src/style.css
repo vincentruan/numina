@@ -191,6 +191,11 @@
   /* Toast dark mode overrides — elevated surface with good contrast */
   --van-toast-background: rgba(18, 18, 42, 0.95);
   --van-toast-text-color: #f5f5f5;
+
+  /* ActionSheet / Popup dark mode — fully opaque to prevent content overlap */
+  --van-popup-background: #12122a;
+  --van-action-sheet-background: #12122a;
+  --van-action-sheet-header-background: #12122a;
 }
 
 /* ── Vant Toast / Notify theme ── */
