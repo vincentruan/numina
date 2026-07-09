@@ -147,31 +147,33 @@ function onNewChat() {
         </svg>
       </button>
     </div>
-    <!-- Agent info popup — floating below agent button -->
-    <div
-      v-if="showAgentInfo && activeAgent"
-      class="agent-info-backdrop"
-      @click="showAgentInfo = false"
-    />
-    <div
-      v-if="showAgentInfo && activeAgent"
-      class="agent-info-popup"
-      role="dialog"
-      aria-label="Agent information"
-      @click.stop
-    >
-      <div class="agent-info-header">
-        <span class="agent-info-icon" aria-hidden="true">
-          <AIBrainIcon v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :active="true" />
-          <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))">
-            {{ getAgentIcon(activeAgent.icon) || '🤖' }}
+    <!-- Agent info popup - teleported to body to escape .chat-header's
+         stacking context (backdrop-filter creates one, trapping fixed children
+         below sibling panels like the tool-call steps panel). -->
+    <Teleport v-if="showAgentInfo && activeAgent" to="body">
+      <div
+        class="agent-info-backdrop"
+        @click="showAgentInfo = false"
+      />
+      <div
+        class="agent-info-popup"
+        role="dialog"
+        aria-label="Agent information"
+        @click.stop
+      >
+        <div class="agent-info-header">
+          <span class="agent-info-icon" aria-hidden="true">
+            <AIBrainIcon v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :active="true" />
+            <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))">
+              {{ getAgentIcon(activeAgent.icon) || '🤖' }}
+            </span>
+            <IIcon v-else :icon="getAgentIcon(activeAgent.icon)" size="24" :color="activeAgent.color || 'var(--van-primary-color)'" />
           </span>
-          <IIcon v-else :icon="getAgentIcon(activeAgent.icon)" size="24" :color="activeAgent.color || 'var(--van-primary-color)'" />
-        </span>
-        <span class="agent-info-name">{{ activeAgent.display_name }}</span>
+          <span class="agent-info-name">{{ activeAgent.display_name }}</span>
+        </div>
+        <p class="agent-info-description">{{ activeAgent.description || t('aiChat.agentNoDescription') }}</p>
       </div>
-      <p class="agent-info-description">{{ activeAgent.description || t('aiChat.agentNoDescription') }}</p>
-    </div>
+    </Teleport>
     <div class="header-actions">
       <TokenUsage v-if="activeThreadId" :thread-id="activeThreadId" :refresh-trigger="tokenUsageTotal" :is-streaming="isStreaming" />
       <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
@@ -380,15 +382,13 @@ function onNewChat() {
   top: calc(50px + env(safe-area-inset-top) + 4px);
   left: 108px;
   z-index: 2001;
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   min-width: 160px;
   max-width: 220px;
   padding: 12px 14px;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
 }
 
 .agent-info-header {
@@ -456,9 +456,10 @@ function onNewChat() {
 }
 
 :global([data-theme='dark'] .agent-info-popup) {
-  /* Fully opaque in dark mode: 0.95 alpha let chat content bleed through
-   * and overlap the popup text, even with backdrop-filter blur. */
-  background: rgb(var(--bg-primary-rgb, 15, 17, 23));
+  /* Fully opaque background to prevent chat content from bleeding through
+   * and overlapping the popup text. Use --bg-tertiary (#12122a) to match
+   * other elevated dark surfaces (cards, action sheets). */
+  background: var(--bg-tertiary);
   border-color: rgba(255, 255, 255, 0.06);
   box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
 }

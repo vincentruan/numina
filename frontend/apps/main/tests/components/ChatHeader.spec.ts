@@ -74,6 +74,8 @@ const vantStubs = {
   VanDialog: { template: '<div class="van-dialog"><slot /></div>', props: ['show', 'title', 'showCancelButton', 'loading'] },
   VanField: { template: '<input class="van-field" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />', props: ['modelValue', 'placeholder', 'autofocus', 'clearable', 'maxlength', 'showWordLimit'] },
   VanLoading: { template: '<div class="van-loading"></div>', props: ['size'] },
+  // Teleport stub: render content inline so wrapper.find() can reach it
+  Teleport: { template: '<div class="teleport-stub"><slot /></div>' },
 }
 
 describe('ChatHeader', () => {
