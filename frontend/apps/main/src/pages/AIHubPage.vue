@@ -297,7 +297,11 @@ const reportLoading = ref(false)
 const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
-const webSearch = ref(false)
+// `undefined` (not `false`) so the InputBox's auto-enable logic runs when the
+// family has web search configured. A literal `false` would be treated as an
+// explicit user choice and short-circuit auto-enable. Once the user toggles
+// (or auto-enable fires), this becomes a definite boolean via v-model.
+const webSearch = ref<boolean | undefined>(undefined)
 const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -407,7 +411,7 @@ function submitChat() {
   const deepThink = chatMode.value === 'thinking' || chatMode.value === 'ultra'
   aiStore.draftQuery = q
   aiStore.deepThinkEnabled = deepThink
-  aiStore.webSearchEnabled = webSearch.value
+  aiStore.webSearchEnabled = webSearch.value ?? false
 
   router.push({
     path: '/ai/chat',
@@ -416,11 +420,11 @@ function submitChat() {
       agentId: selectedAgent.value.id,
       newSession: '1',
       deepThink: deepThink ? '1' : undefined,
-      // Always carry the web search state so the chat page can inherit the
-      // user's explicit choice (including "off"). Omitting it would make the
-      // chat page unable to distinguish "user turned it off" from "direct
-      // navigation" and would re-run the auto-default logic.
-      webSearch: webSearch.value ? '1' : '0',
+      // Carry the web search state ONLY when the user made an explicit choice
+      // (toggled on or off). When it's still `undefined` (auto-enable hasn't
+      // resolved or the user never touched it), omit it so the chat page
+      // runs its own auto-default logic instead of treating '0' as "off".
+      webSearch: webSearch.value === undefined ? undefined : webSearch.value ? '1' : '0',
     },
   })
 
