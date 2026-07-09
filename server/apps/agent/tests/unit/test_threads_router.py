@@ -12,8 +12,16 @@ Regression guards for the /ai/chat/history feature:
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
-from apps.agent.routers.threads import delete_thread, get_thread, search_threads
-from apps.agent.routers.threads import ThreadSearchRequest
+import pytest
+from fastapi import HTTPException
+
+from apps.agent.routers.threads import (
+    ThreadSearchRequest,
+    delete_thread,
+    get_thread,
+    get_thread_state,
+    search_threads,
+)
 
 
 def _verified() -> SimpleNamespace:
@@ -98,3 +106,58 @@ async def test_get_thread_surfaces_original_title_in_metadata():
         assert result.metadata["original_title"] == "自动生成标题"
         assert result.metadata["title"] == "自定义标题"
         assert result.metadata["is_pinned"] is True
+
+
+async def test_get_thread_state_404_when_no_checkpoint_and_no_session():
+    """get_thread_state 404s when both checkpointer and session row are absent."""
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+    ):
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(return_value=None)
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=None)
+
+        with pytest.raises(HTTPException) as exc:
+            await get_thread_state("thread-1", "family-1", verified=_verified())
+        assert exc.value.status_code == 404
+
+
+async def test_get_thread_state_falls_back_to_session_when_no_checkpoint():
+    """get_thread_state returns empty state (not 404) for orphan threads.
+
+    Regression: a thread with an ai_chat_sessions row but no LangGraph
+    checkpoint (e.g. pre-a97eb08c UUID threads) must still resolve so that
+    loadHistory doesn't hard-404. Mirrors get_thread's dual-source logic.
+    """
+    with (
+        patch("apps.agent.routers.threads.AiSessionRepository") as MockRepo,
+        patch("apps.agent.routers.threads.get_checkpointer") as mock_get_ckpt,
+    ):
+        repo = MockRepo.return_value
+        repo.get_session = AsyncMock(
+            return_value={
+                "session_id": "1c68f6b9-8173-439c-bdcf-1046478aeda4",
+                "title": "孤儿会话",
+                "is_pinned": False,
+                "status": "idle",
+                "created_at": "2026-05-11T12:18:22Z",
+                "updated_at": "2026-05-11T12:18:22Z",
+                "metadata": {},
+            }
+        )
+        checkpointer = mock_get_ckpt.return_value
+        checkpointer.aget_tuple = AsyncMock(return_value=None)
+
+        result = await get_thread_state(
+            "1c68f6b9-8173-439c-bdcf-1046478aeda4", "family-1", verified=_verified()
+        )
+
+        assert result.values == {}
+        assert result.next == []
+        assert result.tasks == []
+        assert result.checkpoint_id is None
+        assert result.parent_checkpoint_id is None
+        assert result.metadata["title"] == "孤儿会话"
+        assert result.created_at  # coerced ISO timestamp, not empty

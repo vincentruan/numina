@@ -42,27 +42,3 @@ export const updateSession = (sessionId: string, data: { title?: string; is_pinn
 export const deleteSession = (sessionId: string) =>
   http.delete(`/threads/${encodeURIComponent(sessionId)}`)
 
-export function streamSessionEvents(
-  sessionId: string,
-  signal?: AbortSignal,
-): Promise<ReadableStreamDefaultReader<Uint8Array>> {
-  return fetch(`/api/v1/ai/sessions/${encodeURIComponent(sessionId)}/events`, {
-    credentials: 'include',
-    signal,
-  }).then((res) => {
-    if (!res.ok) throw new Error(`${res.status}`)
-    if (!res.body) throw new Error('streaming_not_supported')
-    return res.body.getReader()
-  })
-}
-
-export interface ForkSessionResponse {
-  ok: boolean
-  session_id: string
-  message_count: number
-}
-
-export const forkSession = (sessionId: string, forkFromMessageId: string) =>
-  http.post<ForkSessionResponse>(`/ai/sessions/${encodeURIComponent(sessionId)}/fork`, {
-    fork_from_message_id: forkFromMessageId,
-  })

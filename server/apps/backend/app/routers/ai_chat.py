@@ -30,11 +30,9 @@ from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
 from apps.backend.app.config import settings
 from apps.backend.app.constants.system_ids import NUMINA_AGENT_ID
-from apps.backend.app.database import SessionLocal, get_db
+from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
-from apps.backend.app.models.cached_file import CachedFile
-from apps.backend.app.models.file_remote_location import FileRemoteLocation
 from apps.backend.app.models.user import User
 from apps.backend.app.schemas.ai_chat_responses import ChatResponse
 from apps.backend.app.schemas.base import SnowflakeBase
@@ -111,31 +109,6 @@ class ChatStreamRequest(BaseModel):
 
 # ── Session Response Schemas (SnowflakeBase for ID serialization) ────────────
 
-class SessionSummaryResponse(SnowflakeBase):
-    """Single session summary for list_all_sessions endpoint."""
-
-    session_id: int
-    family_id: int
-    user_id: int | None = None
-    agent_id: int | None = None
-    title: str | None = None
-    status: str | None = None
-    last_message_summary: str | None = None
-    last_model: str | None = None
-    has_attachments: bool = False
-    is_pinned: bool = False
-    source: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-
-
-class SessionListResponse(BaseModel):
-    """Response wrapper for list_all_sessions endpoint."""
-
-    sessions: list[SessionSummaryResponse]
-    total: int
-
-
 class SessionDefaultResponse(SnowflakeBase):
     """Response for get_system_default_session endpoint."""
 
@@ -149,21 +122,6 @@ class SessionDefaultWrapper(BaseModel):
     """Wrapper for system default session response."""
 
     session: SessionDefaultResponse | None = None
-
-
-class SessionForkResponse(SnowflakeBase):
-    """Response for fork_session endpoint."""
-
-    session_id: int
-    message_count: int = 0
-
-
-class SessionForkWrapper(BaseModel):
-    """Wrapper for fork session response."""
-
-    ok: bool = True
-    session_id: int
-    message_count: int = 0
 
 
 def _get_session_for_family(
@@ -202,7 +160,11 @@ async def chat(
     _ai: None = Depends(require_ai_enabled),
     db: Session = Depends(get_db),
 ):
-    """发送问题，获取 AI 回答，并持久化对话历史到 JSONL 文件。"""
+    """发送问题，获取 AI 回答。
+
+    对话历史由 DeerFlow checkpointer 持久化（agent /api/threads/{id}/runs/stream），
+    后端不再写 JSONL（旧 ChatSessionService 路径已废弃）。
+    """
     # Resolve session — always filter by family_id (security invariant)
     if body.session_id is not None:
         session = _get_session_for_family(body.session_id, current_user.family_id, db)
@@ -214,11 +176,6 @@ async def chat(
             session = await ChatSessionService.create_session(
                 current_user.family_id, current_user.id, db
             )
-
-    # Append user message to JSONL
-    await ChatSessionService.append_message(session, "user", body.question, current_user, db)
-    # Refresh session object after executor commit to avoid stale ORM state on next call
-    db.refresh(session)
 
     # Call agent
     try:
@@ -238,9 +195,6 @@ async def chat(
     except Exception as e:
         logger.error("调用 agent chat 失败: %s", type(e).__name__)
         raise AppError(ErrorCode.AI_SERVICE_UNAVAILABLE) from e
-
-    # Append assistant message to JSONL
-    await ChatSessionService.append_message(session, "assistant", answer, current_user, db)
 
     return {
         "question": body.question,
@@ -279,9 +233,6 @@ async def chat_stream(
         if body.source:
             session.source = body.source
             db.commit()
-
-    await ChatSessionService.append_message(session, "user", body.question, current_user, db)
-    db.refresh(session)
 
     session_id = session.id
     task_id = str(uuid.uuid4())
@@ -366,188 +317,10 @@ async def chat_stream(
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ).encode() + b"\n"
-        finally:
-            # Persist the full answer after stream completes
-            if answer_chunks:
-                with SessionLocal() as persist_db:
-                    try:
-                        persist_session = _get_session_for_family(session_id, current_user.family_id, persist_db)
-                        if persist_session:
-                            await ChatSessionService.append_message(
-                                persist_session, "assistant", "".join(answer_chunks), current_user, persist_db
-                            )
-                    except Exception as e:
-                        logger.error("chat_stream persist failed: %s", type(e).__name__)
-
     return StreamingResponse(
         proxy_stream(),
         media_type="text/event-stream" if use_sse else "application/x-ndjson; charset=utf-8",
         headers=_SSE_HEADERS if use_sse else {},
-    )
-
-
-@router.get("/sessions")
-def get_sessions(
-    limit: int = Query(default=50, ge=1, le=200),
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """列出当前家庭的所有对话会话。"""
-    sessions = (
-        db.query(AIChatSession)
-        .filter_by(family_id=current_user.family_id)
-        .order_by(AIChatSession.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-    return [
-        {
-            "session_id": s.id,
-            "created_at": s.created_at.isoformat(),
-            "message_count": s.message_count,
-            "last_preview": s.last_preview,
-            "title": s.title,
-        }
-        for s in sessions
-    ]
-
-
-@router.get("/history")
-async def get_history(
-    session_id: str | None = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=200),
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """获取对话历史。"""
-    if session_id is not None:
-        session = _get_session_for_family(session_id, current_user.family_id, db)
-        if session is None:
-            raise AppError(ErrorCode.NOT_FOUND)
-    else:
-        session = _get_latest_session(current_user.family_id, db)
-        if session is None:
-            return {"session_id": None, "messages": []}
-
-    messages = await ChatSessionService.read_messages(session)
-    # Return last N messages in ascending order (file is already ascending)
-    if limit and len(messages) > limit:
-        messages = messages[-limit:]
-    return {
-        "session_id": str(session.id),
-        "messages": [
-            {
-                "id": m.get("message_id", ""),
-                "role": m.get("role", ""),
-                "content": m.get("content", ""),
-                "created_at": m.get("timestamp", ""),
-            }
-            for m in messages
-        ],
-    }
-
-
-@router.delete("/history")
-def clear_history(
-    session_id: str | None = Query(default=None),
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """删除对话历史。"""
-    if session_id is not None:
-        sessions = []
-        session = _get_session_for_family(session_id, current_user.family_id, db)
-        if session:
-            sessions = [session]
-    else:
-        sessions = (
-            db.query(AIChatSession)
-            .filter_by(family_id=current_user.family_id)
-            .all()
-        )
-
-    for s in sessions:
-        if s.cached_file_id:
-            cached_file = db.query(CachedFile).filter_by(id=s.cached_file_id).first()
-            if cached_file:
-                cached_file.deleted_at = datetime.utcnow()
-                # Mark pending sync locations as deleted to prevent syncing deleted files
-                db.query(FileRemoteLocation).filter_by(
-                    file_id=s.cached_file_id, sync_status="pending"
-                ).update({"sync_status": "deleted"})
-        # Delete JSONL file from disk to avoid orphaned files
-        try:
-            jsonl_abs = Path(settings.CHAT_DIR) / s.jsonl_path
-            jsonl_abs.resolve()  # validate path exists before unlink
-            if jsonl_abs.exists():
-                jsonl_abs.unlink()
-            # Remove lock file if present
-            lock_file = jsonl_abs.with_suffix(".lock")
-            if lock_file.exists():
-                lock_file.unlink()
-        except OSError as e:
-            logger.warning("删除 JSONL 文件失败 session=%s: %s", s.id, type(e).__name__)
-        db.delete(s)
-
-    db.commit()
-    return {"ok": True}
-
-
-@router.put("/read")
-def mark_read(
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """更新 ai_chat_last_read_at，清除未读红点。"""
-    current_user.ai_chat_last_read_at = datetime.utcnow()
-    db.commit()
-    return {"ok": True}
-
-
-# ── Unified sessions endpoints (all capabilities) ──────────────────────────
-
-@sessions_router.get("/sessions")
-def list_all_sessions(
-    agent_id: str | None = Query(default=None),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-) -> SessionListResponse:
-    """列出当前家庭所有 AI 功能的会话，支持按 agent_id 过滤。"""
-    q = db.query(AIChatSession).filter_by(family_id=current_user.family_id)
-    if agent_id:
-        try:
-            q = q.filter(AIChatSession.agent_id == int(agent_id))
-        except (ValueError, TypeError):
-            raise AppError(ErrorCode.VALIDATION_ERROR, "agent_id 必须为数字") from None
-    total = q.count()
-    rows = (
-        q.order_by(AIChatSession.is_pinned.desc(), AIChatSession.updated_at.desc())
-        .limit(limit)
-        .offset(offset)
-        .all()
-    )
-    return SessionListResponse(
-        sessions=[
-            SessionSummaryResponse(
-                session_id=s.id,
-                family_id=s.family_id,
-                user_id=s.user_id,
-                agent_id=s.agent_id,
-                title=s.title,
-                status=s.status,
-                last_message_summary=s.last_message_summary,
-                last_model=s.last_model,
-                has_attachments=s.has_attachments,
-                is_pinned=s.is_pinned,
-                source=s.source,
-                created_at=s.created_at.isoformat() if s.created_at else None,
-                updated_at=s.updated_at.isoformat() if s.updated_at else None,
-            )
-            for s in rows
-        ],
-        total=total,
     )
 
 
@@ -580,111 +353,6 @@ def get_system_default_session(
             updated_at=session.updated_at.isoformat() if session.updated_at else None,
         )
     )
-
-
-class SessionUpdateRequest(BaseModel):
-    title: str | None = None
-    is_pinned: bool | None = None
-
-
-class SessionForkRequest(BaseModel):
-    fork_from_message_id: str  # The message_id to fork from (exclusive - this message and all after are excluded)
-
-
-@sessions_router.post("/sessions/{session_id}/fork")
-async def fork_session(
-    session_id: str,
-    body: SessionForkRequest,
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-) -> SessionForkWrapper:
-    """Fork a session from a specific message, creating a new branch.
-
-    This is used for the "edit and resend" feature - when a user edits a message,
-    we fork the session from that message's position, preserving all previous context,
-    and the edited message will be sent as a new message in the forked session.
-
-    Args:
-        session_id: The original session to fork
-        body: Contains fork_from_message_id - the message to fork from (exclusive)
-
-    Returns:
-        New session info with session_id for the frontend to use
-    """
-    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
-        raise AppError(ErrorCode.NOT_FOUND)
-    session = _get_session_for_family(session_id, current_user.family_id, db)
-    if session is None:
-        raise AppError(ErrorCode.NOT_FOUND)
-
-    try:
-        new_session = await ChatSessionService.fork_session(
-            session, body.fork_from_message_id, current_user, db
-        )
-    except ValueError as e:
-        logger.warning("fork_session failed: %s", str(e))
-        raise AppError(ErrorCode.NOT_FOUND) from e
-
-    return SessionForkWrapper(
-        ok=True,
-        session_id=new_session.id,
-        message_count=new_session.message_count,
-    )
-
-
-@sessions_router.patch("/sessions/{session_id}")
-def update_session(
-    session_id: str,
-    body: SessionUpdateRequest,
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """重命名或置顶/取消置顶会话。"""
-    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
-        raise AppError(ErrorCode.NOT_FOUND)
-    session = _get_session_for_family(session_id, current_user.family_id, db)
-    if session is None:
-        raise AppError(ErrorCode.NOT_FOUND)
-    if body.title is not None:
-        session.title = body.title.strip()[:256] or None
-    if body.is_pinned is not None:
-        session.is_pinned = body.is_pinned
-    db.commit()
-    return {"ok": True}
-
-
-@sessions_router.delete("/sessions/{session_id}")
-def delete_session(
-    session_id: str,
-    current_user: User = Depends(require_adult),
-    db: Session = Depends(get_db),
-):
-    """删除单个会话及其消息文件。"""
-    if not re.fullmatch(r"\d{15,19}|[0-9a-fA-F\-]{32,36}", session_id):
-        raise AppError(ErrorCode.NOT_FOUND)
-    session = _get_session_for_family(session_id, current_user.family_id, db)
-    if session is None:
-        raise AppError(ErrorCode.NOT_FOUND)
-    if session.cached_file_id:
-        cached_file = db.query(CachedFile).filter_by(id=session.cached_file_id).first()
-        if cached_file:
-            cached_file.deleted_at = datetime.utcnow()
-            db.query(FileRemoteLocation).filter_by(
-                file_id=session.cached_file_id, sync_status="pending"
-            ).update({"sync_status": "deleted"})
-    try:
-        jsonl_abs = Path(settings.CHAT_DIR) / session.jsonl_path
-        jsonl_abs.resolve()
-        if jsonl_abs.exists():
-            jsonl_abs.unlink()
-        lock_file = jsonl_abs.with_suffix(".lock")
-        if lock_file.exists():
-            lock_file.unlink()
-    except OSError as e:
-        logger.warning("删除 JSONL 文件失败 session=%s: %s", session.id, type(e).__name__)
-    db.delete(session)
-    db.commit()
-    return {"ok": True}
 
 
 @sessions_router.get("/sessions/{session_id}/events")

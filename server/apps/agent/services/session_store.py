@@ -33,7 +33,6 @@ class AiSessionRepository:
         family_id: str,
         user_id: str | None,
         agent_id: str | None = None,
-        jsonl_path: str,
         last_model: str | None = None,
     ) -> None:
         try:
@@ -41,7 +40,6 @@ class AiSessionRepository:
                 session_id=session_id,
                 user_id=user_id,
                 agent_id=agent_id,
-                jsonl_path=jsonl_path,
                 last_model=last_model,
             )
         except Exception as e:

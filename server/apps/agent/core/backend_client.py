@@ -179,7 +179,6 @@ class BackendClient:
         session_id: str,
         user_id: str | None,
         agent_id: str | None = None,
-        jsonl_path: str,
         last_model: str | None = None,
     ) -> None:
         await upsert_session(
@@ -187,7 +186,6 @@ class BackendClient:
             session_id=session_id,
             user_id=user_id,
             agent_id=agent_id,
-            jsonl_path=jsonl_path,
             last_model=last_model,
         )
 
@@ -552,7 +550,6 @@ async def upsert_session(
     session_id: str,
     user_id: str | None,
     agent_id: str | None = None,
-    jsonl_path: str,
     last_model: str | None = None,
 ) -> None:
     validated_id = _validate_family_id(family_id)
@@ -561,7 +558,6 @@ async def upsert_session(
         "session_id": session_id,
         "user_id": user_id,
         "agent_id": agent_id,
-        "jsonl_path": jsonl_path,
         "last_model": last_model,
     }
     resp = await client.post(

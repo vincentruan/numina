@@ -4,19 +4,16 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 
-import httpx
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from apps.backend.app.config import settings
 from apps.backend.app.models.ai_extraction_audit import AIExtractionAudit
 from apps.backend.app.models.user import User
+from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_extraction_circuit_service import (
     AIExtractionCircuitService,
 )
 from apps.backend.app.services.ai_task_service import AITaskService
-from apps.backend.app.services.chat_session import ChatSessionService
-from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.utils.snowflake import next_id
 
 logger = logging.getLogger(__name__)
@@ -79,14 +76,6 @@ async def proxy_capability_events(
         AITaskService.mark_post_processing(task_id, gen_db)
 
         answer = "".join(answer_parts)
-        if answer:
-            session_obj = ChatSessionService.get_session(session_id, family_id, gen_db)
-            if session_obj:
-                user = gen_db.query(User).filter(User.id == user_id).first()
-                if user:
-                    await ChatSessionService.append_message(
-                        session_obj, "assistant", answer, user, gen_db
-                    )
 
         # Parse + write structured results (R1.2)
         from apps.backend.app.services.ai_result_parser import parse_capability_result
@@ -284,14 +273,6 @@ async def proxy_agent_first_events(
         AITaskService.mark_post_processing(task_id, gen_db)
 
         answer = "".join(answer_parts)
-        if answer:
-            session_obj = ChatSessionService.get_session(session_id, family_id, gen_db)
-            if session_obj:
-                user = gen_db.query(User).filter(User.id == user_id).first()
-                if user:
-                    await ChatSessionService.append_message(
-                        session_obj, "assistant", answer, user, gen_db
-                    )
 
         # Parse + write structured results (R1.2)
         from apps.backend.app.services.ai_result_parser import parse_capability_result
@@ -494,14 +475,6 @@ async def proxy_report_events(
 
         # Combine answers for chat history
         full_answer = "".join(answer_parts)
-        if full_answer:
-            session_obj = ChatSessionService.get_session(session_id, family_id, gen_db)
-            if session_obj:
-                user = gen_db.query(User).filter(User.id == user_id).first()
-                if user:
-                    await ChatSessionService.append_message(
-                        session_obj, "assistant", full_answer, user, gen_db
-                    )
 
         # Write audit record
         _write_audit(

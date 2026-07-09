@@ -3,20 +3,21 @@
 import logging
 from datetime import datetime
 
-import httpx
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from apps.backend.app.auth.ai_deps import require_ai_enabled
 from apps.backend.app.auth.deps import require_adult
-from apps.backend.app.config import settings
 from apps.backend.app.database import get_db
 from apps.backend.app.errors import AppError, ErrorCode
 from apps.backend.app.models.ai_chat_session import AIChatSession
 from apps.backend.app.models.ai_spending_leak import AISpendingLeak
 from apps.backend.app.models.user import User
-from apps.backend.app.routers._ai_events_helper import check_circuit_blocked, proxy_capability_events
+from apps.backend.app.routers._ai_events_helper import (
+    check_circuit_blocked,
+    proxy_capability_events,
+)
 from apps.backend.app.services.agent_client import AgentClient
 from apps.backend.app.services.ai_task_service import AITaskService
 from apps.backend.app.services.chat_session import ChatSessionService
@@ -84,7 +85,6 @@ async def refresh_leaks(
         # binding (see tests/backend/conftest.py).
         from apps.backend.app.database import SessionLocal as _SessionLocal
 
-        buffer: list[str] = []
         with _SessionLocal() as stream_db:
             try:
                 agent_client = AgentClient(current_user.family_id, current_user.id, timeout=None)
@@ -97,24 +97,10 @@ async def refresh_leaks(
                     },
                 ) as resp:
                     async for chunk in resp.aiter_text():
-                        buffer.append(chunk)
                         yield chunk.encode("utf-8")
-                        if chunk.endswith(("。", "！", "？", ".", "!", "?", "\n")):
-                            await ChatSessionService.append_message(
-                                session, "assistant", "".join(buffer), current_user, stream_db
-                            )
-                            buffer.clear()
-                if buffer:
-                    await ChatSessionService.append_message(
-                        session, "assistant", "".join(buffer), current_user, stream_db
-                    )
                 AITaskService.complete_task(task.id, stream_db)
             except Exception as e:
                 logger.error(f"[ai_spending_leaks] proxy_stream failed: {e}")
-                if buffer:
-                    await ChatSessionService.append_message(
-                        session, "assistant", "".join(buffer), current_user, stream_db
-                    )
                 AITaskService.fail_task(task.id, "agent_stream_error", stream_db)
                 raise
 

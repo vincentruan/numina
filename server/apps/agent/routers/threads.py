@@ -182,7 +182,6 @@ async def create_thread(
         family_id=x_family_id,
         user_id=x_user_id,
         agent_id=body.assistant_id,
-        jsonl_path="", # Deprecated
         last_model=body.metadata.get("model_name", None)
     )
 
@@ -321,12 +320,37 @@ async def get_thread_state(
     x_family_id: str = Header(..., alias="X-Family-Id"),
     verified: VerifiedFamily = Depends(verify_family_token),
 ) -> ThreadStateResponse:
+    repo = AiSessionRepository(x_family_id)
     checkpointer = get_checkpointer()
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
     checkpoint_tuple = await checkpointer.aget_tuple(config)
 
+    # Dual-source resolution (mirrors get_thread): when the checkpointer has no
+    # tuple, fall back to the ai_chat_sessions row before 404-ing. Orphan
+    # threads (e.g. pre-a97eb08c UUID threads with a session row but no
+    # checkpoint) would otherwise hard-404 loadHistory even though the thread
+    # exists in the session index. With no checkpoint there are no messages to
+    # load, so return an empty state instead.
     if checkpoint_tuple is None:
-        raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        record = await repo.get_session(thread_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        meta = {
+            "title": record.get("title") or "",
+            "is_pinned": record.get("is_pinned", False),
+            "created_at": coerce_iso(record.get("created_at", "")),
+            "updated_at": coerce_iso(record.get("updated_at", "")),
+        }
+        return ThreadStateResponse(
+            values={},
+            next=[],
+            metadata=meta,
+            checkpoint={"id": None, "ts": meta["created_at"]},
+            checkpoint_id=None,
+            parent_checkpoint_id=None,
+            created_at=meta["created_at"],
+            tasks=[],
+        )
 
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
     metadata = getattr(checkpoint_tuple, "metadata", {}) or {}

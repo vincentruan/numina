@@ -733,7 +733,6 @@ class SessionUpsertRequest(BaseModel):
     session_id: str
     user_id: str | None = None
     agent_id: str | None = None
-    jsonl_path: str
     last_model: str | None = None
     source: str | None = None
 
@@ -757,7 +756,6 @@ def _session_to_dict(s: "object") -> dict:
         "status": s.status,  # type: ignore[attr-defined]
         "last_message_summary": s.last_message_summary,  # type: ignore[attr-defined]
         "last_model": s.last_model,  # type: ignore[attr-defined]
-        "has_attachments": s.has_attachments,  # type: ignore[attr-defined]
         "is_pinned": s.is_pinned,  # type: ignore[attr-defined]
         "source": s.source,  # type: ignore[attr-defined]
         "created_at": s.created_at.isoformat() if s.created_at else None,  # type: ignore[attr-defined]
@@ -780,7 +778,6 @@ def internal_upsert_session(
             family_id=int(family_id),
             user_id=int(body.user_id) if body.user_id else None,
             agent_id=int(body.agent_id) if body.agent_id else None,
-            jsonl_path=body.jsonl_path,
             last_model=body.last_model,
             source=body.source,
         )

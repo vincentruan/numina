@@ -1,5 +1,5 @@
 import http, { refreshTokenIfNeeded } from './index'
-import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse, ChatMessage } from '@/types'
+import type { AIReport, AssetAlert, DisposalSuggestion, LiabilityAdviceResponse, AllocationDriftResponse } from '@/types'
 
 // ── Multi-provider config types ───────────────────────────────────────────────
 
@@ -437,10 +437,6 @@ export const setAllocationTarget = (data: { category_targets: Record<string, num
 export const checkAllocationDrift = () =>
   http.get<AllocationDriftResponse>('/ai/allocation-target/check')
 
-// Chat
-export const sendChatMessage = (question: string, signal?: AbortSignal) =>
-  http.post<{ question: string; answer: string; message_id: string }>('/ai/chat', { question }, { signal })
-
 // P0-#3: Timeout wrapper for streaming fetch (matches backend 120s timeout)
 const STREAM_TIMEOUT_MS = 120000
 function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
@@ -454,17 +450,6 @@ function combineSignalWithTimeout(signal?: AbortSignal): AbortSignal {
 }
 
 
-
-export const getChatHistory = (sessionId?: string) =>
-  http.get<{ session_id: string | null; messages: ChatMessage[] }>('/ai/chat/history', {
-    params: sessionId ? { session_id: sessionId } : undefined,
-  })
-
-export const clearChatHistory = () =>
-  http.delete('/ai/chat/history')
-
-export const markChatRead = () =>
-  http.put('/ai/chat/read')
 
 // ── AI Task Status ──────────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ Replaces the old DeerFlowAdapter path with:
 No global singleton mutation. No ContextVar. No reload_app_config().
 """
 
+import asyncio
 import contextlib
 import hashlib
 import os
@@ -77,7 +78,6 @@ def _classify_stream_error(e: Exception) -> str:
     WebSearchCircuitReportRequest.failure_type. Python exception class names
     (e.g. 'ConnectionError') are not valid values there.
     """
-    import asyncio
 
     try:
         import httpx as _httpx
@@ -591,7 +591,7 @@ async def stream_agent_dispatch(
         except ValueError:
             # Invalid family_id / user_id / session_id slug — skip journal but
             # let the rest of the dispatch continue. The persistence hook
-            # still fires (jsonl_path stays None for repo.upsert below).
+            # still fires (journal write is skipped, repo.upsert no longer takes jsonl_path).
             logger.warning(
                 "[agent_dispatch] resolve_path rejected ids session=%s", thread_id
             )
@@ -925,7 +925,6 @@ async def _persist_session_metadata(
                 snapshot = await aget_state(runnable_config)
             else:
                 # Older langgraph versions only expose sync get_state.
-                import asyncio
                 loop = asyncio.get_running_loop()
                 snapshot = await loop.run_in_executor(
                     None, agent_graph.get_state, runnable_config
@@ -968,12 +967,6 @@ async def _persist_session_metadata(
     if redacted_answer.strip():
         summary = redacted_answer.strip()[:200]
 
-    user_segment = user_id if user_id else "_shared"
-    jsonl_path = (
-        f"{settings.SESSIONS_DATA_DIR}/{family_id}/agent/agent/"
-        f"{user_segment}/{session_id}.jsonl"
-    )
-
     # Journal — assistant_message and session_end. session_journal.append_event
     # already logs and swallows file I/O errors, but resolve_path can raise on
     # invalid id slugs; guard the whole block.
@@ -1010,7 +1003,6 @@ async def _persist_session_metadata(
             family_id=family_id,
             user_id=user_id,
             agent_id=agent_id,
-            jsonl_path=jsonl_path,
             last_model=model_id,
         )
         await repo.update_summary(
