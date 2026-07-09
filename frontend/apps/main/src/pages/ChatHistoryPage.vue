@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { showDialog, showSuccessToast, showFailToast, showActionSheet } from 'vant'
+import { showDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadList } from '@/composables/useThreadList'
@@ -16,6 +16,21 @@ const { t } = useI18n()
 
 const renamingId = ref<string | null>(null)
 const renameInput = ref('')
+
+// Action sheet (Vant 4 dropped the showActionSheet function API; use the
+// <van-action-sheet> component instead). Tracks visibility and the target
+// session so action callbacks know which thread to export/share.
+const actionSheetVisible = ref(false)
+const actionSheetSession = ref<ThreadSession | null>(null)
+const actionSheetActions = computed(() => {
+  const session = actionSheetSession.value
+  if (!session) return []
+  return [
+    { name: t('aiChat.exportAsMarkdown') },
+    { name: t('aiChat.exportAsJson') },
+    { name: t('aiChat.shareSession') },
+  ]
+})
 
 // Infinite scroll observer
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -120,15 +135,19 @@ async function handleShare(threadId: string) {
 }
 
 function handleMore(session: ThreadSession) {
-  showActionSheet({
-    actions: [
-      { name: t('aiChat.exportAsMarkdown'), callback: () => handleExport(session.thread_id, 'markdown') },
-      { name: t('aiChat.exportAsJson'), callback: () => handleExport(session.thread_id, 'json') },
-      { name: t('aiChat.shareSession'), callback: () => handleShare(session.thread_id) },
-    ],
-    cancelText: t('common.cancel'),
-    closeOnClickAction: true,
-  })
+  actionSheetSession.value = session
+  actionSheetVisible.value = true
+}
+
+function onActionSelect(action: { name: string }, index: number) {
+  const session = actionSheetSession.value
+  if (!session) return
+  actionSheetVisible.value = false
+  // Match by index because Vant 4 action objects only carry {name}; keeping
+  // the order in sync with actionSheetActions above.
+  if (index === 0) handleExport(session.thread_id, 'markdown')
+  else if (index === 1) handleExport(session.thread_id, 'json')
+  else if (index === 2) handleShare(session.thread_id)
 }
 </script>
 
@@ -234,6 +253,15 @@ function handleMore(session: ThreadSession) {
         </div>
       </div>
     </div>
+
+    <!-- More-actions sheet (Vant 4 component API; showActionSheet was removed) -->
+    <van-action-sheet
+      v-model:show="actionSheetVisible"
+      :actions="actionSheetActions"
+      :cancel-text="t('common.cancel')"
+      close-on-click-action
+      @select="onActionSelect"
+    />
   </div>
 </template>
 
