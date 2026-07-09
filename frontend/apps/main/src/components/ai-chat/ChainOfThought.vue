@@ -80,12 +80,20 @@ const steps = computed(() => {
         if (tc.name === 'task') continue
         // 跳过空名 tool_call（后端有时发出 name="" 的占位条目，id 形如 tc-xxx）
         if (!tc.name) continue
-        // Convert ToolCallSummary status to CoT step status
+        // Convert ToolCallSummary status to CoT step status.
+        // DeerFlow has no per-tool "running" flag - it renders tool calls inline
+        // from the messages array (a call exists => it was invoked; a Tool result
+        // exists => it's done). During streaming, tool_calls arrive with
+        // status='pending' (no result yet) - treat as 'running' so the spinner
+        // shows. After the stream ends (isLoading=false), a pending call that
+        // never received a result is treated as 'done' to avoid a stuck spinner
+        // (matching DeerFlow, which never shows an indefinite loading state).
         const stepStatus: 'pending' | 'running' | 'done' | 'error' =
           tc.status === 'success' ? 'done'
           : tc.status === 'error' ? 'error'
           : tc.status === 'running' ? 'running'
-          : 'pending'
+          : props.isLoading ? 'running'
+          : 'done'
         // Convert unknown result to string
         const resultStr = tc.result !== undefined
           ? (typeof tc.result === 'string' ? tc.result : JSON.stringify(tc.result))

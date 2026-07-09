@@ -3,14 +3,13 @@ import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'v
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
 import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
-import type { ChatMessage, PlanningStep } from '@/types/ai-chat/message-group'
+import type { ChatMessage } from '@/types/ai-chat/message-group'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
 
 const props = defineProps<{
   messages: ChatMessage[]
   isStreaming: boolean
   threadId?: string
-  planningSteps?: PlanningStep[]
 }>()
 
 const emit = defineEmits<{
@@ -27,11 +26,19 @@ const scrollRef = ref<HTMLElement | null>(null)
 // Group messages for display (dedupe + group into DeerFlow 6-type structure)
 const messageGroups = useMessageGroups(toRef(props, 'messages'))
 
-/** Index of the last assistant-type group (for planningSteps display) */
+/**
+ * Index of the last assistant-origin group (assistant / assistant:processing /
+ * assistant:clarification / etc.) so the streaming/loading state reaches the
+ * group that is currently producing content - including a tool-call-only
+ * ``assistant:processing`` group that has no text content yet. Previously this
+ * only matched ``type === 'assistant'``, so during tool execution (when the
+ * last group is ``assistant:processing``) isLoading never reached ChainOfThought
+ * and pending tool calls couldn't show a running spinner.
+ */
 const lastAssistantGroupIndex = computed(() => {
   const groups = messageGroups.value
   for (let i = groups.length - 1; i >= 0; i--) {
-    if (groups[i].type === 'assistant') return i
+    if (groups[i].type === 'assistant' || groups[i].type.startsWith('assistant:')) return i
   }
   return -1
 })
@@ -153,7 +160,6 @@ onUnmounted(() => {
         :group="group"
         :thread-id="threadId"
         :is-loading="isStreaming && index === lastAssistantGroupIndex"
-        :planning-steps="index === lastAssistantGroupIndex ? planningSteps : undefined"
         :is-last-assistant="index === lastAssistantGroupIndex"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"

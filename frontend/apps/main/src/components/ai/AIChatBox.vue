@@ -337,7 +337,6 @@ function handleNewChat() {
           :messages="chat.messages.value"
           :is-streaming="chat.isLoading.value"
           :thread-id="store.activeThreadId || undefined"
-          :planning-steps="chat.planningSteps.value"
           @retry="handleRetry"
         @stop="handleStopStream"
         @suggestion-click="handleSuggestionClick"

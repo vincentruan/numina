@@ -18,7 +18,6 @@ import { useI18n } from 'vue-i18n'
 import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
-import PlanningStepsPanel from './PlanningStepsPanel.vue'
 import TokenUsage from './TokenUsage.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import SubtaskCard from './SubtaskCard.vue'
@@ -29,7 +28,6 @@ import type {
   AssistantClarificationGroup,
   AssistantPresentFilesGroup,
   AssistantSubagentGroup,
-  PlanningStep,
 } from '@/types/ai-chat/message-group'
 import {
   extractContentFromMessage,
@@ -43,7 +41,6 @@ const props = defineProps<{
   group: MessageGroup
   isLoading?: boolean
   threadId?: string
-  planningSteps?: PlanningStep[]
   isLastAssistant?: boolean
 }>()
 
@@ -144,12 +141,10 @@ const subagentTaskIds = computed(() => {
 
     <!-- Assistant: AssistantMessage -->
     <template v-else-if="assistantMessage">
-      <!-- Real-time planning steps from SSE custom events (only for last assistant group) -->
-      <PlanningStepsPanel
-        v-if="isLastAssistant && planningSteps && planningSteps.length > 0"
-        :steps="planningSteps"
-        :is-streaming="isLoading"
-      />
+      <!-- Tool calls render in the assistant:processing group (ChainOfThought)
+           driven by the live messages array, matching DeerFlow. No separate
+           real-time planning panel - it duplicated tool calls and its per-step
+           status never updated from tool results (stuck "调用中"). -->
       <AssistantMessage
         :id="assistantMessage.id"
         :content="assistantMessage.content"
