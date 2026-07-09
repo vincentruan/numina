@@ -15,10 +15,21 @@ defineOptions({ name: 'ChatHeader' })
 
 const NUMINA_AGENT_NAME = 'numina'
 
+/**
+ * Realtime token usage from SSE values events.
+ * Passed through to TokenUsage for header display.
+ */
+interface RealtimeTokenUsage {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+}
+
 const props = defineProps<{
   activeThreadId: string | null
   sessions: ThreadSession[]
-  tokenUsageTotal?: number
+  /** Realtime token usage computed from SSE values events (AIChatBox.vue) */
+  realtimeTokenUsage?: RealtimeTokenUsage | null
   isStreaming?: boolean
   activeAgent: Agent | null
 }>()
@@ -175,7 +186,7 @@ function onNewChat() {
       </div>
     </Teleport>
     <div class="header-actions">
-      <TokenUsage v-if="activeThreadId" :thread-id="activeThreadId" :refresh-trigger="tokenUsageTotal" :is-streaming="isStreaming" />
+      <TokenUsage v-if="activeThreadId" :thread-id="activeThreadId" :realtime-usage="realtimeTokenUsage" :is-streaming="isStreaming" />
       <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>

@@ -15,7 +15,7 @@ import {
 
 const props = defineProps<{
   threadId: string | null
-  // When true, signals to the component to refresh the data (e.g. after a stream ends)
+  /** @deprecated Use realtimeUsage instead */
   refreshTrigger?: number
   /** 'popover' for header usage, 'inline' for per-message display */
   mode?: 'popover' | 'inline'
@@ -29,6 +29,14 @@ const props = defineProps<{
    * per-step debug card.
    */
   message?: ChatMessage
+  /**
+   * Realtime token usage from SSE values events (header mode only).
+   * Computed by accumulateUsage(chat.messages) in AIChatBox.vue.
+   * When available, popover mode uses this directly instead of calling
+   * the backend /token-usage API (which has timing issues - checkpointer
+   * write may not be complete when stream ends).
+   */
+  realtimeUsage?: { inputTokens: number; outputTokens: number; totalTokens: number } | null
 }>()
 
 const { t } = useI18n()
@@ -45,13 +53,30 @@ const showPopover = ref(false)
 let debounceTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
-/** Effective usage: prefer per-message usageMetadata, fall back to polled thread totals */
+/**
+ * Effective usage for display.
+ *
+ * Priority (popover mode):
+ * 1. realtimeUsage prop (from SSE values events, most realtime)
+ * 2. usage.value (from backend API, may be stale due to checkpointer timing)
+ *
+ * For inline mode, usageMetadata prop is used (per-message data).
+ */
 const effectiveUsage = computed(() => {
+  // Inline mode: use per-message usageMetadata
   if (props.mode === 'inline' && props.usageMetadata) {
     return {
       prompt_tokens: props.usageMetadata.inputTokens,
       completion_tokens: props.usageMetadata.outputTokens,
       total_tokens: props.usageMetadata.inputTokens + props.usageMetadata.outputTokens,
+    }
+  }
+  // Popover mode: prefer realtimeUsage (from SSE) over API data
+  if (props.mode !== 'inline' && props.realtimeUsage && props.realtimeUsage.totalTokens > 0) {
+    return {
+      prompt_tokens: props.realtimeUsage.inputTokens,
+      completion_tokens: props.realtimeUsage.outputTokens,
+      total_tokens: props.realtimeUsage.totalTokens,
     }
   }
   return usage.value

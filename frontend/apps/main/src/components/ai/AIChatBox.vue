@@ -7,6 +7,7 @@ import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import { useArtifacts } from '@/composables/ai-chat/useArtifacts'
 import { useAgentStore } from '@/stores/agent'
 import { getThread, createThread } from '@/api/ai-chat'
+import { accumulateUsage } from '@/utils/ai-chat/token-usage-steps'
 import ChatHeader from '@/components/ai/ChatHeader.vue'
 import WelcomePage from '@/components/ai/WelcomePage.vue'
 import MessageList from '@/components/ai/MessageList.vue'
@@ -39,6 +40,23 @@ const {
   select: selectArtifact,
   deselect: deselectArtifact,
 } = useArtifacts()
+
+/**
+ * Realtime token usage computed from SSE values events.
+ * accumulateUsage deduplicates by message id and sums input/output tokens
+ * across all AI messages. This is the primary data source for the header
+ * TokenUsage display - more realtime than the backend /token-usage API
+ * (which requires checkpointer write to complete first).
+ */
+const realtimeTokenUsage = computed(() => {
+  const usage = accumulateUsage(chat.messages.value)
+  if (!usage) return null
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+  }
+})
 
 /** Title generation is async on the backend — poll twice after stream ends */
 const titleRefreshTimeouts = new Set<ReturnType<typeof setTimeout>>()
@@ -321,7 +339,7 @@ function handleNewChat() {
       <ChatHeader
         :active-thread-id="store.activeThreadId"
         :sessions="store.sessions"
-        :token-usage-total="chat.tokenUsage.value?.total_tokens"
+        :realtime-token-usage="realtimeTokenUsage"
         :is-streaming="chat.isLoading.value"
         :active-agent="activeAgent"
         @title-updated="handleTitleUpdated"
