@@ -87,6 +87,22 @@ watch(
 watch(() => props.threadId, debouncedFetch)
 watch(() => props.refreshTrigger, debouncedFetch)
 
+// Popover mode (header): re-fetch when a stream ends so the button reflects the
+// new totals. The `end` SSE frame from the worker carries only `{"status": ...}`
+// (no `usage`), so `refreshTrigger` (derived from `chat.tokenUsage`) never updates
+// and without this watch the header button stays at 0 after the first reply on a
+// new thread. Inline mode already polls during streaming and prefers
+// `usageMetadata`, so it is unaffected.
+watch(
+  () => props.isStreaming,
+  (streaming, prev) => {
+    if (props.mode === 'inline') return
+    if (prev && !streaming) {
+      debouncedFetch()
+    }
+  },
+)
+
 onMounted(debouncedFetch)
 onUnmounted(() => {
   if (debounceTimer) clearTimeout(debounceTimer)

@@ -19,6 +19,7 @@ const props = defineProps<{
   activeThreadId: string | null
   sessions: ThreadSession[]
   tokenUsageTotal?: number
+  isStreaming?: boolean
   activeAgent: Agent | null
 }>()
 
@@ -172,7 +173,7 @@ function onNewChat() {
       <p class="agent-info-description">{{ activeAgent.description || t('aiChat.agentNoDescription') }}</p>
     </div>
     <div class="header-actions">
-      <TokenUsage v-if="activeThreadId" :thread-id="activeThreadId" :refresh-trigger="tokenUsageTotal" />
+      <TokenUsage v-if="activeThreadId" :thread-id="activeThreadId" :refresh-trigger="tokenUsageTotal" :is-streaming="isStreaming" />
       <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
