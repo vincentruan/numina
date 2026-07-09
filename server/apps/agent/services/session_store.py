@@ -75,8 +75,12 @@ class AiSessionRepository:
     ) -> tuple[list[dict], int]:
         """Return (sessions, total) for the family, or ([], 0) on error."""
         try:
+            # BackendClient is already bound to family_id at construction; do
+            # NOT pass it again here; BackendClient.list_sessions takes only
+            # keyword-only params (limit/offset/sort_by/sort_order) and the
+            # extra positional arg raised TypeError, which was swallowed by
+            # the except below, making /api/threads/search return [] always.
             return await self._client.list_sessions(
-                family_id,
                 limit=limit,
                 offset=offset,
                 sort_by=sort_by,

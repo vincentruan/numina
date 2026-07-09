@@ -78,6 +78,16 @@ class TestAiSessionRepository:
             assert total == 2
             assert len(result) == 2
 
+    async def test_list_sessions_does_not_pass_family_id_positionally(self, repo):
+        """Regression: AiSessionRepository.list_sessions used to pass family_id
+        as a positional arg to BackendClient.list_sessions, which is keyword-only
+        (it uses self.family_id). The TypeError was swallowed by the except
+        branch, making /api/threads/search always return []."""
+        sessions = [{"session_id": "s1"}]
+        with patch.object(repo._client, "list_sessions", new_callable=AsyncMock, return_value=(sessions, 1)) as mock_list:
+            await repo.list_sessions(FAMILY_ID, limit=20, offset=0, sort_by="updated_at", sort_order="desc")
+            mock_list.assert_awaited_once_with(limit=20, offset=0, sort_by="updated_at", sort_order="desc")
+
     async def test_list_sessions_backend_error_returns_empty(self, repo):
         with patch.object(repo._client, "list_sessions", new_callable=AsyncMock, side_effect=Exception("timeout")):
             result, total = await repo.list_sessions(FAMILY_ID)
