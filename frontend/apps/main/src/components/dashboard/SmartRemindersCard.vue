@@ -3,7 +3,15 @@
     <van-collapse v-model="expanded" @change="onToggle">
       <van-collapse-item name="reminders">
         <template #title>
-          <span><span class="bell-icon" :class="{ 'bell-icon--ringing': hasExpiringSoon }">🔔</span> {{ t('alertCards.reminder') }}</span>
+          <span>
+            <span class="bell-icon" :class="{ 'bell-icon--ringing': hasExpiringSoon }">
+              <IIcon :icon="hasExpiringSoon ? 'lucide:bell-ring' : 'lucide:bell'" size="18" class="bell-icon__svg" />
+              <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--1" />
+              <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--2" />
+              <span v-if="hasExpiringSoon" class="bell-icon__wave bell-icon__wave--3" />
+            </span>
+            {{ t('alertCards.reminder') }}
+          </span>
           <span v-if="totalCount > 0" class="reminder-summary">
             <template v-if="expiringAssets.length > 0">{{ t('reminders.expiringSoon') }} {{ expiringAssets.length }}</template>
             <template v-if="upcomingPayments.length > 0"> · {{ t('reminders.upcomingPayments') }} {{ upcomingPayments.length }}</template>
@@ -127,6 +135,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import IIcon from '@/components/IIcon.vue'
 import { useRemindersStore } from '@/stores/reminders'
 import type { LowUsageItem } from '@/types'
 import type { ExpiringSoonItem, UpcomingPaymentItem } from '@/api/dashboard'
@@ -239,11 +248,43 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
 
 <style scoped>
 .bell-icon {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 1.4em;
+  height: 1.4em;
+  vertical-align: -0.3em;
+}
+.bell-icon__svg {
+  position: relative;
+  z-index: 1;
   transform-origin: top center;
 }
-.bell-icon--ringing {
+.bell-icon--ringing .bell-icon__svg {
   animation: bell-ring 8s ease-in-out infinite;
+}
+.bell-icon__wave {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 1.4em;
+  height: 1.4em;
+  margin: -0.7em 0 0 -0.7em;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0;
+  pointer-events: none;
+  animation: bell-wave 2.4s ease-out infinite;
+}
+.bell-icon--ringing .bell-icon__wave--1 {
+  animation-delay: 0s;
+}
+.bell-icon--ringing .bell-icon__wave--2 {
+  animation-delay: 0.8s;
+}
+.bell-icon--ringing .bell-icon__wave--3 {
+  animation-delay: 1.6s;
 }
 @keyframes bell-ring {
   0%, 2% { transform: rotate(0); }
@@ -254,8 +295,22 @@ function getPaymentUrgencyClass(dueDateStr: string): string {
   12% { transform: rotate(6deg); }
   14%, 100% { transform: rotate(0); }
 }
+@keyframes bell-wave {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.55;
+  }
+  70% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
-  .bell-icon--ringing {
+  .bell-icon--ringing .bell-icon__svg,
+  .bell-icon__wave {
     animation: none;
   }
 }
