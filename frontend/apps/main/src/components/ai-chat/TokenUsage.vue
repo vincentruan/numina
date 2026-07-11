@@ -97,9 +97,13 @@ const debugStep = computed<TokenDebugStep | null>(() => {
 const shouldRenderInline = computed(() => {
   if (props.mode !== 'inline') return false
   if (preferences.value.inlineMode === 'off') return false
-  // per_turn: show summary line when this message has usage
+  // DeerFlow pattern: only show inline token usage AFTER the round completes.
+  // During streaming (isStreaming=true), the model hasn't finished outputting,
+  // so token counts would be incomplete/misleading. Show only when stream ends.
+  if (props.isStreaming) return false
+  // per_turn: show summary line when this message has usage AND stream is done
   if (preferences.value.inlineMode === 'per_turn') return hasUsage.value
-  // step_debug: show debug card when this message has a debug step
+  // step_debug: show debug card when this message has a debug step AND stream is done
   if (preferences.value.inlineMode === 'step_debug') return debugStep.value !== null
   return false
 })

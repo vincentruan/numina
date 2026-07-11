@@ -6,18 +6,33 @@
  * - markdown-it 解析 + DOMPurify sanitize
  * - shiki 双主题代码高亮（github-dark / github-light）
  * - 表格操作栏（复制为 markdown / 下载 CSV）
+ *
+ * 表格操作栏实现：
+ * 直接在 DOM 上创建操作栏按钮元素（不使用 Vue 组件渲染），
+ * 避免 v-html re-render 清除 Vue 管理的元素导致 vDOM 追踪断裂。
+ * 每次 render 后（nextTick），injectTableActionBars 在每个 table-wrapper
+ * 中注入操作栏按钮并绑定事件。v-html 更新时这些元素会被清除，
+ * 下次 nextTick 会重新注入。
  */
 import { ref, watch, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
-import TableActionBar from './TableActionBar.vue'
+import {
+  htmlTableToMarkdown,
+  htmlTableToCsv,
+  downloadCsv,
+  copyToClipboard,
+} from '@/utils/ai-chat/tableUtils'
+import { showSuccessToast } from 'vant'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   content: string
   isLoading?: boolean
 }>()
 
-// markdown-it 实例
+const { t } = useI18n()
+
 const md = new MarkdownIt({
   html: false,
   breaks: true,
@@ -26,10 +41,6 @@ const md = new MarkdownIt({
 
 /**
  * Shared singleton shiki highlighter (#11).
- * MarkdownContent mounts once per assistant message; creating a highlighter per
- * instance re-runs the expensive WASM/oniguruma init N times. This module-level
- * promise is shared across all instances — created once, awaited by all.
- * On failure the promise resets so a retry is possible.
  */
 type ShikiModule = typeof import('shiki')
 type ShikiHighlighter = Awaited<ReturnType<ShikiModule['createHighlighter']>>
@@ -42,7 +53,6 @@ function getHighlighter(): Promise<ShikiHighlighter> {
         langs: ['python', 'javascript', 'typescript', 'html', 'css', 'json', 'bash', 'sql'],
       }),
     ).catch((err) => {
-      // Reset so a later mount can retry instead of being stuck on a rejected promise.
       highlighterPromise = null
       throw err
     })
@@ -50,27 +60,20 @@ function getHighlighter(): Promise<ShikiHighlighter> {
   return highlighterPromise
 }
 
-// Per-instance ref mirroring the shared singleton (read by highlightCode).
 const highlighter = shallowRef<ShikiHighlighter | null>(null)
 const rendererReady = ref(false)
 
-// 渲染结果
 const renderedContent = ref('')
-
-// 组件根元素 ref（避免 document.querySelector 命中其他 MarkdownContent 实例）
 const rootRef = ref<HTMLElement | null>(null)
 
-// 表格数据（用于操作栏）—— key 由表格内容哈希派生，渲染期保持稳定。
 interface TableBlock {
   html: string
   key: string
 }
 const tables = ref<TableBlock[]>([])
 
-// Track mounted state so async shiki load doesn't write to stale refs after unmount (#13).
 let isMounted = false
 
-// 简单字符串哈希（FNV-1a）用于稳定的 v-for key，避免 Date.now() 每次渲染变化导致重挂载。
 function hashString(s: string): string {
   let h = 0x811c9dc5
   for (let i = 0; i < s.length; i++) {
@@ -80,12 +83,10 @@ function hashString(s: string): string {
   return h.toString(16)
 }
 
-// 异步加载 shiki 高亮器（共享单例）
 async function loadHighlighter() {
   if (highlighter.value) return
   try {
     const hl = await getHighlighter()
-    // #13: 如果组件在 await 期间卸载，不要写已失效的 ref 或触发 rerender。
     if (!isMounted) return
     highlighter.value = hl
     rendererReady.value = true
@@ -95,18 +96,15 @@ async function loadHighlighter() {
   }
 }
 
-// 使用 shiki 高亮代码块
 function highlightCode(code: string, lang: string): string {
   const hl = highlighter.value
   if (!hl) {
-    // Fallback: plain code block
     const escaped = md.utils.escapeHtml(code)
     return `<pre class="code-block-fallback"><code>${escaped}</code></pre>`
   }
 
   const language = lang && hl.getLoadedLanguages().includes(lang) ? lang : 'text'
   try {
-    // 双主题模式：同时输出两个主题的样式，由 CSS class 切换
     return hl.codeToHtml(code, {
       lang: language,
       themes: { light: 'github-light', dark: 'github-dark' },
@@ -117,15 +115,10 @@ function highlightCode(code: string, lang: string): string {
   }
 }
 
-// 配置 markdown-it 代码高亮
 md.set({
   highlight: (str: string, lang: string): string => highlightCode(str, lang),
 })
 
-// Use .table-wrapper to wrap tables (reference: DeerFlow screenshot with action bar floating top-right).
-// Each table is wrapped in a position:relative .table-wrapper,
-// after mount TableActionBar (absolute top-right) is moved into the wrapper,
-// making icon buttons stick to the table's top-right corner. Use content-based stable key (#10).
 function extractTablesAndInjectAnchors(html: string): string {
   tables.value = []
   const tableRegex = /<table[^>]*>[\s\S]*?<\/table>/gi
@@ -136,10 +129,8 @@ function extractTablesAndInjectAnchors(html: string): string {
   let idx = 0
   while ((match = tableRegex.exec(html)) !== null) {
     const tableHtml = match[0]
-    // Stable key: table content hash + index, key stays same when content doesn't change.
     const key = `table-${idx}-${hashString(tableHtml)}`
     matches.push({ html: tableHtml, key })
-    // Wrap table with .table-wrapper (action bar will be moved into wrapper later)
     result += html.slice(lastIdx, match.index)
     result += `<div class="table-wrapper" data-table-idx="${idx}">`
     result += tableHtml
@@ -154,7 +145,6 @@ function extractTablesAndInjectAnchors(html: string): string {
   return result
 }
 
-// 渲染函数
 function renderMarkdown(content: string): string {
   if (!content) return ''
   const raw = md.render(content)
@@ -171,40 +161,71 @@ function rerender() {
     return
   }
   renderedContent.value = renderMarkdown(props.content)
-  // 渲染后把操作栏移动到锚点位置（nextTick 确保 DOM 已更新）。
-  nextTick(positionActionBars)
+  nextTick(injectTableActionBars)
 }
 
+// SVG icons for table action bar buttons
+const COPY_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
+const CHECK_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>`
+const DOWNLOAD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`
+
 /**
- * 将每个 TableActionBar 元素移动到其 .table-wrapper 容器内。
- * wrapper 由 data-table-idx 标记，与 tables 数组索引一一对应。
- * TableActionBar 使用 position:absolute 定位到 wrapper 的右上角。
+ * 创建表格操作栏 DOM 元素并注入到对应 table-wrapper 中。
  *
- * 注意：必须使用组件自身的 rootRef，不能用 document.querySelector('.markdown-content')，
- * 因为页面上可能同时存在多个 MarkdownContent 实例（多轮对话），全局查询会命中
- * 第一个实例（可能没有表格），导致后续实例的表格操作栏无法被移入 wrapper。
+ * 不使用 Vue 组件渲染（避免 v-html re-render 清除 Vue 管理的元素导致 vDOM 追踪断裂）。
+ * 直接创建原生 DOM 元素并绑定事件，v-html 更新时这些元素会被清除，
+ * 下次 nextTick 会重新注入。
  */
-function positionActionBars() {
+function injectTableActionBars() {
   if (!isMounted) return
   const root = rootRef.value
   if (!root) return
-  const wrappers = root.querySelectorAll<HTMLElement>('.table-wrapper')
-  const bars = root.querySelectorAll<HTMLElement>('.table-action-bar-wrapper')
-  wrappers.forEach((wrapper, idx) => {
-    const bar = bars[idx]
-    if (!bar) return
-    // 将操作栏移入 wrapper（TableActionBar absolute 定位到右上角）
-    if (bar.parentElement !== wrapper) {
-      wrapper.appendChild(bar)
-    } else if (!wrapper.contains(bar)) {
-      wrapper.appendChild(bar)
-    }
+
+  tables.value.forEach((table, idx) => {
+    const wrapper = root.querySelector<HTMLElement>(`.table-wrapper[data-table-idx="${idx}"]`)
+    if (!wrapper) return
+    // Skip if already injected
+    if (wrapper.querySelector('.table-action-bar')) return
+
+    const bar = document.createElement('div')
+    bar.className = 'table-action-bar'
+
+    // Copy markdown button
+    const copyBtn = document.createElement('button')
+    copyBtn.className = 'tab-btn'
+    copyBtn.type = 'button'
+    copyBtn.setAttribute('aria-label', t('aiChat.copyTableAsMarkdown'))
+    copyBtn.setAttribute('title', t('aiChat.copyTableAsMarkdown'))
+    copyBtn.innerHTML = COPY_ICON
+    copyBtn.addEventListener('click', async () => {
+      const markdown = htmlTableToMarkdown(table.html)
+      const ok = await copyToClipboard(markdown)
+      if (ok) {
+        copyBtn.innerHTML = CHECK_ICON
+        showSuccessToast(t('aiChat.copiedSuccess'))
+        setTimeout(() => { copyBtn.innerHTML = COPY_ICON }, 1500)
+      }
+    })
+
+    // Download CSV button
+    const downloadBtn = document.createElement('button')
+    downloadBtn.className = 'tab-btn'
+    downloadBtn.type = 'button'
+    downloadBtn.setAttribute('aria-label', t('aiChat.downloadTable'))
+    downloadBtn.setAttribute('title', t('aiChat.downloadTable'))
+    downloadBtn.innerHTML = DOWNLOAD_ICON
+    downloadBtn.addEventListener('click', () => {
+      const csv = htmlTableToCsv(table.html)
+      downloadCsv(csv)
+      showSuccessToast(t('aiChat.tableDownloaded'))
+    })
+
+    bar.appendChild(copyBtn)
+    bar.appendChild(downloadBtn)
+    wrapper.appendChild(bar)
   })
 }
 
-// 防抖渲染 (#5)：流式输出时每个 token 都会触发 watch，但全量重解析 md.render
-// + DOMPurify + 表格提取是 O(n) 的；不做防抖会导致 O(n²) 的重复解析。
-// 用 ~60ms 防抖把多个快速 chunk 合并为一次渲染，并在流结束时强制刷新。
 const RENDER_DEBOUNCE_MS = 60
 let renderTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -224,25 +245,21 @@ function flushNow() {
   rerender()
 }
 
-// 监听内容变化（防抖）
 watch(
   () => props.content,
   () => scheduleRender(),
   { immediate: true }
 )
 
-// isLoading 从 true 变 false 表示流结束，强制刷新一次确保最终内容渲染完整。
 watch(
   () => props.isLoading,
   (loading, prev) => {
     if (prev && !loading) {
-      // 流结束：确保最后一次渲染包含完整内容。
       flushNow()
     }
   }
 )
 
-// shiki 加载完成后重新渲染
 watch(rendererReady, (ready) => {
   if (ready) rerender()
 })
@@ -255,13 +272,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   isMounted = false
-  // 清理防抖计时器，避免卸载后写入失效 ref。
   if (renderTimer !== null) {
     clearTimeout(renderTimer)
     renderTimer = null
   }
-  // 不清空共享单例 highlighterPromise（跨实例共享）；
-  // 仅清理本实例的 ref 引用。
   highlighter.value = null
 })
 </script>
@@ -273,22 +287,10 @@ onUnmounted(() => {
       <van-skeleton :row="3" animated />
     </template>
 
-    <!-- 渲染内容（表格锚点 div 在 v-html 内，挂载后由 positionActionBars 注入操作栏） -->
+    <!-- 渲染内容（表格锚点 div 在 v-html 内，挂载后由 injectTableActionBars 注入操作栏） -->
     <!-- eslint-disable vue/no-v-html -- sanitized by DOMPurify -->
     <div class="markdown-body" v-html="renderedContent" />
     <!-- eslint-enable vue/no-v-html -->
-
-    <!-- 表格操作栏：初始渲染为隐藏源节点，nextTick 后移动到对应锚点 (#6) -->
-    <template v-if="tables.length > 0">
-      <div
-        v-for="(table, idx) in tables"
-        :key="table.key"
-        class="table-action-bar-wrapper"
-        :data-table-idx="idx"
-      >
-        <TableActionBar :table-html="table.html" />
-      </div>
-    </template>
   </div>
 </template>
 
@@ -303,7 +305,6 @@ onUnmounted(() => {
   word-break: break-word;
 }
 
-/* Markdown 元素样式 */
 .markdown-body :deep(h1),
 .markdown-body :deep(h2),
 .markdown-body :deep(h3),
@@ -364,7 +365,6 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-/* shiki 双主题代码块样式 */
 .markdown-body :deep(.shiki) {
   margin: 12px 0;
   border-radius: 8px;
@@ -372,7 +372,6 @@ onUnmounted(() => {
   padding: 12px;
 }
 
-/* 双主题：默认显示当前主题，另一个隐藏 */
 .markdown-body :deep(.shiki.github-dark) {
   display: var(--shiki-dark-display, block);
 }
@@ -381,12 +380,6 @@ onUnmounted(() => {
   display: var(--shiki-light-display, block);
 }
 
-/* 暗色/亮色模式下切换 shiki 双主题代码块可见性。
-   注意：不能用 :global([data-theme]) .markdown-body :deep(.shiki.xxx) 组合——
-   Vue scoped CSS 编译器会丢弃 :global() 之后的 scoped 部分，只留下
-   [data-theme='dark'] { display: none; } 这样的全局规则，直接匹配 <html>
-   元素并隐藏整个页面（blank page bug）。改用 CSS 变量：在 :global([data-theme])
-   上设置变量（仅设变量不会隐藏元素），由上面 scoped 的 .shiki 规则消费。 */
 :global([data-theme='dark']) {
   --shiki-dark-display: block;
   --shiki-light-display: none;
@@ -418,14 +411,12 @@ onUnmounted(() => {
   width: 100%;
   margin: 12px 0;
   border-collapse: collapse;
-  display: block;
-  overflow-x: auto;
 }
 
-/* DeerFlow 模式：表格包裹容器，为操作栏 absolute 定位提供参照 */
 .markdown-body :deep(.table-wrapper) {
   position: relative;
   margin: 12px 0;
+  overflow-x: auto;
 }
 
 .markdown-body :deep(th),
@@ -440,7 +431,52 @@ onUnmounted(() => {
   font-weight: 600;
 }
 
-/* 375px */
+/* Table action bar - injected via DOM (not Vue v-for) to avoid v-html re-render conflicts */
+.markdown-body :deep(.table-action-bar) {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 5;
+  opacity: 1;
+  transition: opacity 0.15s ease;
+}
+
+@media (hover: hover) {
+  .markdown-body :deep(.table-action-bar) {
+    opacity: 0.5;
+  }
+
+  :global(.table-wrapper:hover .table-action-bar) {
+    opacity: 1;
+  }
+}
+
+.markdown-body :deep(.tab-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-secondary, #999);
+  background: var(--card-bg, rgba(255, 255, 255, 0.9));
+  border: 1px solid var(--border-color, rgba(0, 0, 0, 0.08));
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.markdown-body :deep(.tab-btn:hover) {
+  color: var(--van-primary-color, #6366f1);
+  border-color: var(--van-primary-color, #6366f1);
+}
+
+.markdown-body :deep(.tab-btn:active) {
+  transform: scale(0.92);
+}
+
 @media (max-width: 375px) {
   .markdown-content {
     font-size: 14px;

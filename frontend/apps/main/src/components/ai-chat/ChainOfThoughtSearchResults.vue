@@ -2,13 +2,13 @@
 /**
  * ChainOfThoughtSearchResults 组件
  *
- * 用于 web_search / image_search 工具的结果展示
+ * 参考 DeerFlow chain-of-thought.tsx:
+ * - ChainOfThoughtSearchResults: flex flex-wrap items-center gap-2
+ * - ChainOfThoughtSearchResult: Badge variant="secondary" gap-1 px-2 py-0.5 text-xs
+ *
+ * 用于 web_search / image_search / web_fetch 工具的结果展示。
+ * 结果以 Badge 药丸样式水平排列，点击在新标签页打开。
  */
-import { computed, ref } from 'vue'
-import { useI18n } from 'vue-i18n'
-import IIcon from '@/components/IIcon.vue'
-
-const { t } = useI18n()
 
 interface SearchResult {
   url: string
@@ -18,14 +18,7 @@ interface SearchResult {
 
 const props = defineProps<{
   results: SearchResult[]
-  maxVisible?: number
 }>()
-
-const expanded = ref(false)
-const visibleResults = computed(() =>
-  expanded.value ? props.results : props.results.slice(0, props.maxVisible || 3),
-)
-const hiddenCount = computed(() => props.results.length - visibleResults.value.length)
 
 function openResult(url: string) {
   window.open(url, '_blank', 'noopener,noreferrer')
@@ -33,82 +26,63 @@ function openResult(url: string) {
 </script>
 
 <template>
+  <!-- DeerFlow pattern: flex flex-wrap items-center gap-2 -->
   <div class="search-results">
-    <div
-      v-for="(result, idx) in visibleResults"
+    <a
+      v-for="(result, idx) in props.results"
       :key="`${result.url}-${idx}`"
-      class="result-item"
-      @click="openResult(result.url)"
+      :href="result.url"
+      target="_blank"
+      rel="noopener noreferrer"
+      class="search-badge"
+      @click.prevent="openResult(result.url)"
     >
-      <IIcon icon="external-link" class="result-icon" />
-      <span class="result-title">{{ result.title || result.url }}</span>
-    </div>
-
-    <!-- 展开/折叠 -->
-    <button
-      v-if="hiddenCount > 0"
-      class="expand-btn"
-      @click="expanded = !expanded"
-    >
-      {{ expanded ? t('aiChat.collapse') : t('aiChat.moreResults', { count: hiddenCount }) }}
-    </button>
+      {{ result.title || result.url }}
+    </a>
   </div>
 </template>
 
 <style scoped>
+/* DeerFlow ChainOfThoughtSearchResults: flex flex-wrap items-center gap-2 overflow-x-hidden */
 .search-results {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  background: var(--bg-primary);
-  border-radius: 6px;
-  margin-left: 24px;
-}
-
-.result-item {
-  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.2s;
+  gap: 8px; /* DeerFlow gap-2 */
+  overflow-x: hidden;
+  padding-top: 4px;
 }
 
-.result-item:hover {
-  background: var(--card-bg);
-}
-
-.result-icon {
-  width: 12px;
-  height: 12px;
-  color: var(--van-primary-color);
-}
-
-.result-title {
-  font-size: 13px;
-  color: var(--text-primary);
+/* DeerFlow ChainOfThoughtSearchResult: Badge variant="secondary" gap-1 px-2 py-0.5 text-xs font-normal */
+.search-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px; /* DeerFlow gap-1 */
+  padding: 2px 8px; /* DeerFlow py-0.5 px-2 */
+  font-size: 12px; /* DeerFlow text-xs */
+  font-weight: 400; /* DeerFlow font-normal */
+  color: var(--text-secondary);
+  background: var(--bg-secondary, rgba(127, 127, 127, 0.12));
+  border-radius: 9999px; /* Badge rounded-full */
+  text-decoration: none;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 200px;
+  transition: all 0.15s ease;
+  cursor: pointer;
 }
 
-.expand-btn {
-  padding: 4px 8px;
-  font-size: 12px;
+.search-badge:hover {
+  background: var(--bg-secondary-hover, rgba(127, 127, 127, 0.2));
   color: var(--van-primary-color);
-  background: transparent;
-  border: none;
-  cursor: pointer;
 }
 
 /* 375px */
 @media (max-width: 375px) {
-  .result-title {
-    font-size: 12px;
-    max-width: 160px;
+  .search-badge {
+    font-size: 11px;
+    max-width: 180px;
   }
 }
 </style>

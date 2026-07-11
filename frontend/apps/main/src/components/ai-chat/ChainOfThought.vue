@@ -3,23 +3,25 @@
  * DeerFlow ChainOfThought 组件
  *
  * 参考: frontend/src/components/ai-elements/chain-of-thought.tsx
+ * 参考: frontend/src/components/workspace/messages/message-group.tsx
  *
  * 功能:
  * - 可折叠工具调用历史
  * - 工具特定图标 (web_search, read_file, write_file, bash, etc.)
- * - 结果 badge (success/error/running)
  * - 工具特定结果可视化 (web_search 链接, bash CodeBlock, artifact 点击)
  * - "X more steps" 展开按钮
  * - 最后一个 tool call 高亮显示
+ * - 思考过程折叠
  */
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Badge } from 'vant'
-import { getToolIcon, explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
+import { getToolIcon, explainToolCallKey, extractShortToolName } from '@/utils/ai-chat/tool-icon-map'
 import {
   extractReasoningContentFromMessage,
+  extractContentFromMessage,
   extractToolCalls,
 } from '@/utils/ai-chat'
+import MarkdownContent from './MarkdownContent.vue'
 import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'
 import FlipDisplay from './FlipDisplay.vue'
@@ -46,7 +48,7 @@ const showThinking = ref(false)
 // 转换消息为 CoT steps
 const steps = computed(() => {
   const allSteps: Array<{
-    type: 'reasoning' | 'toolCall'
+    type: 'reasoning' | 'toolCall' | 'leadingContent'
     id: string
     messageId?: string
     content?: string
@@ -75,6 +77,24 @@ const steps = computed(() => {
 
       // 工具调用 (排除 task，task 由 SubtaskCard 处理)
       const toolCalls = extractToolCalls(message)
+
+      // 过渡文本（leadingContent）：AI 消息同时携带 tool_calls 与正文 content 时，
+      // content 是工具调用前的过渡说明（如"让我为您查询家庭资产负债的最新情况"）。
+      // messageGroups.ts 已确保此类消息不创建独立 assistant 气泡，此处将其作为
+      // ChainOfThought 块的首个步骤渲染，保持当前轮次的视觉连贯性。
+      if (toolCalls.length > 0) {
+        const bodyContent = extractContentFromMessage(message)
+        if (bodyContent) {
+          allSteps.push({
+            type: 'leadingContent',
+            id: `leading-${message.id}`,
+            messageId: message.id,
+            content: bodyContent,
+            status: 'done',
+          })
+        }
+      }
+
       for (const tc of toolCalls) {
         // Skip 'task' tool - handled by SubtaskCard
         if (tc.name === 'task') continue
@@ -133,11 +153,21 @@ const lastToolCallStep = computed(() => {
   return toolCalls[toolCalls.length - 1] || null
 })
 
+// leadingContent 步骤（过渡文本）：始终可见，不受折叠影响。
+// 这些是 AI 消息携带 tool_calls 时的正文说明（如"让我为您查询…"），
+// 必须显示在 ChainOfThought 块顶部，不应被"还有 N 步"折叠隐藏。
+const leadingContentSteps = computed(() =>
+  steps.value.filter(s => s.type === 'leadingContent')
+)
+
 // DeerFlow pattern: steps above the last tool call (hidden by default)
+// 排除 leadingContent（始终可见）和 reasoning（按 DeerFlow 模式折叠）
 const aboveLastToolCallSteps = computed(() => {
   if (!lastToolCallStep.value) return []
   const idx = steps.value.indexOf(lastToolCallStep.value)
-  return steps.value.slice(0, idx)
+  return steps.value
+    .slice(0, idx)
+    .filter(s => s.type !== 'leadingContent')
 })
 
 // DeerFlow pattern: reasoning step after the last tool call
@@ -154,9 +184,14 @@ const lastReasoningStep = computed(() => {
 })
 
 // 隐藏的历史步骤数量 (DeerFlow pattern: aboveLastToolCallSteps)
+// 注意：expanded 时 hiddenCount 为 0，但按钮仍需显示（文案改为"收起"）。
+// 按钮的 v-if 使用 showExpandBtn（= aboveLastToolCallSteps.length > 0）而非 hiddenCount。
 const hiddenCount = computed(() =>
   expanded.value ? 0 : aboveLastToolCallSteps.value.length
 )
+
+// 是否显示展开/收起按钮：当有可折叠的历史步骤时显示
+const showExpandBtn = computed(() => aboveLastToolCallSteps.value.length > 0)
 
 // 当前正在运行的步骤
 const runningStep = computed(() =>
@@ -184,13 +219,6 @@ function getName(step: { type: string; name?: string; displayName?: string; args
   return params ? t(key, params) : t(key)
 }
 
-// 状态 badge 类型
-function getBadgeType(status: string): 'success' | 'danger' | 'primary' {
-  if (status === 'done') return 'success'
-  if (status === 'error') return 'danger'
-  return 'primary'
-}
-
 // Tool args interfaces for result parsing
 interface ToolArgsWithPath {
   path?: string
@@ -213,10 +241,16 @@ interface SearchResultItem {
  * Parse web_search result into clickable links
  */
 function getSearchResults(step: { name?: string; result?: string }): SearchResultItem[] | null {
-  const name = step.name?.replace(/^(mcp|skill|builtin):\/\//, '')
-  if (name !== 'web_search' && name !== 'image_search') return null
+  const name = extractShortToolName(step.name || '')
+  if (name !== 'web_search' && name !== 'image_search' && name !== 'web_fetch') return null
 
   if (!step.result) return null
+
+  // web_fetch: result is markdown text, extract URL from args instead
+  if (name === 'web_fetch') {
+    // For web_fetch, we don't parse search results - handled by getArtifactPath
+    return null
+  }
 
   try {
     // Result might be JSON array or JSON string
@@ -257,7 +291,7 @@ function getSearchResults(step: { name?: string; result?: string }): SearchResul
  * Get bash command for CodeBlock display
  */
 function getBashCommand(step: { name?: string; args?: Record<string, unknown> }): string | null {
-  const name = step.name?.replace(/^(mcp|skill|builtin):\/\//, '')
+  const name = extractShortToolName(step.name || '')
   if (name !== 'bash' && name !== 'python') return null
 
   const args = step.args as ToolArgsWithCommand
@@ -265,14 +299,29 @@ function getBashCommand(step: { name?: string; args?: Record<string, unknown> })
 }
 
 /**
- * Get file path for artifact click
+ * Get file path for artifact click.
+ * Checks args first (path/file_path), then falls back to parsing the result JSON
+ * (backend sometimes sends args={} with the path only in the result payload).
  */
-function getArtifactPath(step: { name?: string; args?: Record<string, unknown> }): string | null {
-  const name = step.name?.replace(/^(mcp|skill|builtin):\/\//, '')
+function getArtifactPath(step: { name?: string; args?: Record<string, unknown>; result?: string }): string | null {
+  const name = extractShortToolName(step.name || '')
   if (name !== 'write_file' && name !== 'read_file' && name !== 'str_replace') return null
 
   const args = step.args as ToolArgsWithPath
-  return args?.path || args?.file_path || null
+  const argPath = args?.path || args?.file_path
+  if (argPath) return argPath
+
+  // Fallback: extract path from result JSON (e.g. {"success": true, "path": "report.md"})
+  if (step.result) {
+    try {
+      const parsed = JSON.parse(step.result) as Record<string, unknown>
+      const resultPath = (parsed.path || parsed.file_path) as string | undefined
+      if (resultPath) return resultPath
+    } catch {
+      // Result is not JSON - ignore
+    }
+  }
+  return null
 }
 
 /**
@@ -285,22 +334,32 @@ function handleArtifactClick(filepath: string) {
 
 <template>
   <div class="chain-of-thought" :class="{ loading: showLoading }">
+    <!-- 过渡文本（leadingContent）：始终可见，不受折叠影响 -->
+    <div
+      v-for="step in leadingContentSteps"
+      :key="step.id"
+      class="leading-content"
+    >
+      <MarkdownContent :content="step.content || ''" />
+    </div>
+
     <!-- DeerFlow pattern: "X more steps" button for aboveLastToolCallSteps -->
     <button
-      v-if="hiddenCount > 0"
+      v-if="showExpandBtn"
       class="expand-btn"
       @click="expanded = !expanded"
     >
+      <!-- DeerFlow: ChevronUp icon with rotate animation (chevron-first pattern) -->
       <svg
-        width="14"
-        height="14"
+        width="16"
+        height="16"
         viewBox="0 0 24 24"
         fill="none"
         stroke="currentColor"
         stroke-width="2"
-        :class="['chevron', { rotated: expanded }]"
+        :class="['expand-chevron', { rotated: expanded }]"
       >
-        <polyline points="6 9 12 15 18 9"/>
+        <polyline points="18 15 12 9 6 15"/>
       </svg>
       <span class="expand-label opacity-60">
         {{ expanded ? t('aiChat.collapse') : t('aiChat.moreSteps', { count: hiddenCount }) }}
@@ -308,8 +367,7 @@ function handleArtifactClick(filepath: string) {
     </button>
 
     <!-- Tool calls content (DeerFlow pattern) -->
-    <div v-if="lastToolCallStep" class="cot-content">
-      <!-- Hidden history steps (shown when expanded) -->
+    <div v-if="lastToolCallStep" class="cot-content">      <!-- Hidden history steps (shown when expanded) -->
       <template v-if="expanded">
         <div
           v-for="step in aboveLastToolCallSteps"
@@ -317,27 +375,50 @@ function handleArtifactClick(filepath: string) {
           class="cot-step"
           :class="[step.type, step.status]"
         >
+          <!-- DeerFlow pattern: step content with connector line inside icon wrapper -->
           <!-- Reasoning step -->
           <template v-if="step.type === 'reasoning'">
-            <div class="step-header">
+            <div class="step-icon-wrapper">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="step-icon reasoning-icon">
                 <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
               </svg>
-              <span class="step-name">{{ t('aiChat.thinkingLabel') }}</span>
+              <div class="step-connector" />
             </div>
-            <div v-if="step.content" class="thinking-content-inline">{{ step.content }}</div>
+            <div class="step-body">
+              <div class="step-name">{{ t('aiChat.thinkingLabel') }}</div>
+              <div v-if="step.content" class="thinking-content-inline">{{ step.content }}</div>
+            </div>
           </template>
 
-          <!-- Tool call step (history) -->
+          <!-- Tool call step (history) - DeerFlow pattern: no status badge, just name + result -->
           <template v-else>
-            <div class="step-header">
+            <div class="step-icon-wrapper">
               <IIcon :icon="getIcon(step)" class="step-icon" />
-              <span class="step-name">{{ getName(step) }}</span>
-              <div class="step-status">
-                <Badge :type="getBadgeType(step.status)" size="small">
-                  {{ step.status === 'done' ? '✓' : step.status === 'error' ? '✗' : '' }}
-                </Badge>
-              </div>
+              <div class="step-connector" />
+            </div>
+            <div class="step-body-vertical">
+              <div class="step-name">{{ getName(step) }}</div>
+              <!-- Tool-specific result visualization for history steps -->
+              <ChainOfThoughtSearchResults
+                v-if="getSearchResults(step)"
+                :results="getSearchResults(step)!"
+              />
+              <CodeBlock
+                v-else-if="getBashCommand(step)"
+                language="bash"
+                :code="getBashCommand(step)!"
+                :show-line-numbers="false"
+                bare
+              />
+              <button
+                v-else-if="getArtifactPath(step)"
+                class="artifact-link"
+                @click="handleArtifactClick(getArtifactPath(step)!)"
+              >
+                <IIcon icon="file-text" class="artifact-icon" />
+                <span class="artifact-path">{{ getArtifactPath(step) }}</span>
+                <IIcon icon="external-link" class="external-icon" />
+              </button>
             </div>
           </template>
         </div>
@@ -349,10 +430,14 @@ function handleArtifactClick(filepath: string) {
           class="cot-step last-tool-call"
           :class="[lastToolCallStep.status, { running: lastToolCallStep.status === 'running' }]"
         >
-          <div class="step-header">
+          <!-- DeerFlow pattern: icon wrapper without connector (last step has no line) -->
+          <div class="step-icon-wrapper">
             <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" />
-            <span class="step-name">{{ getName(lastToolCallStep) }}</span>
-            <div class="step-status">
+          </div>
+          <div class="step-body-vertical">
+            <div class="step-name-row">
+              <span class="step-name">{{ getName(lastToolCallStep) }}</span>
+              <!-- DeerFlow pattern: only show spinner for running, no ✓/✗ badge for done -->
               <svg
                 v-if="lastToolCallStep.status === 'running'"
                 class="status-loader animate-spin"
@@ -365,32 +450,22 @@ function handleArtifactClick(filepath: string) {
               >
                 <path d="M21 12a9 9 0 11-6.219-8.56"/>
               </svg>
-              <Badge v-else :type="getBadgeType(lastToolCallStep.status)" size="small">
-                {{ lastToolCallStep.status === 'done' ? '✓' : lastToolCallStep.status === 'error' ? '✗' : '' }}
-              </Badge>
             </div>
-          </div>
 
-          <!-- Progress message for running step -->
-          <div v-if="lastToolCallStep.progressMessage" class="step-progress">
-            {{ lastToolCallStep.progressMessage }}
-          </div>
-
-          <!-- Tool-specific result visualization -->
-          <div v-if="lastToolCallStep.status === 'done'" class="step-result">
+            <!-- Tool-specific result visualization -->
             <ChainOfThoughtSearchResults
-              v-if="getSearchResults(lastToolCallStep)"
+              v-if="lastToolCallStep.status === 'done' && getSearchResults(lastToolCallStep)"
               :results="getSearchResults(lastToolCallStep)!"
-              :max-visible="3"
             />
             <CodeBlock
-              v-else-if="getBashCommand(lastToolCallStep)"
+              v-else-if="lastToolCallStep.status === 'done' && getBashCommand(lastToolCallStep)"
               language="bash"
               :code="getBashCommand(lastToolCallStep)!"
               :show-line-numbers="false"
+              bare
             />
             <button
-              v-else-if="getArtifactPath(lastToolCallStep)"
+              v-else-if="lastToolCallStep.status === 'done' && getArtifactPath(lastToolCallStep)"
               class="artifact-link"
               @click="handleArtifactClick(getArtifactPath(lastToolCallStep)!)"
             >
@@ -444,33 +519,50 @@ function handleArtifactClick(filepath: string) {
 .chain-of-thought {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 8px; /* DeerFlow: gap-2 */
   padding: 12px;
   background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  border: 1px solid var(--van-border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px; /* DeerFlow: rounded-lg */
 }
 
 .chain-of-thought.loading {
   border-color: var(--van-primary-color);
 }
 
-/* 思考区域 */
-.thinking-section {
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 8px;
+/* 过渡文本（leadingContent）：工具调用前的说明文字，
+   始终可见，用次要样式与最终回答区分 */
+.leading-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  padding: 4px 0;
 }
 
+/* Thinking collapsible toggle - DeerFlow ReasoningTrigger pattern */
 .thinking-toggle {
   display: flex;
   align-items: center;
+  justify-content: space-between; /* DeerFlow: label on left, chevron on right */
   gap: 8px;
-  padding: 4px 8px;
+  padding: 8px 12px;
   background: transparent;
   border: none;
   cursor: pointer;
   width: 100%;
   text-align: left;
+}
+
+.thinking-toggle-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lightbulb-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--van-primary-color);
 }
 
 .thinking-label {
@@ -479,15 +571,18 @@ function handleArtifactClick(filepath: string) {
   font-weight: 500;
 }
 
-.chevron {
-  transition: transform 0.2s;
+.thinking-toggle .chevron {
+  width: 12px;
+  height: 12px;
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
 }
 
-.chevron.rotated {
+.thinking-toggle .chevron.rotated {
   transform: rotate(180deg);
 }
 
-.thinking-content {
+.thinking-content-expanded {
   padding: 8px 12px;
   font-size: 13px;
   color: var(--text-secondary);
@@ -497,67 +592,122 @@ function handleArtifactClick(filepath: string) {
   margin-top: 4px;
 }
 
-/* 工具调用步骤 */
-.cot-steps {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.chevron {
+  transition: transform 0.2s;
 }
 
+/* DeerFlow ChainOfThoughtContent: 步骤列表容器，竖直排列 */
+.cot-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* DeerFlow pattern: expand button matches message-group.tsx Button styling.
+   `w-full items-start justify-start text-left` + `variant="ghost"`
+   DeerFlow uses ChevronUp icon (size-4) with rotate animation.
+   The chevron comes BEFORE the text label (chevron-first pattern). */
 .expand-btn {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
+  align-items: flex-start; /* DeerFlow: items-start (aligns chevron with text start) */
+  justify-content: flex-start; /* DeerFlow: justify-start */
+  gap: 8px; /* gap-2 = 8px between chevron and label */
+  width: 100%; /* DeerFlow: w-full */
+  padding: 4px 0; /* minimal padding, ghost variant */
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px; /* DeerFlow: text-sm = 14px */
   color: var(--van-primary-color);
+  text-align: left; /* DeerFlow: text-left */
+}
+
+.expand-chevron {
+  width: 16px; /* DeerFlow: size-4 */
+  height: 16px;
+  color: var(--text-secondary);
+  opacity: 0.6; /* DeerFlow: opacity-60 on icon wrapper */
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+  margin-top: 0; /* aligns with text baseline */
+}
+
+.expand-chevron.rotated {
+  transform: rotate(180deg); /* DeerFlow: rotate-180 when expanded (ChevronUp becomes ChevronDown) */
 }
 
 .expand-label {
-  font-size: 12px;
+  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .cot-step {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 8px;
-  background: var(--bg-primary);
-  border-radius: 6px;
+  gap: 8px; /* DeerFlow: gap-2 = 8px */
+  font-size: 14px; /* DeerFlow: text-sm = 14px */
+  padding: 4px 8px;
   position: relative;
 }
 
-/* DeerFlow 竖直连接线：从当前步骤图标延伸到下一个步骤
-   参考 chain-of-thought.tsx .step-connector */
-.cot-content .cot-step:not(.last-tool-call)::after {
-  content: '';
+/* DeerFlow pattern: last step has no connector line (no step after it) */
+.cot-step.last-tool-call .step-connector {
+  display: none;
+}
+
+/* Thinking content shown inline within step body */
+.thinking-content-inline {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  padding: 4px 0;
+}
+
+/* DeerFlow 竖直轴线连接：参考 chain-of-thought.tsx ChainOfThoughtStep:
+   `<div className="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />`
+   - top-7 = 28px (below 16px icon + gap)
+   - left-1/2 + -mx-px = centered on icon
+   - w-px = 1px width
+*/
+.step-connector {
   position: absolute;
-  left: 16px; /* 对齐 step-icon 中心 (8px padding + 8px icon half) */
-  top: 28px;  /* 图标下方开始 */
-  bottom: -4px; /* 延伸到下一个步骤 */
+  top: 28px; /* DeerFlow: top-7 = 28px (16px icon + 8px gap + 4px margin) */
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
   width: 1px;
-  background: var(--border-color, var(--separator));
+  background: var(--separator);
   z-index: 0;
 }
 
-.cot-step.last {
-  border-left: 2px solid var(--van-primary-color);
+/* DeerFlow pattern: step body takes remaining space.
+   参考 chain-of-thought.tsx: `<div className="flex-1 space-y-2 overflow-hidden">`
+   space-y-2 = vertical spacing between children (label, description, results).
+   Use vertical layout (flex-direction: column) so results render below the name. */
+.step-body-vertical {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* DeerFlow space-y-2 */
+  overflow: hidden;
+  min-width: 0;
 }
 
-.cot-step.error {
-  border-left-color: #ef4444;
-  background: rgba(239, 68, 68, 0.05);
+/* Name row: name left, spinner right (for last-tool-call running state) */
+.step-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-.cot-step.done {
-  border-left-color: #22c55e;
-}
-
-.cot-step.running {
-  border-left-color: var(--van-primary-color);
+.step-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* name left, status badge right */
+  gap: 8px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .step-header {
@@ -568,13 +718,25 @@ function handleArtifactClick(filepath: string) {
   z-index: 1;
 }
 
+/* DeerFlow pattern: step icon wrapper contains icon + connector line.
+   The wrapper stretches vertically (flex align-items: stretch default)
+   so the connector extends from icon down to next step. */
+.step-icon-wrapper {
+  position: relative; /* Containing block for connector */
+  margin-top: 2px; /* DeerFlow: mt-0.5 */
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start; /* Icon at top of wrapper */
+  justify-content: center; /* Center horizontally for connector */
+}
+
 .step-icon {
-  width: 16px;
+  width: 16px; /* DeerFlow: size-4 */
   height: 16px;
   color: var(--text-secondary);
-  background: var(--bg-primary);
-  border-radius: 50%;
+  font-size: 16px; /* IIcon uses 1em sizing - set font-size to match */
   flex-shrink: 0;
+  /* DeerFlow: no background circle, just the icon SVG */
 }
 
 .step-name {
@@ -606,13 +768,6 @@ function handleArtifactClick(filepath: string) {
   color: var(--text-secondary);
 }
 
-.step-progress {
-  font-size: 12px;
-  color: var(--van-primary-color);
-  padding: 4px 8px;
-  margin-left: 24px;
-}
-
 .step-error {
   font-size: 12px;
   color: #ef4444;
@@ -622,10 +777,7 @@ function handleArtifactClick(filepath: string) {
   margin-left: 24px;
 }
 
-/* 工具特定结果样式 */
-.step-result {
-  margin-left: 24px;
-}
+/* 工具特定结果样式 - 不再用 margin-left: 24px，改为 step-body-vertical 内的 gap */
 
 .artifact-link {
   display: flex;
@@ -633,7 +785,7 @@ function handleArtifactClick(filepath: string) {
   gap: 8px;
   padding: 8px 12px;
   background: var(--bg-primary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--van-border-color, rgba(255, 255, 255, 0.08));
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
@@ -691,7 +843,7 @@ function handleArtifactClick(filepath: string) {
     max-width: 100px;
   }
 
-  .thinking-content {
+  .thinking-content-inline {
     font-size: 12px;
   }
 }

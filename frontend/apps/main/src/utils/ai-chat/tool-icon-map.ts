@@ -87,7 +87,7 @@ export const TOOL_DISPLAY_NAME_KEY_MAP: Record<string, string> = {
  * 空格之后的第一个下划线。tool_name 本身可能含下划线（如 get_family_overview），
  * 所以不能用 lastIndexOf('_')。
  */
-function extractShortToolName(toolName: string): string {
+export function extractShortToolName(toolName: string): string {
   if (!toolName) return ''
   const stripped = toolName.replace(/^(mcp|skill|builtin):\/\//, '')
   // MCP "{Server Name}_{tool}" 格式：找最后一个空格之后的第一个下划线

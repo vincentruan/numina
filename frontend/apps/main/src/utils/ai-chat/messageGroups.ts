@@ -203,14 +203,20 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
         }
       }
 
-      // 4d: 有正文内容 → assistant group（正文气泡）
+      // 4d: 有正文内容 -> assistant group（正文气泡）
       // 注意：不是 else-if，一个 message 可能同时进入 processing + assistant
       // （有 reasoning/tool_calls + content 的情况）。tool_calls 的可视化在
-      // processing group (ChainOfThought) 渲染，正文 content 必须在 assistant
-      // group 渲染 —— 否则当 AI 消息同时携带 content 与 tool_calls（例如
-      // ask_clarification）时，正文会被丢弃，页面看起来"空白"无 AI 回复。
-      // 不使用 !hasToolCalls 限制：只要 hasContent 就生成正文气泡。
-      if (hasContent(message)) {
+      // processing group (ChainOfThought) 渲染。
+      //
+      // 当 AI 消息同时携带 tool_calls 与 content 时（如“让我为您查询家庭资产
+      // 负债的最新情况”+ get_assets），content 是工具调用前的过渡说明文本，
+      // 不是最终回答。若为它单独创建 assistant 气泡，会显示为“下一轮对话”，
+      // 破坏当前轮次的视觉连贯性（DeerFlow 将过渡文本归入 ChainOfThought 块）。
+      // 因此：有 tool_calls 时不创建 assistant 气泡，过渡文本由 ChainOfThought
+      // 的 leadingContent 渲染为处理块的一部分。
+      // ask_clarification 的澄清正文由 tool 结果消息进入 assistant:clarification
+      // group 展示，不依赖此处。
+      if (hasContent(message) && !hasToolCalls(message)) {
         groups.push({
           type: 'assistant',
           id: message.id,
