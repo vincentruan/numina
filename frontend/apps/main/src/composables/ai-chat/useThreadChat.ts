@@ -241,7 +241,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       if (last && last.type === 'ai' && (!chunkId || chunkId === last.id || !last.id)) {
         const updated: ChatMessage = { ...last }
         updated.content = last.content + chunk.content
-        updated.phase = 'answering'
+        // Preserve 'done' phase: once an AI message is marked done (by the `end`
+        // event's mark-all-done logic), a late messages-tuple chunk arriving
+        // after `end` must not regress it back to 'answering' - otherwise the
+        // StreamingIndicator (three-dot animation) reappears after completion.
+        if (last.phase !== 'done') {
+          updated.phase = 'answering'
+        }
         if (chunkId) updated.id = chunkId
         if (chunk.tool_calls) {
           const newCalls = toToolCallSummaries(chunk.tool_calls)
@@ -391,6 +397,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'
       websearch_enabled?: boolean
     },
+    source?: string,
   ): Promise<void> {
     if (isLoading.value) return
     isLoading.value = true
@@ -406,7 +413,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // Resolve thread before streaming
     try {
       if (!threadId && !currentThreadId) {
-        const thread = await createThread()
+        const thread = await createThread(source)
         currentThreadId = thread.thread_id
         createdThreadInThisCall = true
       } else if (threadId) {
@@ -489,9 +496,12 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           ...(Object.keys(configurable).length > 0 ? { config: { configurable } } : {}),
         })
 
-        if (!hasPriorProgress) {
-          setUserMsgStatus(userMsg.id, 'sent')
-        }
+        // Always mark the current turn's user message as 'sent' once the stream
+        // connection succeeds. The previous guard (`if (!hasPriorProgress)`)
+        // incorrectly skipped this on follow-up turns after history load, where
+        // replayed AI messages still had phase='answering', causing the user
+        // bubble to stay stuck at "发送中" forever.
+        setUserMsgStatus(userMsg.id, 'sent')
 
         // Clear any error carried over from a prior attempt (#20): an error chunk
         // in attempt N must not persist if attempt N+1 succeeds.
@@ -621,6 +631,18 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (!streamSucceeded && streamEnded === false) {
           const lastAi = [...messages.value].reverse().find(m => m.type === 'ai')
           if (lastAi && lastAi.content.trim().length > 0) {
+            // Mark ALL AI messages as done - mirrors the `end` chunk handling
+            // above. Without this, a dropped connection leaves earlier AI
+            // messages stuck at phase='answering', so their StreamingIndicator
+            // (three-dot animation) stays visible forever even though
+            // isLoading is set to false below.
+            const next = messages.value.map(msg =>
+              msg.type === 'ai' && msg.phase !== 'done'
+                ? { ...msg, phase: 'done' as const }
+                : msg,
+            )
+            messages.value = next
+            planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
             streamSucceeded = true
           }
         }

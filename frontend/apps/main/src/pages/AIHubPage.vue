@@ -563,10 +563,23 @@ function handleNuminaConsult() {
     .then((res) => {
       const cached = res.data.session
       if (cached) {
-        router.push({ name: 'AIChat', query: { agentId, sessionId: cached.session_id } })
+        // 缓存会话存在 → 直接进入查看历史
+        router.push({ name: 'AIChat', query: { agentId, thread_id: cached.session_id } })
       } else {
-        aiStore.draftQuery = SHUMING_DEFAULT_PROMPT
-        router.push({ name: 'AIChat', query: { agentId, newSession: '1', source: 'system_default' } })
+        // 无缓存 → 创建新会话并自动发送默认提示词
+        // Pro 模式 + 继承当前 webSearch 配置（根据家庭设置自动决定）
+        router.push({
+          name: 'AIChat',
+          query: {
+            agentId,
+            q: SHUMING_DEFAULT_PROMPT,
+            newSession: '1',
+            source: 'system_default',
+            // webSearch 状态继承自 AI Hub 页面的当前选择
+            // 如果用户在 hub 页面开启了联网搜索，则传递 '1'
+            webSearch: webSearch.value === true ? '1' : undefined,
+          },
+        })
       }
     })
     .catch(() => {

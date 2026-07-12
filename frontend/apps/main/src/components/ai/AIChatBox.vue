@@ -16,9 +16,11 @@ import SuggestionChips from '@/components/ai/SuggestionChips.vue'
 import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
 import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
+import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
+const DEFAULT_MODEL = 'default'
 
 const { t } = useI18n()
 
@@ -167,7 +169,19 @@ onMounted(async () => {
     if (msg.webSearch !== undefined) {
       chatWebSearch.value = msg.webSearch
     }
-    await handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
+    // Construct complete SubmitPayload with mode config values
+    const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = msg.deepThink ? 'thinking' : 'pro'
+    const modeConfig = INPUT_MODE_CONFIGS[mode]
+    await handleStartChat({
+      text: msg.text,
+      model_name: DEFAULT_MODEL,
+      mode,
+      thinking_enabled: modeConfig.thinking_enabled,
+      is_plan_mode: modeConfig.is_plan_mode,
+      subagent_enabled: modeConfig.subagent_enabled,
+      reasoning_effort: modeConfig.reasoning_effort,
+      websearch_enabled: msg.webSearch,
+    }, msg.source)
     // handleStartChat completes after thread creation + send starts streaming
     // Skeleton will be hidden once streaming begins (isLoading becomes true)
   } else {
@@ -249,9 +263,9 @@ function handleTitleUpdated(threadId: string, newTitle: string) {
   }
 }
 
-async function handleStartChat(payload: SubmitPayload) {
+async function handleStartChat(payload: SubmitPayload, source?: string) {
   try {
-    const thread = await createThread()
+    const thread = await createThread(source)
     // Mark this thread so the activeThreadId watcher skips loadHistory for it
     // — sendMessage below will stream into it, and a concurrent loadHistory
     // would cancelStream-abort the run (see skipNextHistoryLoadFor comment).
@@ -269,7 +283,7 @@ async function handleStartChat(payload: SubmitPayload) {
       subagent_enabled: payload.subagent_enabled,
       reasoning_effort: payload.reasoning_effort,
       websearch_enabled: payload.websearch_enabled,
-    })
+    }, source)
   } catch {
     skipNextHistoryLoadFor.value = null
     initialLoading.value = false

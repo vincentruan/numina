@@ -112,7 +112,9 @@ class ChatStreamRequest(BaseModel):
 class SessionDefaultResponse(SnowflakeBase):
     """Response for get_system_default_session endpoint."""
 
-    session_id: int
+    # session_id can be either a Snowflake int (legacy) or a UUID string
+    # (current LangGraph thread IDs). Typed as str so both serialize correctly.
+    session_id: str
     status: str | None = None
     created_at: str | None = None
     updated_at: str | None = None

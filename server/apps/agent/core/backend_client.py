@@ -180,6 +180,7 @@ class BackendClient:
         user_id: str | None,
         agent_id: str | None = None,
         last_model: str | None = None,
+        source: str | None = None,
     ) -> None:
         await upsert_session(
             self.family_id,
@@ -187,6 +188,7 @@ class BackendClient:
             user_id=user_id,
             agent_id=agent_id,
             last_model=last_model,
+            source=source,
         )
 
     async def update_session_summary(
@@ -551,6 +553,7 @@ async def upsert_session(
     user_id: str | None,
     agent_id: str | None = None,
     last_model: str | None = None,
+    source: str | None = None,
 ) -> None:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
@@ -559,6 +562,7 @@ async def upsert_session(
         "user_id": user_id,
         "agent_id": agent_id,
         "last_model": last_model,
+        "source": source,
     }
     resp = await client.post(
         "/api/v1/internal/ai/sessions/upsert",

@@ -55,10 +55,18 @@ function getAgentHeaders(): Record<string, string> {
   if (!familyId) {
     throw new Error('Family not loaded - cannot make agent API calls')
   }
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Family-Id': familyId,
   }
+  // X-User-Id is required so the agent can persist user_id on session rows
+  // (ai_chat_sessions). Without it, getSystemDefaultSession - which filters
+  // by user_id - never matches, breaking the cache-hit path in handleNuminaConsult.
+  const userId = authStore.user?.id
+  if (userId) {
+    headers['X-User-Id'] = String(userId)
+  }
+  return headers
 }
 
 /** Raw ThreadResponse from the agent threads API */
@@ -90,12 +98,12 @@ function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
   }
 }
 
-export async function createThread(): Promise<ThreadSession> {
+export async function createThread(source?: string): Promise<ThreadSession> {
   const res = await fetch(`${getAgentApiBase()}/api/threads`, {
     method: 'POST',
     headers: getAgentHeaders(),
     credentials: 'include',
-    body: JSON.stringify({}),
+    body: JSON.stringify(source ? { metadata: { source } } : {}),
   })
   if (!res.ok) throw new Error(`Failed to create thread: ${res.status}`)
   return mapThreadResponse(await res.json() as ThreadApiResponse)

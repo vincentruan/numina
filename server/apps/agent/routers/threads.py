@@ -182,7 +182,8 @@ async def create_thread(
         family_id=x_family_id,
         user_id=x_user_id,
         agent_id=body.assistant_id,
-        last_model=body.metadata.get("model_name", None)
+        last_model=body.metadata.get("model_name", None),
+        source=body.metadata.get("source"),
     )
 
     config = {"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}}
@@ -355,9 +356,18 @@ async def get_thread_state(
     checkpoint = getattr(checkpoint_tuple, "checkpoint", {}) or {}
     metadata = getattr(checkpoint_tuple, "metadata", {}) or {}
 
-    # Family ownership check
+    # Family ownership check — prefer checkpoint metadata, fall back to session record
     ckpt_family_id = metadata.get("family_id")
-    if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+    if not ckpt_family_id:
+        # Checkpoint metadata lacks family_id (e.g. older checkpoints written before
+        # family_id was added to metadata). Fall back to the session row.
+        record = await repo.get_session(thread_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        record_family_id = record.get("family_id")
+        if not record_family_id or str(record_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+    elif str(ckpt_family_id) != str(verified.family_id):
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
     checkpoint_id = getattr(checkpoint_tuple, "config", {}).get("configurable", {}).get("checkpoint_id")
     channel_values = checkpoint.get("channel_values", {})
@@ -401,9 +411,16 @@ async def update_thread_state(
     checkpoint = dict(getattr(checkpoint_tuple, "checkpoint", {}) or {})
     metadata = dict(getattr(checkpoint_tuple, "metadata", {}) or {})
 
-    # Family ownership check
+    # Family ownership check — prefer checkpoint metadata, fall back to session record
     ckpt_family_id = metadata.get("family_id")
-    if not ckpt_family_id or str(ckpt_family_id) != str(verified.family_id):
+    if not ckpt_family_id:
+        record = await repo.get_session(thread_id)
+        if record is None:
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+        record_family_id = record.get("family_id")
+        if not record_family_id or str(record_family_id) != str(verified.family_id):
+            raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
+    elif str(ckpt_family_id) != str(verified.family_id):
         raise HTTPException(status_code=404, detail=f"Thread {thread_id} not found")
 
     channel_values = dict(checkpoint.get("channel_values", {}))
