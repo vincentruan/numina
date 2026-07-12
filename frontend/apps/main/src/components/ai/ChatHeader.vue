@@ -274,8 +274,8 @@ function onNewChat() {
 
 .header-agent-logo-btn :deep(.ai-button-3d),
 .agent-info-icon :deep(.ai-button-3d) {
-  width: 32px;
-  height: 32px;
+  width: 32px !important;
+  height: 32px !important;
   padding: 0;
   box-shadow: none;
   background: transparent;
@@ -285,14 +285,14 @@ function onNewChat() {
 
 .header-agent-logo-btn :deep(.fg-icon),
 .agent-info-icon :deep(.fg-icon) {
-  width: 20px;
-  height: 20px;
+  width: 20px !important;
+  height: 20px !important;
 }
 
 .header-agent-logo-btn :deep(.bg-icon),
 .agent-info-icon :deep(.bg-icon) {
-  width: 18px;
-  height: 18px;
+  width: 18px !important;
+  height: 18px !important;
 }
 
 .header-title-wrap {
