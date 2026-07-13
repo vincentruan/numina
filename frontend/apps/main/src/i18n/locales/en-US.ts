@@ -133,6 +133,7 @@ export default {
     usedSources: 'Used {count} sources',
     citedTimes: 'Cited {count} times',
     copyReference: 'Copy reference',
+    visitSource: 'Visit source',
     errorRetry: 'Request failed, please retry',
     connectionBrokenRetry: 'Connection broken, tap to retry',
     errorTimeout: 'Response timed out, please retry',

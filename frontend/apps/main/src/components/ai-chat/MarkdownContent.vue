@@ -28,6 +28,8 @@ import { extractCitationSources, type CitationSource } from '@/utils/ai-chat/cit
 import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import SelectionToolbar from './SelectionToolbar.vue'
+import CitationHoverCard from './CitationHoverCard.vue'
+import type { CitationHoverData } from './CitationHoverCard.vue'
 
 const props = defineProps<{
   content: string
@@ -66,6 +68,56 @@ const tables = ref<TableBlock[]>([])
 
 let isMounted = false
 let mouseUpTimer: ReturnType<typeof setTimeout> | null = null
+
+// Citation hover card state
+const isMobile = ref(false)
+const hoverCardVisible = ref(false)
+const hoverCardCitation = ref<CitationHoverData | null>(null)
+const hoverCardAnchorRect = ref<DOMRect | null>(null)
+let hoverHideTimer: ReturnType<typeof setTimeout> | null = null
+
+function detectMobile() {
+  isMobile.value = window.matchMedia('(pointer: coarse)').matches || window.innerWidth <= 768
+}
+
+function findCitationData(url: string): CitationHoverData {
+  // Try to find a matching title from the emitted citation sources
+  const sources = currentCitationSources.value
+  const match = sources.find((s) => s.url === url)
+  const title = match?.title || url
+  const index = match ? sources.indexOf(match) : 0
+  return { title, url, index }
+}
+
+const currentCitationSources = ref<CitationSource[]>([])
+
+function showHoverCard(el: HTMLElement) {
+  if (hoverHideTimer !== null) {
+    clearTimeout(hoverHideTimer)
+    hoverHideTimer = null
+  }
+  const url = el.dataset.url || ''
+  if (!url) return
+  hoverCardCitation.value = findCitationData(url)
+  hoverCardAnchorRect.value = el.getBoundingClientRect()
+  hoverCardVisible.value = true
+}
+
+function hideHoverCard() {
+  if (hoverHideTimer !== null) clearTimeout(hoverHideTimer)
+  hoverHideTimer = setTimeout(() => {
+    hoverHideTimer = null
+    hoverCardVisible.value = false
+  }, 150)
+}
+
+function hideHoverCardImmediate() {
+  if (hoverHideTimer !== null) {
+    clearTimeout(hoverHideTimer)
+    hoverHideTimer = null
+  }
+  hoverCardVisible.value = false
+}
 
 function hashString(s: string): string {
   let h = 0x811c9dc5
@@ -188,12 +240,14 @@ function rerender() {
   if (!props.content) {
     renderedContent.value = ''
     tables.value = []
+    currentCitationSources.value = []
     emit('citations', [])
     return
   }
   renderedContent.value = renderMarkdown(props.content)
   // Extract and emit citation sources
   const sources = extractCitationSources(props.content)
+  currentCitationSources.value = sources
   emit('citations', sources)
   nextTick(injectTableActionBars)
 }
@@ -300,10 +354,15 @@ watch(rendererReady, (ready) => {
 
 onMounted(() => {
   isMounted = true
+  detectMobile()
+  window.addEventListener('resize', detectMobile)
   loadHighlighter()
   rerender()
   // Event delegation for citation badges
   rootRef.value?.addEventListener('click', handleCitationClick)
+  // Event delegation for citation hover (desktop)
+  rootRef.value?.addEventListener('mouseenter', handleCitationMouseEnter, true)
+  rootRef.value?.addEventListener('mouseleave', handleCitationMouseLeave, true)
   // Event delegation for text selection (mouseup)
   rootRef.value?.addEventListener('mouseup', handleMouseUp)
 })
@@ -330,10 +389,42 @@ function handleCitationClick(e: Event) {
   const badge = target.closest('.citation-badge') as HTMLElement | null
   if (badge) {
     e.preventDefault()
+    // Mobile: toggle hover card on click
+    if (isMobile.value) {
+      const badgeRect = badge.getBoundingClientRect()
+      const isSameAnchor = hoverCardAnchorRect.value &&
+        hoverCardAnchorRect.value.top === badgeRect.top &&
+        hoverCardAnchorRect.value.left === badgeRect.left
+      if (hoverCardVisible.value && isSameAnchor) {
+        hideHoverCardImmediate()
+      } else {
+        showHoverCard(badge)
+      }
+      return
+    }
+    // Desktop fallback: open link directly
     const url = badge.dataset.url
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer')
     }
+  }
+}
+
+function handleCitationMouseEnter(e: Event) {
+  if (isMobile.value) return
+  const target = e.target as HTMLElement
+  const badge = target.closest('.citation-badge') as HTMLElement | null
+  if (badge) {
+    showHoverCard(badge)
+  }
+}
+
+function handleCitationMouseLeave(e: Event) {
+  if (isMobile.value) return
+  const target = e.target as HTMLElement
+  const badge = target.closest('.citation-badge') as HTMLElement | null
+  if (badge) {
+    hideHoverCard()
   }
 }
 
@@ -352,7 +443,15 @@ onUnmounted(() => {
     clearTimeout(mouseUpTimer)
     mouseUpTimer = null
   }
+  if (hoverHideTimer !== null) {
+    clearTimeout(hoverHideTimer)
+    hoverHideTimer = null
+  }
+  window.removeEventListener('resize', detectMobile)
   rootRef.value?.removeEventListener('mouseup', handleMouseUp)
+  rootRef.value?.removeEventListener('click', handleCitationClick)
+  rootRef.value?.removeEventListener('mouseenter', handleCitationMouseEnter, true)
+  rootRef.value?.removeEventListener('mouseleave', handleCitationMouseLeave, true)
   highlighter.value = null
 })
 </script>
@@ -371,6 +470,14 @@ onUnmounted(() => {
 
     <!-- Selection toolbar for quoting text -->
     <SelectionToolbar ref="selectionToolbarRef" />
+
+    <!-- Citation hover card -->
+    <CitationHoverCard
+      :citation="hoverCardCitation"
+      :anchor-rect="hoverCardAnchorRect"
+      :show="hoverCardVisible"
+      @hide="hideHoverCardImmediate"
+    />
   </div>
 </template>
 

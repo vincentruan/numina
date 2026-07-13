@@ -396,6 +396,7 @@ export default {
     usedSources: '使用了 {count} 个来源',
     citedTimes: '引用 {count} 次',
     copyReference: '复制引用',
+    visitSource: '访问来源',
     loadModelsFailed: '加载模型列表失败: {error}',
     clarification: {
       title: 'Agent 需要确认',
