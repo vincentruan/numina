@@ -4,16 +4,10 @@ import { showFailToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { updateThread } from '@/api/ai-chat'
-import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import TokenUsage from '@/components/ai-chat/TokenUsage.vue'
-import IIcon from '@/components/IIcon.vue'
-import { getAgentIcon, isEmoji } from '@/utils/agent'
 import type { ThreadSession } from '@/types/ai-chat/session'
-import type { Agent } from '@/types/agent'
 
 defineOptions({ name: 'ChatHeader' })
-
-const NUMINA_AGENT_NAME = 'numina'
 
 /**
  * Realtime token usage from SSE values events.
@@ -31,7 +25,6 @@ const props = defineProps<{
   /** Realtime token usage computed from SSE values events (AIChatBox.vue) */
   realtimeTokenUsage?: RealtimeTokenUsage | null
   isStreaming?: boolean
-  activeAgent: Agent | null
 }>()
 
 const emit = defineEmits<{
@@ -43,9 +36,6 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const { t } = useI18n()
-
-// Agent info popup state
-const showAgentInfo = ref(false)
 
 // Edit title state
 const showEditTitleDialog = ref(false)
@@ -70,10 +60,6 @@ const canEditTitle = computed(() => {
 const titleNeedsScroll = computed(() => {
   return headerTitle.value.length > 8
 })
-
-function onToggleAgentInfo() {
-  showAgentInfo.value = !showAgentInfo.value
-}
 
 function onEditTitle() {
   // If the title is still the default (LLM title not yet generated), start
@@ -128,19 +114,6 @@ function onNewChat() {
         <polyline points="12 6 12 12 16 14"/>
       </svg>
     </button>
-    <!-- Agent logo button — shows popup with name + description on click -->
-    <button
-      v-if="activeAgent"
-      class="header-btn header-agent-logo-btn"
-      :aria-label="t('aiChat.agentInfoAria')"
-      @click="onToggleAgentInfo"
-    >
-      <AIBrainIcon v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :active="true" />
-      <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))" class="header-agent-logo-emoji">
-        {{ getAgentIcon(activeAgent.icon) || '🤖' }}
-      </span>
-      <IIcon v-else :icon="getAgentIcon(activeAgent.icon)" size="20" :color="activeAgent.color || 'var(--van-primary-color)'" />
-    </button>
     <!-- Title wrap: title (truncated or scrolling) + inline edit button -->
     <div class="header-title-wrap">
       <div class="header-title-container" :class="{ 'needs-scroll': titleNeedsScroll }">
@@ -158,33 +131,6 @@ function onNewChat() {
         </svg>
       </button>
     </div>
-    <!-- Agent info popup - teleported to body to escape .chat-header's
-         stacking context (backdrop-filter creates one, trapping fixed children
-         below sibling panels like the tool-call steps panel). -->
-    <Teleport v-if="showAgentInfo && activeAgent" to="body">
-      <div
-        class="agent-info-backdrop"
-        @click="showAgentInfo = false"
-      />
-      <div
-        class="agent-info-popup"
-        role="dialog"
-        aria-label="Agent information"
-        @click.stop
-      >
-        <div class="agent-info-header">
-          <span class="agent-info-icon" aria-hidden="true">
-            <AIBrainIcon v-if="activeAgent.agent_name === NUMINA_AGENT_NAME" :active="true" />
-            <span v-else-if="isEmoji(getAgentIcon(activeAgent.icon))">
-              {{ getAgentIcon(activeAgent.icon) || '🤖' }}
-            </span>
-            <IIcon v-else :icon="getAgentIcon(activeAgent.icon)" size="24" :color="activeAgent.color || 'var(--van-primary-color)'" />
-          </span>
-          <span class="agent-info-name">{{ activeAgent.display_name }}</span>
-        </div>
-        <p class="agent-info-description">{{ activeAgent.description || t('aiChat.agentNoDescription') }}</p>
-      </div>
-    </Teleport>
     <div class="header-actions">
       <TokenUsage v-if="activeThreadId" :thread-id="activeThreadId" :realtime-usage="realtimeTokenUsage" :is-streaming="isStreaming" />
       <button class="header-btn" :aria-label="t('aiChat.newChatAria')" @click="onNewChat">
@@ -253,46 +199,6 @@ function onNewChat() {
 .header-btn:hover {
   background: rgba(0, 0, 0, 0.06);
   color: rgba(0, 0, 0, 0.9);
-}
-
-/* Agent logo button */
-.header-agent-logo-btn {
-  position: relative;
-}
-
-.header-agent-logo-emoji {
-  font-size: 20px;
-  line-height: 1;
-}
-
-/* 数鸣 AIBrainIcon: strip the 3D button chrome so the brain mark scales to
- * match neighboring 20px header icons (mirrors InputBox.vue's handling). */
-.header-agent-logo-btn :deep(.ai-button-wrapper),
-.agent-info-icon :deep(.ai-button-wrapper) {
-  transform: none !important;
-}
-
-.header-agent-logo-btn :deep(.ai-button-3d),
-.agent-info-icon :deep(.ai-button-3d) {
-  width: 32px !important;
-  height: 32px !important;
-  padding: 0;
-  box-shadow: none;
-  background: transparent;
-  border: none;
-  transform: none !important;
-}
-
-.header-agent-logo-btn :deep(.fg-icon),
-.agent-info-icon :deep(.fg-icon) {
-  width: 20px !important;
-  height: 20px !important;
-}
-
-.header-agent-logo-btn :deep(.bg-icon),
-.agent-info-icon :deep(.bg-icon) {
-  width: 18px !important;
-  height: 18px !important;
 }
 
 .header-title-wrap {
@@ -381,59 +287,6 @@ function onNewChat() {
   flex-shrink: 0;
 }
 
-/* Agent info popup */
-.agent-info-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-}
-
-.agent-info-popup {
-  position: fixed;
-  top: calc(50px + env(safe-area-inset-top) + 4px);
-  left: 108px;
-  z-index: 2001;
-  background: #ffffff;
-  border: 1px solid rgba(0, 0, 0, 0.06);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  min-width: 160px;
-  max-width: 220px;
-  padding: 12px 14px;
-}
-
-.agent-info-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.agent-info-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  line-height: 1;
-}
-
-.agent-info-name {
-  font-size: 15px;
-  font-weight: 600;
-  color: rgba(0, 0, 0, 0.9);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.agent-info-description {
-  font-size: 13px;
-  color: rgba(0, 0, 0, 0.6);
-  line-height: 1.5;
-  margin: 0;
-  word-break: break-word;
-}
-
 /* Dark mode
  * Wrap the FULL selector in :global() - Vue scoped CSS only scopes the last
  * simple selector outside :global(), so `:global([data-theme='dark']) .x`
@@ -464,22 +317,5 @@ function onNewChat() {
 :global([data-theme='dark'] .header-edit-btn:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
-}
-
-:global([data-theme='dark'] .agent-info-popup) {
-  /* Fully opaque background to prevent chat content from bleeding through
-   * and overlapping the popup text. Use --bg-tertiary (#12122a) to match
-   * other elevated dark surfaces (cards, action sheets). */
-  background: var(--bg-tertiary);
-  border-color: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
-}
-
-:global([data-theme='dark'] .agent-info-name) {
-  color: var(--text-primary);
-}
-
-:global([data-theme='dark'] .agent-info-description) {
-  color: var(--text-secondary);
 }
 </style>

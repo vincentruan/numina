@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
-import { showFailToast } from 'vant'
+import { useRouter } from 'vue-router'
+import { showFailToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import { useArtifacts } from '@/composables/ai-chat/useArtifacts'
 import { useAgentStore } from '@/stores/agent'
-import { getThread, createThread } from '@/api/ai-chat'
+import { getThread, createThread, branchThreadFromTurn } from '@/api/ai-chat'
 import { accumulateUsage } from '@/utils/ai-chat/token-usage-steps'
 import ChatHeader from '@/components/ai/ChatHeader.vue'
 import WelcomePage from '@/components/ai/WelcomePage.vue'
@@ -23,6 +24,7 @@ const NUMINA_AGENT_NAME = 'numina'
 const DEFAULT_MODEL = 'default'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const store = useChatSessionStore()
 const agentStore = useAgentStore()
@@ -340,6 +342,30 @@ function handleArtifactTap(artifact: { id: string; title: string; kind: string; 
 function handleNewChat() {
   store.clearActiveThread()
 }
+
+// Branch conversation state and handler
+const branchingMessageId = ref<string | null>(null)
+const canBranch = computed(() => !!store.activeThreadId && !chat.isLoading.value)
+
+async function handleBranch(messageId: string, messageIds: string[]) {
+  if (!store.activeThreadId || branchingMessageId.value) return
+
+  branchingMessageId.value = messageId
+  try {
+    const response = await branchThreadFromTurn(store.activeThreadId, {
+      messageId,
+      messageIds,
+    })
+    showSuccessToast(t('aiChat.branchSuccess'))
+    // Navigate to the new branch thread
+    router.push({ name: 'AIChat', query: { thread_id: response.thread_id } })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('aiChat.branchFailed')
+    showFailToast(message)
+  } finally {
+    branchingMessageId.value = null
+  }
+}
 </script>
 
 <template>
@@ -355,7 +381,6 @@ function handleNewChat() {
         :sessions="store.sessions"
         :realtime-token-usage="realtimeTokenUsage"
         :is-streaming="chat.isLoading.value"
-        :active-agent="activeAgent"
         @title-updated="handleTitleUpdated"
         @new-chat="handleNewChat"
       />
@@ -369,11 +394,14 @@ function handleNewChat() {
           :messages="chat.messages.value"
           :is-streaming="chat.isLoading.value"
           :thread-id="store.activeThreadId || undefined"
+          :can-branch="canBranch"
+          :branching-message-id="branchingMessageId"
           @retry="handleRetry"
-        @stop="handleStopStream"
-        @suggestion-click="handleSuggestionClick"
-        @artifact-tap="handleArtifactTap"
-      />
+          @stop="handleStopStream"
+          @suggestion-click="handleSuggestionClick"
+          @artifact-tap="handleArtifactTap"
+          @branch="handleBranch"
+        />
       <!-- Suggestion chips above input (from SSE custom events) -->
       <SuggestionChips
         v-if="!chat.isLoading.value && chat.suggestions.value.length > 0"
@@ -393,6 +421,10 @@ function handleNewChat() {
         :is-welcome-mode="false"
         :thread-id="store.activeThreadId || undefined"
         :web-search="chatWebSearch"
+        :agent-id="activeAgent?.id"
+        :agents="activeAgent ? [{ id: activeAgent.id, display_name: activeAgent.display_name, agent_name: activeAgent.agent_name, icon: activeAgent.icon, color: activeAgent.color, description: activeAgent.description }] : []"
+        :agent-icon="activeAgent?.icon"
+        :agent-label="activeAgent?.display_name"
         @submit="handleSendMessage"
         @stop="handleStop"
         @context-change="handleContextChange"

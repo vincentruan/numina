@@ -35,6 +35,7 @@ interface AgentOption {
   agent_name?: string
   icon?: string
   color?: string | null
+  description?: string
 }
 
 interface Attachment {
@@ -56,6 +57,8 @@ const props = defineProps<{
   agents?: AgentOption[]
   agentIcon?: string
   agentLabel?: string
+  /** When true, agent icon shows info popup instead of triggering selection */
+  readonly?: boolean
   disabled?: boolean
   modelValue?: string
   webSearch?: boolean
@@ -158,6 +161,13 @@ const selectedAgent = computed(() =>
 const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.icon || undefined)
 const displayAgentLabel = computed(() => props.agentLabel || selectedAgent.value?.display_name || '')
 const isNuminaAgent = computed(() => selectedAgent.value?.agent_name === NUMINA_AGENT_NAME)
+
+// Agent info popup state (for chat mode)
+const showAgentInfo = ref(false)
+
+function onToggleAgentInfo() {
+  showAgentInfo.value = !showAgentInfo.value
+}
 
 // ── Watchers ──
 watch(internalValue, (val) => emit('update:modelValue', val))
@@ -531,19 +541,23 @@ onUnmounted(() => {
                 </svg>
               </template>
             </button>
-            <!-- Static agent icon in chat mode -->
-            <span
+            <!-- Agent icon in chat mode: clickable to show info popup -->
+            <button
               v-else-if="(displayAgentIcon || isNuminaAgent) && !isWelcomeMode"
-              class="agent-static-icon"
+              class="control-btn control-btn--agent agent-chat-icon"
+              :aria-label="t('aiChat.agentInfoAria')"
               :title="displayAgentLabel"
+              @click="onToggleAgentInfo"
             >
               <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
               <template v-else>
-                <span v-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
+                <span v-if="isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
+                  {{ getAgentIcon(displayAgentIcon) }}
+                </span>
                 <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
               </template>
-            </span>
+            </button>
 
             <!-- [2] Mode selector (4-mode DeerFlow) -->
             <ModeSelector
@@ -618,6 +632,37 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+    <!-- Agent info popup (chat mode) - teleported to body to escape stacking context -->
+    <Teleport v-if="showAgentInfo && selectedAgent && !isWelcomeMode" to="body">
+      <div
+        class="agent-info-backdrop"
+        @click="showAgentInfo = false"
+      />
+      <div
+        class="agent-info-popup"
+        role="dialog"
+        aria-label="Agent information"
+        @click.stop
+      >
+        <div class="agent-info-header">
+          <span class="agent-info-icon" aria-hidden="true">
+            <AIBrainIcon v-if="isNuminaAgent" :active="true" />
+            <span v-else-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))">
+              {{ getAgentIcon(displayAgentIcon) || '🤖' }}
+            </span>
+            <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="24" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+            <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="4"/>
+              <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
+              <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
+            </svg>
+          </span>
+          <span class="agent-info-name">{{ displayAgentLabel }}</span>
+        </div>
+        <p class="agent-info-description">{{ selectedAgent.description || t('aiChat.agentNoDescription') }}</p>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -1193,5 +1238,96 @@ onUnmounted(() => {
   .chat-textarea {
     font-size: 13px;
   }
+}
+
+/* ── Agent info popup (chat mode) ── */
+.agent-info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.agent-info-popup {
+  position: fixed;
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  left: 20px;
+  z-index: 2001;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  min-width: 160px;
+  max-width: 220px;
+  padding: 12px 14px;
+}
+
+.agent-info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.agent-info-icon :deep(.ai-button-wrapper) {
+  transform: none !important;
+}
+
+.agent-info-icon :deep(.ai-button-3d) {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+  border: none;
+  transform: none !important;
+}
+
+.agent-info-icon :deep(.fg-icon) {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.agent-info-icon :deep(.bg-icon) {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.agent-info-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-info-description {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+  line-height: 1.5;
+  margin: 0;
+  word-break: break-word;
+}
+
+:global([data-theme='dark'] .agent-info-popup) {
+  background: var(--bg-tertiary);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
+}
+
+:global([data-theme='dark'] .agent-info-name) {
+  color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .agent-info-description) {
+  color: var(--text-secondary);
 }
 </style>
