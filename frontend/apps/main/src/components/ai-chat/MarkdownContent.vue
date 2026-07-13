@@ -65,6 +65,7 @@ interface TableBlock {
 const tables = ref<TableBlock[]>([])
 
 let isMounted = false
+let mouseUpTimer: ReturnType<typeof setTimeout> | null = null
 
 function hashString(s: string): string {
   let h = 0x811c9dc5
@@ -309,7 +310,9 @@ onMounted(() => {
 
 function handleMouseUp() {
   // Small delay to let the browser finalize the selection
-  setTimeout(() => {
+  if (mouseUpTimer !== null) clearTimeout(mouseUpTimer)
+  mouseUpTimer = setTimeout(() => {
+    mouseUpTimer = null
     const selection = window.getSelection()
     if (!selection || !selection.toString().trim()) return
     // Only show toolbar if selection is within this markdown content
@@ -345,6 +348,11 @@ onUnmounted(() => {
     clearTimeout(renderTimer)
     renderTimer = null
   }
+  if (mouseUpTimer !== null) {
+    clearTimeout(mouseUpTimer)
+    mouseUpTimer = null
+  }
+  rootRef.value?.removeEventListener('mouseup', handleMouseUp)
   highlighter.value = null
 })
 </script>
