@@ -78,6 +78,11 @@ async def run_family_agent(
     # Completion status surfaced to the client in the `end` frame (Q2). Default
     # to "error" so an unexpected path never reports "complete" falsely.
     completion_status = "error"
+    # Set True when the adapter stream yields a custom event with
+    # type="interrupt" (LangGraph interrupt() call from ask_clarification).
+    # Distinct from abort_event (user-initiated cancel) — interrupted runs
+    # skip the 300s cleanup GC so the checkpoint state is preserved for resume.
+    interrupted_by_event = False
     # Stream-extras inputs — initialised here so the ``finally`` block is safe
     # when the run aborts before streaming starts. Title/suggestion generation
     # are skipped when ``selected_provider`` stays None.
@@ -248,8 +253,21 @@ async def run_family_agent(
                             "args": tc.get("args", {}),
                         })
 
+            # Detect LangGraph interrupt() events forwarded by the adapter as
+            # custom events with type="interrupt".  Set the flag so the
+            # terminal-status block below marks the run as ``interrupted``
+            # (distinct from ``cancelled`` via abort_event) and the finally
+            # block skips the 300s cleanup GC — the checkpoint must survive
+            # so the user can resume after providing human input.
+            if sse_type == "custom" and isinstance(data, dict) and data.get("type") == "interrupt":
+                interrupted_by_event = True
+
         # 8. Terminal status — drives the `end` completion signal (Q2).
-        if record.abort_event.is_set():
+        # Two paths to ``interrupted``: (a) user-initiated cancel via
+        # abort_event, (b) LangGraph interrupt() detected as a custom event
+        # in the stream (ask_clarification tool). Both preserve the checkpoint
+        # so the run can be resumed, but only (a) sets abort_event.
+        if record.abort_event.is_set() or interrupted_by_event:
             await run_manager.set_status(run_id, RunStatus.interrupted)
             completion_status = "interrupted"
         else:
@@ -331,4 +349,8 @@ async def run_family_agent(
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
+        # Skip the 300s cleanup GC for interrupted runs — the checkpoint must
+        # be preserved so the user can resume after providing human input.
+        # Cancelled runs (abort_event) still get cleaned up after 300s.
+        if not interrupted_by_event:
+            asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
