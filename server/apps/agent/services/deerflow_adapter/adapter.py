@@ -312,6 +312,15 @@ class DeerFlowAdapter:
                 yield ("end", event_data)
             elif event_type == "error":
                 yield ("error", {"error": str(event_data)})
+            elif (
+                event_type == "custom"
+                and isinstance(event_data, dict)
+                and event_data.get("type") == "interrupt"
+            ):
+                # LangGraph interrupt() emits a custom event with type="interrupt".
+                # Forward as-is so the worker can publish it to the SSE stream
+                # and the frontend can render the HumanInputCard.
+                yield ("custom", event_data)
             else:
                 # All other event types (tool progress, metadata, etc.) → custom
                 if isinstance(event_data, dict):

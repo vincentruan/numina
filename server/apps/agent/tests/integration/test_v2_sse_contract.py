@@ -267,3 +267,79 @@ def test_v2_sse_contract_full_event_order(client):
 
     # At least one custom event (tool_call or suggestions)
     assert "custom" in event_names
+
+
+# ---------------------------------------------------------------------------
+# Interrupt event tests
+# ---------------------------------------------------------------------------
+
+
+async def test_interrupt_event_is_forwarded_by_typed_stream_dispatch():
+    """When adapter yields a custom interrupt event, typed_stream_dispatch forwards it."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from apps.agent.services.deerflow_adapter.adapter import DeerFlowAdapter
+
+    # Build a mock event that mimics LangGraph's interrupt() output:
+    # a StreamEvent with type="custom" and data containing type="interrupt".
+    interrupt_event = SimpleNamespace(
+        type="custom",
+        data={
+            "type": "interrupt",
+            "question": "Which category?",
+            "options": [{"label": "股票", "value": "stock"}],
+            "context": "Need clarification",
+            "interrupt_id": "interrupt-123",
+        },
+    )
+
+    # Create adapter via __new__ to skip __init__ (no real DeerFlowClient needed)
+    adapter = DeerFlowAdapter.__new__(DeerFlowAdapter)
+
+    # Mock raw_stream_dispatch to yield our interrupt event
+    async def mock_raw_stream(*args, **kwargs):
+        yield interrupt_event
+
+    with patch.object(adapter, "raw_stream_dispatch", side_effect=mock_raw_stream):
+        events = []
+        async for event_type, data in adapter.typed_stream_dispatch(
+            "chat", {}, "thread-1"
+        ):
+            events.append((event_type, data))
+
+    assert len(events) == 1
+    assert events[0][0] == "custom"
+    assert events[0][1]["type"] == "interrupt"
+    assert events[0][1]["question"] == "Which category?"
+    assert events[0][1]["interrupt_id"] == "interrupt-123"
+
+
+async def test_non_interrupt_custom_events_still_forwarded():
+    """Custom events that are NOT interrupts still pass through as before."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from apps.agent.services.deerflow_adapter.adapter import DeerFlowAdapter
+
+    # A regular custom event (e.g., tool progress) — not an interrupt
+    custom_event = SimpleNamespace(
+        type="custom",
+        data={"type": "tool_progress", "tool_name": "web_search", "progress": 50},
+    )
+
+    adapter = DeerFlowAdapter.__new__(DeerFlowAdapter)
+
+    async def mock_raw_stream(*args, **kwargs):
+        yield custom_event
+
+    with patch.object(adapter, "raw_stream_dispatch", side_effect=mock_raw_stream):
+        events = []
+        async for event_type, data in adapter.typed_stream_dispatch(
+            "chat", {}, "thread-1"
+        ):
+            events.append((event_type, data))
+
+    assert len(events) == 1
+    assert events[0][0] == "custom"
+    assert events[0][1]["type"] == "tool_progress"
