@@ -13,7 +13,7 @@
  * - 最后一个 tool call 高亮显示
  * - 思考过程折叠
  */
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getToolIcon, explainToolCallKey, extractShortToolName } from '@/utils/ai-chat/tool-icon-map'
 import {
@@ -25,6 +25,7 @@ import MarkdownContent from './MarkdownContent.vue'
 import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'
 import FlipDisplay from './FlipDisplay.vue'
+import LiveTimer from './LiveTimer.vue'
 import IIcon from '@/components/IIcon.vue'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
 
@@ -44,6 +45,39 @@ const props = defineProps<{
 
 const expanded = ref(false)
 const showThinking = ref(false)
+
+// Timing state for LiveTimer and auto-collapse
+const reasoningStartTime = ref<number | null>(null)
+const reasoningEndTime = ref<number | null>(null)
+const manualControl = ref(false)
+const autoCollapsed = ref(false)
+
+// Watch for reasoning content to track start time
+watch(() => lastReasoningStep.value?.content, (newVal) => {
+  if (newVal && !reasoningStartTime.value) {
+    reasoningStartTime.value = Date.now()
+  }
+})
+
+// Watch for content after reasoning to track end time and auto-collapse
+watch(() => lastToolCallStep.value, (newVal) => {
+  // When tool calls appear after reasoning starts, mark reasoning as ended
+  if (newVal && reasoningStartTime.value && !reasoningEndTime.value) {
+    reasoningEndTime.value = Date.now()
+    // Auto-collapse after 1s if user hasn't manually toggled
+    setTimeout(() => {
+      if (!manualControl.value) {
+        showThinking.value = false
+        autoCollapsed.value = true
+      }
+    }, 1000)
+  }
+})
+
+function toggleThinking() {
+  showThinking.value = !showThinking.value
+  manualControl.value = true
+}
 
 // 转换消息为 CoT steps
 const steps = computed(() => {
@@ -246,10 +280,13 @@ function getSearchResults(step: { name?: string; result?: string }): SearchResul
 
   if (!step.result) return null
 
-  // web_fetch: result is markdown text, extract URL from args instead
+  // web_fetch: show page title as a single badge
   if (name === 'web_fetch') {
-    // For web_fetch, we don't parse search results - handled by getArtifactPath
-    return null
+    // Try to extract title from markdown (# Title) or use URL
+    const titleMatch = step.result.match(/^#\s+(.+)$/m)
+    const title = titleMatch ? titleMatch[1] : step.result.slice(0, 50)
+    const url = step.args?.url as string || ''
+    return [{ url, title: title || url }]
   }
 
   try {
@@ -362,7 +399,7 @@ function handleArtifactClick(filepath: string) {
         <polyline points="18 15 12 9 6 15"/>
       </svg>
       <span class="expand-label opacity-60">
-        {{ expanded ? t('aiChat.collapse') : t('aiChat.moreSteps', { count: hiddenCount }) }}
+        {{ expanded ? t('aiChat.lessSteps') : t('aiChat.moreSteps', { count: hiddenCount }) }}
       </span>
     </button>
 
@@ -487,13 +524,18 @@ function handleArtifactClick(filepath: string) {
     <template v-if="lastReasoningStep">
       <button
         class="thinking-toggle"
-        @click="showThinking = !showThinking"
+        @click="toggleThinking"
       >
         <div class="thinking-toggle-inner">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="lightbulb-icon">
             <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
           </svg>
           <span class="thinking-label">{{ t('aiChat.thinkingLabel') }}</span>
+          <LiveTimer
+            v-if="reasoningStartTime"
+            :start-time="reasoningStartTime"
+            :end-time="reasoningEndTime ?? undefined"
+          />
         </div>
         <svg
           width="12"
