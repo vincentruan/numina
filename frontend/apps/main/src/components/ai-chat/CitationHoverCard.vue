@@ -30,6 +30,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+let isMounted = true
 const cardRef = ref<HTMLElement | null>(null)
 
 const domain = computed(() => {
@@ -67,7 +68,9 @@ watch(
     if (visible) {
       // Delay to avoid catching the current click event
       setTimeout(() => {
-        document.addEventListener('click', onDocumentClick)
+        if (isMounted) {
+          document.addEventListener('click', onDocumentClick)
+        }
       }, 0)
     } else {
       document.removeEventListener('click', onDocumentClick)
@@ -76,6 +79,7 @@ watch(
 )
 
 onUnmounted(() => {
+  isMounted = false
   document.removeEventListener('click', onDocumentClick)
 })
 </script>
