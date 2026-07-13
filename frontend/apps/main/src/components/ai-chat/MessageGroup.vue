@@ -22,6 +22,7 @@ import TokenUsage from './TokenUsage.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import SubtaskCard from './SubtaskCard.vue'
 import ArtifactFileList from './ArtifactFileList.vue'
+import HumanInputCard from './HumanInputCard.vue'
 import type {
   MessageGroup,
   AssistantProcessingGroup,
@@ -63,6 +64,18 @@ const humanMessage = computed(() =>
 const assistantMessage = computed(() =>
   props.group.type === 'assistant' ? props.group.messages[0] : null
 )
+
+// Assistant group: extract content with thinking tags stripped.
+// Without this, <think>...</think> tags from the backend (llm.py) leak into
+// MarkdownContent and render as regular body text — the user sees the raw
+// thinking content mixed into the AI response. extractContentFromMessage
+// calls splitInlineReasoning which strips fully-closed and unclosed
+// <think> / halle_think_start tags, matching DeerFlow's approach where
+// reasoning is rendered in a separate muted collapsible section.
+const assistantCleanContent = computed(() => {
+  if (!assistantMessage.value) return ''
+  return extractContentFromMessage(assistantMessage.value)
+})
 
 // Assistant group: extract legacy fields for processSteps, etc.
 const assistantLegacyFields = computed(() => {
@@ -109,6 +122,21 @@ const clarificationContent = computed(() => {
   return extractContentFromMessage(msg)
 })
 
+// Clarification group: extract interruptData for HumanInputCard
+const clarificationInterruptData = computed(() => {
+  if (props.group.type !== 'assistant:clarification') return null
+  return (props.group as AssistantClarificationGroup).interruptData ?? null
+})
+
+// Handle clarification answer submission
+function handleClarificationSubmit(group: MessageGroup, answer: string) {
+  if (group.type !== 'assistant:clarification') return
+  // TODO: Call resume API with threadId and interruptId
+  // For now, just mark the group as answered
+  group.phase = 'answered'
+  group.answer = answer
+}
+
 // Present-files group: extract files
 const presentFilesData = computed(() => {
   if (props.group.type !== 'assistant:present-files') return null
@@ -147,7 +175,7 @@ const subagentTaskIds = computed(() => {
            status never updated from tool results (stuck "调用中"). -->
       <AssistantMessage
         :id="assistantMessage.id"
-        :content="assistantMessage.content"
+        :content="assistantCleanContent"
         :phase="assistantMessage.phase || 'done'"
         :process-steps="assistantProcessSteps"
         :plan-steps="assistantPlanSteps"
@@ -158,7 +186,7 @@ const subagentTaskIds = computed(() => {
         :suggestions="assistantMessage.suggestions"
         :feedback="assistantMessage.feedback"
         @retry="emit('retry')"
-        @copy="emit('copy', assistantMessage.content)"
+        @copy="emit('copy', assistantCleanContent)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
       >
@@ -186,22 +214,22 @@ const subagentTaskIds = computed(() => {
       v-else-if="processingGroup"
       :messages="processingGroup.messages"
       :is-loading="isLoading"
+      @artifact-select="(filepath: string) => emit('artifactTap', { id: filepath, title: filepath, kind: 'file', path: filepath })"
     />
 
-    <!-- Clarification: Special card -->
-    <div v-else-if="clarificationContent" class="clarification-card">
-      <div class="clarification-header">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <span class="clarification-title">{{ t('aiChat.needClarification') }}</span>
-      </div>
-      <MarkdownContent
-        v-if="clarificationContent"
-        class="clarification-content"
-        :content="clarificationContent"
-      />
-    </div>
+    <!-- Clarification: interactive HumanInputCard -->
+    <HumanInputCard
+      v-else-if="group.type === 'assistant:clarification'"
+      :question="clarificationInterruptData?.question || clarificationContent || ''"
+      :options="clarificationInterruptData?.options"
+      :context="clarificationInterruptData?.context"
+      :choice-with-other="clarificationInterruptData?.choiceWithOther"
+      :status="group.phase === 'answered' ? 'answered' : 'pending'"
+      :answer="group.answer"
+      :thread-id="threadId || ''"
+      :interrupt-id="clarificationInterruptData?.interrupt_id || ''"
+      @submit="handleClarificationSubmit(group, $event)"
+    />
 
     <!-- Present-files: Content + File list -->
     <div v-else-if="presentFilesData" class="present-files-group">
@@ -239,41 +267,6 @@ const subagentTaskIds = computed(() => {
   margin-bottom: 12px;
 }
 
-/* Clarification card */
-.clarification-card {
-  padding: 16px;
-  background: rgba(129, 140, 248, 0.12);
-  border: 1px solid rgba(129, 140, 248, 0.2);
-  border-radius: 12px;
-}
-
-.clarification-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  color: var(--van-primary-color);
-}
-
-.clarification-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.clarification-content {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text-primary);
-}
-
-.clarification-content :deep(p) {
-  margin: 0 0 8px;
-}
-
-.clarification-content :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
 /* Present-files group */
 .present-files-group {
   display: flex;
@@ -307,10 +300,6 @@ const subagentTaskIds = computed(() => {
 
 /* Light theme - wrap FULL selector in :global() so it matches the scoped
  * element; data-theme attr (not OS preference) is the source of truth. */
-:global([data-theme='light'] .clarification-card) {
-  background: rgba(129, 140, 248, 0.08);
-}
-
 :global([data-theme='light'] .file-card) {
   background: var(--card-bg);
   border-color: rgba(0, 0, 0, 0.06);

@@ -19,6 +19,7 @@ import type {
   MessageGroup,
   AssistantPresentFilesGroup,
   AssistantSubagentGroup,
+  AssistantClarificationGroup,
   ChatMessage,
   ToolCallSummary,
 } from '@/types/ai-chat/message-group'
@@ -147,10 +148,13 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
           open.messages.push(message)
         }
         // 同时新建 clarification group 用于醒目展示
+        // 从 additional_kwargs.interruptData 提取结构化数据供 HumanInputCard 使用
+        const interruptData = message.additional_kwargs?.interruptData as AssistantClarificationGroup['interruptData']
         groups.push({
           type: 'assistant:clarification',
           id: message.id,
           messages: [message],
+          ...(interruptData ? { interruptData } : {}),
         })
       } else {
         // 普通 tool → 合入前一个 processing group
