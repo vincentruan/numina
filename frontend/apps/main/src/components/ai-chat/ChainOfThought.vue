@@ -367,6 +367,82 @@ function getArtifactPath(step: { name?: string; args?: Record<string, unknown>; 
 function handleArtifactClick(filepath: string) {
   emit('artifactSelect', filepath)
 }
+
+/**
+ * Check if a step is a search/fetch type tool (uses ChainOfThoughtSearchResults).
+ * Used to distinguish "empty results" from "not a search tool".
+ */
+function isSearchTypeTool(step: { name?: string }): boolean {
+  const name = extractShortToolName(step.name || '')
+  return name === 'web_search' || name === 'image_search' || name === 'web_fetch'
+}
+
+/**
+ * Check if a step has an error result but no explicit 'error' status.
+ * Catches cases where status is 'done' but the result payload contains an error.
+ */
+function hasToolError(step: { status: string; result?: string }): boolean {
+  if (step.status === 'error') return true
+  if (!step.result) return false
+  try {
+    const parsed = JSON.parse(step.result) as Record<string, unknown>
+    if (parsed.error) return true
+  } catch {
+    // Not JSON - check for common error prefixes
+    return step.result.startsWith('Error:') || step.result.startsWith('Error ')
+  }
+  return false
+}
+
+/**
+ * Extract a short error summary from a tool result.
+ * Returns a truncated, user-friendly error message.
+ */
+function getToolErrorSummary(step: { status: string; result?: string }): string {
+  if (!step.result) return t('aiChat.toolError')
+  // Try JSON extraction
+  try {
+    const parsed = JSON.parse(step.result) as Record<string, unknown>
+    if (parsed.error) {
+      const errMsg = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error)
+      return errMsg.length > 120 ? errMsg.slice(0, 120) + '...' : errMsg
+    }
+  } catch {
+    // Not JSON - use raw result
+  }
+  const raw = step.result
+  return raw.length > 120 ? raw.slice(0, 120) + '...' : raw
+}
+
+/**
+ * Check if a search-type tool completed but produced zero results.
+ */
+function hasEmptySearchResults(step: { name?: string; status: string; result?: string }): boolean {
+  if (!isSearchTypeTool(step)) return false
+  if (step.status !== 'done') return false
+  if (hasToolError(step)) return false
+  const results = getSearchResults(step)
+  // null = not parseable / no result yet; empty array = parsed but zero items
+  return results !== null && results.length === 0
+}
+
+/**
+ * Check if step is web_fetch (for distinct rendering).
+ */
+function isWebFetch(step: { name?: string }): boolean {
+  return extractShortToolName(step.name || '') === 'web_fetch'
+}
+
+/**
+ * Get a display-friendly domain from a URL for web_fetch badge.
+ */
+function getFetchDomain(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '')
+  } catch {
+    return url
+  }
+}
 </script>
 
 <template>
@@ -435,9 +511,32 @@ function handleArtifactClick(filepath: string) {
             </div>
             <div class="step-body-vertical">
               <div class="step-name">{{ getName(step) }}</div>
+              <!-- Error state: tool returned an error -->
+              <div v-if="hasToolError(step)" class="tool-error">
+                <IIcon icon="x-circle" class="tool-error-icon" />
+                <span class="tool-error-text">{{ getToolErrorSummary(step) }}</span>
+              </div>
+              <!-- Empty state: search tool returned zero results -->
+              <div v-else-if="hasEmptySearchResults(step)" class="tool-empty">
+                <IIcon icon="info" class="tool-empty-icon" />
+                <span class="tool-empty-text">{{ t('aiChat.noResults') }}</span>
+              </div>
+              <!-- web_fetch: distinct badge with domain -->
+              <div v-else-if="isWebFetch(step) && getSearchResults(step)" class="web-fetch-result">
+                <IIcon icon="globe" class="web-fetch-icon" />
+                <a
+                  :href="(getSearchResults(step)![0]?.url) || '#'"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="web-fetch-link"
+                >
+                  <span class="web-fetch-domain">{{ getFetchDomain(getSearchResults(step)![0]?.url || '') }}</span>
+                  <span class="web-fetch-title">{{ getSearchResults(step)![0]?.title || getSearchResults(step)![0]?.url }}</span>
+                </a>
+              </div>
               <!-- Tool-specific result visualization for history steps -->
               <ChainOfThoughtSearchResults
-                v-if="getSearchResults(step)"
+                v-else-if="getSearchResults(step) && !isWebFetch(step)"
                 :results="getSearchResults(step)!"
               />
               <CodeBlock
@@ -489,9 +588,32 @@ function handleArtifactClick(filepath: string) {
               </svg>
             </div>
 
+            <!-- Error state: tool returned an error -->
+            <div v-if="hasToolError(lastToolCallStep)" class="tool-error">
+              <IIcon icon="x-circle" class="tool-error-icon" />
+              <span class="tool-error-text">{{ getToolErrorSummary(lastToolCallStep) }}</span>
+            </div>
+            <!-- Empty state: search tool returned zero results -->
+            <div v-else-if="hasEmptySearchResults(lastToolCallStep)" class="tool-empty">
+              <IIcon icon="info" class="tool-empty-icon" />
+              <span class="tool-empty-text">{{ t('aiChat.noResults') }}</span>
+            </div>
+            <!-- web_fetch: distinct badge with domain -->
+            <div v-else-if="isWebFetch(lastToolCallStep) && getSearchResults(lastToolCallStep)" class="web-fetch-result">
+              <IIcon icon="globe" class="web-fetch-icon" />
+              <a
+                :href="(getSearchResults(lastToolCallStep)![0]?.url) || '#'"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="web-fetch-link"
+              >
+                <span class="web-fetch-domain">{{ getFetchDomain(getSearchResults(lastToolCallStep)![0]?.url || '') }}</span>
+                <span class="web-fetch-title">{{ getSearchResults(lastToolCallStep)![0]?.title || getSearchResults(lastToolCallStep)![0]?.url }}</span>
+              </a>
+            </div>
             <!-- Tool-specific result visualization -->
             <ChainOfThoughtSearchResults
-              v-if="lastToolCallStep.status === 'done' && getSearchResults(lastToolCallStep)"
+              v-else-if="lastToolCallStep.status === 'done' && getSearchResults(lastToolCallStep) && !isWebFetch(lastToolCallStep)"
               :results="getSearchResults(lastToolCallStep)!"
             />
             <CodeBlock
@@ -817,6 +939,107 @@ function handleArtifactClick(filepath: string) {
   background: rgba(239, 68, 68, 0.1);
   border-radius: 4px;
   margin-left: 24px;
+}
+
+/* Tool error state: red error summary with icon */
+.tool-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 10px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.tool-error-icon {
+  width: 14px;
+  height: 14px;
+  color: #ef4444;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.tool-error-text {
+  color: #ef4444;
+  word-break: break-word;
+}
+
+/* Tool empty state: info-style when search returns zero results */
+.tool-empty {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.tool-empty-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.tool-empty-text {
+  font-style: italic;
+}
+
+/* web_fetch distinct result: domain badge + title link */
+.web-fetch-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--bg-secondary, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--van-border-color, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+}
+
+.web-fetch-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--van-primary-color);
+  flex-shrink: 0;
+}
+
+.web-fetch-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  min-width: 0;
+  flex: 1;
+}
+
+.web-fetch-domain {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--van-primary-color);
+  background: rgba(129, 140, 248, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-fetch-title {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.web-fetch-link:hover .web-fetch-title {
+  color: var(--van-primary-color);
 }
 
 /* 工具特定结果样式 - 不再用 margin-left: 24px，改为 step-body-vertical 内的 gap */

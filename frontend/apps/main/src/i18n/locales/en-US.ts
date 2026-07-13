@@ -58,6 +58,8 @@ export default {
     toolRunning: 'Running',
     toolDone: 'Done',
     toolFailed: 'Failed',
+    toolError: 'Execution failed',
+    noResults: 'No results',
     deepThinking: 'Deep thinking…',
     thinkDone: 'Deep thinking done',
     sendingMessage: 'Sending',

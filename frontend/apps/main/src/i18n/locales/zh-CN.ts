@@ -162,6 +162,8 @@ export default {
     toolRunning: '调用中',
     toolDone: '已完成',
     toolFailed: '调用失败',
+    toolError: '执行出错',
+    noResults: '无结果',
     deepThinking: '深度思考中…',
     thinkDone: '已深度思考',
     sendingMessage: '发送中',
