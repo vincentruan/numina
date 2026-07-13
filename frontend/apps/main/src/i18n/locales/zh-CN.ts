@@ -162,7 +162,6 @@ export default {
     toolRunning: '调用中',
     toolDone: '已完成',
     toolFailed: '调用失败',
-    toolError: '执行出错',
     noResults: '无结果',
     deepThinking: '深度思考中…',
     thinkDone: '已深度思考',
@@ -292,7 +291,7 @@ export default {
     planInferred: '根据工具调用推断',
     toolArgs: '参数',
     toolResult: '结果',
-    toolError: '错误',
+    toolError: '执行出错',
     generatingAnswer: '正在生成回答',
     // DeerFlow follow-up suggestions keys
     generatingSuggestions: '正在生成追问建议...',

@@ -633,11 +633,6 @@ function getFetchDomain(url: string): string {
               <IIcon icon="external-link" class="external-icon" />
             </button>
           </div>
-
-          <!-- Error message -->
-          <div v-if="lastToolCallStep.status === 'error' && lastToolCallStep.result" class="step-error">
-            {{ lastToolCallStep.result }}
-          </div>
         </div>
       </FlipDisplay>
     </div>
@@ -930,15 +925,6 @@ function getFetchDomain(url: string): string {
 .step-time {
   font-size: 11px;
   color: var(--text-secondary);
-}
-
-.step-error {
-  font-size: 12px;
-  color: #ef4444;
-  padding: 4px 8px;
-  background: rgba(239, 68, 68, 0.1);
-  border-radius: 4px;
-  margin-left: 24px;
 }
 
 /* Tool error state: red error summary with icon */
