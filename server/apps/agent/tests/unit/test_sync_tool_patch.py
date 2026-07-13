@@ -132,3 +132,27 @@ def test_ask_clarification_tool_is_sync_invocable(_fresh_patch):
     tools = get_available_tools(app_config=config)
     ask_tool = next(t for t in tools if t.name == "ask_clarification")
     assert ask_tool.func is not None
+
+
+def test_exactly_one_ask_clarification_after_patch(_fresh_patch):
+    """There must be exactly ONE ask_clarification tool after patching.
+
+    DeerFlow's builtin ask_clarification is a placeholder that returns a static
+    string and does NOT call interrupt(). If both the builtin and our custom
+    interrupt-based tool coexist, the LLM may select the wrong one and the
+    human-in-the-loop feature silently breaks.
+    """
+    from deerflow.config.app_config import AppConfig
+    from deerflow.config.sandbox_config import SandboxConfig
+    from deerflow.tools import get_available_tools
+
+    config = AppConfig(
+        sandbox=SandboxConfig(use='deerflow.sandbox.local:LocalSandboxProvider'),
+        tools=[]
+    )
+    tools = get_available_tools(app_config=config)
+    ask_tools = [t for t in tools if t.name == "ask_clarification"]
+    assert len(ask_tools) == 1, (
+        f"Expected exactly one ask_clarification tool, found {len(ask_tools)}. "
+        "DeerFlow's builtin placeholder must be filtered before adding our interrupt tool."
+    )

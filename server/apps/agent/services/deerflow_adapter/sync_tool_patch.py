@@ -88,6 +88,11 @@ def apply_sync_tool_patches() -> None:
         for t in tools:
             _ensure_sync_invocable_tool(t)
 
+        # Remove DeerFlow's placeholder ask_clarification before adding our interrupt tool.
+        # DeerFlow's builtin returns a static string and does NOT call interrupt(),
+        # so if the LLM selects it instead of ours, human-in-the-loop breaks.
+        tools = [t for t in tools if t.name != "ask_clarification"]
+
         # Add interrupt tools
         interrupt_tools = get_interrupt_tools()
         for t in interrupt_tools:
