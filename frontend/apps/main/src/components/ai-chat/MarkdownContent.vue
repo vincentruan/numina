@@ -14,7 +14,7 @@
  * 中注入操作栏按钮并绑定事件。v-html 更新时这些元素会被清除，
  * 下次 nextTick 会重新注入。
  */
-import { ref, watch, onMounted, onUnmounted, shallowRef, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, shallowRef, nextTick, onErrorCaptured } from 'vue'
 import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import {
@@ -23,12 +23,18 @@ import {
   downloadCsv,
   copyToClipboard,
 } from '@/utils/ai-chat/tableUtils'
+import { getHighlighter, type ShikiHighlighter } from '@/utils/ai-chat/shikiHighlighter'
+import { extractCitationSources, type CitationSource } from '@/utils/ai-chat/citations'
 import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   content: string
   isLoading?: boolean
+}>()
+
+const emit = defineEmits<{
+  citations: [sources: CitationSource[]]
 }>()
 
 const { t } = useI18n()
@@ -40,25 +46,9 @@ const md = new MarkdownIt({
 })
 
 /**
- * Shared singleton shiki highlighter (#11).
+ * Shared singleton shiki highlighter — imported from shikiHighlighter.ts
+ * (uses globalThis cache to survive Vite HMR module re-execution).
  */
-type ShikiModule = typeof import('shiki')
-type ShikiHighlighter = Awaited<ReturnType<ShikiModule['createHighlighter']>>
-let highlighterPromise: Promise<ShikiHighlighter> | null = null
-function getHighlighter(): Promise<ShikiHighlighter> {
-  if (!highlighterPromise) {
-    highlighterPromise = import('shiki').then((shiki) =>
-      shiki.createHighlighter({
-        themes: ['github-dark', 'github-light'],
-        langs: ['python', 'javascript', 'typescript', 'html', 'css', 'json', 'bash', 'sql'],
-      }),
-    ).catch((err) => {
-      highlighterPromise = null
-      throw err
-    })
-  }
-  return highlighterPromise
-}
 
 const highlighter = shallowRef<ShikiHighlighter | null>(null)
 const rendererReady = ref(false)
@@ -145,22 +135,63 @@ function extractTablesAndInjectAnchors(html: string): string {
   return result
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
 function renderMarkdown(content: string): string {
   if (!content) return ''
-  const raw = md.render(content)
-  const sanitized = DOMPurify.sanitize(raw, {
-    ADD_ATTR: ['class', 'style'],
+  try {
+    const raw = md.render(content)
+    const sanitized = DOMPurify.sanitize(raw, {
+      ADD_ATTR: ['class', 'style'],
+    })
+    const withTables = extractTablesAndInjectAnchors(sanitized)
+    return transformCitations(withTables)
+  } catch (error) {
+    console.warn('Markdown rendering failed, falling back to plain text:', error)
+    return `<pre>${escapeHtml(content)}</pre>`
+  }
+}
+
+/**
+ * Transform citation links [citation: title](url) into badge-style HTML.
+ * Also extracts citation sources and emits them to parent.
+ */
+function transformCitations(html: string): string {
+  // Match <a href="url">citation: title</a> or <a href="url">title</a> where text starts with "citation:"
+  const citationRegex = /<a([^>]*)href="([^"]*)"([^>]*)>\s*(?:citation:\s*)?([^<]*)<\/a>/gi
+  return html.replace(citationRegex, (match, preAttrs, url, postAttrs, text) => {
+    // Only transform if it looks like a citation (has citation: prefix or is in a citation context)
+    const fullMatch = match.toLowerCase()
+    if (!fullMatch.includes('citation:') && !url.includes('citation')) {
+      return match // Not a citation, keep as-is
+    }
+    const cleanText = text.replace(/^citation:\s*/i, '').trim()
+    let domain = url
+    try {
+      domain = new URL(url).hostname.replace(/^www\./i, '')
+    } catch { /* keep url as domain */ }
+    const displayText = cleanText || domain
+    return `<span class="citation-badge" data-url="${url}" title="${displayText} - ${url}">${displayText}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></span>`
   })
-  return extractTablesAndInjectAnchors(sanitized)
 }
 
 function rerender() {
   if (!props.content) {
     renderedContent.value = ''
     tables.value = []
+    emit('citations', [])
     return
   }
   renderedContent.value = renderMarkdown(props.content)
+  // Extract and emit citation sources
+  const sources = extractCitationSources(props.content)
+  emit('citations', sources)
   nextTick(injectTableActionBars)
 }
 
@@ -268,6 +299,25 @@ onMounted(() => {
   isMounted = true
   loadHighlighter()
   rerender()
+  // Event delegation for citation badges
+  rootRef.value?.addEventListener('click', handleCitationClick)
+})
+
+function handleCitationClick(e: Event) {
+  const target = e.target as HTMLElement
+  const badge = target.closest('.citation-badge') as HTMLElement | null
+  if (badge) {
+    e.preventDefault()
+    const url = badge.dataset.url
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  }
+}
+
+onErrorCaptured((error) => {
+  console.warn('Vue error captured in MarkdownContent:', error)
+  return false // prevent propagation
 })
 
 onUnmounted(() => {
@@ -475,6 +525,41 @@ onUnmounted(() => {
 
 .markdown-body :deep(.tab-btn:active) {
   transform: scale(0.92);
+}
+
+/* Citation badges */
+.markdown-body :deep(.citation-badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  margin: 0 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary, #999);
+  background: rgba(127, 127, 127, 0.12);
+  border-radius: 9999px;
+  transition: all 0.15s ease;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.markdown-body :deep(.citation-badge:hover) {
+  background: rgba(127, 127, 127, 0.2);
+  color: var(--van-primary-color, #6366f1);
+  text-decoration: none;
+}
+
+.markdown-body :deep(.citation-badge svg) {
+  flex-shrink: 0;
+}
+
+:global([data-theme='light']) .markdown-body :deep(.citation-badge) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:global([data-theme='light']) .markdown-body :deep(.citation-badge:hover) {
+  background: rgba(0, 0, 0, 0.1);
 }
 
 @media (max-width: 375px) {
