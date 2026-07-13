@@ -1064,6 +1064,7 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   transition: background 0.2s, color 0.2s, transform 0.15s;
+  position: relative;
 }
 
 :global([data-theme='dark'] .send-btn) {
@@ -1075,6 +1076,22 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #6366f1, #7c3aed);
   color: #fff !important;
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* ── Pulse ripple on active send button ── */
+.send-btn--active::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.6);
+  animation: send-pulse-ripple 2.4s ease-out infinite;
 }
 
 .send-btn--active:hover {
@@ -1096,6 +1113,22 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
+/* ── Pulse ripple on abort button ── */
+.send-btn--abort::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.6);
+  animation: send-pulse-ripple 2.4s ease-out infinite;
+}
+
 .send-btn--abort:hover {
   transform: scale(1.05);
   background: #ff2d20;
@@ -1103,6 +1136,17 @@ onUnmounted(() => {
 
 .send-btn--abort:active {
   transform: scale(0.95);
+}
+
+@keyframes send-pulse-ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
 }
 
 /* ── Panel transition ── */
