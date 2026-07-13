@@ -709,26 +709,33 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         }
       } catch (err) {
         const e = err as Error & { name?: string }
-        // #9: distinguish a user-initiated cancel (break, no retry, mark failed)
+        // Mark the user message as failed for THIS attempt so it doesn't stay
+        // stuck at 'sending' while we retry or after all retries are exhausted.
+        // A successful retry will set it back to 'sent' via setUserMsgStatus
+        // after the stream connection succeeds.
+        setUserMsgStatus(userMsg.id, 'failed')
+        // #9: distinguish a user-initiated cancel (break, no retry)
         // from a timeout/stream error abort (retryable transient failure).
         if (e.name === 'AbortError') {
           if (userCancelled) {
-            setUserMsgStatus(userMsg.id, 'failed')
             break
           }
           // Timeout abort — retry like any transient failure.
           retryCount++
-          if (retryCount > SSE_MAX_RETRIES) {
-            setUserMsgStatus(userMsg.id, 'failed')
-            error.value = e.message || t('aiChat.sendFailed')
+          if (retryCount <= SSE_MAX_RETRIES) {
+            // Optimistic: set back to 'sending' while we retry, so the UI
+            // reflects that we're still trying. If this retry also fails,
+            // the top of this catch block will set it to 'failed' again.
+            setUserMsgStatus(userMsg.id, 'sending')
           }
         } else {
           retryCount++
-          if (retryCount > SSE_MAX_RETRIES) {
-            setUserMsgStatus(userMsg.id, 'failed')
-            error.value = e.message || t('aiChat.sendFailed')
+          if (retryCount <= SSE_MAX_RETRIES) {
+            setUserMsgStatus(userMsg.id, 'sending')
           }
-          // Otherwise loop and retry
+        }
+        if (retryCount > SSE_MAX_RETRIES) {
+          error.value = e.message || t('aiChat.sendFailed')
         }
       } finally {
         if (streamTimeoutId !== null) {
