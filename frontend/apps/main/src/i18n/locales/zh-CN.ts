@@ -407,6 +407,7 @@ export default {
       superseded: '已被新问题替代',
       customInput: '或输入自定义回答...',
     },
+    quoteButton: '引用到对话',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',

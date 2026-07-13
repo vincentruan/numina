@@ -221,6 +221,7 @@ export default {
       superseded: 'Superseded by new question',
       customInput: 'Or type a custom answer...',
     },
+    quoteButton: 'Quote to conversation',
   },
   ai: {
     systemAgents: 'System Agents',

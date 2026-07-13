@@ -387,7 +387,17 @@ onMounted(() => {
   window.visualViewport?.addEventListener('resize', onScrollOrResize)
   // Re-evaluate desktop pointer media query changes
   window.matchMedia?.('(pointer: fine)').addEventListener('change', syncDesktop)
+  // Listen for text selection quote events from SelectionToolbar
+  window.addEventListener('ai-chat:quote', onQuoteEvent)
 })
+
+function onQuoteEvent(e: Event) {
+  const detail = (e as CustomEvent).detail as { text: string }
+  if (!detail?.text) return
+  const quote = `> ${detail.text}\n\n`
+  internalValue.value = internalValue.value + quote
+  nextTick(() => inputRef.value?.focus())
+}
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick, true)
@@ -395,6 +405,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onScrollOrResize)
   window.visualViewport?.removeEventListener('resize', onScrollOrResize)
   window.matchMedia?.('(pointer: fine)').removeEventListener('change', syncDesktop)
+  window.removeEventListener('ai-chat:quote', onQuoteEvent)
 })
 </script>
 

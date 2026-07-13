@@ -27,6 +27,7 @@ import { getHighlighter, type ShikiHighlighter } from '@/utils/ai-chat/shikiHigh
 import { extractCitationSources, type CitationSource } from '@/utils/ai-chat/citations'
 import { showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
+import SelectionToolbar from './SelectionToolbar.vue'
 
 const props = defineProps<{
   content: string
@@ -55,6 +56,7 @@ const rendererReady = ref(false)
 
 const renderedContent = ref('')
 const rootRef = ref<HTMLElement | null>(null)
+const selectionToolbarRef = ref<InstanceType<typeof SelectionToolbar> | null>(null)
 
 interface TableBlock {
   html: string
@@ -301,7 +303,24 @@ onMounted(() => {
   rerender()
   // Event delegation for citation badges
   rootRef.value?.addEventListener('click', handleCitationClick)
+  // Event delegation for text selection (mouseup)
+  rootRef.value?.addEventListener('mouseup', handleMouseUp)
 })
+
+function handleMouseUp() {
+  // Small delay to let the browser finalize the selection
+  setTimeout(() => {
+    const selection = window.getSelection()
+    if (!selection || !selection.toString().trim()) return
+    // Only show toolbar if selection is within this markdown content
+    const anchorNode = selection.anchorNode
+    if (!anchorNode || !rootRef.value?.contains(anchorNode)) return
+    const range = selection.getRangeAt(0)
+    const rect = range.getBoundingClientRect()
+    if (rect.width === 0 && rect.height === 0) return
+    selectionToolbarRef.value?.show(selection.toString().trim(), rect)
+  }, 10)
+}
 
 function handleCitationClick(e: Event) {
   const target = e.target as HTMLElement
@@ -341,6 +360,9 @@ onUnmounted(() => {
     <!-- eslint-disable vue/no-v-html -- sanitized by DOMPurify -->
     <div class="markdown-body" v-html="renderedContent" />
     <!-- eslint-enable vue/no-v-html -->
+
+    <!-- Selection toolbar for quoting text -->
+    <SelectionToolbar ref="selectionToolbarRef" />
   </div>
 </template>
 
