@@ -189,6 +189,9 @@ export default {
     inputAriaLabel: '向 AI 提问',
     collapse: '收起',
     expand: '展开',
+    // Tool history collapse (DeerFlow pattern)
+    moreSteps: '查看其他 {count} 个步骤',
+    lessSteps: '收起步骤',
     moreResults: '+{count} 更多结果',
     panelCamera: '拍照',
     panelFile: '上传文件',
@@ -242,6 +245,9 @@ export default {
     historyAria: '会话历史',
     backAria: '返回',
     moreActionsAria: '更多操作',
+    exportAction: '导出',
+    deleteAction: '删除',
+    exportAsTitle: '选择导出格式',
     copyAria: '复制',
     editAria: '编辑消息',
     editPlaceholder: '编辑消息内容…',
@@ -301,7 +307,8 @@ export default {
     // ChainOfThought thinking label
     thinkingLabel: '思考',
     // Tool history collapse
-    moreSteps: '还有 {count} 步',
+    moreSteps: '查看其他 {count} 个步骤',
+    lessSteps: '收起步骤',
     // DeerFlow execution mode keys
     modeFlashLabel: '闪电',
     modeFlashDesc: '快速响应，无深度思考',
@@ -375,7 +382,21 @@ export default {
     copyTableAsMarkdown: '复制表格',
     downloadTable: '下载表格',
     tableDownloaded: '表格已下载',
+    // Citation sources panel (DeerFlow pattern)
+    usedSources: '使用了 {count} 个来源',
+    citedTimes: '引用 {count} 次',
+    copyReference: '复制引用',
     loadModelsFailed: '加载模型列表失败: {error}',
+    clarification: {
+      title: 'Agent 需要确认',
+      submit: '提交',
+      submitting: '提交中...',
+      answered: '已回答',
+      error: '提交失败',
+      retry: '重试',
+      superseded: '已被新问题替代',
+      customInput: '或输入自定义回答...',
+    },
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',
