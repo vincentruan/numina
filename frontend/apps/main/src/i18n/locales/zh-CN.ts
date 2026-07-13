@@ -167,7 +167,6 @@ export default {
     thinkDone: '已深度思考',
     sendingMessage: '发送中',
     sendFailed: '发送失败',
-    resend: '重发',
     connectingAI: '正在连接',
     stopGeneration: '停止生成',
     generationStopped: '已停止生成',
@@ -410,6 +409,9 @@ export default {
       customInput: '或输入自定义回答...',
     },
     quoteButton: '引用到对话',
+    branchButton: '创建分支',
+    branchSuccess: '分支创建成功',
+    branchFailed: '无法创建分支',
   },
   aiPlanProgress: {
     ariaLabel: '计划进度：已完成 {completed} / {total} 步',

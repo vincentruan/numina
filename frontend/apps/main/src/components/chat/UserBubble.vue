@@ -23,7 +23,6 @@ const props = defineProps<Props>()
 
 const emit = defineEmits<{
   copy: []
-  retry: []
 }>()
 
 const { t } = useI18n()
@@ -51,7 +50,6 @@ function onCopy() {
         <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
       </svg>
       <span>{{ t('aiChat.sendFailed') }}</span>
-      <button class="retry-btn" @click="emit('retry')">{{ t('aiChat.resend') }}</button>
     </div>
 
     <!-- Footer: copy + time (below bubble, right-aligned) -->
@@ -123,17 +121,6 @@ function onCopy() {
 
 .send-status.failed {
   color: #f87171;
-}
-
-.retry-btn {
-  margin-left: 4px;
-  padding: 2px 6px;
-  font-size: 12px;
-  background: rgba(248, 113, 113, 0.2);
-  border-radius: 4px;
-  border: none;
-  color: inherit;
-  cursor: pointer;
 }
 
 /* Footer (below bubble, right-aligned) */

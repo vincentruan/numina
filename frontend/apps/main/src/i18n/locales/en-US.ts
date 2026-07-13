@@ -64,7 +64,6 @@ export default {
     thinkDone: 'Deep thinking done',
     sendingMessage: 'Sending',
     sendFailed: 'Send failed',
-    resend: 'Resend',
     connectingAI: 'Connecting',
     stopGeneration: 'Stop',
     generationStopped: 'Generation stopped',
@@ -225,6 +224,9 @@ export default {
       customInput: 'Or type a custom answer...',
     },
     quoteButton: 'Quote to conversation',
+    branchButton: 'Branch conversation',
+    branchSuccess: 'Branch created',
+    branchFailed: 'Failed to create branch',
   },
   ai: {
     systemAgents: 'System Agents',
