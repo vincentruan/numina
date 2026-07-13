@@ -19,6 +19,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
+import VoiceInputButton from './VoiceInputButton.vue'
 import IIcon from '@/components/IIcon.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
@@ -317,6 +318,17 @@ function removeAttachment(index: number) {
   emit('removeAttachment', index)
 }
 
+// Voice input
+function onVoiceResult(text: string) {
+  internalValue.value = internalValue.value
+    ? internalValue.value + ' ' + text
+    : text
+}
+
+function onVoiceError(message: string) {
+  showToast(t('aiChat.voiceErrorPermission'))
+}
+
 // Plus panel position: left-aligned with the + button, shown above it
 // Uses ref updated on open + scroll/resize for reactive positioning
 const panelPosition = ref<Record<string, string>>({})
@@ -564,6 +576,9 @@ onUnmounted(() => {
 
           <!-- Right: Send/Stop button -->
           <div class="send-actions">
+            <!-- Voice input button -->
+            <VoiceInputButton @result="onVoiceResult" @error="onVoiceError" />
+
             <!-- Send/Stop button -->
             <button
               v-if="status === 'streaming' || status === 'submitted'"

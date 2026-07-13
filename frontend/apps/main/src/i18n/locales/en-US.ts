@@ -81,6 +81,10 @@ export default {
     chipFollowupExample: 'Can you give an example?',
     chipFollowupCompare: 'Compare with other options?',
     chipFollowupTrend: 'What about future trends?',
+    reasoning: {
+      thinking: 'Thinking',
+      thought: 'Thought for',
+    },
     moreFeatures: 'More',
     inputAriaLabel: 'Ask AI',
     collapse: 'Collapse',
@@ -201,6 +205,12 @@ export default {
     filterTimeMachine: 'Time Machine',
     slashPaletteHint: 'Select a feature, press Esc to close',
     slashPaletteEmpty: 'No features available',
+    // Voice input
+    voiceTooltip: 'Tap to start voice input',
+    voiceTooltipFirst: 'Voice input requires microphone permission',
+    voiceErrorPermission: 'Microphone permission denied',
+    voiceErrorNotSupported: 'Browser does not support voice input',
+    voiceListening: 'Listening...',
     clarification: {
       title: 'Agent needs clarification',
       submit: 'Submit',

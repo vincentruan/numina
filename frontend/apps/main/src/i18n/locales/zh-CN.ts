@@ -273,6 +273,10 @@ export default {
     filterTimeMachine: '财务时光机',
     slashPaletteHint: '选择功能，按 Esc 关闭',
     slashPaletteEmpty: '暂无可用功能',
+    reasoning: {
+      thinking: '思考中',
+      thought: '已思考',
+    },
     agentInfoAria: '查看智能体信息',
     agentInfoTitle: '智能体信息',
     agentNoDescription: '暂无描述',
@@ -330,6 +334,12 @@ export default {
     heroTitleChat: '有什么想问的？',
     heroSubtitleChat: '输入问题，智能助手帮你分析家庭资产',
     continuePlaceholder: '继续对话...',
+    // Voice input
+    voiceTooltip: '点击开始语音输入',
+    voiceTooltipFirst: '语音输入需要麦克风权限',
+    voiceErrorPermission: '麦克风权限被拒绝',
+    voiceErrorNotSupported: '浏览器不支持语音输入',
+    voiceListening: '正在聆听...',
     // DeerFlow WelcomeExamples keys (SuggestionList pattern)
     welcomeExampleSurprise: '随机提问',
     welcomeExampleAnalyze: '分析',
