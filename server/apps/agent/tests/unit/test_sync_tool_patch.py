@@ -100,3 +100,35 @@ def test_patch_is_idempotent(_fresh_patch):
     from deerflow.tools import get_available_tools as after
 
     assert before is after
+
+
+def test_patched_get_available_tools_includes_ask_clarification(_fresh_patch):
+    """The patched get_available_tools must include ask_clarification."""
+    from deerflow.config.app_config import AppConfig
+    from deerflow.config.sandbox_config import SandboxConfig
+    from deerflow.tools import get_available_tools
+
+    # Create minimal config to avoid YAML parsing issues
+    config = AppConfig(
+        sandbox=SandboxConfig(use='deerflow.sandbox.local:LocalSandboxProvider'),
+        tools=[]
+    )
+    tools = get_available_tools(app_config=config)
+    tool_names = [t.name for t in tools]
+    assert "ask_clarification" in tool_names
+
+
+def test_ask_clarification_tool_is_sync_invocable(_fresh_patch):
+    """ask_clarification must have func set (sync-invocable) after patching."""
+    from deerflow.config.app_config import AppConfig
+    from deerflow.config.sandbox_config import SandboxConfig
+    from deerflow.tools import get_available_tools
+
+    # Create minimal config to avoid YAML parsing issues
+    config = AppConfig(
+        sandbox=SandboxConfig(use='deerflow.sandbox.local:LocalSandboxProvider'),
+        tools=[]
+    )
+    tools = get_available_tools(app_config=config)
+    ask_tool = next(t for t in tools if t.name == "ask_clarification")
+    assert ask_tool.func is not None

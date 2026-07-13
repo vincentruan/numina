@@ -13,6 +13,15 @@ This module monkey-patches ``get_available_tools`` to wrap every returned tool
 through ``_ensure_sync_invocable_tool`` so the sync stream path can invoke
 async-only tools (``task``) the same way it already invokes MCP tools.
 
+It also patches ``make_sync_tool_wrapper`` to propagate ``contextvars`` into
+the thread pool executor. Without this, ``task_tool`` (which runs in
+``_SYNC_TOOL_EXECUTOR``) cannot access ``get_app_config()`` (set via
+``push_current_app_config()`` ContextVar in the parent thread) or
+``get_stream_writer()`` (LangGraph runtime ContextVar). The result is that
+subagents load the wrong config (base template with placeholder API keys)
+and ``task_started``/``task_completed`` custom events are never emitted —
+the frontend stays stuck at "正在执行 N 个子任务".
+
 It also patches ``deerflow.mcp.tools.get_mcp_tools`` to inject an
 ``httpx_client_factory`` that builds the MCP client's httpx AsyncClient with
 ``trust_env=False``. Without this, ``langchain-mcp-adapters``' ``sse_client``
@@ -30,6 +39,8 @@ from __future__ import annotations
 
 import inspect
 import logging
+
+from apps.agent.services.deerflow_adapter.interrupt_tools import get_interrupt_tools
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +75,9 @@ def apply_sync_tool_patches() -> None:
         source = inspect.getsource(_orig_get_available_tools)
         return_section = source.rsplit("return", 1)[-1]
         if "_ensure_sync_invocable_tool" in return_section:
-            logger.debug("[sync_tool_patch] upstream fix already present; skipping")
+            logger.debug("[sync_tool_patch] upstream fix already present; skipping get_available_tools patch")
             _patched = True
+            _apply_contextvar_propagation_patch()
             _apply_mcp_proxy_bypass_patch()
             return
     except Exception:
@@ -73,7 +85,16 @@ def apply_sync_tool_patches() -> None:
 
     def _patched_get_available_tools(*args, **kwargs):
         tools = _orig_get_available_tools(*args, **kwargs)
-        return [_ensure_sync_invocable_tool(t) for t in tools]
+        for t in tools:
+            _ensure_sync_invocable_tool(t)
+
+        # Add interrupt tools
+        interrupt_tools = get_interrupt_tools()
+        for t in interrupt_tools:
+            _ensure_sync_invocable_tool(t)
+        tools.extend(interrupt_tools)
+
+        return tools
 
     # Replace on BOTH the submodule and the parent package. DeerFlowClient's
     # ``_get_tools()`` imports ``get_available_tools`` from the ``deerflow.tools``
@@ -92,7 +113,75 @@ def apply_sync_tool_patches() -> None:
 
     logger.info("[sync_tool_patch] patched get_available_tools to wrap all tools for sync invocation")
     _patched = True
+    _apply_contextvar_propagation_patch()
     _apply_mcp_proxy_bypass_patch()
+
+
+def _apply_contextvar_propagation_patch() -> None:
+    """Patch ``make_sync_tool_wrapper`` to propagate contextvars into the pool thread.
+
+    ``deerflow.tools.sync.make_sync_tool_wrapper`` submits async tool coroutines
+    to ``_SYNC_TOOL_EXECUTOR`` (a ``ThreadPoolExecutor``) via ``asyncio.run()``.
+    However, ``ThreadPoolExecutor.submit()`` does NOT propagate ``contextvars``
+    from the calling thread to the worker thread. This means:
+
+    - ``get_app_config()`` (set via ``push_current_app_config()`` ContextVar in
+      the parent deerflow thread) is not available → subagent loads wrong/empty
+      config (base template with placeholder API keys) → API 401 or wrong model
+    - ``get_stream_writer()`` (LangGraph runtime ContextVar) returns a no-op →
+      ``task_started``/``task_completed`` custom events are never emitted →
+      frontend stays stuck at "正在执行 N 个子任务"
+
+    The fix captures the calling context via ``contextvars.copy_context()`` and
+    runs the coroutine inside that context in the pool thread.
+    """
+    try:
+        import deerflow.tools.sync as _sync_mod
+        _orig_make_sync_tool_wrapper = _sync_mod.make_sync_tool_wrapper
+    except (ImportError, AttributeError):
+        logger.warning("[sync_tool_patch] deerflow.tools.sync not found; skipping contextvar patch")
+        return
+
+    def _patched_make_sync_tool_wrapper(coro, tool_name: str):
+        """Build a sync wrapper that propagates contextvars into the pool thread."""
+        import asyncio as _asyncio
+        import contextvars
+
+        # Capture the calling context (includes app_config, stream_writer, etc.)
+        # at the time the wrapper is CALLED (not when make_sync_tool_wrapper is called).
+        # This is critical: the context must be captured in sync_wrapper(), not here,
+        # because the tool is invoked from the deerflow thread which has the correct
+        # ContextVar values for this specific family request.
+        def sync_wrapper(*args, **kwargs):
+            # Capture context from the calling thread (deerflow stream thread)
+            ctx = contextvars.copy_context()
+
+            def _run_in_context():
+                return _asyncio.run(ctx.run(coro, *args, **kwargs))
+
+            try:
+                loop = _asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            try:
+                if loop is not None and loop.is_running():
+                    # Called from within an event loop (deerflow stream thread) —
+                    # submit to the pool executor but run inside the captured context
+                    future = _sync_mod._SYNC_TOOL_EXECUTOR.submit(_run_in_context)
+                    return future.result()
+                # No running loop — run directly in the captured context
+                return _run_in_context()
+            except Exception as e:
+                _sync_mod.logger.error(
+                    "Error invoking tool %r via sync wrapper: %s", tool_name, e, exc_info=True
+                )
+                raise
+
+        return sync_wrapper
+
+    _sync_mod.make_sync_tool_wrapper = _patched_make_sync_tool_wrapper
+    logger.info("[sync_tool_patch] patched make_sync_tool_wrapper to propagate contextvars into pool thread")
 
 
 def _apply_mcp_proxy_bypass_patch() -> None:
