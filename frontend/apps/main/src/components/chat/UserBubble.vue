@@ -10,8 +10,13 @@
  * - w-fit (narrow bubble that fits content)
  * - max-width 70% (prevents overly wide bubbles)
  * - Bubble contains ONLY user text; copy + time are below the bubble
+ *
+ * Markdown rendering:
+ * User content is rendered as markdown (like AI responses) so formatted
+ * input (lists, code, links) displays properly.
  */
 import { useI18n } from 'vue-i18n'
+import MarkdownContent from '@/components/ai-chat/MarkdownContent.vue'
 
 interface Props {
   content: string
@@ -37,7 +42,7 @@ function onCopy() {
   <div class="user-bubble">
     <!-- Bubble: only the user's text content (DeerFlow: w-fit, right-aligned) -->
     <div class="bubble-content">
-      <p class="bubble-text">{{ content }}</p>
+      <MarkdownContent :content="content" class="bubble-markdown" />
     </div>
 
     <!-- Send status indicator (below bubble) -->
@@ -95,10 +100,37 @@ function onCopy() {
   background: #27272a;
 }
 
-.bubble-text {
-  margin: 0;
+/* Markdown content inside user bubble */
+.bubble-markdown {
   font-size: 15px;
   line-height: 1.5;
+}
+
+.bubble-markdown :deep(p) {
+  margin: 0;
+}
+
+.bubble-markdown :deep(p + p) {
+  margin-top: 0.5em;
+}
+
+.bubble-markdown :deep(pre) {
+  margin: 6px 0;
+  border-radius: 8px;
+}
+
+.bubble-markdown :deep(code) {
+  font-size: 0.9em;
+}
+
+.bubble-markdown :deep(ul),
+.bubble-markdown :deep(ol) {
+  margin: 4px 0;
+  padding-left: 1.5em;
+}
+
+.bubble-markdown :deep(a) {
+  color: var(--van-primary-color);
 }
 
 /* Send status (below bubble) */
