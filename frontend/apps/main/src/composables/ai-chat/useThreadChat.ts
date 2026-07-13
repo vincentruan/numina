@@ -5,6 +5,7 @@ import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
+import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 
 export type { ChatMessage }
 
@@ -74,6 +75,20 @@ interface ValuesData {
   title?: string
   messages?: SerializedMessage[]
   artifacts?: Array<Record<string, unknown>>
+}
+
+/**
+ * Interrupt event payload from DeerFlow ask_clarification tool.
+ *
+ * The backend emits this as a `custom` SSE event with `type: 'interrupt'`
+ * when the agent needs user clarification before continuing. The frontend
+ * renders it as an `assistant:clarification` message group.
+ */
+export interface InterruptData {
+  question: string
+  options?: Array<{ label: string; value: string }>
+  context?: string
+  interrupt_id: string
 }
 
 /** Format current time as HH:MM */
@@ -169,6 +184,7 @@ export interface UseThreadChatOptions {
 
 export function useThreadChat(options: UseThreadChatOptions = {}) {
   const { t } = useI18n()
+  const { handleTaskEvent } = useUpdateSubtask()
   const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
@@ -539,6 +555,17 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               tool_name?: string
               args?: Record<string, unknown>
               suggestions?: string[]
+              task_id?: string
+              description?: string
+              prompt?: string
+              result?: string
+              error?: string
+              usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
+              // Interrupt event fields
+              question?: string
+              options?: Array<{ label: string; value: string }>
+              context?: string
+              interrupt_id?: string
             }
             if (customData.type === 'tool_call') {
               const step = createPlanningStep(customData)
@@ -550,6 +577,40 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               }
             } else if (customData.type === 'suggestions' && customData.suggestions) {
               suggestions.value = customData.suggestions
+            } else if (customData.type === 'interrupt') {
+              // DeerFlow ask_clarification interrupt: the agent paused and needs
+              // user input to continue. Create a tool message named
+              // 'ask_clarification' so useMessageGroups routes it into an
+              // assistant:clarification group. Store the full interrupt payload
+              // in additional_kwargs so the clarification UI can render the
+              // question, options, and submit a resume with interrupt_id.
+              const interruptPayload: InterruptData = {
+                question: customData.question || '',
+                options: customData.options,
+                context: customData.context,
+                interrupt_id: customData.interrupt_id || genId('intr'),
+              }
+              const msg: ChatMessage = {
+                id: genId('clar'),
+                type: 'tool',
+                role: 'assistant',
+                content: interruptPayload.question,
+                displayTime: formatDisplayTime(),
+                name: 'ask_clarification',
+                tool_call_id: interruptPayload.interrupt_id,
+                additional_kwargs: { interruptData: interruptPayload },
+              }
+              messages.value = [...messages.value, msg]
+            } else if (
+              customData.type === 'task_started'
+              || customData.type === 'task_running'
+              || customData.type === 'task_completed'
+              || customData.type === 'task_failed'
+              || customData.type === 'task_timed_out'
+              || customData.type === 'task_cancelled'
+            ) {
+              // DeerFlow task_tool emits these events for subagent progress
+              handleTaskEvent(customData)
             }
           } else if (chunk.event === 'end') {
             streamEnded = true
