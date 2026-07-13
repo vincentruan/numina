@@ -226,6 +226,7 @@ from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
 from apps.agent.routers import liability as liability_router  # noqa: E402
 from apps.agent.routers import model_test as model_test_router  # noqa: E402
 from apps.agent.routers import report as report_router  # noqa: E402
+from apps.agent.routers import resume as resume_router  # noqa: E402
 from apps.agent.routers import runs_stream as runs_stream_router  # noqa: E402
 from apps.agent.routers import spending_leak as spending_leak_router  # noqa: E402
 from apps.agent.routers import suggest as suggest_router  # noqa: E402
@@ -247,6 +248,7 @@ app.include_router(capabilities_router.router)
 app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)
+app.include_router(resume_router.router)
 
 
 @app.get("/health")
