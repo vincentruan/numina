@@ -215,7 +215,7 @@ async def run_family_agent(
         # because typed_stream_dispatch yields raw LangGraph `messages` events
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        capability = "chat"
+        capability = "chat-search" if call_websearch_enabled else "chat"
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
             context=redacted,
