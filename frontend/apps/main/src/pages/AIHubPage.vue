@@ -216,12 +216,8 @@
       :agent-icon="selectedAgent?.icon"
       :agent-label="selectedAgent?.display_name"
       @submit="submitChatFromInput"
-      @action="onInputAction"
       @select-agent="showAgentPicker = true"
     />
-    <!-- Hidden file inputs (kept here so the page owns the upload state) -->
-    <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
-    <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
 
     <!-- Agent picker action sheet (only shows actual agents, not Time Machine) -->
     <van-action-sheet
