@@ -96,6 +96,9 @@ const panelTriggerRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const webSearchEnabled = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const cameraInputRef = ref<HTMLInputElement | null>(null)
 
 // Track whether web search state was explicitly set (by the user toggling it,
 // or by the parent passing a definite webSearch prop e.g. inherited from the
@@ -304,7 +307,41 @@ function closePanel() {
 
 function onPanelItem(action: 'file' | 'image' | 'camera') {
   panelOpen.value = false
-  emit('action', action)
+  // Directly trigger the corresponding file input
+  if (action === 'file') {
+    fileInputRef.value?.click()
+  } else if (action === 'image') {
+    imageInputRef.value?.click()
+  } else if (action === 'camera') {
+    cameraInputRef.value?.click()
+  }
+}
+
+function handleFileSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.fileSelected', { name: file.name }))
+    // TODO: implement file upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+function handleImageSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.photoSelected'))
+    // TODO: implement photo upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+function handleCameraSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.photoSelected'))
+    // TODO: implement photo upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
 }
 
 const panelItems = computed(() => [
@@ -664,6 +701,10 @@ onUnmounted(() => {
         <p class="agent-info-description">{{ selectedAgent.description || t('aiChat.agentNoDescription') }}</p>
       </div>
     </Teleport>
+    <!-- Hidden file inputs for panel actions -->
+    <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
+    <input ref="imageInputRef" type="file" accept="image/*" hidden @change="handleImageSelect" />
+    <input ref="cameraInputRef" type="file" accept="image/*" capture="environment" hidden @change="handleCameraSelect" />
   </div>
 </template>
 

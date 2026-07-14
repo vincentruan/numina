@@ -169,15 +169,18 @@ describe('InputBox', () => {
       expect(vm.panelOpen).toBe(true)
     })
 
-    it('closes panel and emits action when panel item is clicked', async () => {
+    it('closes panel and triggers file input when panel item is clicked', async () => {
       const vm = wrapper.vm as any
       vm.panelOpen = true
       await nextTick()
 
+      // Mock the click method on file inputs
+      const cameraInput = wrapper.find('input[capture="environment"]')
+      const clickSpy = vi.spyOn(cameraInput.element as HTMLInputElement, 'click')
+
       await vm.onPanelItem('camera')
       expect(vm.panelOpen).toBe(false)
-      expect(wrapper.emitted('action')).toBeTruthy()
-      expect(wrapper.emitted('action')?.[0][0]).toBe('camera')
+      expect(clickSpy).toHaveBeenCalled()
     })
 
     it('closePanel sets panelOpen to false', async () => {
