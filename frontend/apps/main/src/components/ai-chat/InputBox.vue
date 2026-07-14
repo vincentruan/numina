@@ -72,7 +72,6 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   'update:webSearch': [value: boolean]
   selectAgent: []
-  action: [type: 'file' | 'image' | 'camera']
   removeAttachment: [index: number]
   contextChange: [context: InputContext]
 }>()
