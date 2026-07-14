@@ -221,8 +221,8 @@ watch(() => models.value, (newModels) => {
 }, { immediate: true })
 
 // ── Methods ──
-// PC (fine-pointer / keyboard) devices: Enter inserts a newline,
-// Cmd (mac) / Ctrl (win) + Enter sends. Mobile falls back to the Send button.
+// PC (fine-pointer / keyboard) devices: Enter submits, Shift+Enter inserts
+// a newline. Mobile falls back to the Send button.
 const isDesktop = ref(false)
 function syncDesktop() {
   isDesktop.value = window.matchMedia?.('(pointer: fine)').matches ?? false
@@ -230,11 +230,12 @@ function syncDesktop() {
 
 function onKeydownEnter(e: KeyboardEvent) {
   if (!isDesktop.value) return
-  if (e.metaKey || e.ctrlKey) {
-    e.preventDefault()
-    onSubmit()
+  if (e.shiftKey) {
+    // Let the textarea insert a newline (default behavior)
+    return
   }
-  // else: let the textarea insert a newline (default behavior)
+  e.preventDefault()
+  onSubmit()
 }
 
 function onSubmit() {
