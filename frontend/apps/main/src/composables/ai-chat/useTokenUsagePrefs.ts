@@ -71,6 +71,13 @@ export function tokenUsagePreferencesFromPreset(
   }
 }
 
+// Module-level singleton refs - all instances share the same reactive state
+// so the header dropdown and inline renderers stay in sync automatically.
+const _sharedPreset = ref<TokenUsageViewPreset>(readStoredPreset())
+const _sharedPreferences = ref<TokenUsagePreferences>(
+  tokenUsagePreferencesFromPreset(_sharedPreset.value),
+)
+
 /**
  * Persistent preset selection shared across sessions.
  *
@@ -83,14 +90,9 @@ export function tokenUsagePreferencesFromPreset(
  * without prop-drilling a setter back up from every message.
  */
 export function useTokenUsagePrefs() {
-  const preset = ref<TokenUsageViewPreset>(readStoredPreset())
-  const preferences = ref<TokenUsagePreferences>(
-    tokenUsagePreferencesFromPreset(preset.value),
-  )
-
   function setPreset(next: TokenUsageViewPreset) {
-    preset.value = next
-    preferences.value = tokenUsagePreferencesFromPreset(next)
+    _sharedPreset.value = next
+    _sharedPreferences.value = tokenUsagePreferencesFromPreset(next)
     try {
       window.localStorage.setItem(STORAGE_KEY, next)
     } catch {
@@ -99,8 +101,8 @@ export function useTokenUsagePrefs() {
   }
 
   return {
-    preset,
-    preferences,
+    preset: _sharedPreset,
+    preferences: _sharedPreferences,
     setPreset,
   }
 }

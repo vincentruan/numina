@@ -353,14 +353,14 @@ export default {
     // DeerFlow clarification/subagent keys
     needClarification: '需要补充信息',
     subagentTasks: '正在执行 {count} 个子任务',
-    usageToken: 'Token',
+    usageToken: 'Tokens',
     tokenUsage: 'Token 用量',
     tokensInput: '输入',
     tokensOutput: '输出',
     tokensTotal: '总计',
     // DeerFlow-style token usage view presets + debug labels
     tokenUsageTitle: 'Token 用量',
-    tokenUsageLabel: 'Tokens',
+    tokenUsageLabel: 'Token',
     tokenUsageView: '显示方式',
     tokenUsageUnavailable: '暂无 Token 用量。只有模型成功返回且供应商提供 usage_metadata 时才会显示。',
     tokenUsageUnavailableShort: '未返回用量',
@@ -377,6 +377,11 @@ export default {
     tokenUsageThinking: '思考',
     tokenUsageStepTotal: '步骤总计',
     tokenUsageSharedAttribution: '该 token 由此步骤中的多个动作共同消耗',
+    tokenUsageSubagentTask: '子代理任务',
+    tokenUsageSearchAction: '搜索：{query}',
+    tokenUsageSearchGeneric: '搜索',
+    tokenUsageToolAction: '工具调用',
+    tokenUsageTodoAction: '任务更新',
     // Welcome page keys
     welcomeTitle: 'Numina AI',
     welcomeSubtitle: '家庭资产管理助手',

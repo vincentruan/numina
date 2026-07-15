@@ -289,20 +289,11 @@ function onSelectPreset(value: TokenUsageViewPreset) {
     </svg>
     <span class="token-label">{{ t('aiChat.usageToken') }}</span>
     <span class="token-sep">·</span>
-    <span class="token-item">
-      <span class="token-item-label">{{ t('aiChat.tokensInput') }}</span>
-      <strong>{{ formatInlineTokenCount(effectiveUsage.prompt_tokens) }}</strong>
-    </span>
+    <strong class="token-value">{{ formatInlineTokenCount(effectiveUsage.prompt_tokens) }}</strong>
     <span class="token-sep">·</span>
-    <span class="token-item">
-      <span class="token-item-label">{{ t('aiChat.tokensOutput') }}</span>
-      <strong>{{ formatInlineTokenCount(effectiveUsage.completion_tokens) }}</strong>
-    </span>
+    <strong class="token-value">{{ formatInlineTokenCount(effectiveUsage.completion_tokens) }}</strong>
     <span class="token-sep">·</span>
-    <span class="token-item token-item-total">
-      <span class="token-item-label">{{ t('aiChat.tokensTotal') }}</span>
-      <strong>{{ formatInlineTokenCount(effectiveUsage.total_tokens) }}</strong>
-    </span>
+    <strong class="token-value token-value-total">{{ formatInlineTokenCount(effectiveUsage.total_tokens) }}</strong>
   </span>
 
   <!-- Inline mode: debug step card (DeerFlow MessageTokenUsageDebugList pattern) -->
@@ -320,8 +311,8 @@ function onSelectPreset(value: TokenUsageViewPreset) {
       <div v-if="debugStep.sharedAttribution" class="tdc-shared">{{ t('aiChat.tokenUsageSharedAttribution') }}</div>
       <div class="tdc-usage-detail">
         <template v-if="debugStep.usage">
-          {{ t('aiChat.tokensInput') }}: {{ formatTokenCount(debugStep.usage.inputTokens) }}
-          · {{ t('aiChat.tokensOutput') }}: {{ formatTokenCount(debugStep.usage.outputTokens) }}
+          {{ formatTokenCount(debugStep.usage.inputTokens) }}
+          · {{ formatTokenCount(debugStep.usage.outputTokens) }}
         </template>
         <template v-else>{{ t('aiChat.tokenUsageUnavailableShort') }}</template>
       </div>
@@ -527,7 +518,7 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   font-size: 12px;
   color: var(--text-secondary, #999);
   padding: 4px 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .token-icon {
@@ -544,23 +535,13 @@ function onSelectPreset(value: TokenUsageViewPreset) {
   opacity: 0.4;
 }
 
-.token-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.token-item-label {
-  color: var(--text-secondary, #999);
-}
-
-.token-item strong {
+.token-value {
   color: var(--text-primary, #fff);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.token-item-total strong {
+.token-value-total {
   color: var(--van-primary-color, #6366f1);
 }
 

@@ -47,6 +47,8 @@ const toolIconMap: Record<string, { icon: string; color: string }> = {
   search: { icon: '🔍', color: '#22c55e' },
   read_file: { icon: '📄', color: '#818cf8' },
   write_file: { icon: '✏️', color: '#f59e0b' },
+  read_numina_report: { icon: '📄', color: '#818cf8' },
+  write_numina_report: { icon: '✏️', color: '#f59e0b' },
   bash: { icon: '⚡', color: '#6366f1' },
   list_directory: { icon: '📁', color: '#3b82f6' },
   web_search: { icon: '🌐', color: '#06b6d4' },

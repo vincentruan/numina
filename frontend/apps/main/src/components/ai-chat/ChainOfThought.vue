@@ -21,6 +21,8 @@ import {
   extractContentFromMessage,
   extractToolCalls,
 } from '@/utils/ai-chat'
+import { useTokenUsagePrefs } from '@/composables/ai-chat/useTokenUsagePrefs'
+import { formatTokenCount } from '@/utils/ai-chat/token-usage-steps'
 import MarkdownContent from './MarkdownContent.vue'
 import ChainOfThoughtSearchResults from './ChainOfThoughtSearchResults.vue'
 import CodeBlock from './CodeBlock.vue'
@@ -30,6 +32,7 @@ import IIcon from '@/components/IIcon.vue'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
 
 const { t } = useI18n()
+const { preferences: tokenPrefs } = useTokenUsagePrefs()
 
 // Emit for artifact selection
 const emit = defineEmits<{
@@ -71,6 +74,8 @@ const steps = computed(() => {
     status: 'pending' | 'running' | 'done' | 'error'
     elapsedMs?: number
     progressMessage?: string
+    /** Per-step token usage (from the AI message's usageMetadata, for debug mode) */
+    usageMetadata?: { inputTokens: number; outputTokens: number }
   }> = []
 
   for (const message of props.messages) {
@@ -139,6 +144,7 @@ const steps = computed(() => {
           status: stepStatus,
           elapsedMs: tc.elapsedMs,
           progressMessage: tc.progressMessage,
+          usageMetadata: message.usageMetadata,
         })
       }
     }
@@ -445,6 +451,20 @@ function isSubagentTask(step: { name?: string }): boolean {
 }
 
 /**
+ * Check if we should show per-step token usage (debug mode only).
+ */
+const showStepTokens = computed(() => tokenPrefs.value.inlineMode === 'step_debug')
+
+/**
+ * Format token count for per-step display (compact format).
+ */
+function formatStepTokens(n: number): string {
+  if (n >= 10000) return `${(n / 1000).toFixed(1)}K`
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K'
+  return n.toLocaleString()
+}
+
+/**
  * Get a display-friendly domain from a URL for web_fetch badge.
  */
 function getFetchDomain(url: string): string {
@@ -502,7 +522,7 @@ function getFetchDomain(url: string): string {
           <!-- DeerFlow pattern: step content with connector line inside icon wrapper -->
           <!-- Reasoning step -->
           <template v-if="step.type === 'reasoning'">
-            <div class="step-icon-wrapper">
+            <div class="step-icon-container">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="step-icon reasoning-icon">
                 <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.984 3.984 0 0014 21a3.984 3.984 0 00-2.612-1.267l-.548-.547z"/>
               </svg>
@@ -516,29 +536,41 @@ function getFetchDomain(url: string): string {
 
           <!-- Tool call step (history) - DeerFlow pattern: no status badge, just name + result -->
           <template v-else>
-            <div class="step-icon-wrapper">
-              <IIcon :icon="getIcon(step)" class="step-icon" :class="{ 'subagent-icon': isSubagentTask(step) }" />
-              <div class="step-connector" />
+            <div class="step-icon-container">
+              <IIcon :icon="getIcon(step)" class="step-icon" :class="[step.status, { 'subagent-icon': isSubagentTask(step) }]" />
+              <div class="step-connector" :class="step.status" />
             </div>
             <div class="step-body-vertical">
-              <div class="step-name" :class="{ 'subagent-name': isSubagentTask(step) }">{{ getName(step) }}</div>
+              <div class="step-name-row">
+                <span class="step-name" :class="{ 'subagent-name': isSubagentTask(step) }">{{ getName(step) }}</span>
+                <!-- Per-step token usage badge (debug mode) -->
+                <span v-if="showStepTokens && step.usageMetadata" class="step-token-badge">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                  <span class="step-token-io">
+                    <span class="step-token-in">↑{{ formatStepTokens(step.usageMetadata.inputTokens) }}</span>
+                    <span class="step-token-out">↓{{ formatStepTokens(step.usageMetadata.outputTokens) }}</span>
+                  </span>
+                </span>
+              </div>
               <!-- Subagent task: show progress indicator -->
               <div v-if="isSubagentTask(step) && step.status === 'running'" class="subagent-progress">
                 <span class="subagent-progress-text">{{ t('aiChat.subtaskExecuting') }}</span>
               </div>
               <!-- Error state: tool returned an error -->
               <div v-if="hasToolError(step)" class="tool-error">
-                <IIcon icon="x-circle" class="tool-error-icon" />
+                <IIcon icon="lucide:x-circle" class="tool-error-icon" />
                 <span class="tool-error-text">{{ getToolErrorSummary(step) }}</span>
               </div>
               <!-- Empty state: search tool returned zero results -->
               <div v-else-if="hasEmptySearchResults(step)" class="tool-empty">
-                <IIcon icon="info" class="tool-empty-icon" />
+                <IIcon icon="lucide:info" class="tool-empty-icon" />
                 <span class="tool-empty-text">{{ t('aiChat.noResults') }}</span>
               </div>
               <!-- web_fetch: distinct badge with domain -->
               <div v-else-if="isWebFetch(step) && getSearchResults(step)" class="web-fetch-result">
-                <IIcon icon="globe" class="web-fetch-icon" />
+                <IIcon icon="lucide:globe" class="web-fetch-icon" />
                 <a
                   :href="(getSearchResults(step)![0]?.url) || '#'"
                   target="_blank"
@@ -566,9 +598,9 @@ function getFetchDomain(url: string): string {
                 class="artifact-link"
                 @click="handleArtifactClick(getArtifactPath(step)!)"
               >
-                <IIcon icon="file-text" class="artifact-icon" />
+                <IIcon icon="lucide:file-text" class="artifact-icon" />
                 <span class="artifact-path">{{ getArtifactPath(step) }}</span>
-                <IIcon icon="external-link" class="external-icon" />
+                <IIcon icon="lucide:external-link" class="external-icon" />
               </button>
             </div>
           </template>
@@ -581,13 +613,23 @@ function getFetchDomain(url: string): string {
           class="cot-step last-tool-call"
           :class="[lastToolCallStep.status, { running: lastToolCallStep.status === 'running' }]"
         >
-          <!-- DeerFlow pattern: icon wrapper without connector (last step has no line) -->
-          <div class="step-icon-wrapper">
-            <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" :class="{ 'subagent-icon': isSubagentTask(lastToolCallStep) }" />
+          <!-- DeerFlow pattern: icon without wrapper (last step has no connector line) -->
+          <div class="step-icon-container">
+            <IIcon :icon="getIcon(lastToolCallStep)" class="step-icon" :class="[lastToolCallStep.status, { 'subagent-icon': isSubagentTask(lastToolCallStep) }]" />
           </div>
           <div class="step-body-vertical">
             <div class="step-name-row">
               <span class="step-name" :class="{ 'subagent-name': isSubagentTask(lastToolCallStep) }">{{ getName(lastToolCallStep) }}</span>
+              <!-- Per-step token usage badge (debug mode) -->
+              <span v-if="showStepTokens && lastToolCallStep.usageMetadata" class="step-token-badge">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <span class="step-token-io">
+                  <span class="step-token-in">↑{{ formatStepTokens(lastToolCallStep.usageMetadata.inputTokens) }}</span>
+                  <span class="step-token-out">↓{{ formatStepTokens(lastToolCallStep.usageMetadata.outputTokens) }}</span>
+                </span>
+              </span>
               <!-- DeerFlow pattern: only show spinner for running, no ✓/✗ badge for done -->
               <svg
                 v-if="lastToolCallStep.status === 'running'"
@@ -605,17 +647,17 @@ function getFetchDomain(url: string): string {
 
             <!-- Error state: tool returned an error -->
             <div v-if="hasToolError(lastToolCallStep)" class="tool-error">
-              <IIcon icon="x-circle" class="tool-error-icon" />
+              <IIcon icon="lucide:x-circle" class="tool-error-icon" />
               <span class="tool-error-text">{{ getToolErrorSummary(lastToolCallStep) }}</span>
             </div>
             <!-- Empty state: search tool returned zero results -->
             <div v-else-if="hasEmptySearchResults(lastToolCallStep)" class="tool-empty">
-              <IIcon icon="info" class="tool-empty-icon" />
+              <IIcon icon="lucide:info" class="tool-empty-icon" />
               <span class="tool-empty-text">{{ t('aiChat.noResults') }}</span>
             </div>
             <!-- web_fetch: distinct badge with domain -->
             <div v-else-if="isWebFetch(lastToolCallStep) && getSearchResults(lastToolCallStep)" class="web-fetch-result">
-              <IIcon icon="globe" class="web-fetch-icon" />
+              <IIcon icon="lucide:globe" class="web-fetch-icon" />
               <a
                 :href="(getSearchResults(lastToolCallStep)![0]?.url) || '#'"
                 target="_blank"
@@ -643,9 +685,9 @@ function getFetchDomain(url: string): string {
               class="artifact-link"
               @click="handleArtifactClick(getArtifactPath(lastToolCallStep)!)"
             >
-              <IIcon icon="file-text" class="artifact-icon" />
+              <IIcon icon="lucide:file-text" class="artifact-icon" />
               <span class="artifact-path">{{ getArtifactPath(lastToolCallStep) }}</span>
-              <IIcon icon="external-link" class="external-icon" />
+              <IIcon icon="lucide:external-link" class="external-icon" />
             </button>
           </div>
         </div>
@@ -817,6 +859,7 @@ function getFetchDomain(url: string): string {
 
 .cot-step {
   display: flex;
+  align-items: flex-start; /* icon aligns with first line of text */
   gap: 8px; /* DeerFlow: gap-2 = 8px */
   font-size: 14px; /* DeerFlow: text-sm = 14px */
   padding: 4px 8px;
@@ -836,21 +879,42 @@ function getFetchDomain(url: string): string {
   padding: 4px 0;
 }
 
-/* DeerFlow 竖直轴线连接：参考 chain-of-thought.tsx ChainOfThoughtStep:
-   `<div className="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />`
-   - top-7 = 28px (below 16px icon + gap)
-   - left-1/2 + -mx-px = centered on icon
-   - w-px = 1px width
-*/
+/* DeerFlow 竖直轴线连接：参考 chain-of-thought.tsx ChainOfThoughtStep
+   改进：使用渐变效果，从主色到透明，更好地表示步骤流向 */
 .step-connector {
   position: absolute;
-  top: 28px; /* DeerFlow: top-7 = 28px (16px icon + 8px gap + 4px margin) */
-  bottom: 0;
+  top: 22px; /* Below the 16px icon + 6px padding */
+  bottom: -2px;
   left: 50%;
   transform: translateX(-50%);
-  width: 1px;
-  background: var(--separator);
+  width: 2px;
+  background: linear-gradient(
+    to bottom,
+    var(--van-primary-color) 0%,
+    var(--border-color, rgba(129, 140, 248, 0.3)) 50%,
+    transparent 100%
+  );
   z-index: 0;
+}
+
+/* Running state: animated gradient */
+.step-connector.running {
+  background: linear-gradient(
+    to bottom,
+    var(--van-primary-color) 0%,
+    var(--van-primary-color) 50%,
+    transparent 100%
+  );
+  animation: connector-flow 1.5s linear infinite;
+}
+
+@keyframes connector-flow {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 0 20px;
+  }
 }
 
 /* DeerFlow pattern: step body takes remaining space.
@@ -892,25 +956,39 @@ function getFetchDomain(url: string): string {
   z-index: 1;
 }
 
-/* DeerFlow pattern: step icon wrapper contains icon + connector line.
-   The wrapper stretches vertically (flex align-items: stretch default)
-   so the connector extends from icon down to next step. */
-.step-icon-wrapper {
+/* DeerFlow pattern: icon container holds icon + connector line.
+   No circle background — just the icon, horizontally aligned with text. */
+.step-icon-container {
   position: relative; /* Containing block for connector */
-  margin-top: 2px; /* DeerFlow: mt-0.5 */
   flex-shrink: 0;
   display: flex;
-  align-items: flex-start; /* Icon at top of wrapper */
-  justify-content: center; /* Center horizontally for connector */
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  min-height: 20px;
 }
 
 .step-icon {
-  width: 16px; /* DeerFlow: size-4 */
+  width: 16px;
   height: 16px;
   color: var(--text-secondary);
-  font-size: 16px; /* IIcon uses 1em sizing - set font-size to match */
+  font-size: 16px;
   flex-shrink: 0;
-  /* DeerFlow: no background circle, just the icon SVG */
+}
+
+/* Running state: primary color */
+.step-icon.running {
+  color: var(--van-primary-color);
+}
+
+/* Done state: success color */
+.step-icon.done {
+  color: #22c55e;
+}
+
+/* Error state: error color */
+.step-icon.error {
+  color: #ef4444;
 }
 
 .step-name {
@@ -1115,6 +1193,39 @@ function getFetchDomain(url: string): string {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* Per-step token usage badge (debug mode) - DeerFlow parity */
+.step-token-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  color: var(--text-secondary);
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.step-token-badge svg {
+  opacity: 0.5;
+}
+
+.step-token-io {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.step-token-in {
+  color: var(--text-secondary);
+}
+
+.step-token-out {
+  color: var(--van-primary-color);
 }
 
 /* 375px */

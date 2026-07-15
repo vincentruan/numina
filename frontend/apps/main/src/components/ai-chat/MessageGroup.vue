@@ -47,6 +47,8 @@ const props = defineProps<{
   branchingMessageId?: string | null
   answeredInterruptIds?: Set<string>
   interruptErrorId?: string | null
+  /** Previous group's planSteps - used to detect redundant completion summaries */
+  prevGroupPlanSteps?: PlanStep[]
 }>()
 
 const emit = defineEmits<{
@@ -95,8 +97,9 @@ const assistantProcessSteps = computed((): ProcessStep[] | undefined =>
 )
 
 // Assistant group: extract planSteps for TodoList rendering
+// Falls back to prevGroupPlanSteps for detecting redundant completion summaries
 const assistantPlanSteps = computed((): PlanStep[] | undefined =>
-  assistantLegacyFields.value?.planSteps
+  assistantLegacyFields.value?.planSteps || props.prevGroupPlanSteps
 )
 
 // Assistant group: extract planSource

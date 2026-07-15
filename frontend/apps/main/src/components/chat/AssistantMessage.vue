@@ -59,6 +59,18 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+// DeerFlow 模式：当 planSteps 存在且内容只是冗余的完成总结时，抑制内容渲染。
+// Numina agent 在 write_todos 完成后会生成一条额外的 AI 总结消息
+// （如"已完成！所有 5 个待办事项均已标记为完成。"），但 DeerFlow
+// 不显示这种冗余消息——todo 列表本身就是最终输出。
+const isRedundantCompletionSummary = computed(() => {
+  if (!props.planSteps || props.planSteps.length === 0) return false
+  const content = props.content.trim()
+  if (content.length === 0 || content.length >= 100) return false
+  return content.includes('完成') || content.includes('已完成') ||
+    content.includes('标记为完成') || content.includes('全部完成')
+})
+
 // Extract reasoning steps from processSteps
 const reasoningSteps = computed(() =>
   props.processSteps?.filter((s) => s.type === 'reasoning') ?? []
@@ -250,9 +262,9 @@ watch(
       :status="processStatus"
     />
 
-    <!-- Main content area -->
+    <!-- Main content area (suppressed when planSteps exist and content is a redundant completion summary) -->
     <div
-      v-if="phase !== 'error' && content"
+      v-if="phase !== 'error' && content && !isRedundantCompletionSummary"
       class="message-content"
       :class="{ 'content--appearing': phase === 'answering' && !renderedContent }"
     >
@@ -286,14 +298,16 @@ watch(
       {{ t('aiChat.generationStopped') }}
     </div>
 
-    <!-- Token usage slot: rendered between content and footer so the order is
-         content -> token usage -> timestamp/actions -> suggestions.
-         Slotted in by MessageGroup to keep this component data-agnostic. -->
-    <slot name="token-usage" />
-
-    <!-- Footer: timestamp and actions -->
+    <!-- Footer: token usage + timestamp + actions.
+         Token usage is integrated into the footer (DeerFlow pattern) instead of
+         rendering as a separate block between content and footer. The separate
+         block created a visual break that made the content above look like a
+         boxed "final reply", confusing users into thinking the actual answer
+         was below the token usage line. -->
     <div v-if="phase === 'done' || phase === 'interrupted' || phase === 'error'" class="message-footer">
       <span class="message-time">{{ displayTime }}</span>
+      <slot name="token-usage" />
+      <div class="message-footer-spacer" />
 
       <!-- Actions -->
       <div class="message-actions">
@@ -539,16 +553,22 @@ watch(
 /* Footer */
 .message-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 8px;
   margin-top: 8px;
   padding-top: 8px;
+}
+
+/* Spacer pushes actions to the right */
+.message-footer-spacer {
+  flex: 1;
 }
 
 .message-time {
   font-size: 11px;
   color: var(--text-secondary);
   opacity: 0.6;
+  flex-shrink: 0;
 }
 
 .message-actions {

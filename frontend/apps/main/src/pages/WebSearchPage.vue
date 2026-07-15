@@ -27,11 +27,21 @@ const isReordering = ref(false)
 
 const enabledCount = computed(() => providers.value.filter((p) => p.is_enabled).length)
 
-const enabledProviders = computed(() =>
-  providers.value.filter((p) => p.is_enabled).sort((a, b) => a.display_order - b.display_order),
-)
+const enabledProviders = computed({
+  get: () =>
+    providers.value.filter((p) => p.is_enabled).sort((a, b) => a.display_order - b.display_order),
+  set: (newList: WebSearchProvider[]) => {
+    // Sync the reordered enabled list back into the source array
+    const enabledIds = new Set(newList.map((p) => p.id))
+    const disabled = providers.value.filter((p) => !enabledIds.has(p.id))
+    providers.value = [...newList, ...disabled]
+  },
+})
 
 const disabledProviders = computed(() => providers.value.filter((p) => !p.is_enabled))
+
+// Snapshot of enabled provider IDs before drag — used to detect actual order changes
+let preDragOrder: string[] = []
 
 function getTemplate(providerName: string) {
   return templates.value.find((t) => t.provider_name === providerName)
@@ -91,15 +101,15 @@ async function handleToggle(provider: WebSearchProvider) {
   }
 }
 
-async function onDragEnd() {
-  // Check if order actually changed
-  const newOrder = enabledProviders.value.map((p) => p.id)
-  const oldOrder = providers.value
-    .filter((p) => p.is_enabled)
-    .sort((a, b) => a.display_order - b.display_order)
-    .map((p) => p.id)
+function onDragStart() {
+  // Snapshot current order before vuedraggable mutates v-model
+  preDragOrder = enabledProviders.value.map((p) => p.id)
+}
 
-  if (JSON.stringify(newOrder) === JSON.stringify(oldOrder)) {
+async function onDragEnd() {
+  const newOrder = enabledProviders.value.map((p) => p.id)
+
+  if (JSON.stringify(newOrder) === JSON.stringify(preDragOrder)) {
     return // No change, skip API calls
   }
 
@@ -143,6 +153,7 @@ onMounted(load)
         :disabled="!isOwner"
         handle=".drag-handle"
         ghost-class="ghost-item"
+        @start="onDragStart"
         @end="onDragEnd"
       >
         <template #item="{ element: provider }">

@@ -337,6 +337,7 @@ import { ref, computed, onMounted } from 'vue'
 import { showToast, showFailToast, showConfirmDialog } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import PageHeader from '@/components/common/PageHeader.vue'
 import {
   getSkillsGrouped,
   createCustomSkill,

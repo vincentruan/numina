@@ -92,6 +92,9 @@ async def run_family_agent(
     selected_provider: dict[str, Any] | None = None
     user_message = ""
     ai_response_parts: list[str] = []
+    # Cumulative token usage from the adapter's `end` event (DeerFlow pattern).
+    # Captured here so the worker's own `end` frame can include it.
+    cumulative_usage: dict[str, int] | None = None
 
     try:
         # 1. Mark running + publish metadata (DeerFlow pattern)
@@ -233,6 +236,16 @@ async def run_family_agent(
                 break
 
             if sse_type == "end":
+                # Capture cumulative usage from DeerFlow before breaking.
+                # The adapter yields ("end", {"usage": {...}}) from
+                # DeerFlowClient.stream() end event.
+                if isinstance(data, dict) and data.get("usage"):
+                    raw_usage = data["usage"]
+                    cumulative_usage = {
+                        "input_tokens": raw_usage.get("input_tokens", 0),
+                        "output_tokens": raw_usage.get("output_tokens", 0),
+                        "total_tokens": raw_usage.get("total_tokens", 0),
+                    }
                 break
             if sse_type == "error":
                 await bridge.publish(run_id, "error", data)
@@ -351,7 +364,11 @@ async def run_family_agent(
         # so the frontend can distinguish a clean completion from a truncated
         # stream (#19) without guessing from content. publish_end() below only
         # signals the sentinel (data=None), so the data frame must precede it.
-        await bridge.publish(run_id, "end", {"status": completion_status})
+        # Include cumulative token usage from DeerFlow when available.
+        end_payload = {"status": completion_status}
+        if cumulative_usage:
+            end_payload["usage"] = cumulative_usage
+        await bridge.publish(run_id, "end", end_payload)
 
         if completion_status == 'complete' and selected_provider is not None:
             # Sync / generate the thread title. DeerFlow's TitleMiddleware

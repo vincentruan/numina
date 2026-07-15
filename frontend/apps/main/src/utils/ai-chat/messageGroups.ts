@@ -27,6 +27,7 @@ import { isHiddenFromUIMessage } from '@/types/ai-chat/message-group'
 import {
   hasReasoning,
   hasContent,
+  extractContentFromMessage,
 } from './reasoning-filter'
 
 /**
@@ -212,15 +213,43 @@ export function getMessageGroups(messages: ChatMessage[]): MessageGroup[] {
       // （有 reasoning/tool_calls + content 的情况）。tool_calls 的可视化在
       // processing group (ChainOfThought) 渲染。
       //
-      // 当 AI 消息同时携带 tool_calls 与 content 时（如“让我为您查询家庭资产
+      // 当 AI 消息同时携带 tool_calls 与 content 时（如”让我为您查询家庭资产
       // 负债的最新情况”+ get_assets），content 是工具调用前的过渡说明文本，
-      // 不是最终回答。若为它单独创建 assistant 气泡，会显示为“下一轮对话”，
+      // 不是最终回答。若为它单独创建 assistant 气泡，会显示为”下一轮对话”，
       // 破坏当前轮次的视觉连贯性（DeerFlow 将过渡文本归入 ChainOfThought 块）。
       // 因此：有 tool_calls 时不创建 assistant 气泡，过渡文本由 ChainOfThought
       // 的 leadingContent 渲染为处理块的一部分。
       // ask_clarification 的澄清正文由 tool 结果消息进入 assistant:clarification
       // group 展示，不依赖此处。
       if (hasContent(message) && !hasToolCalls(message)) {
+        // DeerFlow 模式：当 todos 已完成时，跳过冗余的完成总结消息。
+        // Numina agent 在 write_todos 完成后会生成一条额外的 AI 总结消息
+        // （如”已完成！所有 5 个待办事项均已标记为完成。”），但 DeerFlow
+        // 不显示这种冗余消息——todo 列表本身就是最终输出。
+        //
+        // 检测条件：
+        // 1. 前一个 group 是 assistant:processing
+        // 2. 该 processing group 包含 write_todos 工具调用
+        // 3. 当前消息内容很短（< 100 字符）且包含完成类关键词
+        const lastGroup = groups[groups.length - 1]
+        if (lastGroup?.type === 'assistant:processing') {
+          const hasWriteTodos = lastGroup.messages.some(
+            m => m.type === 'ai' && m.tool_calls?.some(tc => tc.name === 'write_todos'),
+          )
+
+          if (hasWriteTodos) {
+            const content = extractContentFromMessage(message)
+            const isShortCompletion = content.length > 0 && content.length < 100 &&
+              (content.includes('完成') || content.includes('已完成') ||
+               content.includes('标记为完成') || content.includes('全部完成'))
+
+            if (isShortCompletion) {
+              // 跳过创建 assistant group，避免冗余的完成总结
+              continue
+            }
+          }
+        }
+
         groups.push({
           type: 'assistant',
           id: message.id,

@@ -345,16 +345,21 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (!raw || raw.length === 0) return
     const mapped = raw.map(serializedToChatMessage)
     const existingIds = new Set(messages.value.map(m => m.id))
-    // Skip human messages from values events. sendMessage always creates an
-    // optimistic human message with the user's original text before streaming,
-    // and that optimistic message is the authoritative display text. The
-    // backend persists the human message as a `[SKILL:chat]\n{json}` prompt
-    // wrapper (adapter._build_prompt) — an internal prompt string that must
-    // never be shown. Including it here would render a duplicate human bubble
-    // with the raw JSON. Prior turns' human messages are already in
-    // messages.value (from earlier optimistic messages or loadHistory), so
-    // skipping human messages only drops the current turn's prompt wrapper.
-    const newOnes = mapped.filter(m => !existingIds.has(m.id) && m.type !== 'human')
+    // During active streaming, skip human messages from values events because
+    // sendMessage already created an optimistic human message with the user's
+    // original text. The backend persists the human message as a
+    // `[SKILL:chat]\n{json}` prompt wrapper (adapter._build_prompt) — an
+    // internal prompt string that must never be shown as a duplicate.
+    //
+    // On page refresh (initial load), however, there is no optimistic human
+    // message — the values event is the ONLY source of user messages. Include
+    // human messages only when messages.value is empty (initial hydration).
+    const isInitialLoad = messages.value.length === 0
+    const newOnes = mapped.filter(m => {
+      if (existingIds.has(m.id)) return false
+      if (m.type === 'human' && !isInitialLoad) return false
+      return true
+    })
     if (newOnes.length > 0) {
       messages.value = [...messages.value, ...newOnes]
     }
@@ -668,10 +673,20 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
             // reply and no error UI (B-end-status).
             let endStatus: string | undefined
             if (chunk.data) {
-              const endData = chunk.data as { usage?: TokenUsage; status?: string }
+              const endData = chunk.data as {
+                usage?: TokenUsage | { input_tokens?: number; output_tokens?: number; total_tokens?: number }
+                status?: string
+              }
               endStatus = endData.status
               if (endData.usage) {
-                tokenUsage.value = endData.usage
+                // Normalize: backend may send DeerFlow format (input_tokens/output_tokens)
+                // or legacy format (prompt_tokens/completion_tokens)
+                const raw = endData.usage as Record<string, number>
+                tokenUsage.value = {
+                  prompt_tokens: raw.prompt_tokens ?? raw.input_tokens ?? 0,
+                  completion_tokens: raw.completion_tokens ?? raw.output_tokens ?? 0,
+                  total_tokens: raw.total_tokens ?? 0,
+                }
               }
             }
             if (endStatus === 'error') {

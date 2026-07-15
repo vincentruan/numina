@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
 import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
 import type { ChatMessage } from '@/types/ai-chat/message-group'
+import type { PlanStep } from '@/types/agent-stream'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
+import { extractLegacyFields } from '@/utils/ai-chat/messageAdapter'
 
 const props = defineProps<{
   messages: ChatMessage[]
@@ -63,6 +65,22 @@ const showThinkingIndicator = computed(() => {
   if (groups.length === 0) return false
   return groups[groups.length - 1].type === 'human'
 })
+
+/**
+ * Get planSteps from the previous group (for detecting redundant completion summaries).
+ * DeerFlow pattern: when todos are complete, the final "已完成！" message is redundant
+ * because the todo list itself is the final output.
+ */
+function getPrevGroupPlanSteps(index: number): PlanStep[] | undefined {
+  if (index === 0) return undefined
+  const prevGroup = messageGroups.value[index - 1]
+  if (!prevGroup) return undefined
+  // Only look at the first AI message in the previous group
+  const firstAiMsg = prevGroup.messages.find(m => m.type === 'ai')
+  if (!firstAiMsg) return undefined
+  const legacy = extractLegacyFields(firstAiMsg)
+  return legacy?.planSteps
+}
 
 // ── Auto-scroll with user-interrupt (R5) ──
 const SCROLL_THRESHOLD = 50 // px from bottom to consider "at bottom"
@@ -171,6 +189,7 @@ onUnmounted(() => {
         :branching-message-id="branchingMessageId"
         :answered-interrupt-ids="answeredInterruptIds"
         :interrupt-error-id="interruptErrorId"
+        :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
         @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"

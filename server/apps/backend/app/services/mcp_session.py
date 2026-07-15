@@ -148,11 +148,11 @@ class MCPSession:
                 elif name == "get_recent_alerts":
                     limit = int(arguments.get("limit", 10))
                     data = dashboard_service.get_recent_alerts(db, user, limit=limit)
-                elif name == "write_file":
+                elif name == "write_numina_report":
                     filename = arguments.get("filename", "")
                     content = arguments.get("content", "")
                     data = self._handle_write_file(filename, content)
-                elif name == "read_file":
+                elif name == "read_numina_report":
                     filename = arguments.get("filename", "")
                     data = self._handle_read_file(filename)
                 else:

@@ -8,10 +8,9 @@
  * The step carries the message's usage_metadata so the UI can show per-step
  * token attribution in `debug` mode.
  *
- * Numina's backend does not send `token_usage_attribution` (DeerFlow's richer
- * payload), so we use the same fallback path DeerFlow falls back to: derive
- * labels from `tool_calls` on the message, and default to "最终回复" / "思考"
- * based on whether the message has text content.
+ * Numina's backend sends `token_usage_attribution` in `additional_kwargs`
+ * (via DeerFlow's TokenUsageMiddleware). When available, we use the rich
+ * attribution data; otherwise we fall back to deriving labels from `tool_calls`.
  */
 import type { ChatMessage, UsageMetadata } from '@/types/ai-chat/message-group'
 import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
@@ -27,6 +26,76 @@ export interface TokenDebugStep {
   usage: { inputTokens: number; outputTokens: number; totalTokens: number } | null
   /** True when multiple actions contributed to this step's token cost */
   sharedAttribution: boolean
+}
+
+/**
+ * Token usage attribution from backend (DeerFlow TokenUsageMiddleware).
+ * Stored in AIMessage.additional_kwargs["token_usage_attribution"].
+ */
+interface TokenUsageAttribution {
+  version: number
+  kind: 'thinking' | 'final_answer' | 'tool_batch' | 'todo_update' | 'subagent_dispatch'
+  shared_attribution: boolean
+  tool_call_ids: string[]
+  actions: Array<{
+    kind: string
+    tool_name?: string
+    tool_call_id?: string
+    description?: string
+    content?: string
+    query?: string
+    subagent_type?: string
+  }>
+}
+
+/**
+ * Extract token_usage_attribution from message's additional_kwargs.
+ * Returns null if not present or invalid.
+ */
+function getTokenUsageAttribution(message: ChatMessage): TokenUsageAttribution | null {
+  if (message.type !== 'ai') return null
+  const ak = message.additional_kwargs
+  if (!ak || typeof ak !== 'object') return null
+  const attr = ak.token_usage_attribution
+  if (!attr || typeof attr !== 'object') return null
+  const obj = attr as Record<string, unknown>
+  if (typeof obj.version !== 'number') return null
+  if (!Array.isArray(obj.actions)) return null
+  return obj as unknown as TokenUsageAttribution
+}
+
+/**
+ * Build a human-readable label from an attribution action.
+ * Mirrors DeerFlow's action label generation.
+ */
+function actionToLabel(
+  action: TokenUsageAttribution['actions'][number],
+  t: (key: string, params?: Record<string, unknown>) => string,
+): string {
+  switch (action.kind) {
+    case 'subagent':
+      return action.description || t('aiChat.tokenUsageSubagentTask')
+    case 'search':
+      return action.query
+        ? t('aiChat.tokenUsageSearchAction', { query: action.query })
+        : t('aiChat.tokenUsageSearchGeneric')
+    case 'tool':
+      if (action.tool_name && action.description) {
+        return action.description
+      }
+      if (action.tool_name) {
+        const { key, params } = explainToolCallKey(action.tool_name, {})
+        return params ? t(key, params) : t(key)
+      }
+      return t('aiChat.tokenUsageToolAction')
+    case 'todo_start':
+    case 'todo_complete':
+    case 'todo_update':
+    case 'todo_remove':
+      return action.content || t('aiChat.tokenUsageTodoAction')
+    default:
+      return action.description || t('aiChat.tokenUsageToolAction')
+  }
 }
 
 /** Build already-translated action labels for a single AI message's tool calls. */
@@ -61,6 +130,28 @@ export function buildTokenDebugStep(
   if (message.type !== 'ai') return null
 
   const usage = extractUsage(message)
+
+  // Try to use token_usage_attribution from backend (DeerFlow pattern)
+  const attribution = getTokenUsageAttribution(message)
+
+  if (attribution && attribution.actions.length > 0) {
+    // Use rich attribution data from backend
+    const labels = attribution.actions.map(action => actionToLabel(action, t))
+    const sharedAttribution = attribution.shared_attribution || labels.length > 1
+
+    return {
+      id: message.id || `token-step-${message.id}`,
+      messageId: message.id || `token-step-${message.id}`,
+      label: sharedAttribution
+        ? t('aiChat.tokenUsageStepTotal')
+        : labels[0]!,
+      secondaryLabels: sharedAttribution ? labels : [],
+      usage,
+      sharedAttribution,
+    }
+  }
+
+  // Fallback: derive labels from tool_calls (legacy path)
   const actionLabels = buildToolCallLabels(message, t)
 
   if (actionLabels.length === 0) {

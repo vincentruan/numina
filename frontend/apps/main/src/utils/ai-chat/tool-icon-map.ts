@@ -6,43 +6,45 @@
  */
 
 export const TOOL_ICON_MAP: Record<string, string> = {
-  // DeerFlow 内置工具
-  'web_search': 'search',
-  'web_fetch': 'globe',
-  'image_search': 'search',
-  'read_file': 'file-text',
-  'write_file': 'file-edit',
-  'str_replace': 'file-edit',
-  'bash': 'terminal',
-  'ls': 'folder',
-  'ask_clarification': 'help-circle',
-  'write_todos': 'list-todo',
-  'present_files': 'file',
+  // DeerFlow 内置工具 (使用 lucide: 前缀，匹配 @iconify/vue 格式)
+  'web_search': 'lucide:search',
+  'web_fetch': 'lucide:globe',
+  'image_search': 'lucide:image',
+  'read_file': 'lucide:file-text',
+  'write_file': 'lucide:file-pen-line',
+  'str_replace': 'lucide:file-pen-line',
+  'bash': 'lucide:terminal',
+  'ls': 'lucide:folder-open',
+  'ask_clarification': 'lucide:help-circle',
+  'write_todos': 'lucide:list-todo',
+  'present_files': 'lucide:file',
 
   // MCP tools (带前缀)
-  'mcp://web_search': 'search',
-  'mcp://read_file': 'file-text',
-  'mcp://write_file': 'file-edit',
-  'mcp://bash': 'terminal',
+  'mcp://web_search': 'lucide:search',
+  'mcp://read_file': 'lucide:file-text',
+  'mcp://write_file': 'lucide:file-pen-line',
+  'mcp://bash': 'lucide:terminal',
 
   // Numina domain tools（含实际流式传输的复数/变体名）
-  'get_asset': 'coin',
-  'get_assets': 'coin',
-  'get_liability': 'credit-card',
-  'get_liabilities': 'credit-card',
-  'get_allocation': 'pie-chart',
-  'get_dashboard': 'dashboard',
-  'get_dashboard_overview': 'dashboard',
-  'get_family_members': 'users',
-  'get_members': 'users',
-  'get_family_overview': 'dashboard',
+  'get_asset': 'lucide:coins',
+  'get_assets': 'lucide:coins',
+  'get_liability': 'lucide:credit-card',
+  'get_liabilities': 'lucide:credit-card',
+  'get_allocation': 'lucide:pie-chart',
+  'get_dashboard': 'lucide:layout-dashboard',
+  'get_dashboard_overview': 'lucide:layout-dashboard',
+  'get_family_members': 'lucide:users',
+  'get_members': 'lucide:users',
+  'get_family_overview': 'lucide:layout-dashboard',
+  'read_numina_report': 'lucide:file-text',
+  'write_numina_report': 'lucide:file-pen-line',
 
   // Subagent (task 由 SubtaskCard 处理)
-  'task': 'agent',
-  'subagent': 'agent',
+  'task': 'lucide:bot',
+  'subagent': 'lucide:bot',
 
   // Default
-  'default': 'tool',
+  'default': 'lucide:wrench',
 }
 
 /**
@@ -73,6 +75,8 @@ export const TOOL_DISPLAY_NAME_KEY_MAP: Record<string, string> = {
   'get_family_members': 'tool.displayName.get_family_members',
   'get_members': 'tool.displayName.get_family_members',
   'get_family_overview': 'tool.displayName.get_dashboard',
+  'read_numina_report': 'tool.displayName.read_numina_report',
+  'write_numina_report': 'tool.displayName.write_numina_report',
 }
 
 /**
@@ -201,6 +205,18 @@ export const TOOL_ACTION_KEY_MAP: Record<string, (args?: Record<string, unknown>
   'get_family_members': () => ({ key: 'tool.action.get_family_members' }),
   'get_members': () => ({ key: 'tool.action.get_family_members' }),
   'get_family_overview': () => ({ key: 'tool.action.get_family_overview' }),
+  'read_numina_report': (args) => {
+    const filename = args?.filename as string | undefined
+    return filename
+      ? { key: 'tool.action.read_numina_report_with_filename', params: { filename } }
+      : { key: 'tool.action.read_numina_report' }
+  },
+  'write_numina_report': (args) => {
+    const filename = args?.filename as string | undefined
+    return filename
+      ? { key: 'tool.action.write_numina_report_with_filename', params: { filename } }
+      : { key: 'tool.action.write_numina_report' }
+  },
   // MCP namespaced variants（旧格式，保留兼容）
   'numina-family-data_get_assets': () => ({ key: 'tool.action.get_asset' }),
   'numina-family-data_get_liabilities': () => ({ key: 'tool.action.get_liability' }),
