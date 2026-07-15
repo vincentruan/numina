@@ -3,6 +3,11 @@
  * CodeBlock 组件
  *
  * 用于代码高亮展示（Artifact 预览、工具调用结果）
+ *
+ * DeerFlow pattern (message-group.tsx bash tool):
+ *   <CodeBlock className="mx-0 cursor-pointer border-none px-0"
+ *              showLineNumbers={false} language="bash" code={command} />
+ * - No header, no border, no padding when `bare` mode is used
  */
 import { computed } from 'vue'
 import IIcon from '@/components/IIcon.vue'
@@ -11,6 +16,8 @@ const props = defineProps<{
   language: string
   code: string
   showLineNumbers?: boolean
+  /** DeerFlow "border-none px-0" mode: no header, no border, minimal padding */
+  bare?: boolean
 }>()
 
 // 简化的代码展示（无 external highlighting library）
@@ -32,9 +39,9 @@ function copyCode() {
 </script>
 
 <template>
-  <div class="code-block">
-    <!-- 语言标签 -->
-    <div class="code-header">
+  <div class="code-block" :class="{ bare }">
+    <!-- 语言标签 + 复制按钮（bare 模式下隐藏） -->
+    <div v-if="!bare" class="code-header">
       <span class="language-label">{{ languageLabel }}</span>
       <button class="copy-btn" @click="copyCode">
         <IIcon icon="copy" />
@@ -53,6 +60,15 @@ function copyCode() {
   background: var(--bg-primary);
   border-radius: 8px;
   overflow: hidden;
+}
+
+/* DeerFlow bare mode: mx-0 border-none px-0 - no background, no border, no radius */
+.code-block.bare {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  overflow: visible;
+  cursor: pointer;
 }
 
 .code-header {
@@ -93,6 +109,11 @@ function copyCode() {
   overflow-x: auto;
   white-space: pre;
   color: var(--text-primary);
+}
+
+/* DeerFlow bare mode: px-0 = no padding */
+.code-block.bare .code-content {
+  padding: 0;
 }
 
 .with-line-numbers {

@@ -19,6 +19,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { showToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import ModeSelector from './ModeSelector.vue'
+import VoiceInputButton from './VoiceInputButton.vue'
 import IIcon from '@/components/IIcon.vue'
 import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
@@ -34,6 +35,7 @@ interface AgentOption {
   agent_name?: string
   icon?: string
   color?: string | null
+  description?: string
 }
 
 interface Attachment {
@@ -55,6 +57,8 @@ const props = defineProps<{
   agents?: AgentOption[]
   agentIcon?: string
   agentLabel?: string
+  /** When true, agent icon shows info popup instead of triggering selection */
+  readonly?: boolean
   disabled?: boolean
   modelValue?: string
   webSearch?: boolean
@@ -68,7 +72,6 @@ const emit = defineEmits<{
   'update:modelValue': [value: string]
   'update:webSearch': [value: boolean]
   selectAgent: []
-  action: [type: 'file' | 'image' | 'camera']
   removeAttachment: [index: number]
   contextChange: [context: InputContext]
 }>()
@@ -80,6 +83,7 @@ const {
   supportsThinking: _supportsThinking,
   supportsSubagent,
   loading: _resourcesLoading,
+  webSearchAvailable,
 } = useTenantAiResources()
 
 // ── Input state ──
@@ -91,6 +95,27 @@ const panelTriggerRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const webSearchEnabled = ref(props.webSearch ?? false)
 const inputRef = ref<HTMLTextAreaElement | null>(null)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const cameraInputRef = ref<HTMLInputElement | null>(null)
+
+// Track whether web search state was explicitly set (by the user toggling it,
+// or by the parent passing a definite webSearch prop e.g. inherited from the
+// AI hub page). The auto-default logic below never overrides an explicit value.
+let webSearchExplicitlySet = props.webSearch !== undefined
+
+// Auto-enable web search by default when the family tenant has AI enabled
+// (models loaded) AND has web search available (enabled provider or websearch
+// MCP). Only fires once on first resource load; never overrides explicit user
+// or parent-driven choices.
+watch(webSearchAvailable, (available) => {
+  if (webSearchExplicitlySet) return
+  // AI enabled = at least one model is available to the tenant
+  const aiEnabled = models.value.length > 0
+  if (available && aiEnabled && !webSearchEnabled.value) {
+    webSearchEnabled.value = true
+  }
+})
 
 // ── Mode context (DeerFlow 4-mode) ──
 const LAST_MODE_KEY = 'ai-chat:last-mode'
@@ -139,6 +164,13 @@ const displayAgentIcon = computed(() => props.agentIcon || selectedAgent.value?.
 const displayAgentLabel = computed(() => props.agentLabel || selectedAgent.value?.display_name || '')
 const isNuminaAgent = computed(() => selectedAgent.value?.agent_name === NUMINA_AGENT_NAME)
 
+// Agent info popup state (for chat mode)
+const showAgentInfo = ref(false)
+
+function onToggleAgentInfo() {
+  showAgentInfo.value = !showAgentInfo.value
+}
+
 // ── Watchers ──
 watch(internalValue, (val) => emit('update:modelValue', val))
 watch(() => props.modelValue, (val) => {
@@ -150,6 +182,8 @@ watch(webSearchEnabled, (val) => emit('update:webSearch', val))
 watch(() => props.webSearch, (val) => {
   if (val !== undefined && val !== webSearchEnabled.value) {
     webSearchEnabled.value = val
+    // Parent-driven changes are treated as explicit intent
+    webSearchExplicitlySet = true
   }
 })
 
@@ -189,8 +223,8 @@ watch(() => models.value, (newModels) => {
 }, { immediate: true })
 
 // ── Methods ──
-// PC (fine-pointer / keyboard) devices: Enter inserts a newline,
-// Cmd (mac) / Ctrl (win) + Enter sends. Mobile falls back to the Send button.
+// PC (fine-pointer / keyboard) devices: Enter submits, Shift+Enter inserts
+// a newline. Mobile falls back to the Send button.
 const isDesktop = ref(false)
 function syncDesktop() {
   isDesktop.value = window.matchMedia?.('(pointer: fine)').matches ?? false
@@ -198,11 +232,12 @@ function syncDesktop() {
 
 function onKeydownEnter(e: KeyboardEvent) {
   if (!isDesktop.value) return
-  if (e.metaKey || e.ctrlKey) {
-    e.preventDefault()
-    onSubmit()
+  if (e.shiftKey) {
+    // Let the textarea insert a newline (default behavior)
+    return
   }
-  // else: let the textarea insert a newline (default behavior)
+  e.preventDefault()
+  onSubmit()
 }
 
 function onSubmit() {
@@ -256,6 +291,7 @@ async function toggleWebSearch() {
     }
   }
   webSearchEnabled.value = !webSearchEnabled.value
+  webSearchExplicitlySet = true
 }
 
 // Expand
@@ -270,7 +306,41 @@ function closePanel() {
 
 function onPanelItem(action: 'file' | 'image' | 'camera') {
   panelOpen.value = false
-  emit('action', action)
+  // Directly trigger the corresponding file input
+  if (action === 'file') {
+    fileInputRef.value?.click()
+  } else if (action === 'image') {
+    imageInputRef.value?.click()
+  } else if (action === 'camera') {
+    cameraInputRef.value?.click()
+  }
+}
+
+function handleFileSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.fileSelected', { name: file.name }))
+    // TODO: implement file upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+function handleImageSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.photoSelected'))
+    // TODO: implement photo upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
+}
+
+function handleCameraSelect(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (file) {
+    showToast(t('toast.photoSelected'))
+    // TODO: implement photo upload to chat
+  }
+  ;(e.target as HTMLInputElement).value = ''
 }
 
 const panelItems = computed(() => [
@@ -293,6 +363,17 @@ const panelItems = computed(() => [
 
 function removeAttachment(index: number) {
   emit('removeAttachment', index)
+}
+
+// Voice input
+function onVoiceResult(text: string) {
+  internalValue.value = internalValue.value
+    ? internalValue.value + ' ' + text
+    : text
+}
+
+function onVoiceError(message: string) {
+  showToast(t('aiChat.voiceErrorPermission'))
 }
 
 // Plus panel position: left-aligned with the + button, shown above it
@@ -353,7 +434,17 @@ onMounted(() => {
   window.visualViewport?.addEventListener('resize', onScrollOrResize)
   // Re-evaluate desktop pointer media query changes
   window.matchMedia?.('(pointer: fine)').addEventListener('change', syncDesktop)
+  // Listen for text selection quote events from SelectionToolbar
+  window.addEventListener('ai-chat:quote', onQuoteEvent)
 })
+
+function onQuoteEvent(e: Event) {
+  const detail = (e as CustomEvent).detail as { text: string }
+  if (!detail?.text) return
+  const quote = `> ${detail.text}\n\n`
+  internalValue.value = internalValue.value + quote
+  nextTick(() => inputRef.value?.focus())
+}
 
 onUnmounted(() => {
   document.removeEventListener('click', onDocClick, true)
@@ -361,6 +452,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', onScrollOrResize)
   window.visualViewport?.removeEventListener('resize', onScrollOrResize)
   window.matchMedia?.('(pointer: fine)').removeEventListener('change', syncDesktop)
+  window.removeEventListener('ai-chat:quote', onQuoteEvent)
 })
 </script>
 
@@ -471,7 +563,7 @@ onUnmounted(() => {
               :title="t('aiHub.selectAgent')"
               @click="emit('selectAgent')"
             >
-              <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
+              <!-- 小鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
               <template v-else>
                 <span v-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
@@ -486,19 +578,23 @@ onUnmounted(() => {
                 </svg>
               </template>
             </button>
-            <!-- Static agent icon in chat mode -->
-            <span
+            <!-- Agent icon in chat mode: clickable to show info popup -->
+            <button
               v-else-if="(displayAgentIcon || isNuminaAgent) && !isWelcomeMode"
-              class="agent-static-icon"
+              class="control-btn control-btn--agent agent-chat-icon"
+              :aria-label="t('aiChat.agentInfoAria')"
               :title="displayAgentLabel"
+              @click="onToggleAgentInfo"
             >
-              <!-- 数鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
+              <!-- 小鸣 agent uses the colorful AIBrainIcon to match the agent picker -->
               <AIBrainIcon v-if="isNuminaAgent" :active="true" />
               <template v-else>
-                <span v-if="isEmoji(getAgentIcon(displayAgentIcon))">{{ getAgentIcon(displayAgentIcon) }}</span>
+                <span v-if="isEmoji(getAgentIcon(displayAgentIcon))" class="agent-emoji" aria-hidden="true">
+                  {{ getAgentIcon(displayAgentIcon) }}
+                </span>
                 <IIcon v-else :icon="getAgentIcon(displayAgentIcon)" size="20" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
               </template>
-            </span>
+            </button>
 
             <!-- [2] Mode selector (4-mode DeerFlow) -->
             <ModeSelector
@@ -542,6 +638,9 @@ onUnmounted(() => {
 
           <!-- Right: Send/Stop button -->
           <div class="send-actions">
+            <!-- Voice input button -->
+            <VoiceInputButton @result="onVoiceResult" @error="onVoiceError" />
+
             <!-- Send/Stop button -->
             <button
               v-if="status === 'streaming' || status === 'submitted'"
@@ -549,7 +648,7 @@ onUnmounted(() => {
               :aria-label="t('aiChat.stopGeneration')"
               @click="emit('stop')"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <rect x="4" y="4" width="16" height="16" rx="2"/>
               </svg>
             </button>
@@ -570,12 +669,47 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+    <!-- Agent info popup (chat mode) - teleported to body to escape stacking context -->
+    <Teleport v-if="showAgentInfo && selectedAgent && !isWelcomeMode" to="body">
+      <div
+        class="agent-info-backdrop"
+        @click="showAgentInfo = false"
+      />
+      <div
+        class="agent-info-popup"
+        role="dialog"
+        aria-label="Agent information"
+        @click.stop
+      >
+        <div class="agent-info-header">
+          <span class="agent-info-icon" aria-hidden="true">
+            <AIBrainIcon v-if="isNuminaAgent" :active="true" />
+            <span v-else-if="displayAgentIcon && isEmoji(getAgentIcon(displayAgentIcon))">
+              {{ getAgentIcon(displayAgentIcon) || '🤖' }}
+            </span>
+            <IIcon v-else-if="displayAgentIcon" :icon="getAgentIcon(displayAgentIcon)" size="24" :color="selectedAgent?.color || 'var(--van-primary-color)'" />
+            <svg v-else width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="4"/>
+              <circle cx="8.5" cy="10" r="1.5" fill="currentColor"/>
+              <circle cx="15.5" cy="10" r="1.5" fill="currentColor"/>
+              <path d="M8 15c1 1.2 2.4 1.8 4 1.8s3-.6 4-1.8"/>
+            </svg>
+          </span>
+          <span class="agent-info-name">{{ displayAgentLabel }}</span>
+        </div>
+        <p class="agent-info-description">{{ selectedAgent.description || t('aiChat.agentNoDescription') }}</p>
+      </div>
+    </Teleport>
+    <!-- Hidden file inputs for panel actions -->
+    <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
+    <input ref="imageInputRef" type="file" accept="image/*" hidden @change="handleImageSelect" />
+    <input ref="cameraInputRef" type="file" accept="image/*" capture="environment" hidden @change="handleCameraSelect" />
   </div>
 </template>
 
 <style scoped>
 /* ── Theme variables override ── */
-:global([data-theme='light']) .input-box,
+:global([data-theme='light'] .input-box),
 .input-box {
   --ai-btn-border: rgba(0, 0, 0, 0.08);
   --ai-btn-color: var(--text-secondary, #666666);
@@ -594,7 +728,7 @@ onUnmounted(() => {
   --ai-expand-hover-color: var(--text-primary, #111111);
 }
 
-:global([data-theme='dark']) .input-box {
+:global([data-theme='dark'] .input-box) {
   --ai-btn-border: rgba(255, 255, 255, 0.1);
   --ai-btn-color: var(--text-secondary, #c8c8d0);
   --ai-btn-hover-bg: rgba(255, 255, 255, 0.06);
@@ -627,6 +761,17 @@ onUnmounted(() => {
   transition: all 0.2s ease;
 }
 
+/* Chat mode: participate in the flex column so MessageList can allocate space
+   and content never overlaps the input. Welcome mode keeps fixed positioning
+   (floats over the scrolling hub page). */
+.input-box:not(.welcome-mode) {
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  width: auto;
+}
+
 /* ── Premium Gradient Border wrapper ── */
 .input-card-border {
   background: linear-gradient(135deg, #4040ff, #ff49fd, #d763fc, #3cc4fa);
@@ -654,7 +799,7 @@ onUnmounted(() => {
   transition: background-color 0.2s ease;
 }
 
-:global([data-theme='dark']) .input-card-inner {
+:global([data-theme='dark'] .input-card-inner) {
   background: var(--bg-primary, #010120);
 }
 
@@ -1005,9 +1150,10 @@ onUnmounted(() => {
   justify-content: center;
   cursor: pointer;
   transition: background 0.2s, color 0.2s, transform 0.15s;
+  position: relative;
 }
 
-:global([data-theme='dark']) .send-btn {
+:global([data-theme='dark'] .send-btn) {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.4);
 }
@@ -1016,6 +1162,22 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #6366f1, #7c3aed);
   color: #fff !important;
   box-shadow: 0 2px 12px rgba(99, 102, 241, 0.3);
+}
+
+/* ── Pulse ripple on active send button ── */
+.send-btn--active::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.6);
+  animation: send-pulse-ripple 2.4s ease-out infinite;
 }
 
 .send-btn--active:hover {
@@ -1037,6 +1199,22 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
+/* ── Pulse ripple on abort button ── */
+.send-btn--abort::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.6);
+  animation: send-pulse-ripple 2.4s ease-out infinite;
+}
+
 .send-btn--abort:hover {
   transform: scale(1.05);
   background: #ff2d20;
@@ -1044,6 +1222,17 @@ onUnmounted(() => {
 
 .send-btn--abort:active {
   transform: scale(0.95);
+}
+
+@keyframes send-pulse-ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
 }
 
 /* ── Panel transition ── */
@@ -1090,5 +1279,96 @@ onUnmounted(() => {
   .chat-textarea {
     font-size: 13px;
   }
+}
+
+/* ── Agent info popup (chat mode) ── */
+.agent-info-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.agent-info-popup {
+  position: fixed;
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  left: 20px;
+  z-index: 2001;
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  min-width: 160px;
+  max-width: 220px;
+  padding: 12px 14px;
+}
+
+.agent-info-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.agent-info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.agent-info-icon :deep(.ai-button-wrapper) {
+  transform: none !important;
+}
+
+.agent-info-icon :deep(.ai-button-3d) {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0;
+  box-shadow: none;
+  background: transparent;
+  border: none;
+  transform: none !important;
+}
+
+.agent-info-icon :deep(.fg-icon) {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+.agent-info-icon :deep(.bg-icon) {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.agent-info-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-info-description {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.6);
+  line-height: 1.5;
+  margin: 0;
+  word-break: break-word;
+}
+
+:global([data-theme='dark'] .agent-info-popup) {
+  background: var(--bg-tertiary);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 8px 24px rgba(1, 1, 32, 0.2);
+}
+
+:global([data-theme='dark'] .agent-info-name) {
+  color: var(--text-primary);
+}
+
+:global([data-theme='dark'] .agent-info-description) {
+  color: var(--text-secondary);
 }
 </style>

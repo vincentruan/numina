@@ -17,11 +17,14 @@ vi.mock('@/composables/ai-chat/useThreadChat', () => ({
     tokenUsage: { value: null },
     planningSteps: { value: [] },
     suggestions: { value: [] },
+    answeredInterruptIds: { value: new Set() },
     runId: { value: null },
     sendMessage: vi.fn(),
     cancelStream: vi.fn(),
     loadHistory: vi.fn(),
     retry: vi.fn(),
+    clearMessages: vi.fn(),
+    resumeInterrupt: vi.fn(),
   }),
 }))
 

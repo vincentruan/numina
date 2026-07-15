@@ -1,20 +1,49 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { showDialog, showSuccessToast, showFailToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadList } from '@/composables/useThreadList'
+import type { ThreadSession } from '@/types/ai-chat/session'
 
 defineOptions({ name: 'ChatHistory' })
 
 const router = useRouter()
 const store = useChatSessionStore()
-const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin } = useThreadList()
+const { dateGroups, isLoading, hasMore, loadMore, refresh, deleteSession, renameSession, togglePin, exportSession, shareSession } = useThreadList()
 const { t } = useI18n()
 
 const renamingId = ref<string | null>(null)
 const renameInput = ref('')
+
+// Swipe-to-reveal state
+const swipedSessionId = ref<string | null>(null)
+const swipeStartX = ref(0)
+const swipeCurrentX = ref(0)
+const isSwiping = ref(false)
+const SWIPE_THRESHOLD = 80
+
+// Action sheet (Vant 4 dropped the showActionSheet function API; use the
+// <van-action-sheet> component instead). Tracks visibility and the target
+// session so action callbacks know which thread to export/share.
+const actionSheetVisible = ref(false)
+const actionSheetSession = ref<ThreadSession | null>(null)
+const actionSheetActions = computed(() => {
+  const session = actionSheetSession.value
+  if (!session) return []
+  return [
+    { key: 'export', name: t('aiChat.exportAction'), icon: 'down' },
+    { key: 'share', name: t('aiChat.shareSession'), icon: 'share-o' },
+    { key: 'delete', name: t('aiChat.deleteAction'), icon: 'delete-o', color: 'var(--van-danger-color, #ee0a24)' },
+  ]
+})
+
+const exportSheetVisible = ref(false)
+const exportSheetActions = [
+  { key: 'export-markdown', name: t('aiChat.exportAsMarkdown') },
+  { key: 'export-json', name: t('aiChat.exportAsJson') },
+]
 
 // Infinite scroll observer
 const sentinelRef = ref<HTMLElement | null>(null)
@@ -42,7 +71,8 @@ onUnmounted(() => {
 })
 
 function close() {
-  router.push('/ai/chat')
+  // Navigate to AI chat page by route name
+  router.push({ name: 'AIChat' })
 }
 
 function selectThread(threadId: string) {
@@ -99,6 +129,108 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
     showFailToast(t('aiChat.sendFailed'))
   }
 }
+
+async function handleExport(threadId: string, format: 'markdown' | 'json') {
+  try {
+    await exportSession(threadId, format)
+    showSuccessToast(t('aiChat.exportSuccess'))
+  } catch {
+    showFailToast(t('aiChat.exportFailed'))
+  }
+}
+
+async function handleShare(threadId: string) {
+  try {
+    await shareSession(threadId)
+    showSuccessToast(t('aiChat.shareLinkCopied'))
+  } catch {
+    showFailToast(t('aiChat.shareFailed'))
+  }
+}
+
+function handleMore(session: ThreadSession) {
+  actionSheetSession.value = session
+  actionSheetVisible.value = true
+}
+
+function onActionSelect(action: { key: string }) {
+  const session = actionSheetSession.value
+  if (!session) return
+  actionSheetVisible.value = false
+  const key = action.key
+  if (key === 'export') {
+    // Open second-level export format picker
+    exportSheetVisible.value = true
+  } else if (key === 'share') {
+    handleShare(session.thread_id)
+  } else if (key === 'delete') {
+    handleDelete(session.thread_id)
+  }
+}
+
+function onExportSelect(action: { key: string }) {
+  const session = actionSheetSession.value
+  if (!session) return
+  exportSheetVisible.value = false
+  if (action.key === 'export-markdown') handleExport(session.thread_id, 'markdown')
+  else if (action.key === 'export-json') handleExport(session.thread_id, 'json')
+}
+
+// Long press to open action sheet
+let longPressTimer: ReturnType<typeof setTimeout> | null = null
+const LONG_PRESS_DURATION = 500
+
+function startLongPress(session: ThreadSession) {
+  cancelLongPress()
+  longPressTimer = setTimeout(() => {
+    handleMore(session)
+  }, LONG_PRESS_DURATION)
+}
+
+function cancelLongPress() {
+  if (longPressTimer) {
+    clearTimeout(longPressTimer)
+    longPressTimer = null
+  }
+}
+
+// Swipe-to-reveal handlers
+function handleTouchStart(e: TouchEvent, sessionId: string) {
+  swipeStartX.value = e.touches[0].clientX
+  swipeCurrentX.value = e.touches[0].clientX
+  isSwiping.value = false
+}
+
+function handleTouchMove(e: TouchEvent, sessionId: string) {
+  const deltaX = swipeStartX.value - e.touches[0].clientX
+  if (Math.abs(deltaX) > 10) {
+    isSwiping.value = true
+    swipeCurrentX.value = e.touches[0].clientX
+  }
+}
+
+function handleTouchEnd(e: TouchEvent, sessionId: string) {
+  const deltaX = swipeStartX.value - swipeCurrentX.value
+
+  if (deltaX > SWIPE_THRESHOLD) {
+    // Swipe left - reveal actions
+    swipedSessionId.value = sessionId
+  } else if (deltaX < -SWIPE_THRESHOLD) {
+    // Swipe right - hide actions
+    swipedSessionId.value = null
+  }
+
+  // Reset
+  swipeStartX.value = 0
+  swipeCurrentX.value = 0
+  isSwiping.value = false
+}
+
+function closeSwipe(sessionId: string) {
+  if (swipedSessionId.value === sessionId) {
+    swipedSessionId.value = null
+  }
+}
 </script>
 
 <template>
@@ -134,48 +266,57 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
           v-for="session in group.sessions"
           :key="session.thread_id"
           class="history-session"
-          :class="{ active: session.thread_id === store.activeThreadId }"
-          @click="selectThread(session.thread_id)"
+          :class="{ active: session.thread_id === store.activeThreadId, swiped: swipedSessionId === session.thread_id }"
+          @touchstart="handleTouchStart($event, session.thread_id)"
+          @touchmove="handleTouchMove($event, session.thread_id)"
+          @touchend="handleTouchEnd($event, session.thread_id)"
         >
-          <div class="session-info">
-            <template v-if="renamingId === session.thread_id">
-              <van-field
-                v-model="renameInput"
-                :placeholder="session.title"
-                :aria-label="t('aiChat.editTitle')"
-                autofocus
-                @blur="cancelRename"
-                @keydown.enter="confirmRename(session.thread_id)"
-                @click.stop
-              />
-            </template>
-            <template v-else>
-              <div class="session-title">{{ session.title || t('aiChat.newChat') }}</div>
-              <div class="session-time">{{ new Date(session.updated_at).toLocaleString() }}</div>
-            </template>
+          <div class="session-content" @click="selectThread(session.thread_id)">
+            <div class="session-info">
+              <template v-if="renamingId === session.thread_id">
+                <van-field
+                  v-model="renameInput"
+                  :placeholder="session.title"
+                  :aria-label="t('aiChat.editTitle')"
+                  autofocus
+                  @blur="cancelRename"
+                  @keydown.enter="confirmRename(session.thread_id)"
+                  @click.stop
+                />
+                <div v-if="session.original_title" class="session-original-title">
+                  {{ t('aiChat.originalTitleHint', { title: session.original_title }) }}
+                </div>
+              </template>
+              <template v-else>
+                <div class="session-title">{{ session.title || t('aiChat.newChat') }}</div>
+                <div class="session-time">{{ new Date(session.updated_at).toLocaleString() }}</div>
+              </template>
+            </div>
+            <div class="session-pin-indicator" v-if="session.is_pinned">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
           </div>
-          <div class="session-actions" @click.stop>
-            <van-button
-              icon="edit"
-              type="default"
-              size="small"
-              :aria-label="t('aiChat.editTitle')"
-              @click="handleRename(session.thread_id, session.title)"
-            />
-            <van-button
-              :icon="session.is_pinned ? 'star' : 'star-o'"
-              type="default"
-              size="small"
-              :aria-label="session.is_pinned ? t('aiChat.unpinSession') : t('aiChat.pinSession')"
-              @click="handleTogglePin(session.thread_id, session.is_pinned)"
-            />
-            <van-button
-              icon="delete"
-              type="default"
-              size="small"
-              :aria-label="t('common.delete')"
-              @click="handleDelete(session.thread_id)"
-            />
+          <div class="session-actions">
+            <button class="action-btn edit" @click.stop="handleRename(session.thread_id, session.title)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+              {{ t('aiChat.editTitle') }}
+            </button>
+            <button class="action-btn pin" @click.stop="handleTogglePin(session.thread_id, session.is_pinned)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+              {{ session.is_pinned ? t('aiChat.unpinSession') : t('aiChat.pinSession') }}
+            </button>
+            <button class="action-btn more" @click.stop="handleMore(session)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/>
+              </svg>
+            </button>
           </div>
         </div>
       </div>
@@ -188,6 +329,25 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
         </div>
       </div>
     </div>
+
+    <!-- More-actions sheet (Vant 4 component API; showActionSheet was removed) -->
+    <van-action-sheet
+      v-model:show="actionSheetVisible"
+      :actions="actionSheetActions"
+      :cancel-text="t('common.cancel')"
+      close-on-click-action
+      @select="onActionSelect"
+    />
+
+    <!-- Export format picker (second level) -->
+    <van-action-sheet
+      v-model:show="exportSheetVisible"
+      :title="t('aiChat.exportAsTitle')"
+      :actions="exportSheetActions"
+      :cancel-text="t('common.cancel')"
+      close-on-click-action
+      @select="onExportSelect"
+    />
   </div>
 </template>
 
@@ -244,6 +404,7 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
 .history-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 8px 0;
 }
 
@@ -284,21 +445,69 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
 }
 
 .history-session {
+  position: relative;
+  width: 100%;
+  margin-bottom: 1px;
+}
+
+.session-content {
+  position: relative;
+  width: 100%;
   display: flex;
   align-items: center;
   padding: 12px 16px;
+  background: var(--van-background-2, #fff);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: transform 0.3s ease;
+  z-index: 2;
 }
 
-.history-session:hover,
-.history-session.active {
-  background: var(--van-primary-color-light, rgba(25, 137, 250, 0.1));
+.history-session.swiped .session-content {
+  transform: translateX(-240px);
 }
 
-.session-info {
+.session-actions {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  width: 240px;
+  z-index: 1;
+}
+
+.action-btn {
   flex: 1;
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.action-btn:active {
+  opacity: 0.7;
+}
+
+.action-btn.edit {
+  background: var(--van-primary-color, #1989fa);
+}
+
+.action-btn.pin {
+  background: var(--van-warning-color, #ff976a);
+}
+
+.action-btn.more {
+  background: var(--van-text-color-2, #969799);
+}
+
+:global([data-theme='dark'] .session-content) {
+  background: var(--bg-primary);
 }
 
 .session-title {
@@ -315,15 +524,17 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
   margin-top: 2px;
 }
 
-.session-actions {
-  display: flex;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
+.session-original-title {
+  font-size: 11px;
+  color: var(--van-text-color-3, #999);
+  margin-top: 4px;
+  font-style: italic;
 }
 
-.history-session:hover .session-actions {
-  opacity: 1;
+.swipe-action-btn {
+  height: 100%;
+  min-width: 60px;
+  padding: 0 12px;
 }
 
 .history-sentinel {
@@ -337,59 +548,65 @@ async function handleTogglePin(threadId: string, isPinned: boolean) {
   color: var(--van-text-color-3, #999);
 }
 
-/* Dark mode */
-:global([data-theme='dark']) .chat-history-page {
+/* Dark mode
+ * Wrap the FULL selector in :global() - `:global([data-theme='dark']) .x`
+ * compiles without the [data-v-xxx] scoping attr and never matches.
+ * See AIChatInput.vue:472. */
+:global([data-theme='dark'] .chat-history-page) {
   background: var(--bg-primary);
 }
 
-:global([data-theme='dark']) .history-header {
+:global([data-theme='dark'] .history-header) {
   background: rgba(var(--bg-primary-rgb, 15, 17, 23), 0.95);
   border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
-:global([data-theme='dark']) .history-title {
+:global([data-theme='dark'] .history-title) {
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .close-btn {
+:global([data-theme='dark'] .close-btn) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .close-btn:hover {
+:global([data-theme='dark'] .close-btn:hover) {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .empty-icon {
+:global([data-theme='dark'] .empty-icon) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .empty-text {
+:global([data-theme='dark'] .empty-text) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .empty-hint {
+:global([data-theme='dark'] .empty-hint) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .history-group-label {
+:global([data-theme='dark'] .history-group-label) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .session-title {
+:global([data-theme='dark'] .session-title) {
   color: var(--text-primary);
 }
 
-:global([data-theme='dark']) .session-time {
+:global([data-theme='dark'] .session-time) {
   color: var(--text-secondary);
 }
 
-:global([data-theme='dark']) .history-session:hover,
-:global([data-theme='dark']) .history-session.active {
+:global([data-theme='dark'] .session-original-title) {
+  color: var(--text-secondary);
+}
+
+:global([data-theme='dark'] .history-session.active) {
   background: rgba(25, 137, 250, 0.15);
 }
 
-:global([data-theme='dark']) .no-more {
+:global([data-theme='dark'] .no-more) {
   color: var(--text-secondary);
 }
 </style>

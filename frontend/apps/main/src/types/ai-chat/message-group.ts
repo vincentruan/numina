@@ -40,11 +40,24 @@ export interface AssistantPresentFilesGroup {
   messages: ChatMessage[]
 }
 
+/** Interrupt data from DeerFlow ask_clarification tool (mirrored from useThreadChat). */
+export interface ClarificationInterruptData {
+  question: string
+  options?: Array<{ label: string; value: string }>
+  context?: string
+  choiceWithOther?: boolean
+  multiSelect?: boolean
+  interrupt_id: string
+}
+
 /** 智能体请求补充信息 — "需要补充信息" 提示 */
 export interface AssistantClarificationGroup {
   type: 'assistant:clarification'
   id: string | undefined
   messages: ChatMessage[]
+  interruptData?: ClarificationInterruptData
+  phase?: 'pending' | 'answered'
+  answer?: string
 }
 
 /** 子智能体任务卡片 */

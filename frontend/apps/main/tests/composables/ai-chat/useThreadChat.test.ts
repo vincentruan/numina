@@ -53,6 +53,7 @@ describe('useThreadChat — U1 SSE extensions', () => {
 
   it('parses custom suggestions event into suggestions ref', async () => {
     const mockStream = makeMockStream([
+      { event: 'messages-tuple', data: { type: 'ai', content: 'Hello!', id: 'ai-1' } },
       { event: 'custom', data: { type: 'suggestions', suggestions: ['Q1', 'Q2', 'Q3'] } },
       { event: 'end', data: null },
     ])
@@ -63,7 +64,11 @@ describe('useThreadChat — U1 SSE extensions', () => {
     const chat = useThreadChat()
     await chat.sendMessage('hello', undefined, 'thread-1')
 
-    expect(chat.suggestions.value).toEqual(['Q1', 'Q2', 'Q3'])
+    // After stream ends, suggestions are cleared from standalone ref (Issue 1 fix)
+    // and attached inline to the last AI message instead
+    expect(chat.suggestions.value).toEqual([])
+    const lastAi = chat.messages.value.filter(m => m.type === 'ai').pop()
+    expect(lastAi?.suggestions).toEqual(['Q1', 'Q2', 'Q3'])
   })
 
   it('captures metadata run_id', async () => {
@@ -79,6 +84,28 @@ describe('useThreadChat — U1 SSE extensions', () => {
     await chat.sendMessage('hello', undefined, 'thread-1')
 
     expect(chat.runId.value).toBe('run-abc')
+  })
+
+  it('cancelStream passes the real run_id to runs.cancel', async () => {
+    // runs.cancel is async in the SDK — the mock must return a Promise so
+    // cancelStream's .catch(() => {}) chaining does not blow up.
+    const cancelMock = vi.fn().mockResolvedValue(undefined)
+    const mockStream = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-xyz' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: cancelMock },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    // metadata event has been processed, so runId is captured
+    expect(chat.runId.value).toBe('run-xyz')
+
+    chat.cancelStream()
+    expect(cancelMock).toHaveBeenCalledWith('thread-1', 'run-xyz')
   })
 
   it('extracts usage_metadata from values events', async () => {
@@ -193,5 +220,143 @@ describe('useThreadChat — U1 SSE extensions', () => {
   it('exposes isStreaming as computed alias', () => {
     const chat = useThreadChat()
     expect(chat.isStreaming.value).toBe(false)
+  })
+
+  it('does not add human messages from values events (skips [SKILL:chat] wrapper)', async () => {
+    // The agent adapter wraps the user message as `[SKILL:chat]\n{json}` for
+    // the DeerFlow harness. LangGraph persists that wrapper as the human message
+    // and replays it via values events. The optimistic message (with the user's
+    // original text) is authoritative — the wrapper must not produce a duplicate
+    // human bubble showing raw JSON.
+    const mockStream = makeMockStream([
+      {
+        event: 'values',
+        data: {
+          messages: [
+            { id: 'human-backend-1', type: 'human', content: '[SKILL:chat]\n{"free_text":"hello"}' },
+            { id: 'ai-1', type: 'ai', content: 'Answer' },
+          ],
+        },
+      },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: vi.fn() },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    const humanMessages = chat.messages.value.filter(m => m.type === 'human')
+    expect(humanMessages).toHaveLength(1)
+    expect(humanMessages[0].content).toBe('hello')
+    expect(humanMessages[0].sendStatus).toBe('sent')
+  })
+
+  it('transitions optimistic user message sendStatus from sending to sent', async () => {
+    const mockStream = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-1' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: vi.fn() },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    const humanMsg = chat.messages.value.find(m => m.type === 'human')
+    expect(humanMsg?.sendStatus).toBe('sent')
+  })
+
+  it('strips [SKILL:chat] wrapper and recovers free_text on loadHistory', async () => {
+    const skillWrapper = '[SKILL:chat]\n' + JSON.stringify({
+      family_id: 'fam-1',
+      free_text: '用户原始输入',
+    }, null, 2)
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: vi.fn(), cancel: vi.fn() },
+      threads: {
+        getState: vi.fn().mockResolvedValue({
+          values: {
+            messages: [
+              { id: 'human-1', type: 'human', content: skillWrapper },
+              { id: 'ai-1', type: 'ai', content: 'AI 回复' },
+            ],
+          },
+        }),
+      },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.loadHistory('thread-1')
+
+    const humanMsg = chat.messages.value.find(m => m.type === 'human')
+    expect(humanMsg?.content).toBe('用户原始输入')
+    expect(humanMsg?.content).not.toContain('[SKILL:')
+  })
+
+  it('marks ALL AI messages done on end (not just the last) so streaming indicators stop', async () => {
+    // A single turn can emit multiple AI messages: a tool-call message then a
+    // text-reply message (or a summarization-leak message then the real reply).
+    // The end handler must mark every AI message 'done', not just the last -
+    // otherwise earlier ones stay phase='answering' and their StreamingIndicator
+    // (three-dot animation) never stops. This also breaks the next turn's
+    // hasPriorProgress check, leaving the follow-up user bubble on "发送中".
+    const mockStream = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-1' } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-toolcall', content: '', tool_calls: [{ id: 'tc-1', name: 'search', args: {} }] } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-reply', content: 'Final answer' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream, cancel: vi.fn() },
+    } as never)
+
+    const chat = useThreadChat()
+    await chat.sendMessage('hello', undefined, 'thread-1')
+
+    const aiMessages = chat.messages.value.filter(m => m.type === 'ai')
+    expect(aiMessages).toHaveLength(2)
+    // Both AI messages must be 'done', not just the last - otherwise the
+    // three-dot StreamingIndicator stays visible on the earlier one forever.
+    expect(aiMessages[0].phase).toBe('done')
+    expect(aiMessages[1].phase).toBe('done')
+  })
+
+  it('follow-up sendStatus is sent even when a prior turn had multiple AI messages', async () => {
+    // Regression: after a turn that left a non-last AI message at phase='answering',
+    // the next sendMessage's hasPriorProgress check returned true (because it
+    // scans for any AI message with phase='answering'), so setUserMsgStatus was
+    // skipped and the follow-up user bubble stayed on "发送中".
+    const chat = useThreadChat()
+
+    // Turn 1: multiple AI messages, all should be marked done by end
+    const mockStream1 = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-1' } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-toolcall', content: '', tool_calls: [{ id: 'tc-1', name: 'search', args: {} }] } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-reply', content: 'Answer 1' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream1, cancel: vi.fn() },
+    } as never)
+    await chat.sendMessage('first', undefined, 'thread-1')
+
+    // Turn 2: follow-up on the same thread
+    const mockStream2 = makeMockStream([
+      { event: 'metadata', data: { run_id: 'run-2' } },
+      { event: 'messages', data: { type: 'ai', id: 'ai-reply-2', content: 'Answer 2' } },
+      { event: 'end', data: null },
+    ])
+    vi.mocked(getClient).mockReturnValue({
+      runs: { stream: () => mockStream2, cancel: vi.fn() },
+    } as never)
+    await chat.sendMessage('second', undefined, 'thread-1')
+
+    // The follow-up user message must transition to 'sent', not stay 'sending'
+    const humanMessages = chat.messages.value.filter(m => m.type === 'human')
+    expect(humanMessages).toHaveLength(2)
+    expect(humanMessages[1].sendStatus).toBe('sent')
   })
 })

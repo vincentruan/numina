@@ -16,7 +16,17 @@ export function getClient(): Client {
   if (!familyId) {
     throw new Error('Family not loaded - cannot make agent API calls')
   }
-  return new Client({ apiUrl, defaultHeaders: { 'X-Family-Id': familyId } })
+  // The @langchain/langgraph-sdk Client builds fetch requests without setting
+  // `credentials`, so the browser does not attach the `access_token` cookie
+  // that `verify_family_token` (runs_stream.py) reads. Every direct fetch() in
+  // this module uses `credentials: 'include'` for the same reason; the SDK
+  // client must match, or `client.runs.stream()` 401s before the run starts
+  // and the thread is left empty (no AI output, no checkpoint messages).
+  return new Client({
+    apiUrl,
+    defaultHeaders: { 'X-Family-Id': familyId },
+    onRequest: (_url, init) => ({ ...init, credentials: 'include' }),
+  })
 }
 
 export interface ThreadSearchParams {
@@ -45,10 +55,18 @@ function getAgentHeaders(): Record<string, string> {
   if (!familyId) {
     throw new Error('Family not loaded - cannot make agent API calls')
   }
-  return {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Family-Id': familyId,
   }
+  // X-User-Id is required so the agent can persist user_id on session rows
+  // (ai_chat_sessions). Without it, getSystemDefaultSession - which filters
+  // by user_id - never matches, breaking the cache-hit path in handleNuminaConsult.
+  const userId = authStore.user?.id
+  if (userId) {
+    headers['X-User-Id'] = String(userId)
+  }
+  return headers
 }
 
 /** Raw ThreadResponse from the agent threads API */
@@ -63,9 +81,16 @@ interface ThreadApiResponse {
 
 /** Map agent ThreadResponse → frontend ThreadSession */
 function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
+  const metadataTitle = (r.metadata?.title as string) || ''
+  const valuesTitle = (r.values?.title as string) || ''
+  // values.title is the raw [SKILL:chat] prompt wrapper on the sync stream
+  // path (sync after_model fallback) - never display it as a title.
+  const title = metadataTitle
+    || (valuesTitle && !valuesTitle.startsWith('[SKILL:') ? valuesTitle : '')
   return {
     thread_id: r.thread_id,
-    title: (r.metadata?.title as string) || (r.values?.title as string) || '',
+    title,
+    original_title: (r.metadata?.original_title as string) || undefined,
     status: (r.status as ThreadSession['status']) || 'idle',
     is_pinned: (r.metadata?.is_pinned as boolean) || false,
     created_at: r.created_at,
@@ -73,12 +98,12 @@ function mapThreadResponse(r: ThreadApiResponse): ThreadSession {
   }
 }
 
-export async function createThread(): Promise<ThreadSession> {
+export async function createThread(source?: string): Promise<ThreadSession> {
   const res = await fetch(`${getAgentApiBase()}/api/threads`, {
     method: 'POST',
     headers: getAgentHeaders(),
     credentials: 'include',
-    body: JSON.stringify({}),
+    body: JSON.stringify(source ? { metadata: { source } } : {}),
   })
   if (!res.ok) throw new Error(`Failed to create thread: ${res.status}`)
   return mapThreadResponse(await res.json() as ThreadApiResponse)
@@ -91,6 +116,40 @@ export async function getThread(id: string): Promise<ThreadSession> {
   })
   if (!res.ok) throw new Error(`Failed to get thread: ${res.status}`)
   return mapThreadResponse(await res.json() as ThreadApiResponse)
+}
+
+/** Thread state (including channel_values.messages) — used for export. */
+export interface ThreadState {
+  values: { title?: string; messages?: unknown[]; [k: string]: unknown }
+  [k: string]: unknown
+}
+
+/**
+ * Minimal runtime shape check for a thread-state response.
+ *
+ * The agent returns a JSON object with ``channel_values`` under ``values``;
+ * ``as ThreadState`` alone would pass ``null`` / arrays / strings through and
+ * crash the consumer's ``state.values?.messages`` access. We avoid pulling in
+ * Zod just for this one boundary - a structural guard is enough.
+ */
+function asThreadState(raw: unknown): ThreadState {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Unexpected thread state response shape')
+  }
+  const obj = raw as Record<string, unknown>
+  if (!obj.values || typeof obj.values !== 'object') {
+    throw new Error('Thread state response missing values')
+  }
+  return raw as ThreadState
+}
+
+export async function getThreadState(id: string): Promise<ThreadState> {
+  const res = await fetch(`${getAgentApiBase()}/api/threads/${encodeURIComponent(id)}/state`, {
+    headers: getAgentHeaders(),
+    credentials: 'include',
+  })
+  if (!res.ok) throw new Error(`Failed to get thread state: ${res.status}`)
+  return asThreadState(await res.json())
 }
 
 export async function searchThreads(params: ThreadSearchParams): Promise<ThreadSearchResponse> {
@@ -139,4 +198,51 @@ export async function getTokenUsage(threadId: string): Promise<TokenUsageData> {
   })
   if (!res.ok) throw new Error(`Failed to fetch token usage: ${res.status}`)
   return res.json()
+}
+
+// ---------------------------------------------------------------------------
+// Branch API (DeerFlow threads/api.ts:71-97)
+// ---------------------------------------------------------------------------
+
+export interface ThreadBranchResponse {
+  thread_id: string
+  parent_thread_id: string
+  parent_checkpoint_id: string
+  branched_from_message_id: string
+}
+
+export interface BranchThreadFromTurnInput {
+  messageId: string
+  messageIds?: string[]
+  title?: string
+}
+
+export async function branchThreadFromTurn(
+  threadId: string,
+  input: BranchThreadFromTurnInput,
+): Promise<ThreadBranchResponse> {
+  const res = await fetch(
+    `${getAgentApiBase()}/api/threads/${encodeURIComponent(threadId)}/branches`,
+    {
+      method: 'POST',
+      headers: getAgentHeaders(),
+      credentials: 'include',
+      body: JSON.stringify({
+        message_id: input.messageId,
+        message_ids: input.messageIds ?? [input.messageId],
+        ...(input.title ? { title: input.title } : {}),
+      }),
+    },
+  )
+  if (!res.ok) {
+    let detail = `Failed to branch conversation (${res.status})`
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string' && body.detail) detail = body.detail
+    } catch {
+      // ignore parse failure, use fallback detail
+    }
+    throw new Error(detail)
+  }
+  return res.json() as Promise<ThreadBranchResponse>
 }

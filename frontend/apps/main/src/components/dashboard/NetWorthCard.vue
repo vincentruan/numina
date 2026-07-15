@@ -1,6 +1,11 @@
 <template>
   <div class="overview-card">
     <div class="ov-main">
+      <!-- Faded upward-growth arrow watermark on the right — visual beacon for the trend entry -->
+      <svg class="trend-watermark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M3 17L9 11L13 15L21 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M15 7H21V13" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
       <div class="ov-label">{{ t('dashboard.totalAssets') }}</div>
       <div class="ov-amount">
         <MoneyDisplay :amount="totalAssets" size="large" />
@@ -117,6 +122,31 @@ const changeText = computed(() => {
   position: relative;
 }
 
+/* Keep label/amount/sub-row above the faded watermark (z-index 0) */
+.ov-main > .ov-label,
+.ov-main > .ov-amount,
+.ov-main > .ov-sub-row {
+  position: relative;
+  z-index: 1;
+}
+
+/* Faded upward-growth arrow on the right — beckons the eye toward the trend entry */
+.trend-watermark {
+  position: absolute;
+  top: -16px;
+  right: -8px;
+  width: 108px;
+  height: 108px;
+  color: var(--color-primary);
+  opacity: 0.07;
+  z-index: 0;
+  pointer-events: none;
+}
+[data-theme='dark'] .trend-watermark {
+  color: var(--color-lavender);
+  opacity: 0.12;
+}
+
 /* Mono label — PP Neue Montreal Mono style: uppercase, tight tracking */
 .ov-label {
   font-size: 11px;
@@ -161,6 +191,8 @@ const changeText = computed(() => {
   background: rgba(0, 0, 0, 0.06);
   border: 1px solid rgba(0, 0, 0, 0.08);
   transition: background 0.15s ease;
+  position: relative;
+  overflow: hidden;
 }
 [data-theme='dark'] .trend-entry {
   background: rgba(255, 255, 255, 0.10);
@@ -168,6 +200,58 @@ const changeText = computed(() => {
 }
 .trend-entry:active {
   transform: scale(0.95);
+}
+
+/* Icon + text sit above the sweeping highlight */
+.trend-entry > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* 扫光效果 — a soft highlight band sweeps across the button left→right, looping */
+.trend-entry::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -120%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    transparent 100%
+  );
+  transform: skewX(-18deg);
+  animation: trend-entry-sweep 3.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+[data-theme='dark'] .trend-entry::after {
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+}
+
+@keyframes trend-entry-sweep {
+  0% {
+    left: -120%;
+  }
+  55% {
+    left: 160%;
+  }
+  100% {
+    left: 160%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trend-entry::after {
+    animation: none;
+  }
 }
 
 .trend-icon {

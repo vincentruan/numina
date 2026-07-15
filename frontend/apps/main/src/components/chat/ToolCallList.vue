@@ -47,6 +47,8 @@ const toolIconMap: Record<string, { icon: string; color: string }> = {
   search: { icon: '🔍', color: '#22c55e' },
   read_file: { icon: '📄', color: '#818cf8' },
   write_file: { icon: '✏️', color: '#f59e0b' },
+  read_numina_report: { icon: '📄', color: '#818cf8' },
+  write_numina_report: { icon: '✏️', color: '#f59e0b' },
   bash: { icon: '⚡', color: '#6366f1' },
   list_directory: { icon: '📁', color: '#3b82f6' },
   web_search: { icon: '🌐', color: '#06b6d4' },
@@ -348,15 +350,14 @@ function formatTime(ms?: number): string {
   to { transform: rotate(360deg); }
 }
 
-/* Light theme */
-@media (prefers-color-scheme: light) {
-  :global(.theme-light) .tool-card {
-    background: rgba(0, 0, 0, 0.02);
-    border-color: rgba(0, 0, 0, 0.06);
-  }
+/* Light theme - wrap FULL selector in :global() so it matches the scoped
+ * element; data-theme attr (not OS preference) is the source of truth. */
+:global([data-theme='light'] .tool-card) {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
 
-  :global(.theme-light) .tool-result {
-    background: rgba(0, 0, 0, 0.02);
-  }
+:global([data-theme='light'] .tool-result) {
+  background: rgba(0, 0, 0, 0.02);
 }
 </style>

@@ -34,6 +34,16 @@ export function explainLastToolCallKey(message: ChatMessage): { key: string; par
     }
   }
 
+  if (lastToolCall.name === 'read_numina_report' || lastToolCall.name === 'write_numina_report') {
+    const filename = args?.filename as string | undefined
+    if (filename) {
+      return {
+        key: `tool.action.${lastToolCall.name}_with_filename`,
+        params: { filename },
+      }
+    }
+  }
+
   if (lastToolCall.name === 'bash') {
     const command = args?.command as string | undefined
     if (command) {

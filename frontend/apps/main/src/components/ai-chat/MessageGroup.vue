@@ -18,18 +18,17 @@ import { useI18n } from 'vue-i18n'
 import UserBubble from '@/components/chat/UserBubble.vue'
 import AssistantMessage from '@/components/chat/AssistantMessage.vue'
 import ChainOfThought from './ChainOfThought.vue'
-import PlanningStepsPanel from './PlanningStepsPanel.vue'
 import TokenUsage from './TokenUsage.vue'
 import MarkdownContent from './MarkdownContent.vue'
 import SubtaskCard from './SubtaskCard.vue'
 import ArtifactFileList from './ArtifactFileList.vue'
+import HumanInputCard from './HumanInputCard.vue'
 import type {
   MessageGroup,
   AssistantProcessingGroup,
   AssistantClarificationGroup,
   AssistantPresentFilesGroup,
   AssistantSubagentGroup,
-  PlanningStep,
 } from '@/types/ai-chat/message-group'
 import {
   extractContentFromMessage,
@@ -43,8 +42,13 @@ const props = defineProps<{
   group: MessageGroup
   isLoading?: boolean
   threadId?: string
-  planningSteps?: PlanningStep[]
   isLastAssistant?: boolean
+  canBranch?: boolean
+  branchingMessageId?: string | null
+  answeredInterruptIds?: Set<string>
+  interruptErrorId?: string | null
+  /** Previous group's planSteps - used to detect redundant completion summaries */
+  prevGroupPlanSteps?: PlanStep[]
 }>()
 
 const emit = defineEmits<{
@@ -53,6 +57,8 @@ const emit = defineEmits<{
   feedback: [messageId: string, value: 1 | -1]
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  branch: [messageId: string, messageIds: string[]]
+  clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
 }>()
 
 const { t } = useI18n()
@@ -67,6 +73,18 @@ const assistantMessage = computed(() =>
   props.group.type === 'assistant' ? props.group.messages[0] : null
 )
 
+// Assistant group: extract content with thinking tags stripped.
+// Without this, <think>...</think> tags from the backend (llm.py) leak into
+// MarkdownContent and render as regular body text — the user sees the raw
+// thinking content mixed into the AI response. extractContentFromMessage
+// calls splitInlineReasoning which strips fully-closed and unclosed
+// <think> / halle_think_start tags, matching DeerFlow's approach where
+// reasoning is rendered in a separate muted collapsible section.
+const assistantCleanContent = computed(() => {
+  if (!assistantMessage.value) return ''
+  return extractContentFromMessage(assistantMessage.value)
+})
+
 // Assistant group: extract legacy fields for processSteps, etc.
 const assistantLegacyFields = computed(() => {
   if (!assistantMessage.value) return null
@@ -79,8 +97,9 @@ const assistantProcessSteps = computed((): ProcessStep[] | undefined =>
 )
 
 // Assistant group: extract planSteps for TodoList rendering
+// Falls back to prevGroupPlanSteps for detecting redundant completion summaries
 const assistantPlanSteps = computed((): PlanStep[] | undefined =>
-  assistantLegacyFields.value?.planSteps
+  assistantLegacyFields.value?.planSteps || props.prevGroupPlanSteps
 )
 
 // Assistant group: extract planSource
@@ -111,6 +130,55 @@ const clarificationContent = computed(() => {
   const msg = (props.group as AssistantClarificationGroup).messages[0]
   return extractContentFromMessage(msg)
 })
+
+// Clarification group: extract interruptData for HumanInputCard
+const clarificationInterruptData = computed(() => {
+  if (props.group.type !== 'assistant:clarification') return null
+  return (props.group as AssistantClarificationGroup).interruptData ?? null
+})
+
+// Clarification status: check if this interrupt was answered via answeredInterruptIds
+// (tracked by useThreadChat after resumeInterrupt succeeds) or via group.phase.
+// Also check for error state from useThreadChat.interruptError.
+const clarificationStatus = computed((): 'pending' | 'submitting' | 'answered' | 'error' => {
+  if (props.group.type !== 'assistant:clarification') return 'pending'
+  const interruptId = (props.group as AssistantClarificationGroup).interruptData?.interrupt_id
+  if (interruptId && props.answeredInterruptIds?.has(interruptId)) return 'answered'
+  if (props.group.phase === 'answered') return 'answered'
+  // Check if this specific interrupt failed (error state)
+  if (interruptId && props.interruptErrorId === interruptId) return 'error'
+  return 'pending'
+})
+
+// Branch: extract all assistant message IDs from the group
+const assistantMessageIds = computed((): string[] => {
+  if (props.group.type !== 'assistant') return []
+  return props.group.messages
+    .filter(msg => msg.role === 'assistant' && msg.id)
+    .map(msg => msg.id!)
+})
+
+// Branch: check if this specific message is currently branching
+const isBranching = computed(() => {
+  if (!props.branchingMessageId || !assistantMessage.value) return false
+  return props.branchingMessageId === assistantMessage.value.id
+})
+
+// Handle branch button click
+function handleBranch() {
+  if (!assistantMessage.value?.id) return
+  emit('branch', assistantMessage.value.id, assistantMessageIds.value)
+}
+
+// Handle clarification answer submission
+function handleClarificationSubmit(group: MessageGroup, answer: string) {
+  if (group.type !== 'assistant:clarification') return
+  const interruptId = group.interruptData?.interrupt_id
+  const threadId = props.threadId
+  if (!interruptId || !threadId) return
+  // Emit to parent (AIChatBox) which calls the resume API
+  emit('clarificationSubmit', { threadId, interruptId, answer })
+}
 
 // Present-files group: extract files
 const presentFilesData = computed(() => {
@@ -144,15 +212,13 @@ const subagentTaskIds = computed(() => {
 
     <!-- Assistant: AssistantMessage -->
     <template v-else-if="assistantMessage">
-      <!-- Real-time planning steps from SSE custom events (only for last assistant group) -->
-      <PlanningStepsPanel
-        v-if="isLastAssistant && planningSteps && planningSteps.length > 0"
-        :steps="planningSteps"
-        :is-streaming="isLoading"
-      />
+      <!-- Tool calls render in the assistant:processing group (ChainOfThought)
+           driven by the live messages array, matching DeerFlow. No separate
+           real-time planning panel - it duplicated tool calls and its per-step
+           status never updated from tool results (stuck "调用中"). -->
       <AssistantMessage
         :id="assistantMessage.id"
-        :content="assistantMessage.content"
+        :content="assistantCleanContent"
         :phase="assistantMessage.phase || 'done'"
         :process-steps="assistantProcessSteps"
         :plan-steps="assistantPlanSteps"
@@ -162,19 +228,31 @@ const subagentTaskIds = computed(() => {
         :display-time="assistantMessage.displayTime"
         :suggestions="assistantMessage.suggestions"
         :feedback="assistantMessage.feedback"
+        :can-branch="canBranch && !isLoading"
+        :is-branching="isBranching"
         @retry="emit('retry')"
-        @copy="emit('copy', assistantMessage.content)"
+        @copy="emit('copy', assistantCleanContent)"
         @feedback="(v: 1 | -1) => emit('feedback', assistantMessage!.id, v)"
         @suggestion-click="emit('suggestionClick', $event)"
-      />
-      <!-- Per-message token usage (inline below AI message) -->
-      <TokenUsage
-        v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
-        mode="inline"
-        :thread-id="threadId || null"
-        :usage-metadata="assistantMessage.usageMetadata"
-        :is-streaming="isLoading && isLastAssistant"
-      />
+        @branch="handleBranch"
+      >
+        <!-- Per-message token usage (slotted between content and footer so the
+             order is: content -> token usage -> timestamp/actions -> suggestions).
+             Visibility is controlled by the global token-usage preset inside
+             TokenUsage (off/summary/per_turn/debug). The `message` prop feeds
+             the debug-mode per-step card; per_turn mode only needs
+             usageMetadata. -->
+        <template #token-usage>
+          <TokenUsage
+            v-if="assistantMessage.type === 'ai' && (assistantMessage.usageMetadata || isLoading)"
+            mode="inline"
+            :thread-id="threadId || null"
+            :usage-metadata="assistantMessage.usageMetadata"
+            :is-streaming="isLoading && isLastAssistant"
+            :message="assistantMessage"
+          />
+        </template>
+      </AssistantMessage>
     </template>
 
     <!-- Processing: ChainOfThought -->
@@ -182,22 +260,23 @@ const subagentTaskIds = computed(() => {
       v-else-if="processingGroup"
       :messages="processingGroup.messages"
       :is-loading="isLoading"
+      @artifact-select="(filepath: string) => emit('artifactTap', { id: filepath, title: filepath, kind: 'file', path: filepath })"
     />
 
-    <!-- Clarification: Special card -->
-    <div v-else-if="clarificationContent" class="clarification-card">
-      <div class="clarification-header">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-        </svg>
-        <span class="clarification-title">{{ t('aiChat.needClarification') }}</span>
-      </div>
-      <MarkdownContent
-        v-if="clarificationContent"
-        class="clarification-content"
-        :content="clarificationContent"
-      />
-    </div>
+    <!-- Clarification: interactive HumanInputCard -->
+    <HumanInputCard
+      v-else-if="group.type === 'assistant:clarification'"
+      :question="clarificationInterruptData?.question || clarificationContent || ''"
+      :options="clarificationInterruptData?.options"
+      :context="clarificationInterruptData?.context"
+      :choice-with-other="clarificationInterruptData?.choiceWithOther"
+      :multi-select="clarificationInterruptData?.multiSelect"
+      :status="clarificationStatus"
+      :answer="group.answer"
+      :thread-id="threadId || ''"
+      :interrupt-id="clarificationInterruptData?.interrupt_id || ''"
+      @submit="handleClarificationSubmit(group, $event)"
+    />
 
     <!-- Present-files: Content + File list -->
     <div v-else-if="presentFilesData" class="present-files-group">
@@ -235,41 +314,6 @@ const subagentTaskIds = computed(() => {
   margin-bottom: 12px;
 }
 
-/* Clarification card */
-.clarification-card {
-  padding: 16px;
-  background: rgba(129, 140, 248, 0.12);
-  border: 1px solid rgba(129, 140, 248, 0.2);
-  border-radius: 12px;
-}
-
-.clarification-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
-  color: var(--van-primary-color);
-}
-
-.clarification-title {
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.clarification-content {
-  font-size: 15px;
-  line-height: 1.6;
-  color: var(--text-primary);
-}
-
-.clarification-content :deep(p) {
-  margin: 0 0 8px;
-}
-
-.clarification-content :deep(p:last-child) {
-  margin-bottom: 0;
-}
-
 /* Present-files group */
 .present-files-group {
   display: flex;
@@ -301,19 +345,14 @@ const subagentTaskIds = computed(() => {
   padding-top: 8px;
 }
 
-/* Light theme */
-@media (prefers-color-scheme: light) {
-  :global(.theme-light) .clarification-card {
-    background: rgba(129, 140, 248, 0.08);
-  }
+/* Light theme - wrap FULL selector in :global() so it matches the scoped
+ * element; data-theme attr (not OS preference) is the source of truth. */
+:global([data-theme='light'] .file-card) {
+  background: var(--card-bg);
+  border-color: rgba(0, 0, 0, 0.06);
+}
 
-  :global(.theme-light) .file-card {
-    background: var(--card-bg);
-    border-color: rgba(0, 0, 0, 0.06);
-  }
-
-  :global(.theme-light) .file-card:hover {
-    background: rgba(0, 0, 0, 0.02);
-  }
+:global([data-theme='light'] .file-card:hover) {
+  background: rgba(0, 0, 0, 0.02);
 }
 </style>

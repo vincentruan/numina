@@ -81,6 +81,20 @@ function onRefreshFailed(error: unknown) {
   pendingRequests = []
 }
 
+// Prevent concurrent router.push('/login') calls from racing with user-initiated navigation.
+// Without this, multiple 401 responses can abort an in-flight tab navigation and then
+// bounce back to the original page if localStorage is restored by a concurrent fetchMe().
+let isRedirectingToLogin = false
+function redirectToLogin() {
+  if (isRedirectingToLogin) return
+  const currentPath = router.currentRoute.value.path
+  if (currentPath === '/login' || currentPath === '/register' || currentPath === '/join-family') return
+  isRedirectingToLogin = true
+  router.replace('/login').finally(() => {
+    isRedirectingToLogin = false
+  })
+}
+
 // Response interceptor - handle 401 with automatic refresh
 http.interceptors.response.use(
   (response) => {
@@ -108,7 +122,7 @@ http.interceptors.response.use(
         code === 'AUTH_SESSION_NOT_FOUND'
       ) {
         clearAuth()
-        router.push('/login')
+        redirectToLogin()
         showFailToast(resolveErrorMsg(code, (response.data as ApiEnvelope).message || t('errors.AUTH_TOKEN_EXPIRED')))
         return Promise.reject(new Error(code))
       }
@@ -145,7 +159,7 @@ http.interceptors.response.use(
           message: t('device.sessionExpiredMessage'),
           confirmButtonText: t('device.sessionExpiredConfirm'),
         }).then(() => {
-          router.push('/login')
+          redirectToLogin()
         })
         return Promise.reject(error)
       }
@@ -175,7 +189,7 @@ http.interceptors.response.use(
       } catch (refreshError) {
         onRefreshFailed(refreshError)
         clearAuth()
-        router.push('/login')
+        redirectToLogin()
         // Safe type narrowing with axios.isAxiosError()
         if (axios.isAxiosError(refreshError)) {
           showFailToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))
@@ -254,7 +268,7 @@ export async function refreshTokenIfNeeded(): Promise<void> {
   } catch (refreshError) {
     onRefreshFailed(refreshError)
     clearAuth()
-    router.push('/login')
+    redirectToLogin()
     // Safe type narrowing with axios.isAxiosError()
     if (axios.isAxiosError(refreshError)) {
       showFailToast(resolveErrorMsg(refreshError.response?.data?.code, refreshError.response?.data?.message || refreshError.response?.data?.detail || t('errors.AUTH_REFRESH_FAILED')))

@@ -7,10 +7,11 @@ export default defineConfig({
   test: {
     environment: 'happy-dom',
     setupFiles: ['tests/setup.ts'],
-    // Parallel execution for speed (Vitest 4 uses pool directly)
-    pool: 'threads',
+    // Use forks pool for better memory isolation (each test file in separate process)
+    // Threads pool shares memory across workers, causing OOM with large test suites
+    pool: 'forks',
     minWorkers: 1,
-    maxWorkers: 4,
+    maxWorkers: 2,
     // Silent console in tests for machine-friendly output
     silent: true,
     deps: {

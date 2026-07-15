@@ -4,17 +4,20 @@
  * 参考: frontend/src/core/messages/utils.ts splitInlineReasoning()
  *
  * 安全规则:
- * - 剥离 `halle_think_start...halle_think_end` 标签
+ * - 剥离 `<think>...</think>` 标签（标准格式，后端 llm.py 使用）
+ * - 剥离 `halle_think_start...halle_think_end` 标签（旧格式，向后兼容）
  * - 处理流式场景：只有开标签无闭标签时，后续内容视为推理
  * - 如果后端返回 `additional_kwargs.reasoning_content`，优先使用（这是安全摘要）
  */
 
-const THINK_OPEN_TAG = 'halle_think_start'
-const THINK_CLOSE_TAG = 'halle_think_end'
+const THINK_OPEN_TAG = '<think>'
+const THINK_CLOSE_TAG = '</think>'
+const LEGACY_THINK_OPEN_TAG = 'halle_think_start'
+const LEGACY_THINK_CLOSE_TAG = 'halle_think_end'
 
-// 正则：匹配完整的思考标签块
+// 正则：匹配完整的思考标签块（标准 + 旧格式）
 const THINK_TAG_RE = new RegExp(
-  `${THINK_OPEN_TAG}\\s*([\\s\\S]*?)\\s*${THINK_CLOSE_TAG}`,
+  `(?:${THINK_OPEN_TAG}|${LEGACY_THINK_OPEN_TAG})\\s*([\\s\\S]*?)\\s*(?:${THINK_CLOSE_TAG}|${LEGACY_THINK_CLOSE_TAG})`,
   'g',
 )
 
@@ -45,24 +48,34 @@ export function splitInlineReasoning(content: string): {
 
   // 流式安全处理：只有开标签时，后续内容视为推理中
   // 避免未闭合的推理内容渲染到正文
-  const openTagIndex = cleaned.indexOf(THINK_OPEN_TAG)
-  if (openTagIndex !== -1) {
-    // 排除 markdown inline code 内的标签（用户讨论标签本身）
-    // 检查开标签前是否是反引号
-    if (openTagIndex > 0 && cleaned[openTagIndex - 1] === '`') {
-      // 在 inline code 内，不处理
-    } else {
-      const tail = cleaned.slice(openTagIndex + THINK_OPEN_TAG.length).trim()
+  // 支持两种标签格式：<think> 和 halle_think_start
+  const openTags = [THINK_OPEN_TAG, LEGACY_THINK_OPEN_TAG]
+  const closeTags = [THINK_CLOSE_TAG, LEGACY_THINK_CLOSE_TAG]
+
+  for (let i = 0; i < openTags.length; i++) {
+    const openTag = openTags[i]
+    const closeTag = closeTags[i]
+    const openTagIndex = cleaned.indexOf(openTag)
+
+    if (openTagIndex !== -1) {
+      // 排除 markdown inline code 内的标签（用户讨论标签本身）
+      // 检查开标签前是否是反引号
+      if (openTagIndex > 0 && cleaned[openTagIndex - 1] === '`') {
+        // 在 inline code 内，不处理
+        continue
+      }
+
+      const tail = cleaned.slice(openTagIndex + openTag.length).trim()
       if (tail) {
         // 尝试找到闭标签
-        const closeIndex = tail.indexOf(THINK_CLOSE_TAG)
+        const closeIndex = tail.indexOf(closeTag)
         if (closeIndex !== -1) {
           // 有闭标签，提取内容
           const innerContent = tail.slice(0, closeIndex).trim()
           if (innerContent) {
             reasoningParts.push(innerContent)
           }
-          cleaned = cleaned.slice(0, openTagIndex) + tail.slice(closeIndex + THINK_CLOSE_TAG.length)
+          cleaned = cleaned.slice(0, openTagIndex) + tail.slice(closeIndex + closeTag.length)
         } else {
           // 无闭标签，视为正在推理中
           reasoningParts.push(tail)
@@ -72,6 +85,7 @@ export function splitInlineReasoning(content: string): {
         // 只有开标签，移除
         cleaned = cleaned.slice(0, openTagIndex)
       }
+      break // 找到并处理了一个标签，退出循环
     }
   }
 

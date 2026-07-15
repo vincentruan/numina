@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, computed, ref } from 'vue'
-import { showFailToast } from 'vant'
+import { useRouter } from 'vue-router'
+import { showFailToast, showSuccessToast } from 'vant'
 import { useI18n } from 'vue-i18n'
 import { useChatSessionStore } from '@/stores/chatSession'
 import { useThreadChat } from '@/composables/ai-chat/useThreadChat'
 import { useArtifacts } from '@/composables/ai-chat/useArtifacts'
 import { useAgentStore } from '@/stores/agent'
-import { getThread, createThread } from '@/api/ai-chat'
+import { getThread, createThread, branchThreadFromTurn } from '@/api/ai-chat'
+import { accumulateUsage } from '@/utils/ai-chat/token-usage-steps'
 import ChatHeader from '@/components/ai/ChatHeader.vue'
 import WelcomePage from '@/components/ai/WelcomePage.vue'
 import MessageList from '@/components/ai/MessageList.vue'
@@ -14,11 +16,15 @@ import InputBox from '@/components/ai-chat/InputBox.vue'
 import SuggestionChips from '@/components/ai/SuggestionChips.vue'
 import ErrorMessage from '@/components/ai-chat/ErrorMessage.vue'
 import ArtifactPreviewPopup from '@/components/ai-chat/ArtifactPreviewPopup.vue'
+import AIChatSkeleton from '@/components/ai/AIChatSkeleton.vue'
+import { INPUT_MODE_CONFIGS } from '@/composables/ai-chat/useTenantAiResources'
 import type { SubmitPayload, InputContext } from '@/types/ai-chat/input-mode'
 
 const NUMINA_AGENT_NAME = 'numina'
+const DEFAULT_MODEL = 'default'
 
 const { t } = useI18n()
+const router = useRouter()
 
 const store = useChatSessionStore()
 const agentStore = useAgentStore()
@@ -39,6 +45,23 @@ const {
   deselect: deselectArtifact,
 } = useArtifacts()
 
+/**
+ * Realtime token usage computed from SSE values events.
+ * accumulateUsage deduplicates by message id and sums input/output tokens
+ * across all AI messages. This is the primary data source for the header
+ * TokenUsage display - more realtime than the backend /token-usage API
+ * (which requires checkpointer write to complete first).
+ */
+const realtimeTokenUsage = computed(() => {
+  const usage = accumulateUsage(chat.messages.value)
+  if (!usage) return null
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    totalTokens: usage.totalTokens,
+  }
+})
+
 /** Title generation is async on the backend — poll twice after stream ends */
 const titleRefreshTimeouts = new Set<ReturnType<typeof setTimeout>>()
 
@@ -48,12 +71,16 @@ function scheduleTitleRefresh(threadId: string) {
     if (store.activeThreadId !== threadId) return
     try {
       const thread = await getThread(threadId)
-      if (thread.title && store.activeThreadId === threadId) {
-        // Update store sessions if this thread is tracked there
-        const idx = store.sessions.findIndex(s => s.thread_id === threadId)
-        if (idx !== -1) {
-          store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
-        }
+      // Skip empty titles and the raw [SKILL:chat] prompt wrapper (sync
+      // after_model fallback) - wait for the LLM-generated title.
+      if (!thread.title || thread.title.startsWith('[SKILL:')) return
+      if (store.activeThreadId !== threadId) return
+      const idx = store.sessions.findIndex(s => s.thread_id === threadId)
+      if (idx !== -1) {
+        store.sessions[idx] = { ...store.sessions[idx], title: thread.title }
+      } else {
+        // New thread not yet in sessions list (e.g. created from /ai page)
+        store.sessions.unshift(thread)
       }
     } catch {
       // Title may not be ready yet — ignore
@@ -70,6 +97,12 @@ function scheduleTitleRefresh(threadId: string) {
     doRefresh()
   }, 8000)
   titleRefreshTimeouts.add(timeout2)
+  // Third attempt at 15s - safety margin for slow LLM title generation
+  const timeout3 = setTimeout(() => {
+    titleRefreshTimeouts.delete(timeout3)
+    doRefresh()
+  }, 15000)
+  titleRefreshTimeouts.add(timeout3)
 }
 
 function cancelTitleRefresh() {
@@ -77,14 +110,85 @@ function cancelTitleRefresh() {
   titleRefreshTimeouts.clear()
 }
 
+/** Ensure the active thread's metadata (especially title) is in store.sessions.
+ *  On page refresh or route navigation, store.sessions is empty and loadHistory
+ *  only fetches messages via client.threads.getState - the thread title would
+ *  show "新对话" without this fetch. */
+async function ensureThreadInSessions(threadId: string) {
+  if (store.sessions.find(s => s.thread_id === threadId)) return
+  try {
+    const thread = await getThread(threadId)
+    // Re-check: a concurrent scheduleTitleRefresh may have added it already
+    if (!store.sessions.find(s => s.thread_id === threadId)) {
+      store.sessions.unshift(thread)
+    }
+  } catch {
+    // Non-critical: title stays as default until next refresh
+  }
+}
+
+// Initial loading state for skeleton display (during thread creation + first send)
+const initialLoading = ref(true)
+
+// Inherited web search state: when the chat page is entered from the AI hub
+// page, the hub's web search toggle is carried via pendingMessage.webSearch.
+// Pass it to the chat InputBox as an explicit initial value so it inherits the
+// user's choice instead of re-running the auto-default logic.
+const chatWebSearch = ref<boolean | undefined>(undefined)
+
 // Initialize from URL on mount and auto-send pending message if present
-onMounted(() => {
+onMounted(async () => {
+  // Ensure agent data is available for ChatHeader logo. Direct navigation to
+  // /ai/chat (page refresh, direct URL, browser back) bypasses AIHubPage which
+  // normally loads agents - without this, systemAgents stays empty and the
+  // agent logo never renders. Non-blocking: logo appears once the API returns.
+  if (agentStore.systemAgents.length === 0) {
+    agentStore.loadAgents()
+  }
+  // Capture the store's active thread before initializeFromUrl possibly changes it.
+  // If the ID is unchanged after init (e.g. returning from /ai/chat/history to
+  // the same thread, or closing history back to /ai/chat), the activeThreadId
+  // watcher below won't fire — but this fresh composable instance has empty
+  // messages, so we must explicitly load history to avoid a blank page.
+  const prevActiveId = store.activeThreadId
   store.initializeFromUrl()
+  if (
+    store.activeThreadId
+    && store.activeThreadId === prevActiveId
+    && !store.pendingMessage
+  ) {
+    // Existing thread: load history and hide skeleton immediately
+    chat.loadHistory(store.activeThreadId)
+    // Watcher won't fire (same ID) - fetch thread metadata here too.
+    ensureThreadInSessions(store.activeThreadId)
+    initialLoading.value = false
+  }
   // Auto-send pending message from URL (passed from AIHubPage)
   if (store.pendingMessage) {
     const msg = store.pendingMessage
     store.pendingMessage = null // clear so it only fires once
-    handleStartChat({ text: msg.text, mode: msg.deepThink ? 'thinking' : 'pro' })
+    // Inherit the hub page's web search toggle into the chat InputBox
+    if (msg.webSearch !== undefined) {
+      chatWebSearch.value = msg.webSearch
+    }
+    // Construct complete SubmitPayload with mode config values
+    const mode: 'flash' | 'thinking' | 'pro' | 'ultra' = msg.deepThink ? 'thinking' : 'pro'
+    const modeConfig = INPUT_MODE_CONFIGS[mode]
+    await handleStartChat({
+      text: msg.text,
+      model_name: DEFAULT_MODEL,
+      mode,
+      thinking_enabled: modeConfig.thinking_enabled,
+      is_plan_mode: modeConfig.is_plan_mode,
+      subagent_enabled: modeConfig.subagent_enabled,
+      reasoning_effort: modeConfig.reasoning_effort,
+      websearch_enabled: msg.webSearch,
+    }, msg.source)
+    // handleStartChat completes after thread creation + send starts streaming
+    // Skeleton will be hidden once streaming begins (isLoading becomes true)
+  } else {
+    // No pending message: hide skeleton immediately
+    initialLoading.value = false
   }
 })
 
@@ -97,14 +201,32 @@ onUnmounted(() => {
   cancelTitleRefresh()
 })
 
+// When handleStartChat creates a new thread and calls setActiveThread, the
+// activeThreadId watcher below fires loadHistory → cancelStream. If this runs
+// after sendMessage has started its stream, cancelStream aborts the in-flight
+// run (userCancelled=true → silent break, no retry) and the thread is left as
+// an empty shell — the blank-page bug. Set this flag before setActiveThread so
+// the watcher skips exactly one loadHistory for the thread we are about to
+// stream into; sendMessage already manages that thread's messages.
+const skipNextHistoryLoadFor = ref<string | null>(null)
+
 // Watch for thread switches — load history
 watch(
   () => store.activeThreadId,
   async (newId, oldId) => {
     if (newId && newId !== oldId) {
+      if (skipNextHistoryLoadFor.value === newId) {
+        skipNextHistoryLoadFor.value = null
+        return
+      }
       // Cancel pending title refreshes for old thread
       cancelTitleRefresh()
-      await chat.loadHistory(newId)
+      // Load messages and thread metadata in parallel - loadHistory only
+      // fetches checkpoint messages, ensureThreadInSessions fetches the title.
+      await Promise.all([
+        chat.loadHistory(newId),
+        ensureThreadInSessions(newId),
+      ])
     }
   }
 )
@@ -143,19 +265,43 @@ function handleTitleUpdated(threadId: string, newTitle: string) {
   }
 }
 
-async function handleStartChat(payload: SubmitPayload) {
+async function handleStartChat(payload: SubmitPayload, source?: string) {
   try {
-    const thread = await createThread()
+    const thread = await createThread(source)
+    // Mark this thread so the activeThreadId watcher skips loadHistory for it
+    // — sendMessage below will stream into it, and a concurrent loadHistory
+    // would cancelStream-abort the run (see skipNextHistoryLoadFor comment).
+    skipNextHistoryLoadFor.value = thread.thread_id
     store.setActiveThread(thread.thread_id)
-    await chat.sendMessage(payload.text, payload.mode, thread.thread_id)
+    // Add to sessions so ChatHeader can display the title once generated
+    if (!store.sessions.find(s => s.thread_id === thread.thread_id)) {
+      store.sessions.unshift(thread)
+    }
+    // Hide skeleton once thread is created - streaming will show actual content
+    initialLoading.value = false
+    await chat.sendMessage(payload.text, payload.mode, thread.thread_id, {
+      thinking_enabled: payload.thinking_enabled,
+      is_plan_mode: payload.is_plan_mode,
+      subagent_enabled: payload.subagent_enabled,
+      reasoning_effort: payload.reasoning_effort,
+      websearch_enabled: payload.websearch_enabled,
+    }, source)
   } catch {
+    skipNextHistoryLoadFor.value = null
+    initialLoading.value = false
     showFailToast(t('aiChat.sendFailed'))
   }
 }
 
 async function handleSendMessage(payload: SubmitPayload) {
   if (!store.activeThreadId) return
-  await chat.sendMessage(payload.text, payload.mode, store.activeThreadId)
+  await chat.sendMessage(payload.text, payload.mode, store.activeThreadId, {
+    thinking_enabled: payload.thinking_enabled,
+    is_plan_mode: payload.is_plan_mode,
+    subagent_enabled: payload.subagent_enabled,
+    reasoning_effort: payload.reasoning_effort,
+    websearch_enabled: payload.websearch_enabled,
+  })
 }
 
 function handleStopStream() {
@@ -179,6 +325,21 @@ function handleContextChange(_context: InputContext) {
 async function handleSuggestionClick(text: string) {
   if (!store.activeThreadId || chat.isLoading.value) return
   chat.suggestions.value = []
+  // Also clear per-message suggestions on the last AI message so the inline
+  // chips don't remain visible after the user has clicked one and a new
+  // round starts. Without this, the old suggestion chips stay rendered
+  // inside the previous AI message bubble.
+  const lastAiIdx = chat.messages.value.findLastIndex(m => m.type === 'ai')
+  if (lastAiIdx >= 0) {
+    const msg = chat.messages.value[lastAiIdx]
+    if (msg.suggestions) {
+      chat.messages.value = [
+        ...chat.messages.value.slice(0, lastAiIdx),
+        { ...msg, suggestions: undefined },
+        ...chat.messages.value.slice(lastAiIdx + 1),
+      ]
+    }
+  }
   await chat.sendMessage(text, undefined, store.activeThreadId)
 }
 
@@ -194,37 +355,80 @@ function handleArtifactTap(artifact: { id: string; title: string; kind: string; 
 }
 
 function handleNewChat() {
+  chat.clearMessages()
   store.clearActiveThread()
+}
+
+// Branch conversation state and handler
+const branchingMessageId = ref<string | null>(null)
+const canBranch = computed(() => !!store.activeThreadId && !chat.isLoading.value)
+
+async function handleBranch(messageId: string, messageIds: string[]) {
+  if (!store.activeThreadId || branchingMessageId.value) return
+
+  branchingMessageId.value = messageId
+  try {
+    const response = await branchThreadFromTurn(store.activeThreadId, {
+      messageId,
+      messageIds,
+    })
+    showSuccessToast(t('aiChat.branchSuccess'))
+    // Navigate to the new branch thread
+    router.push({ name: 'AIChat', query: { thread_id: response.thread_id } })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : t('aiChat.branchFailed')
+    showFailToast(message)
+  } finally {
+    branchingMessageId.value = null
+  }
+}
+
+/**
+ * Handle clarification submit from HumanInputCard.
+ * Calls the resume API to continue the interrupted graph execution.
+ */
+async function handleClarificationSubmit(payload: { threadId: string; interruptId: string; answer: string }) {
+  await chat.resumeInterrupt(payload.threadId, payload.interruptId, payload.answer)
 }
 </script>
 
 <template>
   <div class="ai-chat-box">
-    <!-- Header bar -->
-    <ChatHeader
-      :active-thread-id="store.activeThreadId"
-      :sessions="store.sessions"
-      :token-usage-total="chat.tokenUsage.value?.total_tokens"
-      :active-agent="activeAgent"
-      @title-updated="handleTitleUpdated"
-      @new-chat="handleNewChat"
-    />
+    <!-- Skeleton for initial loading (thread creation + first message) -->
+    <AIChatSkeleton v-if="initialLoading" />
 
-    <template v-if="store.isWelcomeMode">
-      <!-- WelcomePage includes its own InputBox (DeerFlow pattern) -->
-      <WelcomePage @start-chat="handleStartChat" />
-    </template>
+    <!-- Actual Content -->
     <template v-else>
-      <MessageList
-        :messages="chat.messages.value"
+      <!-- Header bar -->
+      <ChatHeader
+        :active-thread-id="store.activeThreadId"
+        :sessions="store.sessions"
+        :realtime-token-usage="realtimeTokenUsage"
         :is-streaming="chat.isLoading.value"
-        :thread-id="store.activeThreadId || undefined"
-        :planning-steps="chat.planningSteps.value"
-        @retry="handleRetry"
-        @stop="handleStopStream"
-        @suggestion-click="handleSuggestionClick"
-        @artifact-tap="handleArtifactTap"
+        @title-updated="handleTitleUpdated"
+        @new-chat="handleNewChat"
       />
+
+      <template v-if="store.isWelcomeMode">
+        <!-- WelcomePage includes its own InputBox (DeerFlow pattern) -->
+        <WelcomePage @start-chat="handleStartChat" />
+      </template>
+      <template v-else>
+        <MessageList
+          :messages="chat.messages.value"
+          :is-streaming="chat.isLoading.value"
+          :thread-id="store.activeThreadId || undefined"
+          :can-branch="canBranch"
+          :branching-message-id="branchingMessageId"
+          :answered-interrupt-ids="chat.answeredInterruptIds.value"
+          :interrupt-error-id="chat.interruptErrorId.value"
+          @retry="handleRetry"
+          @stop="handleStopStream"
+          @suggestion-click="handleSuggestionClick"
+          @artifact-tap="handleArtifactTap"
+          @branch="handleBranch"
+          @clarification-submit="handleClarificationSubmit"
+        />
       <!-- Suggestion chips above input (from SSE custom events) -->
       <SuggestionChips
         v-if="!chat.isLoading.value && chat.suggestions.value.length > 0"
@@ -243,6 +447,11 @@ function handleNewChat() {
         :status="chat.isLoading.value ? 'streaming' : 'ready'"
         :is-welcome-mode="false"
         :thread-id="store.activeThreadId || undefined"
+        :web-search="chatWebSearch"
+        :agent-id="activeAgent?.id"
+        :agents="activeAgent ? [{ id: activeAgent.id, display_name: activeAgent.display_name, agent_name: activeAgent.agent_name, icon: activeAgent.icon, color: activeAgent.color, description: activeAgent.description }] : []"
+        :agent-icon="activeAgent?.icon"
+        :agent-label="activeAgent?.display_name"
         @submit="handleSendMessage"
         @stop="handleStop"
         @context-change="handleContextChange"
@@ -256,6 +465,7 @@ function handleNewChat() {
       :session-id="store.activeThreadId || ''"
       @update:show="(v: boolean) => v ? undefined : deselectArtifact()"
     />
+    </template>
   </div>
 </template>
 

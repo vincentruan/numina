@@ -1,0 +1,58 @@
+[
+  {
+    "mode": "flash",
+    "query": "帮我研究下比亚迪的市场趋势",
+    "status": "success",
+    "durationMs": 24259,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/flash-q1-post.png"
+  },
+  {
+    "mode": "flash",
+    "query": "分析家庭资产负债，联网搜索优化建议",
+    "status": "success",
+    "durationMs": 24200,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/flash-q2-post.png"
+  },
+  {
+    "mode": "thinking",
+    "query": "帮我研究下比亚迪的市场趋势",
+    "status": "success",
+    "durationMs": 22665,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/thinking-q1-post.png"
+  },
+  {
+    "mode": "thinking",
+    "query": "分析家庭资产负债，联网搜索优化建议",
+    "status": "success",
+    "durationMs": 28724,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/thinking-q2-post.png"
+  },
+  {
+    "mode": "pro",
+    "query": "帮我研究下比亚迪的市场趋势",
+    "status": "success",
+    "durationMs": 28724,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/pro-q1-post.png"
+  },
+  {
+    "mode": "pro",
+    "query": "分析家庭资产负债，联网搜索优化建议",
+    "status": "success",
+    "durationMs": 27234,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/pro-q2-post.png"
+  },
+  {
+    "mode": "ultra",
+    "query": "帮我研究下比亚迪的市场趋势",
+    "status": "success",
+    "durationMs": 18144,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/ultra-q1-post.png"
+  },
+  {
+    "mode": "ultra",
+    "query": "分析家庭资产负债，联网搜索优化建议",
+    "status": "success",
+    "durationMs": 15126,
+    "screenshotPath": "/Volumes/LexarSSDNQ790/geek_space/github/numina_dev_space/numina/tests/screenshot/four-mode-comparison/ultra-q2-post.png"
+  }
+]

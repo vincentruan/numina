@@ -125,17 +125,19 @@ describe('getMessageGroups — processing groups (tool_calls/reasoning)', () => 
     expect(groups[0].messages).toHaveLength(2)
   })
 
-  it('AI with both tool_calls and content stays in processing only (no assistant body)', () => {
+  it('AI with both tool_calls and content creates only processing group', () => {
     const msgs = [
       ai('a1', {
-        content: 'partial body',
+        content: '让我为您查询家庭资产负债的最新情况',
         tool_calls: [{ id: 'tc1', name: 'web_search', args: {} }],
       }),
     ]
     const groups = getMessageGroups(msgs)
-    // 4d guard: only when !hasToolCalls
-    expect(groups).toHaveLength(1)
-    expect(groups[0].type).toBe('assistant:processing')
+    // DeerFlow 模式：tool_calls + content 时，content 是工具调用前的过渡说明文本，
+    // 不是最终回答。只创建 assistant:processing group，过渡文本由 ChainOfThought
+    // 的 leadingContent 渲染，避免显示为"下一轮对话"破坏视觉连贯性。
+    expect(groups.map(g => g.type)).toEqual(['assistant:processing'])
+    expect(groups[0].messages[0].id).toBe('a1')
   })
 })
 

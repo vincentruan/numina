@@ -27,13 +27,12 @@
     </div>
 
     <div class="list-content">
-      <!-- Skeleton for initial loading -->
-      <WishListSkeleton v-if="wishStore.loading && wishes.length === 0" />
+      <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
+        <!-- Skeleton for initial loading -->
+        <WishListSkeleton v-if="wishStore.loading && wishes.length === 0" />
 
-      <!-- Actual Content -->
-      <template v-else>
-        <van-pull-refresh v-model="refreshing" @refresh="onRefresh">
-        <template v-if="sortedWishes.length">
+        <!-- Actual Content -->
+        <template v-else-if="sortedWishes.length">
           <ul class="wish-list" :aria-label="t('wish.aria.listLabel')">
             <li
               v-for="wish in sortedWishes"
@@ -145,7 +144,6 @@
           </template>
         </div>
       </van-pull-refresh>
-      </template>
     </div>
 
     <div class="fab" :aria-label="t('wish.aria.addWish')" @click="$router.push('/wishes/new')">

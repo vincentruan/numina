@@ -18,7 +18,7 @@ import logging
 from typing import Any, Literal
 
 from deerflow.runtime import RunManager
-from fastapi import APIRouter, Depends, Header, Request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -97,7 +97,6 @@ async def stream_run_v2(
     body: RunCreateRequest,
     request: Request,
     x_family_id: str = Header(..., alias="X-Family-Id"),
-    x_user_id: str = Header(None, alias="X-User-Id"),
     verified: VerifiedFamily = Depends(verify_family_token),
 ) -> StreamingResponse:
     """Create a run and stream events via SSE with full lifecycle management.
@@ -114,7 +113,14 @@ async def stream_run_v2(
     # [Copied from DeerFlow Reference] — app/gateway/routers/thread_runs.py stream_run
     # [Integrated with Numina Multi-Tenant] — family_id in run metadata
     """
-    record = await start_run(body, thread_id, request, x_family_id, x_user_id)
+    # Use the user_id from the verified JWT, not a separate ``X-User-Id``
+    # header. The frontend LangGraph SDK client (ai-chat.ts:getClient) only
+    # sends ``X-Family-Id`` + cookies - it does NOT set ``X-User-Id`` - so
+    # reading the header left user_id=None, which made worker.py skip
+    # ``X-Caller-User-Id`` on the MCP SSE handshake, causing the backend
+    # /internal/mcp/{family_id}/sse endpoint to 403 ("missing caller_user_id")
+    # and load zero MCP tools (the agent then reported "所有记录仍为空").
+    record = await start_run(body, thread_id, request, x_family_id, verified.user_id)
     bridge = get_stream_bridge(request)
     run_mgr = get_run_manager(request)
 
@@ -137,3 +143,30 @@ async def stream_run_v2(
             "Content-Location": f"/api/threads/{thread_id}/runs/{record.run_id}",
         },
     )
+
+
+@router.post("/{thread_id}/runs/{run_id}/cancel")
+async def cancel_run(
+    thread_id: str,
+    run_id: str,
+    action: Literal["interrupt", "rollback"] = "interrupt",
+    verified: VerifiedFamily = Depends(verify_family_token),
+    run_mgr: RunManager = Depends(get_run_manager),
+) -> dict[str, Any]:
+    """Cancel an in-flight agent run.
+
+    Implements the ``@langchain/langgraph-sdk`` ``runs.cancel`` protocol — the
+    SDK sends ``POST /threads/{thread_id}/runs/{run_id}/cancel?action=interrupt&wait=0``.
+    The run is cancelled via ``RunManager``; tenant isolation is enforced by
+    checking the run's ``family_id`` metadata against the verified family. A
+    mismatched or unknown run returns 404 so existence is not leaked.
+    """
+    record = run_mgr.get(run_id)
+    if (
+        record is None
+        or record.thread_id != thread_id
+        or record.metadata.get("family_id") != verified.family_id
+    ):
+        raise HTTPException(status_code=404, detail="运行不存在")
+    cancelled = await run_mgr.cancel(run_id, action=action)
+    return {"run_id": run_id, "cancelled": cancelled}

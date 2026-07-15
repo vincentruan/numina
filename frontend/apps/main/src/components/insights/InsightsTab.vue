@@ -1352,6 +1352,10 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
+/* Dark-mode bar fill is light lavender, so white count text is illegible —
+   step the text down to the same dark navy used on other lavender fills. */
+[data-theme='dark'] .dur-bar-count { color: #010120; }
+
 .dur-count {
   width: 28px;
   font-size: 12px;
@@ -1468,10 +1472,17 @@ onMounted(async () => {
 .podium-item.rank3 { order: 3; }
 
 .podium-thumb {
+  /* Multi-color conic-gradient ring (border-box) wraps a neutral inner fill
+     (padding-box). Each rank overrides --podium-ring below to give Top 1-3
+     distinct, high-saturation color bands and lift the podium's colorfulness. */
+  --podium-ring: conic-gradient(from 0deg, #FF6B9D, #FFD93D, #6BCB77, #4D96FF, #9D72FF, #FF6B9D);
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: var(--bg-secondary);
+  background:
+    linear-gradient(var(--bg-secondary), var(--bg-secondary)) padding-box,
+    var(--podium-ring) border-box;
+  border: 3px solid transparent;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1489,7 +1500,9 @@ onMounted(async () => {
 
 [data-theme='dark'] .podium-thumb { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); }
 
+/* 冠军 — 暖色火环 (金/橙/红/绯) */
 .podium-item.rank1 .podium-thumb {
+  --podium-ring: conic-gradient(from 0deg, #FFD700, #FF9100, #FF3D00, #FF1744, #FFD700);
   width: 56px;
   height: 56px;
   border-radius: 14px;
@@ -1499,6 +1512,16 @@ onMounted(async () => {
 .podium-item.rank1 .podium-thumb .icon-svg {
   width: 32px;
   height: 32px;
+}
+
+/* 亚军 — 冷色极光环 (青/蓝/紫/品红) */
+.podium-item.rank2 .podium-thumb {
+  --podium-ring: conic-gradient(from 0deg, #00E5FF, #2979FF, #7C4DFF, #E040FB, #00E5FF);
+}
+
+/* 季军 — 宝石环 (青/绿/琥/珊瑚) */
+.podium-item.rank3 .podium-thumb {
+  --podium-ring: conic-gradient(from 0deg, #26A69A, #9CCC65, #FFCA28, #FF7043, #26A69A);
 }
 
 .podium-name {

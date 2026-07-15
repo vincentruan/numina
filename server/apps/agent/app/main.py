@@ -1,5 +1,7 @@
 """Numina AI Agent 微服务入口。"""
 
+import logging
+
 # Patch MCP SDK's httpx client factory before any imports that use it.
 # CRITICAL: httpx defaults trust_env=True, which picks up macOS system proxy settings.
 # This causes 503 errors when connecting to SSE endpoints. trust_env=False bypasses
@@ -54,6 +56,17 @@ if "DEER_FLOW_CONFIG_PATH" not in os.environ:
     )
 
 setup_logging()
+
+# Bridge the per-family DeerFlow AppConfig into the background memory-update
+# timer thread (see services/deerflow_adapter/memory_config_bridge.py for why).
+# Importing the module installs the patch idempotently at process start, before
+# any agent run can enqueue a memory update.
+try:
+    from apps.agent.services.deerflow_adapter import (
+        memory_config_bridge,  # noqa: F401,E402
+    )
+except Exception as e:
+    logging.getLogger(__name__).warning("memory_config_bridge install failed: %s", e)
 
 
 @asynccontextmanager
@@ -131,6 +144,22 @@ async def lifespan(app: FastAPI):
 
         logging.getLogger(__name__).warning("AsyncSqliteSaver init failed: %s", _e)
 
+    # Apply DeerFlow sync-tool compatibility patch: the pinned harness (rev
+    # 4538c322) predates upstream fix 3599b570, so the built-in ``task`` tool
+    # (subagent delegation, used in ultra mode) lacks the sync wrapper that
+    # MCP tools already get. Without this, ultra mode fails with
+    # "StructuredTool does not support sync invocation" on the sync stream path.
+    try:
+        from apps.agent.services.deerflow_adapter.sync_tool_patch import (
+            apply_sync_tool_patches,
+        )
+
+        apply_sync_tool_patches()
+    except Exception as _e:
+        import logging
+
+        logging.getLogger(__name__).warning("sync_tool_patch failed: %s", _e)
+
     # [Copied from DeerFlow Reference] — initialise runtime (StreamBridge + RunManager)
     # [Integrated with Numina Multi-Tenant] — shared singletons for all families
     from apps.agent.services.runtime.lifespan import init_runtime, shutdown_runtime
@@ -197,6 +226,7 @@ from apps.agent.routers import import_parse as import_parse_router  # noqa: E402
 from apps.agent.routers import liability as liability_router  # noqa: E402
 from apps.agent.routers import model_test as model_test_router  # noqa: E402
 from apps.agent.routers import report as report_router  # noqa: E402
+from apps.agent.routers import resume as resume_router  # noqa: E402
 from apps.agent.routers import runs_stream as runs_stream_router  # noqa: E402
 from apps.agent.routers import spending_leak as spending_leak_router  # noqa: E402
 from apps.agent.routers import suggest as suggest_router  # noqa: E402
@@ -218,6 +248,7 @@ app.include_router(capabilities_router.router)
 app.include_router(model_test_router.router)
 app.include_router(threads_router.router)
 app.include_router(runs_stream_router.router)
+app.include_router(resume_router.router)
 
 
 @app.get("/health")

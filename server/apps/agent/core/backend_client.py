@@ -179,16 +179,16 @@ class BackendClient:
         session_id: str,
         user_id: str | None,
         agent_id: str | None = None,
-        jsonl_path: str,
         last_model: str | None = None,
+        source: str | None = None,
     ) -> None:
         await upsert_session(
             self.family_id,
             session_id=session_id,
             user_id=user_id,
             agent_id=agent_id,
-            jsonl_path=jsonl_path,
             last_model=last_model,
+            source=source,
         )
 
     async def update_session_summary(
@@ -241,6 +241,14 @@ class BackendClient:
 
     async def get_session(self, session_id: str) -> dict | None:
         return await get_session(self.family_id, session_id)
+
+    async def delete_session(self, session_id: str) -> bool:
+        """Delete a session row via the backend internal API.
+
+        Returns:
+            True if deleted successfully, False if not found.
+        """
+        return await delete_session(self.family_id, session_id)
 
     async def report_circuit_event(
         self,
@@ -544,8 +552,8 @@ async def upsert_session(
     session_id: str,
     user_id: str | None,
     agent_id: str | None = None,
-    jsonl_path: str,
     last_model: str | None = None,
+    source: str | None = None,
 ) -> None:
     validated_id = _validate_family_id(family_id)
     client = await get_shared_client()
@@ -553,8 +561,8 @@ async def upsert_session(
         "session_id": session_id,
         "user_id": user_id,
         "agent_id": agent_id,
-        "jsonl_path": jsonl_path,
         "last_model": last_model,
+        "source": source,
     }
     resp = await client.post(
         "/api/v1/internal/ai/sessions/upsert",
@@ -647,6 +655,24 @@ async def get_session(family_id: str, session_id: str) -> dict | None:
         return None
     resp.raise_for_status()
     return _unwrap(resp)
+
+
+async def delete_session(family_id: str, session_id: str) -> bool:
+    """Delete a session row via the backend internal API.
+
+    Returns:
+        True if deleted successfully, False if not found.
+    """
+    validated_id = _validate_family_id(family_id)
+    client = await get_shared_client()
+    resp = await client.delete(
+        f"/api/v1/internal/ai/sessions/{session_id}",
+        headers=_make_headers(validated_id),
+    )
+    if resp.status_code == 404:
+        return False
+    resp.raise_for_status()
+    return True
 
 
 async def report_circuit_event(

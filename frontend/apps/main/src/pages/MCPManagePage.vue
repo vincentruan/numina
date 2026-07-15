@@ -203,6 +203,7 @@ async function onDialogClose(action: string) {
 .cell-actions {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
 }
 .action-icon {

@@ -454,6 +454,38 @@ def _generate_temp_config(
     if base_url:
         model_entry["base_url"] = base_url
 
+    # ── DeerFlow factory.py parity: stream_usage + stream_chunk_timeout ──
+    # DeerFlow's factory.create_chat_model() auto-injects these for all
+    # OpenAI-compatible models. Without them:
+    #   - stream_usage: LangChain only auto-enables when no custom base_url
+    #     is set, so third-party endpoints silently lose token usage data
+    #     (TokenUsage shows 0/0/0).
+    #   - stream_chunk_timeout: LangChain default is 60s, too aggressive for
+    #     reasoning models (DeepSeek-R1, QwQ) whose first chunk can take
+    #     90~150s. We use the user-configured timeout_seconds from DB.
+    _openai_compat_use_paths = (
+        "langchain_openai:ChatOpenAI",
+        "deerflow.models.patched_openai:PatchedChatOpenAI",
+    )
+    if use_class in _openai_compat_use_paths:
+        if "stream_usage" not in model_entry:
+            model_entry["stream_usage"] = True
+        db_timeout = ai_config.get("timeout_seconds")
+        if isinstance(db_timeout, int) and db_timeout > 0:
+            if "stream_chunk_timeout" not in model_entry:
+                model_entry["stream_chunk_timeout"] = float(db_timeout)
+
+    # ── api_base → base_url normalisation ──
+    # langchain_openai.ChatOpenAI accepts the endpoint override as ``base_url``
+    # (with ``openai_api_base`` as a legacy alias). If a caller passes
+    # ``api_base`` (a common mistake copied from other model classes),
+    # LangChain silently diverts it into ``model_kwargs``, which then gets
+    # spread into every Completions.create() call and rejected by the OpenAI
+    # SDK with "unexpected keyword argument 'api_base'". Normalise here so
+    # the endpoint override works as the user intended.
+    if "api_base" in model_entry and "base_url" not in model_entry:
+        model_entry["base_url"] = model_entry.pop("api_base")
+
     config["models"] = [model_entry]
     # 移除旧的 llm 节（已弃用）
     config.pop("llm", None)

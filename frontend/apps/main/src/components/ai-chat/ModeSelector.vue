@@ -146,9 +146,10 @@ onUnmounted(() => {
   <button
     ref="triggerRef"
     class="mode-trigger control-btn"
-    :class="{ 'mode-trigger--ultra': currentMode === 'ultra' }"
+    :class="[`mode-trigger--${currentMode}`]"
     @click.stop="togglePopup"
   >
+    <span class="mode-trigger-shimmer" />
     <IIcon :icon="getModeIcon(currentMode)" class="mode-trigger-icon" />
   </button>
 
@@ -201,31 +202,163 @@ onUnmounted(() => {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
+  position: relative;
 }
 
-.mode-trigger:hover {
-  background: rgba(99, 102, 241, 0.15);
-  color: var(--text-primary);
+/* ── Glow halo (like AIBrainIcon ::before) ── */
+.mode-trigger::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  z-index: 0;
+  filter: blur(6px);
+  opacity: 0;
+  transition: opacity 0.3s, background 0.3s;
+  pointer-events: none;
+}
+
+/* ── Shimmer sweep overlay ── */
+.mode-trigger-shimmer {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%
+  );
+  animation: mode-shimmer 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.mode-trigger:hover::before {
+  opacity: 0.8;
 }
 
 .mode-trigger:active {
   transform: scale(0.92);
 }
 
+/* ── Per-mode colors ── */
+
+/* flash — theme indigo */
+.mode-trigger--flash {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.2);
+  color: #818cf8;
+}
+.mode-trigger--flash::before {
+  background: rgba(99, 102, 241, 0.18);
+}
+.mode-trigger--flash:hover {
+  background: rgba(99, 102, 241, 0.15);
+}
+
+/* thinking — theme primary (violet) */
+.mode-trigger--thinking {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+.mode-trigger--thinking::before {
+  background: rgba(139, 92, 246, 0.18);
+}
+.mode-trigger--thinking:hover {
+  background: rgba(139, 92, 246, 0.15);
+}
+
+/* pro — teal */
+.mode-trigger--pro {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: rgba(20, 184, 166, 0.2);
+  color: #2dd4bf;
+}
+.mode-trigger--pro::before {
+  background: rgba(20, 184, 166, 0.18);
+}
+.mode-trigger--pro:hover {
+  background: rgba(20, 184, 166, 0.15);
+}
+
+/* ultra — warm gold (existing) */
 .mode-trigger--ultra {
   background: rgba(218, 187, 94, 0.12);
   border-color: rgba(218, 187, 94, 0.3);
   color: #dabb5e;
 }
+.mode-trigger--ultra::before {
+  background: rgba(218, 187, 94, 0.22);
+}
 
+/* ── Pulse ripple — only on ultra mode ── */
+.mode-trigger--ultra::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow: 0 0 0 2px rgba(218, 187, 94, 0.6);
+  animation: mode-pulse-ripple 2.4s ease-out infinite;
+}
 .mode-trigger--ultra:hover {
   background: rgba(218, 187, 94, 0.2);
+}
+
+/* Dark mode shimmer uses lower opacity */
+:global([data-theme='dark']) .mode-trigger-shimmer {
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 70%
+  );
+}
+
+@keyframes mode-shimmer {
+  0% {
+    left: -100%;
+  }
+  60% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+@keyframes mode-pulse-ripple {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(2.2);
+    opacity: 0;
+  }
 }
 
 .mode-trigger-icon {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 /* ── Dropdown ── */

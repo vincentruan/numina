@@ -1,4 +1,7 @@
-"""AI 对话会话模型 — 存储会话元数据，消息内容存储在 JSONL 文件中。"""
+"""AI 对话会话模型 - 存储会话元数据。
+
+消息内容由 DeerFlow checkpointer 持久化，不再写 JSONL 文件。
+"""
 
 from datetime import datetime
 
@@ -7,9 +10,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
-    Integer,
     String,
-    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,23 +29,18 @@ class AIChatSession(Base):
     user_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id"), nullable=True
     )
-    cached_file_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("cached_files.id"), nullable=True
-    )
     agent_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("ai_agents.id", ondelete="SET NULL"), nullable=True, index=True
     )
     title: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    # Preserved auto-generated title (from DeerFlow TitleMiddleware) before the
+    # user manually renames — see internal_update_session_summary's preserve logic.
+    original_title: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
-    jsonl_path: Mapped[str] = mapped_column(String(512), nullable=False)
     last_message_summary: Mapped[str | None] = mapped_column(String(200), nullable=True)
     last_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    has_attachments: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    # Kept for backward compatibility — no longer written by agent
-    message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    last_preview: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=func.now(), onupdate=func.now()

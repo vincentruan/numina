@@ -43,6 +43,18 @@ const TOOL_DISPLAY_MAP: Record<string, ToolDisplayInfo> = {
     argsTemplate: '文件：{path}',
     resultTemplate: '写入 {lines} 行',
   },
+  read_numina_report: {
+    displayName: '读取小鸣报告',
+    icon: '📄',
+    argsTemplate: '文件：{filename}',
+    resultTemplate: '读取 {size} 字节',
+  },
+  write_numina_report: {
+    displayName: '写入小鸣报告',
+    icon: '✏️',
+    argsTemplate: '文件：{filename}',
+    resultTemplate: '写入 {size} 字节',
+  },
   bash: {
     displayName: '执行命令',
     icon: '⚙️',

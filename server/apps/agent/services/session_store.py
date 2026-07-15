@@ -33,16 +33,16 @@ class AiSessionRepository:
         family_id: str,
         user_id: str | None,
         agent_id: str | None = None,
-        jsonl_path: str,
         last_model: str | None = None,
+        source: str | None = None,
     ) -> None:
         try:
             await self._client.upsert_session(
                 session_id=session_id,
                 user_id=user_id,
                 agent_id=agent_id,
-                jsonl_path=jsonl_path,
                 last_model=last_model,
+                source=source,
             )
         except Exception as e:
             logger.warning("session upsert failed for %s: %s", session_id, e)
@@ -75,8 +75,12 @@ class AiSessionRepository:
     ) -> tuple[list[dict], int]:
         """Return (sessions, total) for the family, or ([], 0) on error."""
         try:
+            # BackendClient is already bound to family_id at construction; do
+            # NOT pass it again here; BackendClient.list_sessions takes only
+            # keyword-only params (limit/offset/sort_by/sort_order) and the
+            # extra positional arg raised TypeError, which was swallowed by
+            # the except below, making /api/threads/search return [] always.
             return await self._client.list_sessions(
-                family_id,
                 limit=limit,
                 offset=offset,
                 sort_by=sort_by,
@@ -123,3 +127,15 @@ class AiSessionRepository:
             )
         except Exception as e:
             logger.warning("session update failed for %s: %s", session_id, e)
+
+    async def delete_session(self, *, session_id: str, family_id: str) -> bool:
+        """Delete a session row via backend.
+
+        Returns:
+            True if deleted successfully, False if not found or on error.
+        """
+        try:
+            return await self._client.delete_session(session_id)
+        except Exception as e:
+            logger.warning("session delete failed for %s: %s", session_id, e)
+            return False

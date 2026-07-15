@@ -2,6 +2,8 @@
 export interface ThreadSession {
   thread_id: string
   title: string
+  /** Auto-generated title preserved on first manual rename (read-only). */
+  original_title?: string
   status: 'idle' | 'interrupted' | 'error'
   is_pinned: boolean
   created_at: string

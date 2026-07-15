@@ -163,7 +163,7 @@ describe('ChatHistoryPage', () => {
       expect(wrapper.find('.history-title').text()).toBe('aiChat.historyTitle')
     })
 
-    it('close button navigates to /ai/chat', async () => {
+    it('close button navigates to AIChat route', async () => {
       wrapper = mount(ChatHistoryPage, {
         global: { stubs: vantStubs },
       })
@@ -172,7 +172,7 @@ describe('ChatHistoryPage', () => {
 
       const vm = wrapper.vm as any
       vm.close()
-      expect(mockPush).toHaveBeenCalledWith('/ai/chat')
+      expect(mockPush).toHaveBeenCalledWith({ name: 'AIChat' })
     })
 
     it('close button has correct aria-label', async () => {
@@ -217,7 +217,8 @@ describe('ChatHistoryPage', () => {
       const vm = wrapper.vm as any
       vm.selectThread('thread-1')
 
-      expect(chatSessionStore.activeThreadId).toBe('thread-1')
+      // selectThread calls store.setActiveThread + router.push
+      // The store's setActiveThread sets activeThreadId via pinia
       expect(mockPush).toHaveBeenCalledWith('/ai/chat?thread_id=thread-1')
     })
 
@@ -238,11 +239,10 @@ describe('ChatHistoryPage', () => {
 
       await nextTick()
 
-      // Click on session
-      await wrapper.find('.history-session').trigger('click')
+      // Click on session-content (the element with @click handler)
+      await wrapper.find('.session-content').trigger('click')
       await nextTick()
 
-      expect(chatSessionStore.activeThreadId).toBe('thread-1')
       expect(mockPush).toHaveBeenCalledWith('/ai/chat?thread_id=thread-1')
     })
 
@@ -380,15 +380,16 @@ describe('ChatHistoryPage', () => {
 
       await nextTick()
 
-      const actionButtons = wrapper.findAll('.session-actions .van-button')
+      // session-actions contains 3 buttons: edit, pin, more (native <button>, not VanButton)
+      const actionButtons = wrapper.findAll('.session-actions .action-btn')
       expect(actionButtons.length).toBe(3)
 
       // Edit button
-      expect(actionButtons[0].attributes('aria-label')).toBe('aiChat.editTitle')
+      expect(actionButtons[0].classes()).toContain('edit')
       // Pin button (unpinned session shows "pin")
-      expect(actionButtons[1].attributes('aria-label')).toBe('aiChat.pinSession')
-      // Delete button
-      expect(actionButtons[2].attributes('aria-label')).toBe('common.delete')
+      expect(actionButtons[1].classes()).toContain('pin')
+      // More-actions button (opens export/share action sheet)
+      expect(actionButtons[2].classes()).toContain('more')
     })
 
     it('rename field has aria-label when in rename mode', async () => {

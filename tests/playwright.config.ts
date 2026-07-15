@@ -8,7 +8,7 @@ export default defineConfig({
   reporter: [['list'], ['html', { open: 'never' }]],
 
   use: {
-    baseURL: 'http://localhost',
+    baseURL: process.env.BASE_URL || 'http://localhost:5173',
     viewport: { width: 390, height: 844 },
     // httpOnly cookies require credentials to be sent
     // Axios uses withCredentials: true — browser context handles this automatically

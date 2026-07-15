@@ -193,8 +193,25 @@ class DeerFlowAdapter:
         context: RedactedContext,
         thread_id: str,
         enable_thinking: bool = False,
+        subagent_enabled: bool | None = None,
+        plan_mode: bool | None = None,
+        resume_answer: str | None = None,
     ) -> AsyncGenerator[Any, None]:
-        """Yield raw LangGraph StreamEvents from DeerFlowClient.stream()."""
+        """Yield raw LangGraph StreamEvents from DeerFlowClient.stream().
+
+        Args:
+            resume_answer: If provided, resume an interrupted graph with this answer
+                using LangGraph's Command(resume=answer) instead of sending a new message.
+        """
+        # Build per-call kwargs for DeerFlowClient.stream(). Only include
+        # overrides that are explicitly set (not None) so the adapter's
+        # init-time defaults are preserved when no per-call mode is specified.
+        stream_kwargs: dict[str, Any] = {"thinking_enabled": enable_thinking}
+        if subagent_enabled is not None:
+            stream_kwargs["subagent_enabled"] = subagent_enabled
+        if plan_mode is not None:
+            stream_kwargs["plan_mode"] = plan_mode
+
         async with _get_semaphore():
             loop = asyncio.get_running_loop()
             import queue as thread_queue
@@ -222,9 +239,21 @@ class DeerFlowAdapter:
                                 pass
 
                         try:
-                            message = self._build_prompt(skill_name, context)
-                            for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
-                                loop.call_soon_threadsafe(queue.put_nowait, event)
+                            if resume_answer is not None:
+                                # Resume mode: use Command(resume=answer) instead of a new message
+                                from langgraph.types import Command
+                                message = self._build_prompt(skill_name, context)
+                                for event in self._client.stream(
+                                    message,
+                                    thread_id=thread_id,
+                                    resume_answer=resume_answer,
+                                    **stream_kwargs,
+                                ):
+                                    loop.call_soon_threadsafe(queue.put_nowait, event)
+                            else:
+                                message = self._build_prompt(skill_name, context)
+                                for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
+                                    loop.call_soon_threadsafe(queue.put_nowait, event)
                         finally:
                             if prev_extensions_env is not None:
                                 _os.environ["DEER_FLOW_EXTENSIONS_CONFIG_PATH"] = prev_extensions_env
@@ -232,9 +261,20 @@ class DeerFlowAdapter:
                                 _os.environ.pop("DEER_FLOW_EXTENSIONS_CONFIG_PATH", None)
                             pop_current_app_config()
                     else:
-                        message = self._build_prompt(skill_name, context)
-                        for event in self._client.stream(message, thread_id=thread_id, thinking_enabled=enable_thinking):
-                            loop.call_soon_threadsafe(queue.put_nowait, event)
+                        if resume_answer is not None:
+                            # Resume mode: use Command(resume=answer) instead of a new message
+                            message = self._build_prompt(skill_name, context)
+                            for event in self._client.stream(
+                                message,
+                                thread_id=thread_id,
+                                resume_answer=resume_answer,
+                                **stream_kwargs,
+                            ):
+                                loop.call_soon_threadsafe(queue.put_nowait, event)
+                        else:
+                            message = self._build_prompt(skill_name, context)
+                            for event in self._client.stream(message, thread_id=thread_id, **stream_kwargs):
+                                loop.call_soon_threadsafe(queue.put_nowait, event)
                 except Exception as e:
                     loop.call_soon_threadsafe(queue.put_nowait, e)
                 finally:
@@ -262,6 +302,9 @@ class DeerFlowAdapter:
         context: RedactedContext,
         thread_id: str,
         enable_thinking: bool = False,
+        subagent_enabled: bool | None = None,
+        plan_mode: bool | None = None,
+        resume_answer: str | None = None,
     ) -> AsyncGenerator[tuple[str, dict], None]:
         """Yield (sse_event_type, data) tuples from DeerFlowClient.stream().
 
@@ -275,11 +318,17 @@ class DeerFlowAdapter:
           - ``error``         → ``"error"`` (stream error)
           - All other types   → ``"custom"`` (tool progress, metadata)
 
+        Args:
+            resume_answer: If provided, resume an interrupted graph with this answer
+                using LangGraph's Command(resume=answer) instead of sending a new message.
+
         Yields:
             (sse_event_type, data_dict) tuples ready for ``format_sse()``.
         """
         async for event in self.raw_stream_dispatch(
-            skill_name, context, thread_id, enable_thinking
+            skill_name, context, thread_id, enable_thinking,
+            subagent_enabled=subagent_enabled, plan_mode=plan_mode,
+            resume_answer=resume_answer,
         ):
             if isinstance(event, BaseException):
                 yield ("error", {"error": str(event)})
@@ -298,6 +347,15 @@ class DeerFlowAdapter:
                 yield ("end", event_data)
             elif event_type == "error":
                 yield ("error", {"error": str(event_data)})
+            elif (
+                event_type == "custom"
+                and isinstance(event_data, dict)
+                and event_data.get("type") == "interrupt"
+            ):
+                # LangGraph interrupt() emits a custom event with type="interrupt".
+                # Forward as-is so the worker can publish it to the SSE stream
+                # and the frontend can render the HumanInputCard.
+                yield ("custom", event_data)
             else:
                 # All other event types (tool progress, metadata, etc.) → custom
                 if isinstance(event_data, dict):
@@ -565,8 +623,15 @@ class DeerFlowAdapter:
             raise DeerFlowError(str(e)) from e
 
     def _build_prompt(self, skill_name: str, context: RedactedContext) -> str:
-        """Build a skill-dispatch prompt from the redacted context."""
-        ctx_dict = context.model_dump(exclude={"redaction_log"})
+        """Build a skill-dispatch prompt from the redacted context.
+
+        ``exclude_defaults=True`` omits empty data fields (assets=[], liabilities=[],
+        etc.) so the chat skill's MCP-based data retrieval isn't short-circuited by
+        the LLM trusting injected empty data over calling its MCP tools. The chat
+        worker (worker.py) builds a minimal context with only family_id + free_text;
+        pre-fetched skills that actually populate data still emit those fields.
+        """
+        ctx_dict = context.model_dump(exclude={"redaction_log"}, exclude_defaults=True)
         return f"[SKILL:{skill_name}]\n{json.dumps(ctx_dict, ensure_ascii=False, indent=2)}"
 
 

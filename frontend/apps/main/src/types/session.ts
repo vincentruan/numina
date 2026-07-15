@@ -7,7 +7,6 @@ export interface SessionSummary {
   status: 'active' | 'completed' | 'error'
   last_message_summary: string | null
   last_model: string | null
-  has_attachments: boolean
   is_pinned: boolean
   source: string | null
   created_at: string

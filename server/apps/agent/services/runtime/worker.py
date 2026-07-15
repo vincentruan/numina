@@ -20,16 +20,27 @@ from typing import Any
 
 from deerflow.runtime import RunManager, RunRecord, RunStatus, StreamBridge
 
+from apps.agent.app.config import settings
 from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
+from apps.agent.services.message_classifier import extract_tool_calls
 from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
-from .run_extras import generate_and_save_title, generate_suggestions
+from .run_extras import generate_suggestions, sync_title_from_checkpoint
 
 logger = logging.getLogger(__name__)
+
+# Track fire-and-forget background tasks so they don't get garbage collected prematurely
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _track_task(task: asyncio.Task) -> None:
+    """Track a background task and auto-remove it when done."""
+    _background_tasks.add(task)
+    task.add_done_callback(lambda t: _background_tasks.discard(t))
 
 
 async def run_family_agent(
@@ -43,6 +54,8 @@ async def run_family_agent(
     graph_input: dict | None,
     config: dict[str, Any],
     stream_modes: list[str] | None = None,
+    resume_answer: str | None = None,
+    interrupt_id: str | None = None,
 ) -> None:
     """Background agent execution for a family-scoped run.
 
@@ -68,6 +81,20 @@ async def run_family_agent(
     # Completion status surfaced to the client in the `end` frame (Q2). Default
     # to "error" so an unexpected path never reports "complete" falsely.
     completion_status = "error"
+    # Set True when the adapter stream yields a custom event with
+    # type="interrupt" (LangGraph interrupt() call from ask_clarification).
+    # Distinct from abort_event (user-initiated cancel) — interrupted runs
+    # skip the 300s cleanup GC so the checkpoint state is preserved for resume.
+    interrupted_by_event = False
+    # Stream-extras inputs — initialised here so the ``finally`` block is safe
+    # when the run aborts before streaming starts. Title/suggestion generation
+    # are skipped when ``selected_provider`` stays None.
+    selected_provider: dict[str, Any] | None = None
+    user_message = ""
+    ai_response_parts: list[str] = []
+    # Cumulative token usage from the adapter's `end` event (DeerFlow pattern).
+    # Captured here so the worker's own `end` frame can include it.
+    cumulative_usage: dict[str, int] | None = None
 
     try:
         # 1. Mark running + publish metadata (DeerFlow pattern)
@@ -91,17 +118,73 @@ async def run_family_agent(
             (p for p in providers if p.get("is_active")), providers[0]
         )
 
-        # 3. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
+        # 3. Fetch enabled MCP servers so the chat skill can query family data
+        # via MCP tools (get_family_overview, get_assets, ...). Without this,
+        # _generate_temp_config writes no extensions_config.json and DeerFlow
+        # loads zero MCP tools - the agent then falls back to the empty context
+        # fields injected by _build_prompt and reports "all records empty".
+        # Mirrors the same logic in agent_dispatch.stream_agent_dispatch.
+        try:
+            mcp_servers = await client.get_enabled_mcp_servers()
+            for srv in mcp_servers:
+                if srv.get("name") == "Numina Backend MCP":
+                    expected_prefix = settings.BACKEND_BASE_URL.rstrip("/")
+                    actual_url = (srv.get("url") or "").rstrip("/")
+                    if not actual_url.startswith(expected_prefix):
+                        srv["url"] = (
+                            expected_prefix
+                            + "/api/v1/internal/mcp/"
+                            + family_id
+                            + "/sse"
+                        )
+                    # Auth headers required by the backend MCP SSE handshake
+                    # (X-Caller-User-Id is mandatory; without it the SSE endpoint 403s).
+                    # Only attach headers to the Numina Backend MCP entry, not to all servers.
+                    mcp_headers: dict[str, str] = {
+                        "X-Agent-Token": settings.AGENT_INTERNAL_TOKEN,
+                        "X-Family-Id": family_id,
+                    }
+                    if user_id:
+                        mcp_headers["X-Caller-User-Id"] = user_id
+                    srv["headers"] = mcp_headers
+                    break
+        except Exception as exc:
+            logger.warning(
+                "[run_family_agent] get_enabled_mcp_servers failed family=%s err=%s",
+                family_id, type(exc).__name__,
+            )
+            mcp_servers = []
+
+        # 4. Build adapter (uses per-family LRU cache from family_adapter_cache.py)
+        #
+        # subagent_enabled/plan_mode init-time defaults are False; per-call
+        # overrides (driven by the frontend's flash/thinking/pro/ultra mode
+        # selector) are extracted from ``config["configurable"]`` below and
+        # passed to typed_stream_dispatch as kwargs, which route them into
+        # DeerFlowClient.stream() -> _get_runnable_config() to override the
+        # init-time setting for this specific call. This mirrors the reference
+        # Gateway path (agent_dispatch.stream_agent_dispatch).
         adapter = create_family_adapter(
             family_id,
             selected_provider,
             timeout_seconds=240,
-            subagent_enabled=True,
+            subagent_enabled=False,
             plan_mode=False,
+            mcp_servers=mcp_servers,
         )
 
-        # 4. Extract user message for context
-        user_message = ""
+        # 4a. Extract per-call execution-mode overrides from the RunnableConfig.
+        # The frontend sends these in config.configurable (see reference
+        # backend/app/gateway/services.py:merge_run_context_overrides). They
+        # control DeerFlow's tool loading (subagent_enabled -> task tool) and
+        # planning middleware (plan_mode -> TodoList) on a per-call basis.
+        configurable = config.get("configurable", {}) if isinstance(config, dict) else {}
+        call_subagent_enabled = bool(configurable.get("subagent_enabled", False))
+        call_plan_mode = bool(configurable.get("is_plan_mode", False))
+        call_thinking_enabled = bool(configurable.get("thinking_enabled", True))
+        call_websearch_enabled = bool(configurable.get("websearch_enabled", False))
+
+        # 5. Extract user message for context
         if graph_input and "messages" in graph_input:
             msgs = graph_input["messages"]
             if isinstance(msgs, list) and msgs:
@@ -109,30 +192,60 @@ async def run_family_agent(
                 if isinstance(last, dict) and last.get("role") in ("user", "human"):
                     user_message = last.get("content", "")
 
-        # 5. PII redaction (Key Invariant #1)
+        # 5a. Inject web_search behavioural guidance so the LLM knows whether it
+        # may search. The web_search tool is always loaded when the family has a
+        # configured provider (family_adapter_cache.py:485), but without this
+        # prompt the LLM won't proactively call it. Mirrors chat_adapter.py:96-100
+        # and agent_dispatch.py:630-651 (legacy Gateway path).
+        if call_websearch_enabled:
+            web_search_providers = ai_config.get("web_search_providers", [])
+            web_search_mcp_servers = ai_config.get("web_search_mcp_servers", [])
+            if web_search_providers:
+                web_search_guidance = "用户已启用联网搜索。如果需要最新信息，你可以调用搜索工具获取。"
+            elif web_search_mcp_servers:
+                web_search_guidance = (
+                    "用户已启用联网搜索（MCP 模式）。如果需要最新信息，你可以调用 MCP 搜索工具获取。"
+                )
+            else:
+                web_search_guidance = "用户未启用联网搜索。请仅基于已有工具和知识回答，不要尝试联网。"
+            user_message = f"## 联网搜索\n\n{web_search_guidance}\n\n{user_message}"
+
+        # 6. PII redaction (Key Invariant #1)
         context = FamilyContext(family_id=family_id, free_text=user_message)
         redacted = pii_redactor.redact(context)
 
-        # 6. Stream via typed_stream_dispatch → publish to bridge.
+        # 7. Stream via typed_stream_dispatch → publish to bridge.
         # Collect AI text for suggestions, and synthesize `tool_call` custom
         # events from `messages` frames so R6 (规划步骤) renders under v2 —
         # the legacy runs.py router did this inline; the v2 worker must too,
         # because typed_stream_dispatch yields raw LangGraph `messages` events
         # (with tool_calls on the AI message) rather than pre-split tool_call
         # chunks. See services/deerflow_adapter/adapter.py:typed_stream_dispatch.
-        ai_response_parts: list[str] = []
-        capability = "chat"
+        capability = "chat-search" if call_websearch_enabled else "chat"
         async for sse_type, data in adapter.typed_stream_dispatch(
             skill_name=capability,
             context=redacted,
             thread_id=thread_id,
-            enable_thinking=True,
+            enable_thinking=call_thinking_enabled,
+            subagent_enabled=call_subagent_enabled,
+            plan_mode=call_plan_mode,
+            resume_answer=resume_answer,
         ):
             # Cooperative cancellation check (DeerFlow pattern)
             if record.abort_event.is_set():
                 break
 
             if sse_type == "end":
+                # Capture cumulative usage from DeerFlow before breaking.
+                # The adapter yields ("end", {"usage": {...}}) from
+                # DeerFlowClient.stream() end event.
+                if isinstance(data, dict) and data.get("usage"):
+                    raw_usage = data["usage"]
+                    cumulative_usage = {
+                        "input_tokens": raw_usage.get("input_tokens", 0),
+                        "output_tokens": raw_usage.get("output_tokens", 0),
+                        "total_tokens": raw_usage.get("total_tokens", 0),
+                    }
                 break
             if sse_type == "error":
                 await bridge.publish(run_id, "error", data)
@@ -145,20 +258,52 @@ async def run_family_agent(
             # `tool_call` custom events from the AI message's tool_calls so
             # the frontend planning-steps UI (R6) updates in real time.
             if sse_type == "messages" and isinstance(data, dict):
-                if data.get("type") == "ai" and data.get("content"):
-                    ai_response_parts.append(data["content"])
-                tool_calls_raw = data.get("tool_calls")
-                if tool_calls_raw:
-                    for tc in tool_calls_raw:
+                msg_type = data.get("type")
+
+                if msg_type == "ai":
+                    if data.get("content"):
+                        ai_response_parts.append(data["content"])
+                    tool_calls_raw = data.get("tool_calls")
+                    if tool_calls_raw:
+                        # Use extract_tool_calls to properly handle LangChain ToolCall objects
+                        for tc in extract_tool_calls(data):
+                            await bridge.publish(run_id, "custom", {
+                                "type": "tool_call",
+                                "tool_call_id": tc.get("id", ""),
+                                "tool_name": tc.get("name", ""),
+                                "args": tc.get("args", {}),
+                            })
+
+                elif msg_type == "tool":
+                    # Tool result message — forward to frontend so ChainOfThought
+                    # can update step status from 'running' to 'done' and display
+                    # artifact links (which require status === 'done').
+                    tool_call_id = str(data.get("tool_call_id") or "")
+                    tool_name = data.get("name") or ""
+                    content = data.get("content")
+                    if tool_call_id:
                         await bridge.publish(run_id, "custom", {
-                            "type": "tool_call",
-                            "tool_call_id": tc.get("id", ""),
-                            "tool_name": tc.get("name", ""),
-                            "args": tc.get("args", {}),
+                            "type": "tool_result",
+                            "tool_call_id": tool_call_id,
+                            "tool_name": tool_name,
+                            "content": content,
                         })
 
-        # 7. Terminal status — drives the `end` completion signal (Q2).
-        if record.abort_event.is_set():
+            # Detect LangGraph interrupt() events forwarded by the adapter as
+            # custom events with type="interrupt".  Set the flag so the
+            # terminal-status block below marks the run as ``interrupted``
+            # (distinct from ``cancelled`` via abort_event) and the finally
+            # block skips the 300s cleanup GC — the checkpoint must survive
+            # so the user can resume after providing human input.
+            if sse_type == "custom" and isinstance(data, dict) and data.get("type") == "interrupt":
+                interrupted_by_event = True
+
+        # 8. Terminal status — drives the `end` completion signal (Q2).
+        # Two paths to ``interrupted``: (a) user-initiated cancel via
+        # abort_event, (b) LangGraph interrupt() detected as a custom event
+        # in the stream (ask_clarification tool). Both preserve the checkpoint
+        # so the run can be resumed, but only (a) sets abort_event.
+        if record.abort_event.is_set() or interrupted_by_event:
             await run_manager.set_status(run_id, RunStatus.interrupted)
             completion_status = "interrupted"
         else:
@@ -181,7 +326,7 @@ async def run_family_agent(
         )
 
     finally:
-        # 8. Audit log (Key Invariant #3)
+        # 9. Audit log (Key Invariant #3)
         audit_logger.log_call(
             AuditEntry(
                 family_id=family_id,
@@ -194,32 +339,60 @@ async def run_family_agent(
                 duration_ms=int((time.monotonic() - t_start) * 1000),
             )
         )
-        # 9. Terminal frames: `end` with completion status (Q2), follow-up
-        # suggestions (R8), and fire-and-forget title generation — then the
-        # end sentinel + deferred cleanup (DeerFlow pattern).
+        # 10. Terminal frames: follow-up suggestions (R8), `end` with completion
+        # status (Q2), and fire-and-forget title generation — then the end
+        # sentinel + deferred cleanup (DeerFlow pattern).
         #
+        # R8: generate follow-up suggestions BEFORE publishing `end`, because
+        # the frontend attaches suggestions to the last AI message in the `end`
+        # handler. If suggestions arrive after `end`, they are silently dropped.
+        # — NOT the whole ``ai_config`` envelope, which nests provider keys
+        # (api_key/ai_model_id/ai_base_url) under ``providers``. Passing the
+        # envelope leaves every key unset, so the suggestions LLM falls back
+        # to a dummy key and silently 401s. Skipped when the run aborted
+        # before a provider was selected OR when the run was cancelled/interrupted.
+        if completion_status == 'complete' and selected_provider is not None:
+            ai_response = "".join(ai_response_parts)
+            suggestions = await generate_suggestions(ai_response, user_message, selected_provider)
+            if suggestions:
+                await bridge.publish(run_id, "custom", {
+                    "type": "suggestions",
+                    "suggestions": suggestions,
+                })
+
         # Q2: publish a real `end` data frame carrying the completion status
         # so the frontend can distinguish a clean completion from a truncated
         # stream (#19) without guessing from content. publish_end() below only
         # signals the sentinel (data=None), so the data frame must precede it.
-        await bridge.publish(run_id, "end", {"status": completion_status})
+        # Include cumulative token usage from DeerFlow when available.
+        end_payload = {"status": completion_status}
+        if cumulative_usage:
+            end_payload["usage"] = cumulative_usage
+        await bridge.publish(run_id, "end", end_payload)
 
-        # R8: generate follow-up suggestions from the accumulated AI response
-        # and emit them as a `custom` event before the stream closes. Mirrors
-        # the legacy runs.py:251-254 finally-block behavior.
-        ai_response = "".join(ai_response_parts)
-        suggestions = await generate_suggestions(ai_response, user_message, ai_config)
-        if suggestions:
-            await bridge.publish(run_id, "custom", {
-                "type": "suggestions",
-                "suggestions": suggestions,
-            })
-
-        # Background title generation (best-effort, does not block the stream).
-        asyncio.create_task(
-            generate_and_save_title(thread_id, family_id, user_message, ai_config)
-        )
+        if completion_status == 'complete' and selected_provider is not None:
+            # Sync / generate the thread title. DeerFlow's TitleMiddleware
+            # writes to the checkpoint, but Numina's adapter runs the sync
+            # ``stream()`` path so only the sync ``after_model`` hook fires -
+            # that returns a local fallback (the raw ``[SKILL:chat]`` wrapper),
+            # never an LLM summary. sync_title_from_checkpoint generates a
+            # proper title via the family provider when the checkpoint title is
+            # a fallback. Best-effort, fire-and-forget.
+            task = asyncio.create_task(
+                sync_title_from_checkpoint(
+                    thread_id,
+                    family_id,
+                    ai_config=selected_provider,
+                    user_message=user_message,
+                    ai_response="".join(ai_response_parts),
+                )
+            )
+            _track_task(task)
 
         await bridge.publish_end(run_id)
         asyncio.create_task(bridge.cleanup(run_id, delay=60))
-        asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))
+        # Skip the 300s cleanup GC for interrupted runs — the checkpoint must
+        # be preserved so the user can resume after providing human input.
+        # Cancelled runs (abort_event) still get cleaned up after 300s.
+        if not interrupted_by_event:
+            asyncio.create_task(schedule_run_cleanup(run_manager, run_id, delay=300))

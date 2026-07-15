@@ -120,9 +120,9 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent sections: 数鸣 featured card → My Agents → Analysis Apps -->
+    <!-- Agent sections: 小鸣 featured card → My Agents → Analysis Apps -->
     <div class="feature-section">
-      <!-- 数鸣 featured card (full width) -->
+      <!-- 小鸣 featured card (full width) -->
       <NuminaAgentCard @consult="handleNuminaConsult" />
 
       <!-- 我的智能体 Section -->
@@ -216,19 +216,16 @@
       :agent-icon="selectedAgent?.icon"
       :agent-label="selectedAgent?.display_name"
       @submit="submitChatFromInput"
-      @action="onInputAction"
       @select-agent="showAgentPicker = true"
     />
-    <!-- Hidden file inputs (kept here so the page owns the upload state) -->
-    <input ref="fileInputRef" type="file" accept=".pdf,.doc,.docx,.txt,.md" hidden @change="handleFileSelect" />
-    <input ref="photoInputRef" type="file" accept="image/*" hidden @change="handlePhotoSelect" />
 
     <!-- Agent picker action sheet (only shows actual agents, not Time Machine) -->
     <van-action-sheet
       v-model:show="showAgentPicker"
       :title="t('aiHub.selectAgent')"
+      safe-area-inset-bottom
     >
-      <van-cell-group inset>
+      <van-cell-group inset class="agent-picker-group">
         <van-cell
           v-for="agent in agentChoices"
           :key="agent.id"
@@ -274,7 +271,7 @@ import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
-import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
+import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
@@ -296,7 +293,11 @@ const reportLoading = ref(false)
 const initialLoading = ref(true)
 const chatInput = ref('')
 const chatMode = ref<'flash' | 'thinking' | 'pro' | 'ultra'>('pro')
-const webSearch = ref(false)
+// `undefined` (not `false`) so the InputBox's auto-enable logic runs when the
+// family has web search configured. A literal `false` would be treated as an
+// explicit user choice and short-circuit auto-enable. Once the user toggles
+// (or auto-enable fires), this becomes a definite boolean via v-model.
+const webSearch = ref<boolean | undefined>(undefined)
 const showAgentPicker = ref(false)
 const selectedAgent = ref<Agent | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -353,7 +354,7 @@ const chatPlaceholder = computed(() => {
   return t('aiHub.chatPlaceholderWithAgent', { name: selectedAgent.value.display_name })
 })
 
-// Default selected agent to 数鸣 once loaded
+// Default selected agent to 小鸣 once loaded
 watch(
   () => agentStore.systemAgents,
   () => {
@@ -406,7 +407,7 @@ function submitChat() {
   const deepThink = chatMode.value === 'thinking' || chatMode.value === 'ultra'
   aiStore.draftQuery = q
   aiStore.deepThinkEnabled = deepThink
-  aiStore.webSearchEnabled = webSearch.value
+  aiStore.webSearchEnabled = webSearch.value ?? false
 
   router.push({
     path: '/ai/chat',
@@ -415,7 +416,11 @@ function submitChat() {
       agentId: selectedAgent.value.id,
       newSession: '1',
       deepThink: deepThink ? '1' : undefined,
-      webSearch: webSearch.value ? '1' : undefined,
+      // Carry the web search state ONLY when the user made an explicit choice
+      // (toggled on or off). When it's still `undefined` (auto-enable hasn't
+      // resolved or the user never touched it), omit it so the chat page
+      // runs its own auto-default logic instead of treating '0' as "off".
+      webSearch: webSearch.value === undefined ? undefined : webSearch.value ? '1' : '0',
     },
   })
 
@@ -554,10 +559,23 @@ function handleNuminaConsult() {
     .then((res) => {
       const cached = res.data.session
       if (cached) {
-        router.push({ name: 'AIChat', query: { agentId, sessionId: cached.session_id } })
+        // 缓存会话存在 → 直接进入查看历史
+        router.push({ name: 'AIChat', query: { agentId, thread_id: cached.session_id } })
       } else {
-        aiStore.draftQuery = SHUMING_DEFAULT_PROMPT
-        router.push({ name: 'AIChat', query: { agentId, newSession: '1', source: 'system_default' } })
+        // 无缓存 → 创建新会话并自动发送默认提示词
+        // Pro 模式 + 继承当前 webSearch 配置（根据家庭设置自动决定）
+        router.push({
+          name: 'AIChat',
+          query: {
+            agentId,
+            q: XIAOMING_DEFAULT_PROMPT,
+            newSession: '1',
+            source: 'system_default',
+            // webSearch 状态继承自 AI Hub 页面的当前选择
+            // 如果用户在 hub 页面开启了联网搜索，则传递 '1'
+            webSearch: webSearch.value === true ? '1' : undefined,
+          },
+        })
       }
     })
     .catch(() => {
@@ -1265,6 +1283,10 @@ defineExpose({
 
 
 /* ── Agent picker ── */
+.agent-picker-group {
+  padding-bottom: 12px;
+}
+
 .agent-row__icon {
   width: 36px;
   height: 36px;

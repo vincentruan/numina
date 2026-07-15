@@ -2,14 +2,20 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import MessageGroup from '@/components/ai-chat/MessageGroup.vue'
-import type { ChatMessage, PlanningStep } from '@/types/ai-chat/message-group'
+import StreamingIndicator from '@/components/ai-chat/StreamingIndicator.vue'
+import type { ChatMessage } from '@/types/ai-chat/message-group'
+import type { PlanStep } from '@/types/agent-stream'
 import { useMessageGroups } from '@/composables/ai-chat/useMessageGroups'
+import { extractLegacyFields } from '@/utils/ai-chat/messageAdapter'
 
 const props = defineProps<{
   messages: ChatMessage[]
   isStreaming: boolean
   threadId?: string
-  planningSteps?: PlanningStep[]
+  canBranch?: boolean
+  branchingMessageId?: string | null
+  answeredInterruptIds?: Set<string>
+  interruptErrorId?: string | null
 }>()
 
 const emit = defineEmits<{
@@ -17,6 +23,8 @@ const emit = defineEmits<{
   stop: []
   suggestionClick: [text: string]
   artifactTap: [artifact: { id: string; title: string; kind: string; url?: string; path?: string }]
+  branch: [messageId: string, messageIds: string[]]
+  clarificationSubmit: [payload: { threadId: string; interruptId: string; answer: string }]
 }>()
 
 const { t } = useI18n()
@@ -26,14 +34,53 @@ const scrollRef = ref<HTMLElement | null>(null)
 // Group messages for display (dedupe + group into DeerFlow 6-type structure)
 const messageGroups = useMessageGroups(toRef(props, 'messages'))
 
-/** Index of the last assistant-type group (for planningSteps display) */
+/**
+ * Index of the last assistant-origin group (assistant / assistant:processing /
+ * assistant:clarification / etc.) so the streaming/loading state reaches the
+ * group that is currently producing content - including a tool-call-only
+ * ``assistant:processing`` group that has no text content yet. Previously this
+ * only matched ``type === 'assistant'``, so during tool execution (when the
+ * last group is ``assistant:processing``) isLoading never reached ChainOfThought
+ * and pending tool calls couldn't show a running spinner.
+ */
 const lastAssistantGroupIndex = computed(() => {
   const groups = messageGroups.value
   for (let i = groups.length - 1; i >= 0; i--) {
-    if (groups[i].type === 'assistant') return i
+    if (groups[i].type === 'assistant' || groups[i].type.startsWith('assistant:')) return i
   }
   return -1
 })
+
+/**
+ * Show the three-dot thinking indicator while the user's message has been sent
+ * but no assistant-type group exists yet (the AI hasn't produced any text or
+ * tool-call chunk). Once an assistant / assistant:processing / etc. group
+ * appears, that group renders its own streaming indicator and this placeholder
+ * hides. Without this, the only feedback during the first model round-trip is
+ * the input-box button state, which looks like the page is stuck.
+ */
+const showThinkingIndicator = computed(() => {
+  if (!props.isStreaming) return false
+  const groups = messageGroups.value
+  if (groups.length === 0) return false
+  return groups[groups.length - 1].type === 'human'
+})
+
+/**
+ * Get planSteps from the previous group (for detecting redundant completion summaries).
+ * DeerFlow pattern: when todos are complete, the final "已完成！" message is redundant
+ * because the todo list itself is the final output.
+ */
+function getPrevGroupPlanSteps(index: number): PlanStep[] | undefined {
+  if (index === 0) return undefined
+  const prevGroup = messageGroups.value[index - 1]
+  if (!prevGroup) return undefined
+  // Only look at the first AI message in the previous group
+  const firstAiMsg = prevGroup.messages.find(m => m.type === 'ai')
+  if (!firstAiMsg) return undefined
+  const legacy = extractLegacyFields(firstAiMsg)
+  return legacy?.planSteps
+}
 
 // ── Auto-scroll with user-interrupt (R5) ──
 const SCROLL_THRESHOLD = 50 // px from bottom to consider "at bottom"
@@ -137,11 +184,21 @@ onUnmounted(() => {
         :group="group"
         :thread-id="threadId"
         :is-loading="isStreaming && index === lastAssistantGroupIndex"
-        :planning-steps="index === lastAssistantGroupIndex ? planningSteps : undefined"
         :is-last-assistant="index === lastAssistantGroupIndex"
+        :can-branch="canBranch"
+        :branching-message-id="branchingMessageId"
+        :answered-interrupt-ids="answeredInterruptIds"
+        :interrupt-error-id="interruptErrorId"
+        :prev-group-plan-steps="getPrevGroupPlanSteps(index)"
         @suggestion-click="(text: string) => emit('suggestionClick', text)"
         @artifact-tap="(artifact: { id: string; title: string; kind: string; url?: string; path?: string }) => emit('artifactTap', artifact)"
+        @branch="(messageId: string, messageIds: string[]) => emit('branch', messageId, messageIds)"
+        @clarification-submit="(payload: { threadId: string; interruptId: string; answer: string }) => emit('clarificationSubmit', payload)"
       />
+      <!-- Three-dot thinking indicator: fills the gap between send and first AI chunk -->
+      <div v-if="showThinkingIndicator" class="thinking-placeholder">
+        <StreamingIndicator :visible="true" />
+      </div>
     </div>
 
     <!-- "回到底部" floating button (shown when user scrolled up) -->
@@ -166,7 +223,7 @@ onUnmounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px;
-  padding-bottom: 140px; /* Space for the floating bottom input box */
+  padding-bottom: 20px; /* Small gap above the in-flow InputBox below */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -186,6 +243,15 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* Three-dot thinking bubble shown while waiting for the first AI chunk */
+.thinking-placeholder {
+  padding: 10px 16px;
+  background: var(--bubble-ai-bg, rgba(189, 187, 255, 0.12));
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 80%;
 }
 
 /* "回到底部" floating button */

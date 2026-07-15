@@ -1,9 +1,41 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { searchThreads, deleteThread, updateThread } from '@/api/ai-chat'
+import { searchThreads, deleteThread, updateThread, getThreadState } from '@/api/ai-chat'
 import type { ThreadSession, DateGroup, DateGroupLabel } from '@/types/ai-chat/session'
 
 const PAGE_SIZE = 20
+
+/** Extract plain text from a serialized LangChain message's content. */
+function extractMessageText(message: unknown): string {
+  if (!message || typeof message !== 'object') return ''
+  const m = message as Record<string, unknown>
+  const content = m.content
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => {
+        if (!block || typeof block !== 'object') return ''
+        const b = block as Record<string, unknown>
+        if (typeof b.text === 'string') return b.text
+        return ''
+      })
+      .join('')
+  }
+  return ''
+}
+
+/** Trigger a browser download for generated export content. */
+function downloadFile(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
 
 export function useThreadList() {
   const { t } = useI18n()
@@ -93,8 +125,51 @@ export function useThreadList() {
     }
   }
 
+  /** Export a thread's messages as markdown or json (DeerFlow parity). */
+  async function exportSession(id: string, format: 'markdown' | 'json'): Promise<void> {
+    const state = await getThreadState(id)
+    const messages = (state.values?.messages ?? []) as unknown[]
+    const session = sessions.value.find(s => s.thread_id === id)
+    const title = state.values?.title || session?.title || t('aiChat.untitledSession')
+    const safeTitle = (title).replace(/[^\w一-龥-]/g, '_').slice(0, 40) || 'thread'
+
+    if (format === 'json') {
+      const payload = {
+        thread_id: id,
+        title,
+        original_title: session?.original_title,
+        created_at: session?.created_at,
+        updated_at: session?.updated_at,
+        messages,
+      }
+      downloadFile(`${safeTitle}.json`, JSON.stringify(payload, null, 2), 'application/json')
+      return
+    }
+
+    const lines: string[] = [`# ${title}`, '']
+    for (const msg of messages) {
+      const m = msg as Record<string, unknown>
+      const type = m.type as string
+      const text = extractMessageText(msg)
+      if (!text) continue
+      if (type === 'human') {
+        lines.push(`## ${t('aiChat.exportRoleUser')}`, '', text, '')
+      } else if (type === 'ai') {
+        lines.push(`## ${t('aiChat.exportRoleAssistant')}`, '', text, '')
+      }
+    }
+    downloadFile(`${safeTitle}.md`, lines.join('\n'), 'text/markdown')
+  }
+
+  /** Copy a shareable link to the thread (same-family access). */
+  async function shareSession(id: string): Promise<void> {
+    const url = `${window.location.origin}/ai/chat?thread_id=${encodeURIComponent(id)}`
+    await navigator.clipboard.writeText(url)
+  }
+
   return {
     sessions, isLoading, hasMore, dateGroups,
     loadMore, refresh, deleteSession, renameSession, togglePin,
+    exportSession, shareSession,
   }
 }

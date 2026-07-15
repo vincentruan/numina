@@ -1,11 +1,31 @@
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { nanoid } from 'nanoid'
 import { getClient, createThread, deleteThread } from '@/api/ai-chat'
 import type { TokenUsage } from '@/types/ai-chat/session'
 import type { ChatMessage, ToolCallSummary, PlanningStep, UsageMetadata } from '@/types/ai-chat/message-group'
 import { explainToolCallKey } from '@/utils/ai-chat/tool-icon-map'
+import { useUpdateSubtask } from '@/composables/ai-chat/useSubtasks'
 
 export type { ChatMessage }
+
+/**
+ * Generate a unique id for an optimistic/temporary chat message.
+ *
+ * `crypto.randomUUID()` is only available in secure contexts (HTTPS or
+ * localhost). The Vite dev server is commonly reached over plain HTTP on a
+ * LAN IP (e.g. http://100.72.41.99:5173), where `crypto.randomUUID` is
+ * `undefined` — and calling it throws `TypeError: crypto.randomUUID is not
+ * a function`. That throw aborts `sendMessage` before the stream starts,
+ * leaving the /ai/chat page blank. Fall back to nanoid on non-secure
+ * contexts so the dev flow works identically to production (HTTPS).
+ */
+function genId(prefix: string): string {
+  const uuid = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : nanoid()
+  return `${prefix}-${uuid}`
+}
 
 /** A single chunk yielded by client.runs.stream() in legacy SSE mode. */
 interface StreamChunk {
@@ -57,6 +77,22 @@ interface ValuesData {
   artifacts?: Array<Record<string, unknown>>
 }
 
+/**
+ * Interrupt event payload from DeerFlow ask_clarification tool.
+ *
+ * The backend emits this as a `custom` SSE event with `type: 'interrupt'`
+ * when the agent needs user clarification before continuing. The frontend
+ * renders it as an `assistant:clarification` message group.
+ */
+export interface InterruptData {
+  question: string
+  options?: Array<{ label: string; value: string }>
+  context?: string
+  choiceWithOther?: boolean
+  multiSelect?: boolean
+  interrupt_id: string
+}
+
 /** Format current time as HH:MM */
 function formatDisplayTime(): string {
   const now = new Date()
@@ -71,12 +107,37 @@ function parseArgs(args: string | object): Record<string, unknown> {
   return args
 }
 
+/**
+ * Recover the user's original input text from a backend-stored human message.
+ *
+ * The agent adapter (server/apps/agent/services/deerflow_adapter/adapter.py
+ * `_build_prompt`) wraps the user message as ``[SKILL:chat]\n{json}`` so the
+ * DeerFlow harness knows which skill to dispatch. That wrapper is an internal
+ * prompt string — it must never be shown to the user. LangGraph persists it as
+ * the human message content and replays it via ``values`` events and thread
+ * history, so strip the wrapper here and recover ``free_text`` (the user's
+ * original text, PII-redacted) for display. If ``free_text`` is empty/missing
+ * (e.g. the wrapper arrived without user text), return an empty string rather
+ * than leaking the raw JSON to the UI.
+ */
+function unwrapSkillPrompt(content: string): string {
+  const match = content.match(/^\[SKILL:[^\]]+\]\s*\n?([\s\S]*)$/)
+  if (!match) return content
+  try {
+    const ctx = JSON.parse(match[1]) as { free_text?: unknown }
+    if (typeof ctx.free_text === 'string' && ctx.free_text.length > 0) {
+      return ctx.free_text
+    }
+  } catch { /* not valid JSON — fall through to empty */ }
+  return ''
+}
+
 /** Convert DeerFlow tool_calls to ToolCallSummary[] */
 function toToolCallSummaries(
   toolCalls: Array<{ id?: string; name: string; args: string | object }>,
 ): ToolCallSummary[] {
   return toolCalls.map((tc, i) => ({
-    id: tc.id || `tc-${crypto.randomUUID()}`,
+    id: tc.id || genId('tc'),
     name: tc.name,
     displayName: tc.name,
     args: parseArgs(tc.args),
@@ -91,11 +152,14 @@ function serializedToChatMessage(m: SerializedMessage): ChatMessage {
     : 'ai' as const
   const role = type === 'human' ? 'user' as const : 'assistant' as const
 
+  const rawContent = m.content || ''
+  const content = type === 'human' ? unwrapSkillPrompt(rawContent) : rawContent
+
   const msg: ChatMessage = {
-    id: m.id || `msg-${crypto.randomUUID()}`,
+    id: m.id || genId('msg'),
     type,
     role,
-    content: m.content || '',
+    content,
     displayTime: formatDisplayTime(),
     phase: type !== 'human' ? 'done' as const : undefined,
     name: m.name,
@@ -122,12 +186,20 @@ export interface UseThreadChatOptions {
 
 export function useThreadChat(options: UseThreadChatOptions = {}) {
   const { t } = useI18n()
+  const { handleTaskEvent } = useUpdateSubtask()
   const messages = ref<ChatMessage[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
   const tokenUsage = ref<TokenUsage | null>(null)
   const planningSteps = ref<PlanningStep[]>([])
   const suggestions = ref<string[]>([])
+  /**
+   * Track interrupt IDs that have been answered by the user in this session.
+   * Used by MessageGroup to transition HumanInputCard from 'pending' to
+   * 'answered' after resumeInterrupt completes. getMessageGroups doesn't
+   * set phase/answer on clarification groups, so we track externally.
+   */
+  const answeredInterruptIds = ref<Set<string>>(new Set())
   const runId = ref<string | null>(null)
   let abortController: AbortController | null = null
   let currentThreadId: string | null = null
@@ -147,7 +219,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
 
   function addOptimisticUserMessage(text: string): ChatMessage {
     const msg: ChatMessage = {
-      id: `msg-${crypto.randomUUID()}`,
+      id: genId('msg'),
       type: 'human',
       role: 'user',
       content: text,
@@ -156,6 +228,26 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
     messages.value = [...messages.value, msg]
     return msg
+  }
+
+  /**
+   * Reactively update an optimistic user message's send status.
+   *
+   * ``addOptimisticUserMessage`` returns the raw message object, but
+   * ``messages.value`` exposes a reactive proxy of it. Mutating the raw object
+   * (``userMsg.sendStatus = 'sent'``) updates the underlying data but does NOT
+   * call Vue's ``trigger()``, so the "发送中" indicator stays stuck until some
+   * unrelated reassignment happens to re-run the computed. Replace the message
+   * through the reactive array so watchers/computeds re-run immediately.
+   */
+  function setUserMsgStatus(id: string, status: 'sending' | 'sent' | 'failed'): void {
+    const idx = messages.value.findIndex(m => m.id === id)
+    if (idx === -1) return
+    messages.value = [
+      ...messages.value.slice(0, idx),
+      { ...messages.value[idx], sendStatus: status },
+      ...messages.value.slice(idx + 1),
+    ]
   }
 
   /**
@@ -174,7 +266,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       if (last && last.type === 'ai' && (!chunkId || chunkId === last.id || !last.id)) {
         const updated: ChatMessage = { ...last }
         updated.content = last.content + chunk.content
-        updated.phase = 'answering'
+        // Preserve 'done' phase: once an AI message is marked done (by the `end`
+        // event's mark-all-done logic), a late messages-tuple chunk arriving
+        // after `end` must not regress it back to 'answering' - otherwise the
+        // StreamingIndicator (three-dot animation) reappears after completion.
+        if (last.phase !== 'done') {
+          updated.phase = 'answering'
+        }
         if (chunkId) updated.id = chunkId
         if (chunk.tool_calls) {
           const newCalls = toToolCallSummaries(chunk.tool_calls)
@@ -187,7 +285,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       } else {
         // New AI message
         const msg: ChatMessage = {
-          id: chunkId || `ai-${crypto.randomUUID()}`,
+          id: chunkId || genId('ai'),
           type: 'ai',
           role: 'assistant',
           content: chunk.content,
@@ -205,7 +303,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     } else if (chunk.type === 'tool') {
       // Tool result message
       const msg: ChatMessage = {
-        id: chunk.id || `tool-${crypto.randomUUID()}`,
+        id: chunk.id || genId('tool'),
         type: 'tool',
         role: 'assistant',
         content: chunk.content,
@@ -247,7 +345,21 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     if (!raw || raw.length === 0) return
     const mapped = raw.map(serializedToChatMessage)
     const existingIds = new Set(messages.value.map(m => m.id))
-    const newOnes = mapped.filter(m => !existingIds.has(m.id))
+    // During active streaming, skip human messages from values events because
+    // sendMessage already created an optimistic human message with the user's
+    // original text. The backend persists the human message as a
+    // `[SKILL:chat]\n{json}` prompt wrapper (adapter._build_prompt) — an
+    // internal prompt string that must never be shown as a duplicate.
+    //
+    // On page refresh (initial load), however, there is no optimistic human
+    // message — the values event is the ONLY source of user messages. Include
+    // human messages only when messages.value is empty (initial hydration).
+    const isInitialLoad = messages.value.length === 0
+    const newOnes = mapped.filter(m => {
+      if (existingIds.has(m.id)) return false
+      if (m.type === 'human' && !isInitialLoad) return false
+      return true
+    })
     if (newOnes.length > 0) {
       messages.value = [...messages.value, ...newOnes]
     }
@@ -296,7 +408,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
   }): PlanningStep {
     const toolName = customData.tool_name || 'unknown'
     return {
-      id: customData.tool_call_id || `step-${crypto.randomUUID()}`,
+      id: customData.tool_call_id || genId('step'),
       toolName,
       args: customData.args || {},
       status: 'running',
@@ -304,8 +416,29 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
-  async function sendMessage(text: string, _mode?: string, threadId?: string): Promise<void> {
-    if (isLoading.value) return
+  async function sendMessage(
+    text: string,
+    mode?: string,
+    threadId?: string,
+    modeConfig?: {
+      thinking_enabled?: boolean
+      is_plan_mode?: boolean
+      subagent_enabled?: boolean
+      reasoning_effort?: 'minimal' | 'low' | 'medium' | 'high'
+      websearch_enabled?: boolean
+    },
+    source?: string,
+  ): Promise<void> {
+    // If a previous stream is still marked as loading (e.g. dropped connection
+    // that hasn't fully cleaned up, or user clicked retry mid-stream), cancel
+    // it first instead of silently dropping the new message. Previously
+    // `if (isLoading.value) return` caused the retry button to appear
+    // clickable but do nothing.
+    if (isLoading.value) {
+      cancelStream()
+      // Wait one tick for Vue reactivity to settle after cancel
+      await new Promise(resolve => setTimeout(resolve, 0))
+    }
     isLoading.value = true
     error.value = null
     planningSteps.value = []
@@ -319,7 +452,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     // Resolve thread before streaming
     try {
       if (!threadId && !currentThreadId) {
-        const thread = await createThread()
+        const thread = await createThread(source)
         currentThreadId = thread.thread_id
         createdThreadInThisCall = true
       } else if (threadId) {
@@ -330,7 +463,7 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       }
     } catch (err) {
       const e = err as Error
-      userMsg.sendStatus = 'failed'
+      setUserMsgStatus(userMsg.id, 'failed')
       error.value = e.message || t('aiChat.sendFailed')
       isLoading.value = false
       return
@@ -378,6 +511,20 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         // Resume the run instead by passing `input: null`.
         const hasPriorProgress = planningSteps.value.length > 0
           || messages.value.some(m => m.type === 'ai' && m.phase === 'answering')
+        // Pass execution-mode overrides (flash/thinking/pro/ultra) to the backend
+        // via config.configurable. The worker (run_family_agent) reads these and
+        // forwards them to DeerFlowClient.stream() as per-call kwargs, which
+        // control tool loading (subagent_enabled -> task tool for ultra mode)
+        // and planning middleware (is_plan_mode -> TodoList for pro/ultra).
+        // Mirrors the reference frontend (hooks.ts:781-796).
+        const configurable: Record<string, unknown> = {}
+        if (modeConfig) {
+          if (modeConfig.thinking_enabled !== undefined) configurable.thinking_enabled = modeConfig.thinking_enabled
+          if (modeConfig.is_plan_mode !== undefined) configurable.is_plan_mode = modeConfig.is_plan_mode
+          if (modeConfig.subagent_enabled !== undefined) configurable.subagent_enabled = modeConfig.subagent_enabled
+          if (modeConfig.reasoning_effort !== undefined) configurable.reasoning_effort = modeConfig.reasoning_effort
+          if (modeConfig.websearch_enabled !== undefined) configurable.websearch_enabled = modeConfig.websearch_enabled
+        }
         const stream = client.runs.stream(currentThreadId as string, 'agent', {
           input: hasPriorProgress ? null : { messages: [{ role: 'user', content: text }] },
           signal: abortController.signal,
@@ -385,11 +532,15 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
           // and there is no handler branch for it; requesting it advertises an
           // unfulfilled contract.
           streamMode: ['messages-tuple', 'values', 'custom'],
+          ...(Object.keys(configurable).length > 0 ? { config: { configurable } } : {}),
         })
 
-        if (!hasPriorProgress) {
-          userMsg.sendStatus = 'sent'
-        }
+        // Always mark the current turn's user message as 'sent' once the stream
+        // connection succeeds. The previous guard (`if (!hasPriorProgress)`)
+        // incorrectly skipped this on follow-up turns after history load, where
+        // replayed AI messages still had phase='answering', causing the user
+        // bubble to stay stuck at "发送中" forever.
+        setUserMsgStatus(userMsg.id, 'sent')
 
         // Clear any error carried over from a prior attempt (#20): an error chunk
         // in attempt N must not persist if attempt N+1 succeeds.
@@ -427,6 +578,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               tool_name?: string
               args?: Record<string, unknown>
               suggestions?: string[]
+              task_id?: string
+              description?: string
+              prompt?: string
+              result?: string
+              error?: string
+              usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
+              // Interrupt event fields
+              question?: string
+              options?: Array<{ label: string; value: string }>
+              context?: string
+              choice_with_other?: boolean
+              multi_select?: boolean
+              interrupt_id?: string
             }
             if (customData.type === 'tool_call') {
               const step = createPlanningStep(customData)
@@ -436,52 +600,158 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               if (!exists) {
                 planningSteps.value = [...planningSteps.value, step]
               }
+            } else if (customData.type === 'tool_result') {
+              // Tool result from backend — update the corresponding tool_call
+              // step status from 'running' to 'done' and attach the result.
+              // This is needed for ChainOfThought to display artifact links
+              // (which require status === 'done').
+              const toolCallId = customData.tool_call_id
+              if (toolCallId) {
+                planningSteps.value = planningSteps.value.map(s =>
+                  s.id === toolCallId
+                    ? { ...s, status: 'done' as const }
+                    : s
+                )
+              }
             } else if (customData.type === 'suggestions' && customData.suggestions) {
               suggestions.value = customData.suggestions
+              // If the stream already ended (end arrived before suggestions),
+              // retroactively attach suggestions to the last AI message so
+              // they appear without requiring a new message.
+              const lastAiIdx = messages.value.findLastIndex(m => m.type === 'ai')
+              if (lastAiIdx >= 0 && messages.value[lastAiIdx].phase === 'done') {
+                const msg = messages.value[lastAiIdx]
+                messages.value = [
+                  ...messages.value.slice(0, lastAiIdx),
+                  { ...msg, suggestions: customData.suggestions },
+                  ...messages.value.slice(lastAiIdx + 1),
+                ]
+              }
+            } else if (customData.type === 'interrupt') {
+              // DeerFlow ask_clarification interrupt: the agent paused and needs
+              // user input to continue. Create a tool message named
+              // 'ask_clarification' so useMessageGroups routes it into an
+              // assistant:clarification group. Store the full interrupt payload
+              // in additional_kwargs so the clarification UI can render the
+              // question, options, and submit a resume with interrupt_id.
+              const interruptPayload: InterruptData = {
+                question: customData.question || '',
+                options: customData.options,
+                context: customData.context,
+                choiceWithOther: customData.choice_with_other,
+                multiSelect: customData.multi_select,
+                interrupt_id: customData.interrupt_id || genId('intr'),
+              }
+              const msg: ChatMessage = {
+                id: genId('clar'),
+                type: 'tool',
+                role: 'assistant',
+                content: interruptPayload.question,
+                displayTime: formatDisplayTime(),
+                name: 'ask_clarification',
+                tool_call_id: interruptPayload.interrupt_id,
+                additional_kwargs: { interruptData: interruptPayload },
+              }
+              messages.value = [...messages.value, msg]
+            } else if (
+              customData.type === 'task_started'
+              || customData.type === 'task_running'
+              || customData.type === 'task_completed'
+              || customData.type === 'task_failed'
+              || customData.type === 'task_timed_out'
+              || customData.type === 'task_cancelled'
+            ) {
+              // DeerFlow task_tool emits these events for subagent progress
+              handleTaskEvent(customData)
             }
           } else if (chunk.event === 'end') {
             streamEnded = true
+            // worker.py publishes an `end` data frame `{"status": ...}` before
+            // the END_SENTINEL. "error" means the agent run threw (LLM failure,
+            // API-key decrypt, etc.) — treat as a retryable failure instead of
+            // the silent success below, which left the page blank with no AI
+            // reply and no error UI (B-end-status).
+            let endStatus: string | undefined
             if (chunk.data) {
-              const endData = chunk.data as { usage?: TokenUsage }
+              const endData = chunk.data as {
+                usage?: TokenUsage | { input_tokens?: number; output_tokens?: number; total_tokens?: number }
+                status?: string
+              }
+              endStatus = endData.status
               if (endData.usage) {
-                tokenUsage.value = endData.usage
+                // Normalize: backend may send DeerFlow format (input_tokens/output_tokens)
+                // or legacy format (prompt_tokens/completion_tokens)
+                const raw = endData.usage as Record<string, number>
+                tokenUsage.value = {
+                  prompt_tokens: raw.prompt_tokens ?? raw.input_tokens ?? 0,
+                  completion_tokens: raw.completion_tokens ?? raw.output_tokens ?? 0,
+                  total_tokens: raw.total_tokens ?? 0,
+                }
               }
             }
-            // Mark last AI message as done (attach suggestions if available).
+            if (endStatus === 'error') {
+              throw new Error(t('aiChat.sendFailed'))
+            }
+            // Mark ALL AI messages as done (attach suggestions to the last one).
             // #19: an `end` chunk is the backend's completion signal — treat it
             // as success. Truncated-content detection is unreliable from `end`
             // alone (a tool-only turn legitimately ends with no AI text), and
             // duplicate-execution risk on retry is already mitigated by #2
-            // (idempotent resume via input:null). Marking the last AI message
-            // 'done' only when one exists; absent AI message (tool-only turn
-            // with no text yet) is still a clean success.
+            // (idempotent resume via input:null).
+            //
+            // A single turn can produce multiple AI messages (e.g. a tool-call
+            // message followed by a text-reply message, or a summarization-leak
+            // message followed by the real reply). Previously only the LAST AI
+            // message was marked 'done', leaving earlier ones stuck at
+            // phase='answering' — their StreamingIndicator stayed visible forever
+            // (three-dot animation never stops), and the next turn's
+            // hasPriorProgress check saw an 'answering' message and skipped
+            // setUserMsgStatus, leaving the follow-up user bubble on "发送中".
             const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
             if (lastIdx >= 0) {
-              const last = messages.value[lastIdx]
               const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
-              messages.value = [
-                ...messages.value.slice(0, lastIdx),
-                {
-                  ...last,
+              let changed = false
+              const next = messages.value.map((msg, i) => {
+                if (msg.type !== 'ai' || msg.phase === 'done') return msg
+                changed = true
+                const isLast = i === lastIdx
+                return {
+                  ...msg,
                   phase: 'done' as const,
-                  suggestions: currentSuggestions ?? last.suggestions,
-                },
-                ...messages.value.slice(lastIdx + 1),
-              ]
+                  suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+                }
+              })
+              if (changed) {
+                messages.value = next
+              }
             }
             // Mark all planning steps as done
             planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+            // Defensive: ensure user message status is 'sent' when stream completes.
+            // Line 520 should have already set this, but the array replacement in the
+            // AI message marking above can sometimes race with Vue's reactivity system,
+            // leaving the user bubble stuck at "发送中". This explicit call guarantees
+            // the status is correct when the stream ends successfully.
+            setUserMsgStatus(userMsg.id, 'sent')
             streamSucceeded = true
+            // Clear standalone suggestions now that they're attached inline to
+            // the last AI message. Without this, SuggestionChips (standalone)
+            // and AssistantMessage (inline) both render the same suggestions
+            // simultaneously — duplicate UI.
+            suggestions.value = []
             // Notify caller that stream ended (for title refresh)
             if (currentThreadId) {
               options.onStreamEnd?.(currentThreadId)
             }
           } else if (chunk.event === 'error' && chunk.data) {
-            const errData = chunk.data as { error?: string }
+            // worker.py publishes `{"message": str(exc), "name": error_type}`;
+            // accept both `message` and `error` so the toast carries the real
+            // backend reason instead of falling back to the generic string.
+            const errData = chunk.data as { error?: string; message?: string; name?: string }
             // #20: an `error` chunk is terminal for this attempt. Set the error
             // and throw so the catch block classifies and retries; do NOT let
             // the loop fall through to streamSucceeded=true with a stale error.
-            const errMsg = errData.error || t('aiChat.sendFailed')
+            const errMsg = errData.error || errData.message || t('aiChat.sendFailed')
             throw new Error(errMsg)
           }
         }
@@ -495,31 +765,50 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
         if (!streamSucceeded && streamEnded === false) {
           const lastAi = [...messages.value].reverse().find(m => m.type === 'ai')
           if (lastAi && lastAi.content.trim().length > 0) {
+            // Mark ALL AI messages as done - mirrors the `end` chunk handling
+            // above. Without this, a dropped connection leaves earlier AI
+            // messages stuck at phase='answering', so their StreamingIndicator
+            // (three-dot animation) stays visible forever even though
+            // isLoading is set to false below.
+            const next = messages.value.map(msg =>
+              msg.type === 'ai' && msg.phase !== 'done'
+                ? { ...msg, phase: 'done' as const }
+                : msg,
+            )
+            messages.value = next
+            planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
             streamSucceeded = true
           }
         }
       } catch (err) {
         const e = err as Error & { name?: string }
-        // #9: distinguish a user-initiated cancel (break, no retry, mark failed)
+        // Mark the user message as failed for THIS attempt so it doesn't stay
+        // stuck at 'sending' while we retry or after all retries are exhausted.
+        // A successful retry will set it back to 'sent' via setUserMsgStatus
+        // after the stream connection succeeds.
+        setUserMsgStatus(userMsg.id, 'failed')
+        // #9: distinguish a user-initiated cancel (break, no retry)
         // from a timeout/stream error abort (retryable transient failure).
         if (e.name === 'AbortError') {
           if (userCancelled) {
-            userMsg.sendStatus = 'failed'
             break
           }
           // Timeout abort — retry like any transient failure.
           retryCount++
-          if (retryCount > SSE_MAX_RETRIES) {
-            userMsg.sendStatus = 'failed'
-            error.value = e.message || t('aiChat.sendFailed')
+          if (retryCount <= SSE_MAX_RETRIES) {
+            // Optimistic: set back to 'sending' while we retry, so the UI
+            // reflects that we're still trying. If this retry also fails,
+            // the top of this catch block will set it to 'failed' again.
+            setUserMsgStatus(userMsg.id, 'sending')
           }
         } else {
           retryCount++
-          if (retryCount > SSE_MAX_RETRIES) {
-            userMsg.sendStatus = 'failed'
-            error.value = e.message || t('aiChat.sendFailed')
+          if (retryCount <= SSE_MAX_RETRIES) {
+            setUserMsgStatus(userMsg.id, 'sending')
           }
-          // Otherwise loop and retry
+        }
+        if (retryCount > SSE_MAX_RETRIES) {
+          error.value = e.message || t('aiChat.sendFailed')
         }
       } finally {
         if (streamTimeoutId !== null) {
@@ -558,10 +847,13 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
       clearTimeout(retryDelayId)
       retryDelayId = null
     }
-    // Fire-and-forget server-side cancel so the agent run is cleaned up
-    if (currentThreadId) {
+    // Fire-and-forget server-side cancel so the agent run is cleaned up.
+    // Pass the real run_id captured from the metadata SSE event; if metadata
+    // hasn't arrived yet, skip — the server's SSE disconnect watcher still
+    // cancels the run when abortController fires.
+    if (currentThreadId && runId.value) {
       const client = getClient()
-      client.runs.cancel(currentThreadId, 'agent').catch(() => {})
+      client.runs.cancel(currentThreadId, runId.value).catch(() => {})
     }
     isLoading.value = false
     // Mark in-progress planning steps as interrupted
@@ -611,9 +903,310 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
     }
   }
 
+  function clearMessages() {
+    cancelStream()
+    messages.value = []
+    tokenUsage.value = null
+    planningSteps.value = []
+    suggestions.value = []
+    answeredInterruptIds.value = new Set()
+    runId.value = null
+    error.value = null
+    isLoading.value = false
+  }
+
+  /**
+   * Resume an interrupted graph execution with the user's answer.
+   *
+   * Calls POST /api/threads/{threadId}/runs/resume which returns an SSE stream
+   * (same protocol as sendMessage). Processes the stream identically — messages-
+   * tuple, values, custom events — so the agent's continued response appears
+   * in the chat in real-time.
+   *
+   * Includes retry logic (3 attempts with exponential backoff) matching
+   * sendMessage's behavior. On failure, sets interruptError so HumanInputCard
+   * can show error state with retry button.
+   */
+  const interruptError = ref<string | null>(null)
+
+  /**
+   * The interrupt_id that most recently failed (all retries exhausted).
+   * Used by MessageGroup to set HumanInputCard status to 'error' so the
+   * retry button appears. Cleared on new resumeInterrupt attempt.
+   */
+  const interruptErrorId = ref<string | null>(null)
+
+  async function resumeInterrupt(
+    threadId: string,
+    interruptId: string,
+    answer: string,
+  ): Promise<void> {
+    if (isLoading.value) return
+    isLoading.value = true
+    error.value = null
+    interruptError.value = null
+    planningSteps.value = []
+    suggestions.value = []
+    runId.value = null
+    userCancelled = false
+    abortController = new AbortController()
+
+    // Add an optimistic user message so the answer appears in the chat
+    const userMsg = addOptimisticUserMessage(answer)
+
+    let retryCount = 0
+    let streamSucceeded = false
+
+    while (!streamSucceeded && retryCount <= SSE_MAX_RETRIES) {
+      if (retryCount > 0) {
+        // Exponential backoff with jitter
+        const baseDelay = SSE_RETRY_DELAYS[retryCount - 1]
+        const jitteredDelay = Math.floor(baseDelay * (0.85 + Math.random() * 0.15))
+        await new Promise(resolve => {
+          retryDelayId = setTimeout(resolve, jitteredDelay)
+        })
+        retryDelayId = null
+        if (userCancelled || !abortController || abortController.signal.aborted) break
+      }
+
+      streamTimeoutId = setTimeout(() => {
+        abortController?.abort()
+      }, STREAM_TIMEOUT_MS)
+
+      try {
+        const apiUrl = typeof window !== 'undefined' ? window.location.origin : ''
+        const authStore = (await import('@/stores/auth')).useAuthStore()
+        const familyStore = (await import('@/stores/family')).useFamilyStore()
+        const familyId = familyStore.family?.id || authStore.user?.family_id
+        if (!familyId) throw new Error('Family not loaded')
+
+        const res = await fetch(
+          `${apiUrl}/api/threads/${encodeURIComponent(threadId)}/runs/resume`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Family-Id': familyId,
+              ...(authStore.user?.id ? { 'X-User-Id': String(authStore.user.id) } : {}),
+            },
+            credentials: 'include',
+            body: JSON.stringify({ answer, interrupt_id: interruptId }),
+            signal: abortController.signal,
+          },
+        )
+
+        if (!res.ok) {
+          throw new Error(`Resume failed: ${res.status}`)
+        }
+
+        setUserMsgStatus(userMsg.id, 'sent')
+
+        // Parse the SSE stream from the resume endpoint
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('No response body')
+
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let streamEnded = false
+        let currentEvent = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          for (const line of lines) {
+            // Handle SSE event: field
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim()
+              continue
+            }
+            // Handle SSE data: field
+            if (!line.startsWith('data:')) continue
+            const dataStr = line.slice(5).trim()
+            if (!dataStr || dataStr === '[DONE]') continue
+
+            try {
+              const parsed = JSON.parse(dataStr) as {
+                event?: string
+                data?: unknown
+              }
+              // Prefer event: field, fallback to parsed.event
+              const event = currentEvent || parsed.event || 'message'
+              const data = parsed.data
+              currentEvent = '' // Reset after use
+
+              if (event === 'metadata' && data) {
+                const metaData = data as { run_id?: string }
+                if (metaData.run_id) runId.value = metaData.run_id
+              } else if ((event === 'messages-tuple' || event === 'messages') && data) {
+                mergeMessagesTuple(data as MessagesTupleData)
+              } else if (event === 'values' && data) {
+                const valData = data as ValuesData
+                if (valData.messages) mergeValuesMessages(valData.messages)
+              } else if (event === 'custom' && data) {
+                const customData = data as {
+                  type?: string
+                  question?: string
+                  options?: Array<{ label: string; value: string }>
+                  context?: string
+                  choice_with_other?: boolean
+                  multi_select?: boolean
+                  interrupt_id?: string
+                  suggestions?: string[]
+                  tool_call_id?: string
+                  tool_name?: string
+                  args?: Record<string, unknown>
+                  task_id?: string
+                  description?: string
+                  prompt?: string
+                  result?: string
+                  error?: string
+                  usage?: { input_tokens: number; output_tokens: number; total_tokens: number }
+                }
+                if (customData.type === 'tool_call') {
+                  const step = createPlanningStep(customData)
+                  const exists = step.id && planningSteps.value.some(s => s.id === step.id)
+                  if (!exists) planningSteps.value = [...planningSteps.value, step]
+                } else if (customData.type === 'suggestions' && customData.suggestions) {
+                  suggestions.value = customData.suggestions
+                  // If the stream already ended (end arrived before suggestions),
+                  // retroactively attach suggestions to the last AI message so
+                  // they appear without requiring a new message.
+                  const lastAiIdx = messages.value.findLastIndex(m => m.type === 'ai')
+                  if (lastAiIdx >= 0 && messages.value[lastAiIdx].phase === 'done') {
+                    const msg = messages.value[lastAiIdx]
+                    messages.value = [
+                      ...messages.value.slice(0, lastAiIdx),
+                      { ...msg, suggestions: customData.suggestions },
+                      ...messages.value.slice(lastAiIdx + 1),
+                    ]
+                  }
+                } else if (customData.type === 'interrupt') {
+                  // Nested interrupt (agent asks another question)
+                  const interruptPayload: InterruptData = {
+                    question: customData.question || '',
+                    options: customData.options,
+                    context: customData.context,
+                    choiceWithOther: customData.choice_with_other,
+                    multiSelect: customData.multi_select,
+                    interrupt_id: customData.interrupt_id || genId('intr'),
+                  }
+                  const msg: ChatMessage = {
+                    id: genId('clar'),
+                    type: 'tool',
+                    role: 'assistant',
+                    content: interruptPayload.question,
+                    displayTime: formatDisplayTime(),
+                    name: 'ask_clarification',
+                    tool_call_id: interruptPayload.interrupt_id,
+                    additional_kwargs: { interruptData: interruptPayload },
+                  }
+                  messages.value = [...messages.value, msg]
+                } else if (
+                  customData.type === 'task_started'
+                  || customData.type === 'task_running'
+                  || customData.type === 'task_completed'
+                  || customData.type === 'task_failed'
+                  || customData.type === 'task_timed_out'
+                  || customData.type === 'task_cancelled'
+                ) {
+                  handleTaskEvent(customData)
+                }
+              } else if (event === 'end') {
+                streamEnded = true
+                if (data) {
+                  const endData = data as { usage?: TokenUsage; status?: string }
+                  if (endData.status === 'error') throw new Error(t('aiChat.sendFailed'))
+                  if (endData.usage) tokenUsage.value = endData.usage
+                }
+                // Mark all AI messages as done
+                const lastIdx = messages.value.findLastIndex(m => m.type === 'ai')
+                if (lastIdx >= 0) {
+                  const currentSuggestions = suggestions.value.length > 0 ? suggestions.value : undefined
+                  const next = messages.value.map((msg, i) => {
+                    if (msg.type !== 'ai' || msg.phase === 'done') return msg
+                    const isLast = i === lastIdx
+                    return {
+                      ...msg,
+                      phase: 'done' as const,
+                      suggestions: isLast ? (currentSuggestions ?? msg.suggestions) : msg.suggestions,
+                    }
+                  })
+                  messages.value = next
+                }
+                planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+                setUserMsgStatus(userMsg.id, 'sent')
+                // Clear standalone suggestions (now attached inline)
+                suggestions.value = []
+                if (currentThreadId) options.onStreamEnd?.(currentThreadId)
+                streamSucceeded = true
+              } else if (event === 'error' && data) {
+                const errData = data as { error?: string; message?: string }
+                throw new Error(errData.error || errData.message || t('aiChat.sendFailed'))
+              }
+            } catch (parseErr) {
+              if (parseErr instanceof Error && parseErr.message !== t('aiChat.sendFailed')) {
+                // JSON parse error — skip malformed line
+                continue
+              }
+              throw parseErr
+            }
+          }
+        }
+
+        if (!streamEnded && !streamSucceeded) {
+          // Stream ended without explicit 'end' chunk — mark AI messages done
+          const next = messages.value.map(msg =>
+            msg.type === 'ai' && msg.phase !== 'done'
+              ? { ...msg, phase: 'done' as const }
+              : msg,
+          )
+          messages.value = next
+          planningSteps.value = planningSteps.value.map(s => ({ ...s, status: 'done' as const }))
+          streamSucceeded = true
+        }
+      } catch (err) {
+        const e = err as Error & { name?: string }
+        setUserMsgStatus(userMsg.id, 'failed')
+        if (e.name === 'AbortError' && userCancelled) {
+          break
+        }
+        retryCount++
+        if (retryCount <= SSE_MAX_RETRIES) {
+          setUserMsgStatus(userMsg.id, 'sending')
+        }
+        if (retryCount > SSE_MAX_RETRIES) {
+          // All retries exhausted — set interruptError for HumanInputCard
+          interruptError.value = e.message || t('aiChat.sendFailed')
+          interruptErrorId.value = interruptId
+          error.value = interruptError.value
+        }
+      } finally {
+        if (streamTimeoutId !== null) {
+          clearTimeout(streamTimeoutId)
+          streamTimeoutId = null
+        }
+      }
+    }
+
+    // Mark this interrupt as answered so HumanInputCard transitions to
+    // 'answered' state (checkmark + answer text). Without this, the card
+    // stays in 'pending' state forever after a successful resume.
+    if (streamSucceeded) {
+      answeredInterruptIds.value = new Set([...answeredInterruptIds.value, interruptId])
+    }
+
+    isLoading.value = false
+    abortController = null
+  }
+
   return {
     messages, isLoading, isStreaming, error, tokenUsage,
-    planningSteps, suggestions, runId,
-    sendMessage, cancelStream, loadHistory, retry,
+    planningSteps, suggestions, answeredInterruptIds, interruptErrorId, runId,
+    sendMessage, cancelStream, loadHistory, retry, clearMessages, resumeInterrupt,
   }
 }

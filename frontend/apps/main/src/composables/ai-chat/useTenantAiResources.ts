@@ -19,6 +19,7 @@ import { showFailToast } from 'vant'
 import i18n from '@/i18n'
 import http from '@/api'
 import { useFamilyStore } from '@/stores/family'
+import { getMCPServers, type MCPServer } from '@/api/ai'
 
 // i18n helper
 function t(key: string, params?: Record<string, unknown>): string {
@@ -79,6 +80,8 @@ export function useTenantAiResources(): {
   supportsThinking: ComputedRef<boolean>
   supportsSubagent: ComputedRef<boolean>
   supportsWebSearch: ComputedRef<boolean>
+  hasWebSearchMcp: ComputedRef<boolean>
+  webSearchAvailable: ComputedRef<boolean>
   defaultModel: ComputedRef<ModelInfo | undefined>
   loadResources: () => Promise<void>
   getModelCapabilities: (modelName: string) => {
@@ -95,6 +98,7 @@ export function useTenantAiResources(): {
   const familyId = computed(() => familyStore.family?.id)
 
   const models = ref<ModelInfo[]>([])
+  const mcpServers = ref<MCPServer[]>([])
   const tenantConfig = ref<TenantAiConfig>({
     subagent_enabled: false,
     websearch_enabled: false,
@@ -113,6 +117,16 @@ export function useTenantAiResources(): {
 
   const supportsWebSearch = computed(() =>
     tenantConfig.value.websearch_enabled,
+  )
+
+  // 联网搜索 MCP：mcp_type == "websearch" 且 is_enabled 的 MCP server
+  const hasWebSearchMcp = computed(() =>
+    mcpServers.value.some((s) => s.mcp_type === 'websearch' && s.is_enabled),
+  )
+
+  // 联网搜索可用 = 启用了联网搜索配置 或 启用了联网搜索 MCP
+  const webSearchAvailable = computed(() =>
+    supportsWebSearch.value || hasWebSearchMcp.value,
   )
 
   // 默认模型
@@ -134,8 +148,12 @@ export function useTenantAiResources(): {
     error.value = null
 
     try {
-      const response = await http.get<ModelsApiResponse>('/ai/models')
+      const [response, mcpRes] = await Promise.all([
+        http.get<ModelsApiResponse>('/ai/models'),
+        getMCPServers().catch(() => [] as MCPServer[]),
+      ])
       models.value = response.data.models
+      mcpServers.value = mcpRes
       tenantConfig.value = {
         subagent_enabled: response.data.subagent_enabled,
         websearch_enabled: response.data.websearch_enabled,
@@ -202,6 +220,8 @@ export function useTenantAiResources(): {
     supportsThinking,
     supportsSubagent,
     supportsWebSearch,
+    hasWebSearchMcp,
+    webSearchAvailable,
     defaultModel,
     loadResources,
     getModelCapabilities,

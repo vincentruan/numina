@@ -38,6 +38,79 @@ vi.mock('nprogress', () => ({
 }))
 vi.mock('nprogress/nprogress.css', () => ({ default: {} }))
 
+// Mock @iconify/vue to prevent network requests to api.unisvg.com /
+// api.iconify.design during tests. The real Icon component lazily fetches
+// icon SVGs over HTTP when an icon name isn't cached locally; across a full
+// test run these pending fetches accumulate in the worker and cause
+// "JS heap out of memory" crashes (ERR_WORKER_OUT_OF_MEMORY). The stub
+// renders a lightweight <svg> placeholder so tests asserting icon presence
+// (e.g. AgentGrid AE5 inverse) still pass without triggering fetches.
+vi.mock('@iconify/vue', () => {
+  const Icon = {
+    name: 'IconifyIconStub',
+    template: '<svg class="i-icon-stub" aria-hidden="true" />',
+    props: ['icon', 'width', 'height', 'color', 'flip', 'rotate'],
+  }
+  return {
+    Icon,
+    addAPIProvider: () => false,
+    addCollection: () => false,
+    addIcon: () => false,
+    buildIcon: () => null,
+    calculateSize: (size: number) => size,
+    disableCache: () => {},
+    enableCache: () => {},
+    getIcon: () => null,
+    iconExists: () => false,
+    iconLoaded: () => false,
+    listIcons: () => [],
+    loadIcon: () => Promise.resolve(null),
+    loadIcons: () => {},
+    replaceIDs: (s: string) => s,
+    setCustomIconLoader: () => {},
+    setCustomIconsLoader: () => {},
+    _api: {
+      getAPIConfig: () => null,
+      setAPIModule: () => {},
+      sendAPIQuery: () => {},
+      setFetch: () => {},
+      getFetch: () => null,
+      listAPIProviders: () => [],
+    },
+  }
+})
+
+// Global fetch stub: happy-dom's default window.location is
+// http://localhost:3000/, so any un-mocked relative fetch('/api/v1/...')
+// resolves to localhost:3000 and throws ECONNREFUSED. These rejected
+// promises accumulate across the full test suite and cause worker OOM
+// crashes. This stub returns a benign 401 so un-mocked callers fail fast
+// instead of hanging. Tests that need real fetch behavior should mock the
+// specific API module (e.g. vi.mock('@/api/ai-chat', ...)) or assign
+// global.fetch themselves (as useArtifacts.test.ts does).
+globalThis.fetch = vi.fn(async () => {
+  return new Response(JSON.stringify({ detail: 'fetch not mocked in test' }), {
+    status: 401,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}) as typeof globalThis.fetch
+
+// Global @/api/agent mock: useAgentStore calls getAgents() on mount, which
+// triggers an axios GET to /ai/agents. Tests that mount components using the
+// agent store (AIChatBox, ChatHeader, etc.) without mocking @/api/agent
+// cause ECONNREFUSED to localhost:3000 (happy-dom default origin). These
+// unhandled rejections accumulate and contribute to worker OOM. This mock
+// returns empty agent lists so stores initialize safely. Tests that need
+// specific agent data mock @/api/agent locally (e.g. AEPhaseD.test.ts).
+vi.mock('@/api/agent', () => ({
+  getAgents: vi.fn(() => Promise.resolve({ system: [], custom: [] })),
+  getAgent: vi.fn(() => Promise.resolve(null)),
+  createAgent: vi.fn(() => Promise.resolve({})),
+  updateAgent: vi.fn(() => Promise.resolve({})),
+  deleteAgent: vi.fn(() => Promise.resolve()),
+  toggleAgent: vi.fn(() => Promise.resolve({})),
+}))
+
 // Mock the loading composable to prevent import.meta.hot initialization issues
 vi.mock('../../packages/auth/src/composables/loading', () => ({
   useLoadingOverlay: () => ({

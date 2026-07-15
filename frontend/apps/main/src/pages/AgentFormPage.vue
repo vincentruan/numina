@@ -155,7 +155,7 @@ function getSkillIcon(skill: SkillDefinition): string {
       @click-left="router.back()"
     />
 
-    <!-- U13: read-only banner — system agents (数鸣, AI问答) cannot be edited.
+    <!-- U13: read-only banner — system agents (小鸣, AI问答) cannot be edited.
          Owners can still navigate here to inspect the agent's configuration.
          Text already has 🔒 emoji, so no left-icon needed. Scrollable for long text. -->
     <van-notice-bar

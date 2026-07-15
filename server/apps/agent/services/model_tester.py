@@ -4,7 +4,10 @@ import base64
 import time
 
 from apps.agent.core.llm import get_llm_client
-from apps.agent.services.vision_test_image import get_expected_ocr_text, get_test_image_data_url
+from apps.agent.services.vision_test_image import (
+    get_expected_ocr_text,
+    get_test_image_data_url,
+)
 
 
 def _make_client(provider, api_key, model_id, base_url, vision_model_id, timeout):
@@ -23,7 +26,12 @@ async def test_connection(provider, api_key, model_id, base_url=None):
     start = time.monotonic()
     try:
         client = _make_client(provider, api_key, model_id, base_url, None, 30.0)
-        await client.complete("hi", max_tokens=1)
+        # max_tokens=10 (not 1): DeepSeek models have intrinsic reasoning
+        # that consumes the token budget for ThinkingBlock before producing
+        # TextBlock. With max_tokens=1, all tokens go to thinking and the
+        # response contains no text block, causing a false connection
+        # failure. 10 tokens leaves enough budget for both.
+        await client.complete("hi", max_tokens=10)
         latency = int((time.monotonic() - start) * 1000)
         return {"connected": True, "message": "主模型连接成功", "latency_ms": latency}
     except Exception as e:
@@ -96,7 +104,9 @@ async def test_vision(provider, api_key, vision_model_id, base_url=None):
     ).decode()
     try:
         client = _make_client(provider, api_key, vision_model_id, base_url, vision_model_id, 120.0)
-        await client.complete_vision("what", tiny_png, max_tokens=1)
+        # max_tokens=10 (not 1): same reasoning as test_connection —
+        # DeepSeek's intrinsic thinking may consume the entire budget.
+        await client.complete_vision("what", tiny_png, max_tokens=10)
         latency = int((time.monotonic() - start) * 1000)
         return {"success": True, "message": "图像模型连接成功", "latency_ms": latency}
     except Exception as e:

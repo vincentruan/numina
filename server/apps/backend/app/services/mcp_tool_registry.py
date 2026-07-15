@@ -89,9 +89,13 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=False,
     ),
-    # File tools for report generation (Phase 1/2)
-    "write_file": MCPToolMeta(
-        name="write_file",
+    # Domain-specific report tools — named to avoid collision with DeerFlow's
+    # built-in read_file/write_file sandbox tools.  The built-in tools operate
+    # on absolute virtual paths (/mnt/user-data/...) for general file I/O;
+    # these tools are scoped to the tenant report directory and accept simple
+    # filenames, so the agent should always prefer these for report operations.
+    "write_numina_report": MCPToolMeta(
+        name="write_numina_report",
         description="将内容写入租户报告目录的文件。仅支持 markdown 报告文件。",
         input_schema={
             "type": "object",
@@ -111,8 +115,8 @@ _REGISTRY: dict[str, MCPToolMeta] = {
         allowed_roles=frozenset({"owner", "member"}),
         requires_write=True,
     ),
-    "read_file": MCPToolMeta(
-        name="read_file",
+    "read_numina_report": MCPToolMeta(
+        name="read_numina_report",
         description="读取租户报告目录中的文件内容。仅支持 markdown 报告文件。",
         input_schema={
             "type": "object",

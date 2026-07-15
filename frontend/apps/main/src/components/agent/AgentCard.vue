@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Agent } from '@/types/agent'
 import { useI18n } from 'vue-i18n'
-import NuminaLogo from '@/components/common/NuminaLogo.vue'
+import AIBrainIcon from '@/components/common/AIBrainIcon.vue'
 import IIcon from '@/components/IIcon.vue'
 import { getAgentIcon, isEmoji } from '@/utils/agent'
 
@@ -27,8 +27,9 @@ const emit = defineEmits<{
     @click="emit('consult', agent)"
   >
     <div class="agent-card__icon">
-      <!-- Numina brand agent (数鸣) renders the cursive wordmark instead of emoji. -->
-      <NuminaLogo v-if="agent.agent_name === NUMINA_AGENT_NAME" :width="80" />
+      <!-- 小鸣 brand agent (小鸣) renders the colorful AIBrainIcon to match the
+           /ai page input box and agent picker. -->
+      <AIBrainIcon v-if="agent.agent_name === NUMINA_AGENT_NAME" :active="true" />
       <span v-else-if="isEmoji(getAgentIcon(agent.icon))">{{ getAgentIcon(agent.icon) || '🤖' }}</span>
       <IIcon v-else :icon="getAgentIcon(agent.icon)" size="32" :color="agent.color || 'var(--van-primary-color)'" />
     </div>
@@ -66,9 +67,9 @@ const emit = defineEmits<{
   transform: scale(0.97);
 }
 
-/* Fixed icon slot height accommodates both the 32px emoji and the 80px
-   NuminaLogo SVG (rendered with its native aspect ratio) without changing
-   card height. Center contents so emoji and SVG both look balanced. */
+/* Fixed icon slot height accommodates both the 32px emoji and the 44px
+   AIBrainIcon (小鸣) without changing card height. Center contents so emoji
+   and the icon both look balanced. */
 .agent-card__icon {
   height: 56px;
   display: flex;
