@@ -331,7 +331,7 @@ async def stream_agent_dispatch(
         enabled_skills = []
 
     # Apply per-agent skill scope: AI问答 (chat-only) → no business skills;
-    # 数鸣 (sentinel "*") → all family-enabled; custom → intersect declared with family.
+    # 小鸣 (sentinel "*") → all family-enabled; custom → intersect declared with family.
     resolved_skills = _resolve_skills(agent_config.get("skills"), enabled_skills)
 
     try:

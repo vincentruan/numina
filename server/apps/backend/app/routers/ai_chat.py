@@ -248,7 +248,7 @@ async def chat_stream(
             yield json.dumps({"type": "session.start", **start_event}, ensure_ascii=False, separators=(",", ":")).encode() + b"\n"
 
         # Route to the runs.py endpoint (LangGraph SSE format).
-        # When agent_id is absent, fall back to the 数鸣 system agent (NUMINA_AGENT_ID).
+        # When agent_id is absent, fall back to the 小鸣 system agent (NUMINA_AGENT_ID).
         agent_id = body.agent_id or str(NUMINA_AGENT_ID)
         agent_url = f"/api/threads/{session_id}/runs/stream"
         request_json = {
@@ -443,19 +443,39 @@ async def get_artifact(
         logger.warning("artifact path traversal attempt: %s -> %s", filepath, decoded_filepath)
         raise AppError(ErrorCode.NOT_FOUND)
 
-    # Try to find artifact in session's artifact directory
-    # For now, artifacts are stored in the chat directory alongside JSONL
-    artifact_dir = Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts"
-    artifact_path = artifact_dir / decoded_filepath
+    # Try to find artifact in multiple possible locations:
+    # 1. DeerFlow tenant reports directory: ~/.numina/data/workspaces/tenants/{family_id}/reports/
+    # 2. Session artifact directory: CHAT_DIR/session_{session_id}/artifacts/
+    family_id = current_user.family_id
+    data_root = Path(settings.DATA_ROOT).expanduser() if hasattr(settings, 'DATA_ROOT') else Path.home() / ".numina" / "data"
 
-    # Security: Final check - resolved path must be within artifact_dir
-    try:
-        artifact_path.resolve().relative_to(artifact_dir.resolve())
-    except ValueError:
-        logger.warning("artifact resolved path escapes directory: %s", decoded_filepath)
-        raise AppError(ErrorCode.NOT_FOUND) from None
+    possible_paths = [
+        # DeerFlow tenant reports (primary location)
+        data_root / "workspaces" / "tenants" / str(family_id) / "reports" / decoded_filepath,
+        # Session artifacts (legacy location)
+        Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts" / decoded_filepath,
+    ]
 
-    if not artifact_path.exists():
+    artifact_path = None
+    for candidate_path in possible_paths:
+        # Security: Final check - resolved path must be within allowed directories
+        allowed_dirs = [
+            (data_root / "workspaces" / "tenants" / str(family_id) / "reports").resolve(),
+            (Path(settings.CHAT_DIR) / f"session_{session_id}" / "artifacts").resolve(),
+        ]
+
+        try:
+            resolved = candidate_path.resolve()
+            # Check if resolved path is within any allowed directory
+            if any(resolved.is_relative_to(allowed) for allowed in allowed_dirs if allowed.exists()):
+                if resolved.exists():
+                    artifact_path = resolved
+                    break
+        except (ValueError, OSError):
+            continue
+
+    if artifact_path is None:
+        logger.warning("artifact not found: session=%s family=%s filepath=%s", session_id, family_id, decoded_filepath)
         raise AppError(ErrorCode.NOT_FOUND)
 
     # Read file content

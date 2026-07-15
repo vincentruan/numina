@@ -120,9 +120,9 @@
       <p class="report-empty-sub">{{ t('aiHub.generateFirstReportSub') }}</p>
     </div>
 
-    <!-- Agent sections: 数鸣 featured card → My Agents → Analysis Apps -->
+    <!-- Agent sections: 小鸣 featured card → My Agents → Analysis Apps -->
     <div class="feature-section">
-      <!-- 数鸣 featured card (full width) -->
+      <!-- 小鸣 featured card (full width) -->
       <NuminaAgentCard @consult="handleNuminaConsult" />
 
       <!-- 我的智能体 Section -->
@@ -271,7 +271,7 @@ import { getAgentIcon, isEmoji } from '@/utils/agent'
 import InputBox from '@/components/ai-chat/InputBox.vue'
 import ShimmerText from '@/components/ai-chat/ShimmerText.vue'
 import AIHubSkeleton from '@/components/ai/AIHubSkeleton.vue'
-import { SHUMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
+import { XIAOMING_DEFAULT_PROMPT, SYSTEM_DEFAULT_SESSION_MAX_AGE_HOURS } from '@/constants/agentDefaultPrompt'
 import type { Agent } from '@/types/agent'
 import type { AIReport } from '@/types'
 import type { SubmitPayload } from '@/types/ai-chat/input-mode'
@@ -354,7 +354,7 @@ const chatPlaceholder = computed(() => {
   return t('aiHub.chatPlaceholderWithAgent', { name: selectedAgent.value.display_name })
 })
 
-// Default selected agent to 数鸣 once loaded
+// Default selected agent to 小鸣 once loaded
 watch(
   () => agentStore.systemAgents,
   () => {
@@ -568,7 +568,7 @@ function handleNuminaConsult() {
           name: 'AIChat',
           query: {
             agentId,
-            q: SHUMING_DEFAULT_PROMPT,
+            q: XIAOMING_DEFAULT_PROMPT,
             newSession: '1',
             source: 'system_default',
             // webSearch 状态继承自 AI Hub 页面的当前选择

@@ -573,6 +573,8 @@ export default {
       get_allocation: '获取配置',
       get_dashboard: '获取仪表盘',
       get_family_members: '获取家庭成员',
+      read_numina_report: '读取小鸣报告',
+      write_numina_report: '写入小鸣报告',
     },
     action: {
       // DeerFlow pattern: descriptive action labels (not progressive tense)
@@ -599,6 +601,10 @@ export default {
       get_dashboard: '读取资产概览',
       get_family_members: '获取家庭成员',
       get_family_overview: '获取家庭概览',
+      read_numina_report: '读取小鸣报告',
+      read_numina_report_with_filename: '读取小鸣报告: {filename}',
+      write_numina_report: '写入小鸣报告',
+      write_numina_report_with_filename: '写入小鸣报告: {filename}',
       mcp_generic: '调用工具: {name}',
       skill_generic: '使用技能: {name}',
       generic: '使用 {name}',

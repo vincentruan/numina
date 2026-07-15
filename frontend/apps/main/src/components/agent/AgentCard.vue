@@ -27,7 +27,7 @@ const emit = defineEmits<{
     @click="emit('consult', agent)"
   >
     <div class="agent-card__icon">
-      <!-- 数鸣 brand agent (数鸣) renders the colorful AIBrainIcon to match the
+      <!-- 小鸣 brand agent (小鸣) renders the colorful AIBrainIcon to match the
            /ai page input box and agent picker. -->
       <AIBrainIcon v-if="agent.agent_name === NUMINA_AGENT_NAME" :active="true" />
       <span v-else-if="isEmoji(getAgentIcon(agent.icon))">{{ getAgentIcon(agent.icon) || '🤖' }}</span>
@@ -68,7 +68,7 @@ const emit = defineEmits<{
 }
 
 /* Fixed icon slot height accommodates both the 32px emoji and the 44px
-   AIBrainIcon (数鸣) without changing card height. Center contents so emoji
+   AIBrainIcon (小鸣) without changing card height. Center contents so emoji
    and the icon both look balanced. */
 .agent-card__icon {
   height: 56px;

@@ -15,7 +15,7 @@ function handleClick() {
 
 <template>
   <div class="numina-agent-card" role="button" tabindex="0" @click="handleClick" @keydown.enter="handleClick" @keydown.space.prevent="handleClick">
-    <!-- Full-width featured card for 数鸣 agent - horizontal layout -->
+    <!-- Full-width featured card for 小鸣 agent - horizontal layout -->
     <div class="numina-card__inner">
       <!-- Left: AI brain icon (from nav bar) - colorful active state with breathing effect -->
       <div class="numina-card__icon">

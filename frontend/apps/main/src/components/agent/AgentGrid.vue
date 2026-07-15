@@ -19,7 +19,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <!-- System agents zone: AI问答, 数鸣 (always present when at least one is enabled). -->
+  <!-- System agents zone: AI问答, 小鸣 (always present when at least one is enabled). -->
   <div v-if="systemAgents.length" class="agent-section">
     <div class="agent-section__title">{{ t('agents.systemAgents') }}</div>
     <div class="agent-grid">

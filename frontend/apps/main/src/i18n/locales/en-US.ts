@@ -340,6 +340,8 @@ export default {
       get_allocation: 'Get allocation',
       get_dashboard: 'Get dashboard',
       get_family_members: 'Get family members',
+      read_numina_report: 'Read Numina report',
+      write_numina_report: 'Write Numina report',
     },
     action: {
       // DeerFlow pattern: descriptive action labels (not progressive tense)
@@ -364,6 +366,10 @@ export default {
       get_dashboard: 'Read asset overview',
       get_family_members: 'Get family members',
       get_family_overview: 'Get family overview',
+      read_numina_report: 'Read Numina report',
+      read_numina_report_with_filename: 'Read Numina report: {filename}',
+      write_numina_report: 'Write Numina report',
+      write_numina_report_with_filename: 'Write Numina report: {filename}',
       mcp_generic: 'Call tool: {name}',
       skill_generic: 'Use skill: {name}',
       generic: 'Use {name}',
