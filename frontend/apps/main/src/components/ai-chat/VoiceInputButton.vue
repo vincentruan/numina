@@ -68,7 +68,7 @@ watch(error, (val) => {
 </script>
 
 <template>
-  <div v-if="isSupported" class="voice-input-wrapper">
+  <div class="voice-input-wrapper">
     <!-- Tooltip -->
     <Transition name="tooltip-fade">
       <div v-if="showTooltip && !isListening" class="voice-tooltip">
@@ -103,6 +103,24 @@ watch(error, (val) => {
         <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
         <line x1="12" y1="19" x2="12" y2="23"/>
         <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+
+      <!-- Disabled overlay icon (ban/slash) — same size as the button -->
+      <svg
+        v-if="isDisabled"
+        class="voice-disabled-icon"
+        width="44"
+        height="44"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
       </svg>
 
       <!-- Pulse rings while listening -->
@@ -194,6 +212,19 @@ watch(error, (val) => {
 .voice-btn--disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.voice-btn--disabled:hover {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--ai-btn-color, #666);
+}
+
+.voice-disabled-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: rgba(239, 68, 68, 0.6);
   pointer-events: none;
 }
 
