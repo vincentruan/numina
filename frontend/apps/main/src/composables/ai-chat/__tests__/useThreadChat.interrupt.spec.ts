@@ -151,6 +151,14 @@ describe('useThreadChat — interrupt SSE event handling', () => {
         },
       },
       {
+        event: 'messages-tuple',
+        data: {
+          type: 'ai',
+          content: 'Test response',
+          id: 'msg-1',
+        },
+      },
+      {
         event: 'custom',
         data: {
           type: 'suggestions',
@@ -164,8 +172,10 @@ describe('useThreadChat — interrupt SSE event handling', () => {
     expect(chat.planningSteps.value).toHaveLength(1)
     expect(chat.planningSteps.value[0].toolName).toBe('search')
 
-    // Suggestions should exist
-    expect(chat.suggestions.value).toEqual(['opt1', 'opt2'])
+    // Suggestions should be attached to the last AI message (not standalone)
+    // The code clears suggestions.value after attaching to the last AI message
+    const lastAiMsg = [...chat.messages.value].reverse().find(m => m.type === 'ai')
+    expect(lastAiMsg?.suggestions).toEqual(['opt1', 'opt2'])
 
     // No clarification message
     const clarificationMsgs = chat.messages.value.filter(

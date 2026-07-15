@@ -25,6 +25,7 @@ from apps.agent.core.backend_client import BackendClient
 from apps.agent.schemas.context import FamilyContext
 from apps.agent.services.audit_logger import AuditEntry, audit_logger
 from apps.agent.services.deerflow_adapter.adapter import create_family_adapter
+from apps.agent.services.message_classifier import extract_tool_calls
 from apps.agent.services.pii_redactor import pii_redactor
 
 from .gc import schedule_run_cleanup
@@ -244,16 +245,35 @@ async def run_family_agent(
             # `tool_call` custom events from the AI message's tool_calls so
             # the frontend planning-steps UI (R6) updates in real time.
             if sse_type == "messages" and isinstance(data, dict):
-                if data.get("type") == "ai" and data.get("content"):
-                    ai_response_parts.append(data["content"])
-                tool_calls_raw = data.get("tool_calls")
-                if tool_calls_raw:
-                    for tc in tool_calls_raw:
+                msg_type = data.get("type")
+
+                if msg_type == "ai":
+                    if data.get("content"):
+                        ai_response_parts.append(data["content"])
+                    tool_calls_raw = data.get("tool_calls")
+                    if tool_calls_raw:
+                        # Use extract_tool_calls to properly handle LangChain ToolCall objects
+                        for tc in extract_tool_calls(data):
+                            await bridge.publish(run_id, "custom", {
+                                "type": "tool_call",
+                                "tool_call_id": tc.get("id", ""),
+                                "tool_name": tc.get("name", ""),
+                                "args": tc.get("args", {}),
+                            })
+
+                elif msg_type == "tool":
+                    # Tool result message — forward to frontend so ChainOfThought
+                    # can update step status from 'running' to 'done' and display
+                    # artifact links (which require status === 'done').
+                    tool_call_id = str(data.get("tool_call_id") or "")
+                    tool_name = data.get("name") or ""
+                    content = data.get("content")
+                    if tool_call_id:
                         await bridge.publish(run_id, "custom", {
-                            "type": "tool_call",
-                            "tool_call_id": tc.get("id", ""),
-                            "tool_name": tc.get("name", ""),
-                            "args": tc.get("args", {}),
+                            "type": "tool_result",
+                            "tool_call_id": tool_call_id,
+                            "tool_name": tool_name,
+                            "content": content,
                         })
 
             # Detect LangGraph interrupt() events forwarded by the adapter as

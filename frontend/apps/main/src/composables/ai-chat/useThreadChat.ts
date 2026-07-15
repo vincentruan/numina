@@ -595,6 +595,19 @@ export function useThreadChat(options: UseThreadChatOptions = {}) {
               if (!exists) {
                 planningSteps.value = [...planningSteps.value, step]
               }
+            } else if (customData.type === 'tool_result') {
+              // Tool result from backend — update the corresponding tool_call
+              // step status from 'running' to 'done' and attach the result.
+              // This is needed for ChainOfThought to display artifact links
+              // (which require status === 'done').
+              const toolCallId = customData.tool_call_id
+              if (toolCallId) {
+                planningSteps.value = planningSteps.value.map(s =>
+                  s.id === toolCallId
+                    ? { ...s, status: 'done' as const }
+                    : s
+                )
+              }
             } else if (customData.type === 'suggestions' && customData.suggestions) {
               suggestions.value = customData.suggestions
               // If the stream already ended (end arrived before suggestions),
